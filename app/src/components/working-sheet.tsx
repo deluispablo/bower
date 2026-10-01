@@ -151,7 +151,7 @@ export const DEMO_REASSURANCE_LEAD = 'A recording.';
 export const DEMO_REASSURANCE_REST =
   'In the demo the bird plays back a real run in twenty seconds; nothing ' +
   'is sent to Claude, nothing costs anything. In your own Bower this ' +
-  'takes three to five minutes.';
+  'takes a few minutes.';
 
 /** The time line's label while a run goes in the demo: the recording always
  * plays back the same twenty seconds, so "Started n min ago" has no meaning. */
