@@ -723,11 +723,13 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SMOKE_STATE=$(cat "$HERE/../current-state")
 SMOKE_SCENARIO=$(cat "$HERE/../current-scenario")
-turns='' tools='' denied='' prompt=''
+turns='' tools='' denied='' prompt='' format='' verbose=no
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -p) prompt=$2; shift 2 ;;
     --max-turns) turns=$2; shift 2 ;;
+    --output-format) format=$2; shift 2 ;;
+    --verbose) verbose=yes; shift ;;
     --allowedTools) tools=$2; shift 2 ;;
     --disallowedTools) denied=$2; shift 2 ;;
     *) shift ;;
@@ -737,6 +739,7 @@ echo "claude max-turns=$turns rulebook=$([ -f CLAUDE.md ] && echo yes || echo no
 printf '%s' "$tools" >"$SMOKE_STATE/claude-tools.txt"
 printf '%s' "$prompt" >"$SMOKE_STATE/claude-prompt.txt"
 printf '%s' "$denied" >"$SMOKE_STATE/claude-denied.txt"
+printf 'format=%s verbose=%s' "$format" "$verbose" >"$SMOKE_STATE/claude-format.txt"
 # The model's own environment, exactly as run.sh's env -i allow-list built
 # it: the test greps this for the Drive token, the run ticket, BOWER_* and
 # the model credential, never the console output (that stays content-free).
@@ -1022,9 +1025,25 @@ if [ "$SMOKE_SCENARIO" = overloaded ]; then
   exit 1
 fi
 [ ! -f 0-Inbox/a.pdf ] || mv 0-Inbox/a.pdf 0-Inbox/Processed/
-printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
+# run.sh asks for --output-format stream-json --verbose (R-SS-2): one JSON
+# event per line, the agent's text and tool calls (which name vault paths)
+# along the way and the closing text in the final result event.
+json_string() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  printf '"%s"' "$s"
+}
+result=$(printf '%s\n' 'Working on 0-Inbox/a.pdf' 'Reading Clippings/b.md' \
   'SUMMARY-MARKER 1 processed a.pdf' \
-  'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6'
+  'Filed: 1 files' 'SUMMARY-MARKER 3' 'SUMMARY-MARKER 4' 'SUMMARY-MARKER 5' 'SUMMARY-MARKER 6')
+printf '{"type":"system","subtype":"init","cwd":%s,"tools":["Read","Grep"]}\n' "$(json_string "$PWD")"
+printf '{"type":"assistant","message":{"content":[{"type":"text","text":"Working on 0-Inbox/a.pdf"},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"0-Inbox/a.pdf"}}]}}\n'
+printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Reading Clippings/b.md"}]}}\n'
+printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Grep","input":{"pattern":"a.pdf"}}]}}\n'
+printf '{"type":"result","subtype":"success","is_error":false,"num_turns":3,"duration_ms":4000,"duration_api_ms":3500,"result":%s,"usage":{"input_tokens":12,"output_tokens":34,"cache_read_input_tokens":560,"cache_creation_input_tokens":78}}\n' \
+  "$(json_string "$result")"
 STUB
 
 # pdfinfo and unzip stubs for the file facts (#610). pdfinfo reads a
@@ -1046,135 +1065,8 @@ cat "$2"
 STUB
 
 if ! command -v jq >/dev/null 2>&1; then
-  cat >"$STUBS/jq.js" <<'STUB'
-// Stand-in for jq, covering only the filters run.sh uses:
-// '$ARGS.named', '[inputs]' (with -R), '.[$k] // empty' and
-// '.files[].name' (both with -r).
-const fs = require('fs');
-const args = process.argv.slice(1);
-const named = {};
-const flags = new Set();
-const rest = [];
-for (let i = 0; i < args.length; i++) {
-  const a = args[i];
-  if (a === '--arg') { named[args[i + 1]] = args[i + 2]; i += 2; }
-  else if (a === '--argjson') { named[args[i + 1]] = JSON.parse(args[i + 2]); i += 2; }
-  else if (/^-[a-zA-Z]+$/.test(a)) { for (const f of a.slice(1)) flags.add(f); }
-  else rest.push(a);
-}
-const [filter, file] = rest;
-const input = () => fs.readFileSync(file ?? 0, 'utf8');
-if (filter === '$ARGS.named') {
-  process.stdout.write(JSON.stringify(named) + '\n');
-} else if (filter === '[inputs]' && flags.has('R')) {
-  const lines = input().split('\n');
-  if (lines[lines.length - 1] === '') lines.pop();
-  process.stdout.write(JSON.stringify(lines) + '\n');
-} else if (filter === '.files[].name' && flags.has('r')) {
-  const files = JSON.parse(input()).files;
-  if (!Array.isArray(files)) {
-    process.stderr.write('jq stand-in: cannot iterate\n');
-    process.exit(5);
-  }
-  for (const f of files) process.stdout.write(String(f.name) + '\n');
-} else if (filter.startsWith('.[] | select((.IsDir | not)') && flags.has('r')) {
-  // run.sh's LISTING_FILTER (#597).
-  for (const o of JSON.parse(input())) {
-    if (o.IsDir || typeof o.ID !== 'string' || /[\t\n]/.test(o.ID + o.Path)) continue;
-    process.stdout.write(o.ID + '\t' + o.Path + '\n');
-  }
-} else if (filter.startsWith('to_entries[] | select((.value | type) == "string"') && flags.has('r')) {
-  // run.sh's PATHS_READ_FILTER (#597).
-  const m = JSON.parse(input());
-  if (m === null || typeof m !== 'object' || Array.isArray(m)) {
-    process.stderr.write('jq stand-in: not an object\n');
-    process.exit(5);
-  }
-  for (const [k, v] of Object.entries(m)) {
-    if (typeof v === 'string' && !/[\t\n]/.test(k + v)) process.stdout.write(k + '\t' + v + '\n');
-  }
-} else if (filter.startsWith('[inputs | split(') && flags.has('R')) {
-  // run.sh's PATHS_WRITE_FILTER (#597).
-  const lines = input().split('\n');
-  if (lines[lines.length - 1] === '') lines.pop();
-  const m = {};
-  for (const l of lines) { const parts = l.split('\t'); m[parts[0]] = parts[1]; }
-  process.stdout.write(JSON.stringify(m) + '\n');
-} else if (filter.startsWith('to_entries[] | select((.value | type) == "object"') && flags.has('r')) {
-  // run.sh's FACTS_KEYS_FILTER (#610).
-  const m = JSON.parse(input());
-  if (m === null || typeof m !== 'object' || Array.isArray(m)) {
-    process.stderr.write('jq stand-in: not an object\n');
-    process.exit(5);
-  }
-  for (const [k, v] of Object.entries(m)) {
-    if (v !== null && typeof v === 'object' && typeof v.k === 'string' && !/[\t\n]/.test(k + v.k)) {
-      process.stdout.write(k + '\t' + v.k + '\n');
-    }
-  }
-} else if (filter.startsWith('$prev as $p | [inputs') && flags.has('R')) {
-  // run.sh's FACTS_WRITE_FILTER (#610).
-  const lines = fs.readFileSync(0, 'utf8').split('\n');
-  if (lines[lines.length - 1] === '') lines.pop();
-  const m = {};
-  for (const l of lines) {
-    const [path, key, kind, n] = l.split('\t');
-    m[path] = kind === 'keep' ? named.prev[path] : { k: key, [kind]: Number(n) };
-  }
-  process.stdout.write(JSON.stringify(m, null, 2) + '\n');
-} else if (filter.startsWith('if type == "object" and .state == "failed"') && flags.has('r')) {
-  // run.sh's ALREADY_WRITTEN_FILTER (R-AG-10).
-  const r = JSON.parse(input());
-  if (r !== null && typeof r === 'object' && r.state === 'failed' && Array.isArray(r.created)) {
-    for (const c of r.created) {
-      if (typeof c === 'string' && c.length > 0) process.stdout.write(c.replace(/[\r\n]/g, ' ') + '\n');
-    }
-  }
-} else if (filter.startsWith('def n($v)')) {
-  // run.sh's REPORT_FILTER (R-RUNNER-1): the named arguments, created,
-  // updated and left cut to $list each, then left, updated and created cut
-  // until everything fits in $max.
-  const { list, max, ...r } = named;
-  const n = (v) => (Array.isArray(v) ? Math.min(v.length, list) : 0);
-  for (const k of ['created', 'updated', 'left']) if (k in r) r[k] = r[k].slice(0, list);
-  for (const k of ['left', 'updated', 'created']) {
-    if (!(k in r)) continue;
-    const over = n(r.processed) + n(r.items) + n(r.setAside) + n(r.created) + n(r.updated) + n(r.left) - max;
-    if (over > 0) r[k] = r[k].slice(0, Math.max(r[k].length - over, 0));
-  }
-  process.stdout.write(JSON.stringify(r) + '\n');
-} else if (filter.startsWith('[inputs | . as $line') && flags.has('R')) {
-  // run.sh's UPDATED_FILTER (R-RUNNER-1).
-  const lines = input().split('\n');
-  if (lines[lines.length - 1] === '') lines.pop();
-  process.stdout.write(JSON.stringify(lines.map((l) => {
-    const [path, ...what] = l.split('\t');
-    return what.length > 0 ? { path, what: [...what.join('\t')].slice(0, named.cut).join('') } : { path };
-  })) + '\n');
-} else if (filter.startsWith('[inputs | sub(') && flags.has('R')) {
-  // run.sh's DISAGREE_FILTER and NEXT_FILTER (R-MEAN-1).
-  const next = filter.includes('{action: .[1]}');
-  const lines = input().split('\n');
-  if (lines[lines.length - 1] === '') lines.pop();
-  const out = [];
-  for (const l of lines) {
-    const f = l.replace(/\r$/, '').split('\t').map((x) => x.trim());
-    if (f.length !== (next ? 2 : 3) || f.some((x) => x.length === 0)) continue;
-    if ([...f[f.length - 1]].length > named.cut) continue;
-    if (next) out.push(f[0] === '-' ? { action: f[1] } : { path: f[0], action: f[1] });
-    else out.push({ a: f[0], b: f[1], reason: f[2] });
-  }
-  process.stdout.write(JSON.stringify(out.slice(0, named.max)) + '\n');
-} else if (filter === '.[$k] // empty' && flags.has('r')) {
-  const v = JSON.parse(input())[named.k];
-  if (v !== undefined && v !== null && v !== false) {
-    process.stdout.write((typeof v === 'string' ? v : JSON.stringify(v)) + '\n');
-  }
-} else {
-  process.stderr.write('jq stand-in: unsupported filter\n');
-  process.exit(3);
-}
-STUB
+  # The stand-in is shared with stats.test.sh and the benchmark (agent/bench/).
+  cp "$HERE/jq-stand-in.js" "$STUBS/jq.js"
   cat >"$STUBS/jq" <<STUB
 #!/usr/bin/env bash
 exec node -e "\$(cat '$STUBS/jq.js')" -- "\$@"
@@ -1608,6 +1500,13 @@ expect_eq "$(node -e '
   process.stdout.write([t.access_token, t.token_type, t.expiry].join(" "));
 ' <"$STATE/rclone-token.json")" "$DRIVE_TOKEN Bearer 2030-01-01T00:00:00.000Z" 'rclone token'
 grep -q STDERR-MARKER "$STATE/runner-temp/bower-logs/agent.err" || die 'agent stderr not kept in the logs dir'
+# R-SS-2: the agent runs with stream-json, and its transcript (vault
+# content) never reaches the logs dir the workflow uploads on a failure.
+expect_eq "$(cat "$STATE/claude-format.txt")" 'format=stream-json verbose=yes' 'claude output format'
+if grep -rqF -e 'SUMMARY-MARKER' -e '"type":"result"' "$STATE/runner-temp/bower-logs"; then
+  die 'the agent stream reached the logs dir'
+fi
+[ -z "$(find "$STATE/runner-temp/bower-logs" -name '*.jsonl')" ] || die 'a stream file is in the logs dir'
 if grep -q 'no runner settings file' "$STATE/out.log"; then
   die 'warned about a missing runner settings file that was there'
 fi

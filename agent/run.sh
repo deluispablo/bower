@@ -303,6 +303,10 @@ readonly UNLISTED_FILE="$WORK_DIR/instruction-unlisted.txt"
 readonly SAVED_KEYS="$WORK_DIR/saved-keys.txt"
 readonly PRE_RUN_DIR="$WORK_DIR/pre-run"
 readonly AGENT_OUT="$WORK_DIR/agent.out"
+# The agent's stream-json transcript (R-SS-2): every message, tool call and
+# tool result of the session, so vault content. It stays in the work dir,
+# never under LOG_DIR, which the workflow uploads when a run fails.
+readonly AGENT_STREAM="$WORK_DIR/agent.stream.jsonl"
 readonly AGENT_ERR="$LOG_DIR/agent.err"
 readonly RCLONE_LOG="$LOG_DIR/rclone.log"
 readonly PANDOC_LOG="$LOG_DIR/pandoc.log"
@@ -1827,6 +1831,15 @@ agent_failure_reason() {
   fi
 }
 
+# R-SS-2: the text of the last `result` event of the stream-json transcript
+# $1, as the text output used to print it. A line that is not JSON (a stream
+# cut short by a timeout) is skipped. Prints nothing when there is no result.
+readonly RESULT_TEXT_FILTER='[inputs | fromjson? | select(type == "object" and .type == "result")]
+  | last | .result? | strings'
+agent_result_text() {
+  jq -rnR "$RESULT_TEXT_FILTER" "$1"
+}
+
 # Read one string field of the vault info; empty when absent or null.
 field() { jq -r --arg k "$1" '.[$k] // empty' "$VAULT_JSON"; }
 
@@ -2386,11 +2399,15 @@ set +e
 (
   cd "$VAULT_DIR"
   timeout -k 30 "$AGENT_TIME_LIMIT" env -i "${claude_env[@]}" \
-    claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format text \
+    claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
       --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
-) >"$AGENT_OUT" 2>"$AGENT_ERR"
+) >"$AGENT_STREAM" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e
+# The agent's closing lines (the report parsed below) are the final result
+# event's text; with no result event (a crash, a timeout) AGENT_OUT is empty,
+# as an empty text output was.
+agent_result_text "$AGENT_STREAM" >"$AGENT_OUT" 2>>"$AGENT_ERR" || : >"$AGENT_OUT"
 if [ "$agent_rc" -ne 0 ]; then
   fail "$STEP: exit $agent_rc" "$(agent_failure_reason "$agent_rc")"
 fi
