@@ -306,9 +306,9 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   await expect(option).toBeVisible();
   // The snippet reads like the note body, not the raw file (#554): no
   // frontmatter keys, fences or the heading's own "#" mark.
-  const snippetText = await option
-    .locator('.switcher-row-snippet')
-    .textContent();
+  // #917: the snippet is the meta line's last part, in quotes.
+  const meta = (await option.locator('.list-row-meta').textContent()) ?? '';
+  const snippetText = /“([^”]*)”$/.exec(meta)?.[1] ?? null;
   expect(snippetText).not.toBeNull();
   expect(snippetText).not.toContain('---');
   expect(snippetText).not.toContain('status:');

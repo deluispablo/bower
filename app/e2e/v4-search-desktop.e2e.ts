@@ -45,7 +45,7 @@ test('the overlay has two columns and the preview follows the highlighted result
   const title = preview.locator('.switcher-preview-title');
   const highlighted = dialog.locator('.switcher-row[data-highlighted="true"]');
   await expect(title).toHaveText(
-    (await highlighted.locator('.switcher-row-name').textContent()) ?? '',
+    (await highlighted.locator('.list-row-title').textContent()) ?? '',
   );
   await shot(page, testInfo, 'search-desktop');
 
@@ -53,7 +53,7 @@ test('the overlay has two columns and the preview follows the highlighted result
   await page.keyboard.press('ArrowDown');
   await expect(highlighted).not.toHaveAttribute('href', first ?? '');
   await expect(title).toHaveText(
-    (await highlighted.locator('.switcher-row-name').textContent()) ?? '',
+    (await highlighted.locator('.list-row-title').textContent()) ?? '',
   );
 });
 

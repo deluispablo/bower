@@ -109,7 +109,7 @@ import { useMediaQuery } from '../use-media-query.js';
 import { FILE_KIND_LABELS, fileKind, isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
 import { useVault } from '../vault-store.js';
-import { FileIcon } from './file-icon.js';
+import { ListRow } from './list-row.js';
 import { FolderMark } from './folder-mark.js';
 import {
   IconChat,
@@ -615,27 +615,6 @@ function commandIcon(command: Command, theme: 'light' | 'dark'): JSX.Element {
   }
 }
 
-/** The meta line's parts with the 8 px root dot, as `ListRow` draws them. */
-function MetaParts({ meta }: { meta: MetaLine }): JSX.Element {
-  return (
-    <>
-      {meta.parts.map((part, at) => (
-        <Fragment key={`${at}-${part}`}>
-          {at > 0 && ' · '}
-          {meta.dot !== null && meta.dot.at === at && (
-            <span
-              class="list-row-dot"
-              data-root={meta.dot.root ?? 'none'}
-              aria-hidden="true"
-            />
-          )}
-          {part}
-        </Fragment>
-      ))}
-    </>
-  );
-}
-
 interface HitRowProps {
   id: string;
   row: RowModel;
@@ -647,11 +626,10 @@ interface HitRowProps {
 }
 
 /**
- * One result: drawn as `ListRow` (§3.17: the FileIcon in its 32 px box,
- * the title, the meta line, the time on the right) but as a listbox
- * `option`, with the matched words marked. `ListRow` itself takes the
- * title as plain text and moves the focus row by row; Search keeps the
- * focus in the field (`aria-activedescendant`).
+ * One result: #908's `ListRow` (§3.17: the FileIcon in its 32 px box, the
+ * title with the matched words marked, the meta line, the time on the
+ * right) inside a listbox `option`. Roving focus is off: Search keeps the
+ * focus in the field (`aria-activedescendant`) and owns the arrows.
  */
 function HitRow({
   id,
@@ -662,7 +640,16 @@ function HitRow({
   onActivate,
   onHighlight,
 }: HitRowProps): JSX.Element {
-  const meta = rowMeta(row, bowerWritten, now);
+  const line = rowMeta(row, bowerWritten, now);
+  // A text hit adds its snippet as the last part of the meta line.
+  const meta: MetaLine =
+    row.snippet === null
+      ? line
+      : {
+          ...line,
+          parts: [...line.parts, `“${row.snippet}”`],
+          text: `${line.text} · “${row.snippet}”`,
+        };
   const time =
     row.kind === 'folder' || row.file.modifiedTime === undefined
       ? null
@@ -674,51 +661,36 @@ function HitRow({
       aria-selected={selected}
       class="switcher-row-item"
     >
-      <a
-        href={hrefOf(row)}
-        class={`list-row switcher-row${selected ? ' is-selected' : ''}`}
-        tabIndex={-1}
-        data-highlighted={selected}
-        data-kind={row.kind}
-        onMouseEnter={onHighlight}
-        onClick={(event) => {
-          event.preventDefault();
-          onActivate(row);
+      <ListRow
+        item={{
+          id: row.file.id,
+          title: <Highlighted text={row.title} spans={row.highlights} />,
+          name: row.file.name,
+          mimeType: row.file.mimeType,
+          path: row.file.path,
+          root: row.root,
+          bowerWritten,
+          href: hrefOf(row),
         }}
-      >
-        <FileIcon
-          item={{
-            name: row.file.name,
-            mimeType: row.file.mimeType,
-            path: row.file.path,
-            root: row.root,
-            bowerWritten,
-          }}
-          size={20}
-          box
-        />
-        <span class="list-row-text">
-          <span class="list-row-head">
-            <span class="list-row-title switcher-row-name">
-              <Highlighted text={row.title} spans={row.highlights} />
-            </span>
-          </span>
-          <span class="list-row-meta">
-            <MetaParts meta={meta} />
-            {row.snippet !== null && (
-              <>
-                {' · “'}
-                <span class="switcher-row-snippet">{row.snippet}</span>”
-              </>
-            )}
-          </span>
-        </span>
-        {time !== null && time !== '' && (
-          <span class="list-row-trailing">
+        meta={meta}
+        trailing={
+          time === null || time === '' ? undefined : (
             <time dateTime={row.file.modifiedTime}>{time}</time>
-          </span>
-        )}
-      </a>
+          )
+        }
+        selected={selected}
+        roving={false}
+        rowProps={{
+          class: 'switcher-row',
+          'data-highlighted': selected,
+          'data-kind': row.kind,
+          onMouseEnter: onHighlight,
+          onClick: (event: MouseEvent) => {
+            event.preventDefault();
+            onActivate(row);
+          },
+        }}
+      />
     </li>
   );
 }

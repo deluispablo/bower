@@ -13,7 +13,7 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useId } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 
 import type { MetaLine } from '../meta-line.js';
 import type { ParaKind } from '../navigation.js';
@@ -26,7 +26,8 @@ import '../styles/list-row.css';
 export interface ListRowItem extends FileIconItem {
   /** Stable key; also the `data-row-key` the list's key handling reads. */
   id: string;
-  title: string;
+  /** Plain text, or marked-up text (Search marks the matched words). */
+  title: string | ComponentChildren;
   /** Where the row opens; without it the row is a focusable group. */
   href?: string;
 }
@@ -48,7 +49,17 @@ export interface ListRowProps {
   where?: { name: string; root: ParaKind | null };
   /** Extra attributes for the row element (long press, data hooks). */
   rowProps?: Record<string, unknown>;
+  /**
+   * The row takes the focus and moves it with the arrows (default). Off
+   * in a listbox whose focus stays in a field (Search's combobox,
+   * `aria-activedescendant`): the row is not a tab stop and leaves the
+   * keys to the field.
+   */
+  roving?: boolean;
 }
+
+/** Each row's own number, for its title and meta ids. */
+let nextRowId = 0;
 
 /** The rows or tiles of the list that holds `from`, in order. */
 function peers(from: HTMLElement, selector: string): HTMLElement[] {
@@ -197,9 +208,14 @@ export function ListRow({
   onOpen,
   where,
   rowProps = {},
+  roving = true,
 }: ListRowProps): JSX.Element {
-  const titleId = useId();
-  const metaId = useId();
+  // A counter, not `useId`: rows rendered in an overlay's own root (Search)
+  // got the same `useId` values as the page's rows, so `aria-labelledby`
+  // named a Search row after a row behind it.
+  const [uid] = useState(() => (nextRowId += 1));
+  const titleId = `list-row-${uid}-title`;
+  const metaId = `list-row-${uid}-meta`;
   const open =
     onOpen ?? (item.href === undefined ? undefined : () => follow(item.href));
   const metaText = <MetaText meta={meta} where={where} />;
@@ -231,6 +247,7 @@ export function ListRow({
     },
     onKeyDown: (event: KeyboardEvent): void => {
       call(rowProps.onKeyDown, event);
+      if (!roving) return;
       selectionKeys(
         event,
         '.list-row',
@@ -249,6 +266,7 @@ export function ListRow({
     'aria-current': selected ? ('true' as const) : undefined,
     'aria-labelledby': titleId,
     'aria-describedby': hasMeta ? metaId : undefined,
+    ...(!roving && { tabIndex: -1 }),
   };
   const body = (
     <>
@@ -274,7 +292,7 @@ export function ListRow({
     </>
   );
   return item.href === undefined ? (
-    <div {...common} tabIndex={0} role="group">
+    <div tabIndex={0} {...common} role="group">
       {body}
     </div>
   ) : (
