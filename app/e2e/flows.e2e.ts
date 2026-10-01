@@ -252,10 +252,8 @@ test('Run your own Bower: the rows, the runbook, and the five screens with Close
   await expect(
     page.getByRole('heading', { name: /Bower files it/ }),
   ).toBeInViewport();
-  await expect(
-    page.getByRole('button', { name: 'Skip', exact: true }),
-  ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Close' }).click();
+  // Skip on pages 1 to 4 (boards IN-P1..P4) goes back to Run your own.
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(heading).toBeVisible();
 });
