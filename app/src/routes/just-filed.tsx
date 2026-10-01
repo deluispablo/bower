@@ -479,6 +479,7 @@ export function JustFiled(): JSX.Element {
           more={{
             expanded: menuOpen,
             onClick: () => setMenuOpen((value) => !value),
+            name: 'Just filed',
           }}
         />
         {menuOpen && (
