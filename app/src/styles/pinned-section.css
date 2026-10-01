@@ -34,6 +34,27 @@
   cursor: pointer;
 }
 
+/* Edit, Done and All pinned: 44 px hit areas around the text (K-34). */
+.home-pinned-edit,
+.home-pinned-all {
+  position: relative;
+}
+
+.home-pinned-edit::after,
+.home-pinned-all::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 44px);
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.home-pinned-head h2:focus {
+  outline: none;
+}
+
 .home-pinned-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

@@ -220,6 +220,31 @@
   font-size: var(--text-15);
 }
 
+/* The bubble's links and "All in Folders": 44 px hit areas around the
+   words (K-34, DA-3). */
+.home-bubble a,
+.home-bubble-link,
+.home-recent-head a {
+  position: relative;
+}
+
+/* Above the first Recent row, which would paint over its hit area. */
+.home-recent-head a {
+  z-index: 1;
+}
+
+.home-bubble a::after,
+.home-bubble-link::after,
+.home-recent-head a::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 44px);
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
 .home-notes {
   display: flex;
   flex-direction: column;

@@ -1,8 +1,7 @@
 /**
  * Bower's note in the reading view (#602, board `Phone-Note-Bower`): the
  * Arlington Road note of the sample folder opens with the `> [!bower]` box,
- * one origin square per line, the legend, the word "Check" and the
- * "Joined from" chips.
+ * one origin square per line, the legend and the word "Check".
  */
 
 import { expect, openHome, shot, test, visible } from './demo.js';
@@ -40,11 +39,7 @@ test("the Arlington Road note shows Bower's note as the board draws it", async (
   await expect(box.locator('.bower-note-word')).toHaveText(['Check']);
   await expect(box).not.toContainText('(from the file)');
 
-  const joined = page.locator('.bower-joined');
-  await expect(joined).toContainText('Joined from:');
-  await expect(joined.locator('.bower-joined-chip')).toHaveText([
-    'Offer letter, Northwind Data',
-    'Cycle to Work agreement',
-  ]);
+  // No "Joined from" chips: the notes are named in About (R-NO-7, #920).
+  await expect(page.locator('.bower-joined')).toHaveCount(0);
   await shot(page, testInfo, 'v4-bower-note');
 });

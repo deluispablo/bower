@@ -628,6 +628,18 @@ export function Note() {
     showText(await appendToNote(id, text));
   }
 
+  /** Closes Add a paragraph and hands focus back to the ⋯ it came from,
+   * as Rename… and Pin do (T-22); after the sheet's own focus return. */
+  function closeAppend(): void {
+    setAppendOpen(false);
+    requestAnimationFrame(() => {
+      const more = [
+        ...document.querySelectorAll<HTMLElement>('.page-header-more'),
+      ].find((button) => button.offsetParent !== null);
+      more?.focus();
+    });
+  }
+
   async function handleTogglePin(): Promise<void> {
     if (file === undefined) return;
     const pinned = index?.notePinnedAt.has(file.id) ?? false;
@@ -828,7 +840,7 @@ export function Note() {
             <AppendForm
               key={id}
               onAppend={handleAppend}
-              onClose={() => setAppendOpen(false)}
+              onClose={closeAppend}
             />
           )}
         </>

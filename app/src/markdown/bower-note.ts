@@ -382,9 +382,7 @@ function legendHtml(rows: readonly BoxRow[]): string {
   );
   if (present.length === 0) return '';
   const words = present
-    .map(
-      (kind) => `<em class="bower-legend-${kind}">${ORIGIN_WORDS[kind]}</em>`,
-    )
+    .map((kind) => `<b class="bower-legend-${kind}">${ORIGIN_WORDS[kind]}</b>`)
     .join(', ');
   return `<div class="bower-note-legend">· from ${words}</div>`;
 }
@@ -399,7 +397,7 @@ function joinedHtml(parser: InlineParser, links: Token[][]): string {
     .join('');
   return (
     '<div class="bower-joined">' +
-    `<span class="bower-joined-label">Joined from:</span>${chips}</div>\n`
+    `<span class="bower-joined-label">Joined from:</span> ${chips}</div>\n`
   );
 }
 

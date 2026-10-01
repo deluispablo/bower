@@ -194,6 +194,37 @@ function runOf(
   };
 }
 
+/** The last part of a path. */
+function lastPart(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+/**
+ * `log.md`'s `Filed:` lines for `runs`, oldest first, each stamped (UTC, as
+ * the agent writes it) at its run's finish, so Activity finds every file
+ * row's folder in its run's window (DB-16).
+ */
+export function filedLogLines(runs: readonly Run[]): string {
+  const lines: string[] = [];
+  for (const run of [...runs].reverse()) {
+    const at = run.finishedAt;
+    if (at === undefined || run.state !== 'done') continue;
+    const stamp = `${at.slice(0, 10)} ${at.slice(11, 16)}`;
+    for (const item of run.items ?? []) {
+      if (item.kind !== 'file' || item.to === undefined) continue;
+      const folder = item.to.slice(0, item.to.lastIndexOf('/'));
+      const renamed =
+        item.renamedFrom === undefined
+          ? ''
+          : `, renamed from ${lastPart(item.path)}`;
+      lines.push(
+        `- ${stamp} · Filed: ${lastPart(item.to)} → ${folder}${renamed}`,
+      );
+    }
+  }
+  return lines.join('\n');
+}
+
 /** A run that did not finish: nothing moved, the inbox kept everything. */
 function unfinished(runId: string, finishedAt: string, minutes: number): Run {
   const run = runOf(
@@ -217,12 +248,32 @@ function unfinished(runId: string, finishedAt: string, minutes: number): Run {
  */
 const LOADED_AT = new Date();
 
-/** Local midnight `offset` days from the viewer's today. */
-function localDay(offset: number): Date {
+/** The latest time of day the fixture writes on its "today" (an offer
+ * Bower wrote at 07:11). */
+const LATEST_TODAY = '0711';
+
+/**
+ * The day the fixture calls today: the viewer's today, or yesterday when
+ * the demo opens before `LATEST_TODAY`, so no time is ever later than the
+ * viewer's clock (T-1). Local midnight.
+ */
+export const DEMO_TODAY: Date = ((): Date => {
+  const minutes = LOADED_AT.getHours() * 60 + LOADED_AT.getMinutes();
+  const latest =
+    Number(LATEST_TODAY.slice(0, 2)) * 60 + Number(LATEST_TODAY.slice(2));
   return new Date(
     LOADED_AT.getFullYear(),
     LOADED_AT.getMonth(),
-    LOADED_AT.getDate() + offset,
+    LOADED_AT.getDate() - (minutes < latest ? 1 : 0),
+  );
+})();
+
+/** Local midnight `offset` days from the fixture's today. */
+function localDay(offset: number): Date {
+  return new Date(
+    DEMO_TODAY.getFullYear(),
+    DEMO_TODAY.getMonth(),
+    DEMO_TODAY.getDate() + offset,
   );
 }
 
@@ -519,6 +570,19 @@ const MIB = 1024 * KIB;
  * network), and fetchable like any URL. */
 function thumb(label: string, fill: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" width="160" height="120"><rect width="160" height="120" fill="${fill}"/><text x="80" y="66" font-family="sans-serif" font-size="14" text-anchor="middle">${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** A PDF's first page standing in for Drive's `thumbnailLink` (DA-22): a
+ * portrait page with its title and grey lines of text. */
+function pageThumb(label: string): string {
+  const lines = [64, 80, 96, 112, 136, 152, 168, 184, 200]
+    .map(
+      (y, i) =>
+        `<rect x="20" y="${y}" width="${i % 4 === 3 ? 80 : 130}" height="6" rx="3" fill="#d5dbe3"/>`,
+    )
+    .join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 220" width="340" height="440"><rect width="170" height="220" fill="#ffffff"/><text x="20" y="40" font-family="sans-serif" font-size="13" font-weight="700" fill="#1f2a37">${label}</text>${lines}</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
@@ -1245,7 +1309,7 @@ function pdfAt(
     modifiedTime: modified,
     content: new Blob([LEASE_PDF], { type: 'application/pdf' }),
     size,
-    thumbnailLink: thumb(label, '#e8eef7'),
+    thumbnailLink: pageThumb(label),
     ...(filedByBower && { appProperties: { bowerOrigin: 'filed' } }),
   };
 }
@@ -1684,17 +1748,19 @@ A senior data engineering role in Melbourne, hybrid.
     tags: 'summary, career',
     callout: [
       'Eight years as a data engineer (SQL, Python, dbt, Google Cloud), most recently at Northwind Data in London. (from the file)',
-      'Work rights need a clear callout: a Working Holiday visa now, a skilled visa applied for. (from your notes: [[Visa & Immigration]])',
-      'The LinkedIn link on the CV matches your [[LinkedIn profile]] note. — Check',
+      'Work rights need a clear callout: a Working Holiday visa now, a skilled visa applied for. (from the file) — Check',
+      'The LinkedIn link on the CV matches your [[LinkedIn profile]] note. (from your notes: [[LinkedIn profile]])',
     ],
     body: `## Why
 A summary of [[Resume Australia]], the CV tailored for [[Job Search Australia]], with the facts an Australian recruiter would look for first and what is worth checking before it goes out.
 
 ## Key facts
-- Target role: Senior Data Engineer (Google Cloud)
-- Experience: 8 years, retail and financial data
-- Current role: Data Engineer, Northwind Data, London (2026)
-- Work rights: Working Holiday visa; skilled visa applied for
+| Fact | Detail |
+|---|---|
+| Target role | Senior Data Engineer (Google Cloud) |
+| Experience | 8 years, retail and financial data |
+| Current role | Data Engineer, Northwind Data, London (2026) |
+| Work rights | Working Holiday visa; skilled visa applied for |
 
 ## What this means for you
 Lead with the Google Cloud work; say the visa status in the first lines.
@@ -1842,11 +1908,7 @@ export const FIXTURE_FILES: readonly FixtureFile[] = [
 - 2026-09-12 · Filed · Flights and stays, Things to see in Lisbon
 - 2026-09-18 · Filed · Paint colours, Quotes from fitters
 - 2026-09-21 · Answered · Which subscriptions renew this autumn
-- 2026-09-26 08:10 · Filed: Running log.md → 3-Resources/Health
-- 2026-09-26 08:11 · Filed: Weeknight curry.md → 3-Resources/Cooking
-- 2026-09-27 06:49 · Filed: Lease agreement 2026.pdf → 4-Archives/Flat hunt
-- 2026-09-27 06:50 · Filed: Arlington Road, window sign.jpg → 4-Archives/Flat hunt, renamed from IMG_4471.jpg
-- 2026-09-27 06:51 · Filed: Notes from the viewing.md → 4-Archives/Flat hunt`,
+${filedLogLines(DEMO_RUNS)}`,
   ),
   note(
     'Lint Report.md',
@@ -2349,15 +2411,6 @@ Home insurance on 3 November, and the streaming service every month until you ca
   // Last, so the older files keep their demo ids (`demo-<n>`) the tests use.
   ...V6_WORLD,
 ];
-
-/**
- * What the scripted tidy-up also files (#674, boards `Flow-05-Home`,
- * `Phone-JustFiled`): the flat listings, each with the companion note that
- * carries `kind: rental-listing`, and the clause Home's bubble adds.
- */
-export const SCRIPTED_LISTINGS: readonly RunItem[] = (
-  DEMO_RUNS.find((run) => run.runId === 'demo-run-earlier-4')?.items ?? []
-).filter((item) => /^4-Archives\/Flat hunt\/.*\.pdf$/.test(item.to ?? ''));
 
 // --- Test states (#735, spec §7c item 4) --------------------------------
 // Extra vault shapes and run states the v5 tests need. Nothing here is part

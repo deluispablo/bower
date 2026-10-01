@@ -44,7 +44,6 @@ import { useNoteTitles } from '../components/use-note-titles.js';
 import {
   findReport,
   healthCardLine,
-  isReportNew,
   reportDayStart,
 } from '../health-report.js';
 import {
@@ -605,15 +604,15 @@ export function Home(): JSX.Element {
   const findings = useHealthFindings(true);
   const reportTime =
     index === null ? undefined : findReport(index)?.modifiedTime;
+  // The tile states where the check stands, never a bare "New" that reads
+  // like a badge (HM-Main-1280, DA-28).
   const healthLine =
     reportTime === undefined
       ? 'Not checked yet'
-      : isReportNew(reportTime, getPref('healthSeenAt'))
-        ? 'New'
-        : healthCardLine(
-            `Checked ${relativeTime(reportDayStart(reportTime), now)}`,
-            findings,
-          );
+      : healthCardLine(
+          `Checked ${relativeTime(reportDayStart(reportTime), now)}`,
+          findings,
+        );
 
   const offline = !online;
   const loading = status === 'loading';
@@ -661,10 +660,17 @@ export function Home(): JSX.Element {
   const greeting = greetingFor(me?.name);
   const toggleMenu = (): void => setMenuOpen((open) => !open);
 
-  // The phone's top bar (R-HM-1): "G'day, Alex" and its ⋯.
+  // The phone's top bar (R-HM-1): "G'day, Alex" and its ⋯. The page's one
+  // h1 on the phone, as on Add and Bower (DA-1, T-9); the desktop's h1 is
+  // the greeting in the page, so the bar's copy stays a plain span there.
   const crumb = useMemo(
-    () => <span class="topbar-title">{greeting}</span>,
-    [greeting],
+    () =>
+      wide ? (
+        <span class="topbar-title">{greeting}</span>
+      ) : (
+        <h1 class="topbar-title">{greeting}</h1>
+      ),
+    [greeting, wide],
   );
   useShellSlot('crumb', crumb);
   const actions = useMemo(

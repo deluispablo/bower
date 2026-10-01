@@ -15,7 +15,7 @@
  */
 
 import type { JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
@@ -184,6 +184,7 @@ export function PinnedSection({
   // The card that just finished unpinning: kept on screen with the bird
   // mark, even once `items` itself has already dropped it.
   const [pending, setPending] = useState<Tile | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (pending === null) return;
     const timer = setTimeout(() => setPending(null), UNPINNED_SHOWN_MS);
@@ -202,7 +203,9 @@ export function PinnedSection({
     return (
       <div class="home-pinned">
         <div class="home-pinned-head">
-          <h2>Pinned</h2>
+          <h2 ref={headingRef} tabIndex={-1}>
+            Pinned
+          </h2>
         </div>
         <p class="home-pinned-empty">{PINNED_EMPTY}</p>
       </div>
@@ -219,14 +222,21 @@ export function PinnedSection({
   const hasMore = items.length > TILE_LIMIT;
 
   async function handleUnpin(tile: Tile): Promise<void> {
+    const last = items.length === 1;
     const ok = await runUnpin(tile.unpin);
-    if (ok) setPending(tile);
+    if (!ok) return;
+    setPending(tile);
+    // The button that had focus is gone; after the last pin, focus waits
+    // on the Pinned heading rather than dropping to the page (T-20).
+    if (last) headingRef.current?.focus();
   }
 
   return (
     <div class="home-pinned">
       <div class="home-pinned-head">
-        <h2>Pinned</h2>
+        <h2 ref={headingRef} tabIndex={-1}>
+          Pinned
+        </h2>
         <button
           type="button"
           class="home-pinned-edit"

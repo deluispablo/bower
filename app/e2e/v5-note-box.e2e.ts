@@ -32,9 +32,10 @@ test("Bower's note folds to one line and stays folded on the device", async ({
   const box = await page.locator('.bower-note-box-head').boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  // Open shows everything: summary, key facts once, details, no caption.
+  // Open shows everything: summary, details, no caption, and no key-fact
+  // tiles (G-18).
   await expect(page.locator('.bower-note-box-summary')).toBeVisible();
-  await expect(page.locator('.bower-note-box .key-facts')).toHaveCount(1);
+  await expect(page.locator('.bower-note-box .key-facts')).toHaveCount(0);
   await expect(page.locator('.note-keyfacts-caption')).toHaveCount(0);
   await expect(page.locator('.details-toggle')).toHaveCount(0);
 

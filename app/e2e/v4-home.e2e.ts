@@ -42,7 +42,7 @@ test('the bubble says what was filed and links to Just filed', async ({
   const bubble = visible(page.locator('.home-bubble'));
   await expect(bubble).toContainText(
     // #754: the run sentence, what Bower added, then See what changed.
-    'Done just now: 5 filed',
+    'Done just now: 2 filed',
   );
   await expect(bubble).not.toContainText('bike times');
   await shot(page, testInfo, 'home-after-tidy');
@@ -57,7 +57,7 @@ test('Last tidy-up counts what is new and opens Just filed; Health and Notes sit
   await tidyUp(page);
   const card = visible(page.locator('.stat-tile', { hasText: 'Last tidy-up' }));
   // #754: the card is the time and the counts line only.
-  await expect(card).toContainText('5 filed');
+  await expect(card).toContainText('2 filed');
   await expect(card).not.toContainText('new to you');
   if (testInfo.project.name === 'desktop') {
     const tidy = await card.boundingBox();
@@ -98,16 +98,19 @@ test('Recent rows show the kind and the where dot, and All in Folders on the pho
   }
 });
 
-test("phone Home: the top bar says G'day, Alex and there is no greeting heading; desktop has the h1 (R-HM-1)", async ({
+test("phone Home: the top bar's G'day, Alex is the page's one h1; desktop has the h1 in the page (R-HM-1, #920 DA-1)", async ({
   page,
 }, testInfo) => {
   await openHome(page);
   const greeting = page.getByRole('heading', { name: "G'day, Alex" });
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   if (testInfo.project.name === 'phone') {
     await expect(
-      page.locator('header.topbar').getByText("G'day, Alex", { exact: true }),
+      page
+        .locator('header.topbar')
+        .getByRole('heading', { level: 1, name: "G'day, Alex" }),
     ).toBeVisible();
-    await expect(greeting).toHaveCount(0);
+    await expect(page.locator('.home-h1')).toHaveCount(0);
     await expect(visible(page.locator('.home-bubble'))).toBeVisible();
   } else {
     await expect(greeting).toBeVisible();
