@@ -73,7 +73,6 @@ import { lazyOverlay, whenIdle } from '../lazy-overlay.js';
 import { replayTour, useTour } from '../tour-store.js';
 import type { HelpTab } from '../help-rows.js';
 import { BackLink } from './back-link.js';
-import { BowerMark } from './bird.js';
 import { DemoBanner } from './demo-banner.js';
 import { openFoldersDrawer, useFoldersDrawer } from '../folders-drawer.js';
 import { Explorer, HEALTH_PATH } from './explorer.js';
@@ -411,8 +410,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           aria-current={currentFor(href, path)}
           data-tour={tour}
         >
-          {/* R-ICON-27: the Bower item wears the bird, as on the tab bar. */}
-          {href === BOWER.href ? <BowerMark size={20} /> : <Icon />}
+          {/* Every item is a stroke icon; Bower is the speech bubble (#950 D-2). */}
+          <Icon />
           <span class="explorer-row-label">{label}</span>
         </a>
       ))}
@@ -560,8 +559,8 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             aria-current={id !== undefined && id === tab ? 'page' : undefined}
             data-tour={tour}
           >
-            {/* The Bower tab is the still bird mark, 22 px (§3.2, #915). */}
-            {id === 'bower' ? <BowerMark size={22} /> : <Icon />}
+            {/* Every tab is a stroke icon; Bower is the speech bubble (#950 D-2). */}
+            <Icon />
             <span>{label}</span>
           </a>
         ))}
