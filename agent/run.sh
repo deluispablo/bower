@@ -874,9 +874,17 @@ note_meta() {
 # section. A scan (no text layer) gets "Scanned: no text to copy". The
 # document's name must be unique among the pending ones, else nothing is
 # guessed. Logs a count only.
+# R-SS-12: a new text copy (the agent created it in this session) whose
+# original is a PDF with no kept text, next to it in the same folder and not
+# pending (a filed PDF the agent was asked about), gets the PDF's text the
+# same way: pdf_text runs on it now (too_large still applies, a PDF
+# pdftotext cannot read gets nothing) and its text, or the scan line, is
+# appended as above.
 append_document_text() {
-  [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -s "$DOC_TEXT_MAP" ] || return 0
-  local map="$WORK_DIR/doc-text-names.txt" path base by kind orig file n appended=0
+  [ "$TOO_MANY_CHANGES" -eq 0 ] || return 0
+  local map="$WORK_DIR/doc-text-names.txt" before="$WORK_DIR/before-paths-text.txt"
+  local path base by kind orig file n pdf appended=0 filed=0
+  cut -d ' ' -f 3- "$MANIFEST_BEFORE" | LC_ALL=C sort -u >"$before" || return 1
   {
     cat "$DOC_TEXT_MAP"
     awk -F '\t' 'FILENAME == ARGV[1] { p = $1; sub(/^.*\//, "", p); f[p] = $2; next }
@@ -892,8 +900,25 @@ append_document_text() {
     [ "${base%.md}" = "${orig%.*}" ] || continue
     if grep -qxF '## The document' "$VAULT_DIR/$path"; then continue; fi
     n=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"]' "$map" | grep -c . || true)
-    [ "$n" -eq 1 ] || continue
-    file=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"] { print $2 }' "$map")
+    if [ "$n" -eq 0 ]; then
+      case "$orig" in
+        *.[pP][dD][fF]) ;;
+        *) continue ;;
+      esac
+      ! grep -qxF -- "$path" "$before" || continue
+      pdf=$orig
+      [ "${path%/*}" = "$path" ] || pdf="${path%/*}/$orig"
+      [ -f "$VAULT_DIR/$pdf" ] || continue
+      ! grep -qxF -- "$pdf" "$PENDING_FILE" || continue
+      pdf_text "$pdf"
+      file=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"] { f = $2 } END { print f }' "$DOC_TEXT_MAP")
+      [ -n "$file" ] || continue
+      filed=$((filed + 1))
+    elif [ "$n" -eq 1 ]; then
+      file=$(O="$orig" awk -F '\t' '$1 == ENVIRON["O"] { print $2 }' "$map")
+    else
+      continue
+    fi
     {
       [ -z "$(tail -c1 "$VAULT_DIR/$path")" ] || printf '\n'
       printf '\n## The document\n\n'
@@ -906,8 +931,9 @@ append_document_text() {
     appended=$((appended + 1))
   done <"$CHANGED_FILE"
   [ "$appended" -eq 0 ] || log "$appended text copies completed"
+  [ "$filed" -eq 0 ] || log "$filed of them for filed PDFs"
   # The appended text changed those files: the manifest must say so.
-  manifest >"$MANIFEST_AFTER"
+  [ "$appended" -eq 0 ] || manifest >"$MANIFEST_AFTER"
 }
 
 # R-AG-4 and R-AG-5, after the audit: a note the agent created that is named
@@ -2582,9 +2608,17 @@ export RCLONE_CONFIG_VAULT_EXPORT_FORMATS=txt
 STEP='sync down'
 log "$STEP"
 check_folder "$STEP"
+sync_started=$(date +%s)
 if ! rclone sync vault: "$VAULT_DIR" --exclude '.obsidian/**' "${RCLONE_FILTER[@]}" >>"$RCLONE_LOG" 2>&1; then
   fail "$STEP: rclone failed" drive_unavailable
 fi
+# R-SS-15: how heavy the sync down is, numbers only: the files and bytes of
+# the local copy and the seconds it took. When the time passes 20 s in
+# normal use, the partial download (spec D-5) moves up.
+sync_seconds=$(($(date +%s) - sync_started))
+sync_files=$(find "$VAULT_DIR" -type f | wc -l | tr -d ' ')
+sync_bytes=$(du -sb "$VAULT_DIR" | cut -f 1)
+log "$STEP: $sync_files files, $(awk -v b="$sync_bytes" 'BEGIN { printf "%.1f", b / 1048576 }') MB, $sync_seconds s"
 
 STEP='check rulebook'
 if [ ! -f "$VAULT_DIR/CLAUDE.md" ]; then
@@ -3151,6 +3185,17 @@ fi
 if ! append_document_text || ! audit_note_names; then
   fail "$STEP: text copy failed"
 fi
+# R-SS-10: the index rows the session added or changed, checked against the
+# v24 form (check_rows); a bad row is counted, never refused or rewritten,
+# and the count is a warning in the summary. Before the bookkeeping phase,
+# so a link the runner rewrites for a move is not counted as the agent's.
+if [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -f "$VAULT_DIR/index.md" ]; then
+  rows_checked=$(check_rows "$INDEX_BEFORE" "$VAULT_DIR/index.md") || fail "$STEP: row check failed"
+  bad_rows=${rows_checked% *}
+  [ "${rows_checked#* }" -eq 0 ] || log "row check: $bad_rows of ${rows_checked#* } rows not in the expected form"
+  [ "$bad_rows" -eq 0 ] ||
+    ROWS_WARNING="Warning: $bad_rows index $([ "$bad_rows" -eq 1 ] && echo 'row is' || echo 'rows are') not in the expected form."
+fi
 # E-7 (#921): an unusable folder status list in a changed hub note is removed.
 if ! check_hub_statuses; then
   fail "$STEP: status list check failed"
@@ -3234,6 +3279,8 @@ else
 '}$AUDIT_WARNING"
   [ -z "$STATUSES_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
 '}$STATUSES_WARNING"
+  [ -z "$ROWS_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
+'}$ROWS_WARNING"
   filed=$(count_lines "$WORK_DIR/pending-after-scan.txt")
   [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
   write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
