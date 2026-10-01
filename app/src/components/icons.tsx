@@ -579,32 +579,3 @@ export function IconLink(): JSX.Element {
     </Svg>
   );
 }
-
-/** Settings (R-ICON-28): a gear, so the sliders keep Filter & sort only. */
-export function IconGear(): JSX.Element {
-  return (
-    <Svg>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" />
-    </Svg>
-  );
-}
-
-/** Remove a thing from a pile, unpin in edit mode, remove a rule (R-ICON-32). */
-export function IconRemove(): JSX.Element {
-  return (
-    <Svg>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M8 12h8" />
-    </Svg>
-  );
-}
-
-/** Pause a rule (R-ICON-33). */
-export function IconPause(): JSX.Element {
-  return (
-    <Svg>
-      <path d="M9 6v12M15 6v12" />
-    </Svg>
-  );
-}
