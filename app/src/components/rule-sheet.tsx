@@ -18,7 +18,7 @@
 import type { JSX } from 'preact';
 
 import { IconClose, IconEdit, IconPause, IconPlay, IconRedo } from './icons.js';
-import { Overlay } from './overlay.js';
+import { Overlay, OverlayHeader } from './overlay.js';
 import { Queued } from './queued-overlay.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { ruleSheetLabel } from '../rules.js';
@@ -103,18 +103,21 @@ export function RuleSheet({
         onClose={onClose}
       >
         <div class={`rule-sheet-body rule-sheet-body--${close}`}>
-          {close === 'close' && (
-            <button
-              type="button"
-              class="icon-button rule-sheet-close"
-              aria-label="Close the rule"
-              onClick={onClose}
-            >
-              <IconClose />
-            </button>
-          )}
           <div class="rule-sheet-head">
-            <p class="rule-sheet-label">{ruleSheetLabel(topic, rule)}</p>
+            {close === 'close' ? (
+              <OverlayHeader
+                titleId="rule-sheet-title"
+                title={
+                  <span class="rule-sheet-label">
+                    {ruleSheetLabel(topic, rule)}
+                  </span>
+                }
+                closeLabel="Close the rule"
+                onClose={onClose}
+              />
+            ) : (
+              <p class="rule-sheet-label">{ruleSheetLabel(topic, rule)}</p>
+            )}
             <p class="rule-sheet-text">{rule.text}</p>
           </div>
           {rowsFor(rule).map(({ action, label, hint, Icon }) => (

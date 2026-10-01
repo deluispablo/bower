@@ -35,16 +35,13 @@
   overflow-wrap: anywhere;
 }
 
-/* Desktop: the panel's ✕ "Close the rule" sits top right. */
-.rule-sheet-body--close {
-  position: relative;
-  padding-top: var(--space-6);
+/* Desktop: OverlayHeader holds the overline and ✕ "Close the rule". */
+.rule-sheet-head .overlay-head {
+  min-height: 32px;
 }
 
-.rule-sheet-close {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
+.rule-sheet-head .overlay-title {
+  font-size: inherit;
 }
 
 .rule-sheet-row {
