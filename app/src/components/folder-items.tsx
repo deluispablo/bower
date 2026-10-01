@@ -45,6 +45,7 @@ import {
   rowsFor,
   sortRows,
   folderPagesUnder,
+  listedUnder,
   isFolderPage,
   subfolderThings,
 } from '../folder-view.js';
@@ -61,12 +62,7 @@ import { noteTitle } from '../note-title.js';
 import type { PendingRequest } from '../rename-request.js';
 import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
-import {
-  FILE_KIND_LABELS,
-  changedUnder,
-  fileKind,
-  fileTitle,
-} from '../vault-index.js';
+import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
 import { Badge } from './badge.js';
 import { FilterSortSheet } from './filter-sort-sheet.js';
@@ -182,7 +178,7 @@ export function firstInside(
   bower: ReadonlySet<string> = new Set(),
   answers: ReadonlySet<string> = new Set(),
 ): FolderCardItem[] {
-  return changedUnder(byPath, path, max).map((file) => ({
+  return listedUnder(byPath, path, max, peekNoteMeta).map((file) => ({
     id: file.id,
     title: titleOfFile(file),
     name: file.name,
@@ -429,14 +425,16 @@ export function FolderItems({
   // A folder of folders: what its cards and Recently changed list.
   const recent = useMemo(
     () =>
-      folderOfFolders ? changedUnder(byPath, contents.path, RECENT_MAX) : [],
+      folderOfFolders
+        ? listedUnder(byPath, contents.path, RECENT_MAX, peekNoteMeta)
+        : [],
     [folderOfFolders, byPath, contents.path],
   );
   const cardFiles = useMemo(
     () =>
       folderOfFolders
         ? subfolders.flatMap((folder) =>
-            changedUnder(byPath, folder.path, CARD_RECENT_MAX),
+            listedUnder(byPath, folder.path, CARD_RECENT_MAX, peekNoteMeta),
           )
         : [],
     [folderOfFolders, byPath, subfolders],
@@ -680,19 +678,22 @@ export function FolderItems({
 
   /** A subfolder card, as the preview column shows it (AR-Select-1280). */
   function paneOfFolder(folder: FolderSubfolder): PaneItem {
-    const inside: PaneInsideItem[] = changedUnder(byPath, folder.path, 10).map(
-      (file) => ({
-        id: file.id,
-        title: titleOfFile(file),
-        href: hrefOfFile(file),
-        name: file.name,
-        mimeType: file.mimeType,
-        path: file.path,
-        bowerWritten: bowerSet.has(file.id),
-        isNew: fresh.isNew(file.id),
-        ...(file.modifiedTime !== undefined && { modified: file.modifiedTime }),
-      }),
-    );
+    const inside: PaneInsideItem[] = listedUnder(
+      byPath,
+      folder.path,
+      CARD_RECENT_MAX,
+      peekNoteMeta,
+    ).map((file) => ({
+      id: file.id,
+      title: titleOfFile(file),
+      href: hrefOfFile(file),
+      name: file.name,
+      mimeType: file.mimeType,
+      path: file.path,
+      bowerWritten: bowerSet.has(file.id),
+      isNew: fresh.isNew(file.id),
+      ...(file.modifiedTime !== undefined && { modified: file.modifiedTime }),
+    }));
     const own = byPath.get(folder.path);
     return {
       type: 'folder',

@@ -537,10 +537,35 @@ export function folderReads(
     folderPagesUnder(folders, byPath, sub.path).forEach(add);
   }
   if (folderOfFolders) {
-    changedUnder(byPath, folder.path, RECENT_MAX).forEach(add);
+    listedUnder(byPath, folder.path, RECENT_MAX).forEach(add);
     for (const sub of folder.subfolders) {
-      changedUnder(byPath, sub.path, CARD_RECENT_MAX).forEach(add);
+      listedUnder(byPath, sub.path, CARD_RECENT_MAX).forEach(add);
     }
   }
   return [...reads.values()];
+}
+
+/**
+ * The things under the folder at `path`, newest first, at most `max`, as a
+ * card's preview, the preview column and "Recently changed" list them: never
+ * a folder's own page (K-31, #922). A note named after its folder counts as
+ * its page until `metaOf` says otherwise (`by: person`), so a page never
+ * shows first and disappears after. Pure.
+ */
+export function listedUnder(
+  byPath: ReadonlyMap<string, DriveFile>,
+  path: string,
+  max = Number.POSITIVE_INFINITY,
+  metaOf: (file: DriveFile) => NoteMeta | undefined = () => undefined,
+): DriveFile[] {
+  const listed: DriveFile[] = [];
+  for (const file of changedUnder(byPath, path)) {
+    if (listed.length >= max) break;
+    if (fileKind(file) === 'note' && isNamedAfterFolder(file)) {
+      const meta = metaOf(file);
+      if (meta === undefined || isFolderPage(file, meta)) continue;
+    }
+    listed.push(file);
+  }
+  return listed;
 }
