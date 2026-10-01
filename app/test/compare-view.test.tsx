@@ -252,14 +252,17 @@ describe('Compare on a phone (PF-Compare-375, PF-Sort-375)', () => {
       (el) => el.textContent === 'Low first',
     );
     click(low);
-    expect(titles()[0]).toBe('Camden Mews, 1 bed');
-    expect(root.querySelector('.compare-sort-btn')?.textContent).toBe(
-      'Rent a month, low first',
-    );
+    // A draft until Show (T-23): the cards keep their order meanwhile.
+    expect(titles()[0]).not.toBe('Camden Mews, 1 bed');
     const show = [...(dialog?.querySelectorAll('button') ?? [])].find((el) =>
       el.textContent?.startsWith('Show '),
     );
     expect(show?.textContent).toBe('Show 3 flats');
+    click(show);
+    expect(titles()[0]).toBe('Camden Mews, 1 bed');
+    expect(root.querySelector('.compare-sort-btn')?.textContent).toBe(
+      'Rent a month, low first',
+    );
     await vi.waitFor(() => {
       expect(cache.saveViewSettings).toHaveBeenCalled();
     });

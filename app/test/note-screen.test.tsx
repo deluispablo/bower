@@ -223,20 +223,18 @@ describe('Note screen (#609)', () => {
     expect(root.querySelector('.note-props')).toBeNull();
 
     expect(root.querySelector('.bower-note-box')).not.toBeNull();
-    // R-INS-2: no caption, and the key facts are in the box only.
+    // R-INS-2: no caption; no key-fact tiles at all (G-18, #920).
     expect(root.querySelector('.note-keyfacts-caption')).toBeNull();
-    expect(root.querySelectorAll('.key-facts')).toHaveLength(1);
-    expect(root.querySelector('.bower-note-box .key-facts')).not.toBeNull();
+    expect(root.querySelectorAll('.key-facts')).toHaveLength(0);
     // R-INS-7: no Details toggle; the fields are shown while the box is open.
     expect(root.querySelector('.details-toggle')).toBeNull();
     expect(root.querySelector('.bower-note-box .details')).not.toBeNull();
     const head = root.querySelector('.bower-note-box-fold');
     expect(head?.getAttribute('aria-expanded')).toBe('true');
 
-    // Box (summary, key facts, details), then the body: in that order.
+    // Box (summary, details), then the body: in that order.
     const order = [
       '.bower-note-box-summary',
-      '.key-facts',
       '.details',
       '.markdown h2',
     ];
