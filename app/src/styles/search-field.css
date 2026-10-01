@@ -152,9 +152,16 @@
 
 /* The sidebar's 44 px field sits in the explorer's own 4 px gaps with no
    margin of its own, so the tree still ends above the ledge in an 800 px
-   window (#847). */
+   window (#847), and spans the sidebar's 12 px sides, about 238 wide, so
+   its placeholder fits (#920 DA-18). */
 .shell-sidebar .explorer-search-slot .search-field {
-  margin: 0 var(--space-3);
+  margin: 0;
+}
+
+/* The sidebar column is a height-limited flex column: the field keeps its
+   44 px instead of giving way (O-R4, #920 DB-33). */
+.shell-sidebar .explorer-search-slot {
+  flex-shrink: 0;
 }
 
 .explorer-drawer .explorer-search-slot .search-field,

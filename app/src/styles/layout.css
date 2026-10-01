@@ -996,9 +996,15 @@ button.page-bare-back {
     padding: var(--space-6) var(--space-4);
   }
 
+  /* The sidebar's 12 px sides put the wordmark and the nav rows' icons
+     at x = 20 (boards *-1280, #920 DA-18). */
   .explorer-brand {
-    margin: 0 var(--space-2);
-    padding: 0 10px;
+    margin: 0;
+    padding: 0 8px;
+  }
+
+  .shell-sidebar .explorer-rows {
+    padding: 0;
   }
 
   /* The desktop top area (#906, PF-Main-1280, JF-Main-1280): one 48 px row
