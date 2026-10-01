@@ -130,8 +130,18 @@
 
 .search-field-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+/* The line under the box (O-R2), the Composer's muted 13 px line. */
+.search-field-line {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-13);
 }
 
 /* In the explorer's slot (#909): the sidebar keeps its side margins; the

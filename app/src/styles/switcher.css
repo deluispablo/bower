@@ -4,7 +4,7 @@
 /* The overlay's own panel (`overlay.css`) takes the switcher's size: a full
    screen on the phone, a wide dialog from 900 px. The scrim, the animation
    and the focus trap are the overlay's. */
-.overlay .overlay-panel:has(> .switcher-panel) {
+.overlay .overlay-panel:has(> .switcher-panel:where(:not(.is-sheet))) {
   top: 0;
   right: 0;
   bottom: 0;
@@ -19,8 +19,20 @@
   box-shadow: none;
 }
 
-.overlay .overlay-panel:has(> .switcher-panel) > .overlay-grab {
+.overlay
+  .overlay-panel:has(> .switcher-panel:where(:not(.is-sheet)))
+  > .overlay-grab {
   display: none;
+}
+
+/* NO-Tag-375: the tag search opened from a note is a content sheet on the
+   surface colour over the note (the overlay's own sheet). */
+.overlay .overlay-panel:has(> .switcher-panel.is-sheet) {
+  background: var(--color-surface);
+}
+
+.switcher-panel.is-sheet .switcher-body {
+  padding-bottom: var(--space-6);
 }
 
 .switcher-panel {
@@ -30,38 +42,24 @@
   min-height: 0;
 }
 
+/* #917 (SE-Empty, SE-Query, NO-Tag): #910's SearchField at the top, 16 px
+   from the edges; no rule under it. */
 .switcher-field {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 56px;
-  padding: 0 var(--space-2) 0 var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  /* SE-Empty-375: the field's top edge 8 px from the screen's. */
+  padding: var(--space-2) var(--space-4) var(--space-2);
+}
+
+/* The tag search's line (NO-Tag), the offline and no-results lines. */
+.switcher-tag-line,
+.switcher-line {
+  margin: 0;
+  padding: var(--space-1) var(--space-5, 20px) var(--space-2);
   color: var(--color-text-muted);
+  font-size: var(--text-13);
 }
 
-.switcher-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
-  padding: var(--space-2) 0;
-  border: none;
-  background: none;
-  color: var(--color-text);
-  font: inherit;
-  outline: none;
-}
-
-.switcher-bird {
-  /* Room of rule 3 around the 72 px bird: 9 px above and each side, 1 px below. */
-  padding: 9px 9px 1px;
-  position: absolute;
-  /* It sits on the field's top edge and left of Close: it never covers the
-     input border or the button (#888). */
-  right: 64px;
-  bottom: 100%;
-  pointer-events: none;
+.switcher-line {
+  padding: var(--space-2);
 }
 
 .switcher-body {
@@ -70,7 +68,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-2);
+  padding: 0 var(--space-4) var(--space-4);
   overflow-y: auto;
 }
 
@@ -90,16 +88,14 @@
   list-style: none;
 }
 
+/* Group labels are the shared `.group-label` (13 px, 700, sentence case,
+   muted; R-LABEL-1); this only keeps the list item plain. */
 .switcher-heading {
-  padding: var(--space-3) var(--space-3) var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  list-style: none;
 }
 
-.switcher-row {
+/* Result rows are `.list-row` (list-row.css); the command rows keep this. */
+.switcher-row:not(.list-row) {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -115,8 +111,8 @@
   cursor: pointer;
 }
 
-.switcher-row:hover,
-.switcher-row[data-highlighted='true'] {
+.switcher-row:not(.list-row):hover,
+.switcher-row:not(.list-row)[data-highlighted='true'] {
   background: var(--color-surface);
 }
 
@@ -129,21 +125,8 @@
   font-size: var(--text-base);
 }
 
-.switcher-row-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.switcher-row-path,
-.switcher-row-snippet {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
+/* The matched words (SE-Query): teal, 600 (the link token, so the light
+   theme keeps today's colour). */
 .switcher-match {
   background: none;
   color: var(--color-link);
@@ -156,7 +139,7 @@
   display: flex;
   flex-wrap: nowrap;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: 0 var(--space-4) var(--space-2);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -240,53 +223,21 @@
   font-size: var(--text-sm);
 }
 
-.switcher-recent-group .switcher-heading {
-  margin: 0;
-}
-
 .switcher-recent {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-}
-
-.switcher-row-icon-file {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.switcher-row-path .folder-mark {
-  vertical-align: middle;
+  padding: var(--space-1) var(--space-2);
 }
 
 .switcher-none {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-8) var(--space-3) 0;
-  text-align: center;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
-.switcher-none-title {
-  color: var(--color-text);
-  font-size: var(--text-lg);
-}
-
-.switcher-none-text {
-  color: var(--color-text-muted);
-  line-height: 1.5;
-}
-
-/* R-SEARCH-9: on the phone the bird would sit over the field, so it stays away. */
 @media (max-width: 899px) {
-  .switcher-bird {
-    display: none;
-  }
-
   /* The chip row scrolls sideways; the last chip ("Any time") never clips. */
   .switcher-chips {
     max-width: 100%;
@@ -302,14 +253,18 @@
 
 @media (min-width: 900px) {
   .overlay .overlay-panel:has(> .switcher-panel) {
-    /* The bird above the field needs room (R-BIRD-6): only the results
-       list scrolls, never the panel or the overlay panel. */
-    overflow: visible;
-    top: var(--switcher-top, 96px);
+    /* Only the results list scrolls, never the panel or the overlay panel. */
+    overflow: hidden;
+    /* SE-Query-1280: centred over the content area right of the sidebar
+       (x 322–1222 at 1280), 60 px from the top. */
+    top: max(60px, var(--switcher-top, 0px));
     right: 0;
     bottom: auto;
-    left: 0;
-    width: min(920px, calc(100vw - var(--space-8)));
+    left: var(--sidebar-width, 264px);
+    width: min(
+      900px,
+      calc(100vw - var(--sidebar-width, 264px) - var(--space-8))
+    );
     height: min(600px, calc(100vh - 160px));
     margin: 0 auto;
     padding: 0;
@@ -320,13 +275,6 @@
 
   /* #594, board Desktop-Search: the list on the left, the highlighted
      result previewed on the right. */
-  .switcher-columns {
-    display: grid;
-    flex: 1;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    min-height: 0;
-  }
-
   .switcher-body {
     min-height: 0;
     overflow-y: auto;
@@ -379,25 +327,53 @@
     margin: 0;
   }
 
-  .switcher-scope {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    gap: 6px;
-    min-height: 32px;
-    padding: 0 var(--space-2);
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-    background: var(--color-surface);
-    color: var(--color-text);
-    font: inherit;
-    font-size: var(--text-sm);
-    cursor: pointer;
+  /* S-SE-6: Open and Open in Drive under the preview's title. */
+  .switcher-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
   }
 
-  .switcher-scope .icon {
-    width: 14px;
-    height: 14px;
+  /* SE-Query-1280: the field and chips span the list column only. */
+  .switcher-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  .switcher-panel > .switcher-field,
+  .switcher-panel > .switcher-tag-line,
+  .switcher-panel > .switcher-chips {
+    grid-column: 1;
+  }
+
+  .switcher-panel > .switcher-columns {
+    display: contents;
+  }
+
+  /* NO-Tag-1280: the tag search is the list only, no preview column, in a
+     narrower dialog as tall as its rows. */
+  .switcher-panel.is-tag {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* NO-Tag-1280 draws it over the note's middle (x 360–920 at 1280). */
+  .overlay .overlay-panel:has(> .switcher-panel.is-tag) {
+    left: 0;
+    width: min(560px, calc(100vw - var(--space-8)));
+    height: auto;
+    max-height: min(600px, calc(100vh - 120px));
+  }
+
+  .switcher-columns > .switcher-body {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .switcher-columns > .switcher-preview {
+    grid-column: 2;
+    grid-row: 1 / -1;
   }
 
   .switcher-foot {
@@ -434,21 +410,4 @@
   .switcher-columns {
     display: contents;
   }
-}
-
-/* A photo's own thumbnail in place of its icon (#594). */
-.switcher-row-thumb {
-  display: inline-flex;
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  overflow: hidden;
-  border-radius: 6px;
-  background: var(--color-surface);
-}
-
-.switcher-row-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }

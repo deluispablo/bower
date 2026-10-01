@@ -19,6 +19,7 @@ import type { JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 
 import { openSwitcher } from '../switcher-store.js';
+import { COMPOSER_LINES } from './composer.js';
 import {
   dictationBlocked,
   getRecognitionCtor,
@@ -227,6 +228,12 @@ function SearchInput({
       >
         <IconClose />
       </button>
+      {/* O-R2: a blocked mic says so under the box, as the Composer does. */}
+      {state === 'blocked' && (
+        <p class="search-field-line" aria-live="polite">
+          {COMPOSER_LINES.blocked}
+        </p>
+      )}
     </div>
   );
 }

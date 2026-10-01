@@ -71,6 +71,11 @@
   font-size: 15px;
 }
 
+/* Its placeholder ("sk-ant-…") reads in the body font, as drawn. */
+.composer-mono::placeholder {
+  font-family: var(--font-sans);
+}
+
 .composer-line {
   display: flex;
   align-items: center;

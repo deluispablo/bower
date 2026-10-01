@@ -298,21 +298,15 @@ test('/search?q= lands on Home with the switcher open and prefilled (#495)', asy
   const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
   await expect(switcher).toBeVisible();
   await expect(switcher.getByRole('combobox')).toHaveValue('laundry');
-  // A recent note: a snippet needs the note's text in the cache, and the
-  // load caches the newest notes first, up to a fetch cap.
+  // A note found by its text still lists; #917 (SE-Query): the row is the
+  // name and the meta line only, no body snippet (so no raw Markdown).
   const option = switcher
     .getByRole('option', { name: /10-43 Buckley St, Moonee Ponds/ })
     .first();
   await expect(option).toBeVisible();
-  // The snippet reads like the note body, not the raw file (#554): no
-  // frontmatter keys, fences or the heading's own "#" mark.
-  const snippetText = await option
-    .locator('.switcher-row-snippet')
-    .textContent();
-  expect(snippetText).not.toBeNull();
-  expect(snippetText).not.toContain('---');
-  expect(snippetText).not.toContain('status:');
-  expect(snippetText?.trimStart().startsWith('#')).toBe(false);
+  const meta = (await option.locator('.list-row-meta').textContent()) ?? '';
+  expect(meta).not.toContain('“');
+  expect(meta).not.toContain('---');
 });
 
 test("a note Bower wrote opens with Bower's note and the Used line (#351, #602)", async ({
@@ -1505,8 +1499,9 @@ test('Settings footer carries the build commit next to the version (#512)', asyn
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   // The demo build runs from this same git checkout, so a real commit is
   // always available: no dangling "Bower 0.1.0 ·" with nothing after it.
-  await expect(page.locator('.settings-footer p').first()).toHaveText(
-    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7,12}$/,
+  // #917: one footer line, "Bower <version> · <sha> · Source code · …".
+  await expect(page.locator('.settings-footer')).toHaveText(
+    /^Bower \d+\.\d+\.\d+ · [0-9a-f]{7,12} · Source code · Privacy · Terms$/,
   );
 });
 
@@ -1590,29 +1585,26 @@ test('Settings runs the v3 section order, sign-in-way at the bottom (#309)', asy
   await webLookup.click();
   await expect(webLookup).not.toBeChecked();
 
-  // Sign out is a plain button, apart from Sign out everywhere; in the
-  // demo build, Sign out everywhere and the own API key render nothing of
-  // their own — one sentence covers the whole Advanced section instead of
-  // repeating per control (#364) — and Delete (its own section) keeps its
-  // own sentence: twice total, not three times. Scoped to the settings
-  // section: the desktop sidebar has its own Sign out button.
+  // Sign out is a plain button, apart from Sign out everywhere. In the
+  // demo build (#917, spec §4.14 states) the account controls stay on
+  // screen as drawn, disabled, each with "Not in the demo. Run your own
+  // Bower to use it.": the push toggle, the key box, Sign out and Delete. Scoped to
+  // the settings section: the desktop sidebar has its own Sign out button.
   const settings = page.locator('.settings');
   await expect(
     settings.getByRole('button', { name: 'Sign out', exact: true }),
-  ).toBeVisible();
+  ).toBeDisabled();
   await expect(
-    settings.getByText('Not in the demo: run your own Bower to use this.'),
-  ).toHaveCount(2);
-
-  // The push toggle is greyed with its own sentence (#364, handover
-  // C.10/D.6), word for word what "From your Drive" gets in Add.
-  const pushToggle = settings.getByRole('switch', {
-    name: "Ping me when it's done",
-  });
-  await expect(pushToggle).toBeDisabled();
+    settings.getByRole('button', { name: 'Sign out everywhere' }),
+  ).toBeDisabled();
   await expect(
     settings.getByText('Not in the demo. Run your own Bower to use it.'),
-  ).toBeVisible();
+  ).toHaveCount(4);
+
+  const pushToggle = settings.getByRole('switch', {
+    name: 'Ping me when it is done',
+  });
+  await expect(pushToggle).toBeDisabled();
 });
 
 test.describe('/login never redirects to the intro (#313)', () => {

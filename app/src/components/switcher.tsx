@@ -19,12 +19,19 @@
  * tidy-up (the run report's `items` with `to`, #583) and Searched before.
  * No results offers "Ask Bower where it is".
  *
+ * v6 (#917, spec §4.7, boards SE-Empty, SE-Query, NO-Tag): the field is
+ * #910's `SearchField` (the mic dictates into it; a trigger's mic opens
+ * Search already dictating); results group under sentence-case labels
+ * (R-LABEL-1) in rows drawn like `ListRow` with a `FileIcon` and the mixed
+ * meta line "<kind> · ● <parent>" (folders add "<n> things · updated
+ * <when>", R-SE-3); a `#tag` query lists the notes with that tag over the
+ * note it was opened from (R-SE-5).
+ *
  * Mounted once in `layout.tsx`; only actually rendered while open, so every
  * open starts from a clean field. The scrim, focus trap, Escape, inert page,
  * scroll lock and return-to-opener come from `overlay.tsx` (it portals into
  * `document.body`, outside the inert shell); arrow keys and Enter are this component's own,
- * over the flat list of rows. The bird never sits over the field or Close
- * (R-SEARCH-9): the phone hides it.
+ * over the flat list of rows.
  */
 
 import { Fragment } from 'preact';
@@ -44,18 +51,23 @@ import { loadNote, loadThumbnail } from '../cache.js';
 import { FOLDER_MIME, getText, searchFullText } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { formatSize } from '../file-preview.js';
-import { things } from '../home.js';
-import { parseFrontmatter } from '../markdown/frontmatter.js';
+import { normalizeTags, parseFrontmatter } from '../markdown/frontmatter.js';
+import { metaLine, shortDate } from '../meta-line.js';
+import type { MetaLine } from '../meta-line.js';
 import { plainText } from '../proposals.js';
 import {
   displayName,
+  driveFileUrl,
+  driveFolderUrl,
   folderHref,
+  folderOf,
   paraKindOf,
   relativeTime,
 } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
+import { useOnline } from '../online.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { useRun } from '../run-store.js';
@@ -68,9 +80,17 @@ import type {
   TitleSpan,
 } from '../search-index.js';
 import {
+  OFFLINE_LINE,
+  hasTag,
   loadRecentSearches,
+  noResultsLine,
   saveRecentSearch,
+  searchGroupLabel,
+  searchTitle,
   snippet as makeSnippet,
+  tagLine,
+  tagOfQuery,
+  withoutExtension,
 } from '../search.js';
 import { BOWER_PATH } from '../shell-routes.js';
 import {
@@ -86,27 +106,23 @@ import type { Command } from '../switcher.js';
 import { commandsFor } from '../switcher.js';
 import { effectiveTheme, setTheme } from '../theme.js';
 import { useMediaQuery } from '../use-media-query.js';
-import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
-import type { FileKind, VaultIndex } from '../vault-index.js';
+import { FILE_KIND_LABELS, fileKind, isAppFile } from '../vault-index.js';
+import type { VaultIndex } from '../vault-index.js';
 import { useVault } from '../vault-store.js';
-import { Bird } from './bird.js';
-import { FolderIcon, FolderMark } from './folder-mark.js';
+import { ListRow } from './list-row.js';
+import { FolderMark } from './folder-mark.js';
 import {
   IconChat,
   IconClock,
   IconClose,
-  IconFile,
-  IconImage,
   IconInbox,
   IconMoon,
-  IconNote,
-  IconPdf,
   IconPlus,
-  IconSearch,
   IconSun,
 } from './icons.js';
-import { KindBadge } from './kind-badge.js';
 import { Overlay } from './overlay.js';
+import { SearchField } from './search-field.js';
+import { isBowerWritten } from '../bower-written.js';
 import { Queued } from './queued-overlay.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import '../styles/switcher.css';
@@ -125,51 +141,8 @@ const PREVIEW_DELAY_MS = 120;
 type SearchStatus = 'idle' | 'searching' | 'done' | 'error';
 type KindChip = 'all' | 'folders' | 'notes' | 'files';
 
-/** The desktop chips group files by what they are: "PDFs 2 · Spreadsheets 1". */
-const FAMILIES: readonly { key: string; label: string; kinds: FileKind[] }[] = [
-  { key: 'pdf', label: 'PDFs', kinds: ['pdf'] },
-  { key: 'sheet', label: 'Spreadsheets', kinds: ['sheet', 'excel', 'csv'] },
-  { key: 'photo', label: 'Photos', kinds: ['photo', 'heic', 'image'] },
-  {
-    key: 'doc',
-    label: 'Documents',
-    kinds: ['doc', 'word', 'opendocument', 'text', 'markdown'],
-  },
-  { key: 'slides', label: 'Slides', kinds: ['slides', 'powerpoint'] },
-  { key: 'video', label: 'Videos', kinds: ['video'] },
-  { key: 'audio', label: 'Audio', kinds: ['audio'] },
-];
-
-/** The desktop chip a hit is counted under. */
-function chipKeyOf(hit: Pick<SearchHit, 'kind' | 'file'>): string {
-  if (hit.kind !== 'file') return hit.kind;
-  const kind = fileKind(hit.file);
-  return FAMILIES.find((family) => family.kinds.includes(kind))?.key ?? 'other';
-}
-
-/** The desktop chips for `results`: All, then one per kind that has a hit. */
-function desktopChips(
-  results: SearchResults,
-): { key: string; label: string; count: number }[] {
-  const counts = new Map<string, number>();
-  for (const hit of [...results.folders, ...results.notes, ...results.files]) {
-    const key = chipKeyOf(hit);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  const labelled = [
-    { key: 'folder', label: 'Folders' },
-    { key: 'note', label: 'Notes' },
-    ...FAMILIES,
-    { key: 'other', label: 'Other files' },
-  ];
-  return [
-    { key: 'all', label: 'All', count: resultTotal(results) },
-    ...labelled.flatMap(({ key, label }) => {
-      const count = counts.get(key);
-      return count === undefined ? [] : [{ key, label, count }];
-    }),
-  ];
-}
+/** How many tag lookups read note frontmatter at once. */
+const TAG_BATCH = 8;
 
 /** The note that describes a PDF (`Name.pdf` -> `Name.md`), if the vault has one. */
 function companionOf(
@@ -184,32 +157,23 @@ function pagesWord(pages: number): string {
   return `${pages} ${pages === 1 ? 'page' : 'pages'}`;
 }
 
-/** Whether the file's picture is worth showing in its row. */
-function isPictureKind(file: DriveFile): boolean {
-  const kind = fileKind(file);
-  return kind === 'photo' || kind === 'heic' || kind === 'image';
-}
-
 /**
- * What the rows learn after they are drawn: photo thumbnails (the listing's
- * `thumbnailLink`, blob-cached) and a PDF's page count, from its companion
- * note's `pages`. Each is fetched once per file; a miss leaves the row as it
- * was (icon, no count).
+ * What the rows learn after they are drawn: a PDF's page count, from its
+ * companion note's `pages`, for the desktop preview. Fetched once per
+ * file; a miss leaves the count out. Rows draw the FileIcon, never a
+ * thumbnail (R-SE-3).
  */
 function useRowExtras(
   rows: readonly RowModel[],
   byPath: ReadonlyMap<string, DriveFile> | undefined,
-): { pages: ReadonlyMap<string, number>; thumbs: ReadonlyMap<string, string> } {
+): { pages: ReadonlyMap<string, number> } {
   const [pages, setPages] = useState<ReadonlyMap<string, number>>(new Map());
-  const [thumbs, setThumbs] = useState<ReadonlyMap<string, string>>(new Map());
   const asked = useRef(new Set<string>());
-  const urls = useRef(new Set<string>());
   const gone = useRef(false);
 
   useEffect(
     () => () => {
       gone.current = true;
-      for (const url of urls.current) URL.revokeObjectURL(url);
     },
     [],
   );
@@ -233,29 +197,115 @@ function useRowExtras(
           },
         );
       }
-      const thumbKey = `thumb:${file.id}`;
-      if (isPictureKind(file) && !asked.current.has(thumbKey)) {
-        asked.current.add(thumbKey);
-        loadThumbnail(file).then(
-          (blob) => {
-            if (blob === undefined) return;
-            const url = URL.createObjectURL(blob);
-            if (gone.current) {
-              URL.revokeObjectURL(url);
-              return;
-            }
-            urls.current.add(url);
-            setThumbs((prev) => new Map(prev).set(file.id, url));
-          },
-          (err: unknown) => {
-            console.error(err);
-          },
-        );
-      }
     }
   }, [rows, byPath]);
 
-  return { pages, thumbs };
+  return { pages };
+}
+
+/**
+ * The notes tagged `tag` (N-11), newest first: each note's frontmatter
+ * `tags`, read through the note-meta cache (a note not cached yet is read
+ * once from Drive, like a folder screen does). `null` while reading.
+ */
+/**
+ * Which of the listed notes Bower wrote (K-14: the bird and "Bower note"),
+ * read the way tag search reads tags: `loadNoteMeta`, the cached
+ * frontmatter first and Drive once for a note not cached yet. Every row
+ * in every list (Opened lately, results, tag search) asks the same source,
+ * so a Bower note never shows as a plain note. Grows as answers come in.
+ */
+function useBowerNotes(files: readonly DriveFile[]): ReadonlySet<string> {
+  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+  const asked = useRef(new Set<string>());
+  const gone = useRef(false);
+  const key = files
+    .slice(0, EXTRAS_MAX)
+    .map((file) => `${file.id}:${file.modifiedTime ?? ''}`)
+    .join(',');
+
+  useEffect(
+    () => () => {
+      gone.current = true;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    for (const file of files.slice(0, EXTRAS_MAX)) {
+      const ask = `${file.id}:${file.modifiedTime ?? ''}`;
+      if (asked.current.has(ask)) continue;
+      asked.current.add(ask);
+      loadNoteMeta(file).then(
+        (meta) => {
+          const text = knownNoteText(file.id);
+          const body =
+            text === undefined ? undefined : parseFrontmatter(text).body;
+          if (gone.current || !isBowerWritten(meta, { body })) return;
+          setIds((prev) =>
+            prev.has(file.id) ? prev : new Set(prev).add(file.id),
+          );
+        },
+        (err: unknown) => {
+          console.error('A note could not be read for its author', err);
+        },
+      );
+    }
+  }, [key]);
+
+  return ids;
+}
+
+function useTagged(
+  tag: string | null,
+  index: VaultIndex | null,
+): DriveFile[] | null {
+  const [found, setFound] = useState<{
+    tag: string;
+    notes: DriveFile[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (tag === null || index === null) return;
+    let cancelled = false;
+    const notes = index.notes.filter(
+      (note) => !isAppFile(note.path, note.name),
+    );
+    void (async () => {
+      const tagged: DriveFile[] = [];
+      for (let at = 0; at < notes.length; at += TAG_BATCH) {
+        const batch = notes.slice(at, at + TAG_BATCH);
+        const metas = await Promise.all(
+          batch.map((note) =>
+            loadNoteMeta(note).catch((err: unknown) => {
+              console.error('A note could not be read for its tags', err);
+              return null;
+            }),
+          ),
+        );
+        if (cancelled) return;
+        metas.forEach((meta, i) => {
+          const note = batch[i];
+          if (
+            note !== undefined &&
+            meta !== null &&
+            hasTag(normalizeTags(meta.fields.tags), tag)
+          ) {
+            tagged.push(note);
+          }
+        });
+      }
+      tagged.sort((a, b) =>
+        (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''),
+      );
+      if (!cancelled) setFound({ tag, notes: tagged });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tag, index]);
+
+  return tag !== null && found?.tag === tag ? found.notes : null;
 }
 
 /** The first lines of a note's own words (no frontmatter, callout marks or link syntax). */
@@ -434,6 +484,30 @@ interface RowModel {
   snippet: string | null;
   /** How long ago, when there is no snippet ("yesterday"). */
   tail: string | null;
+  /** The root the item lives under, for its icon and the meta dot. */
+  root: ParaKind | null;
+  /** The folder it is in, as Drive names it; `''` at the top. */
+  parentName: string;
+  /** A folder's newest change inside it, ISO (the folder page's "updated"). */
+  updated: string;
+}
+
+/** The row's meta line (R-SE-3, K-15): "Bower note · ● Moonee Ponds",
+ * "Folder · ● Housing Search Australia · 7 things · updated today". */
+function rowMeta(row: RowModel, bowerWritten: boolean, now: number): MetaLine {
+  return metaLine(
+    {
+      name: row.file.name,
+      mimeType: row.file.mimeType,
+      bowerWritten,
+      root: row.root,
+      ...(row.parentName !== '' && { parentName: row.parentName }),
+      ...(row.count !== null && { count: row.count }),
+      ...(row.kind === 'folder' &&
+        row.updated !== '' && { updated: row.updated }),
+    },
+    { view: 'mixed-row', now },
+  );
 }
 
 function hrefOf(row: RowModel): string {
@@ -482,7 +556,7 @@ function rowFromHit(hit: SearchHit, index: VaultIndex, now: number): RowModel {
   return {
     file: hit.file,
     kind: hit.kind,
-    title: hit.title,
+    title: searchTitle(hit.title),
     highlights: hit.highlights,
     para,
     where,
@@ -490,7 +564,27 @@ function rowFromHit(hit: SearchHit, index: VaultIndex, now: number): RowModel {
     count: hit.kind === 'folder' ? childCount(index, hit.file.path) : null,
     snippet: hit.snippet,
     tail: tailFor(hit.file, now),
+    root: hit.root,
+    parentName: lastSegment(folderOf(hit.file.path)),
+    updated: hit.updated,
   };
+}
+
+function lastSegment(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+/** A folder's newest change anywhere inside it, ISO, `''` when unknown. */
+function newestInside(index: VaultIndex, path: string): string {
+  const prefix = `${path}/`;
+  let newest = '';
+  for (const list of [index.notes, index.files]) {
+    for (const file of list) {
+      const time = file.modifiedTime ?? '';
+      if (file.path.startsWith(prefix) && time > newest) newest = time;
+    }
+  }
+  return newest;
 }
 
 /** A row for a file the empty screen lists (no query, so nothing highlighted). */
@@ -514,8 +608,8 @@ function rowFromFile(
       kind === 'folder'
         ? displayName(file.name)
         : kind === 'note'
-          ? noteTitle(file)
-          : fileTitle(file.name),
+          ? searchTitle(noteTitle(file))
+          : withoutExtension(file.name),
     highlights: [],
     para,
     where,
@@ -523,6 +617,9 @@ function rowFromFile(
     count: kind === 'folder' ? childCount(index, file.path) : null,
     snippet: null,
     tail,
+    root: paraKindOf(file.path.split('/')[0] ?? ''),
+    parentName: lastSegment(folderOf(file.path)),
+    updated: kind === 'folder' ? newestInside(index, file.path) : '',
   };
 }
 
@@ -566,59 +663,37 @@ function commandIcon(command: Command, theme: 'light' | 'dark'): JSX.Element {
   }
 }
 
-/** The row's icon; a file also wears its grey kind badge. */
-function RowIcon({
-  row,
-  thumb,
-}: {
-  row: RowModel;
-  thumb?: string | undefined;
-}): JSX.Element {
-  if (thumb !== undefined) {
-    return (
-      <span class="switcher-row-thumb">
-        <img src={thumb} alt="" />
-      </span>
-    );
-  }
-  if (row.kind === 'folder') return <FolderIcon tint={row.para ?? undefined} />;
-  if (row.kind === 'note') return <IconNote />;
-  const kind = fileKind(row.file);
-  const icon =
-    kind === 'pdf' ? (
-      <IconPdf />
-    ) : kind === 'photo' || kind === 'heic' || kind === 'image' ? (
-      <IconImage />
-    ) : (
-      <IconFile />
-    );
-  return (
-    <span class="switcher-row-icon-file">
-      {icon}
-      <KindBadge kind={kind} file={row.file} />
-    </span>
-  );
-}
-
 interface HitRowProps {
   id: string;
   row: RowModel;
   selected: boolean;
-  pages?: number | undefined;
-  thumb?: string | undefined;
+  bowerWritten: boolean;
+  now: number;
   onActivate: (row: RowModel) => void;
   onHighlight: () => void;
 }
 
+/**
+ * One result: #908's `ListRow` (§3.17: the FileIcon in its 32 px box, the
+ * title with the matched words marked, the meta line, the time on the
+ * right) inside a listbox `option`. Roving focus is off: Search keeps the
+ * focus in the field (`aria-activedescendant`) and owns the arrows.
+ */
 function HitRow({
   id,
   row,
   selected,
-  pages,
-  thumb,
+  bowerWritten,
+  now,
   onActivate,
   onHighlight,
 }: HitRowProps): JSX.Element {
+  // The name and the meta line only, as drawn (SE-Query): no body snippet.
+  const meta = rowMeta(row, bowerWritten, now);
+  const time =
+    row.kind === 'folder' || row.file.modifiedTime === undefined
+      ? null
+      : shortDate(row.file.modifiedTime, now);
   return (
     <li
       id={id}
@@ -626,43 +701,36 @@ function HitRow({
       aria-selected={selected}
       class="switcher-row-item"
     >
-      <a
-        href={hrefOf(row)}
-        class="switcher-row"
-        data-highlighted={selected}
-        data-kind={row.kind}
-        onMouseEnter={onHighlight}
-        onClick={(event) => {
-          event.preventDefault();
-          onActivate(row);
+      <ListRow
+        item={{
+          id: row.file.id,
+          title: <Highlighted text={row.title} spans={row.highlights} />,
+          name: row.file.name,
+          mimeType: row.file.mimeType,
+          path: row.file.path,
+          root: row.root,
+          bowerWritten,
+          href: hrefOf(row),
         }}
-      >
-        <RowIcon row={row} thumb={thumb} />
-        <span class="switcher-row-text">
-          <span class="switcher-row-name">
-            <Highlighted text={row.title} spans={row.highlights} />
-          </span>
-          <span class="switcher-row-path">
-            {row.kind === 'file' &&
-              `${row.kindWord} · ${pages === undefined ? '' : `${pagesWord(pages)} · `}`}
-            {row.para !== null && (
-              <>
-                <FolderMark kind={row.para} size={18} />{' '}
-              </>
-            )}
-            {row.where}
-            {row.count !== null && ` · ${things(row.count)}`}
-            {row.snippet !== null ? (
-              <>
-                {' · “'}
-                <span class="switcher-row-snippet">{row.snippet}</span>”
-              </>
-            ) : (
-              row.tail !== null && ` · ${row.tail}`
-            )}
-          </span>
-        </span>
-      </a>
+        meta={meta}
+        trailing={
+          time === null || time === '' ? undefined : (
+            <time dateTime={row.file.modifiedTime}>{time}</time>
+          )
+        }
+        selected={selected}
+        roving={false}
+        rowProps={{
+          class: 'switcher-row',
+          'data-highlighted': selected,
+          'data-kind': row.kind,
+          onMouseEnter: onHighlight,
+          onClick: (event: MouseEvent) => {
+            event.preventDefault();
+            onActivate(row);
+          },
+        }}
+      />
     </li>
   );
 }
@@ -697,6 +765,7 @@ function CommandRow({
         <a
           href={command.href}
           class="switcher-row"
+          tabIndex={-1}
           data-highlighted={selected}
           onMouseEnter={onHighlight}
           onClick={(event) => {
@@ -711,6 +780,7 @@ function CommandRow({
         <button
           type="button"
           class="switcher-row"
+          tabIndex={-1}
           data-highlighted={selected}
           onMouseEnter={onHighlight}
           onClick={() => {
@@ -728,14 +798,20 @@ function CommandRow({
 /** The desktop column beside the list: the highlighted result, larger. */
 function SearchPreview({
   row,
+  bowerWritten,
+  now,
   pages,
   picture,
   lines,
+  onOpen,
 }: {
   row: RowModel | null;
+  bowerWritten: boolean;
+  now: number;
   pages: number | undefined;
   picture: string | null;
   lines: string[] | null;
+  onOpen: (row: RowModel) => void;
 }): JSX.Element {
   if (row === null) {
     return (
@@ -744,21 +820,59 @@ function SearchPreview({
       </aside>
     );
   }
+  // The meta line under a title (SE-Query-1280: "Folder · 7 things ·
+  // updated today"); a file adds its pages and size.
   const facts: string[] = [];
   if (row.kind === 'folder') {
-    facts.push('Folder');
-    if (row.count !== null) facts.push(things(row.count));
-  } else if (row.kind === 'note') {
-    facts.push('Note');
+    facts.push(
+      ...metaLine(
+        {
+          name: row.file.name,
+          mimeType: row.file.mimeType,
+          ...(row.count !== null && { count: row.count }),
+          ...(row.updated !== '' && { updated: row.updated }),
+        },
+        { view: 'row', now },
+      ).parts,
+    );
+    facts.unshift('Folder');
   } else {
-    facts.push(row.kindWord);
+    facts.push(
+      metaLine(
+        { name: row.file.name, mimeType: row.file.mimeType, bowerWritten },
+        { view: 'row', now },
+      ).text,
+    );
     if (pages !== undefined) facts.push(pagesWord(pages));
-    if (row.file.size !== undefined) facts.push(formatSize(row.file.size));
+    if (row.kind === 'file' && row.file.size !== undefined) {
+      facts.push(formatSize(row.file.size));
+    }
   }
+  const drive =
+    row.kind === 'folder' ? driveFolderUrl(row.file) : driveFileUrl(row.file);
   return (
     <aside class="switcher-preview" aria-label="Preview">
       <b class="switcher-preview-title">{row.title}</b>
       <p class="switcher-preview-meta">{facts.join(' · ')}</p>
+      <div class="switcher-preview-actions">
+        <button
+          type="button"
+          class="btn btn-sm"
+          onClick={() => {
+            onOpen(row);
+          }}
+        >
+          Open
+        </button>
+        <a
+          class="btn btn-secondary btn-sm"
+          href={drive}
+          target="_blank"
+          rel="noopener"
+        >
+          Open in Drive
+        </a>
+      </div>
       {picture !== null && (
         <img class="switcher-preview-picture" src={picture} alt="" />
       )}
@@ -771,11 +885,6 @@ function SearchPreview({
       )}
     </aside>
   );
-}
-
-function headingFor(kind: HitKind, count: number): string {
-  if (kind === 'folder') return count === 1 ? 'Folder' : 'Folders';
-  return kind === 'note' ? 'Notes' : 'Files';
 }
 
 const CHIP_KINDS: Readonly<Record<KindChip, HitKind | null>> = {
@@ -804,6 +913,32 @@ function SwitcherPanel({
   const lastFinished = seenRun ?? reportedRun;
 
   const [query, setQuery] = useState(initialQuery);
+  // Opened from a tag on a note (`/search?q=%23tag`, R-SE-5).
+  const [openedAsTag] = useState(() => tagOfQuery(initialQuery) !== null);
+
+  // Browser Back closes the tag search and stays on the note: one history
+  // entry of its own (same address) while it is open; closing it any other
+  // way takes that entry back off. A row that opens something pushes its
+  // own entry first, so nothing is taken off then.
+  useEffect(() => {
+    if (!openedAsTag) return;
+    history.pushState({ bowerSearch: 'tag' }, '', window.location.href);
+    const onPop = (): void => {
+      closeSwitcher();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      const state: unknown = history.state;
+      if (
+        typeof state === 'object' &&
+        state !== null &&
+        (state as { bowerSearch?: unknown }).bowerSearch === 'tag'
+      ) {
+        history.back();
+      }
+    };
+  }, [openedAsTag]);
   const [status, setStatus] = useState<SearchStatus>('idle');
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [snippets, setSnippets] = useState<ReadonlyMap<string, string | null>>(
@@ -815,19 +950,37 @@ function SwitcherPanel({
     folderOfLocation(location, index),
   );
   const desktop = useMediaQuery(DESKTOP_QUERY);
-  const [kindChip, setKindChip] = useState<string>('all');
+  const [kindChip, setKindChip] = useState<KindChip>('all');
   const [time, setTime] = useState<TimeKey>('any');
   const [timeOpen, setTimeOpen] = useState(false);
   // Bumped when the index learns something on its own (a restored copy, note
   // text read from the cache), so the results are worked out again.
   const [indexVersion, setIndexVersion] = useState(0);
-  const [fieldFocused, setFieldFocused] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  // S-SE-9: offline, the index on this device still answers.
+  const online = useOnline();
   const [theme, setThemeState] = useState(effectiveTheme);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  // SearchField hands its input over through this ref; the combobox role
+  // goes on as soon as it does, whenever the overlay host mounts it.
+  const [inputRef] = useState(() => {
+    let field: HTMLInputElement | null = null;
+    return {
+      get current(): HTMLInputElement | null {
+        return field;
+      },
+      set current(next: HTMLInputElement | null) {
+        field = next;
+        if (next === null) return;
+        next.setAttribute('role', 'combobox');
+        next.setAttribute('aria-expanded', 'true');
+        next.setAttribute('aria-controls', 'switcher-listbox');
+        next.setAttribute('autocomplete', 'off');
+      },
+    };
+  });
   const panelRef = useRef<HTMLDivElement>(null);
   // The clock is read once per open: rows say "yesterday", not a live counter.
   const [now] = useState(() => Date.now());
@@ -906,7 +1059,8 @@ function SwitcherPanel({
     }
     timerRef.current = setTimeout(() => {
       saveRecentSearch(trimmedQuery);
-      runSearch(trimmedQuery);
+      // A tag reads the notes' own tags (`useTagged`), not Drive's text.
+      if (tagOfQuery(trimmedQuery) === null) runSearch(trimmedQuery);
     }, DEBOUNCE_MS);
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -920,11 +1074,13 @@ function SwitcherPanel({
 
   const trimmed = query.trim();
   const searching = trimmed.length >= MIN_QUERY_LENGTH;
+  const tag = searching ? tagOfQuery(trimmed) : null;
+  const tagged = useTagged(tag, index);
 
   // Names and paths are matched at once from the index already in memory:
   // no Drive call, so this never waits on the full-text search.
   const results = useMemo((): SearchResults | null => {
-    if (!searching || index === null) return null;
+    if (!searching || tag !== null || index === null) return null;
     const since = sinceFor(time, now);
     const options: SearchOptions = {
       showAppFiles: getPref('showAppFiles'),
@@ -937,6 +1093,7 @@ function SwitcherPanel({
     // `indexVersion` is not read here: it only forces this to run again.
   }, [
     searching,
+    tag,
     index,
     trimmed,
     scope,
@@ -960,47 +1117,38 @@ function SwitcherPanel({
     return best;
   }, [results]);
 
-  // Desktop chips count by what the thing is ("PDFs 2"); the phone's by group.
-  const chipList = useMemo(
-    () => (results === null ? [] : desktopChips(results)),
-    [results],
-  );
-  const activeChip =
-    desktop && !chipList.some((chip) => chip.key === kindChip)
-      ? 'all'
-      : kindChip;
+  // One set of kind chips on both sizes (SE-Query-375/1280).
+  const activeChip = kindChip;
 
   const sections = useMemo((): Section[] => {
     if (index === null) return [];
-    if (results !== null) {
-      const wanted = desktop
-        ? null
-        : (CHIP_KINDS[activeChip as KindChip] ?? null);
-      const groups: [HitKind, SearchHit[]][] = desktop
-        ? [
-            ['folder', results.folders],
-            ['file', results.files],
-            ['note', results.notes],
-          ]
+    if (tag !== null) {
+      // N-11: one list of the tagged notes, no group label.
+      return tagged === null || tagged.length === 0
+        ? []
         : [
-            ['folder', results.folders],
-            ['note', results.notes],
-            ['file', results.files],
+            {
+              id: 'tag',
+              heading: '',
+              rows: tagged.map((file) => rowFromFile(file, index, null)),
+            },
           ];
+    }
+    if (results !== null) {
+      const wanted = CHIP_KINDS[activeChip];
+      const groups: [HitKind, SearchHit[]][] = [
+        ['folder', results.folders],
+        ['note', results.notes],
+        ['file', results.files],
+      ];
       return groups
-        .map(([kind, all]): [HitKind, SearchHit[]] => [
-          kind,
-          desktop && activeChip !== 'all'
-            ? all.filter((hit) => chipKeyOf(hit) === activeChip)
-            : all,
-        ])
         .filter(
           ([kind, hits]) =>
             hits.length > 0 && (wanted === null || wanted === kind),
         )
         .map(([kind, hits]) => ({
           id: kind,
-          heading: headingFor(kind, hits.length),
+          heading: searchGroupLabel(kind),
           rows: hits.map((hit) => rowFromHit(hit, index, now)),
         }));
     }
@@ -1041,8 +1189,9 @@ function SwitcherPanel({
     return out;
   }, [
     index,
+    tag,
+    tagged,
     results,
-    desktop,
     activeChip,
     searching,
     opened,
@@ -1051,17 +1200,23 @@ function SwitcherPanel({
   ]);
 
   const matchingCommands = useMemo(() => {
-    if (!searching) return [];
+    if (!searching || tag !== null) return [];
     const needle = trimmed.toLowerCase();
     return commands.filter((command) =>
       command.label.toLowerCase().includes(needle),
     );
-  }, [searching, trimmed, commands]);
+  }, [searching, tag, trimmed, commands]);
 
   const flatRows = useMemo(
     () => sections.flatMap((section) => section.rows),
     [sections],
   );
+  // Which note rows Bower wrote: the bird and "Bower note" (K-14).
+  const noteFiles = useMemo(
+    () => flatRows.filter((row) => row.kind === 'note').map((row) => row.file),
+    [flatRows],
+  );
+  const bower = useBowerNotes(noteFiles);
   const entryCount = flatRows.length + matchingCommands.length;
   const extras = useRowExtras(flatRows, index?.byPath);
   const highlightedRow = flatRows[highlightedIndex] ?? null;
@@ -1145,7 +1300,7 @@ function SwitcherPanel({
   );
 
   const handleKeyDown = useCallback(
-    (event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
+    (event: KeyboardEvent) => {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
         setHighlightedIndex((i) => Math.min(i + 1, entryCount - 1));
@@ -1187,10 +1342,34 @@ function SwitcherPanel({
   const paraOfScope =
     scope === null ? null : paraKindOf(scope.path.split('/')[0] ?? '');
   const showParaChips = !searching && (scope === null || paraScope !== null);
-  const placeholder =
-    scope === null
-      ? 'Search folders, notes and files'
-      : `Search in ${scope.label}`;
+
+  // The note Search was opened over (a tag on it, R-SE-5): "you stay on …".
+  const stayOn = useMemo((): string | null => {
+    const match = /^\/note\/([^/?#]+)/.exec(location ?? '');
+    if (match?.[1] === undefined || index === null) return null;
+    let id: string;
+    try {
+      id = decodeURIComponent(match[1]);
+    } catch {
+      return null;
+    }
+    const file = index.byId.get(id);
+    return file === undefined ? null : searchTitle(noteTitle(file));
+  }, [location, index]);
+
+  // The highlighted option, on the field (the listbox pattern).
+  useEffect(() => {
+    const input = inputRef.current;
+    if (input === null) return;
+    if (entryCount > 0) {
+      input.setAttribute(
+        'aria-activedescendant',
+        `switcher-option-${highlightedIndex}`,
+      );
+    } else {
+      input.removeAttribute('aria-activedescendant');
+    }
+  });
 
   let at = 0;
   const statusText =
@@ -1204,49 +1383,48 @@ function SwitcherPanel({
             ? `No results for ${trimmed}.`
             : `${total} result${total === 1 ? '' : 's'}.`;
 
+  // NO-Tag-375: opened from a tag, the phone shows a content sheet over the
+  // note, not the full screen.
+  const sheet = openedAsTag && !desktop;
+  const panelClass = `switcher-panel${tag !== null ? ' is-tag' : ''}${
+    sheet ? ' is-sheet' : ''
+  }`;
+
   return (
     <Queued id="switcher" priority={OVERLAY_PRIORITY.own}>
-      <Overlay kind="dialog" label="Quick switcher" onClose={closeSwitcher}>
-        <div ref={panelRef} class="switcher-panel">
+      <Overlay
+        kind={sheet ? 'sheet' : 'dialog'}
+        label="Quick switcher"
+        onClose={closeSwitcher}
+      >
+        <div ref={panelRef} class={panelClass}>
           <div class="switcher-field">
-            <IconSearch />
-            <input
-              ref={inputRef}
-              type="text"
-              class="switcher-input"
-              placeholder={placeholder}
-              aria-label={placeholder}
-              role="combobox"
-              aria-expanded="true"
-              aria-controls="switcher-listbox"
-              aria-activedescendant={
-                entryCount > 0
-                  ? `switcher-option-${highlightedIndex}`
-                  : undefined
-              }
-              autocomplete="off"
+            <SearchField
+              variant="input"
+              size={desktop ? 'desktop' : 'phone'}
               value={query}
-              onInput={(event) => {
-                setQuery((event.target as HTMLInputElement).value);
-              }}
-              onFocus={() => {
-                setFieldFocused(true);
-              }}
-              onBlur={() => {
-                setFieldFocused(false);
-              }}
+              onChange={setQuery}
+              onClose={closeSwitcher}
+              inputRef={inputRef}
               onKeyDown={handleKeyDown}
             />
-            {desktop && scope !== null && (
+          </div>
+          {tag !== null && tagged !== null && (
+            <p class="switcher-tag-line">
+              {tagLine(tagged.length, tag, stayOn)}
+            </p>
+          )}
+          <div class="switcher-chips" onKeyDown={handleChipsKeyDown}>
+            {scope !== null && !showParaChips && (
               <button
                 type="button"
-                class="switcher-scope"
+                class="switcher-chip"
+                aria-pressed="true"
                 aria-label={`Clear search in ${scope.label}`}
                 onClick={() => {
                   setScope(null);
                 }}
               >
-                in
                 {paraOfScope !== null && (
                   <FolderMark kind={paraOfScope} size={18} />
                 )}
@@ -1254,24 +1432,6 @@ function SwitcherPanel({
                 <IconClose />
               </button>
             )}
-            <button
-              type="button"
-              class="icon-button"
-              aria-label="Close"
-              onClick={closeSwitcher}
-            >
-              <IconClose />
-            </button>
-            <div class="switcher-bird" aria-hidden="true">
-              <Bird
-                state={fieldFocused ? 'shiny' : 'peeking'}
-                flip
-                size={72}
-                overlay
-              />
-            </div>
-          </div>
-          <div class="switcher-chips" onKeyDown={handleChipsKeyDown}>
             {showParaChips &&
               PARA_CHIPS.map(({ kind, label }) => {
                 const folder = paraFolder(index, kind);
@@ -1294,42 +1454,27 @@ function SwitcherPanel({
                   </button>
                 );
               })}
-            {scope !== null && !showParaChips && !desktop && (
-              <button
-                type="button"
-                class="switcher-chip"
-                aria-pressed="true"
-                aria-label={`Clear search in ${scope.label}`}
-                onClick={() => {
-                  setScope(null);
-                }}
-              >
-                {scope.label}
-                <IconClose />
-              </button>
-            )}
-            {searching && (
+            {searching && tag === null && (
               <>
-                {(desktop
-                  ? chipList
-                  : [
-                      { key: 'all', label: 'All', count: total },
-                      {
-                        key: 'folders',
-                        label: 'Folders',
-                        count: results?.folders.length ?? 0,
-                      },
-                      {
-                        key: 'notes',
-                        label: 'Notes',
-                        count: results?.notes.length ?? 0,
-                      },
-                      {
-                        key: 'files',
-                        label: 'Files',
-                        count: results?.files.length ?? 0,
-                      },
-                    ]
+                {(
+                  [
+                    { key: 'all', label: 'All', count: total },
+                    {
+                      key: 'folders',
+                      label: 'Folders',
+                      count: results?.folders.length ?? 0,
+                    },
+                    {
+                      key: 'notes',
+                      label: 'Notes',
+                      count: results?.notes.length ?? 0,
+                    },
+                    {
+                      key: 'files',
+                      label: 'Files',
+                      count: results?.files.length ?? 0,
+                    },
+                  ] as const
                 ).map(({ key, label, count }) => (
                   <button
                     key={key}
@@ -1340,7 +1485,7 @@ function SwitcherPanel({
                       setKindChip(key);
                     }}
                   >
-                    {label} <i>{count}</i>
+                    {label} {count}
                   </button>
                 ))}
                 <button
@@ -1399,13 +1544,12 @@ function SwitcherPanel({
               >
                 {searching && statusText}
               </p>
+              {!online && searching && (
+                <p class="switcher-line">{OFFLINE_LINE}</p>
+              )}
               {noResults && (
                 <div class="switcher-none">
-                  <b class="switcher-none-title">Nothing called “{trimmed}”</b>
-                  <span class="switcher-none-text">
-                    No folder, note or file has those words in its name or its
-                    text.
-                  </span>
+                  <p class="switcher-line">{noResultsLine(trimmed)}</p>
                   <a
                     class="button"
                     href={`${BOWER_PATH}?text=${encodeURIComponent(`Where is ${trimmed}?`)}`}
@@ -1426,7 +1570,7 @@ function SwitcherPanel({
                         setScope(null);
                       }}
                     >
-                      Search all of {scope.label} instead
+                      Search all folders
                     </button>
                   )}
                 </div>
@@ -1439,9 +1583,14 @@ function SwitcherPanel({
               >
                 {sections.map((section) => (
                   <Fragment key={section.id}>
-                    <li class="switcher-heading" role="presentation">
-                      {section.heading}
-                    </li>
+                    {section.heading !== '' && (
+                      <li
+                        class="group-label switcher-heading"
+                        role="presentation"
+                      >
+                        {section.heading}
+                      </li>
+                    )}
                     {section.rows.map((row) => {
                       const position = at++;
                       return (
@@ -1450,8 +1599,8 @@ function SwitcherPanel({
                           id={`switcher-option-${position}`}
                           row={row}
                           selected={position === highlightedIndex}
-                          pages={extras.pages.get(row.file.id)}
-                          thumb={extras.thumbs.get(row.file.id)}
+                          bowerWritten={bower.has(row.file.id)}
+                          now={now}
                           onActivate={activateRow}
                           onHighlight={() => {
                             setHighlightedIndex(position);
@@ -1462,7 +1611,7 @@ function SwitcherPanel({
                   </Fragment>
                 ))}
                 {matchingCommands.length > 0 && (
-                  <li class="switcher-heading" role="presentation">
+                  <li class="group-label switcher-heading" role="presentation">
                     Commands
                   </li>
                 )}
@@ -1490,7 +1639,7 @@ function SwitcherPanel({
               )}
               {!searching && recent.length > 0 && (
                 <div class="switcher-recent-group">
-                  <p class="switcher-heading">Searched before</p>
+                  <p class="group-label switcher-heading">Searched before</p>
                   <div class="switcher-recent">
                     {recent.map((entry) => (
                       <button
@@ -1537,9 +1686,14 @@ function SwitcherPanel({
                 </div>
               )}
             </div>
-            {desktop && (
+            {desktop && tag === null && (
               <SearchPreview
                 row={highlightedRow}
+                bowerWritten={
+                  highlightedRow !== null && bower.has(highlightedRow.file.id)
+                }
+                now={now}
+                onOpen={activateRow}
                 pages={
                   highlightedRow === null
                     ? undefined

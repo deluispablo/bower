@@ -165,7 +165,9 @@ export function composerLine(input: {
   if (input.dictation === 'blocked') {
     return { text: COMPOSER_LINES.blocked, tone: 'muted' };
   }
-  if (input.dictation === 'unavailable') {
+  // The crossed-out mic already says dictation is off: the caller's own
+  // hint ("Saved. …") wins over the line (#917, also seen on Add).
+  if (input.dictation === 'unavailable' && input.hint === null) {
     return { text: COMPOSER_LINES.unavailable, tone: 'muted' };
   }
   if (input.failure !== '') return { text: input.failure, tone: 'muted' };

@@ -1,8 +1,10 @@
 /**
- * `/search?q=...`: no screen of its own. It only opens the quick switcher
- * (#142), prefilled from `q` when present, then replaces itself with Home —
- * so a link built before the switcher existed (a note's tag pills,
- * `/search?q=%23tag`, #144) keeps working, and Back never returns here.
+ * `/search?q=...`: no screen of its own. It opens Search (the switcher,
+ * #142), prefilled from `q` when present, over the page the person came
+ * from: a tag on a note links here (`/search?q=%23tag`, #917, R-SE-5), so
+ * the route steps back to the note and Search opens over it; closing
+ * Search shows the note again, and Back never returns here. Opened with no
+ * page behind it (a fresh load of the link), it replaces itself with Home.
  *
  * `openSwitcher` runs from a microtask, not straight in this effect (#495):
  * `Switcher` (`components/switcher.tsx`) subscribes to the store from its
@@ -15,14 +17,28 @@
 import { useEffect } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
-import { openSwitcher } from '../switcher-store.js';
+import { lastPage, openSwitcher } from '../switcher-store.js';
 
-export function SearchRedirect() {
+export function SearchRedirect(): null {
   const { query, route } = useLocation();
 
   // Runs once, on the query this navigation landed with.
   useEffect(() => {
     const initialQuery = query.q ?? '';
+    if (lastPage() !== null) {
+      // The page behind is the previous history entry: step back to it,
+      // and open Search once the step has landed, so Search's own history
+      // entry (the tag sheet's Back) goes on top of the note's.
+      window.addEventListener(
+        'popstate',
+        () => {
+          openSwitcher(initialQuery);
+        },
+        { once: true },
+      );
+      history.back();
+      return;
+    }
     route('/', true);
     queueMicrotask(() => {
       openSwitcher(initialQuery);

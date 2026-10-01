@@ -244,3 +244,31 @@ describe('GridTile (#908, R-TILE-1, R-TILE-2)', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ListRow in a listbox (#917)', () => {
+  it('takes a marked-up title and keeps the plain one as before', () => {
+    void act(() => {
+      render(
+        h(ListRow, {
+          item: { ...NOTE, title: [h('mark', null, 'CV'), ' Australia'] },
+        }),
+        host,
+      );
+    });
+    const title = host.querySelector('.list-row-title');
+    expect(title?.textContent).toBe('CV Australia');
+    expect(title?.querySelector('mark')?.textContent).toBe('CV');
+  });
+
+  it('with roving off, is no tab stop and leaves the arrows and Enter alone', () => {
+    const onOpen = vi.fn();
+    void act(() => {
+      render(h(ListRow, { item: NOTE, roving: false, onOpen }), host);
+    });
+    const row = host.querySelector('.list-row');
+    expect(row?.getAttribute('tabindex')).toBe('-1');
+    expect(key(row, 'ArrowDown').defaultPrevented).toBe(false);
+    key(row, 'Enter');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+});

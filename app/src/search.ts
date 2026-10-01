@@ -130,3 +130,71 @@ export function clearRecentSearches(): void {
     // Storage blocked: nothing to remove.
   }
 }
+
+// --- The Search screen's words (#917, spec §4.7) ---------------------------
+
+/** What a result is: the three groups of the Search screen. */
+export type SearchGroupKind = 'folder' | 'note' | 'file';
+
+/**
+ * A result group's label (S-SE-5, R-LABEL-1): sentence case and always
+ * plural, "Folders", "Notes", "Files" (K-10: never the uppercase
+ * "FOLDERS"). "Notes" is the kind and stays (owner review).
+ */
+export function searchGroupLabel(kind: SearchGroupKind): string {
+  if (kind === 'folder') return 'Folders';
+  return kind === 'note' ? 'Notes' : 'Files';
+}
+
+/**
+ * A result's name as the rows show it (R-SE-4): underscores read as
+ * spaces. The length never changes, so the matched stretches found on the
+ * raw title still line up. Search hits arrive without their extension
+ * already (`search-index.ts`); the empty screen's rows use
+ * `withoutExtension`.
+ */
+export function searchTitle(title: string): string {
+  return title.replace(/_/g, ' ');
+}
+
+/** "Passport_copy.pdf" → "Passport copy": a file's name without its extension. */
+export function withoutExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return searchTitle(dot > 0 ? name.slice(0, dot) : name);
+}
+
+/**
+ * The tag a query asks for (N-11): `#summary` → `summary`; anything else
+ * (a plain word, a bare `#`, two words) → `null`.
+ */
+export function tagOfQuery(query: string): string | null {
+  const match = /^#([^\s#]+)$/.exec(query.trim());
+  return match?.[1] ?? null;
+}
+
+/** Whether a note's `tags` (already without `#`) include `tag`, ignoring case. */
+export function hasTag(tags: readonly string[], tag: string): boolean {
+  const wanted = tag.toLowerCase();
+  return tags.some((own) => own.toLowerCase() === wanted);
+}
+
+/**
+ * The tag search's line (S-SE-7): "11 notes tagged #summary · you stay on
+ * CV insights"; without a note behind Search, the count alone.
+ */
+export function tagLine(
+  count: number,
+  tag: string,
+  stayOn: string | null,
+): string {
+  const head = `${count} ${count === 1 ? 'note' : 'notes'} tagged #${tag}`;
+  return stayOn === null ? head : `${head} · you stay on ${stayOn}`;
+}
+
+/** The no-results line (S-SE-8). */
+export function noResultsLine(query: string): string {
+  return `Nothing matches “${query}”. Try fewer words, or another folder.`;
+}
+
+/** The offline line (S-SE-9). */
+export const OFFLINE_LINE = 'Offline: searching what is on this device.';

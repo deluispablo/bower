@@ -206,6 +206,14 @@ describe('composerLine', () => {
     expect(composerLine({ ...base, dictation: 'unavailable' })?.text).toBe(
       'Dictation is off in this browser. Type instead.',
     );
+    // A caller's hint wins: the crossed-out mic already says it (#917).
+    expect(
+      composerLine({
+        ...base,
+        dictation: 'unavailable',
+        hint: 'Saved. Bower runs on your Claude key.',
+      })?.text,
+    ).toBe('Saved. Bower runs on your Claude key.');
     expect(
       composerLine({ ...base, error: 'Could not send. Try again.' }),
     ).toEqual({ text: 'Could not send. Try again.', tone: 'danger' });
