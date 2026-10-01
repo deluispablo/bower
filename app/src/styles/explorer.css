@@ -63,11 +63,13 @@
   height: 16px;
 }
 
-/* 44 px targets on touch, the drawn button stays 28 px. */
+/* 44 x 44 targets on touch, the drawn button stays 28 px (R-EXP-5, K-34,
+   #950 F-10). The tools sit side by side as drawn, so neighbouring targets
+   overlap; each still measures 44. */
 @media (pointer: coarse) {
   .explorer-tool::after {
     position: absolute;
-    inset: -8px -4px;
+    inset: -8px;
     content: '';
   }
 }

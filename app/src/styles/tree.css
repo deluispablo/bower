@@ -134,11 +134,12 @@
   transform: rotate(90deg);
 }
 
-/* A 44 px tall target on touch without widening the drawn chevron. */
+/* A 44 x 44 target on touch without widening the drawn 14 px chevron
+   (R-GLOBAL-1, K-34, #950 F-10). */
 @media (pointer: coarse) {
   .tree-chevron::after {
     position: absolute;
-    inset: calc((14px - var(--tree-row)) / 2) -8px;
+    inset: -15px;
     content: '';
   }
 }
