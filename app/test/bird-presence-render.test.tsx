@@ -5,17 +5,9 @@ import type { ComponentChild } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  birdCount,
-  resetBirdPresence,
-  usePerchVisible,
-} from '../src/bird-presence.js';
+import { birdCount, resetBirdPresence } from '../src/bird-presence.js';
 import { Bird, BowerMark } from '../src/components/bird.js';
 import type { BirdProps } from '../src/components/bird.js';
-
-function Perch(): ComponentChild {
-  return usePerchVisible() ? h('i', { 'data-perch': '' }) : null;
-}
 
 function mount(node: ComponentChild): {
   root: HTMLElement;
@@ -58,15 +50,6 @@ describe('bird presence in the render', () => {
     expect(birdCount()).toBe(1);
     unmount();
     expect(birdCount()).toBe(0);
-  });
-
-  it('hides the perch while a bird is on screen', () => {
-    const perch = mount(h(Perch, {}));
-    expect(perch.root.querySelector('[data-perch]')).not.toBeNull();
-    const greeting = mount(bird());
-    expect(perch.root.querySelector('[data-perch]')).toBeNull();
-    greeting.unmount();
-    expect(perch.root.querySelector('[data-perch]')).not.toBeNull();
   });
 
   it('never counts the mark, the perch or a bird under 40 px', () => {

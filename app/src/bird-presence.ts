@@ -1,9 +1,9 @@
 /**
  * Bird presence (spec 6.21 rule 1, R-BIRD-3): one animated Bower per screen.
  * A tiny external store counts the birds on screen. `Bird` registers itself
- * on mount; the perch is drawn only while the count is 0; while an overlay
- * shows Bower, every other bird holds its still pose. The still mark
- * (`BowerMark`) never counts.
+ * on mount; the phone run chip draws its bird only while no other bird is
+ * on screen (`useBirdRoom`); while an overlay shows Bower, every other
+ * bird holds its still pose. The still mark (`BowerMark`) never counts.
  */
 
 import { useSyncExternalStore } from 'preact/compat';
@@ -70,11 +70,6 @@ export function useBirdCount(): number {
 /** Whether an overlay shows Bower right now (re-renders on change). */
 export function useOverlayBird(): boolean {
   return useSyncExternalStore(subscribeBirds, overlayBirdCount) > 0;
-}
-
-/** The perch is drawn only when no other bird is on screen. */
-export function usePerchVisible(): boolean {
-  return useBirdCount() === 0;
 }
 
 /**

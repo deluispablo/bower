@@ -12,7 +12,7 @@
     "test": "pnpm exec vitest run --passWithNoTests",
     "size": "node scripts/check-size.mjs",
     "e2e": "playwright test",
-    "e2e:shots": "cross-env BOWER_README_SHOTS=1 playwright test --project=desktop"
+    "e2e:shots": "cross-env BOWER_README_SHOTS=1 playwright test readme-shots --project=desktop"
   },
   "dependencies": {
     "@tanstack/virtual-core": "^3.17.11",
