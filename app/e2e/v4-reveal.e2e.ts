@@ -53,9 +53,10 @@ test('reveal never collapses a folder the person had open', async ({
   test.skip(testInfo.project.name !== 'desktop', 'the sidebar is desktop');
   await openHome(page);
   const list = tree(page);
-  await list.getByRole('button', { name: 'Expand Areas' }).click();
+  // Archives: the demo already opens Projects and Areas (#950).
+  await list.getByRole('button', { name: 'Expand Archives' }).click();
   await expect(
-    list.getByRole('button', { name: 'Collapse Areas' }),
+    list.getByRole('button', { name: 'Collapse Archives' }),
   ).toBeVisible();
   await visible(
     page.locator('.home-notes a[href^="/note/"]').filter({ hasText: NOTE }),
@@ -65,7 +66,7 @@ test('reveal never collapses a folder the person had open', async ({
     list.getByRole('button', { name: 'Collapse Moonee Ponds' }),
   ).toBeVisible();
   await expect(
-    list.getByRole('button', { name: 'Collapse Areas' }),
+    list.getByRole('button', { name: 'Collapse Archives' }),
   ).toBeVisible();
 });
 

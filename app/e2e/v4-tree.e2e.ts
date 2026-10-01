@@ -81,18 +81,19 @@ test('chevrons measure at least 44 x 44 on the phone and carry their names', asy
   test.skip(testInfo.project.name !== 'phone', 'the 44 px target is the phone');
   await page.setViewportSize({ width: 375, height: 812 });
   const list = await openTree(page);
-  const chevron = list.getByRole('button', { name: 'Expand Projects' });
+  // The demo opens Projects and Areas on a first visit (#950).
+  const chevron = list.getByRole('button', { name: 'Expand Archives' });
   // #909: the chevron is drawn 14 px (PF-Drawer); on touch its hit area
-  // (::after) spans the whole 40 px row and 30 px across.
+  // (::after) is 44 x 44 (#950 F-10).
   const hit = await chevron.evaluate((el) => {
     const after = getComputedStyle(el, '::after');
     return { w: parseFloat(after.width), h: parseFloat(after.height) };
   });
-  expect(hit.h).toBeGreaterThanOrEqual(40);
-  expect(hit.w).toBeGreaterThanOrEqual(30);
+  expect(hit.h).toBeGreaterThanOrEqual(44);
+  expect(hit.w).toBeGreaterThanOrEqual(44);
   await chevron.click();
   await expect(
-    list.getByRole('button', { name: 'Collapse Projects' }),
+    list.getByRole('button', { name: 'Collapse Archives' }),
   ).toBeVisible();
 });
 
@@ -100,9 +101,14 @@ test('expanded folders survive a reload on the same device', async ({
   page,
 }) => {
   const list = await openTree(page);
-  await expand(list, 'Projects');
+  // The demo opens Projects and Areas on a first visit (#950); what the
+  // person changes is saved and wins on the next load.
   await expect(
     list.locator('a[href^="/folder/1-Projects/"]').first(),
+  ).toBeVisible();
+  await list.getByRole('button', { name: 'Collapse Areas' }).click();
+  await expect(
+    list.getByRole('button', { name: 'Expand Areas' }),
   ).toBeVisible();
   // Let the debounced save reach IndexedDB.
   await page.waitForTimeout(500);

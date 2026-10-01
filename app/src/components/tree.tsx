@@ -34,6 +34,7 @@ import { Fragment } from 'preact';
 import type { JSX, RefCallback } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { isDemo } from '../api.js';
 import { isBowerWritten } from '../bower-written.js';
 import { loadNoteMetaEntry, loadTreeState, saveTreeState } from '../cache.js';
 import { subscribeNoteMetaCached } from '../note-meta-events.js';
@@ -118,6 +119,25 @@ type VirtualModule = typeof import('./virtual-list.js');
 // Loaded the first time a tree passes the threshold, so the virtualiser
 // stays out of the startup chunk. Until it arrives the plain list renders.
 let virtualModule: VirtualModule | null = null;
+
+/** The roots the demo's tree opens on a first visit, as the 1280 boards
+ * draw it (TR-Notes-1280 and most others, #950). */
+const DEMO_OPEN_ROOTS: readonly ParaKind[] = ['projects', 'areas'];
+
+/**
+ * The folders a tree opens with when nothing was saved yet: in the demo
+ * build only, Projects and Areas; a real folder starts closed. Saved state
+ * always wins.
+ */
+export function firstVisitOpen(tree: TreeNode, demo: boolean): string[] {
+  if (!demo) return [];
+  return tree.folders
+    .filter((folder) => {
+      const kind = paraKindOf(folder.name);
+      return kind !== null && DEMO_OPEN_ROOTS.includes(kind);
+    })
+    .map((folder) => folder.path);
+}
 
 /** How long the revealed row's highlight lasts (matches `tree.css`). */
 const REVEAL_FLASH_MS = 600;
@@ -473,6 +493,11 @@ export function Tree({
   const [openRow, setOpenRow] = useState<Row | null>(null);
   const tree = useMemo(() => buildTree(index, sort), [index, sort]);
   const group = useMemo(() => appFileGroup(index), [index]);
+  // A first tree this session (nothing remembered) may open the demo's
+  // roots once the stored state turns out to be empty.
+  const firstThisSession = useRef(rememberedExpanded === null);
+  const treeRef = useRef(tree);
+  treeRef.current = tree;
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
     mergeExpanded(
       rememberedExpanded ?? new Set<string>(),
@@ -512,7 +537,15 @@ export function Tree({
             resetFocusStart();
           }),
         );
-        if (state === undefined) return;
+        if (state === undefined) {
+          const open = firstThisSession.current
+            ? firstVisitOpen(treeRef.current, isDemo())
+            : [];
+          if (open.length > 0) {
+            setExpanded((prev) => mergeExpanded(prev, open));
+          }
+          return;
+        }
         const target = revealRef.current;
         setExpanded(
           mergeExpanded(
