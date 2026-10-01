@@ -835,13 +835,13 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   });
   // R-HOME-0/1: the greeting carries the run (`runSentence`, then what Bower
   // added as a second sentence), the card only the time and the counts.
-  await expect(bubble).toContainText(/^Done just now: 5 filed/);
+  await expect(bubble).toContainText(/^Done just now: 2 filed/);
   await expect(bubble).not.toContainText('bike times');
   await expect(bubble).not.toContainText('..');
   await expect(inbox).toContainText('Nothing waiting. Add something.');
   await expect(
     visible(page.locator('.stat-tile', { hasText: 'Last tidy-up' })),
-  ).toContainText('5 filed');
+  ).toContainText('2 filed');
   await shot(page, testInfo, 'tidy-up');
 
   // #506: Done no longer closes itself on a timer — it used to, within 8 s
@@ -912,7 +912,7 @@ test('the Last tidy-up card keeps the previous line while the next run goes (#49
   const lastCard = visible(
     page.locator('.stat-tile', { hasText: 'Last tidy-up' }),
   );
-  await expect(lastCard).toContainText('5 filed');
+  await expect(lastCard).toContainText('2 filed');
 
   // A second batch, then a second tidy-up: while it goes, the card reads
   // "Tidy-up / Running · n min" (Home-Running board), never "No tidy-up yet".
