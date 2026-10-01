@@ -1,0 +1,9 @@
+/*
+ * FileIcon's 32 px row box (#908): its fill is a class, not an inline
+ * style, so a host can retint it through `--file-icon-box` (the Bower
+ * tab's Activity tile, #915) without overriding anything.
+ */
+
+.file-icon-box {
+  background: var(--file-icon-box, var(--color-surface));
+}

@@ -655,14 +655,14 @@
 
 /* The rounded tile behind the glyph (BW-Activity-375): tinted with the
    root's colour when the row knows where the file went, neutral when not.
-   FileIcon draws its 32 px box inline on the card's own surface colour,
-   so the fill is set here; `currentColor` is the root tint FileIcon sets. */
+   FileIcon's box takes its fill from `--file-icon-box`; `currentColor` is
+   the root tint FileIcon sets. */
 .activity-filed .file-icon-box {
-  background: color-mix(in srgb, currentColor 14%, transparent) !important;
+  --file-icon-box: color-mix(in srgb, currentColor 14%, transparent);
 }
 
 .activity-filed .file-icon-box[data-root='none'] {
-  background: var(--color-surface-hover) !important;
+  --file-icon-box: var(--color-surface-hover);
 }
 
 .activity-more {
