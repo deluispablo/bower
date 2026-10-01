@@ -88,3 +88,40 @@ expect_eq "$(agent_stats "$ROOT/types.jsonl")" \
   'turns=- api_ms=- in=- out=- cache_read=- cache_write=- tools=-' 'stats line'
 expect_eq "$(agent_result_text "$ROOT/types.jsonl")" 'second' 'summary'
 echo "ok $CASE"
+
+# How a failed session is reported: agent_failure_reason (run.sh, run only
+# on a non-zero exit) reads the result event's error as well as stderr.
+eval "$(sed -n '/^agent_failure_reason() {/,/^}/p' "$HERE/../run.sh")"
+AGENT_ERR="$ROOT/agent.err"
+: >"$AGENT_ERR"
+
+# 5. Max turns: stream-json says so in the result event (subtype
+#    error_max_turns), not on stderr. The session is a timeout.
+CASE=maxturns
+expect_eq "$(agent_result_error "$FIXTURES/max-turns.jsonl")" 'max_turns' 'result error'
+AGENT_STREAM="$FIXTURES/max-turns.jsonl"
+expect_eq "$(agent_failure_reason 1)" timeout 'failure reason'
+echo "ok $CASE"
+
+# 6. An API error (overloaded): is_error with the error in the result text.
+#    The model was unavailable.
+CASE=apierror
+expect_eq "$(head -n 1 <<<"$(agent_result_error "$FIXTURES/api-error.jsonl")")" 'error' 'result error'
+AGENT_STREAM="$FIXTURES/api-error.jsonl"
+expect_eq "$(agent_failure_reason 1)" model_unavailable 'failure reason'
+echo "ok $CASE"
+
+# 7. A session that ended well, or left no result: no result error, so only
+#    stderr decides (here, nothing: unknown; with a stderr signal, as before).
+CASE=noerror
+expect_eq "$(agent_result_error "$FIXTURES/session.jsonl")" '' 'result error'
+expect_eq "$(agent_result_error "$ROOT/cut.jsonl")" '' 'result error, cut'
+AGENT_STREAM="$FIXTURES/session.jsonl"
+expect_eq "$(agent_failure_reason 1)" unknown 'failure reason'
+echo 'API Error: 529 overloaded' >"$AGENT_ERR"
+expect_eq "$(agent_failure_reason 1)" model_unavailable 'failure reason from stderr'
+AGENT_STREAM="$ROOT/missing.jsonl"
+: >"$AGENT_ERR"
+expect_eq "$(agent_failure_reason 1)" unknown 'failure reason, no stream'
+expect_eq "$(agent_failure_reason 124)" timeout 'failure reason, time limit'
+echo "ok $CASE"

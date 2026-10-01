@@ -193,6 +193,7 @@ if (filter === '$ARGS.named') {
   filter.startsWith(
     '[inputs | fromjson? | select(type == "object" and .type == "result")]',
   ) &&
+  filter.endsWith('.result? | strings') &&
   flags.has('R')
 ) {
   // run.sh's RESULT_TEXT_FILTER (R-SS-2): the last result event's text.
@@ -247,6 +248,18 @@ if (filter === '$ARGS.named') {
   process.stdout.write(
     `turns=${n(r.num_turns)} api_ms=${n(r.duration_api_ms)} in=${n(u.input_tokens)} out=${n(u.output_tokens)} cache_read=${n(u.cache_read_input_tokens)} cache_write=${n(u.cache_creation_input_tokens)} tools=${tools}\n`,
   );
+} else if (filter.includes('"error_max_turns"') && flags.has('R')) {
+  // run.sh's RESULT_ERROR_FILTER (R-SS-2): how the session says it failed.
+  const results = streamEvents(input()).filter((e) => e.type === 'result');
+  const r = results[results.length - 1];
+  if (r !== undefined) {
+    if (r.subtype === 'error_max_turns') process.stdout.write('max_turns\n');
+    else if (r.is_error === true) {
+      process.stdout.write(
+        `error\n${typeof r.result === 'string' ? r.result : ''}\n`,
+      );
+    }
+  }
 } else {
   process.stderr.write('jq stand-in: unsupported filter\n');
   process.exit(3);

@@ -1821,10 +1821,15 @@ agent_failure_reason() {
       return
       ;;
   esac
-  if grep -Eiq 'max(imum)?[ _-]?turns' "$AGENT_ERR" 2>/dev/null; then
+  # With stream-json the session's own error is in its last result event
+  # (R-SS-2), next to whatever reached stderr.
+  local model_errors='overloaded|rate[ _-]?limit|credit balance|api error|authentication|invalid (api key|x-api-key|bearer)|oauth token|529|503 service'
+  local result_error
+  result_error=$(agent_result_error "$AGENT_STREAM" 2>/dev/null) || result_error=''
+  if [ "$result_error" = max_turns ] || grep -Eiq 'max(imum)?[ _-]?turns' "$AGENT_ERR" 2>/dev/null; then
     echo timeout
-  elif grep -Eiq 'overloaded|rate[ _-]?limit|credit balance|api error|authentication|invalid (api key|x-api-key|bearer)|oauth token|529|503 service' \
-    "$AGENT_ERR" 2>/dev/null; then
+  elif grep -Eiq "$model_errors" "$AGENT_ERR" 2>/dev/null ||
+    { [ "${result_error%%$'\n'*}" = error ] && grep -Eiq "$model_errors" <<<"${result_error#error}"; }; then
     echo model_unavailable
   else
     echo unknown
@@ -1858,6 +1863,19 @@ readonly STATS_FILTER='def n($x): if ($x | type) == "number" then ($x | floor | 
   | "turns=\(n($r.num_turns)) api_ms=\(n($r.duration_api_ms)) in=\(n($u.input_tokens)) out=\(n($u.output_tokens)) cache_read=\(n($u.cache_read_input_tokens)) cache_write=\(n($u.cache_creation_input_tokens)) tools=\(if $t == "" then "-" else $t end)"'
 agent_stats() {
   jq -rnR "$STATS_FILTER" "$1"
+}
+# How the session in the transcript $1 says it failed, from its last
+# `result` event (stream-json puts it there, not on stderr): `max_turns` for
+# subtype error_max_turns; otherwise, when is_error is true, `error` and the
+# event's text on the next lines; nothing for a session that did not fail or
+# has no result event. Read only for a failed session (agent_failure_reason).
+readonly RESULT_ERROR_FILTER='[inputs | fromjson? | select(type == "object" and .type == "result")]
+  | last | objects
+  | if .subtype == "error_max_turns" then "max_turns"
+    elif .is_error == true then "error\n\(.result | if type == "string" then . else "" end)"
+    else empty end'
+agent_result_error() {
+  jq -rnR "$RESULT_ERROR_FILTER" "$1"
 }
 # <<< session stats
 
