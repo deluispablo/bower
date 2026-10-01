@@ -123,12 +123,17 @@
 
   /* The one centred dialog (R-DIALOG-1): tidy-up confirm, Columns and the
      destructive confirmations. Width from `--dialog-width` (AD-Confirm 420,
-     the confirm 400), 70 px from the top as drawn. */
+     the confirm 400), 70 px from the top as drawn, centred on the content
+     column right of the sidebar, not on the window (AD-Confirm-1280:
+     50% + 132 px, #950). */
   .overlay--desktop-center .overlay-panel {
     top: 70px;
     right: 0;
-    left: 0;
-    width: min(var(--dialog-width, 420px), calc(100vw - 2 * var(--space-4)));
+    left: var(--sidebar-width, 264px);
+    width: min(
+      var(--dialog-width, 420px),
+      calc(100vw - var(--sidebar-width, 264px) - 2 * var(--space-4))
+    );
     height: fit-content;
     max-height: calc(100vh - 140px);
     margin: 0 auto;
