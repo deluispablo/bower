@@ -82,9 +82,11 @@ describe('WorkingSheet outside the demo', () => {
   it('shows the note and the time line', () => {
     state.demo = false;
     mount();
-    expect(document.body.textContent).toContain(runningNote(false));
-    expect(document.body.textContent).toContain('so far · usually 3 to 6 min');
-    expect(document.body.textContent).not.toContain(DEMO_PLAYING_BACK);
+    expect(document.body.textContent).toContain(
+      'You can close this: the tidy-up carries on.',
+    );
+    expect(document.body.textContent).toContain('it takes a few minutes');
+    expect(document.body.textContent).not.toContain(DEMO_REASSURANCE_LEAD);
   });
 });
 
@@ -94,14 +96,13 @@ describe('WorkingSheet in a demo build', () => {
     mount();
     expect(document.body.textContent).toContain(DEMO_REASSURANCE_LEAD);
     expect(document.body.textContent).toContain(DEMO_REASSURANCE_REST);
-    expect(document.body.textContent).not.toContain(runningNote(false));
   });
 
-  it('replaces the started-ago badge with "Playing back"', () => {
+  it('shows the start time from the demo run, as on real data (R-API-4)', () => {
     state.demo = true;
     mount();
-    expect(document.body.textContent).toContain(DEMO_PLAYING_BACK);
-    expect(document.body.textContent).not.toContain('Started');
+    expect(document.body.textContent).toContain('it takes a few minutes');
+    expect(document.body.textContent).not.toContain(DEMO_PLAYING_BACK);
   });
 
   it('leaves the done state alone (no running note at all)', () => {

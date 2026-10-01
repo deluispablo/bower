@@ -31,13 +31,17 @@ import { linkTitleFromFileName } from '../add.js';
 import { sinceLabel } from '../bower-tab.js';
 import { doneNotes, things } from '../home.js';
 import { JUST_FILED_PATH } from '../just-filed.js';
-import { displayPath, folderHref, paraKindOf } from '../navigation.js';
+import {
+  displayName,
+  displayPath,
+  folderHref,
+  paraKindOf,
+} from '../navigation.js';
 import { failureCopy, failureReason } from '../run-failure.js';
 import { groupByOrigin, pileOriginOf } from '../pile-groups.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
 import type { OutcomeAction, OutcomeItem, RunOutcome } from '../run-outcome.js';
 import {
-  destinationsLabel,
   keptNote,
   readingLine,
   runRows,
@@ -48,28 +52,21 @@ import { runKey } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useVault } from '../vault-store.js';
-import { Bird } from './bird.js';
-import {
-  BowerWorking,
-  WORKING_STAGE_HEIGHT,
-  workingLabel,
-} from './bower-working.js';
+import { BowerWorking, workingLabel } from './bower-working.js';
 import type { WorkingState } from './bower-working.js';
-import { FolderMark } from './folder-mark.js';
+import { Badge } from './badge.js';
+import type { BadgeTone } from './badge.js';
 import type { ParaKind } from './folder-mark.js';
-import {
-  IconCheck,
-  IconClose,
-  IconDoc,
-  IconImage,
-  IconNote,
-  IconPdf,
-} from './icons.js';
+import { IconCheck, IconClose } from './icons.js';
+import { ListRow } from './list-row.js';
+import { kindLabel } from '../meta-line.js';
+import { startedLine } from '../run-progress.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
 import { RunMeaning } from './run-meaning.js';
-import { RunSummary, summaryTiles } from './run-summary.js';
+import { RunSummary, summaryTiles, tileLabel } from './run-summary.js';
+import { StatTile } from './card.js';
 import '../styles/tidy-confirm-sheet.css';
 
 /** How long the sheet stays up after the day's limit is reached. */
@@ -168,6 +165,28 @@ export function runningNote(desktop: boolean): string {
   return `You can close this. Bower carries on; the tidy-up bar ${
     desktop ? 'at the top' : 'above the tabs'
   } shows how it goes.`;
+}
+
+/** The link to Just filed, on the running and the Done sheet (K-30). */
+export const SEE_WHAT_CHANGED = 'See what changed';
+
+/** The running sheet's three steps (AD-Running): the stage's two ends and
+ * the group over the thing being read. */
+export const RUNNING_STEPS = ['Inbox', 'Your folders', 'Working on it'] as const;
+
+/** The running sheet's last line, around its "See what changed" link. */
+export const RUNNING_NOTE_LEAD = 'You can close this: the tidy-up carries on.';
+export const RUNNING_NOTE_TAIL = 'when it is done.';
+
+/** The running sheet's stage and bird (AD-Running: 118 high, bird 70). */
+export const RUNNING_STAGE_HEIGHT = 118;
+export const RUNNING_BIRD_SIZE = 70;
+
+/** The ✕'s name: the result's own on the Done sheet (AR-Run). */
+export function closeLabelFor(
+  state: SheetState,
+): 'Close the tidy-up' | 'Close the tidy-up result' {
+  return state === 'done' ? 'Close the tidy-up result' : 'Close the tidy-up';
 }
 
 /** How many rows the sheet lists before "See everything": 4 on a phone, 8
@@ -391,6 +410,9 @@ export interface SheetRow {
   note: string | null;
   /** "From your pile: “…”" when the item came out of a pile (R-PILE-5). */
   origin?: string;
+  /** The file name with its extension, for the kind in words and the icon
+   * (the title drops it, K-17). */
+  name?: string;
 }
 
 const ACTION_ORDER: Record<OutcomeAction, number> = {
@@ -464,6 +486,7 @@ export function rowFor(
   return {
     key: `${item.action}:${item.path}`,
     title,
+    name: (at ?? item.path).slice((at ?? item.path).lastIndexOf('/') + 1),
     tone: toneOfName(title),
     action: item.action,
     para,
@@ -519,9 +542,9 @@ function PartialTiles({ outcome }: { outcome: RunOutcome }): JSX.Element {
         <li
           key={tile.key}
           class={`run-summary-tile${tile.value === 0 ? ' run-summary-zero' : ''}${tile.warn ? ' run-summary-warn' : ''}`}
+          aria-label={`${tile.value} ${tile.label}`}
         >
-          <span class="run-summary-value">{tile.value}</span>{' '}
-          <span class="run-summary-label">{tile.label}</span>
+          <StatTile label={tileLabel(tile.label)} value={tile.value} />
         </li>
       ))}
     </ul>
@@ -580,20 +603,6 @@ function StatusIcon({ state }: { state: SheetState }): JSX.Element {
   );
 }
 
-function RowIcon({ tone }: { tone: RowTone }): JSX.Element {
-  const icon =
-    tone === 'pdf' ? (
-      <IconPdf />
-    ) : tone === 'image' ? (
-      <IconImage />
-    ) : tone === 'note' ? (
-      <IconNote />
-    ) : (
-      <IconDoc />
-    );
-  return <span class={`working-sheet-row-icon tone-${tone}`}>{icon}</span>;
-}
-
 /** Rows under "From your pile: …" headings when any came from a pile
  * (R-PILE-5); the rest sit under "Added from elsewhere". */
 function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
@@ -616,28 +625,52 @@ function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
   );
 }
 
+/** The Badge tone of each row tag (AR-Run: "Filed"). */
+const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
+  new: 'new',
+  updated: 'done',
+  filed: 'filed',
+  needs: 'check',
+};
+
+/** One row as the boards draw it (AR-Run, AD-Running): a ListRow with the
+ * kind in words, the folder after its root dot, and the tag as a Badge. */
+function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
+  const name = row.name ?? row.title;
+  const kind = kindLabel({ name, mimeType: '' });
+  const title = linkTitleFromFileName(name) === null ? displayName(row.title) : row.title;
+  const meta = [kind, row.note]
+    .filter((bit): bit is string => bit !== null && bit !== '')
+    .join(' · ');
+  return (
+    <li class="working-sheet-row" data-action={row.action}>
+      <ListRow
+        item={{
+          id: row.key,
+          title,
+          name,
+          mimeType: '',
+          root: row.para,
+        }}
+        meta={meta}
+        {...(row.where === ''
+          ? {}
+          : { where: { name: row.where, root: row.para } })}
+        badge={
+          row.action === null ? undefined : (
+            <Badge tone={ACTION_TONE[row.action]}>{ACTION_TAG[row.action]}</Badge>
+          )
+        }
+      />
+    </li>
+  );
+}
+
 function RowList({ rows }: { rows: readonly SheetRow[] }): JSX.Element {
   return (
     <ul class="working-sheet-rows" aria-label="What Bower did">
       {rows.map((row) => (
-        <li key={row.key} class="working-sheet-row" data-action={row.action}>
-          <RowIcon tone={row.tone} />
-          <span class="working-sheet-row-body">
-            <span class="working-sheet-row-title">{row.title}</span>
-            <span class="working-sheet-row-where">
-              {row.para !== null && <FolderMark kind={row.para} size={18} />}
-              {row.para !== null && ' '}
-              {[row.where, row.note]
-                .filter((bit) => bit !== null && bit !== '')
-                .join(' · ')}
-            </span>
-          </span>
-          {row.action !== null && (
-            <span class={`working-sheet-tag working-sheet-tag-${row.action}`}>
-              {ACTION_TAG[row.action]}
-            </span>
-          )}
-        </li>
+        <SheetListRow key={row.key} row={row} />
       ))}
     </ul>
   );
@@ -724,7 +757,10 @@ export function WorkingSheet({
   const total =
     outcome?.total ?? (waiting.length > 0 ? waiting.length : undefined);
   const heading = sheetTitle(state, state === 'running' ? total : undefined);
-  const timeLine = sheetTimeLine(state, outcome, now, isDemo());
+  const timeLine =
+    state === 'running'
+      ? startedLine(run)
+      : sheetTimeLine(state, outcome, now, isDemo());
   const steps = sheetSteps(
     state,
     outcome === null
@@ -741,7 +777,8 @@ export function WorkingSheet({
       ? sheetRows(outcome, limit, asideNotes)
       : null;
 
-  // The rows a run has filed so far, as they arrive: the last two.
+  // The thing the run is on now (AD-Running "Working on it"): the last row
+  // the run reports as being read, when it reports one.
   const liveSource =
     state === 'running'
       ? runRows({
@@ -753,30 +790,23 @@ export function WorkingSheet({
           setAside: run?.setAside,
         })
       : [];
-  const liveRows: SheetRow[] = liveSource
-    .slice(-SHEET_LIVE_ROWS)
-    .map((row) => ({
-      key: `${row.status}:${row.path}`,
-      title: row.title,
-      tone: row.tone,
-      action: row.status === 'filed' ? 'filed' : null,
-      para: row.para,
-      where:
-        row.status === 'reading'
-          ? readingLine(row.path)
-          : (row.folderPath ?? row.destination ?? ''),
-      note: row.status === 'filed' ? row.keptNote : null,
-    }));
+  const reading = [...liveSource]
+    .reverse()
+    .find((row) => row.status === 'reading');
+  const currentRow: SheetRow | null =
+    reading === undefined
+      ? null
+      : {
+          key: `reading:${reading.path}`,
+          title: reading.title,
+          name: reading.path.slice(reading.path.lastIndexOf('/') + 1),
+          tone: reading.tone,
+          action: null,
+          para: null,
+          where: '',
+          note: readingLine(reading.path).toLowerCase(),
+        };
 
-  const close = (
-    <button
-      type="button"
-      class="tidy-confirm-button tidy-confirm-button-secondary"
-      onClick={onDismiss}
-    >
-      Close
-    </button>
-  );
   const notNow = (
     <button
       type="button"
@@ -798,6 +828,14 @@ export function WorkingSheet({
       {label}
     </button>
   );
+  const changedHref = `${JUST_FILED_PATH}${
+    run === null ? '' : `?run=${encodeURIComponent(runKey(run))}`
+  }`;
+  const seeWhatChanged = (
+    <a class="working-sheet-link" href={changedHref} onClick={onDismiss}>
+      {SEE_WHAT_CHANGED}
+    </a>
+  );
 
   const reason = failureCopy(phase === 'failed' ? run?.reason : undefined);
   const stillIn =
@@ -809,7 +847,7 @@ export function WorkingSheet({
       <Overlay kind="sheet" label={sheetLabel(state)} onClose={onDismiss}>
         <div class={`working-sheet working-sheet-${state}`}>
           <div class="working-sheet-head">
-            <StatusIcon state={state} />
+            {state !== 'running' && <StatusIcon state={state} />}
             <div class="working-sheet-heading">
               <h2 class="working-sheet-title">{heading}</h2>
               {timeLine !== '' && (
@@ -818,8 +856,8 @@ export function WorkingSheet({
             </div>
             <button
               type="button"
-              class="working-sheet-close"
-              aria-label="Close"
+              class="icon-button working-sheet-close"
+              aria-label={closeLabelFor(state)}
               onClick={onDismiss}
             >
               <IconClose />
@@ -830,37 +868,36 @@ export function WorkingSheet({
             <>
               <div
                 class="working-sheet-stage"
-                style={{ height: `${WORKING_STAGE_HEIGHT}px` }}
+                style={{ height: `${RUNNING_STAGE_HEIGHT}px` }}
               >
                 <span class="working-sheet-stage-line" aria-hidden="true" />
-                <span class="working-sheet-stage-from">Inbox</span>
-                <span class="working-sheet-stage-to">
-                  {destinationsLabel(liveSource) ?? FOLDERS_FALLBACK}
-                </span>
+                <span class="working-sheet-stage-from">{RUNNING_STEPS[0]}</span>
+                <span class="working-sheet-stage-to">{RUNNING_STEPS[1]}</span>
                 <BowerWorking
                   state={
                     phase === 'starting' || phase === 'queued'
                       ? 'queued'
                       : 'running'
                   }
+                  size={RUNNING_BIRD_SIZE}
                   overlay
                 />
               </div>
-              <Steps steps={steps} />
-              <Rows rows={liveRows} />
+              <h3 class="working-sheet-group">{RUNNING_STEPS[2]}</h3>
+              {currentRow !== null && (
+                <ul class="working-sheet-rows" aria-label="Working on it">
+                  <SheetListRow row={currentRow} />
+                </ul>
+              )}
               <p class="working-sheet-note">
-                {isDemo() ? (
-                  <>
-                    <b class="working-sheet-note-lead">
-                      {DEMO_REASSURANCE_LEAD}
-                    </b>{' '}
-                    {DEMO_REASSURANCE_REST}
-                  </>
-                ) : (
-                  runningNote(desktop)
-                )}
+                {RUNNING_NOTE_LEAD} {seeWhatChanged} {RUNNING_NOTE_TAIL}
               </p>
-              <div class="working-sheet-actions">{close}</div>
+              {isDemo() && (
+                <p class="working-sheet-note">
+                  <b class="working-sheet-note-lead">{DEMO_REASSURANCE_LEAD}</b>{' '}
+                  {DEMO_REASSURANCE_REST}
+                </p>
+              )}
             </>
           )}
 
@@ -870,12 +907,6 @@ export function WorkingSheet({
                 <PartialTiles outcome={outcome} />
               ) : (
                 <RunSummary outcome={outcome} size="stats" />
-              )}
-              {state === 'done' && outcome.quote !== undefined && (
-                <div class="working-sheet-say">
-                  <Bird state="done" size={44} overlay />
-                  <p class="working-sheet-say-text">{`${outcome.quote}.`}</p>
-                </div>
               )}
               {state === 'done' &&
                 doneNotes(run).map((note) => (
@@ -904,25 +935,14 @@ export function WorkingSheet({
               )}
               <Steps steps={steps} />
               {finished !== null && <Rows rows={finished.rows} />}
-              <div class="working-sheet-actions">
-                {state === 'done' ? (
-                  <>
-                    <a
-                      class="tidy-confirm-button"
-                      href={`${JUST_FILED_PATH}?run=${encodeURIComponent(run === null ? '' : runKey(run))}`}
-                      onClick={onDismiss}
-                    >
-                      See everything
-                    </a>
-                    {close}
-                  </>
-                ) : (
-                  <>
-                    {again('Finish the tidy-up')}
-                    {notNow}
-                  </>
-                )}
-              </div>
+              {state === 'done' ? (
+                <p class="working-sheet-more">{seeWhatChanged}</p>
+              ) : (
+                <div class="working-sheet-actions">
+                  {again('Finish the tidy-up')}
+                  {notNow}
+                </div>
+              )}
             </>
           )}
 
@@ -941,12 +961,9 @@ export function WorkingSheet({
           )}
 
           {state === 'quota' && (
-            <>
-              <p class="working-sheet-detail">
-                {message ?? workingLabel('quota')}
-              </p>
-              <div class="working-sheet-actions">{close}</div>
-            </>
+            <p class="working-sheet-detail">
+              {message ?? workingLabel('quota')}
+            </p>
           )}
         </div>
       </Overlay>

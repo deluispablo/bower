@@ -330,105 +330,45 @@
   font-size: var(--text-xs);
 }
 
-/* Rows (R-SHEET-3): left-aligned, the name wraps to two lines, the where-line
-   under it and the action tag at the end. */
+/* Rows (AR-Run, AD-Running): one ListRow each, the kind in words and the
+   folder after its root dot in the meta, the tag a Badge after the name. */
 
 .working-sheet-rows {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .working-sheet-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: 13.5px;
-  text-align: left;
-}
-
-.working-sheet-row[data-action='needs'] {
-  border-color: var(--color-warn);
-}
-
-.working-sheet-row-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--color-bg);
-}
-
-.working-sheet-row-icon .icon {
-  width: 18px;
-  height: 18px;
-}
-
-.working-sheet-row-icon.tone-pdf {
-  color: var(--color-danger);
-}
-
-.working-sheet-row-icon.tone-note,
-.working-sheet-row-icon.tone-image {
-  color: var(--color-info);
-}
-
-.working-sheet-row-icon.tone-file {
-  color: var(--color-text-muted);
-}
-
-.working-sheet-row-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
   min-width: 0;
 }
 
-.working-sheet-row-title {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--color-text);
-  overflow-wrap: anywhere;
-  text-overflow: ellipsis;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-
-.working-sheet-row-where {
-  font-size: 12.5px;
-  overflow-wrap: anywhere;
-}
-
-.working-sheet-row-where .folder-mark {
-  vertical-align: middle;
-}
-
-.working-sheet-tag {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg);
+/* AD-Running: the group over the thing being read. */
+.working-sheet-group {
+  margin: var(--space-3) 0 0;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
-  white-space: nowrap;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.working-sheet-tag-needs {
-  background: var(--color-warn-bg);
-  color: var(--color-warn);
+.working-sheet-link {
+  color: var(--color-brand);
+}
+
+/* AR-Run: "See what changed" as the sheet's last line, no full-width Close. */
+.working-sheet-more {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.working-sheet-more .working-sheet-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 /* Done: the bird says what it added. */

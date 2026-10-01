@@ -20,7 +20,10 @@ import {
 } from '../src/overlay-queue.js';
 
 import type { Run } from '../src/api.js';
-import { WORKING_STAGE_HEIGHT } from '../src/components/bower-working.js';
+import {
+  RUNNING_BIRD_SIZE,
+  RUNNING_STAGE_HEIGHT,
+} from '../src/components/working-sheet.js';
 import { resetBirdPresence } from '../src/bird-presence.js';
 import { buildRun } from './fixtures/run-outcome-builders.js';
 
@@ -65,7 +68,11 @@ function dialog(): HTMLElement | null {
 function button(name: string): HTMLElement {
   const found = [
     ...document.body.querySelectorAll<HTMLElement>('button, a'),
-  ].find((element) => element.textContent?.trim() === name);
+  ].find(
+    (element) =>
+      element.textContent?.trim() === name ||
+      element.getAttribute('aria-label') === name,
+  );
   if (found === undefined) throw new Error(`no button "${name}"`);
   return found;
 }
@@ -98,7 +105,7 @@ describe('#859: a partly done run', () => {
   it('shows the two board tiles and keeps the buttons in the sheet', () => {
     mount('failed', buildRun('partial'));
     const tiles = [...document.body.querySelectorAll('.run-summary-tile')].map(
-      (tile) => tile.textContent?.replace(/\s+/g, ' ').trim(),
+      (tile) => tile.getAttribute('aria-label'),
     );
     expect(tiles).toEqual(['1 new note', '1 still in your inbox']);
     expect(button('Finish the tidy-up')).toBeTruthy();
@@ -143,10 +150,15 @@ describe('R-SHEET-1: an Overlay sheet', () => {
     expect(dialog()?.getAttribute('aria-label')).toBe('Tidy-up partly done');
   });
 
-  it('closes on the scrim and on Close', () => {
+  it('closes on the scrim and on its ✕ only, no full-width Close (K-25)', () => {
     mount('running', buildRun('running'));
+    expect(
+      [...(dialog()?.querySelectorAll('button') ?? [])].some(
+        (b) => b.textContent === 'Close',
+      ),
+    ).toBe(false);
     void act(() => {
-      button('Close').click();
+      button('Close the tidy-up').click();
     });
     expect(onDismiss).toHaveBeenCalledTimes(1);
     void act(() => {
@@ -159,24 +171,24 @@ describe('R-SHEET-1: an Overlay sheet', () => {
 });
 
 describe('running (R-SHEET-2, R-SHEET-5, R-BIRD-8)', () => {
-  it('shows the title, the steps from phase, the stage and the note', () => {
+  it('shows the title, the start time, the three steps, the stage and the note (AD-Running)', () => {
     mount('running', buildRun('running'));
     const text = dialog()?.textContent ?? '';
     expect(text).toContain('Tidying up 2 things');
-    expect(text).toContain('Started');
-    expect(text).toContain('usually 3 to 6 min');
-    const steps = [
-      ...(dialog()?.querySelectorAll('[aria-label="Steps"] li') ?? []),
-    ];
-    expect(steps).toHaveLength(4);
-    expect(steps[2]?.textContent).toContain('Writing notes');
-    expect(steps[2]?.textContent).toContain('1 of 2');
-    expect(steps[2]?.textContent).toContain('in progress');
-    expect(steps[3]?.textContent).toContain('not started');
-    expect(text).toContain('the tidy-up bar above the tabs shows how it goes');
+    expect(text).toMatch(/Started (\d\d:\d\d|just now) · it takes a few minutes/);
+    expect(dialog()?.querySelector('.working-sheet-stage-from')?.textContent).toBe('Inbox');
+    expect(dialog()?.querySelector('.working-sheet-stage-to')?.textContent).toBe('Your folders');
+    expect(dialog()?.querySelector('.working-sheet-group')?.textContent).toBe('Working on it');
+    expect(dialog()?.querySelector('[aria-label="Steps"]')).toBeNull();
+    expect(text).toContain(
+      'You can close this: the tidy-up carries on. See what changed when it is done.',
+    );
     const stage = dialog()?.querySelector<HTMLElement>('.working-sheet-stage');
-    expect(stage?.style.height).toBe(`${WORKING_STAGE_HEIGHT}px`);
+    expect(stage?.style.height).toBe(`${RUNNING_STAGE_HEIGHT}px`);
     expect(stage?.querySelector('.bw--running')).not.toBeNull();
+    expect(stage?.querySelector('svg')?.getAttribute('width')).toBe(
+      String(RUNNING_BIRD_SIZE),
+    );
   });
 
   it('never plays Hello: the stage bird is the tidying one', () => {
@@ -185,11 +197,9 @@ describe('running (R-SHEET-2, R-SHEET-5, R-BIRD-8)', () => {
     expect(bird?.getAttribute('class') ?? '').not.toContain('hello');
   });
 
-  it('falls back to one indeterminate step without a phase', () => {
+  it('keeps "Working on it" without a phase', () => {
     mount('running', buildRun('running', { phase: undefined }));
-    const steps = dialog()?.querySelectorAll('[aria-label="Steps"] li');
-    expect(steps).toHaveLength(1);
-    expect(steps?.[0]?.textContent).toContain('Working on it');
+    expect(dialog()?.textContent).toContain('Working on it');
   });
 
   it('before the run exists it still shows the sheet (starting)', () => {
@@ -199,7 +209,7 @@ describe('running (R-SHEET-2, R-SHEET-5, R-BIRD-8)', () => {
 });
 
 describe('done (R-SHEET-2, R-SHEET-3, R-SHEET-6)', () => {
-  it('shows the tiles, the quote with the bird, the rows and See everything', () => {
+  it('shows the tiles, the rows, See what changed and the ✕ only (AR-Run)', () => {
     mount(
       'done',
       buildRun('done', {
@@ -212,14 +222,22 @@ describe('done (R-SHEET-2, R-SHEET-3, R-SHEET-6)', () => {
     expect(
       dialog()?.querySelector('[aria-label="What this tidy-up did"]'),
     ).not.toBeNull();
-    expect(text).toContain(
+    expect(text).not.toContain(
       'I compared the flats and added them to your table.',
     );
+    expect(dialog()?.querySelectorAll('.stat-tile')).toHaveLength(4);
     const rows = [...(dialog()?.querySelectorAll('.working-sheet-row') ?? [])];
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]?.textContent).toMatch(/New note|Updated|Filed|Needs you/);
-    const see = button('See everything');
+    expect(rows.some((row) => row.querySelector('.badge') !== null)).toBe(true);
+    const see = button('See what changed');
     expect(see.getAttribute('href')).toBe('/just-filed?run=run-9');
+    expect(button('Close the tidy-up result')).not.toBeNull();
+    expect(
+      [...(dialog()?.querySelectorAll('button, a') ?? [])].some(
+        (b) => b.textContent === 'Close',
+      ),
+    ).toBe(false);
   });
 
   it('lists what needs you first', () => {
