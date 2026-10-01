@@ -5,7 +5,7 @@
  * is a nav item. Runs on the demo's sample folder.
  */
 
-import { expect, openHome, test, visible } from './demo.js';
+import { bootGone, expect, openHome, test, visible } from './demo.js';
 
 test('the files button opens the drawer and ✕ closes it', async ({
   page,
@@ -30,6 +30,7 @@ test('a touch swipe from the left edge opens the drawer', async ({
   await openHome(page);
   await page.goto('/folder/4-Archives/Flat%20hunt');
   await expect(page.locator('h1', { hasText: 'Flat hunt' })).toBeVisible();
+  await bootGone(page);
 
   const cdp = await page.context().newCDPSession(page);
   const touch = async (
