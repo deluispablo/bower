@@ -49,7 +49,13 @@ export type HelpIcon =
   | 'edit'
   | 'sparkle'
   | 'chat'
-  | 'shield';
+  | 'shield'
+  | 'document'
+  | 'check'
+  | 'bolt'
+  | 'sun'
+  | 'play'
+  | 'compare';
 
 export interface HelpRow {
   icon: HelpIcon;
@@ -188,7 +194,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
         text: 'to Bower: it lands here too.',
       },
       {
-        icon: 'edit',
+        icon: 'document',
         lead: 'What is this pile?',
         text: 'is optional: say what to do with these things, or nothing. "From now on…" becomes a rule.',
       },
@@ -232,7 +238,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
     tab: 'home',
     rows: [
       {
-        icon: 'inbox',
+        icon: 'check',
         lead: 'Filed, New notes, Updated, Needs you',
         text: 'count what the last tidy-up did.',
       },
@@ -247,7 +253,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
         text: 'open to show what each one did. One that did not finish lost nothing.',
       },
       {
-        icon: 'eye-off',
+        icon: 'check',
         lead: 'Mark all seen',
         text: 'clears the Just filed badge.',
       },
@@ -259,17 +265,17 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
     tab: 'home',
     rows: [
       {
-        icon: 'sparkle',
+        icon: 'bolt',
         lead: 'Tidying up',
         text: 'says when Bower pings you and whether it may look things up on the web.',
       },
       {
-        icon: 'edit',
+        icon: 'sun',
         lead: 'Look',
         text: 'picks light or dark, or follows your device.',
       },
       {
-        icon: 'chat',
+        icon: 'play',
         lead: 'Learn Bower',
         text: 'replays the intro and the tour.',
       },
@@ -288,7 +294,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
       BY_BOWER_ROW,
       ASK_FOLDER_ROW,
       {
-        icon: 'note',
+        icon: 'compare',
         lead: 'Compare',
         text: 'puts them side by side. Change a status there and Bower keeps it.',
       },
