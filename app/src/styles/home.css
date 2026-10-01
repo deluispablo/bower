@@ -135,7 +135,9 @@
 }
 
 /* "Being tidied up" opens the working sheet: a button drawn as the note. */
-.home-tile-running {
+/* Teal as HM-Running draws it; beats `.stat-tile-note`'s muted colour
+   whatever order the two style sheets load in. */
+.stat-tile-note.home-tile-running {
   display: block;
   padding: 0;
   background: none;
