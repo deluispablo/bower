@@ -88,6 +88,9 @@ export default defineConfig({
         // public/fonts/ (#136), precached the same way as the rest of the
         // shell.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // Pages' 404 page for a missing asset (#992) is not part of the
+        // shell.
+        globIgnores: ['**/node_modules/**', 'assets/404.html'],
       },
       manifest: {
         name: 'Bower',
