@@ -70,6 +70,7 @@ import { markSeen } from '../seen.js';
 import { siblingNames } from '../rename-request.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { isAppFile } from '../vault-index.js';
+import { Skeleton } from '../components/system-state.js';
 import { OfflineError, useVault } from '../vault-store.js';
 import type { EditableNote } from '../vault-store.js';
 import { NotFound } from './not-found.js';
@@ -553,7 +554,7 @@ export function Note() {
   if (index === null) {
     return (
       <section>
-        <p>Loading…</p>
+        <Skeleton shape="properties" count={6} />
       </section>
     );
   }
@@ -794,7 +795,9 @@ export function Note() {
         />
       )}
 
-      {!isEditing && load.status === 'loading' && <p>Loading…</p>}
+      {!isEditing && load.status === 'loading' && (
+        <Skeleton shape="properties" count={6} />
+      )}
       {!isEditing && load.status === 'offline' && (
         <p>Offline: this note is not saved on this device yet.</p>
       )}

@@ -57,6 +57,7 @@ import { FOLDERS_LANDMARK } from '../shell-routes.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { useRequestRows } from '../use-request-rows.js';
 import { useTitle } from '../use-title.js';
+import { Skeleton } from '../components/system-state.js';
 import { useVault } from '../vault-store.js';
 import { NotFound } from './not-found.js';
 import '../styles/folder.css';
@@ -491,7 +492,7 @@ export function Folder(): JSX.Element {
   if (index === null) {
     return (
       <section>
-        <p>Loading…</p>
+        <Skeleton shape="rows" count={6} />
       </section>
     );
   }

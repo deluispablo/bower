@@ -92,6 +92,7 @@ import { useMediaQuery } from '../use-media-query.js';
 import { fileHelpTopic, useHelpTopic } from '../help-rows.js';
 import { useTitle } from '../use-title.js';
 import { useRequestRows } from '../use-request-rows.js';
+import { Skeleton } from '../components/system-state.js';
 import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind, VaultIndex } from '../vault-index.js';
@@ -214,7 +215,7 @@ function Preview({
   );
   switch (load.status) {
     case 'loading':
-      return <p class="file-preview-note">Loading the preview…</p>;
+      return <Skeleton shape="tiles" count={1} />;
     case 'image':
       return (
         <div class="file-preview file-preview-picture">
@@ -768,7 +769,7 @@ export function FileScreen(): JSX.Element {
   if (index === null || isNote) {
     return (
       <section>
-        <p>Loading…</p>
+        <Skeleton shape="properties" count={6} />
       </section>
     );
   }
