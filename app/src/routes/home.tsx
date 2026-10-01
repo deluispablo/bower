@@ -44,7 +44,6 @@ import { useNoteTitles } from '../components/use-note-titles.js';
 import {
   findReport,
   healthCardLine,
-  isReportNew,
   reportDayStart,
 } from '../health-report.js';
 import {
@@ -605,15 +604,15 @@ export function Home(): JSX.Element {
   const findings = useHealthFindings(true);
   const reportTime =
     index === null ? undefined : findReport(index)?.modifiedTime;
+  // The tile states where the check stands, never a bare "New" that reads
+  // like a badge (HM-Main-1280, DA-28).
   const healthLine =
     reportTime === undefined
       ? 'Not checked yet'
-      : isReportNew(reportTime, getPref('healthSeenAt'))
-        ? 'New'
-        : healthCardLine(
-            `Checked ${relativeTime(reportDayStart(reportTime), now)}`,
-            findings,
-          );
+      : healthCardLine(
+          `Checked ${relativeTime(reportDayStart(reportTime), now)}`,
+          findings,
+        );
 
   const offline = !online;
   const loading = status === 'loading';
