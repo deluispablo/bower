@@ -125,13 +125,6 @@
   text-decoration: underline;
 }
 
-/* The lit tab. It sits in the inert page under the scrim, so the ring that
- * shows is `.tour-spot`; this only keeps the tab itself readable. */
-.help-tab-on {
-  border-radius: 14px;
-  background: var(--color-surface);
-}
-
 /* The help panel on the shared overlay: its scrim, inert page and slide come
  * from overlay.css; this is what sits inside (R-OVL-4). */
 .help-panel {
@@ -186,22 +179,35 @@
   text-decoration: underline;
 }
 
-/* The tour: the ring round the lit tab and Bower on the tab bar, above the
- * scrim (Tour-375). Neither takes taps. */
+/* The tour: the ring round the lit target and Bower beside it (TR-*).
+ * Neither takes taps. The ring is a cut-out in the scrim (spec 4.15, F-26):
+ * its own shadow is the scrim, so the target inside it stays lit. The stage
+ * sits just under the overlay, whose scrim turns clear while a ring is on
+ * screen; the overlay's clear scrim still takes the taps, and the card stays
+ * above the shadow. */
 .tour-stage {
   position: fixed;
   inset: 0;
-  z-index: var(--z-overlay);
+  z-index: calc(var(--z-scrim) - 1);
   pointer-events: none;
 }
 
 .tour-spot {
   position: fixed;
   box-sizing: border-box;
-  border-radius: 16px;
-  outline: 2px solid var(--color-accent-line);
-  outline-offset: 0;
-  background: rgb(255 255 255 / 0.1);
+  border: 2px solid var(--color-accent-line);
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px var(--color-scrim);
+}
+
+body:has(.tour-spot) .overlay:has(.tour-card) > .overlay-scrim {
+  background: transparent;
+}
+
+@media (min-width: 900px) {
+  .tour-spot {
+    border-radius: 10px;
+  }
 }
 
 /* The lit phone tab, drawn again above the scrim inside the ring, its icon
@@ -262,7 +268,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  column-gap: var(--space-2);
+  gap: 0 var(--space-2);
 }
 
 .tour-card .help-heading {
@@ -272,6 +278,7 @@
 .tour-card .help-kicker {
   grid-column: 1 / -1;
   font-weight: 700;
+  line-height: 1.4;
   letter-spacing: 0.08em;
 }
 
@@ -280,6 +287,7 @@
   margin-top: 2px;
   font-weight: 700;
   font-size: 20px;
+  line-height: 1.5;
 }
 
 .tour-card .help-skip {
@@ -287,7 +295,10 @@
   grid-row: 2;
   align-self: baseline;
   position: relative;
-  min-height: 44px;
+  /* The 44 px hit area is the ::after box, so the link adds no height to
+     the title's line (TR-*: the lede sits 2 px under the title). */
+  min-height: 0;
+  padding: 0;
   font-size: var(--text-15);
   color: var(--color-text-secondary);
   /* An underlined text link (TR-*), with a 44 px hit area around it. */
@@ -311,15 +322,40 @@
   outline: none;
 }
 
+/* TR-*: the card is 16 px from its top edge and 18 px from the sides on the
+ * phone (20 on desktop), the lede 2 px under the title, each row its text
+ * plus 7 px above and below, the buttons 16 px under the last row. */
+.help-panel.tour-card {
+  gap: 0;
+  padding: 16px 18px 18px;
+}
+
 .tour-card .help-lede {
   grid-column: 1 / -1;
-  margin: 2px 0 var(--space-2);
+  margin: 2px 0 0;
   font-size: var(--text-base);
-  line-height: 1.5;
+  line-height: 1.4;
+}
+
+.tour-card .help-rows {
+  gap: 0;
 }
 
 .tour-card .help-row {
+  gap: var(--space-3);
+  padding: 7px 0;
   font-size: var(--text-base);
+}
+
+.tour-card .help-row > svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.tour-card .help-actions {
+  margin-top: 16px;
 }
 
 @media (min-width: 900px) {
@@ -329,13 +365,24 @@
   }
 }
 
-/* The tour keeps its place from before #907: centred, 440 wide. */
+/* The tour card on desktop (TR-*-Fixed-1280): 482 wide with its border,
+ * its left edge 100 px left of the window's centre (x 540 at 1280), 230 px
+ * from the top, nearer the top on a short window. */
 @media (min-width: 900px) {
-  .overlay--desktop-center .overlay-panel:has(.tour-card) {
-    --dialog-width: 440px;
+  .help-panel.tour-card {
+    padding: 16px 20px 20px;
+  }
 
-    bottom: 0;
-    margin: auto;
+  .overlay--desktop-center .overlay-panel:has(.tour-card) {
+    top: clamp(16px, calc(100vh - 570px), 230px);
+    right: auto;
+    left: calc(50% - 100px);
+    box-sizing: border-box;
+    width: min(482px, calc(50% + 100px - var(--space-4)));
+    max-height: calc(
+      100vh - clamp(16px, calc(100vh - 570px), 230px) - var(--space-4)
+    );
+    margin: 0;
   }
 }
 
@@ -376,13 +423,16 @@
   color: var(--color-text-secondary);
 }
 
+/* Even rhythm (F-25): every row is its text plus 7 px above and below, as
+   the Help boards draw `.hr`, so a one-line row is spaced like a two-line
+   one. The rows are not tap targets, so they carry no 44 px minimum. */
 .help-template .help-rows {
-  gap: var(--space-2);
+  gap: 0;
 }
 
 .help-template .help-row {
   gap: var(--space-3);
-  min-height: 44px;
+  padding: 7px 0;
   font-size: var(--text-base);
   color: var(--color-text);
 }

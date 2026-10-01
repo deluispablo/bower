@@ -41,7 +41,6 @@ import {
   INTRO_FOLDER,
   INTRO_JOIN,
   INTRO_LAST_LABEL,
-  INTRO_LEARN_LABEL,
   INTRO_NOTE,
   INTRO_PAGES,
   INTRO_PAGE_COUNT,
@@ -432,11 +431,6 @@ export function Intro(): JSX.Element {
                       {item.heading}
                     </h1>
                     <p class="intro-body">{introBody(item, desktop)}</p>
-                    {index === LAST && (
-                      <a href="/learn" class="intro-learn">
-                        {INTRO_LEARN_LABEL}
-                      </a>
-                    )}
                   </div>
                   {Illustration !== undefined && <Illustration />}
                 </section>

@@ -1238,5 +1238,3 @@ export function timelineExplainer(count: number): string {
     'they happen.'
   );
 }
-
-// --- Copy as table (R-CMP-9) -------------------------------------------------

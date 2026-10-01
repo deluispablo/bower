@@ -44,11 +44,11 @@ describe('HELP_ROWS', () => {
     }
   });
 
-  it('never says "PARA", "vault", "Four folders" or "the Archive"', () => {
+  it('never says "PARA" or "vault"', () => {
     for (const screen of SCREENS) {
       for (const desktop of [false, true]) {
         const text = words(helpSheet(screen, { desktop })).join(' ');
-        expect(text).not.toMatch(/PARA|vault|Four folders|the Archive\b/);
+        expect(text).not.toMatch(/PARA|vault/);
         expect(text).not.toContain('{');
       }
     }
@@ -64,7 +64,7 @@ describe('HELP_ROWS', () => {
       'Pinned and Recent',
     ]);
     expect(leads('notes')).toEqual([
-      'Your Inbox and four folders',
+      'Four folders',
       'The bird',
       'Search',
       "Bower's own files",
@@ -105,9 +105,9 @@ describe('HELP_ROWS', () => {
     ]);
   });
 
-  it('says Archives are done in the Folders Help (S-NT-6)', () => {
+  it('uses the NT-Help and TR-Notes words for the folders row', () => {
     expect(words(helpSheet('notes'))[2]).toBe(
-      'Your Inbox and four folders sort a life: Projects end, Areas go on, Resources are kept, Archives are done. Bower files into them; you can move anything.',
+      'Four folders sort a life: Projects end, Areas go on, Resources are kept, the Archive is done. Bower files into them; you can move anything.',
     );
     expect(words(helpSheet('notes'))[3]).toBe(
       'The bird marks what Bower wrote; everything else is yours, as you added it.',
@@ -255,5 +255,23 @@ describe('the Help of a folder, a note and a file', () => {
     expect(helpScreenFor('/note/abc')).toBe('note');
     expect(helpScreenFor('/file/abc')).toBe('file');
     expect(helpScreenFor('/folder/2-Areas')).toBe('folder');
+  });
+});
+
+describe('Help row icons follow the boards (#950 F-24)', () => {
+  const icons = (screen: HelpScreen): string[] =>
+    HELP_ROWS[screen].rows.map((row) => row.icon);
+
+  it('draws the bird on the rows about what Bower wrote', () => {
+    expect(icons('home')[0]).toBe('bird');
+    expect(icons('folder')[0]).toBe('bird');
+  });
+
+  it('uses the icons the NO-, FI-, NT-, AR- and JF-Help boards draw', () => {
+    expect(icons('bowerNote')).toEqual(['bird', 'check', 'document']);
+    expect(icons('file')).toEqual(['bird', 'external', 'chevron']);
+    expect(icons('notes')).toEqual(['folder', 'bird', 'search', 'eye']);
+    expect(icons('folderOfFolders')).toEqual(['folder', 'document', 'chat']);
+    expect(icons('justFiled')).toEqual(['check', 'document', 'clock', 'check']);
   });
 });

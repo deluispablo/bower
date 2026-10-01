@@ -274,6 +274,16 @@ export function IconSun(): JSX.Element {
   );
 }
 
+/** The Look row on Settings Help (ST-Help): a sun with four short rays. */
+export function IconLook(): JSX.Element {
+  return (
+    <Svg>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4 12H2M22 12h-2" />
+    </Svg>
+  );
+}
+
 export function IconClock(): JSX.Element {
   return (
     <Svg>
@@ -576,35 +586,6 @@ export function IconLink(): JSX.Element {
     <Svg>
       <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
       <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
-    </Svg>
-  );
-}
-
-/** Settings (R-ICON-28): a gear, so the sliders keep Filter & sort only. */
-export function IconGear(): JSX.Element {
-  return (
-    <Svg>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" />
-    </Svg>
-  );
-}
-
-/** Remove a thing from a pile, unpin in edit mode, remove a rule (R-ICON-32). */
-export function IconRemove(): JSX.Element {
-  return (
-    <Svg>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M8 12h8" />
-    </Svg>
-  );
-}
-
-/** Pause a rule (R-ICON-33). */
-export function IconPause(): JSX.Element {
-  return (
-    <Svg>
-      <path d="M9 6v12M15 6v12" />
     </Svg>
   );
 }
