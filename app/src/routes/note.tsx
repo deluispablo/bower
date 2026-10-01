@@ -735,10 +735,14 @@ export function Note() {
               source: meta.fields.source,
               kind: meta.kind,
               lookup: index,
-            }).map((source) =>
-              textCopy !== null && source.key.startsWith('original:')
-                ? { ...source, role: 'the original' }
-                : source,
+            }).flatMap((source) =>
+              !source.key.startsWith('original:')
+                ? [source]
+                : textCopy !== null
+                  ? [{ ...source, role: 'the original' }]
+                  : // The file it was made from is About's Source row
+                    // (NO-Main: nothing between the meta line and the box).
+                    [],
             )}
           />
           <MadeForIt

@@ -207,7 +207,8 @@ describe('Note screen (#609)', () => {
     await mount(LISTING.id);
 
     // R-NO-1: the meta line "Bower note · 26 Sep" with the tags as links;
-    // the status select of a kind with statuses; Made from (the original).
+    // the status select of a kind with statuses. The original is About's
+    // Source row now, not a Made from line (NO-Main).
     const row = root.querySelector('.note-kind-row');
     expect(row?.querySelector('.note-kind-chip')).toBeNull();
     expect(row?.querySelector('select')?.getAttribute('aria-label')).toBe(
@@ -218,8 +219,7 @@ describe('Note screen (#609)', () => {
     expect(meta?.querySelector('a.note-tag')?.getAttribute('href')).toBe(
       '/search?q=%23housing',
     );
-    const original = root.querySelector('.made-from a[href="/file/id-scan"]');
-    expect(original?.textContent).toContain('Arlington Road, 2 bed.pdf');
+    expect(root.querySelector('.made-from a[href="/file/id-scan"]')).toBeNull();
     expect(root.querySelector('.note-props')).toBeNull();
 
     expect(root.querySelector('.bower-note-box')).not.toBeNull();
