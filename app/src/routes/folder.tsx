@@ -380,9 +380,7 @@ function FolderBody({
           onClose={() => setMenuOpen(false)}
         />
       )}
-      {summary.failed && (
-        <ErrorLine what="folder" onRetry={summary.retry} />
-      )}
+      {summary.failed && <ErrorLine what="folder" onRetry={summary.retry} />}
       {showCompare && compare !== null ? (
         <CompareSlot
           notes={compare.notes}
