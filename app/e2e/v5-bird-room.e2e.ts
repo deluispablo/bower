@@ -155,7 +155,8 @@ test.describe('nothing clips Bower in the states he shows himself', () => {
   test('offline', async ({ page, context }) => {
     await openHome(page);
     await context.setOffline(true);
-    await visible(page.locator('a[href="/notes"]')).click();
+    // Home itself says it is offline; desktop Home has no "All in Folders"
+    // link to leave by any more (#913, R-HM-5).
     await expect(page.getByText(/offline/i).first()).toBeVisible();
     await expectRoom(page, 'offline');
     await context.setOffline(false);
