@@ -272,10 +272,8 @@ export function MoveToSheet({
           title="Move to…"
           closeLabel="Close Move to"
           onClose={onClose}
+          subtitle={`Pick a folder for ${name}. Bower moves it at the next tidy-up.`}
         />
-        <p class="move-to-sub">
-          Pick a folder for {name}. Bower moves it at the next tidy-up.
-        </p>
         <FolderChoice
           subject={subject}
           subjectHasFolders={

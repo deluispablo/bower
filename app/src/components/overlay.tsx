@@ -482,6 +482,9 @@ export interface OverlayHeaderProps {
   /** The ✕'s name, one of the boards' (`OVERLAY_CLOSE_LABELS`). */
   closeLabel: OverlayCloseLabel;
   onClose: () => void;
+  /** A line under the title, in the header block beside the ✕ (PF-Move:
+   * 4 px under the title, #950). */
+  subtitle?: ComponentChildren;
 }
 
 /** A content sheet's or side panel's header: the title and ✕ (§3.8, §3.9). */
@@ -490,12 +493,25 @@ export function OverlayHeader({
   title,
   closeLabel,
   onClose,
+  subtitle,
 }: OverlayHeaderProps): JSX.Element {
+  const heading = (
+    <h2 id={titleId} class="overlay-title" tabIndex={-1}>
+      {title}
+    </h2>
+  );
   return (
-    <div class="overlay-head">
-      <h2 id={titleId} class="overlay-title" tabIndex={-1}>
-        {title}
-      </h2>
+    <div
+      class={`overlay-head${subtitle === undefined ? '' : ' overlay-head-sub'}`}
+    >
+      {subtitle === undefined ? (
+        heading
+      ) : (
+        <div class="overlay-head-text">
+          {heading}
+          <p class="overlay-subtitle">{subtitle}</p>
+        </div>
+      )}
       <button
         type="button"
         class="icon-button overlay-close"

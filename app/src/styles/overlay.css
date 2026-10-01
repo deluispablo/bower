@@ -83,6 +83,31 @@
   color: var(--color-heading);
 }
 
+/* A header with a line under its title (PF-Move-375/1280): the title and
+   the line wrap together beside the ✕, the line 4 px under the title,
+   16 px on the phone and 15 px on a computer (#950). */
+.overlay-head-sub {
+  align-items: flex-start;
+}
+
+.overlay-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: var(--space-1);
+}
+
+.overlay-subtitle {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+@media (min-width: 900px) {
+  .overlay-subtitle {
+    font-size: var(--text-15);
+  }
+}
+
 .overlay-close {
   flex: none;
   margin-right: calc(-1 * var(--space-2));

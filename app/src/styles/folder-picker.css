@@ -48,12 +48,6 @@
   min-height: 0;
 }
 
-.move-to-sub {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 15px;
-}
-
 .move-to-foot {
   display: flex;
   flex-direction: column;
