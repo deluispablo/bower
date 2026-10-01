@@ -2,6 +2,6 @@
   "name": "@bower/agent",
   "private": true,
   "scripts": {
-    "test": "bash test/scan.test.sh && bash test/stats.test.sh && bash test/bookkeeping.test.sh && bash test/smoke.sh"
+    "test": "bash test/scan.test.sh && bash test/stats.test.sh && bash test/context.test.sh && bash test/bookkeeping.test.sh && bash test/smoke.sh"
   }
 }

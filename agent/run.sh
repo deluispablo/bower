@@ -3116,13 +3116,18 @@ rm -f "$INDEX_BEFORE"
 STEP='agent run'
 log "$STEP"
 RUN_STARTED=1
+# The prompt goes in on stdin (#967): `claude -p` with no prompt argument
+# reads it there, so a large folder's context never meets Linux's 128 KB
+# limit on one argument. Nothing else reads stdin. The file is in the work
+# dir, outside the agent's folder.
+printf '%s\n' "$PROMPT" >"$WORK_DIR/prompt.md"
 set +e
 (
   cd "$VAULT_DIR"
   timeout -k 30 "$AGENT_TIME_LIMIT" env -i "${claude_env[@]}" \
-    claude -p "$PROMPT" --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
+    claude -p --max-turns "$MAX_TURNS" --output-format stream-json --verbose \
       --model "$MODEL" --effort "$EFFORT" --append-system-prompt-file "$SYSTEM_FILE" \
-      --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" </dev/null
+      --allowedTools "$ALLOWED_TOOLS" --disallowedTools "$DISALLOWED_TOOLS" <"$WORK_DIR/prompt.md"
 ) >"$AGENT_STREAM" 2>"$AGENT_ERR"
 agent_rc=$?
 set -e
@@ -3281,6 +3286,28 @@ else
 '}$STATUSES_WARNING"
   [ -z "$ROWS_WARNING" ] || SUMMARY="${SUMMARY:+$SUMMARY$'
 '}$ROWS_WARNING"
+  # A silent no-op (#967): the agent was given at least one file (not an
+  # instruction or context note) after the pre-scan, left every one of them
+  # where it was (not filed, not moved to Processed/; the quarantined ones
+  # are not in the list), and said `Problems: none`. A warning with the
+  # count, never a name.
+  if [ "$MODE" = ingest ] && grep -qiE '^[[:space:]]*Problems:[[:space:]]*none\.?[[:space:]]*$' <<<"$SUMMARY"; then
+    pending_now="$WORK_DIR/pending-after-scan.txt"
+    [ -f "$pending_now" ] || pending_now=$PENDING_FILE
+    given=0
+    left=0
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      [ "$(P="$path" awk -F '\t' '$1 == ENVIRON["P"] { print $2; exit }' "$KINDS_FILE")" = file ] || continue
+      given=$((given + 1))
+      [ ! -e "$VAULT_DIR/$path" ] || left=$((left + 1))
+    done <"$pending_now"
+    if [ "$given" -gt 0 ] && [ "$left" -eq "$given" ]; then
+      log "silent run: $left files left where they were, no problem reported"
+      SUMMARY="${SUMMARY:+$SUMMARY$'
+'}Warning: $left $([ "$left" -eq 1 ] && echo 'file was' || echo 'files were') left where $([ "$left" -eq 1 ] && echo 'it was' || echo 'they were'), and no problem was reported."
+    fi
+  fi
   filed=$(count_lines "$WORK_DIR/pending-after-scan.txt")
   [ -f "$WORK_DIR/pending-after-scan.txt" ] || filed=$(count_lines "$PENDING_FILE")
   write_outcome done "Tidied up $filed $([ "$filed" -eq 1 ] && echo thing || echo things)."
