@@ -1,126 +1,96 @@
 /**
- * The folder screen's list mode (issue #611, spec §6.5): the counts, the
- * origin filter, the tool row, the date groups and the rows, with an original
- * and its companion note as one row. Loaded on demand by `routes/folder.tsx`
- * (like `VirtualList` is by the tree), so it stays out of the startup chunk.
+ * The folder screen's body (issue #911, spec §4.8–4.11): h2 "In this
+ * folder" with the segments All / Originals <n> / By Bower <n> and the
+ * Filter & sort icon on one row, then the folder's things. Loaded on demand
+ * by `routes/folder.tsx`, so it stays out of the startup chunk.
  *
- * Sort, kind filter and origin filter are remembered per folder in
- * `viewSettings` (#582); the pure parts are in `folder-view.ts`.
+ * - A folder (PF-Main, LI-Main): subfolders first as rows ("Listings",
+ *   "6 things"), then the date groups "Today", "Yesterday", "29 Sep" of
+ *   ListRows (icon, title, kind, date only: G-18), or the same groups as
+ *   grid tiles (GR-Main). An original and its companion note are one row.
+ * - A folder of folders (AR-Main): the group "Folders" with folder cards,
+ *   then "Recently changed in <folder>" across its subfolders (R-API-1).
+ *
+ * On desktop one click selects (the preview column shows it), a double
+ * click or Enter opens, hover never selects (G-5). A folder opens with its
+ * first row selected; a folder of folders with nothing selected (K-33).
+ *
+ * Counts come from `folder-view.ts#folderSegments` only, so the meta line,
+ * the segments and "Show <n> things" agree (K-31); the route reads them
+ * through `onSummary`. Sort, kind and layout are remembered per folder in
+ * `viewSettings` (#582).
  */
 
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
-import { KEY_HINT, folderKeyAction } from '../folder-keys.js';
+import { folderKeyAction } from '../folder-keys.js';
 import { isBowerWritten } from '../bower-written.js';
 import { loadViewSettings, saveViewSettings } from '../cache.js';
 import type { ViewSettings } from '../cache.js';
 import { parseCatalogueFiles } from '../companion.js';
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
-import { metaLine, shortDate } from '../meta-line.js';
+import { dayWords, metaLine, shortDate } from '../meta-line.js';
 import type { MetaItem } from '../meta-line.js';
 import { CATALOGUE_PATH, originOf } from '../file-origin.js';
 import type { Origin } from '../file-origin.js';
 import {
   FOLDER_SORTS,
-  SORT_LABELS,
   buildFolderModel,
   fileLine,
   filterKind,
-  groupRows,
+  folderSegments,
   kindOptions,
-  lastFiled,
-  metaCounts,
   rowsFor,
   sortRows,
 } from '../folder-view.js';
 import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
-import { keyFactsFor, kindById } from '../kinds.js';
 import {
   displayName,
   folderHref,
+  folderOf,
   paraKindOf,
-  shortAge,
 } from '../navigation.js';
 import type { FolderContents, FolderSubfolder } from '../navigation.js';
 import { loadNoteMeta } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
 import type { PendingRequest } from '../rename-request.js';
-import { useMediaQuery } from '../use-media-query.js';
 import { useNew } from '../use-new.js';
 import { useVault } from '../vault-store.js';
-import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
+import {
+  FILE_KIND_LABELS,
+  changedUnder,
+  fileKind,
+  fileTitle,
+} from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
 import { Badge } from './badge.js';
+import { FilterSortSheet } from './filter-sort-sheet.js';
+import type { FilterSortChoice } from './filter-sort-sheet.js';
 import { FolderCard } from './folder-card.js';
 import type { FolderCardItem } from './folder-card.js';
-import { FolderMark } from './folder-mark.js';
-import { GridTile, LayoutToggle, defaultLayout } from './folder-grid.js';
-import type { FolderLayout } from './folder-grid.js';
-import { Hint } from './hint.js';
-import { IconChevronRight, IconFolder } from './icons.js';
-import { InfoPop } from './info-pop.js';
-import { FilterSortSheet } from './filter-sort-sheet.js';
+import { FolderGrid, GridTile, defaultLayout } from './folder-grid.js';
+import type { FolderLayout, TileGroup } from './folder-grid.js';
+import { IconChevronRight } from './icons.js';
 import { ListRow } from './list-row.js';
 import type { ListRowItem } from './list-row.js';
 import { QuickLook } from './quick-look.js';
-import type { PanePreview } from './quick-look.js';
+import type { PaneInsideItem, PaneItem } from './quick-look.js';
+import { Segmented } from './segmented.js';
+import { EmptyFolder, EmptySegment } from './system-state.js';
+import { useBowerWritten } from './tree.js';
 import { useLongPress } from './use-long-press.js';
-import { EMPTY_COPY } from './system-state.js';
-import { BowerTag } from './tags.js';
-
-/** The path bar (R-FOLDER-1): the PARA mark, each segment a link, the
- * current one bold. */
-export function PathBar({ path }: { path: string }): JSX.Element {
-  const segments = path.split('/').filter(Boolean);
-  const para = paraKindOf(segments[0] ?? '');
-  let acc = '';
-  return (
-    <nav class="folder-path" aria-label="You are in">
-      {para !== null && <FolderMark kind={para} size={18} />}
-      {segments.map((segment, at) => {
-        acc = acc === '' ? segment : `${acc}/${segment}`;
-        const last = at === segments.length - 1;
-        return (
-          <span key={acc} class="folder-path-part">
-            {at > 0 && (
-              <span class="folder-path-sep" aria-hidden="true">
-                ›
-              </span>
-            )}
-            {last ? (
-              <b aria-current="page">{displayName(segment)}</b>
-            ) : (
-              <a href={folderHref(acc)}>{displayName(segment)}</a>
-            )}
-          </span>
-        );
-      })}
-    </nav>
-  );
-}
 
 /** "1 thing" / "3 things". */
 function things(n: number): string {
   return `${n} ${n === 1 ? 'thing' : 'things'}`;
 }
 
-/** A subfolder row's second line on a root folder's screen (#431): "6
- * things · updated today", "3 things · 5 d". Empty when nothing is in it
- * (#502). */
-export function subfolderLine(folder: FolderSubfolder, now: number): string {
-  if (folder.things === 0) return '';
-  const count = things(folder.things);
-  if (folder.updated === undefined) return count;
-  const age = shortAge(folder.updated, now);
-  return `${count} · ${age === 'today' ? 'updated today' : age}`;
-}
-
-/** A subfolder as a row of the one list (R-FOLD-1, board PF-Main): the
- * folder outline in its root's colour, its name, and "6 things" with a
- * chevron at the right. */
+/** A subfolder as a row of the one list (R-PF-5, board PF-Main): the folder
+ * outline in its root's colour, its name, and "6 things" with a chevron at
+ * the right. */
 export function SubfolderRow({
   folder,
 }: {
@@ -148,94 +118,61 @@ export function SubfolderRow({
   );
 }
 
+/** The title a list shows for `file`: a note's title, a file's name
+ * without its extension. */
+function titleOfFile(file: DriveFile): string {
+  return fileKind(file) === 'note' ? noteTitle(file) : fileTitle(file.name);
+}
+
 /** The first things inside a folder, newest first, as its card lists them
- * (title and kind only, G-18). */
+ * (title and kind only, G-18; R-API-1). `bower` names the notes Bower wrote,
+ * so they read "Bower note" with the bird. */
 export function firstInside(
   byPath: ReadonlyMap<string, DriveFile>,
   path: string,
   max = 3,
+  bower: ReadonlySet<string> = new Set(),
 ): FolderCardItem[] {
-  const prefix = `${path}/`;
-  const inside: DriveFile[] = [];
-  for (const [at, file] of byPath) {
-    if (!at.startsWith(prefix) || file.mimeType === FOLDER_MIME) continue;
-    inside.push(file);
-  }
-  inside.sort((a, b) =>
-    (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''),
-  );
-  return inside.slice(0, max).map((file) => ({
+  return changedUnder(byPath, path, max).map((file) => ({
     id: file.id,
-    title: fileKind(file) === 'note' ? noteTitle(file) : fileTitle(file.name),
+    title: titleOfFile(file),
     name: file.name,
     mimeType: file.mimeType,
     path: file.path,
+    bowerWritten: bower.has(file.id),
   }));
 }
 
-/** The subfolders of a folder as the top rows of its one list; on a root
- * folder's screen (a folder of folders, `detailed`) as folder cards
- * (R-FCARD-1, board AR-Main). */
-export function SubfolderList({
-  contents,
-  now,
-  detailed,
-}: {
-  contents: FolderContents;
-  now: number;
-  detailed: boolean;
-}): JSX.Element | null {
-  const { index } = useVault();
-  const fresh = useNew();
-  if (contents.subfolders.length === 0) return null;
-  if (detailed) {
-    const byPath = index?.byPath ?? NO_FILES;
-    return (
-      <>
-        <h3 class="folder-cards-label">Folders</h3>
-        <ul class="folder-cards" role="list" aria-label={`In ${contents.name}`}>
-          {contents.subfolders.map((folder) => (
-            <li key={folder.path}>
-              <FolderCard
-                folder={{
-                  path: folder.path,
-                  name: folder.name,
-                  href: folderHref(folder.path),
-                  things: folder.things,
-                  ...(folder.updated !== undefined && {
-                    updated: folder.updated,
-                  }),
-                }}
-                items={firstInside(byPath, folder.path)}
-                newCount={fresh.newCountIn(folder.path)}
-                now={now}
-              />
-            </li>
-          ))}
-        </ul>
-      </>
-    );
+/** How many rows "Recently changed in <folder>" lists. */
+export const RECENT_MAX = 5;
+
+/** A day group's label: "Today", "Yesterday", "29 Sep" (S-PF-6). */
+export function dayLabel(iso: string, now: number): string {
+  const words = iso === '' ? '' : dayWords(iso, now);
+  if (words === '') return 'Undated';
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
+/** Runs of `rows` (already in date order) under their day's label. */
+export function dayGroups<T extends { modified: string }>(
+  rows: readonly T[],
+  now: number,
+): TileGroup<T>[] {
+  const groups: { label: string; items: T[] }[] = [];
+  for (const row of rows) {
+    const label = dayLabel(row.modified, now);
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.items.push(row);
+    else groups.push({ label, items: [row] });
   }
-  return (
-    <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>
-      {contents.subfolders.map((folder) => (
-        <li key={folder.path}>
-          <SubfolderRow folder={folder} />
-        </li>
-      ))}
-    </ul>
-  );
+  return groups;
 }
 
 const NO_FILES: ReadonlyMap<string, DriveFile> = new Map();
 
-/** Past this many rows the list renders only the ones in view (`VirtualList`,
- * #590/#611); below it every row is in the DOM. */
+/** Past this many rows the list renders only the ones in view
+ * (`VirtualList`, #590/#611); below it every row is in the DOM. */
 const VIRTUAL_FROM_ROWS = 150;
-
-/** A row's and a date heading's height in px before they are measured. */
-/** From here the folder keeps its toolbar (R-FOLD-6). */
-const TOOLBAR_QUERY = '(min-width: 900px)';
 
 const ROW_ESTIMATE = 62;
 const GROUP_ESTIMATE = 34;
@@ -291,7 +228,7 @@ function readView(stored: StoredView | undefined): FolderViewState {
   return { sort, kind, origin, layout };
 }
 
-/** Sort, kind filter and origin filter, remembered per folder (#582). */
+/** Sort, kind, origin and layout, remembered per folder (#582). */
 function useFolderView(
   path: string,
 ): [FolderViewState, (patch: Partial<FolderViewState>) => void] {
@@ -347,7 +284,7 @@ function versionKey(notes: readonly DriveFile[]): string {
 }
 
 /** The frontmatter of the folder's notes, read lazily a few at a time: rows
- * render first and their key facts follow. */
+ * render first and their kinds follow. */
 function useNoteMetas(
   notes: readonly DriveFile[],
 ): ReadonlyMap<string, NoteMeta> {
@@ -418,17 +355,6 @@ function useCatalogueFiles(
   return files;
 }
 
-const FILTER_LABELS: Readonly<Record<OriginFilter, string>> = {
-  all: 'All',
-  originals: 'Originals',
-  bower: 'By Bower',
-};
-
-const TIP_LIST =
-  'marks what Bower wrote. Everything else is yours: what you added or wrote. An original and the note Bower wrote about it share one row.';
-const TIP_BOWER =
-  'Only what Bower wrote, with its key facts, so you can skim a folder without opening the originals. Tap All to see them again.';
-
 /** A row's line for what the person added or wrote. A CSV that is the copy
  * of a Google Sheet (`appProperties.bowerSource`, set when Bower exports one
  * from Drive) says so, as the board has it. */
@@ -446,53 +372,75 @@ export function addedLine(
 
 const NO_WAITING: ReadonlyMap<string, PendingRequest> = new Map();
 
+/** What the route's header reads from the body (K-31). */
+export interface FolderSummary {
+  /** The meta line's count: things, or for a folder of folders, folders. */
+  count: number;
+  unit: 'thing' | 'folder';
+  /** The folder's lifecycle from its own note's `status` ("Active"). */
+  lifecycle?: string;
+  /** The newest change in the folder, ISO. */
+  updated?: string;
+}
+
+/** A folder's lifecycle (AR-Sub: "Areas · Active · 2 things"): the `status`
+ * of the note named after the folder, capitalised. */
+export function lifecycleOf(
+  contents: Pick<FolderContents, 'name' | 'notes'>,
+  metas: ReadonlyMap<string, NoteMeta>,
+): string | undefined {
+  const own = contents.notes.find(
+    (note) => note.name === `${contents.name}.md`,
+  );
+  const status =
+    own === undefined ? undefined : metas.get(own.id)?.fields.status;
+  if (typeof status !== 'string' || status.trim() === '') return undefined;
+  const word = status.trim();
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+}
+
+/** The newest of the folder's own things and its subfolders, ISO. */
+export function folderUpdated(contents: FolderContents): string | undefined {
+  let newest: string | undefined;
+  const take = (iso: string | undefined): void => {
+    if (
+      iso !== undefined &&
+      iso !== '' &&
+      (newest === undefined || iso > newest)
+    ) {
+      newest = iso;
+    }
+  };
+  for (const item of contents.items) take(item.modifiedTime);
+  for (const folder of contents.subfolders) take(folder.updated);
+  return newest;
+}
+
 export interface FolderItemsProps {
   contents: FolderContents;
   titles: ReadonlyMap<string, string>;
   catalogue: ReadonlyMap<string, Origin>;
   now: number;
-  /** The desktop's "Compare <n> <plural>" button beside the kind filter
-   * (#613, R-COMP-1); `undefined` when the folder has nothing to compare. */
-  compare?: { label: string; onOpen: () => void };
-  /** From 1200 px (#614): a selection that follows the arrow keys, the
-   * kind chips, the right-hand dates and the key hint. */
+  /** From 1200 px: one click selects and the preview column shows it. */
   desktop?: boolean;
+  /** A root folder with subfolders (AR-Main): cards and Recently changed. */
+  folderOfFolders?: boolean;
   /** The Rename and Move requests that wait, by path (`pendingByPath`):
-   * their rows carry a clock badge (#765, R-MORE-4, D32). */
+   * their rows say so (#765, R-MORE-4, D32). */
   waiting?: ReadonlyMap<string, PendingRequest>;
-  /** Tells the preview pane what is selected (desktop only). */
-  onPreview?: (item: PanePreview | null) => void;
-  /** A file id the pane never preselects on its own (the project note that
-   * the front card already shows); choosing its row still previews it. */
-  noAutoPreview?: string | undefined;
+  /** Tells the preview column what is selected (desktop only). */
+  onPreview?: (item: PaneItem | null) => void;
+  /** The header's counts (K-31). */
+  onSummary?: (summary: FolderSummary) => void;
+  /** Opens Ask Bower about this folder (the empty folder's link). */
+  onAsk?: () => void;
   /** Takes the person up a folder (Backspace); absent at a top level. */
   onUp?: (() => void) | undefined;
-  /** Opens a row's address (Enter). */
+  /** Opens a row's address (Enter, double click). */
   onOpen?: (href: string) => void;
 }
 
-/** A tile's line under its title: "PDF · Bower's note", "Photo",
- * "PDF · 6 pages", "Spreadsheet (CSV)", "Note". */
-export function tileLine(row: FolderRow, pages: number | undefined): string {
-  const label = FILE_KIND_LABELS[row.kind];
-  if (row.original !== undefined) return `${label} · Bower's note`;
-  if (row.kind === 'note') return row.bower ? "Bower's note" : label;
-  if (pages !== undefined && pages > 0) {
-    return `${label} · ${pages} ${pages === 1 ? 'page' : 'pages'}`;
-  }
-  return label;
-}
-
-type Entry = { type: 'group'; label: string } | { type: 'row'; row: FolderRow };
-
-function entryKey(entry: Entry): string {
-  return entry.type === 'group' ? `g:${entry.label}` : entry.row.key;
-}
-
-/** The list mode of the folder screen (issue #611): origin filter, tool row,
- * date groups and rows, with pairs as one row. */
-/** The row the preview pane shows: the chosen one, else the first row that is
- * not `skipId` (the automatic pick never lands on the project note). */
+/** The row the preview shows: the chosen one, else the first row. */
 export function pickSelected<T extends { key: string; file: { id: string } }>(
   rows: readonly T[],
   selectedKey: string | null,
@@ -503,21 +451,33 @@ export function pickSelected<T extends { key: string; file: { id: string } }>(
   return rows.find((row) => row.file.id !== skipId) ?? null;
 }
 
+type Entry = { type: 'group'; label: string } | { type: 'row'; row: FolderRow };
+
+function entryKey(entry: Entry): string {
+  return entry.type === 'group' ? `g:${entry.label}` : entry.row.key;
+}
+
+const SEGMENT_LABELS: Readonly<Record<OriginFilter, string>> = {
+  all: 'All',
+  originals: 'Originals',
+  bower: 'By Bower',
+};
+
 export function FolderItems({
   contents,
   titles,
   catalogue,
   now,
-  compare,
   desktop = false,
+  folderOfFolders = false,
   waiting = NO_WAITING,
   onPreview,
-  noAutoPreview,
+  onSummary,
+  onAsk,
   onUp,
   onOpen,
 }: FolderItemsProps): JSX.Element {
   const fresh = useNew();
-  const newHere = fresh.newCountIn(contents.path);
   const [quick, setQuick] = useState<FolderRow | null>(null);
   const { index, getNoteText } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
@@ -536,13 +496,48 @@ export function FolderItems({
       }),
     [contents.items, byPath, metas, catalogue, catalogueFiles],
   );
-  const filed = lastFiled(contents.items, now);
   const [loaded, setLoaded] = useState<VirtualModule | null>(virtualModule);
+
+  // A folder of folders: what its cards and Recently changed list.
+  const recent = useMemo(
+    () =>
+      folderOfFolders ? changedUnder(byPath, contents.path, RECENT_MAX) : [],
+    [folderOfFolders, byPath, contents.path],
+  );
+  const cardFiles = useMemo(
+    () =>
+      folderOfFolders
+        ? contents.subfolders.flatMap((folder) =>
+            changedUnder(byPath, folder.path, 10),
+          )
+        : [],
+    [folderOfFolders, byPath, contents.subfolders],
+  );
+  const bowerSet = useBowerWritten(
+    useMemo(() => [...recent, ...cardFiles], [recent, cardFiles]),
+  );
 
   const titleOf = (row: FolderRow): string =>
     fileKind(row.file) === 'note'
       ? (titles.get(row.file.id) ?? noteTitle(row.file))
       : fileTitle(row.file.name);
+
+  // K-31: subfolders count as originals, except on a folder of folders,
+  // whose cards are not its own things (AR-Main: "Originals 0").
+  const subCount = folderOfFolders ? 0 : contents.subfolders.length;
+  const segments = folderSegments({ subfolders: subCount, model });
+
+  const lifecycle = lifecycleOf(contents, metas);
+  const updated = folderUpdated(contents);
+  const summary: FolderSummary = folderOfFolders
+    ? { count: contents.subfolders.length, unit: 'folder' }
+    : { count: segments.originals + segments.bower, unit: 'thing' };
+  if (lifecycle !== undefined) summary.lifecycle = lifecycle;
+  if (updated !== undefined) summary.updated = updated;
+  const summaryKey = JSON.stringify(summary);
+  useEffect(() => {
+    onSummary?.(summary);
+  }, [summaryKey, contents.path, onSummary]);
 
   const originRows = useMemo(
     () => rowsFor(model, view.origin),
@@ -557,15 +552,21 @@ export function FolderItems({
     // `titleOf` follows `titles`.
     [originRows, kind, view.sort, titles],
   );
-  const entries = useMemo<Entry[]>(() => {
-    if (view.sort === 'name' || view.sort === 'kind') {
-      return rows.map((row): Entry => ({ type: 'row', row }));
-    }
-    return groupRows(rows, now).flatMap((group): Entry[] => [
-      { type: 'group', label: group.label },
-      ...group.rows.map((row): Entry => ({ type: 'row', row })),
-    ]);
-  }, [rows, view.sort, now]);
+  const grouped = view.sort === 'newest' || view.sort === 'oldest';
+  const groups = useMemo<TileGroup<FolderRow>[]>(
+    () => (grouped ? dayGroups(rows, now) : [{ label: null, items: rows }]),
+    [rows, grouped, now],
+  );
+  const entries = useMemo<Entry[]>(
+    () =>
+      groups.flatMap((group): Entry[] => [
+        ...(group.label === null
+          ? []
+          : [{ type: 'group', label: group.label } as const]),
+        ...group.items.map((row): Entry => ({ type: 'row', row })),
+      ]),
+    [groups],
+  );
 
   const pages = useMemo(() => {
     const map = new Map<string, number>();
@@ -593,15 +594,36 @@ export function FolderItems({
     };
   }, [wantsVirtual, loaded]);
 
-  // Below 900 px the sort, kind and layout controls are one button (D34).
-  const toolbar = useMediaQuery(TOOLBAR_QUERY);
-
   // Grid when the person chose it, else when most of the folder is photos.
   const allKinds = useMemo(
     () => rowsFor(model, 'all').map((row) => row.kind),
     [model],
   );
-  const layout: FolderLayout = view.layout ?? defaultLayout(allKinds);
+  const folderLayout = defaultLayout(allKinds);
+  const layout: FolderLayout = view.layout ?? folderLayout;
+
+  // Subfolders are rows of the list in All and Originals (they are
+  // originals, K-31) until a kind narrows it.
+  const showSubs = (origin: OriginFilter, kindOn: string | null): boolean =>
+    !folderOfFolders && origin !== 'bower' && kindOn === null;
+  const subs = showSubs(view.origin, kind) ? contents.subfolders : [];
+
+  /** What Filter & sort's "Show <n> things" counts for a draft (K-31):
+   * things, not rows, so in All a pair (one row) counts as its two files
+   * and the number equals the meta line's. */
+  const countFor = (choice: FilterSortChoice): number => {
+    const known = options.some((option) => option.kind === choice.kind)
+      ? (choice.kind as FileKind | null)
+      : null;
+    const shown = filterKind(originRows, known).reduce(
+      (n, row) =>
+        n + (view.origin === 'all' && row.original !== undefined ? 2 : 1),
+      0,
+    );
+    return (
+      shown + (showSubs(view.origin, known) ? contents.subfolders.length : 0)
+    );
+  };
 
   // Holding a row or tile opens quick look (#613); the click that follows a
   // real long press must not also open the row.
@@ -610,7 +632,6 @@ export function FolderItems({
     const held = rows.find((row) => row.key === key);
     if (held !== undefined) setQuick(held);
   });
-  // Hover never selects (G-5): the row selects on click or focus.
   const holdProps = (row: FolderRow): Record<string, unknown> => ({
     ...press,
     'data-row-key': row.key,
@@ -624,10 +645,9 @@ export function FolderItems({
       setQuick(row);
     },
   });
-  const hrefOf = (row: FolderRow): string =>
-    fileKind(row.file) === 'note'
-      ? `/note/${row.file.id}`
-      : `/file/${row.file.id}`;
+  const hrefOfFile = (file: DriveFile): string =>
+    fileKind(file) === 'note' ? `/note/${file.id}` : `/file/${file.id}`;
+  const hrefOf = (row: FolderRow): string => hrefOfFile(row.file);
 
   /** What a row or tile shows of its file (FileIcon, title, link). */
   function itemOf(row: FolderRow): ListRowItem & MetaItem {
@@ -645,14 +665,25 @@ export function FolderItems({
   const isNewRow = (row: FolderRow): boolean =>
     fresh.isNew(row.file.id) ||
     (row.original !== undefined && fresh.isNew(row.original.id));
+
+  // The desktop's selection (#614): the preview column shows it, the arrow
+  // keys move it, Space and Enter act on it. A folder of folders starts
+  // with nothing selected (K-33).
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  useEffect(() => setSelectedKey(null), [contents.path]);
+  const selected =
+    desktop && !folderOfFolders ? pickSelected(rows, selectedKey) : null;
   const selectProps = (
-    row: FolderRow,
+    key: string,
+    href: string,
   ): { selected: boolean; onSelect?: () => void; onOpen?: () => void } =>
     desktop
       ? {
-          selected: row.key === selected?.key,
-          onSelect: () => setSelectedKey(row.key),
-          ...(onOpen !== undefined && { onOpen: () => onOpen(hrefOf(row)) }),
+          selected: folderOfFolders
+            ? key === selectedKey
+            : key === selected?.key,
+          onSelect: () => setSelectedKey(key),
+          ...(onOpen !== undefined && { onOpen: () => onOpen(href) }),
         }
       : { selected: false };
 
@@ -665,7 +696,7 @@ export function FolderItems({
         {...(row.modified !== '' && { dateTime: row.modified })}
         badge={isNewRow(row) ? <Badge tone="new">New</Badge> : undefined}
         rowProps={holdProps(row)}
-        {...selectProps(row)}
+        {...selectProps(row.key, hrefOf(row))}
       />
     );
   }
@@ -694,59 +725,108 @@ export function FolderItems({
           )
         }
         rowProps={holdProps(row)}
-        {...selectProps(row)}
+        {...selectProps(row.key, hrefOf(row))}
       />
     );
   }
 
-  // The desktop's selection (#614): the preview pane shows this row, the
-  // arrow keys move it, Space and Enter act on it.
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const selected = desktop
-    ? pickSelected(rows, selectedKey, noAutoPreview)
-    : null;
-  const orderedRows = useMemo(
-    () =>
-      layout === 'grid'
-        ? rows
-        : entries.flatMap((entry) => (entry.type === 'row' ? [entry.row] : [])),
-    [layout, rows, entries],
-  );
-
-  function panePropsOf(row: FolderRow): PanePreview {
-    const shown = row.original ?? row.file;
-    const meta = model.metas.get(row.file.id);
-    const noteKind = meta?.kind === undefined ? undefined : kindById(meta.kind);
+  /** A file of this folder or below, as the preview column shows it. */
+  function paneOfFile(file: DriveFile, original?: DriveFile): PaneItem {
+    const shown = original ?? file;
+    const bower =
+      model.bowerIds.has(file.id) ||
+      bowerSet.has(file.id) ||
+      isBowerWritten(model.metas.get(file.id));
     return {
-      title: titleOf(row),
-      href: hrefOf(row),
-      file: row.file,
-      original: row.original,
-      kind: row.kind,
+      title:
+        fileKind(file) === 'note'
+          ? (titles.get(file.id) ?? noteTitle(file))
+          : fileTitle(file.name),
+      href: hrefOfFile(file),
+      file,
+      original,
+      kind: fileKind(shown),
       pages: pages.get(shown.id),
       origin: originOf(shown, catalogue),
-      folderPath: contents.path,
+      folderPath: folderOf(file.path),
       now: Date.now(),
-      bower: isBowerWritten(meta),
-      facts:
-        noteKind === undefined || meta === undefined
-          ? []
-          : keyFactsFor(noteKind, meta.fields),
+      bower,
     };
   }
 
-  const selectedRowKey = selected?.key ?? null;
+  /** A subfolder card, as the preview column shows it (AR-Select-1280). */
+  function paneOfFolder(folder: FolderSubfolder): PaneItem {
+    const inside: PaneInsideItem[] = changedUnder(byPath, folder.path, 10).map(
+      (file) => ({
+        id: file.id,
+        title: titleOfFile(file),
+        href: hrefOfFile(file),
+        name: file.name,
+        mimeType: file.mimeType,
+        path: file.path,
+        bowerWritten: bowerSet.has(file.id),
+        isNew: fresh.isNew(file.id),
+        ...(file.modifiedTime !== undefined && { modified: file.modifiedTime }),
+      }),
+    );
+    const own = byPath.get(folder.path);
+    return {
+      type: 'folder',
+      title: folder.name,
+      href: folderHref(folder.path),
+      path: folder.path,
+      ...(own !== undefined && { file: own }),
+      things: folder.things,
+      ...(folder.updated !== undefined && { updated: folder.updated }),
+      inside,
+      now: Date.now(),
+    };
+  }
+
+  const orderedRows = useMemo(
+    () =>
+      layout === 'grid'
+        ? groups.flatMap((group) => [...group.items])
+        : entries.flatMap((entry) => (entry.type === 'row' ? [entry.row] : [])),
+    [layout, groups, entries],
+  );
+
+  // Tell the preview column what is selected.
+  const selectedRowKey = folderOfFolders
+    ? selectedKey
+    : (selected?.key ?? null);
   // `titles` is a new map on every render, so the effect follows the one
   // title it uses instead.
   const selectedTitle = selected === null ? null : titleOf(selected);
   useEffect(() => {
     if (!desktop || onPreview === undefined) return;
-    onPreview(selected === null ? null : panePropsOf(selected));
-    // The selected row's key names it; the rest follow the model.
-  }, [desktop, selectedRowKey, selectedTitle, model, catalogue, pages]);
+    if (!folderOfFolders) {
+      onPreview(
+        selected === null ? null : paneOfFile(selected.file, selected.original),
+      );
+      return;
+    }
+    const folder = contents.subfolders.find((sub) => sub.path === selectedKey);
+    if (folder !== undefined) {
+      onPreview(paneOfFolder(folder));
+      return;
+    }
+    const file = recent.find((one) => `recent:${one.id}` === selectedKey);
+    onPreview(file === undefined ? null : paneOfFile(file));
+    // The selected key names it; the rest follow the model.
+  }, [
+    desktop,
+    folderOfFolders,
+    selectedRowKey,
+    selectedTitle,
+    model,
+    catalogue,
+    pages,
+    bowerSet,
+  ]);
   useEffect(
     () => () => {
-      if (onPreview !== undefined) onPreview(null);
+      onPreview?.(null);
     },
     [],
   );
@@ -771,7 +851,7 @@ export function FolderItems({
   };
 
   useEffect(() => {
-    if (!desktop) return;
+    if (!desktop || folderOfFolders) return;
     function onKeyDown(event: KeyboardEvent): void {
       const { orderedRows, layout, onUp, onOpen } = live.current;
       if (event.defaultPrevented) return;
@@ -829,183 +909,152 @@ export function FolderItems({
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [desktop]);
+  }, [desktop, folderOfFolders]);
 
   const VirtualList = loaded?.VirtualList;
-  // Subfolders are rows of the list until a filter narrows it (R-FOLD-1).
-  const subs =
-    view.origin === 'all' && kind === null ? contents.subfolders : [];
-  const subContents: FolderContents = { ...contents, subfolders: subs };
-  const counts: Record<OriginFilter, number | null> = {
-    all: null,
-    originals: model.originals.length,
-    bower: model.bower.length,
+  const choice: FilterSortChoice = { sort: view.sort, kind, layout };
+  const defaults: FilterSortChoice = {
+    sort: 'newest',
+    kind: null,
+    layout: folderLayout,
   };
+  const para = paraKindOf(contents.path.split('/')[0] ?? '');
+  const emptyFolder =
+    contents.items.length === 0 && contents.subfolders.length === 0;
 
-  return (
-    <div class="folder-section">
-      <div class="folder-facts">
-        <p class="folder-counts">
-          {metaCounts(model).replace(
-            /^\d+ things?/,
-            (head) =>
-              `${things(parseInt(head, 10) + contents.subfolders.length)}${
-                desktop && newHere > 0 ? ` · ${newHere} new` : ''
-              }`,
-          )}
-        </p>
-        {filed !== null && <p class="folder-filed">{filed}</p>}
-      </div>
-      <div class="folder-filter-row">
-        <div class="folder-seg" role="group" aria-label="Show">
-          {(['all', 'originals', 'bower'] as const).map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              class="folder-seg-btn"
-              aria-pressed={view.origin === filter}
-              onClick={() => onView({ origin: filter, kind: null })}
-            >
-              {FILTER_LABELS[filter]}
-              {counts[filter] !== null && (
-                <span class="folder-seg-count"> {counts[filter]}</span>
-              )}
-            </button>
-          ))}
-        </div>
-        <InfoPop label="What By Bower means">
-          <p>
-            <BowerTag /> {TIP_LIST}
-          </p>
-          <p>{TIP_BOWER}</p>
-        </InfoPop>
-      </div>
-      {view.origin !== 'all' && (
-        <Hint
-          id="folder-filter"
-          variant="state"
-          icon={<IconFolder />}
-          actions={
-            <button
-              type="button"
-              class="folder-show-all"
-              onClick={() => onView({ origin: 'all', kind: null })}
-            >
-              Show all
-            </button>
-          }
-        >
-          Showing only {FILTER_LABELS[view.origin]}.
-        </Hint>
-      )}
-      <div class="folder-tools">
-        {toolbar ? (
-          <>
-            <select
-              class="folder-select"
-              aria-label="Sort"
-              value={view.sort}
-              onChange={(event) =>
-                onView({ sort: event.currentTarget.value as FolderSort })
-              }
-            >
-              {FOLDER_SORTS.map((sort) => (
-                <option key={sort} value={sort}>
-                  {SORT_LABELS[sort]}
-                </option>
-              ))}
-            </select>
-            {desktop ? (
-              <div class="folder-kind-chips" role="group" aria-label="Kind">
-                <button
-                  type="button"
-                  class="folder-kind-chip"
-                  aria-pressed={kind === null}
-                  onClick={() => onView({ kind: null })}
-                >
-                  All {originRows.length}
-                </button>
-                {options.map((option) => (
-                  <button
-                    key={option.kind}
-                    type="button"
-                    class="folder-kind-chip"
-                    aria-pressed={kind === option.kind}
-                    onClick={() => onView({ kind: option.kind })}
-                  >
-                    {option.plural} {option.count}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <select
-                class="folder-select"
-                aria-label="Kind"
-                value={kind ?? ''}
-                onChange={(event) =>
-                  onView({
-                    kind:
-                      event.currentTarget.value === ''
-                        ? null
-                        : (event.currentTarget.value as FileKind),
-                  })
-                }
-              >
-                <option value="">All kinds</option>
-                {options.map((option) => (
-                  <option key={option.kind} value={option.kind}>
-                    {option.label} {option.count}
-                  </option>
-                ))}
-              </select>
-            )}
-          </>
-        ) : (
-          <FilterSortSheet
-            sort={view.sort}
-            kind={kind}
-            kinds={options}
-            layout={layout}
-            total={rows.length}
-            onSort={(sort) => onView({ sort })}
-            onKind={(next) => onView({ kind: next as FileKind | null })}
-            onLayout={(next) => onView({ layout: next })}
-          />
-        )}
-        {compare !== undefined && (
-          <button
-            type="button"
-            class="folder-compare-btn"
-            onClick={compare.onOpen}
-          >
-            {compare.label}
-          </button>
-        )}
-        {toolbar && (
-          <LayoutToggle
-            layout={layout}
-            onChange={(next) => onView({ layout: next })}
-          />
-        )}
-      </div>
-      {rows.length === 0 && subs.length === 0 ? (
-        <p class="folder-elsewhere empty-segment">
-          {view.origin === 'all' || kind !== null
-            ? 'Nothing of that kind here.'
-            : EMPTY_COPY[view.origin]}
-        </p>
-      ) : layout === 'grid' ? (
+  function body(): JSX.Element {
+    if (emptyFolder) {
+      return <EmptyFolder onAsk={() => onAsk?.()} />;
+    }
+    if (folderOfFolders && view.origin === 'all') {
+      return (
         <>
-          <SubfolderList contents={subContents} now={now} detailed={false} />
-          <ul class="folder-grid grid-tiles">
-            {rows.map((row) => (
-              <li key={row.key}>{renderTile(row)}</li>
+          <h3 class="folder-group">Folders</h3>
+          <ul
+            class="folder-cards"
+            role="list"
+            aria-label={`Folders in ${displayName(contents.name)}`}
+          >
+            {contents.subfolders.map((folder) => (
+              <li key={folder.path}>
+                <FolderCard
+                  folder={{
+                    path: folder.path,
+                    name: folder.name,
+                    href: folderHref(folder.path),
+                    things: folder.things,
+                    ...(folder.updated !== undefined && {
+                      updated: folder.updated,
+                    }),
+                  }}
+                  items={firstInside(byPath, folder.path, 3, bowerSet)}
+                  newCount={fresh.newCountIn(folder.path)}
+                  now={now}
+                  {...selectProps(folder.path, folderHref(folder.path))}
+                />
+              </li>
             ))}
           </ul>
+          {recent.length > 0 && (
+            <>
+              <h3 class="folder-group">
+                Recently changed in {displayName(contents.name)}
+              </h3>
+              <ul
+                class="folder-list"
+                role="list"
+                aria-label={`Recently changed in ${displayName(contents.name)}`}
+              >
+                {recent.map((file) => {
+                  const parent = folderOf(file.path);
+                  const item: ListRowItem & MetaItem = {
+                    id: `recent:${file.id}`,
+                    title: titleOfFile(file),
+                    href: hrefOfFile(file),
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    path: file.path,
+                    bowerWritten: bowerSet.has(file.id),
+                    root: para,
+                    parentName: parent.slice(parent.lastIndexOf('/') + 1),
+                  };
+                  return (
+                    <li key={file.id}>
+                      <ListRow
+                        item={item}
+                        meta={metaLine(item, { view: 'mixed-row', now })}
+                        badge={
+                          fresh.isNew(file.id) ? (
+                            <Badge tone="new">New</Badge>
+                          ) : undefined
+                        }
+                        trailing={
+                          file.modifiedTime === undefined ? undefined : (
+                            <time
+                              class="folder-row-date"
+                              dateTime={file.modifiedTime}
+                            >
+                              {shortDate(file.modifiedTime, now)}
+                            </time>
+                          )
+                        }
+                        {...selectProps(item.id, hrefOfFile(file))}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </>
-      ) : wantsVirtual && VirtualList !== undefined ? (
+      );
+    }
+    if (rows.length === 0 && subs.length === 0) {
+      if (view.origin !== 'all' && kind === null) {
+        return <EmptySegment segment={view.origin} />;
+      }
+      return <p class="empty-segment">Nothing of that kind here.</p>;
+    }
+    if (layout === 'grid') {
+      return (
         <>
-          <SubfolderList contents={subContents} now={now} detailed={false} />
+          {subs.length > 0 && (
+            <ul
+              class="folder-list"
+              role="list"
+              aria-label={`Folders in ${contents.name}`}
+            >
+              {subs.map((folder) => (
+                <li key={folder.path}>
+                  <SubfolderRow folder={folder} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <FolderGrid
+            groups={groups}
+            keyOf={(row) => row.key}
+            renderTile={renderTile}
+          />
+        </>
+      );
+    }
+    if (wantsVirtual && VirtualList !== undefined) {
+      return (
+        <>
+          {subs.length > 0 && (
+            <ul
+              class="folder-list"
+              role="list"
+              aria-label={`Folders in ${contents.name}`}
+            >
+              {subs.map((folder) => (
+                <li key={folder.path}>
+                  <SubfolderRow folder={folder} />
+                </li>
+              ))}
+            </ul>
+          )}
           <VirtualList
             as="ul"
             rowAs="li"
@@ -1019,19 +1068,55 @@ export function FolderItems({
             renderRow={renderEntry}
           />
         </>
-      ) : (
-        <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>
-          {subs.map((folder) => (
-            <li key={folder.path}>
-              <SubfolderRow folder={folder} />
-            </li>
-          ))}
-          {entries.map((entry) => (
-            <li key={entryKey(entry)}>{renderEntry(entry)}</li>
-          ))}
-        </ul>
-      )}
-      {desktop && <p class="folder-keys-hint">{KEY_HINT}</p>}
+      );
+    }
+    return (
+      <ul class="folder-list" role="list" aria-label={`In ${contents.name}`}>
+        {subs.map((folder) => (
+          <li key={folder.path}>
+            <SubfolderRow folder={folder} />
+          </li>
+        ))}
+        {entries.map((entry) => (
+          <li key={entryKey(entry)}>{renderEntry(entry)}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div class="folder-section">
+      <div class="folder-in-head">
+        <h2 class="folder-in-title">In this folder</h2>
+        <div class="folder-in-row">
+          <Segmented<OriginFilter>
+            label="Show"
+            outlined
+            options={(['all', 'originals', 'bower'] as const).map((value) => ({
+              value,
+              label: SEGMENT_LABELS[value],
+              ...(value === 'originals' && { count: segments.originals }),
+              ...(value === 'bower' && { count: segments.bower }),
+            }))}
+            value={view.origin}
+            onChange={(origin) => onView({ origin, kind: null })}
+          />
+          <FilterSortSheet
+            value={choice}
+            defaults={defaults}
+            kinds={options}
+            countFor={countFor}
+            onApply={(next) =>
+              onView({
+                sort: next.sort,
+                kind: next.kind as FileKind | null,
+                layout: next.layout,
+              })
+            }
+          />
+        </div>
+      </div>
+      {body()}
       {quick !== null && (
         <QuickLook
           title={titleOf(quick)}
