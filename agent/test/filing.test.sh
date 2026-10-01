@@ -1,0 +1,319 @@
+#!/usr/bin/env bash
+# Unit test for run.sh's filing sheet (#978, rules v25): runs the functions
+# between run.sh's "filing sheet" markers on a small fake vault built here
+# (fake content only) and checks the parser, each check a line goes
+# through, and what a usable sheet writes: the moves in the local copy, the
+# hub lines, the index rows, a new folder's hub note and the `## Tags`
+# lines. Hermetic: no network, no claude, no rclone.
+#
+# Prints "ok <case>" per case and exits non-zero on the first failure.
+
+set -euo pipefail
+
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$(mktemp -d)
+trap 'rm -rf "$ROOT"' EXIT
+
+# The functions under test, exactly as run.sh defines them.
+block=$(sed -n '/^# >>> filing sheet (#978)/,/^# <<< filing sheet/p' "$HERE/../run.sh")
+[ -n "$block" ] || { echo 'FAIL: no filing sheet block in run.sh' >&2; exit 1; }
+eval "$block"
+
+CASE=''
+die() {
+  echo "FAIL $CASE: $*" >&2
+  exit 1
+}
+expect_eq() {
+  [ "$1" = "$2" ] || die "$3: expected
+[$2]
+got
+[$1]"
+}
+yes_() { "$@" || die "refused: $*"; }
+no_() { if "$@"; then die "accepted: $*"; fi; }
+
+V="$ROOT/vault"
+PENDING="$ROOT/pending.txt"
+BEFORE="$ROOT/manifest-before.txt"
+DAY=2026-01-15
+T=$'\t'
+
+# fresh: a vault with an inbox, a clipping, an existing project with its
+# hub note, an existing area folder with no hub note, a note filed before
+# the run, and an index; the pending list and the manifest before the run.
+fresh() {
+  rm -rf "$V"
+  mkdir -p "$V/0-Inbox/Processed" "$V/Clippings" "$V/1-Projects/Flat hunt" "$V/2-Areas/Finance" \
+    "$V/3-Resources" "$V/.bower" "$V/Answers"
+  echo pdf >"$V/0-Inbox/scan0001.pdf"
+  echo photo >"$V/0-Inbox/receipt.jpg"
+  echo docx >"$V/0-Inbox/offer.docx"
+  echo 'offer text' >"$V/0-Inbox/offer.md"
+  echo clip >"$V/Clippings/page.md"
+  echo old >"$V/0-Inbox/Processed/old.pdf"
+  echo 'not pending' >"$V/0-Inbox/later.pdf"
+  printf -- '---\ntags: [hub, project]\nby: bower\n---\n\n# Flat hunt\n\n## Notes & documents\n- [[Lease.pdf]] The lease\n\nMore text.\n' \
+    >"$V/1-Projects/Flat hunt/Flat hunt.md"
+  echo lease >"$V/1-Projects/Flat hunt/Lease.pdf"
+  echo 'kept as it was' >"$V/3-Resources/Old.md"
+  echo 'twin' >"$V/2-Areas/Finance/twin.md"
+  printf -- '%s\n' '# Index' '' '## Projects' \
+    '- [[1-Projects/Flat hunt/Lease.pdf]] · PDF · #flat · The lease · filed by Bower' '' \
+    '## Areas' '_(none yet)_' '' '## Resources' '_(none yet)_' '' '## Tags' \
+    '- #flat · Flat hunt papers · 1' >"$V/index.md"
+  printf '%s\n' 0-Inbox/scan0001.pdf 0-Inbox/receipt.jpg 0-Inbox/offer.docx Clippings/page.md >"$PENDING"
+  (cd "$V" && find . -type f -exec cksum {} + | sed 's|^\([0-9]* [0-9]*\) \./|\1 |' | LC_ALL=C sort) >"$BEFORE"
+}
+
+# --- paths, names and fields ---------------------------------------------------
+CASE='paths'
+yes_ sheet_path_ok '1-Projects/Flat hunt'
+yes_ sheet_path_ok '1-Projects/Flat hunt/Arlington Road, listing.pdf'
+for bad in '' '../x' '1-Projects/../../etc' '1-Projects/./x' '/etc/passwd' 'C:/x' 'c:x' \
+  '1-Projects\x' '1-Projects//x' '1-Projects/' '.claude/settings.json' '.obsidian/app.json' \
+  '.bower/filing.tsv' '1-Projects/.hidden' 'CLAUDE.md' '1-Projects/a/claude.MD' \
+  '1-Projects/a[1]' '1-Projects/a|b' '1-Projects/a#b' '1-Projects/a^b' '1-Projects/a · b' \
+  '1-Projects/ x' '1-Projects/x ' '1-Projects/x.' "1-Projects/a${T}b" $'1-Projects/a\nb'; do
+  no_ sheet_path_ok "$bad"
+done
+# A pending path as the runner listed it may hold link characters; never a traversal.
+yes_ sheet_path_ok '0-Inbox/Invoice #12 [copy].pdf' pending
+no_ sheet_path_ok '0-Inbox/../CLAUDE.md' pending
+no_ sheet_path_ok '.claude/x' pending
+echo "ok $CASE"
+
+CASE='names'
+yes_ sheet_name_ok 'Arlington Road, listing.pdf' scan0001.pdf
+yes_ sheet_name_ok 'Receipt.JPG' receipt.jpg
+yes_ sheet_name_ok "$(printf 'a%.0s' {1..56}).pdf" scan.pdf
+no_ sheet_name_ok "$(printf 'a%.0s' {1..57}).pdf" scan.pdf
+no_ sheet_name_ok 'listing.docx' scan0001.pdf
+no_ sheet_name_ok 'listing' scan0001.pdf
+no_ sheet_name_ok 'sub/listing.pdf' scan0001.pdf
+no_ sheet_name_ok 'sub\listing.pdf' scan0001.pdf
+no_ sheet_name_ok 'CLAUDE.md' page.md
+no_ sheet_name_ok '../listing.pdf' scan0001.pdf
+echo "ok $CASE"
+
+CASE='tags and text'
+yes_ sheet_tags_ok '#rental-listing #flat-hunt'
+yes_ sheet_tags_ok '#a #b #c #d #e'
+no_ sheet_tags_ok '#a #b #c #d #e #f'
+no_ sheet_tags_ok ''
+no_ sheet_tags_ok '-'
+no_ sheet_tags_ok '#Flat'
+no_ sheet_tags_ok 'flat'
+no_ sheet_tags_ok '#flat_hunt'
+no_ sheet_tags_ok '#flat--hunt'
+no_ sheet_tags_ok '#$(touch x)'
+yes_ sheet_text_ok 'Listing for a two-bed flat' 100
+yes_ sheet_text_ok "$(printf 'é%.0s' {1..100})" 100
+no_ sheet_text_ok "$(printf 'a%.0s' {1..101})" 100
+no_ sheet_text_ok "$(printf 'a%.0s' {1..81})" 80
+no_ sheet_text_ok 'a · b' 100
+no_ sheet_text_ok 'see [[Lease]]' 100
+no_ sheet_text_ok '-' 100
+no_ sheet_text_ok '' 100
+echo "ok $CASE"
+
+CASE='types'
+for pair in 'a.md Note' 'a.PDF PDF' 'a.jpg Photo' 'a.heic Photo' 'a.gif Image' 'a.xlsx Spreadsheet' \
+  'a.csv Spreadsheet' 'a.docx Document' 'a.txt Document' 'a.mp3 Audio' 'a.mov Video' 'a.zip File' 'a File'; do
+  expect_eq "$(sheet_type_of "${pair% *}")" "${pair#* }" "type of ${pair% *}"
+done
+echo "ok $CASE"
+
+CASE='split'
+sheet_split "file${T}0-Inbox/a.pdf${T} 1-Projects/X ${T}${T}#a${T}desc"$'\r'
+expect_eq "${#SHEET_FIELDS[@]}" 6 'an empty field is kept'
+expect_eq "${SHEET_FIELDS[2]}|${SHEET_FIELDS[3]}|${SHEET_FIELDS[5]}" '1-Projects/X||desc' 'fields trimmed, CR dropped'
+echo "ok $CASE"
+
+CASE='destinations'
+fresh
+expect_eq "$(sheet_dest_kind "$V" '1-Projects/Flat hunt')" existing 'an existing folder'
+expect_eq "$(sheet_dest_kind "$V" '1-Projects/Job hunt')" new 'a new direct subfolder'
+expect_eq "$(sheet_dest_kind "$V" 0-Inbox/Processed)" processed 'Processed'
+for bad in 1-Projects 3-Resources '1-Projects/Job hunt/Offers' 0-Inbox 0-Inbox/Quarantine Answers \
+  Clippings '5-Other/x' '1-Projects/../0-Inbox' '.bower' "1-Projects/$(printf 'a%.0s' {1..61})"; do
+  no_ sheet_dest_kind "$V" "$bad"
+done
+echo "ok $CASE"
+
+# --- file lines ------------------------------------------------------------------
+CASE='file line refused'
+fresh
+file_line() { sheet_file_line "$V" "$PENDING" "$BEFORE" "$DAY" "$@"; }
+refused() {
+  local rc=0
+  file_line "$@" || rc=$?
+  expect_eq "$rc" 1 "refused line ($*)"
+}
+refused 0-Inbox/later.pdf '1-Projects/Flat hunt' later.pdf '#flat' 'Not pending'
+refused 0-Inbox/gone.pdf '1-Projects/Flat hunt' gone.pdf '#flat' 'Not there'
+refused ../escape.pdf '1-Projects/Flat hunt' escape.pdf '#flat' 'Traversal'
+refused 0-Inbox/scan0001.pdf '../../outside' scan0001.pdf '#flat' 'Traversal out'
+refused 0-Inbox/scan0001.pdf '1-Projects/../../outside' scan0001.pdf '#flat' 'Traversal through'
+refused 0-Inbox/scan0001.pdf '/tmp' scan0001.pdf '#flat' 'Absolute'
+refused 0-Inbox/scan0001.pdf '.claude' scan0001.pdf '#flat' 'Protected'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' '../../scan.pdf' '#flat' 'Name traversal'
+refused Clippings/page.md '1-Projects/Flat hunt' CLAUDE.md '#flat' 'Rulebook name'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Lease.pdf '#flat' 'Overwrite'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' "$(printf 'a%.0s' {1..57}).pdf" '#flat' 'Long name'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.docx' '#flat' 'Changed extension'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.pdf' '#Flat' 'Bad tag'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.pdf' '#flat' 'Bad · description'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.pdf' '-' '-'
+refused 0-Inbox/scan0001.pdf 0-Inbox/Processed scan0001.pdf '#flat' 'Tags for Processed'
+refused 0-Inbox/scan0001.pdf 0-Inbox/Processed old.pdf - -
+refused 0-Inbox/scan0001.pdf 1-Projects scan0001.pdf '#flat' 'A PARA folder itself'
+[ -f "$V/0-Inbox/scan0001.pdf" ] && [ -f "$V/Clippings/page.md" ] || die 'a refused line moved a file'
+[ ! -e "$ROOT/escape.pdf" ] && [ ! -e "$ROOT/outside" ] && [ ! -e "$ROOT/scan.pdf" ] || die 'a file left the vault'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/Lease.pdf")" lease 'the existing file is untouched'
+echo "ok $CASE"
+
+CASE='file line filed'
+file_line 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Arlington Road, listing.pdf' '#rental-listing  #flat' \
+  'Listing for a two-bed flat on Arlington Road'
+[ -f "$V/1-Projects/Flat hunt/Arlington Road, listing.pdf" ] && [ ! -e "$V/0-Inbox/scan0001.pdf" ] ||
+  die 'not moved in the local copy'
+expect_eq "$(sed -n '/^## Notes & documents$/,$p' "$V/1-Projects/Flat hunt/Flat hunt.md")" "$(printf '%s\n' \
+  '## Notes & documents' '- [[Lease.pdf]] The lease' \
+  '- [[Arlington Road, listing.pdf]] Listing for a two-bed flat on Arlington Road' '' 'More text.')" \
+  'the hub line under the list'
+expect_eq "$(sed -n '/^## Projects$/,/^$/p' "$V/index.md")" "$(printf '%s\n' '## Projects' \
+  '- [[1-Projects/Flat hunt/Lease.pdf]] · PDF · #flat · The lease · filed by Bower' \
+  '- [[1-Projects/Flat hunt/Arlington Road, listing.pdf]] · PDF · #rental-listing #flat · Listing for a two-bed flat on Arlington Road · filed by Bower' '')" \
+  'the v24 row under the section'
+echo "ok $CASE"
+
+CASE='new folder'
+file_line 0-Inbox/receipt.jpg '2-Areas/Car' 'Garage receipt.jpg' '#car' 'Receipt for the garage'
+expect_eq "$(cat "$V/2-Areas/Car/Car.md")" "$(printf '%s\n' '---' 'tags: [hub, area, car]' 'by: bower' \
+  "created: $DAY" '---' '' '# Car' '' '## Notes & documents' '- [[Garage receipt.jpg]] Receipt for the garage')" \
+  'the new hub note'
+expect_eq "$(sed -n '/^## Areas$/,/^$/p' "$V/index.md")" "$(printf '%s\n' '## Areas' \
+  '- [[2-Areas/Car/Garage receipt.jpg]] · Photo · #car · Receipt for the garage · filed by Bower' '')" \
+  'the row, the placeholder dropped'
+# An existing folder with no hub note gets none.
+file_line 0-Inbox/offer.docx 2-Areas/Finance 'Offer letter.docx' '#job-offer' 'Offer from North Ltd'
+[ ! -e "$V/2-Areas/Finance/Finance.md" ] || die 'a hub note for a folder that had files'
+echo "ok $CASE"
+
+CASE='processed'
+file_line Clippings/page.md 0-Inbox/Processed page.md - -
+[ -f "$V/0-Inbox/Processed/page.md" ] || die 'not moved to Processed'
+if grep -q 'page.md' "$V/index.md"; then die 'a row for Processed'; fi
+echo "ok $CASE"
+
+# --- note and tag lines -------------------------------------------------------------
+CASE='note lines'
+fresh
+note_line() { sheet_note_line "$V" "$BEFORE" "$DAY" "$@"; }
+refused_note() {
+  local rc=0
+  note_line "$@" || rc=$?
+  expect_eq "$rc" 1 "refused note ($*)"
+}
+mkdir -p "$V/1-Projects/Job hunt"
+mv "$V/0-Inbox/offer.docx" "$V/1-Projects/Job hunt/Offer.docx"
+mv "$V/0-Inbox/offer.md" "$V/1-Projects/Job hunt/Offer.md"
+printf -- '---\nby: bower\n---\nA summary.\n' >"$V/1-Projects/Job hunt/Offer summary.md"
+mv "$V/2-Areas/Finance/twin.md" "$V/3-Resources/twin.md"
+echo 'one more line' >>"$V/1-Projects/Flat hunt/Flat hunt.md"
+refused_note '3-Resources/Old.md' - '#flat' 'Not changed in this run'
+refused_note '3-Resources/twin.md' - '#flat' 'Moved from another folder'
+refused_note '3-Resources/Missing.md' - '#flat' 'Not there'
+refused_note '0-Inbox/receipt.jpg' - '#flat' 'Not a note'
+refused_note '0-Inbox/new.md' - '#flat' 'Outside the folders'
+refused_note '.claude/x.md' - '#flat' 'Protected'
+refused_note '1-Projects/../CLAUDE.md' - '#flat' 'Traversal'
+refused_note '1-Projects/Job hunt/Offer summary.md' '1-Projects/Job hunt/Gone.docx' '#job' 'Original not there'
+refused_note '1-Projects/Job hunt/Offer summary.md' '../x' '#job' 'Original traversal'
+refused_note '1-Projects/Job hunt/Offer summary.md' - '#Job' 'Bad tag'
+refused_note '1-Projects/Job hunt/Offer summary.md' - '#job' ''
+[ ! -e "$V/1-Projects/Job hunt/Job hunt.md" ] || die 'a refused note made a hub note'
+note_line '1-Projects/Job hunt/Offer summary.md' '1-Projects/Job hunt/Offer.docx' '#job-offer' 'Summary of the offer'
+# A converted document's .md, moved by Bower from the inbox (rules v25).
+note_line '1-Projects/Job hunt/Offer.md' '1-Projects/Job hunt/Offer.docx' '#job-offer' 'Text of the offer'
+# A changed note.
+note_line '1-Projects/Flat hunt/Flat hunt.md' - '#flat' 'The flat hunt'
+expect_eq "$(sed -n '/^## Projects$/,/^$/p' "$V/index.md")" "$(printf '%s\n' '## Projects' \
+  '- [[1-Projects/Flat hunt/Lease.pdf]] · PDF · #flat · The lease · filed by Bower' \
+  '- [[1-Projects/Job hunt/Offer summary.md]] · Note · #job-offer · Summary of the offer · filed by Bower · [[1-Projects/Job hunt/Offer.docx]]' \
+  '- [[1-Projects/Job hunt/Offer.md]] · Note · #job-offer · Text of the offer · filed by Bower · [[1-Projects/Job hunt/Offer.docx]]' \
+  '- [[1-Projects/Flat hunt/Flat hunt.md]] · Note · #flat · The flat hunt · filed by Bower' '')" 'note rows'
+expect_eq "$(sed -n '/^## Notes & documents$/,$p' "$V/1-Projects/Job hunt/Job hunt.md")" "$(printf '%s\n' \
+  '## Notes & documents' '- [[Offer summary]] Summary of the offer' '- [[Offer]] Text of the offer')" \
+  'hub lines in the new project hub note'
+grep -q '^## Goal$' "$V/1-Projects/Job hunt/Job hunt.md" || die 'the project hub has no Goal section'
+if grep -q '\[\[Flat hunt\]\]' "$V/1-Projects/Flat hunt/Flat hunt.md"; then die 'a hub note linked to itself'; fi
+echo "ok $CASE"
+
+CASE='tag lines'
+fresh
+no_ sheet_tag_line "$V" '#Flat' 'Capitals'
+no_ sheet_tag_line "$V" 'flat' 'No hash'
+no_ sheet_tag_line "$V" '#new-tag' "$(printf 'a%.0s' {1..81})"
+no_ sheet_tag_line "$V" '#new-tag' 'a · b'
+yes_ sheet_tag_line "$V" '#flat' 'Already there'
+yes_ sheet_tag_line "$V" '#job-offer' 'Job offers and contracts'
+expect_eq "$(sed -n '/^## Tags$/,$p' "$V/index.md")" "$(printf '%s\n' '## Tags' \
+  '- #flat · Flat hunt papers · 1' '- #job-offer · Job offers and contracts · 1')" 'the new tag line'
+echo "ok $CASE"
+
+# --- the whole sheet ----------------------------------------------------------------
+CASE='empty sheet'
+fresh
+: >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_TAGS $SHEET_SKIPPED" '0 0 0 0' 'an empty sheet'
+apply_filing_sheet "$V" "$V/.bower/none.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_TAGS $SHEET_SKIPPED" '0 0 0 0' 'no sheet'
+echo "ok $CASE"
+
+CASE='whole sheet'
+fresh
+# Bower writes the companion note at its final path (the folder appears with it).
+mkdir -p "$V/1-Projects/Job hunt"
+printf -- '---\nby: bower\n---\nA summary.\n' >"$V/1-Projects/Job hunt/Offer summary.md"
+{
+  printf 'note\t1-Projects/Job hunt/Offer summary.md\t1-Projects/Job hunt/Offer letter.docx\t#job-offer\tSummary of the offer\r\n'
+  printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer from North Ltd\r\n'
+  printf '\r\n'
+  printf 'tag\t#job-offer\tJob offers and contracts\r\n'
+  printf 'file\t0-Inbox/scan0001.pdf\t../../outside\tscan0001.pdf\t#flat\tTraversal\r\n'
+  printf 'file\t0-Inbox/receipt.jpg\t2-Areas/Finance\treceipt.jpg\t#receipt\r\n'
+  printf 'move\t0-Inbox/receipt.jpg\t2-Areas/Finance\r\n'
+  printf 'file\tClippings/page.md\t0-Inbox/Processed\tpage.md\t-\t-\r\n'
+  printf 'file\tClippings/page.md\t0-Inbox/Processed\tpage.md\t-\t-\r\n'
+  printf 'tag\t#bad tag\tNo\r\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_TAGS $SHEET_SKIPPED" '2 1 1 5' 'counts'
+[ -f "$V/1-Projects/Job hunt/Offer letter.docx" ] && [ -f "$V/0-Inbox/Processed/page.md" ] || die 'not filed'
+[ -f "$V/0-Inbox/scan0001.pdf" ] && [ -f "$V/0-Inbox/receipt.jpg" ] || die 'a skipped file moved'
+[ -f "$V/1-Projects/Job hunt/Job hunt.md" ] || die 'no hub note for the folder new in this run'
+expect_eq "$(grep -c 'Job hunt/' "$V/index.md")" 2 'two rows in the new folder'
+grep -qF -- '- #job-offer · Job offers and contracts · 1' "$V/index.md" || die 'the tag line'
+echo "ok $CASE"
+
+CASE='line ends'
+fresh
+printf '%s\r\n' '# Index' '' '## Projects' '_(none yet)_' '' '## Tags' >"$V/index.md"
+printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\tscan0001.pdf\t#flat\tA scan\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$(grep -c $'\r$' "$V/index.md")" "$(grep -c '' "$V/index.md")" 'Windows line ends kept'
+grep -qF -- '- [[1-Projects/Flat hunt/scan0001.pdf]] · PDF · #flat · A scan · filed by Bower' "$V/index.md" ||
+  die 'no row'
+echo "ok $CASE"
+
+CASE='no shell'
+fresh
+printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/$(touch pwned)\tx.pdf\t#flat\t$(touch pwned2) `touch pwned3`\n' \
+  >"$V/.bower/filing.tsv"
+(cd "$ROOT" && apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY")
+[ ! -e "$ROOT/pwned" ] && [ ! -e "$ROOT/pwned2" ] && [ ! -e "$ROOT/pwned3" ] && [ ! -e "$V/pwned" ] ||
+  die 'a field ran as a command'
+echo "ok $CASE"
