@@ -1976,8 +1976,8 @@ test('At 1920 the content stays in one centred container, away from the right ed
     (box?.x ?? NaN) -
     (box?.width ?? NaN);
   expect(left).toBeCloseTo(right, 0);
-  expect(bar?.x).toBeCloseTo(box?.x ?? NaN, 0);
-  expect(bar?.width).toBeCloseTo(box?.width ?? NaN, 0);
+  // #920 DA-17: Home's desktop bar holds nothing, so it takes no row.
+  expect(bar).toBeNull();
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-home');
 

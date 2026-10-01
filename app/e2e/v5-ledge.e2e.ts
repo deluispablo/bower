@@ -40,7 +40,9 @@ test('desktop: Bower perches on a 66 px ledge below the tree and above nothing i
   const box = await ledge.boundingBox();
   expect(Math.round(box?.height ?? 0)).toBe(66);
   await expect(ledge).toHaveAttribute('aria-hidden', 'true');
-  const tree = await page.locator('.explorer-tree').boundingBox();
+  // The tree scrolls inside the sidebar's nav (#920 DA-8 opens the current
+  // folder, so it may run longer than the window): the nav ends above it.
+  const tree = await page.locator('.shell-sidebar-nav').boundingBox();
   expect(tree).not.toBeNull();
   expect((tree?.y ?? 0) + (tree?.height ?? 0)).toBeLessThanOrEqual(
     (box?.y ?? 0) + 1,
