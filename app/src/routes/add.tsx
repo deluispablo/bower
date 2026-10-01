@@ -1022,88 +1022,87 @@ export function Add() {
                 onRetry={(name) => retry(name, open.id)}
               />
             )}
+            <div class="add-doors">
+              {hasCamera && (
+                <DoorButton
+                  label="Photo"
+                  name="Take a photo"
+                  icon={<IconCamera />}
+                  disabled={inboxFolderId === null}
+                  onClick={() => cameraInputRef.current?.click()}
+                />
+              )}
+              <DoorButton
+                label="Files"
+                name="Choose files"
+                icon={<IconFile />}
+                disabled={inboxFolderId === null}
+                onClick={() => fileInputRef.current?.click()}
+              />
+              {driveShown && (
+                <DoorButton
+                  label="Drive"
+                  name="From your Drive"
+                  icon={<IconDrive />}
+                  disabled={driveDisabled}
+                  onClick={() => void onFromDrive()}
+                />
+              )}
+              <DoorButton
+                label="Link"
+                name="Paste a link"
+                icon={<IconLink />}
+                expanded={linkOpen}
+                disabled={linkDisabled}
+                onClick={() => setLinkOpen(!linkOpen)}
+              />
+            </div>
+            <p class="add-note">{DOORS_NOTE}</p>
+            {isDemo() && <p class="add-note">{NOT_IN_DEMO_DRIVE}</p>}
+
+            {linkOpen && (
+              <Composer
+                id="add-link"
+                class="add-link"
+                mode="send"
+                rows={1}
+                inputType="url"
+                label="Link address"
+                placeholder={LINK_PLACEHOLDER}
+                commitLabel={LINK_SAVE}
+                value={linkUrl}
+                disabled={linkDisabled}
+                autoFocus
+                invalid={linkError !== null}
+                error={linkError}
+                onChange={(next) => {
+                  setLinkUrl(next);
+                  if (linkError !== null) setLinkError(null);
+                }}
+                onCommit={(value) => onSaveLink(value)}
+              />
+            )}
+
+            {driveNotes.map((note) => (
+              <p key={note} class="add-note">
+                {note}
+              </p>
+            ))}
+            {message !== null && <p class="add-field-error">{message}</p>}
+            {!online && <p class="offline-reason">{offlineReason('add')}</p>}
+
+            {open !== undefined && openItems.length > 0 && (
+              <button
+                type="button"
+                class="button-link pile-another"
+                onClick={() => void startAnother()}
+              >
+                Start another pile
+              </button>
+            )}
+            {!uploadsActive && <p class="add-note">{CLOSE_NOTE}</p>}
           </Card>
         </div>
-
-        <div class="add-doors">
-          {hasCamera && (
-            <DoorButton
-              label="Photo"
-              name="Take a photo"
-              icon={<IconCamera />}
-              disabled={inboxFolderId === null}
-              onClick={() => cameraInputRef.current?.click()}
-            />
-          )}
-          <DoorButton
-            label="Files"
-            name="Choose files"
-            icon={<IconFile />}
-            disabled={inboxFolderId === null}
-            onClick={() => fileInputRef.current?.click()}
-          />
-          {driveShown && (
-            <DoorButton
-              label="Drive"
-              name="From your Drive"
-              icon={<IconDrive />}
-              disabled={driveDisabled}
-              onClick={() => void onFromDrive()}
-            />
-          )}
-          <DoorButton
-            label="Link"
-            name="Paste a link"
-            icon={<IconLink />}
-            expanded={linkOpen}
-            disabled={linkDisabled}
-            onClick={() => setLinkOpen(!linkOpen)}
-          />
-        </div>
-        <p class="add-note">{DOORS_NOTE}</p>
-        {isDemo() && <p class="add-note">{NOT_IN_DEMO_DRIVE}</p>}
-
-        {linkOpen && (
-          <Composer
-            id="add-link"
-            class="add-link"
-            mode="send"
-            rows={1}
-            inputType="url"
-            label="Link address"
-            placeholder={LINK_PLACEHOLDER}
-            commitLabel={LINK_SAVE}
-            value={linkUrl}
-            disabled={linkDisabled}
-            autoFocus
-            invalid={linkError !== null}
-            error={linkError}
-            onChange={(next) => {
-              setLinkUrl(next);
-              if (linkError !== null) setLinkError(null);
-            }}
-            onCommit={(value) => onSaveLink(value)}
-          />
-        )}
-
-        {driveNotes.map((note) => (
-          <p key={note} class="add-note">
-            {note}
-          </p>
-        ))}
-        {message !== null && <p class="add-field-error">{message}</p>}
-        {!online && <p class="offline-reason">{offlineReason('add')}</p>}
-
-        {open !== undefined && openItems.length > 0 && (
-          <button
-            type="button"
-            class="button-link pile-another"
-            onClick={() => void startAnother()}
-          >
-            Start another pile
-          </button>
-        )}
-        {!uploadsActive && <p class="add-note">{CLOSE_NOTE}</p>}
 
         {waiting.length > 0 && (
           <section class="pile-waiting" aria-labelledby="pile-waiting-title">
@@ -1153,7 +1152,7 @@ export function Add() {
               <span class="pile-card-meta">{thingsText(elsewhere.length)}</span>
               <button
                 type="button"
-                class="button button-secondary button-sm"
+                class="button-link pile-say"
                 onClick={() => void sayWhatTheyAre(elsewhere)}
               >
                 Say what they are
