@@ -30,7 +30,6 @@ import {
   EMPTY_INBOX_FILES,
   FIXTURE_FILES,
   FIXTURE_FOLDERS,
-  SCRIPTED_LISTINGS,
   INBOX_PLAN,
 } from './fixture.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
@@ -274,38 +273,17 @@ export class DemoServer {
         ? (LAST_FILED_MS - FIRST_FILED_MS) / (pending.length - 1)
         : 0;
 
-    // The flat listings' companion notes (`kind: rental-listing`) are written
-    // again first, so the notes the run files itself stay the newest.
-    const withFiles =
-      scope !== 'instructions' &&
-      pending.some((item) => !isInstruction(item.path, item.name, item.text));
-    if (withFiles) {
-      steps.push({
-        at: FIRST_FILED_MS,
-        apply: () => {
-          for (const item of SCRIPTED_LISTINGS) {
-            const note = (item.to ?? '').replace(/\.pdf$/, '.md');
-            const text = this.textAt(note);
-            if (text !== '')
-              this.vault.write(
-                note,
-                `${text}
-`,
-              );
-          }
-        },
-      });
-    }
+    // The run files only what was in the inbox and answers what was asked
+    // there (T-18): nothing from elsewhere in the folder.
 
     // What the run will count as done: the sheet's "Tidying up N things" and
     // the filed count at the end are the same number (#888). A context note
     // is never counted.
-    run.total =
-      pending.filter(
-        (item) =>
-          !isContext(item.text) &&
-          !isInstruction(item.path, item.name, item.text),
-      ).length + (withFiles ? SCRIPTED_LISTINGS.length : 0);
+    run.total = pending.filter(
+      (item) =>
+        !isContext(item.text) &&
+        !isInstruction(item.path, item.name, item.text),
+    ).length;
 
     for (const [i, { path, name, text }] of pending.entries()) {
       let destination = INBOX_PLAN.get(path) ?? `3-Resources/${name}`;
@@ -347,24 +325,7 @@ export class DemoServer {
     steps.push({
       at: DONE_MS,
       apply: () => {
-        // The flat listings come with the run, so Home and Just filed show
-        // what the boards draw.
-        if (withFiles) {
-          for (const item of SCRIPTED_LISTINGS) {
-            run.processed?.push(item.path);
-            run.items?.push({ ...item });
-            filed.push({
-              name: item.path.slice(item.path.lastIndexOf('/') + 1),
-              folder: (item.to ?? '').slice(
-                0,
-                (item.to ?? '').lastIndexOf('/'),
-              ),
-              at: DONE_MS,
-            });
-          }
-        }
         for (const reply of replies) this.applyReply(reply, date);
-        const count = run.processed?.length ?? 0;
         this.appendLog(
           filed.map(
             ({ name, folder, at }) =>
@@ -376,12 +337,15 @@ export class DemoServer {
         const answered = (run.items ?? []).some(
           (item) => item.kind === 'request',
         );
+        // Only the files count as filed; a question it answered is said
+        // the way a run of requests says it.
+        const count = filed.length;
         run.summary =
-          count === 0
-            ? 'Nothing new to file.'
-            : answered && !withFiles && filed.length === 0
+          count > 0
+            ? `Filed ${count} ${count === 1 ? 'item' : 'items'}.`
+            : answered
               ? runSentence(outcomeFromRun(run), { voice: 'third' })
-              : `Filed ${count} ${count === 1 ? 'item' : 'items'}.`;
+              : 'Nothing new to file.';
         this.history = [copyRun(run), ...this.history].slice(
           0,
           RUN_HISTORY_LIMIT,

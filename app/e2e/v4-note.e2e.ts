@@ -49,9 +49,10 @@ test('the Arlington Road note shows its props line, key facts and folded Details
   await expect(metaLine).toContainText(/Bower note · \d+ \w{3}/);
 
   await expect(view.locator('.bower-note-box')).toBeVisible();
-  await expect(view.locator('.bower-joined')).toContainText('Joined from:');
+  // #920: no "Joined from" chips (R-NO-7), no key-fact tiles (G-18).
+  await expect(view.locator('.bower-joined')).toHaveCount(0);
   await expect(view.locator('.note-keyfacts-caption')).toHaveCount(0);
-  await expect(view.locator('.key-fact')).not.toHaveCount(0);
+  await expect(view.locator('.bower-note-box .key-fact')).toHaveCount(0);
 
   // Details are part of the open box: no second fold.
   await expect(view.locator('.details-toggle')).toHaveCount(0);

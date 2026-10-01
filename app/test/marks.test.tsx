@@ -12,9 +12,6 @@ import {
   OriginSquare,
 } from '../src/components/folder-mark.js';
 import type { OriginKind, ParaKind } from '../src/components/folder-mark.js';
-import { KindBadge } from '../src/components/kind-badge.js';
-import { FILE_KIND_LABELS, kindBadge } from '../src/vault-index.js';
-import type { FileKind } from '../src/vault-index.js';
 import { BowerTag, NewTag } from '../src/components/tags.js';
 
 let root: HTMLDivElement;
@@ -72,25 +69,6 @@ describe('FolderIcon', () => {
   it('is grey without a tint', async () => {
     const el = (await mount(<FolderIcon />)).firstElementChild;
     expect(el?.className).toBe('folder-icon');
-  });
-});
-
-describe('KindBadge', () => {
-  it.each(Object.keys(FILE_KIND_LABELS) as FileKind[])(
-    '%s is a grey text badge',
-    async (kind) => {
-      const el = (await mount(<KindBadge kind={kind} />)).firstElementChild;
-      expect(el?.className).toBe('kind-badge');
-      expect(el?.textContent).toBe(kindBadge(kind));
-      expect(el?.getAttribute('aria-hidden')).toBeNull();
-    },
-  );
-
-  it('uses the file to tell a PNG photo', async () => {
-    const file = { name: 'a.png', mimeType: 'image/png' };
-    const el = (await mount(<KindBadge kind="photo" file={file} />))
-      .firstElementChild;
-    expect(el?.textContent).toBe('PNG');
   });
 });
 

@@ -14,6 +14,7 @@ import type { DriveFile } from '../src/drive.js';
 import { siblings } from '../src/folder-view.js';
 import { buildTree } from '../src/navigation.js';
 import { noteMetaFrom } from '../src/note-meta.js';
+import { currentToast, dismissToast } from '../src/toast-store.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 vi.mock('../src/cache.js', () => ({
@@ -139,10 +140,16 @@ describe('About this note and About this file', () => {
       'Filedyesterday, by Bower, as it is',
       'In DriveOpen in Drive',
     ]);
-    // The demo: a greyed Open in Drive button, as on the folder page.
+    // The demo: Open in Drive is a text link that says why it does nothing
+    // (FI-Main-1280, #920 DA-21).
     const drive = file.querySelector<HTMLButtonElement>('.about-prop-drive');
-    expect(drive?.disabled).toBe(true);
-    expect(drive?.title).toBe('Not in the demo. Run your own Bower to use it.');
+    expect(drive?.disabled).toBe(false);
+    expect(drive?.querySelector('svg')).toBeNull();
+    drive?.click();
+    expect(currentToast()?.message).toBe(
+      'Not in the demo. Run your own Bower to use it.',
+    );
+    dismissToast();
   });
 
   it('shows Source as a link by name, without brackets or extension, with its kind', async () => {

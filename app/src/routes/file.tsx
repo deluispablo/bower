@@ -171,7 +171,11 @@ function usePreview(file: DriveFile | undefined): PreviewLoad {
     } else {
       thumbnailLinkOf(file.id).then((link) => {
         if (cancelled) return;
-        const url = thumbnailUrl(link);
+        // The demo's first pages are pictures of their own (no Drive host).
+        const url =
+          isDemo() && link?.startsWith('data:image/') === true
+            ? link
+            : thumbnailUrl(link);
         setLoad(
           url === null ? { status: 'none' } : { status: 'thumbnail', url },
         );

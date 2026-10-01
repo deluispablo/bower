@@ -43,5 +43,13 @@ test.describe('Compare Sort by sheet (PF-Sort-375)', () => {
     const after = await titles.allTextContents();
     expect(after).not.toEqual(before);
     expect(after[0]).toBe('6-20 Mantell St, Moonee Ponds');
+
+    // Esc cancels a draft: the sort stays as it was (T-23).
+    await button.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('radio', { name: 'Fit' }).click();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(button).toHaveText('Rent a week, low first');
   });
 });

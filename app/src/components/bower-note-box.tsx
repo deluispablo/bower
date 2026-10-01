@@ -2,7 +2,8 @@
  * Bower's note box (issues #757 and #908, spec §3.27 R-NOTEBOX-1 to 3,
  * boards NO-Main, NO-Fold and PF-Main-1280): the one place a note's
  * insights live. Open it keeps today's look: SUMMARY, the points with
- * their origin squares, the key facts once, Details and what to check.
+ * their origin squares, Details and what to check; no key-fact or score
+ * tiles (G-18) and no "Joined from" chips (R-NO-7).
  * Folded it is one 52 px row: the bird, "Bower's note" and "3 points · 1 to
  * check". The fold is remembered per note (`foldedNotes` in `prefs.ts`),
  * open by default. The note page, the file page and the desktop preview
@@ -14,7 +15,7 @@ import type { JSX } from 'preact';
 
 import { requestsForNote } from '../bower-tab.js';
 import type { RequestRow } from '../bower-tab.js';
-import { keyFactsFor, kindById, scoreTone } from '../kinds.js';
+import { kindById, scoreTone } from '../kinds.js';
 import type { Kind } from '../kinds.js';
 import { noteMetaFrom } from '../note-meta.js';
 import type { NoteMeta } from '../note-meta.js';
@@ -23,10 +24,15 @@ import { showToast } from '../toast-store.js';
 import { Bird, BowerMark } from './bird.js';
 import type { BirdState } from './bird.js';
 import { chipLabel, Details, questionsFor } from './details.js';
-import { KeyFacts, scoreName } from './key-facts.js';
 import { NoteBody } from './note-body.js';
 
 import '../styles/bower-note-box.css';
+
+/** The accessible name of a score pill: "Your score 82 of 100". */
+export function scoreName(value: string): string | undefined {
+  const n = Number.parseInt(value, 10);
+  return Number.isNaN(n) ? undefined : `Your score ${n} of 100`;
+}
 
 /** Where the folds live: the `foldedNotes` preference (`prefs.ts`). */
 export const NOTE_FOLDED_KEY = 'bower:pref:foldedNotes';
@@ -364,6 +370,9 @@ export interface BowerNoteBoxProps {
    * desktop preview column (O-R6); `false` keeps the box open with no
    * control (a picture of the box). */
   fold?: boolean;
+  /** The preview column's box (PF-Main, LI-Main): the summary only, no
+   * Details and no "What to check" with its Copy. */
+  summaryOnly?: boolean;
   /** The bird by the box's name: the still mark when left out; a pose
    * (the intro's reading bird, board IN-P2) draws the moving bird at its
    * 40 px floor in the mark's 32 px slot. */
@@ -381,6 +390,7 @@ export function BowerNoteBox({
   updatedAt,
   names,
   fold = true,
+  summaryOnly = false,
   headBird,
 }: BowerNoteBoxProps): JSX.Element {
   const [foldedState, setFolded] = useState<boolean>(() =>
@@ -430,11 +440,6 @@ export function BowerNoteBox({
   const meta = noteMetaFrom(frontmatter);
   const kind = meta.kind === undefined ? undefined : kindById(meta.kind);
   const verdict = verdictRow(meta.fields);
-  // R-VERDICT-4: the verdict row shows the score, so no tile repeats it.
-  const facts =
-    kind === undefined
-      ? []
-      : keyFactsFor(kind, meta.fields, { score: verdict === null });
   const parts = boxParts(html);
   const check = checkItems(kind, meta, checkSection);
   const change = ruleChange(meta.fields);
@@ -560,23 +565,20 @@ export function BowerNoteBox({
           </div>
         )}
 
-        {(parts.rows !== '' || parts.joined !== '') && (
+        {/* No "Joined from" chips here: the notes are named in the points
+            and in About (R-NO-7); no key-fact or score tiles (G-18). */}
+        {parts.rows !== '' && (
           <div class="bower-note-box-summary">
             <h3 class="bower-box-title">Summary</h3>
-            <NoteBody html={`${parts.legend}${parts.rows}${parts.joined}`} />
+            <NoteBody html={`${parts.legend}${parts.rows}`} />
           </div>
         )}
 
-        {facts.length > 0 && (
-          <div class="bower-note-box-facts-block">
-            <h3 class="bower-box-title">Key facts</h3>
-            <KeyFacts facts={facts} />
-          </div>
+        {!summaryOnly && kind !== undefined && (
+          <Details kind={kind} meta={meta} />
         )}
 
-        {kind !== undefined && <Details kind={kind} meta={meta} />}
-
-        {check.items.length > 0 && (
+        {!summaryOnly && check.items.length > 0 && (
           <div class="bower-note-box-check">
             <h3 class="bower-box-title">What to check</h3>
             <ul class="bower-check-rows">

@@ -32,7 +32,7 @@ import { openAsk } from '../components/send-to-bower.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
 import { useNoteTitles } from '../components/use-note-titles.js';
-import type { FolderSummary } from '../components/folder-items.js';
+import { useFolderSummary } from '../components/folder-summary.js';
 import { compareKinds, notesOfKind } from '../compare.js';
 import type { CompareNote } from '../compare.js';
 import { FOLDER_MIME } from '../drive.js';
@@ -192,14 +192,36 @@ interface FolderTabsProps {
 }
 
 /** "List" | "Compare <n> <things>" (§3.24): only on a folder with a
- * comparison; switching never moves the header above. */
+ * comparison; switching never moves the header above. ARIA tabs: the arrow
+ * keys, Home and End move between them and select (T-15). */
 function FolderTabs({
   label,
   comparing,
   onChange,
 }: FolderTabsProps): JSX.Element {
+  const onKeyDown = (event: KeyboardEvent): void => {
+    let next: boolean | undefined;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      next = !comparing;
+    } else if (event.key === 'Home') {
+      next = false;
+    } else if (event.key === 'End') {
+      next = true;
+    }
+    if (next === undefined) return;
+    event.preventDefault();
+    if (next !== comparing) onChange(next);
+    document
+      .getElementById(next ? 'folder-tab-compare' : 'folder-tab-list')
+      ?.focus();
+  };
   return (
-    <div class="folder-tabs" role="tablist" aria-label="Folder views">
+    <div
+      class="folder-tabs"
+      role="tablist"
+      aria-label="Folder views"
+      onKeyDown={onKeyDown}
+    >
       <button
         type="button"
         role="tab"
@@ -207,6 +229,7 @@ function FolderTabs({
         class="folder-tab"
         aria-selected={!comparing}
         aria-controls="folder-panel-list"
+        tabIndex={comparing ? -1 : 0}
         onClick={() => onChange(false)}
       >
         List
@@ -218,6 +241,7 @@ function FolderTabs({
         class="folder-tab"
         aria-selected={comparing}
         aria-controls="folder-panel-compare"
+        tabIndex={comparing ? 0 : -1}
         onClick={() => onChange(true)}
       >
         {label}
@@ -247,6 +271,9 @@ interface FolderBodyProps {
   onTogglePin: () => void;
   desktop: boolean;
   onPreview: (item: PaneItem | null) => void;
+  /** The Compare tab is chosen: kept in the URL (`?view=compare`), so Back
+   * from a crumb returns to Compare as it was left (T-16). */
+  comparing: boolean;
   onComparing: (comparing: boolean) => void;
   upHref: string | undefined;
   onNavigate: (href: string) => void;
@@ -260,6 +287,7 @@ function FolderBody({
   onTogglePin,
   desktop,
   onPreview,
+  comparing,
   onComparing,
   upHref,
   onNavigate,
@@ -275,51 +303,34 @@ function FolderBody({
   const requestRows = useRequestRows();
   const waiting = useMemo(() => pendingByPath(requestRows), [requestRows]);
   const compare = useFolderCompare(contents.notes);
-  const [comparing, setComparing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  // Keyed by path: a summary from the previous folder never shows here.
-  const [summaryOf, setSummaryOf] = useState<{
-    path: string;
-    summary: FolderSummary;
-  } | null>(null);
-  const summary = summaryOf?.path === contents.path ? summaryOf.summary : null;
-  const onSummary = useCallback(
-    (next: FolderSummary) =>
-      setSummaryOf({ path: contents.path, summary: next }),
-    [contents.path],
-  );
   useEffect(() => {
-    setComparing(false);
     setMenuOpen(false);
   }, [contents.path]);
   const showCompare = comparing && compare !== null;
-  useEffect(() => {
-    onComparing(showCompare);
-    return () => onComparing(false);
-  }, [showCompare, onComparing]);
 
   const topName = contents.path.split('/')[0] ?? '';
   const para = paraKindOf(topName);
   const title = root ? rootFolderHeading(contents.path) : contents.name;
   const folderOfFolders = root && contents.subfolders.length > 0;
-  const meta =
-    summary === null
-      ? null
-      : metaLine(
-          {
-            name: contents.name,
-            mimeType: FOLDER_MIME,
-            root: para,
-            rootName: topName,
-            count: summary.count,
-            countUnit: summary.unit,
-            ...(summary.lifecycle !== undefined && {
-              lifecycle: summary.lifecycle,
-            }),
-            ...(summary.updated !== undefined && { updated: summary.updated }),
-          },
-          { view: 'title', now },
-        );
+  // The meta's count from the folder's own data (K-31, `folderCount`), the
+  // same for List and Compare whichever shows first (#920).
+  const summary = useFolderSummary(contents, catalogue, folderOfFolders);
+  const meta = metaLine(
+    {
+      name: contents.name,
+      mimeType: FOLDER_MIME,
+      root: para,
+      rootName: topName,
+      count: summary.count,
+      countUnit: summary.unit,
+      ...(summary.lifecycle !== undefined && {
+        lifecycle: summary.lifecycle,
+      }),
+      ...(summary.updated !== undefined && { updated: summary.updated }),
+    },
+    { view: 'title', now },
+  );
   const ask = (): void =>
     openAsk({
       name: displayName(contents.name),
@@ -338,7 +349,11 @@ function FolderBody({
           ? { rootPath: contents.path }
           : { crumbs: crumbsFor(contents.path) })}
         {...(file !== undefined && {
-          more: { expanded: menuOpen, onClick: () => setMenuOpen((o) => !o) },
+          more: {
+            expanded: menuOpen,
+            onClick: () => setMenuOpen((o) => !o),
+            name: title,
+          },
         })}
         meta={meta}
         {...(purpose !== undefined && { purpose })}
@@ -347,7 +362,7 @@ function FolderBody({
             <FolderTabs
               label={compare.label}
               comparing={showCompare}
-              onChange={setComparing}
+              onChange={onComparing}
             />
           ),
         })}
@@ -389,7 +404,6 @@ function FolderBody({
               folderOfFolders={folderOfFolders}
               waiting={waiting}
               onPreview={onPreview}
-              onSummary={onSummary}
               onAsk={ask}
               onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
               onOpen={onNavigate}
@@ -405,7 +419,6 @@ export function Folder(): JSX.Element {
   const { params } = useRoute();
   const path = params.path ?? '';
   const { index, pinFolder, unpinFolder } = useVault();
-  const [comparing, setComparing] = useState(false);
 
   const contents = useMemo(
     () =>
@@ -417,14 +430,22 @@ export function Folder(): JSX.Element {
   useTitle(contents === null ? null : displayName(contents.name));
   const ancestors = useMemo(() => breadcrumb(path), [path]);
   const parent = ancestors[ancestors.length - 1];
-  const { route } = useLocation();
+  const { route, path: here, query } = useLocation();
+  const comparing = query.view === 'compare';
   const wide = useMediaQuery(PANES_QUERY);
   const [preview, setPreview] = useState<PaneItem | null>(null);
   const onPreview = useCallback(
     (item: PaneItem | null) => setPreview(item),
     [],
   );
-  const onComparing = useCallback((on: boolean) => setComparing(on), []);
+  // Replaces this page's history entry, so Back after a crumb comes back
+  // to the tab as it was left; the sort and columns are kept per folder.
+  const onComparing = useCallback(
+    (on: boolean) => {
+      route(on ? `${here}?view=compare` : here, true);
+    },
+    [route, here],
+  );
 
   // The phone top bar's Back (K-5): the parent folder, or for a root
   // "‹ Your folders".
@@ -477,6 +498,7 @@ export function Folder(): JSX.Element {
       onTogglePin={() => void handleTogglePin()}
       desktop={wide}
       onPreview={onPreview}
+      comparing={comparing}
       onComparing={onComparing}
       onNavigate={route}
       upHref={parent === undefined ? undefined : folderHref(parent.path)}

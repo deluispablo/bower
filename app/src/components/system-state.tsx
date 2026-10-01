@@ -36,6 +36,10 @@ export const EMPTY_COPY = {
   text: 'Add something, or ask Bower to write about this folder.',
   originals:
     'No originals here. Everything in this folder was written by Bower.',
+  /** Originals 0 on a folder of folders (AR-Main): its files sit in the
+   * folders inside it, so the line above would not be true (DA-30). */
+  originalsInFolders:
+    'No originals at this level. Your files are in the folders inside it.',
   bower: 'Nothing by Bower here yet.',
 } as const;
 
@@ -154,8 +158,15 @@ export function EmptyFolder({
 /** An empty segment (R-SYS-4): one muted line, no bird. */
 export function EmptySegment({
   segment,
+  folderOfFolders = false,
 }: {
   segment: 'originals' | 'bower';
+  /** A folder of folders: its originals are in its subfolders. */
+  folderOfFolders?: boolean;
 }): JSX.Element {
-  return <p class="empty-segment">{EMPTY_COPY[segment]}</p>;
+  const copy =
+    segment === 'originals' && folderOfFolders
+      ? EMPTY_COPY.originalsInFolders
+      : EMPTY_COPY[segment];
+  return <p class="empty-segment">{copy}</p>;
 }
