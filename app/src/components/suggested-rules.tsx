@@ -153,7 +153,7 @@ export function SuggestedRules(): JSX.Element | null {
           </p>
           <ul class="suggested-list">
             {load.open.map((proposal) => (
-              <li key={proposal.id} class="suggested-card">
+              <li key={proposal.id} class="card suggested-card">
                 <p class="suggested-kind">{KIND_LABELS[proposal.kind]}</p>
                 <p class="suggested-title">{proposal.title}</p>
                 <p class="suggested-text">{plainText(proposal.text)}</p>
@@ -165,7 +165,7 @@ export function SuggestedRules(): JSX.Element | null {
                 <div class="suggested-actions">
                   <button
                     type="button"
-                    class="suggested-accept"
+                    class="btn btn-sm suggested-accept"
                     disabled={busy !== null}
                     onClick={() => void decide(proposal, 'accepted')}
                   >
@@ -173,7 +173,7 @@ export function SuggestedRules(): JSX.Element | null {
                   </button>
                   <button
                     type="button"
-                    class="suggested-dismiss"
+                    class="btn btn-sm btn-secondary suggested-dismiss"
                     disabled={busy !== null}
                     onClick={() => void decide(proposal, 'dismissed')}
                   >

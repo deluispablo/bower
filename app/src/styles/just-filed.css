@@ -310,10 +310,5 @@
   }
 }
 
-/* Phone: room under the last row for the run chip that floats over the
-   tab bar (about 48 px plus its gap), so it never covers a row. */
-@media (max-width: 899.98px) {
-  .just-filed-screen {
-    padding-bottom: 72px;
-  }
-}
+/* Phone: the room under the last row for the run chip is the page's own
+   `--run-chip-space` (layout.css), kept only while the chip shows. */

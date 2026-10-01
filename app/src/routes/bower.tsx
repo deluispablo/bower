@@ -89,6 +89,8 @@ import {
   writeError,
 } from '../components/rules-panel.js';
 import { useShellSlot } from '../components/shell-slots.js';
+import { Segmented } from '../components/segmented.js';
+import type { SegmentedOption } from '../components/segmented.js';
 import {
   INSTRUCTION_APP_PROPERTIES,
   SaveError,
@@ -146,6 +148,12 @@ const SEGMENTS: readonly SegmentTab[] = [
   { id: 'activity', label: 'Activity', Icon: IconClock },
 ];
 
+/** The tabs as the one segmented control's options (DB-13): the same look
+ * as Settings' Look, with the board's icons. */
+const SEGMENT_OPTIONS: readonly SegmentedOption<Segment>[] = SEGMENTS.map(
+  ({ id, label, Icon }) => ({ value: id, label, Icon }),
+);
+
 /** How many times the tab has opened since the app loaded: each visit
  * shows the next set of examples (`examplesFor`). */
 let visits = 0;
@@ -160,6 +168,8 @@ interface TipProps {
 /** The "?" tip under the box: what can be said, and three examples that
  * fill the box when tapped (never send it). */
 function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
+  // K-27: desktop says "click", the phone says "tap".
+  const desktop = useMediaQuery('(min-width: 900px)');
   return (
     <div class="bower-tip">
       <button
@@ -178,7 +188,8 @@ function Tip({ open, onToggle, examples, onPick }: TipProps): JSX.Element {
           <p>
             A rule (&ldquo;from now on&hellip;&rdquo;), a job (&ldquo;make a
             document&hellip;&rdquo;) or a question, in your words. A rule starts
-            at once; a job or a question waits for the next tidy-up. Tap one:
+            at once; a job or a question waits for the next tidy-up.{' '}
+            {desktop ? 'Click one:' : 'Tap one:'}
           </p>
           <ul class="bower-examples">
             {examples.map((example) => (
@@ -461,7 +472,7 @@ function RequestsList({
         {rows.map((row) => (
           <li
             key={row.key}
-            class={`bower-request bower-request--${toneOf(row.state)}`}
+            class={`card bower-request bower-request--${toneOf(row.state)}`}
           >
             <StateIcon state={row.state} />
             <div class="bower-request-body">
@@ -588,7 +599,7 @@ export function Bower(): JSX.Element {
     setMenuOpen(false);
   }, []);
   const actionsContent = useMemo(
-    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} />,
+    () => <MoreButton expanded={menuOpen} onClick={toggleMenu} name="Bower" />,
     [menuOpen, toggleMenu],
   );
   useShellSlot('actions', actionsContent);
@@ -904,31 +915,6 @@ export function Bower(): JSX.Element {
     if (focus) document.getElementById(`bower-tab-${id}`)?.focus();
   }
 
-  // Arrow keys, Home and End move between the three tabs (WAI-ARIA tabs).
-  function onTabKey(event: JSX.TargetedKeyboardEvent<HTMLDivElement>): void {
-    const at = SEGMENTS.findIndex((tab) => tab.id === segment);
-    let next: number;
-    switch (event.key) {
-      case 'ArrowRight':
-        next = (at + 1) % SEGMENTS.length;
-        break;
-      case 'ArrowLeft':
-        next = (at - 1 + SEGMENTS.length) % SEGMENTS.length;
-        break;
-      case 'Home':
-        next = 0;
-        break;
-      case 'End':
-        next = SEGMENTS.length - 1;
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-    const tab = SEGMENTS[next];
-    if (tab !== undefined) selectSegment(tab.id, true);
-  }
-
   // The three panels' contents: tabs under 1200 px, three columns from
   // there (#357, Desktop-Bower board).
   const panels: Record<Segment, JSX.Element> = {
@@ -987,7 +973,7 @@ export function Bower(): JSX.Element {
       <PageHeader
         title="Bower"
         kind="tab"
-        more={{ expanded: menuOpen, onClick: toggleMenu }}
+        more={{ expanded: menuOpen, onClick: toggleMenu, name: 'Bower' }}
       />
       {menuOpen && (
         <NoteMenu
@@ -1070,31 +1056,17 @@ export function Bower(): JSX.Element {
         </div>
       ) : (
         <>
-          <div
+          <Segmented
+            label="Rules, requests and activity"
+            outlined
+            tabs={{ idPrefix: 'bower' }}
             class="bower-segments"
-            role="tablist"
-            aria-label="Rules, requests and activity"
-            onKeyDown={onTabKey}
-          >
-            {SEGMENTS.map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                id={`bower-tab-${id}`}
-                class="bower-segment"
-                aria-selected={segment === id}
-                aria-controls={`bower-panel-${id}`}
-                tabIndex={segment === id ? 0 : -1}
-                onClick={() => {
-                  selectSegment(id, false);
-                }}
-              >
-                <Icon />
-                {label}
-              </button>
-            ))}
-          </div>
+            options={SEGMENT_OPTIONS}
+            value={segment}
+            onChange={(id) => {
+              selectSegment(id, false);
+            }}
+          />
 
           {SEGMENTS.map(({ id }) => (
             <div

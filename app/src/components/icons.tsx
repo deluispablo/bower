@@ -206,6 +206,14 @@ export function IconClose(): JSX.Element {
   );
 }
 
+export function IconBolt(): JSX.Element {
+  return (
+    <Svg>
+      <path d="M13 3L5 14h6l-1 7 8-11h-6z" />
+    </Svg>
+  );
+}
+
 export function IconSort(): JSX.Element {
   return (
     <Svg>

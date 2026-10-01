@@ -346,7 +346,7 @@ describe('TidyConfirmSheet, the request as its own row (AD-Confirm ruling)', () 
       ...document.body.querySelectorAll('[aria-label="Your piles"] li'),
     ];
     expect(rows).toHaveLength(3);
-    expect(rows[2]?.textContent).toBe('A request for Bower1');
+    expect(rows[2]?.textContent).toBe('A request for Bower1 thing');
   });
 });
 

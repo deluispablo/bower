@@ -167,7 +167,7 @@ function Card({
   const shown = all ? card.rows : card.rows.slice(0, CARD_ROWS);
   const more = card.rows.length - shown.length;
   return (
-    <li class="activity-card">
+    <li class="card activity-card">
       <p class="activity-head">
         <IconClock />
         <b>
@@ -177,7 +177,8 @@ function Card({
           tone={card.failed ? 'failed' : setAside ? 'check' : 'done'}
           class="activity-badge"
         >
-          {card.status}
+          {/* One wording for a failed run, as on Just filed (DB-17). */}
+          {card.failed ? 'Did not finish' : card.status}
         </Badge>
       </p>
       <p class="activity-counts">{card.sentence}</p>

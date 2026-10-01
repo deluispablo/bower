@@ -73,3 +73,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* AD-Running: the running sheet's title is Poppins 700, like every sheet
+   title (`.overlay-title`). The sheet lays itself out in bower-working.css;
+   this only lifts the weight. */
+.working-sheet .working-sheet-title {
+  font-weight: 700;
+}
