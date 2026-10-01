@@ -288,7 +288,7 @@ Since #965 the runner picks the model and the effort for each run and passes the
 
 Three optional repository variables on the instance repo change this. `ingest.yml` and `lint.yml` pass them to `run.sh` only when they are set:
 
-- `BOWER_MODEL`: the model id. It must contain only lower-case letters, digits, dots and hyphens.
+- `BOWER_MODEL`: the model id. It must start with a lower-case letter and contain only lower-case letters, digits, dots and hyphens.
 - `BOWER_EFFORT_LOW`: the effort for a plain tidy-up and the lint.
 - `BOWER_EFFORT_HIGH`: the effort for a tidy-up with a request or a context note.
 

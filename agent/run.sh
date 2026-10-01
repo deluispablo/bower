@@ -213,7 +213,7 @@ readonly SCOPE
 # that names the setting, never its value.
 readonly DEFAULT_MODEL='claude-sonnet-5-5'
 MODEL=${BOWER_MODEL:-$DEFAULT_MODEL}
-if ! [[ "$MODEL" =~ ^[a-z0-9.-]+$ ]]; then
+if ! [[ "$MODEL" =~ ^[a-z][a-z0-9.-]*$ ]]; then
   log "warning: BOWER_MODEL is not a model name, using $DEFAULT_MODEL"
   MODEL=$DEFAULT_MODEL
 fi
