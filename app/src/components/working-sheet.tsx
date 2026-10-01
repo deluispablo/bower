@@ -157,17 +157,6 @@ export const DEMO_REASSURANCE_REST =
  * plays back the same twenty seconds, so "Started n min ago" has no meaning. */
 export const DEMO_PLAYING_BACK = 'Playing back';
 
-/** The stage's right-hand label before any destination is known. */
-export const FOLDERS_FALLBACK = 'Your folders';
-
-/** The note under a running run (R-SHEET element 11): the chip is "the
- * tidy-up bar", above the tabs on a phone and at the top on desktop. */
-export function runningNote(desktop: boolean): string {
-  return `You can close this. Bower carries on; the tidy-up bar ${
-    desktop ? 'at the top' : 'above the tabs'
-  } shows how it goes.`;
-}
-
 /**
  * The running title's count (R-AD-8): the inbox count as the run began,
  * read with `inboxCount` like the sticky button and the confirm, so the
@@ -213,9 +202,6 @@ export function closeLabelFor(
  * from 900 px up (R-SHEET edge cases). */
 export const SHEET_ROWS_PHONE = 4;
 export const SHEET_ROWS_DESKTOP = 8;
-
-/** While a run goes the sheet shows only the last of its rows. */
-export const SHEET_LIVE_ROWS = 2;
 
 export type SheetState = 'running' | 'done' | 'partial' | 'failed' | 'quota';
 
