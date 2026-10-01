@@ -41,7 +41,8 @@ vi.mock('preact-iso', () => ({
   useLocation: () => location,
 }));
 
-vi.mock('../src/session.js', () => ({
+vi.mock('../src/session.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/session.js')>()),
   useSession: () => ({ me: state.me, setMe, signOut }),
 }));
 
@@ -117,10 +118,7 @@ describe('Settings section order', () => {
 
   it('keeps Sign out on its own, apart from Sign out everywhere', () => {
     mount(baseMe);
-    expect(textsOf('.settings-button-secondary')).toContain('Sign out');
-    expect(textsOf('.settings-button-secondary')).not.toContain(
-      'Sign out everywhere',
-    );
+    expect(textsOf('.settings-sign-out')).toEqual(['Sign out']);
     expect(
       textsOf('.settings-row').some((t) => t.includes('Sign out everywhere')),
     ).toBe(true);
@@ -130,7 +128,7 @@ describe('Settings section order', () => {
     mount(baseMe);
     const link = root.querySelector('.settings-link-danger');
     expect(link?.textContent).toBe(
-      'Delete my Bower account (your Drive folder stays)',
+      'Delete my Bower account (your Bower folder stays)',
     );
     // Nothing settings-shaped follows it except the footer.
     const footer = root.querySelector('.settings-footer');
@@ -181,16 +179,14 @@ describe('Settings copy fixes', () => {
     expect(hints).not.toContain('Notifications on this phone');
   });
 
-  it('says the API key runs on billing instead of the operator’s', () => {
+  it('says the key runs Bower on your own Claude billing (K-30, C-5)', () => {
     mount(baseMe);
-    expect(
-      textsOf('.settings-hint').some((t) =>
-        t.includes("instead of the operator's"),
-      ),
-    ).toBe(true);
+    expect(textsOf('.settings-hint')).toContain(
+      'Runs Bower on your own Claude billing.',
+    );
   });
 
-  // R-LEARN-3, board Settings-Learn-375: four rows in the Learn Bower group.
+  // R-LEARN-3 and K-30: four rows in the Learn Bower group.
   it('has a Learn Bower group of four rows with their hints', () => {
     mount(baseMe);
     const labels = textsOf('.settings-row-label');
@@ -198,11 +194,11 @@ describe('Settings copy fixes', () => {
       'What is Bower',
       'Show me around',
       'Examples and use cases',
-      'Ideas to try',
+      'Things you can ask',
     ]) {
       expect(labels).toContain(label);
     }
-    const hints = textsOf('.toggle-hint');
+    const hints = textsOf('.settings-hint');
     expect(hints).toContain('The intro: five screens');
     expect(hints).toContain('What people use Bower for');
     expect(hints).not.toContain('The four-page intro, again');

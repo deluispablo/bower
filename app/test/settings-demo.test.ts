@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
-
 /**
- * Settings in a demo build (#193): the own API key field and "Sign out
- * everywhere" render nothing of their own, replaced by one combined
- * sentence for the whole Advanced section (#364, not one per control);
- * "Delete my Bower account" (its own section) keeps its own sentence, and
- * the push toggle is greyed with its own sentence too. Plain "Sign out"
- * is untouched. `isDemo()` is mocked directly (rather than stubbing
- * `VITE_DEMO` and re-importing `api.ts`) so the real demo module never
- * boots for a plain UI check.
+ * Settings in a demo build (#193, spec §4.14 states, #917): every control
+ * that needs a real backend (the Claude key, Sign out everywhere, Delete my
+ * Bower account, the push toggle) stays on screen, as drawn on ST-Mid and
+ * ST-Bot, but disabled, with "Not in the demo. Run your own Bower to use
+ * it." Outside the demo they work.
+ *
+ * The demo flag is mocked (`isDemo`) rather than set through `VITE_DEMO`
+ * and re-importing `api.ts`, so the real demo module never loads here.
  */
 
 import { h, render } from 'preact';
@@ -39,22 +38,19 @@ vi.mock('preact-iso', () => ({
   useLocation: () => location,
 }));
 
-vi.mock('../src/session.js', () => ({
+vi.mock('../src/session.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/session.js')>()),
   useSession: () => ({ me, setMe: vi.fn(), signOut }),
 }));
 
-// #197 added a `useVault()` call to Settings (the rulebook update row).
-// Mocked the same way sibling suites do (see layout.test.ts): an empty
+// Settings reads the vault for the rulebook update row (#197): an empty
 // vault so the row has nothing to show, and no real VaultProvider needed.
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/vault-store.js')>()),
   useVault: () => ({ index: undefined, files: [], updateRules: vi.fn() }),
 }));
 
-const { Settings } = await import('../src/routes/settings.js');
-
-const NOT_IN_DEMO = 'Not in the demo: run your own Bower to use this.';
-const NOT_IN_DEMO_PUSH = 'Not in the demo. Run your own Bower to use it.';
+const { Settings, NOT_IN_DEMO } = await import('../src/routes/settings.js');
 
 let root: HTMLDivElement;
 
@@ -66,9 +62,9 @@ function mount(): void {
   });
 }
 
-function textsOf(selector: string): string[] {
-  return Array.from(root.querySelectorAll(selector)).map(
-    (el) => el.textContent ?? '',
+function button(name: string): HTMLButtonElement | undefined {
+  return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+    (el) => el.textContent?.trim() === name,
   );
 }
 
@@ -81,67 +77,49 @@ afterEach(() => {
 });
 
 describe('Settings outside the demo', () => {
-  it('has working forms and buttons', () => {
+  it('has working controls and no demo sentence', () => {
     state.demo = false;
     mount();
-    expect(root.querySelector('#api-key')).not.toBeNull();
+    expect(root.querySelector<HTMLInputElement>('#api-key')?.disabled).toBe(
+      false,
+    );
+    expect(button('Sign out everywhere')?.disabled).toBe(false);
     expect(
-      textsOf('.settings-row').some((t) => t.includes('Sign out everywhere')),
-    ).toBe(true);
-    expect(
-      textsOf('.settings-link-danger').some((t) =>
-        t.includes('Delete my Bower account'),
-      ),
-    ).toBe(true);
-    expect(textsOf('.settings-note')).not.toContain(NOT_IN_DEMO);
+      button('Delete my Bower account (your Bower folder stays)')?.disabled,
+    ).toBe(false);
+    expect(root.textContent).not.toContain(NOT_IN_DEMO);
   });
 });
 
 describe('Settings in a demo build', () => {
-  it('shows the sentence instead of the API key form', () => {
+  it('keeps the key box on screen, disabled, with the sentence', () => {
     state.demo = true;
     mount();
-    expect(root.querySelector('#api-key')).toBeNull();
+    expect(root.querySelector<HTMLInputElement>('#api-key')?.disabled).toBe(
+      true,
+    );
+    expect(root.querySelector('.settings-key')?.textContent).toContain(
+      NOT_IN_DEMO,
+    );
   });
 
-  it('shows the sentence instead of Sign out everywhere, keeps Sign out', () => {
+  it('disables Sign out everywhere and Delete, keeps Sign out', () => {
     state.demo = true;
     mount();
-    const rows = textsOf('.settings-row');
-    const buttons = textsOf('.settings-button-secondary');
-    expect(buttons).toContain('Sign out');
-    expect(rows.some((t) => t.includes('Sign out everywhere'))).toBe(false);
-  });
-
-  it('shows the sentence instead of Delete my Bower account', () => {
-    state.demo = true;
-    mount();
+    expect(button('Sign out everywhere')?.disabled).toBe(true);
     expect(
-      textsOf('.settings-link-danger').some((t) =>
-        t.includes('Delete my Bower account'),
-      ),
-    ).toBe(false);
+      button('Delete my Bower account (your Bower folder stays)')?.disabled,
+    ).toBe(true);
+    expect(button('Sign out')?.disabled).toBe(false);
   });
 
-  it('shows the sentence exactly twice, not once per control (#364)', () => {
-    state.demo = true;
-    mount();
-    const notes = textsOf('.settings-note').filter((t) => t === NOT_IN_DEMO);
-    // Once for the whole Advanced section (API key + sign out everywhere,
-    // now silent), once for the Danger zone (delete my account).
-    expect(notes).toHaveLength(2);
-  });
-
-  it('greys the push toggle with its own sentence', () => {
+  it('turns the push toggle off with the same sentence', () => {
     state.demo = true;
     mount();
     const row = Array.from(root.querySelectorAll('.toggle-row')).find((el) =>
-      el.textContent?.includes("Ping me when it's done"),
+      el.textContent?.includes('Ping me when it is done'),
     );
-    if (row === undefined) throw new Error('push toggle row missing');
-    expect(row.textContent).toContain(NOT_IN_DEMO_PUSH);
-    expect(row.textContent).not.toContain('Notifications on this device');
-    const input = row.querySelector('input[role="switch"]');
-    expect((input as HTMLInputElement | null)?.disabled).toBe(true);
+    expect(row?.textContent).toContain(NOT_IN_DEMO);
+    expect(row?.querySelector('input')?.disabled).toBe(true);
   });
 });

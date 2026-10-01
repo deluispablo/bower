@@ -1,3 +1,14 @@
+/**
+ * Settings (spec §4.14, boards ST-Top, ST-Mid, ST-Bot; #917). One centred
+ * column: the PageHeader (crumb "Home", ⋯ beside the title), the profile
+ * row, then Tidying up, Look (the one segmented control, K-21), Bower,
+ * Learn Bower, Advanced (the Claude key as the Composer `send` box with
+ * the mic, owner review O-R1), Sign out, Delete my Bower account and the
+ * footer. The phone bar shows "Home" back and no avatar (ST-1).
+ * Destructive actions ask once through #907's `Confirm` (§3.39).
+ */
+
+import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 
@@ -10,11 +21,17 @@ import {
   logoutAll,
   updateSettings,
 } from '../api.js';
+import { BackLink } from '../components/back-link.js';
+import { Composer } from '../components/composer.js';
+import { Confirm } from '../components/confirm.js';
 import {
   DICTATION_LANGUAGES,
   languageLabel,
 } from '../components/dictate-button.js';
-import { IconExternalLink } from '../components/icons.js';
+import { IconChevronRight, IconExternalLink } from '../components/icons.js';
+import { NoteMenu } from '../components/note-menu.js';
+import { HOME_CRUMBS, PageHeader } from '../components/page-header.js';
+import { Segmented } from '../components/segmented.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { useGuardedSignOut } from '../components/upload-chip.js';
 import { Toggle } from '../components/toggle.js';
@@ -29,7 +46,7 @@ import {
 } from '../push.js';
 import { isRulebookBehind } from '../rulebook.js';
 import { IDEAS_PATH } from '../shell-routes.js';
-import { useSession } from '../session.js';
+import { personOf, useSession } from '../session.js';
 import { replayTour } from '../tour-store.js';
 import '../styles/settings.css';
 import { setTheme } from '../theme.js';
@@ -46,17 +63,14 @@ function toMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong.';
 }
 
-/** Delete account, the own API key and Sign out everywhere all need a
- * real backend (#193): the demo shows this sentence instead of acting.
- * One sentence for the whole Advanced section, not once per control
- * (#364): the API key field and Sign out everywhere used to each show
- * their own copy of this line. */
-const NOT_IN_DEMO = 'Not in the demo: run your own Bower to use this.';
+/** The demo's line under every control that needs a real backend (spec
+ * §4.14 states, #193): the key box, Sign out everywhere, Delete my Bower
+ * account and the push toggle. */
+export const NOT_IN_DEMO = 'Not in the demo. Run your own Bower to use it.';
 
-/** The push toggle's demo line (#364, handover C.10/D.6): the same
- * sentence "From your Drive" gets in Add (`routes/add.tsx`), word for
- * word from the `Demo-Add` board. */
-const NOT_IN_DEMO_PUSH = 'Not in the demo. Run your own Bower to use it.';
+/** S-ST-6: the key box's lines. */
+export const KEY_SAVED = 'Saved. Bower runs on your Claude key.';
+export const KEY_WRONG = 'That key did not work. Check it and try again.';
 
 function driveUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
@@ -69,32 +83,27 @@ export function formatVersion(version: string, commit: string): string {
   return commit === '' ? version : `${version} · ${commit}`;
 }
 
-/** The account card's initial disc (spec §14): the name's first letter, or
- * the address's when there is no name. */
-function accountInitial(me: Me): string {
-  const source =
-    me.name !== undefined && me.name.trim() !== '' ? me.name : me.email;
-  return source.charAt(0).toUpperCase();
-}
+/** The phone bar: back to Home, no avatar (ST-1, `barHasAvatar`). */
+const BACK = <BackLink href="/" label="Home" />;
 
-interface ApiKeySectionProps {
-  me: Me;
-}
-
-function ApiKeySection({ me }: ApiKeySectionProps) {
+/**
+ * "Use your own Claude key" (R-ST-4 with the owner review's `send` mode):
+ * the Composer, one row, a password field with the mic, the arrow "Save
+ * the key" once it holds text; no separate Save button. A saved key shows
+ * the line "Saved. …" and a "Clear" link that asks first; a key the
+ * Worker refuses shows "That key did not work. …".
+ */
+function ApiKeyBox({ me }: { me: Me }): JSX.Element {
   const { setMe } = useSession();
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const demo = isDemo();
 
-  // The Advanced section shows one combined sentence for every control
-  // this needs a real backend (#364), not one per control — see
-  // `AdvancedSection` below.
-  if (isDemo()) return null;
-
-  const save = async (): Promise<void> => {
-    const apiKey = value.trim();
-    if (apiKey === '') return;
+  const save = async (typed: string): Promise<void> => {
+    const apiKey = typed.trim();
+    if (apiKey === '' || demo) return;
     setBusy(true);
     setError(null);
     try {
@@ -102,13 +111,20 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
       setMe({ ...me, hasApiKey });
       setValue('');
     } catch (err) {
-      setError(toMessage(err));
+      // A refused key is the person's to fix; anything else is ours.
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        console.error(err);
+        setError(KEY_WRONG);
+      } else {
+        setError(toMessage(err));
+      }
     } finally {
       setBusy(false);
     }
   };
 
   const clear = async (): Promise<void> => {
+    setConfirming(false);
     setBusy(true);
     setError(null);
     try {
@@ -122,98 +138,95 @@ function ApiKeySection({ me }: ApiKeySectionProps) {
     }
   };
 
+  const hint = !demo && me.hasApiKey && value === '' ? KEY_SAVED : null;
+
   return (
-    <div class="settings-field">
-      <label for="api-key">Use my own Claude API key</label>
-      <p class="settings-hint">
-        Runs Bower on your own Anthropic billing instead of the operator's.
+    <div class="settings-field settings-key">
+      <p class="settings-row-label" id="api-key-label">
+        Use your own Claude key
       </p>
-      {me.hasApiKey && <p class="settings-note">A key is saved.</p>}
-      <input
+      <p class="settings-hint">Runs Bower on your own Claude billing.</p>
+      <Composer
+        mode="send"
+        rows={1}
         id="api-key"
-        type="password"
-        autocomplete="off"
+        label="Use your own Claude key"
         placeholder="sk-ant-…"
+        inputType="password"
         value={value}
-        disabled={busy}
-        onInput={(e) => {
-          setValue(e.currentTarget.value);
+        onChange={(next) => {
+          setValue(next);
+          setError(null);
         }}
+        onCommit={(typed) => void save(typed)}
+        commitLabel="Save the key"
+        sending={busy}
+        error={error}
+        hint={hint}
+        disabled={demo}
       />
-      <div class="settings-actions">
+      {demo && <p class="settings-note">{NOT_IN_DEMO}</p>}
+      {me.hasApiKey && !demo && (
         <button
           type="button"
-          class="settings-button"
-          disabled={busy || value.trim() === ''}
-          onClick={() => void save()}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          class="settings-button settings-button-secondary"
-          disabled={busy || !me.hasApiKey}
-          onClick={() => void clear()}
+          class="settings-link"
+          disabled={busy}
+          onClick={() => {
+            setConfirming(true);
+          }}
         >
           Clear
         </button>
-      </div>
-      {error && <p class="settings-error">{error}</p>}
+      )}
+      {confirming && (
+        <Confirm
+          action="clearKey"
+          onConfirm={() => void clear()}
+          onCancel={() => {
+            setConfirming(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** The phone top bar's title (spec §14): a stable element, so it never
- * refills the shell's `crumb` slot on a re-render (`shell-slots.ts`). */
-const CRUMB = <h1 class="topbar-title">Settings</h1>;
+export const THEME_OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> =
+  [
+    { value: 'system', label: 'Match my device' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+  ];
 
-const THEME_OPTIONS: Array<{ value: ThemePref; label: string }> = [
-  { value: 'system', label: 'Match my device' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
-
-/** Light/dark, following the system by default, with a manual override (#42). */
-function AppearanceSection() {
+/** Look (R-SEG-1, K-21): the one segmented control. */
+function LookSection(): JSX.Element {
   const [theme, setThemeState] = useState<ThemePref>(() => getPref('theme'));
-
-  const choose = (value: ThemePref): void => {
-    setThemeState(value);
-    setTheme(value);
-  };
 
   return (
     <div class="settings-section">
       <h2>Look</h2>
-      <div class="settings-segmented" role="radiogroup" aria-label="Theme">
-        {THEME_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            class="settings-segment"
-            role="radio"
-            aria-checked={theme === option.value}
-            onClick={() => {
-              choose(option.value);
-            }}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label="Look"
+        options={THEME_OPTIONS}
+        value={theme}
+        onChange={(value) => {
+          setThemeState(value);
+          setTheme(value);
+        }}
+      />
     </div>
   );
 }
 
 /**
- * The "Ping me when it's done" switch: reflects the browser's actual
+ * The "Ping me when it is done" switch: reflects the browser's actual
  * subscription state (`currentPushState()`, checked once on mount) rather
  * than only the local preference, since the two can drift (permission
  * revoked elsewhere, a subscription that expired). Calls
- * `enablePush()`/`disablePush()` and keeps `notifyOnFinish` in sync so
- * other screens (the push prompt) can read it.
+ * `enablePush()`/`disablePush()` only on the person's own toggle (R-API-16)
+ * and keeps `notifyOnFinish` in sync so other screens can read it.
  */
-function NotificationsToggle() {
+function NotificationsToggle(): JSX.Element {
   const [state, setState] = useState<'on' | 'off'>(() =>
     getPref('notifyOnFinish') ? 'on' : 'off',
   );
@@ -240,8 +253,8 @@ function NotificationsToggle() {
   if (isDemo()) {
     return (
       <Toggle
-        label="Ping me when it's done"
-        hint={NOT_IN_DEMO_PUSH}
+        label="Ping me when it is done"
+        hint={NOT_IN_DEMO}
         checked={false}
         disabled
         onChange={() => {
@@ -277,7 +290,7 @@ function NotificationsToggle() {
   return (
     <>
       <Toggle
-        label="Ping me when it's done"
+        label="Ping me when it is done"
         hint={
           support === 'needs-install'
             ? 'Add Bower to your Home Screen first to get notifications.'
@@ -295,10 +308,9 @@ function NotificationsToggle() {
 /**
  * "Let Bower look things up on the web" (#374): the user's own switch,
  * stored by the Worker (`PATCH /settings`) and sent with every run. Off by
- * default; a run gets the web tools only when the operator's instance
- * allows them too.
+ * default; a run gets the web tools only when the instance allows them too.
  */
-function WebLookupToggle({ me }: { me: Me }) {
+function WebLookupToggle({ me }: { me: Me }): JSX.Element {
   const { setMe } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -331,13 +343,41 @@ function WebLookupToggle({ me }: { me: Me }) {
   );
 }
 
+/** A row that opens something: label, hint and the chevron (52 high). */
+function LinkRow({
+  label,
+  hint,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  disabled?: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      class="settings-row settings-link-row"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span class="settings-row-text">
+        <span class="settings-row-label">{label}</span>
+        <span class="settings-hint">{hint}</span>
+      </span>
+      <IconChevronRight />
+    </button>
+  );
+}
+
 /**
  * "Update Bower's rules (vN → vM)" (#197), shown only when the Bower
  * folder's rulebook is older than the one compiled into the app. The
  * template's version comes from a lazily loaded chunk
  * (`rulebook-template.ts`), so its text never weighs on startup.
  */
-function UpdateRulesRow() {
+function UpdateRulesRow(): JSX.Element {
   const vault = useVault();
   const [templateVersion, setTemplateVersion] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -387,22 +427,12 @@ function UpdateRulesRow() {
   return (
     <>
       {behind && (
-        <button
-          type="button"
-          class="settings-row"
+        <LinkRow
+          label={`Update Bower's rules (v${vaultVersion} → v${templateVersion})`}
+          hint="Replaces Bower's rulebook with the latest one; rules you added to it move to Your rules, and About me is left alone."
           disabled={busy}
           onClick={() => void update()}
-        >
-          <span class="settings-row-text">
-            <span class="settings-row-label">
-              Update Bower's rules (v{vaultVersion} → v{templateVersion})
-            </span>
-            <span class="toggle-hint">
-              Replaces Bower's rulebook with the latest one; rules you added to
-              it move to Your rules, and About me is left alone.
-            </span>
-          </span>
-        </button>
+        />
       )}
       {done && <p class="settings-note">{done}</p>}
       {error && <p class="settings-error">{error}</p>}
@@ -410,51 +440,29 @@ function UpdateRulesRow() {
   );
 }
 
-/**
- * Settings › Bower (spec C.8, and the board's own grouping — #379 review):
- * the rulebook update row, "Tell Bower about yourself again", "Show me
- * around again" (replays the first-run tour on Home through a one-shot
- * flag in memory, `tour-store.ts`; `tourSeenAt` is left alone) and "What is
- * Bower". "Show Bower's own files" lives in Advanced instead, next to the
- * other real per-account controls (the board's order, not the C.8 text).
- */
-function BowerSection() {
+/** Settings › Bower (S-ST-4): the rulebook update row when it is behind,
+ * and "Tell Bower about yourself again". */
+function BowerSection(): JSX.Element {
   const { route } = useLocation();
 
   return (
     <div class="settings-section">
       <h2>Bower</h2>
-
       <UpdateRulesRow />
-
-      <button
-        type="button"
-        class="settings-row"
+      <LinkRow
+        label="Tell Bower about yourself again"
+        hint="The four first-run questions, again; About me and Your rules keep everything else you have added."
         onClick={() => route('/onboarding?step=interview&from=settings')}
-      >
-        <span class="settings-row-text">
-          <span class="settings-row-label">
-            Tell Bower about yourself again
-          </span>
-          <span class="toggle-hint">
-            The four first-run questions, again — About me and Your rules keep
-            everything else you have added.
-          </span>
-        </span>
-      </button>
+      />
     </div>
   );
 }
 
-/** The Learn Bower group (R-LEARN-3, board Settings-Learn-375): the intro, the
- * tour, the examples and the ideas. */
-function LearnRows() {
+/** Learn Bower (S-ST-5, K-30): the intro, the tour, the examples and the
+ * things you can ask. */
+function LearnSection(): JSX.Element {
   const { route } = useLocation();
-  const rows: readonly {
-    label: string;
-    hint: string;
-    go: () => void;
-  }[] = [
+  const rows: readonly { label: string; hint: string; go: () => void }[] = [
     {
       label: 'What is Bower',
       hint: 'The intro: five screens',
@@ -474,8 +482,8 @@ function LearnRows() {
       go: () => route(LEARN_PATH),
     },
     {
-      label: 'Ideas to try',
-      hint: 'Things you can ask Bower',
+      label: 'Things you can ask',
+      hint: 'Ideas for rules, jobs and questions',
       go: () => route(IDEAS_PATH),
     },
   ];
@@ -483,79 +491,19 @@ function LearnRows() {
     <div class="settings-section">
       <h2>Learn Bower</h2>
       {rows.map((row) => (
-        <button
+        <LinkRow
           key={row.label}
-          type="button"
-          class="settings-row"
+          label={row.label}
+          hint={row.hint}
           onClick={row.go}
-        >
-          <span class="settings-row-text">
-            <span class="settings-row-label">{row.label}</span>
-            <span class="toggle-hint">{row.hint}</span>
-          </span>
-        </button>
+        />
       ))}
     </div>
   );
 }
 
-/**
- * "Sign out everywhere": ends every session of the account on the Worker
- * first, then signs this device out the ordinary way. A 401 means this
- * session had already ended, so the device is signed out all the same.
- * Lives under Advanced (#309, spec C.8) with one sentence, not beside the
- * plain "Sign out" button.
- */
-function SignOutEverywhereRow() {
-  const { signOut } = useSession();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const signOutEverywhere = async (): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await logoutAll();
-    } catch (err) {
-      if (!(err instanceof ApiError && err.status === 401)) {
-        setError(toMessage(err));
-        setBusy(false);
-        return;
-      }
-      console.error(err);
-    }
-    await signOut();
-  };
-  // Like "Sign out": unfinished uploads ask first.
-  const { request, dialog } = useGuardedSignOut(signOutEverywhere);
-
-  // One combined sentence for the whole Advanced section (#364), not one
-  // per control — see `AdvancedSection` below.
-  if (isDemo()) return null;
-
-  return (
-    <>
-      <button
-        type="button"
-        class="settings-row"
-        disabled={busy}
-        onClick={request}
-      >
-        <span class="settings-row-text">
-          <span class="settings-row-label">Sign out everywhere</span>
-          <span class="toggle-hint">
-            Ends every browser and device signed in to this account.
-          </span>
-        </span>
-      </button>
-      {error && <p class="settings-error">{error}</p>}
-      {dialog}
-    </>
-  );
-}
-
 /** "Dictation language: Match my device", with a small menu to change it (R-DICT-3). */
-function DictationLanguageRow() {
+function DictationLanguageRow(): JSX.Element {
   const [lang, setLang] = useState(() => getPref('dictationLang'));
 
   return (
@@ -587,16 +535,80 @@ function DictationLanguageRow() {
 }
 
 /**
- * Settings › Advanced (spec C.8, board order — #379 review): the own
- * Claude API key form, "Show Bower's own files" (the same `showAppFiles`
- * pref as the explorer's footer button) and "Sign out everywhere" — real
- * per-account controls, kept apart from the "Bower" section above.
- *
- * In a demo build the API key form and Sign out everywhere each need a
- * real backend and render nothing of their own (#364): one sentence
- * covers the whole section instead of repeating per control.
+ * "Sign out everywhere" (ST-3, R-ST-5): a row with a secondary button that
+ * asks first (§3.39), then ends every session of the account on the
+ * Worker and signs this device out the ordinary way. A 401 means this
+ * session had already ended, so the device is signed out all the same.
  */
-function AdvancedSection({ me }: { me: Me }) {
+function SignOutEverywhereRow(): JSX.Element {
+  const { signOut } = useSession();
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const demo = isDemo();
+
+  const signOutEverywhere = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await logoutAll();
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setError(toMessage(err));
+        setBusy(false);
+        return;
+      }
+      console.error(err);
+    }
+    await signOut();
+  };
+  // Like "Sign out": unfinished uploads ask first.
+  const { request, dialog } = useGuardedSignOut(signOutEverywhere);
+
+  return (
+    <>
+      <div class="settings-row settings-row-action">
+        <span class="settings-row-text">
+          <span class="settings-row-label">Sign out everywhere</span>
+          <span class="settings-hint">
+            Ends every browser and device signed in to this account.
+          </span>
+        </span>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          disabled={busy || demo}
+          onClick={() => {
+            setConfirming(true);
+          }}
+        >
+          Sign out everywhere
+        </button>
+      </div>
+      {error && <p class="settings-error">{error}</p>}
+      {confirming && (
+        <Confirm
+          action="signOutEverywhere"
+          onConfirm={() => {
+            setConfirming(false);
+            request();
+          }}
+          onCancel={() => {
+            setConfirming(false);
+          }}
+        />
+      )}
+      {dialog}
+    </>
+  );
+}
+
+/**
+ * Settings › Advanced (S-ST-6, S-ST-7): the Claude key box, "Show Bower's
+ * own files" (the same `showAppFiles` pref as the explorer's), the
+ * dictation language and Sign out everywhere.
+ */
+function AdvancedSection({ me }: { me: Me }): JSX.Element {
   const [showAppFiles, setShowAppFiles] = useState(() =>
     getPref('showAppFiles'),
   );
@@ -605,13 +617,11 @@ function AdvancedSection({ me }: { me: Me }) {
     <div class="settings-section">
       <h2>Advanced</h2>
 
-      {isDemo() && <p class="settings-note">{NOT_IN_DEMO}</p>}
-
-      <ApiKeySection me={me} />
+      <ApiKeyBox me={me} />
 
       <Toggle
         label="Show Bower's own files"
-        hint="Rulebook, your rules, about me, catalogue, journal, instruction notes, health reports and dot-folders (.obsidian, .claude), grouped at the bottom of your notes."
+        hint="Files Bower keeps for itself, grouped at the bottom of your notes."
         checked={showAppFiles}
         onChange={(checked) => {
           setShowAppFiles(checked);
@@ -626,9 +636,8 @@ function AdvancedSection({ me }: { me: Me }) {
   );
 }
 
-/** Sign out of this device only — a plain button on its own, apart from
- * "Sign out everywhere" (moved under Advanced, #309). */
-function SignOutSection() {
+/** Sign out of this device only: a plain button on its own. */
+function SignOutSection(): JSX.Element {
   const { signOut } = useSession();
   // With files still uploading, Sign out first asks (R-UPL-4).
   const { request, dialog } = useGuardedSignOut(signOut);
@@ -637,7 +646,7 @@ function SignOutSection() {
     <div class="settings-section">
       <button
         type="button"
-        class="settings-button settings-button-secondary"
+        class="btn btn-secondary btn-block settings-sign-out"
         onClick={request}
       >
         Sign out
@@ -647,29 +656,23 @@ function SignOutSection() {
   );
 }
 
-function DangerZone() {
+/** "Delete my Bower account (your Bower folder stays)" (K-30, C-6): a red
+ * text link that asks first (§3.39). */
+function DeleteAccount(): JSX.Element {
   const { signOut } = useSession();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (isDemo()) {
-    return (
-      <section class="settings-section">
-        <p class="settings-note">{NOT_IN_DEMO}</p>
-      </section>
-    );
-  }
+  const demo = isDemo();
 
   const confirmDelete = async (): Promise<void> => {
+    setConfirming(false);
     setBusy(true);
     setError(null);
     try {
       await deleteAccount();
       // The account is gone; hand back to the sign-in screen the same way
-      // an ordinary sign-out does — including forgetting the device
-      // (IndexedDB, caches, the Drive token, per-user prefs), which
-      // `signOut()` now does on every path.
+      // an ordinary sign-out does, forgetting the device too.
       await signOut();
     } catch (err) {
       setError(toMessage(err));
@@ -679,68 +682,77 @@ function DangerZone() {
 
   return (
     <section class="settings-section">
-      {!confirming && (
-        <button
-          type="button"
-          class="settings-link-danger"
-          onClick={() => {
-            setConfirming(true);
-          }}
-        >
-          Delete my Bower account (your Drive folder stays)
-        </button>
-      )}
+      <button
+        type="button"
+        class="settings-link-danger"
+        disabled={busy || demo}
+        onClick={() => {
+          setConfirming(true);
+        }}
+      >
+        Delete my Bower account (your Bower folder stays)
+      </button>
+      {demo && <p class="settings-note">{NOT_IN_DEMO}</p>}
+      {error && <p class="settings-error">{error}</p>}
       {confirming && (
-        <div class="settings-confirm">
-          <p>
-            Your notes and your Bower folder in Drive stay untouched. Only
-            Bower&rsquo;s access and settings are removed.
-          </p>
-          <div class="settings-actions">
-            <button
-              type="button"
-              class="settings-button settings-button-danger"
-              disabled={busy}
-              onClick={() => void confirmDelete()}
-            >
-              Yes, delete my Bower account
-            </button>
-            <button
-              type="button"
-              class="settings-button settings-button-secondary"
-              disabled={busy}
-              onClick={() => {
-                setConfirming(false);
-                setError(null);
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-          {error && <p class="settings-error">{error}</p>}
-        </div>
+        <Confirm
+          action="deleteAccount"
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => {
+            setConfirming(false);
+          }}
+        />
       )}
     </section>
   );
 }
 
-export function Settings() {
+export function Settings(): JSX.Element | null {
   const { me } = useSession();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  useShellSlot('crumb', CRUMB);
+  useShellSlot('back', BACK);
 
   if (!me) return null;
 
   const version = import.meta.env.VITE_APP_VERSION ?? __APP_VERSION__;
   const versionLine = formatVersion(version, __BOWER_COMMIT__);
+  const person = personOf(me);
 
   return (
     <section class="settings page-column">
-      <h1 class="screen-title">Settings</h1>
+      <div class="settings-header">
+        <PageHeader
+          title="Settings"
+          crumbs={HOME_CRUMBS}
+          more={{
+            expanded: menuOpen,
+            onClick: () => {
+              setMenuOpen((open) => !open);
+            },
+            name: 'Settings',
+          }}
+        />
+        {menuOpen && (
+          <NoteMenu
+            kind="settings"
+            title="Settings"
+            driveIds={
+              me.vault === undefined || me.vault === null
+                ? {}
+                : { root: me.vault.folderId }
+            }
+            onClose={() => {
+              setMenuOpen(false);
+            }}
+          />
+        )}
+      </div>
 
       <div class="settings-section settings-account">
+        {/* The same initial as the avatar everywhere (R-ST-2). */}
         <span class="settings-account-avatar" aria-hidden="true">
-          {accountInitial(me)}
+          {person.initial}
         </span>
         <div class="settings-account-info">
           {me.name !== undefined && (
@@ -773,30 +785,28 @@ export function Settings() {
         <WebLookupToggle me={me} />
       </div>
 
-      <AppearanceSection />
+      <LookSection />
 
       <BowerSection />
-      <LearnRows />
+      <LearnSection />
 
       <AdvancedSection me={me} />
 
       <SignOutSection />
 
-      <DangerZone />
+      <DeleteAccount />
 
-      <div class="settings-footer">
-        <p>Bower {versionLine}</p>
+      <p class="settings-footer">
+        Bower {versionLine} ·{' '}
         <a
           href="https://github.com/deluispablo/bower"
           target="_blank"
           rel="noopener"
         >
           Source code
-        </a>
-        <p>
-          <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
-        </p>
-      </div>
+        </a>{' '}
+        · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+      </p>
     </section>
   );
 }
