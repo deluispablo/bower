@@ -154,7 +154,9 @@ async function click(button: HTMLButtonElement): Promise<void> {
 }
 
 function sheet(): HTMLElement | null {
-  return document.body.querySelector<HTMLElement>('[role="dialog"]');
+  return document.body.querySelector<HTMLElement>(
+    '[role="dialog"], [role="menu"]',
+  );
 }
 
 beforeEach(() => {
@@ -260,7 +262,7 @@ describe('the Rules screen', () => {
     );
     await mount();
     const paused = buttonWith('Never archive Money', panel());
-    expect(paused.querySelector('.bower-state--paused')?.textContent).toBe(
+    expect(paused.querySelector('.badge-check')?.textContent).toBe(
       'Paused',
     );
     expect(paused.textContent).toContain('Since 28 Sep');
@@ -301,10 +303,13 @@ describe('the Rules screen', () => {
     expect(panel().textContent).toContain('Paused: Never archive Money');
   });
 
-  it('Remove it goes through editRule too', async () => {
+  it('Remove it asks first, then goes through editRule too', async () => {
     await mount();
     await click(buttonWith('Receipts go to Money', panel()));
     await click(buttonWith('Remove it', sheet() ?? root));
+    expect(editRule).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('Remove this rule?');
+    await click(buttonWith('Remove the rule', document.body));
     expect(editRule.mock.calls[0]?.[0].kind).toBe('remove');
   });
 
@@ -358,7 +363,9 @@ describe('the Rules screen', () => {
       ['PROPOSALS_ID', ''],
     ]);
     await mount();
-    expect(panel().textContent).toContain('Nothing yet');
+    expect(panel().textContent).toContain(
+      'No rules yet. Say one in the box: “From now on…”',
+    );
     expect(panel().textContent).not.toContain('Rules are yours');
   });
 });
