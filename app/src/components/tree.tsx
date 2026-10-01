@@ -59,6 +59,7 @@ import { useVault } from '../vault-store.js';
 import { fileKind, fileTitle } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
 import { FileIcon } from './file-icon.js';
+import type { FileIconItem } from './file-icon.js';
 import { FolderMark } from './folder-mark.js';
 import { IconChevronRight } from './icons.js';
 import { PinSheet } from './pin-sheet.js';
@@ -82,6 +83,15 @@ export const TREE_ROW_HEIGHT: Readonly<Record<TreeHost, number>> = {
   drawer: 40,
   page: 40,
 };
+
+/** What the pin sheet's "Ask Bower about this" is about (#910). */
+export interface TreeAskSubject {
+  /** The name as shown in the tree. */
+  name: string;
+  kind: 'folder' | 'note' | 'file';
+  /** The row's own icon item: the bird, the tinted glyph or the folder. */
+  icon: FileIconItem;
+}
 
 interface Row extends TreeRow {
   /** A folder's name as Drive has it (numeric prefix included). */
@@ -315,7 +325,7 @@ export interface TreeProps {
   /** The Folders tab: tapping its tab again scrolls to the top (R-REVEAL-2). */
   topOnTabTap?: boolean;
   /** "Ask Bower about this" in the pin menu; the host opens the sheet. */
-  onAsk?: (name: string) => void;
+  onAsk?: (subject: TreeAskSubject) => void;
 }
 
 export function Tree({
@@ -682,6 +692,21 @@ export function Tree({
     }
   }
 
+  /** The row's icon item, as the tree draws it (folder, bird or glyph). */
+  function askIcon(row: Row): FileIconItem {
+    if (row.kind === 'folder') {
+      return { name: row.name, mimeType: FOLDER_MIME, path: row.path };
+    }
+    const file =
+      row.file ?? (row.id === undefined ? undefined : index.byId.get(row.id));
+    return {
+      name: row.name,
+      mimeType: file?.mimeType ?? 'text/markdown',
+      path: row.path,
+      bowerWritten: row.id !== undefined && bowerIds.has(row.id),
+    };
+  }
+
   function pinSheetFor(row: Row): JSX.Element {
     const name = displayName(row);
     const driveHref =
@@ -702,7 +727,7 @@ export function Tree({
         openHref={folderHref(
           row.kind === 'note' ? folderOf(row.path) : row.path,
         )}
-        onAsk={() => onAsk?.(name)}
+        onAsk={() => onAsk?.({ name, kind: row.kind, icon: askIcon(row) })}
         driveHref={driveHref}
         onTogglePin={() => void togglePin(row)}
         onClose={() => setOpenRow(null)}

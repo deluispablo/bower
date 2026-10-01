@@ -38,7 +38,6 @@ import {
   openFoldersDrawer,
   useFoldersDrawer,
 } from '../folders-drawer.js';
-import { FOLDER_MIME } from '../drive.js';
 import { findReport, summarise } from '../health-report.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
 import { displayName, folderHref } from '../navigation.js';
@@ -77,7 +76,7 @@ import { PinnedSidebar } from './pinned-sidebar.js';
 import { SearchField } from './search-field.js';
 import { openAsk } from './send-to-bower.js';
 import { BELOW_TREE_NAMES, Tree } from './tree.js';
-import type { TreeHost } from './tree.js';
+import type { TreeAskSubject, TreeHost } from './tree.js';
 
 import '../styles/explorer.css';
 
@@ -157,13 +156,10 @@ export function useShowAppFiles(): boolean {
   return on;
 }
 
-/** The pin menu's "Ask Bower about this": the Ask sheet about the folder. */
-function askAbout(name: string): void {
-  openAsk({
-    name,
-    kind: 'folder',
-    icon: { name, mimeType: FOLDER_MIME },
-  });
+/** The pin menu's "Ask Bower about this": the Ask sheet about that row,
+ * a folder or a note or file, with its own icon (#910). */
+function askAbout(subject: TreeAskSubject): void {
+  openAsk({ name: subject.name, kind: subject.kind, icon: subject.icon });
 }
 
 /**

@@ -4,6 +4,9 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { OverlayHost } from '../src/components/overlay.js';
+import { resetOverlayQueue } from '../src/overlay-queue.js';
+
 import { SidebarSeparator } from '../src/components/sidebar-separator.js';
 import {
   TREE_ROW_HEIGHT,
@@ -273,6 +276,46 @@ describe('Tree (#909): one tree, three hosts', () => {
     expect(host.querySelector('.tree-app-label')?.textContent).toBe(
       "Bower's own files",
     );
+  });
+});
+
+describe('Tree pin sheet Ask (#910)', () => {
+  it('asks about the row with its kind, path and own icon', async () => {
+    const onAsk = vi.fn();
+    const overlays = document.createElement('div');
+    document.body.append(overlays);
+    await act(() => {
+      render(h(OverlayHost, null), overlays);
+    });
+    await mount({ onAsk });
+    const row = [...host.querySelectorAll('.tree-folder')].find((el) =>
+      el.textContent?.includes('Projects'),
+    );
+    await act(() => {
+      row?.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true }),
+      );
+    });
+    const ask = [...document.body.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Ask Bower about this'),
+    );
+    await act(() => {
+      ask?.click();
+    });
+    expect(onAsk).toHaveBeenCalledWith({
+      name: 'Projects',
+      kind: 'folder',
+      icon: {
+        name: '1-Projects',
+        mimeType: 'application/vnd.google-apps.folder',
+        path: '1-Projects',
+      },
+    });
+    await act(() => {
+      render(null, overlays);
+    });
+    resetOverlayQueue();
+    overlays.remove();
   });
 });
 
