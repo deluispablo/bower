@@ -710,7 +710,8 @@ function HitRow({
           path: row.file.path,
           root: row.root,
           bowerWritten,
-          href: hrefOf(row),
+          // No link inside the option (axe `nested-interactive`, #920 T-5):
+          // the option opens its row by click or Enter.
         }}
         meta={meta}
         trailing={
@@ -761,36 +762,19 @@ function CommandRow({
       aria-selected={selected}
       class="switcher-row-item"
     >
-      {command.href !== undefined ? (
-        <a
-          href={command.href}
-          class="switcher-row"
-          tabIndex={-1}
-          data-highlighted={selected}
-          onMouseEnter={onHighlight}
-          onClick={(event) => {
-            event.preventDefault();
-            onActivate(command);
-          }}
-        >
-          {icon}
-          {label}
-        </a>
-      ) : (
-        <button
-          type="button"
-          class="switcher-row"
-          tabIndex={-1}
-          data-highlighted={selected}
-          onMouseEnter={onHighlight}
-          onClick={() => {
-            onActivate(command);
-          }}
-        >
-          {icon}
-          {label}
-        </button>
-      )}
+      {/* No link or button inside the option (axe `nested-interactive`,
+          #920 T-5): the option itself is what a click or Enter picks. */}
+      <div
+        class="switcher-row"
+        data-highlighted={selected}
+        onMouseEnter={onHighlight}
+        onClick={() => {
+          onActivate(command);
+        }}
+      >
+        {icon}
+        {label}
+      </div>
     </li>
   );
 }
@@ -1657,31 +1641,20 @@ function SwitcherPanel({
                   </div>
                 </div>
               )}
-              {desktop && (
+              {/* No key hints under the list (#920 DB-25). */}
+              {desktop && scope !== null && (
                 <div class="switcher-foot">
                   <span>
-                    {scope !== null && (
-                      <>
-                        Only in {scope.label}.{' '}
-                        <button
-                          type="button"
-                          class="switcher-link switcher-link-inline"
-                          onClick={() => {
-                            setScope(null);
-                          }}
-                        >
-                          Search everywhere
-                        </button>
-                      </>
-                    )}
-                  </span>
-                  <span class="switcher-kbhint">
-                    <span>
-                      <kbd>Tab</kbd> filters
-                    </span>
-                    <span>
-                      <kbd>Enter</kbd> open
-                    </span>
+                    Only in {scope.label}.{' '}
+                    <button
+                      type="button"
+                      class="switcher-link switcher-link-inline"
+                      onClick={() => {
+                        setScope(null);
+                      }}
+                    >
+                      Search everywhere
+                    </button>
                   </span>
                 </div>
               )}

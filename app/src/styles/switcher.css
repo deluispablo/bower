@@ -94,6 +94,12 @@
   list-style: none;
 }
 
+/* Result rows are `.list-row` (list-row.css), without a link inside the
+   option (#920 T-5): the pointer still says they open. */
+.switcher-row.list-row {
+  cursor: pointer;
+}
+
 /* Result rows are `.list-row` (list-row.css); the command rows keep this. */
 .switcher-row:not(.list-row) {
   display: flex;
@@ -390,19 +396,6 @@
   .switcher-link-inline {
     min-height: 0;
     padding: 0;
-  }
-
-  .switcher-kbhint {
-    display: inline-flex;
-    gap: var(--space-3);
-  }
-
-  .switcher-kbhint kbd {
-    padding: 1px 6px;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    font: inherit;
-    font-size: var(--text-xs);
   }
 }
 
