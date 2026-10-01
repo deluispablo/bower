@@ -40,13 +40,14 @@ import {
 } from '../folders-drawer.js';
 import { findReport, summarise } from '../health-report.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
-import { displayName, folderHref } from '../navigation.js';
+import { displayName, folderHref, folderOf } from '../navigation.js';
+import { hubNotePath } from '../folder-statuses.js';
 import {
   close as closeOverlay,
   open as openOverlay,
   OVERLAY_PRIORITY,
 } from '../overlay-queue.js';
-import { getPref, setPref } from '../prefs.js';
+import { getPref, setPref, subscribePref } from '../prefs.js';
 import type { ExplorerSortPref } from '../prefs.js';
 import {
   lastTarget,
@@ -61,6 +62,7 @@ import type { RevealTarget } from '../reveal.js';
 import { useEdgeSwipe } from '../use-edge-swipe.js';
 import { useMediaQuery } from '../use-media-query.js';
 import { pinned, useVault } from '../vault-store.js';
+import type { PinnedItem } from '../vault-store.js';
 import type { VaultIndex } from '../vault-index.js';
 import { FileIcon } from './file-icon.js';
 import {
@@ -71,7 +73,7 @@ import {
   IconSort,
 } from './icons.js';
 import { JustFiledRow } from './just-filed-row.js';
-import { Overlay } from './overlay.js';
+import { Overlay, useBackCloses } from './overlay.js';
 import { PinnedSidebar } from './pinned-sidebar.js';
 import { SearchField } from './search-field.js';
 import { openAsk } from './send-to-bower.js';
@@ -90,11 +92,43 @@ export const DESKTOP_QUERY = '(min-width: 900px)';
 
 /** The tools' names (one name per tool, A-4). */
 export const SHOW_OPEN_LABEL = 'Show the open item';
-export const SORT_LABEL = 'Sort';
+export const SORT_LABEL = 'Sort your folders';
 export const COLLAPSE_LABEL = 'Collapse all folders';
 
 /** The drawer's width, px (max 88 vw in CSS). */
 export const DRAWER_WIDTH = 324;
+
+/**
+ * The pinned rows as the explorer lists them: a pinned hub note (X/X.md)
+ * stands for its folder, so it shows the folder outline in its root's
+ * colour (#920 DA-9, DB-5). A folder already pinned is listed once.
+ */
+export function pinnedRows(items: readonly PinnedItem[]): PinnedItem[] {
+  const folders = new Set(
+    items.flatMap((item) => (item.kind === 'folder' ? [item.path] : [])),
+  );
+  const out: PinnedItem[] = [];
+  for (const item of items) {
+    if (item.kind !== 'note') {
+      out.push(item);
+      continue;
+    }
+    const folder = folderOf(item.file.path);
+    if (folder === '' || item.file.path !== hubNotePath(folder)) {
+      out.push(item);
+      continue;
+    }
+    if (folders.has(folder)) continue;
+    folders.add(folder);
+    out.push({
+      kind: 'folder',
+      path: folder,
+      file: item.file,
+      pinnedAt: item.pinnedAt,
+    });
+  }
+  return out;
+}
 
 /** The `?reveal=` value "Show in folders" (#608, `revealHref`) put on `/notes`. */
 function revealParam(): string | undefined {
@@ -135,24 +169,25 @@ export function useHealthFindings(enabled: boolean): number | undefined {
 }
 
 // "Show Bower's own files" (the `showAppFiles` preference): the Folders ⋯
-// flips it, every explorer on screen follows.
-const appFilesListeners = new Set<(on: boolean) => void>();
+// or Settings flips it, every explorer on screen follows (`subscribePref`).
 
 /** Shows or hides Bower's own files in every explorer. */
 export function setShowAppFiles(on: boolean): void {
   setPref('showAppFiles', on);
-  for (const listener of appFilesListeners) listener(on);
 }
 
-/** The `showAppFiles` preference, following `setShowAppFiles`. */
+/** The `showAppFiles` preference, following every `setPref` of it. */
 export function useShowAppFiles(): boolean {
   const [on, setOn] = useState(() => getPref('showAppFiles'));
-  useEffect(() => {
-    appFilesListeners.add(setOn);
-    return () => {
-      appFilesListeners.delete(setOn);
-    };
-  }, []);
+  // `setPref` signals every change (Settings writes it directly), and the
+  // storage event brings another tab's (#920 T-14).
+  useEffect(
+    () =>
+      subscribePref('showAppFiles', () => {
+        setOn(getPref('showAppFiles'));
+      }),
+    [],
+  );
   return on;
 }
 
@@ -309,6 +344,13 @@ function useTarget(
   if (variant === 'page') {
     return targetFromReveal(revealParam(), index) ?? lastTarget();
   }
+  // Add's open item is the inbox: the drawer opens on it (#920 DB-4).
+  if (path === '/add') {
+    const inbox = index?.folders.find(
+      (file) => !file.path.includes('/') && displayName(file.name) === 'Inbox',
+    );
+    if (inbox !== undefined) return { kind: 'folder', path: inbox.path };
+  }
   return routeTarget ?? lastTarget();
 }
 
@@ -339,6 +381,8 @@ export function Explorer({
   );
   const [collapseKey, setCollapseKey] = useState(0);
   const showAppFiles = useShowAppFiles();
+  // The phone hosts' Health check row says when there is no report yet.
+  const healthFindings = useHealthFindings(variant !== 'sidebar');
 
   // R-NOTES-7: no index yet and the first listing still on its way.
   const firstLoad = index === null && status === 'loading';
@@ -391,7 +435,7 @@ export function Explorer({
       )}
       {index !== null && (
         <PinnedSidebar
-          items={pinned(index)}
+          items={pinnedRows(pinned(index))}
           variant={variant}
           onNavigate={onNavigate}
         />
@@ -474,6 +518,9 @@ export function Explorer({
               <span class="explorer-item-spacer" aria-hidden="true" />
               <IconHeart />
               <span class="explorer-item-label">Health check</span>
+              {healthFindings === undefined && (
+                <span class="explorer-item-meta">Not checked yet</span>
+              )}
             </a>
           )}
         </div>
@@ -504,6 +551,9 @@ export function FoldersDrawer(): JSX.Element | null {
     onCancel: () => dragFoldersDrawer(null),
   });
 
+  // Back closes it and stays on the page (#920 T-3).
+  useBackCloses(closeFoldersDrawer, open);
+
   // Any route change (choosing an item) closes it.
   useEffect(() => {
     closeFoldersDrawer();
@@ -512,10 +562,14 @@ export function FoldersDrawer(): JSX.Element | null {
   // Focus moves in on open and back to the opener on close; Esc closes;
   // Tab stays inside while it is open.
   // Before any row inside takes focus (a reveal focuses its row).
+  const openedAt = useRef(path);
+  const pathRef = useRef(path);
+  pathRef.current = path;
   useLayoutEffect(() => {
     if (!open) return;
     const active = document.activeElement;
     opener.current = active instanceof HTMLElement ? active : null;
+    openedAt.current = path;
   }, [open]);
 
   useEffect(() => {
@@ -548,7 +602,9 @@ export function FoldersDrawer(): JSX.Element | null {
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      opener.current?.focus();
+      // Choosing an item leaves focus to the new page's heading (#920
+      // T-21, `focusNewPage`); any other close hands it back.
+      if (pathRef.current === openedAt.current) opener.current?.focus();
     };
   }, [open]);
 

@@ -135,6 +135,25 @@
   gap: 8px;
 }
 
+/* ✕ "Close Search": the boards' 40 px `.ib`, 44 px hit, so the phone's
+   placeholder "Search folders, notes and files" fits whole at 375
+   (SE-Empty-375, #920 DB-26). */
+.search-field-row > .search-field-close {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.search-field-row > .search-field-close::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: '';
+}
+
 /* The line under the box (O-R2), the Composer's muted 13 px line. */
 .search-field-line {
   flex-basis: 100%;
@@ -152,9 +171,16 @@
 
 /* The sidebar's 44 px field sits in the explorer's own 4 px gaps with no
    margin of its own, so the tree still ends above the ledge in an 800 px
-   window (#847). */
+   window (#847), and spans the sidebar's 12 px sides, about 238 wide, so
+   its placeholder fits (#920 DA-18). */
 .shell-sidebar .explorer-search-slot .search-field {
-  margin: 0 var(--space-3);
+  margin: 0;
+}
+
+/* The sidebar column is a height-limited flex column: the field keeps its
+   44 px instead of giving way (O-R4, #920 DB-33). */
+.shell-sidebar .explorer-search-slot {
+  flex-shrink: 0;
 }
 
 .explorer-drawer .explorer-search-slot .search-field,

@@ -89,3 +89,97 @@ test('Ideas has no button-name or link-name violations, and its nine Copy links 
   expect(names.length).toBeGreaterThan(1);
   expect(new Set(names).size).toBe(names.length);
 });
+
+/** The tree and list roles' rules (#920 T-4, T-5). */
+const ROLE_RULES = [
+  'aria-required-children',
+  'aria-required-parent',
+  'nested-interactive',
+];
+
+async function expectNoRoleViolations(
+  page: Page,
+  include: string,
+): Promise<void> {
+  const results = await new AxeBuilder({ page })
+    .include(include)
+    .withRules(ROLE_RULES)
+    .analyze();
+  expect(results.violations).toEqual([]);
+}
+
+async function openLisbonNote(page: Page): Promise<void> {
+  await visible(
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('Lisbon');
+  await switcher
+    .getByRole('option', { name: /Lisbon Trip/ })
+    .filter({ has: page.locator('[data-kind="note"]') })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/note\//);
+}
+
+test('the folders tree owns treeitems only, its chevrons inside them (#920 T-4)', async ({
+  page,
+}) => {
+  await openHome(page);
+  const desktop = (page.viewportSize()?.width ?? 0) >= 900;
+  if (!desktop) {
+    await page.getByRole('button', { name: 'Open your folders' }).click();
+  }
+  const host = desktop ? '.shell-sidebar' : '.folders-drawer';
+  const tree = page.locator(`${host} [role="tree"]`).first();
+  await expect(tree.getByRole('treeitem').first()).toBeVisible();
+  await tree
+    .getByRole('button', { name: /^Expand / })
+    .first()
+    .click();
+  await expectNoRoleViolations(page, host);
+});
+
+test('Move to… holds radios only in its radiogroup (#920 T-4)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await openLisbonNote(page);
+  await visible(
+    page.getByRole('button', { name: 'More for Lisbon Trip' }),
+  ).click();
+  await page.getByRole('menuitem', { name: /^Move to/ }).click();
+  const group = page.getByRole('radiogroup', { name: 'Destination folder' });
+  await expect(group.getByRole('radio').first()).toBeVisible();
+  await expectNoRoleViolations(page, '.overlay-panel');
+});
+
+test('a quick switcher option holds no link or button (#920 T-5)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await visible(
+    page.getByRole('button', { name: /^Search( folders, notes and files)?$/ }),
+  ).click();
+  const switcher = page.getByRole('dialog', { name: 'Quick switcher' });
+  await switcher.getByRole('combobox').fill('lease');
+  await expect(switcher.getByRole('option').first()).toBeVisible();
+  await expectNoRoleViolations(page, '.overlay-panel');
+});
+
+test('the first Tab on a root folder reaches Skip to content (#920 T-2)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.goto('/folder/1-Projects');
+  await expect(
+    page.locator('h1.page-header-title', { hasText: 'Projects' }),
+  ).toBeVisible();
+  // The tree has opened on the folder and scrolled to it.
+  await expect(page.locator('.tree-row-open').first()).toBeAttached();
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('link', { name: 'Skip to content' }),
+  ).toBeFocused();
+});

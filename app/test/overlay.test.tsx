@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 
-import { render } from 'preact';
+import { createRef, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -148,6 +148,76 @@ describe('Overlay', () => {
     expect(dialog?.closest('[inert]')).toBeNull();
     expect(shell.hasAttribute('inert')).toBe(true);
     expect(dialog?.contains(document.activeElement)).toBe(true);
+    void act(() => {
+      render(null, inline);
+    });
+  });
+
+  // The tour card starts each step on its main button, not on Skip.
+  it('focuses initialFocus instead of the first control, by selector or ref', () => {
+    const inline = document.createElement('div');
+    shell.appendChild(inline);
+    void act(() => {
+      render(
+        <Overlay
+          kind="dialog"
+          label="Tour"
+          initialFocus=".next"
+          onClose={() => undefined}
+        >
+          <button type="button">Skip</button>
+          <button type="button" class="next">
+            Next
+          </button>
+        </Overlay>,
+        inline,
+      );
+    });
+    expect(document.activeElement?.textContent).toBe('Next');
+    void act(() => {
+      render(null, inline);
+    });
+
+    const ref = createRef<HTMLButtonElement>();
+    void act(() => {
+      render(
+        <Overlay
+          kind="dialog"
+          label="Tour"
+          initialFocus={ref}
+          onClose={() => undefined}
+        >
+          <button type="button">Skip</button>
+          <button type="button" ref={ref}>
+            Done
+          </button>
+        </Overlay>,
+        inline,
+      );
+    });
+    expect(document.activeElement?.textContent).toBe('Done');
+    void act(() => {
+      render(null, inline);
+    });
+  });
+
+  it('falls back to the first control when initialFocus finds nothing', () => {
+    const inline = document.createElement('div');
+    shell.appendChild(inline);
+    void act(() => {
+      render(
+        <Overlay
+          kind="dialog"
+          label="Tour"
+          initialFocus=".missing"
+          onClose={() => undefined}
+        >
+          <button type="button">Skip</button>
+        </Overlay>,
+        inline,
+      );
+    });
+    expect(document.activeElement?.textContent).toBe('Skip');
     void act(() => {
       render(null, inline);
     });

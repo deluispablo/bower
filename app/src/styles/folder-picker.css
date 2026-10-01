@@ -46,23 +46,8 @@
   min-height: 0;
 }
 
-.move-to-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.move-to-title {
-  margin: 0;
-  color: var(--color-heading);
-  font-family: var(--font-display, Poppins, sans-serif);
-  font-size: 22px;
-  font-weight: 700;
-}
-
 .move-to-sub {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 15px;
 }

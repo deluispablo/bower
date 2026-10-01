@@ -112,8 +112,9 @@
   margin-top: var(--space-2);
 }
 
+/* Scoped so it outranks `.btn-block`'s own `display` (#920 DA-4). */
 @media (min-width: 900px) {
-  .note-menu-cancel {
+  .note-menu .note-menu-cancel {
     display: none;
   }
 }

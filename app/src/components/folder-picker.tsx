@@ -33,8 +33,8 @@ import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
 import { FileIcon } from './file-icon.js';
 import { FolderMark } from './folder-mark.js';
-import { IconChevronRight, IconClose } from './icons.js';
-import { Overlay } from './overlay.js';
+import { IconChevronRight } from './icons.js';
+import { Overlay, OverlayHeader } from './overlay.js';
 import { TREE_INDENT } from './tree.js';
 
 import '../styles/tree.css';
@@ -104,12 +104,15 @@ export function FolderChoice({
             style={{ left: `${10 + k * TREE_INDENT}px` }}
           />
         ))}
+        {/* A radiogroup owns radios only (axe `aria-required-children`,
+            #920 T-4): the chevron is for the pointer, and the radio opens
+            or closes its folder with the right and left arrows. */}
         {expandable ? (
           <button
             type="button"
             class={`tree-chevron${expanded ? ' tree-chevron-open' : ''}`}
-            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${label}`}
-            aria-expanded={expanded}
+            aria-hidden="true"
+            tabIndex={-1}
             onClick={() => toggle(node.path)}
           >
             <IconChevronRight />
@@ -125,6 +128,16 @@ export function FolderChoice({
           disabled={isCurrent}
           title={label}
           onClick={() => onChoose(node.path)}
+          onKeyDown={(event) => {
+            if (!expandable) return;
+            if (event.key === 'ArrowRight' && !expanded) {
+              event.preventDefault();
+              toggle(node.path);
+            } else if (event.key === 'ArrowLeft' && expanded) {
+              event.preventDefault();
+              toggle(node.path);
+            }
+          }}
         >
           {depth === 0 && root !== null ? (
             <FolderMark kind={root} size={18} />
@@ -233,25 +246,18 @@ export function MoveToSheet({
 
   return (
     <Overlay kind="sheet" labelledBy="move-to-title" onClose={onClose}>
-      <div class="move-to">
-        <header class="move-to-head">
-          <div>
-            <h2 id="move-to-title" class="move-to-title">
-              Move to…
-            </h2>
-            <p class="move-to-sub">
-              Pick a folder for {name}. Bower moves it at the next tidy-up.
-            </p>
-          </div>
-          <button
-            type="button"
-            class="icon-button move-to-close"
-            aria-label="Close Move to"
-            onClick={onClose}
-          >
-            <IconClose />
-          </button>
-        </header>
+      {/* The shared sheet padding and header, as every content sheet
+          (#920): title and ✕, then the line. */}
+      <div class="overlay-body move-to">
+        <OverlayHeader
+          titleId="move-to-title"
+          title="Move to…"
+          closeLabel="Close Move to"
+          onClose={onClose}
+        />
+        <p class="move-to-sub">
+          Pick a folder for {name}. Bower moves it at the next tidy-up.
+        </p>
         <FolderChoice
           subject={subject}
           folders={folders}
@@ -274,7 +280,7 @@ export function MoveToSheet({
           )}
           <button
             type="button"
-            class="button move-to-primary"
+            class="btn btn-block move-to-primary"
             disabled={busy || chosen === ''}
             onClick={() => void moveHere()}
           >

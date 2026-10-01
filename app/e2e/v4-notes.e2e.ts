@@ -77,7 +77,9 @@ test('the Notes tab lists Pinned, the five landmarks, a divider, the others, Hea
   await expect(box.locator('.explorer-hidden')).toHaveCount(0);
 
   // #909: one Sort tool on the YOUR FOLDERS row.
-  await expect(box.getByRole('button', { name: 'Sort' })).toHaveCount(1);
+  await expect(
+    box.getByRole('button', { name: 'Sort your folders' }),
+  ).toHaveCount(1);
 });
 
 // #909 replaced the Expand/Collapse all toggle with one "Collapse all
@@ -178,4 +180,31 @@ test('the light theme uses the light tokens', async ({ page }, testInfo) => {
   const [r = 0, g = 0, b = 0] = (surface.page.match(/\d+/g) ?? []).map(Number);
   expect((r + g + b) / 3).toBeGreaterThan(200);
   await shot(page, testInfo, 'notes-light');
+});
+
+test('the Folders tab ⋯ opens the shared action sheet with Cancel (#920 DA-5)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the Folders tab is the phone');
+  await openNotes(page);
+  const more = page.getByRole('button', {
+    name: 'More for Folders',
+    exact: true,
+  });
+  await more.click();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  const menu = page.getByRole('menu', { name: /Folders/ });
+  await expect(menu).toBeVisible();
+  await expect(
+    menu.getByRole('menuitem', { name: /Show Bower.s own files/ }),
+  ).toBeVisible();
+  const help = menu.getByRole('menuitem', { name: 'Help and about this' });
+  await expect(help).toBeVisible();
+  expect(Math.round((await help.boundingBox())?.height ?? 0)).toBe(52);
+  await expect(menu.locator('.note-menu-sep').first()).toBeAttached();
+  const cancel = menu.locator('.note-menu-cancel');
+  await expect(cancel).toBeVisible();
+  await cancel.click();
+  await expect(menu).toBeHidden();
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
 });

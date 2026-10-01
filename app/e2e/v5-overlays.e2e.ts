@@ -36,7 +36,9 @@ async function openNote(page: Page): Promise<void> {
 }
 
 const more = (page: Page): Locator =>
-  visible(page.getByRole('button', { name: 'More' }));
+  // The page's own ⋯: a stale "More for Home" (the route still loading)
+  // never matches.
+  visible(page.getByRole('button', { name: /^More for (?!Home$)/ }));
 const tidy = (page: Page): Locator =>
   visible(page.getByRole('button', { name: 'Tidy up' }));
 const photo = (page: Page): Locator =>

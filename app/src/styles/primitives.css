@@ -82,6 +82,28 @@
   }
 }
 
+/* ---------- The ⋯ (§3.6, #920 DA-7) ---------- */
+
+/* One ⋯ everywhere, as the boards' `.ib`: 40 visual, 44 hit, radius 10,
+   the secondary text colour, a 22 px glyph (`MoreButton`). */
+.icon-button.more-button {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+}
+
+.icon-button.more-button::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: '';
+}
+
 /* ---------- Buttons (§3.25, R-BTN-1, R-BTN-3) ---------- */
 
 .btn {
@@ -433,6 +455,22 @@
   top: 50%;
   height: var(--hit);
   transform: translateY(-50%);
+}
+
+/* Touch: each segment's hit area reaches 44 px however the track is drawn
+   (K-21, K-34, #920 DB-21): 5 px over and under the 34 px button. */
+@media (pointer: coarse) {
+  .seg-button {
+    position: relative;
+  }
+
+  .seg-button::after {
+    top: -5px;
+    bottom: -5px;
+    height: auto;
+    min-height: 44px;
+    transform: none;
+  }
 }
 
 .seg-button[aria-checked='true'] {

@@ -179,9 +179,25 @@ describe('FolderChoice', () => {
 
   it('expands a landmark with its chevron', () => {
     choice();
-    click(
-      document.body.querySelector('[aria-label="Expand Projects"]') as Element,
-    );
+    const row = radio('Projects').closest('.folder-picker-row');
+    click(row?.querySelector('.tree-chevron') as Element);
+    expect(radio('Flat hunt')).toBeTruthy();
+  });
+
+  // #920 T-4: the chevron is out of the radiogroup's roles; the radio
+  // opens and closes its folder with the arrows instead.
+  it('keeps the chevron out of the roles and expands with ArrowRight', () => {
+    choice();
+    const projects = radio('Projects');
+    const chevron = projects
+      .closest('.folder-picker-row')
+      ?.querySelector('.tree-chevron');
+    expect(chevron?.getAttribute('aria-hidden')).toBe('true');
+    void act(() => {
+      projects.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+      );
+    });
     expect(radio('Flat hunt')).toBeTruthy();
   });
 });

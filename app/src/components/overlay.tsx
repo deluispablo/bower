@@ -27,7 +27,7 @@
  */
 
 import { Fragment } from 'preact';
-import type { ComponentChildren, JSX } from 'preact';
+import type { ComponentChildren, JSX, RefObject } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 
@@ -53,6 +53,12 @@ interface OverlayBaseProps {
    * now covers the same spot. Off by default; Escape is never guarded.
    */
   scrimGuardMs?: number;
+  /**
+   * What takes focus when the overlay opens, instead of its first control:
+   * a selector inside the panel or a ref (the tour's main button). Left
+   * out, or not found, the first control does.
+   */
+  initialFocus?: string | RefObject<HTMLElement>;
 }
 
 /** Named by a visible heading (`labelledBy`) or by a `label`, never neither. */
@@ -127,16 +133,17 @@ function lockPage(): () => void {
 }
 
 /**
- * Places a desktop popover 6 px under `opener`, right edges aligned (spec
- * §3.10), kept inside the window: flipped above when there is no room
- * below, and to the right of a button too near the left edge.
+ * Places a desktop popover 6 px under `opener`, opening to the right from
+ * the button's left edge (the *-More boards win over spec §3.10's right
+ * alignment, #920 DA-4), kept inside the window: flipped above when there
+ * is no room below, and pulled left when the button is near the right edge.
  */
 function anchorTo(panel: HTMLElement, opener: Element | null): void {
   if (opener === null || opener === document.body) return;
   const rect = opener.getBoundingClientRect();
   const width = Math.min(POPOVER_WIDTH, window.innerWidth * 0.88);
   const maxLeft = window.innerWidth - width - ANCHOR_GAP;
-  const left = Math.max(ANCHOR_GAP, Math.min(rect.right - width, maxLeft));
+  const left = Math.max(ANCHOR_GAP, Math.min(rect.left, maxLeft));
   // Under the opener; above it when there is no room below; clamped into
   // the window when neither side fits.
   const height = panel.offsetHeight;
@@ -148,6 +155,87 @@ function anchorTo(panel: HTMLElement, opener: Element | null): void {
   top = Math.max(ANCHOR_GAP, top);
   panel.style.setProperty('--overlay-anchor-top', `${top}px`);
   panel.style.setProperty('--overlay-anchor-left', `${left}px`);
+}
+
+/*
+ * Browser and system Back close the overlay on top and stay on the page
+ * (#920 T-3). While any overlay is open, one history entry of its own (same
+ * address, `bowerOverlay` in its state) sits on top: Back pops it and the
+ * newest overlay closes. Closing every overlay any other way takes that
+ * entry back off; an overlay that hands over to the next (a menu opening
+ * Help) keeps it. A pick that navigates pushes its own entry first, so
+ * nothing is taken off then.
+ */
+const backClosers: Array<{ close: () => void }> = [];
+let ignorePops = 0;
+let reconcileQueued = false;
+let popListening = false;
+
+function hasOverlayEntry(): boolean {
+  const state: unknown = history.state;
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { bowerOverlay?: unknown }).bowerOverlay === true
+  );
+}
+
+function reconcileHistory(): void {
+  reconcileQueued = false;
+  const want = backClosers.length > 0;
+  const have = hasOverlayEntry();
+  if (want && !have) {
+    const state: unknown = history.state;
+    const base = typeof state === 'object' && state !== null ? state : {};
+    history.pushState({ ...base, bowerOverlay: true }, '', location.href);
+  } else if (!want && have) {
+    ignorePops += 1;
+    history.back();
+  }
+}
+
+function queueReconcile(): void {
+  if (reconcileQueued) return;
+  reconcileQueued = true;
+  setTimeout(reconcileHistory, 0);
+}
+
+function onBackPop(): void {
+  if (ignorePops > 0) {
+    ignorePops -= 1;
+    return;
+  }
+  if (hasOverlayEntry()) return;
+  backClosers[backClosers.length - 1]?.close();
+  queueReconcile();
+}
+
+/**
+ * Lets Back close this overlay (or the drawer) while `open`; `onClose` is
+ * read at the time Back is pressed.
+ */
+export function useBackCloses(onClose: () => void, open = true): void {
+  const latest = useRef(onClose);
+  latest.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    if (!popListening) {
+      popListening = true;
+      window.addEventListener('popstate', onBackPop);
+    }
+    const entry = {
+      close: () => {
+        latest.current();
+      },
+    };
+    backClosers.push(entry);
+    queueReconcile();
+    return () => {
+      const at = backClosers.indexOf(entry);
+      if (at !== -1) backClosers.splice(at, 1);
+      queueReconcile();
+    };
+  }, [open]);
 }
 
 const MENU_ITEMS =
@@ -222,6 +310,19 @@ export function Overlay(props: OverlayProps): JSX.Element {
   }, [placement]);
 
   useFocusTrap(panel, onClose, opener);
+  useBackCloses(onClose);
+
+  // Declared after the trap, so it runs after the trap focused the first
+  // control, and wins.
+  const initialFocus = props.initialFocus;
+  useEffect(() => {
+    if (initialFocus === undefined) return;
+    const target =
+      typeof initialFocus === 'string'
+        ? panel.current?.querySelector<HTMLElement>(initialFocus)
+        : initialFocus.current;
+    target?.focus();
+  }, []);
 
   // Declared after the trap, so it runs after focus went back to the opener:
   // an opener that unmounted meanwhile (the run chip) leaves BODY focused.

@@ -495,14 +495,53 @@ button.page-bare-back {
   margin: 0 12px 8px;
 }
 
+/* The dock sits in the page's flow (the run chip renders inside it), so
+   it takes its own room: the content keeps only its normal end padding,
+   with no dock or run chip room on top (#920). */
 .shell-with-dock .content {
-  padding-bottom: calc(var(--space-16) + var(--space-6) + var(--dock-height));
+  margin-bottom: 0;
 }
 
 /* The phone run chip keeps its room at the end of the page while it shows
    (`--run-chip-space`, set by `run-chip.tsx`, #936). */
 .content {
   margin-bottom: var(--run-chip-space, 0px);
+}
+
+/* The page heading and main take focus after a route change (#920 T-2):
+   a programmatic focus draws no ring. */
+.content:focus,
+#app h1[tabindex='-1']:focus:not(:focus-visible),
+#app .topbar-title[tabindex='-1']:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* The focus starting point before Skip to content: out of the shell's
+   grid, never drawn. */
+.focus-start {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  outline: none;
+}
+
+/* "Skip to content" (WCAG 2.4.1): off screen until it has focus. */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1000;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-heading);
+  font-weight: var(--weight-bold);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
 }
 
 .reauth-banner {
@@ -910,6 +949,18 @@ button.page-bare-back {
     display: none;
   }
 
+  /* A bar with nothing to show on desktop (no breadcrumb, no chip) takes
+     no row at all (#920 DA-17). */
+  .topbar:not(
+    :has(
+      .topbar-chip,
+      .topbar-breadcrumb:not(:empty),
+      .topbar-crumb .breadcrumb
+    )
+  ) {
+    display: none;
+  }
+
   .topbar-breadcrumb:not(:empty) {
     display: block;
     flex: 0 1 auto;
@@ -958,9 +1009,15 @@ button.page-bare-back {
     padding: var(--space-6) var(--space-4);
   }
 
+  /* The sidebar's 12 px sides put the wordmark and the nav rows' icons
+     at x = 20 (boards *-1280, #920 DA-18). */
   .explorer-brand {
-    margin: 0 var(--space-2);
-    padding: 0 10px;
+    margin: 0;
+    padding: 0 8px;
+  }
+
+  .shell-sidebar .explorer-rows {
+    padding: 0;
   }
 
   /* The desktop top area (#906, PF-Main-1280, JF-Main-1280): one 48 px row
@@ -1265,7 +1322,9 @@ button.page-bare-back {
 
   .shell-folder.shell-with-aside .shell-body {
     display: grid;
-    grid-template-columns: calc(560px + 2 * var(--space-6)) minmax(320px, 560px);
+    /* The preview is 360 wide, as the note's About column (`--aside-width`,
+       #920 DA-13); the folder takes the rest, at most 720. */
+    grid-template-columns: minmax(0, 720px) var(--aside-width, 360px);
     align-items: start;
     justify-content: start;
   }
@@ -1278,5 +1337,7 @@ button.page-bare-back {
      so its empty state centres in it (AR-Main-1280). */
   .shell-folder.shell-with-aside .shell-aside {
     align-self: stretch;
+    width: var(--aside-width, 360px);
+    padding: 0;
   }
 }

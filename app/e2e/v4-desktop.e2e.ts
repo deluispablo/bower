@@ -32,7 +32,9 @@ test('1280 px: three panes, and the preview follows the selected row', async ({
     page.getByRole('navigation', { name: 'Your folders' }),
   ).toBeVisible();
   const box = await page.locator('.folder-view').boundingBox();
-  expect(box?.width).toBeLessThanOrEqual(561);
+  // #920 DA-13: the preview is 360 wide; the folder takes the rest (608
+  // inside its padding at 1280, as the boards).
+  expect(box?.width).toBeLessThanOrEqual(609);
 
   // The first row is selected at first; its title is the preview's.
   const rows = page.locator('.folder-item');

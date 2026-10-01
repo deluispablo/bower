@@ -74,12 +74,43 @@ export function getPref<K extends keyof Prefs>(key: K): Prefs[K] {
   }
 }
 
+/** Fired on `window` by `setPref`, with the changed key as `detail`. */
+export const PREF_EVENT = 'bower:pref';
+
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
   } catch {
     // Storage full or blocked: the preference just doesn't stick.
   }
+  // Every reader on screen follows at once (#920 T-14), whoever wrote it.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent<keyof Prefs>(PREF_EVENT, { detail: key }),
+    );
+  }
+}
+
+/**
+ * Calls `listener` when `key` changes: through `setPref` in this tab, or
+ * through storage in another. Returns the unsubscribe.
+ */
+export function subscribePref(
+  key: keyof Prefs,
+  listener: () => void,
+): () => void {
+  const onPref = (event: Event): void => {
+    if ((event as CustomEvent<unknown>).detail === key) listener();
+  };
+  const onStorage = (event: StorageEvent): void => {
+    if (event.key === null || event.key === STORAGE_PREFIX + key) listener();
+  };
+  window.addEventListener(PREF_EVENT, onPref);
+  window.addEventListener('storage', onStorage);
+  return () => {
+    window.removeEventListener(PREF_EVENT, onPref);
+    window.removeEventListener('storage', onStorage);
+  };
 }
 
 /** Every preference except `theme`, which is a device setting, not a user one. */

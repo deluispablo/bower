@@ -38,6 +38,7 @@ import { isBowerWritten } from '../bower-written.js';
 import { loadNoteMetaEntry, loadTreeState, saveTreeState } from '../cache.js';
 import type { DriveFile } from '../drive.js';
 import { FOLDER_MIME } from '../drive.js';
+import { hubNotePath } from '../folder-statuses.js';
 import { driveViewUrl } from '../markdown/embeds.js';
 import {
   appFileGroup,
@@ -144,7 +145,10 @@ function flatten(
   for (const folder of node.folders) {
     if (depth === 0 && isBelowTree(folder.name)) continue;
     const isExpanded = expanded.has(folder.path);
-    const empty = folder.folders.length === 0 && folder.items.length === 0;
+    const hubPath = hubNotePath(folder.path);
+    const empty =
+      folder.folders.length === 0 &&
+      folder.items.every((item) => item.path === hubPath);
     out.push({
       kind: 'folder',
       path: folder.path,
@@ -155,7 +159,11 @@ function flatten(
     });
     if (isExpanded) flatten(folder, depth + 1, expanded, out);
   }
+  // A folder's hub note (X/X.md) is Bower's own page for it: the tree
+  // leaves it out (#920 DA-10).
+  const hub = node.path === '' ? null : hubNotePath(node.path);
   for (const item of node.items) {
+    if (item.path === hub) continue;
     const isNote = fileKind(item) === 'note';
     out.push({
       kind: isNote ? 'note' : 'file',
@@ -166,6 +174,20 @@ function flatten(
       ...(isNote ? {} : { file: item }),
     });
   }
+}
+
+/**
+ * The folders a reveal opens: the target's ancestors, and an open folder
+ * itself, so its contents show (#920 DA-8). `currentId` is set for a note
+ * or a file, left out for a folder.
+ */
+export function openPathsFor(
+  revealPath: string | undefined,
+  currentId: string | undefined,
+): string[] {
+  if (revealPath === undefined) return [];
+  const above = ancestorsOf(revealPath);
+  return currentId === undefined ? [...above, revealPath] : above;
 }
 
 /**
@@ -221,6 +243,21 @@ function scrollBoxOf(el: HTMLElement): HTMLElement | null {
  * column), never the page behind it; the page itself when nothing else
  * scrolls (the Folders tab).
  */
+/**
+ * Puts Chrome's sequential focus starting point back at the top of the
+ * page, so the next Tab reaches "Skip to content" (#920 T-2). Scrolling
+ * the tree on load can move it next to the rows. Only while nothing has
+ * focus: a focused control keeps its place.
+ */
+export function resetFocusStart(): void {
+  const active = document.activeElement;
+  if (active !== null && active !== document.body) return;
+  const start = document.querySelector<HTMLElement>('.focus-start');
+  if (start === null) return;
+  start.focus({ preventScroll: true });
+  start.blur();
+}
+
 function scrollRowIntoView(el: HTMLElement): void {
   const parent = scrollBoxOf(el);
   if (parent === null) {
@@ -351,7 +388,7 @@ export function Tree({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
     mergeExpanded(
       rememberedExpanded ?? new Set<string>(),
-      revealPath === undefined ? [] : ancestorsOf(revealPath),
+      openPathsFor(revealPath, currentId),
     ),
   );
   // The path whose row is still to be scrolled to and highlighted.
@@ -359,6 +396,8 @@ export function Tree({
   const pendingRevealFocus = useRef(false);
   const revealRef = useRef(revealPath);
   revealRef.current = revealPath;
+  const currentIdRef = useRef(currentId);
+  currentIdRef.current = currentId;
   const [flashPath, setFlashPath] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   // Nothing is saved until the stored state has been read, so a fresh mount
@@ -379,9 +418,10 @@ export function Tree({
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             const selected = wrapRef.current?.querySelector<HTMLElement>(
-              '.tree-link[aria-selected="true"]',
+              '.tree-link[aria-current="page"]',
             );
             if (selected != null) scrollRowIntoView(selected);
+            resetFocusStart();
           }),
         );
         if (state === undefined) return;
@@ -389,7 +429,7 @@ export function Tree({
         setExpanded(
           mergeExpanded(
             new Set(state.expanded),
-            target === undefined ? [] : ancestorsOf(target),
+            openPathsFor(target, currentIdRef.current),
           ),
         );
         // A reveal scrolls to its own row; the stored offset would undo it.
@@ -434,7 +474,9 @@ export function Tree({
   useEffect(() => {
     if (revealPath === undefined) return;
     pendingReveal.current = revealPath;
-    setExpanded((prev) => mergeExpanded(prev, ancestorsOf(revealPath)));
+    setExpanded((prev) =>
+      mergeExpanded(prev, openPathsFor(revealPath, currentId)),
+    );
   }, [revealPath, currentId, revealSeq]);
 
   useEffect(() => {
@@ -558,6 +600,7 @@ export function Tree({
       // expansion arriving), so the row is still in view.
       requestAnimationFrame(() => {
         if (el.isConnected) scrollRowIntoView(el);
+        resetFocusStart();
       });
       if (pendingRevealFocus.current) el.focus();
     } else if (listHandle.current !== null) {
@@ -745,12 +788,18 @@ export function Tree({
     return <p class="tree-empty">Nothing here yet.</p>;
   }
 
-  /** Whether `row` is the open note, file or folder. */
+  /** Whether `row` is the open note, file or folder (`aria-current`). */
   function isCurrent(row: Row): boolean {
     if (revealPath === undefined) return false;
     return currentId !== undefined
       ? row.id === currentId
       : row.kind === 'folder' && row.path === revealPath;
+  }
+
+  /** Whether `row` wears the selection (tint and bar): the open note or
+   * file. An open folder wears its root's colour instead (#920 DA-8). */
+  function isSelected(row: Row): boolean {
+    return currentId !== undefined && isCurrent(row);
   }
 
   // The folder open in the main area: the one holding the open item, or the
@@ -776,7 +825,7 @@ export function Tree({
   function rowClass(row: Row, extra: string): string {
     const parts = ['tree-row', extra];
     if (row.depth === 0 && row.kind === 'folder') parts.push('tree-root');
-    if (isCurrent(row)) parts.push('tree-row-selected');
+    if (isSelected(row)) parts.push('tree-row-selected');
     if (flashPath !== null && isCurrent(row)) parts.push('tree-row-reveal');
     if (row.kind === 'folder' && row.path === openFolder) {
       parts.push('tree-row-open');
@@ -784,11 +833,14 @@ export function Tree({
     return parts.join(' ');
   }
 
+  // The chevron sits inside its treeitem (axe `aria-required-children`,
+  // #920 T-4): a tree owns treeitems only. Its click stays its own.
   function rowLink(
     row: Row,
     i: number,
     href: string,
     icon: JSX.Element,
+    lead?: JSX.Element,
   ): JSX.Element {
     const name = displayName(row);
     const root = rootOf(row.path);
@@ -798,11 +850,12 @@ export function Tree({
         ref={rowRef(i)}
         role="treeitem"
         class="tree-link"
+        aria-label={name}
         aria-level={row.depth + 1}
         aria-expanded={
           row.kind === 'folder' && row.empty !== true ? row.expanded : undefined
         }
-        aria-selected={isCurrent(row)}
+        aria-selected={isSelected(row)}
         aria-current={isCurrent(row) ? 'page' : undefined}
         title={name}
         tabIndex={i === focusIndex ? 0 : -1}
@@ -820,6 +873,7 @@ export function Tree({
         onKeyDown={(event) => onRowKeyDown(event, i)}
         onFocus={() => setFocusIndex(i)}
       >
+        {lead}
         {icon}
         <span class="tree-name">{name}</span>
       </a>
@@ -848,20 +902,31 @@ export function Tree({
         }}
       >
         {guides(row.depth)}
-        {row.empty === true ? (
-          <span class="tree-spacer" aria-hidden="true" />
-        ) : (
-          <button
-            type="button"
-            class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
-            tabIndex={-1}
-            aria-label={`${row.expanded === true ? 'Collapse' : 'Expand'} ${name}`}
-            onClick={() => toggle(row.path)}
-          >
-            <IconChevronRight />
-          </button>
+        {rowLink(
+          row,
+          i,
+          folderHref(row.path),
+          icon,
+          row.empty === true ? (
+            <span class="tree-spacer" aria-hidden="true" />
+          ) : (
+            <button
+              type="button"
+              class={`tree-chevron${row.expanded === true ? ' tree-chevron-open' : ''}`}
+              tabIndex={-1}
+              aria-label={`${row.expanded === true ? 'Collapse' : 'Expand'} ${name}`}
+              onClick={(event) => {
+                // Inside the row's link: open or close, never follow it.
+                event.preventDefault();
+                event.stopPropagation();
+                toggle(row.path);
+              }}
+              onDblClick={(event) => event.stopPropagation()}
+            >
+              <IconChevronRight />
+            </button>
+          ),
         )}
-        {rowLink(row, i, folderHref(row.path), icon)}
         {openRow?.path === row.path && pinSheetFor(row)}
       </span>
     );

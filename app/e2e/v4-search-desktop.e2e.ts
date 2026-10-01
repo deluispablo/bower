@@ -137,7 +137,11 @@ test('Tab reaches the chips, Enter opens the highlighted result, / opens search'
   // the highlight can still be the empty query's first row.
   const highlighted = dialog.locator('.switcher-row[data-highlighted="true"]');
   await expect(highlighted).toContainText('Moonee Ponds');
-  const firstHref = await highlighted.getAttribute('href');
+  // Options hold no link (#920 T-5): the highlighted row's title is what
+  // the opened page shows.
+  const firstTitle = (
+    await highlighted.locator('.list-row-title').innerText()
+  ).trim();
 
   await page.keyboard.press('Tab');
   await expect(
@@ -146,6 +150,9 @@ test('Tab reaches the chips, Enter opens the highlighted result, / opens search'
 
   await page.keyboard.press('Enter');
   await expect(dialog).toBeHidden();
-  expect(firstHref).not.toBeNull();
-  await expect.poll(() => page.url()).toContain(firstHref ?? '');
+  expect(firstTitle).not.toBe('');
+  await expect(page).not.toHaveURL(/\/$/);
+  await expect(
+    page.locator('main h1').filter({ hasText: firstTitle }).first(),
+  ).toBeVisible();
 });

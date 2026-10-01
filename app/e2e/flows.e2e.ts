@@ -1646,7 +1646,11 @@ test('four tabs on the phone, the sidebar instead on desktop', async ({
     // replaced the Expand/Collapse all toggle), and the waiting-count bubble
     // on Add's row, where the pile gets filled, not Home's.
     const sidebar = page.getByRole('navigation', { name: 'Your folders' });
-    for (const name of ['Show the open item', 'Sort', 'Collapse all folders']) {
+    for (const name of [
+      'Show the open item',
+      'Sort your folders',
+      'Collapse all folders',
+    ]) {
       await expect(sidebar.getByRole('button', { name })).toBeVisible();
     }
     await expect(sidebar.locator('a[href="/add"] .nav-badge')).toHaveText('3');
@@ -1701,7 +1705,11 @@ test('the Notes tab: the tree, its tools, then Answers, Clippings and Health che
     0,
   );
   const screen = page.locator('.explorer-page');
-  for (const name of ['Show the open item', 'Sort', 'Collapse all folders']) {
+  for (const name of [
+    'Show the open item',
+    'Sort your folders',
+    'Collapse all folders',
+  ]) {
     await expect(screen.getByRole('button', { name })).toBeVisible();
   }
 
@@ -1968,8 +1976,8 @@ test('At 1920 the content stays in one centred container, away from the right ed
     (box?.x ?? NaN) -
     (box?.width ?? NaN);
   expect(left).toBeCloseTo(right, 0);
-  expect(bar?.x).toBeCloseTo(box?.x ?? NaN, 0);
-  expect(bar?.width).toBeCloseTo(box?.width ?? NaN, 0);
+  // #920 DA-17: Home's desktop bar holds nothing, so it takes no row.
+  expect(bar).toBeNull();
   expect(await rightEdgeHuggers(page)).toEqual([]);
   await shot(page, testInfo, 'container-1920-home');
 
@@ -2348,7 +2356,10 @@ test('The folder header has the title and ⋯, no chip row (#911), and the tree 
 }, testInfo) => {
   await openHome(page);
   await page.goto('/folder/4-Archives/Lisbon%20Trip');
-  await expect(page.locator('h1', { hasText: 'Lisbon Trip' })).toBeVisible();
+  // The page's own heading (the preview may show the hub note's h1 too).
+  await expect(
+    page.locator('h1.page-header-title', { hasText: 'Lisbon Trip' }),
+  ).toBeVisible();
   // #911 (R-PF-1): Pin, Ask and Drive live in ⋯ beside the title.
   await expect(page.locator('.header-action')).toHaveCount(0);
   await expect(page.locator('.page-header-more')).toBeVisible();
@@ -2460,8 +2471,10 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await page.getByRole('button', { name: 'Close Ask Bower' }).click();
 
   // The More menu, in its file version: Open in Drive greyed (#555), Pin to
-  // Home present (#688).
-  await visible(page.getByRole('button', { name: 'More' })).click();
+  // Home present (#688). The page's own ⋯, never a stale Home one.
+  await visible(
+    page.getByRole('button', { name: /^More for (?!Home$)/ }),
+  ).click();
   const menu = page.getByRole('menu', { name: 'File actions' });
   const openInDrive = menu.getByRole('menuitem', { name: /Open in Drive/ });
   await expect(openInDrive).toBeVisible();
@@ -2487,7 +2500,10 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
 
   // The same menu on a folder: Pin to Home, no note-only rows.
   await page.goto('/folder/4-Archives/Kitchen%20Refresh');
-  await visible(page.getByRole('button', { name: 'More' })).click();
+  await visible(
+    // A folder's ⋯ is "More" until #920 DA-6 names it; never Home's.
+    page.getByRole('button', { name: /^More( for Kitchen Refresh)?$/ }),
+  ).click();
   const folderMenu = page.getByRole('menu', { name: 'Folder actions' });
   await expect(
     folderMenu.getByRole('menuitem', { name: /Pin to Home/ }),

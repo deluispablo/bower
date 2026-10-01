@@ -208,9 +208,9 @@ function BirdRig({
             <circle cx="97" cy="47" r="5.2" />
             <circle class="bci" cx="97" cy="47" r="3.1" />
           </g>
-          <text class="x ex" x="74" y="16">
-            !
-          </text>
+          <g class="x ex">
+            <path d={EX_D} />
+          </g>
         </g>
         <g class="wg">
           <path
@@ -241,24 +241,25 @@ function BirdRig({
         <circle class="x dd d1" cx="50" cy="20" r="1.6" />
         <circle class="x dd d2" cx="56" cy="16" r="1.6" />
         <circle class="x dd d3" cx="62" cy="14" r="1.6" />
-        <text class="x nt" x="82" y="22">
-          ♪
-        </text>
-        <text class="x nt n2" x="90" y="14">
-          ♪
-        </text>
-        <text class="x nt n3" x="76" y="8">
-          ♪
-        </text>
-        <text class="x qm" x="80" y="18">
-          ?
-        </text>
-        <text class="x zz" x="74" y="22">
-          z
-        </text>
-        <text class="x zz z2" x="82" y="12">
-          z
-        </text>
+        <g class="x nt">
+          <path transform="translate(82 22)" d={NOTE_D} />
+        </g>
+        <g class="x nt n2">
+          <path transform="translate(90 14)" d={NOTE_D} />
+        </g>
+        <g class="x nt n3">
+          <path transform="translate(76 8)" d={NOTE_D} />
+        </g>
+        <g class="x qm">
+          <path transform="translate(80 18)" d={QM_D} style={GLYPH_STROKE} />
+          <path transform="translate(80 18)" d={QM_DOT_D} />
+        </g>
+        <g class="x zz">
+          <path transform="translate(74 22)" d={Z_D} style={Z_STROKE} />
+        </g>
+        <g class="x zz z2">
+          <path transform="translate(82 12)" d={Z_D} style={Z_STROKE} />
+        </g>
         <path
           class="x sp"
           d="M90 8l1.8 3.8 3.8 1.8-3.8 1.8L90 19l-1.8-3.8-3.8-1.8 3.8-1.8z"
@@ -287,6 +288,28 @@ function BirdRig({
     </g>
   );
 }
+
+/*
+ * The rig's little signs ("!", the notes, "?", "z") are drawn, not typed:
+ * text in the SVG would leak into the textContent of every link or option
+ * that holds the bird (#920 DA-31, T-24). Each sits at its old text
+ * position (left, baseline), sized as the glyph it replaces.
+ */
+const EX_D =
+  'M75.3 2.2h3.4l-.6 9.2h-2.2zM77 12.6a1.9 1.9 0 1 1 0 3.8a1.9 1.9 0 1 1 0-3.8z';
+const NOTE_D =
+  'M0 -2.6a3.2 2.4 -20 1 0 6.4 0a3.2 2.4 -20 1 0 -6.4 0zM5.4 -2.8V-14h1.6v11.2zM7 -14c.4 2.4 3.2 3.4 3.6 6.2c-.9-1.5-2.3-2.3-3.6-2.6z';
+const QM_D = 'M1.6 -12.2a4.8 4.8 0 1 1 6.9 4.3c-1.5.7-2.4 1.6-2.4 3.2v.9';
+const QM_DOT_D = 'M4.5 -1.4a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0z';
+const Z_D = 'M.8 -8h6.4l-6.4 7.6h6.4';
+const GLYPH_STROKE = {
+  fill: 'none',
+  stroke: 'var(--color-text)',
+  strokeWidth: 2.6,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+} as const;
+const Z_STROKE = { ...GLYPH_STROKE, strokeWidth: 2 } as const;
 
 /**
  * True while the tab is hidden or the element is off screen (an

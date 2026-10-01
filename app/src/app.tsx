@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { LocationProvider, lazy, Route, Router, useLocation } from 'preact-iso';
 import { registerSW } from 'virtual:pwa-register';
 
 import { isDemo } from './api.js';
-import { Layout } from './components/layout.js';
+import { Layout, focusNewPage } from './components/layout.js';
 import { Home } from './routes/home.js';
 import { Login } from './routes/login.js';
 import { NotFound } from './routes/not-found.js';
@@ -97,6 +97,13 @@ function AppRoutes() {
     if (missingRunKey !== null) void recheckFolder();
   }, [missingRunKey]);
 
+  // What had focus when the route changed: the new page takes focus from it
+  // once it has drawn (#920 T-2, `focusNewPage`).
+  const focusFrom = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    focusFrom.current = document.activeElement;
+  }, [path]);
+
   // Every route names its page (#899, WCAG 2.4.2); named routes set their own.
   useEffect(() => {
     const title = titleForPath(path, isDemo());
@@ -125,7 +132,13 @@ function AppRoutes() {
   }
 
   const routes = (
-    <Router>
+    <Router
+      onRouteChange={() => {
+        // Not called for the first page load, which keeps the browser's
+        // own start.
+        focusNewPage(focusFrom.current);
+      }}
+    >
       <Route path="/" component={Home} />
       <Route path="/login" component={isDemo() ? RunYourOwn : Login} />
       <Route path="/not-invited" component={NotInvited} />
