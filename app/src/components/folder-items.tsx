@@ -42,6 +42,8 @@ import {
   kindOptions,
   rowsFor,
   sortRows,
+  folderPagesUnder,
+  subfolderThings,
 } from '../folder-view.js';
 import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
 import {
@@ -352,6 +354,24 @@ export function FolderItems({
   const [quick, setQuick] = useState<FolderRow | null>(null);
   const { index } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
+  // K-31 on a subfolder's row and card: the same count as its own page, so
+  // a page Bower wrote for a folder is not one of its things (#950).
+  const folderPages = useMemo(
+    () =>
+      contents.subfolders.flatMap((sub) =>
+        folderPagesUnder(index?.folders ?? [], byPath, sub.path),
+      ),
+    [contents.subfolders, index, byPath],
+  );
+  const bowerPages = useBowerWritten(folderPages);
+  const subfolders = useMemo(
+    () =>
+      contents.subfolders.map((sub) => ({
+        ...sub,
+        things: subfolderThings(sub, index?.folders ?? [], byPath, bowerPages),
+      })),
+    [contents.subfolders, index, byPath, bowerPages],
+  );
   const [view, onView] = useFolderView(contents.path);
   const { model } = useFolderModel(contents, catalogue);
   const [loaded, setLoaded] = useState<VirtualModule | null>(virtualModule);
@@ -365,11 +385,9 @@ export function FolderItems({
   const cardFiles = useMemo(
     () =>
       folderOfFolders
-        ? contents.subfolders.flatMap((folder) =>
-            changedUnder(byPath, folder.path, 10),
-          )
+        ? subfolders.flatMap((folder) => changedUnder(byPath, folder.path, 10))
         : [],
-    [folderOfFolders, byPath, contents.subfolders],
+    [folderOfFolders, byPath, subfolders],
   );
   const bowerSet = useBowerWritten(
     useMemo(() => [...recent, ...cardFiles], [recent, cardFiles]),
@@ -382,7 +400,7 @@ export function FolderItems({
 
   // K-31: subfolders count as originals, except on a folder of folders,
   // whose cards are not its own things (AR-Main: "Originals 0").
-  const subCount = folderOfFolders ? 0 : contents.subfolders.length;
+  const subCount = folderOfFolders ? 0 : subfolders.length;
   const segments = folderSegments({ subfolders: subCount, model });
 
   const originRows = useMemo(
@@ -452,7 +470,7 @@ export function FolderItems({
   // originals, K-31) until a kind narrows it.
   const showSubs = (origin: OriginFilter, kindOn: string | null): boolean =>
     !folderOfFolders && origin !== 'bower' && kindOn === null;
-  const subs = showSubs(view.origin, kind) ? contents.subfolders : [];
+  const subs = showSubs(view.origin, kind) ? subfolders : [];
 
   /** What Filter & sort's "Show <n> things" counts for a draft (K-31):
    * things, not rows, so in All a pair (one row) counts as its two files
@@ -466,9 +484,7 @@ export function FolderItems({
         n + (view.origin === 'all' && row.original !== undefined ? 2 : 1),
       0,
     );
-    return (
-      shown + (showSubs(view.origin, known) ? contents.subfolders.length : 0)
-    );
+    return shown + (showSubs(view.origin, known) ? subfolders.length : 0);
   };
 
   // Holding a row or tile opens quick look (#613); the click that follows a
@@ -658,7 +674,7 @@ export function FolderItems({
       );
       return;
     }
-    const folder = contents.subfolders.find((sub) => sub.path === selectedKey);
+    const folder = subfolders.find((sub) => sub.path === selectedKey);
     if (folder !== undefined) {
       onPreview(paneOfFolder(folder));
       return;
@@ -771,8 +787,7 @@ export function FolderItems({
     layout: folderLayout,
   };
   const para = paraKindOf(contents.path.split('/')[0] ?? '');
-  const emptyFolder =
-    contents.items.length === 0 && contents.subfolders.length === 0;
+  const emptyFolder = contents.items.length === 0 && subfolders.length === 0;
 
   function body(): JSX.Element {
     if (emptyFolder) {
@@ -787,7 +802,7 @@ export function FolderItems({
             role={desktop ? 'listbox' : 'list'}
             aria-label={`Folders in ${displayName(contents.name)}`}
           >
-            {contents.subfolders.map((folder) => (
+            {subfolders.map((folder) => (
               <li key={folder.path} role={desktop ? 'none' : undefined}>
                 <FolderCard
                   folder={{

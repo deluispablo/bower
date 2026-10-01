@@ -464,3 +464,42 @@ export function siblings(
   // The folder's own page (`isFolderPage`) is not one of its things.
   return node.items.filter((file) => !isFolderPage(file, metas.get(file.id)));
 }
+
+/** The same-name pages of `path` and of every folder under it ("Moonee
+ * Ponds/Moonee Ponds.md"): the candidates for a page Bower wrote for its
+ * folder, which is not one of the folder's things (K-31). */
+export function folderPagesUnder(
+  folders: readonly Pick<DriveFile, 'path'>[],
+  byPath: ReadonlyMap<string, DriveFile>,
+  path: string,
+): DriveFile[] {
+  const pages: DriveFile[] = [];
+  for (const folder of folders) {
+    if (folder.path !== path && !folder.path.startsWith(`${path}/`)) continue;
+    const name = folder.path.slice(folder.path.lastIndexOf('/') + 1);
+    const page = byPath.get(`${folder.path}/${name}.md`);
+    if (page !== undefined) pages.push(page);
+  }
+  return pages;
+}
+
+/**
+ * A subfolder's count on its row and card, the same K-31 count as its own
+ * page: everything inside it, the folders under it included, but not a
+ * page Bower wrote for a folder (`bowerPages`, the ids of those pages that
+ * are Bower's). `things` is `folderContents`' notes and files inside.
+ */
+export function subfolderThings(
+  sub: { path: string; things: number },
+  folders: readonly Pick<DriveFile, 'path'>[],
+  byPath: ReadonlyMap<string, DriveFile>,
+  bowerPages: ReadonlySet<string>,
+): number {
+  const inside = folders.filter((folder) =>
+    folder.path.startsWith(`${sub.path}/`),
+  ).length;
+  const pages = folderPagesUnder(folders, byPath, sub.path).filter((page) =>
+    bowerPages.has(page.id),
+  ).length;
+  return Math.max(0, sub.things + inside - pages);
+}
