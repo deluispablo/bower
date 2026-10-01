@@ -999,7 +999,7 @@ audit_note_names() {
 recount_tags() {
   LC_ALL=C awk '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
-    function valid(t) { return t ~ /^#[a-z0-9]+(-[a-z0-9]+)*$/ }
+    function valid(t) { return t ~ /^#[a-z0-9]+(-[a-z0-9]+)*$/ && length(t) <= 64 }
     { sub(/\r$/, ""); line[NR] = $0 }
     /^## / {
       if (s && !e) e = NR - 1
@@ -1028,8 +1028,10 @@ recount_tags() {
       ntag = 0; npre = 0; npost = 0; none = 0
       if (s) for (i = s + 1; i <= e; i++) {
         l = line[i]
-        if (l ~ /^- #[^ \t]/) {
-          t = substr(l, 3); sub(/[ \t].*$/, "", t)
+        t = ""
+        if (l ~ /^- #[^ \t]/) { t = substr(l, 3); sub(/[ \t].*$/, "", t) }
+        # The line of an invalid tag stays as it is: not counted, not sorted.
+        if (t != "" && valid(t)) {
           if (t in meaning) continue
           old[++ntag] = l
           m = split(l, p, " · ")
@@ -1074,13 +1076,18 @@ recount_tags() {
     }' "$1"
 }
 
-# The tags of the `## Tags` section of the index file $1, one per line,
-# sorted; nothing when there is no file or no section.
+# The valid tags (`^#[a-z0-9]+(-[a-z0-9]+)*$`, at most 64 characters) of
+# the first `## Tags` section of the index file $1, as recount_tags reads
+# it, one per line, sorted; nothing when there is no file or no section.
+# Only these ever reach a `Tag added:` line.
 section_tags() {
   [ -f "$1" ] || return 0
   awk '{ sub(/\r$/, "") }
-    /^## / { on = ($0 ~ /^## Tags[ \t]*$/); next }
-    on && /^- #[^ \t]/ { t = substr($0, 3); sub(/[ \t].*$/, "", t); print t }' "$1" |
+    /^## / { if (on) exit; on = ($0 ~ /^## Tags[ \t]*$/); next }
+    on && /^- #[^ \t]/ {
+      t = substr($0, 3); sub(/[ \t].*$/, "", t)
+      if (t ~ /^#[a-z0-9]+(-[a-z0-9]+)*$/ && length(t) <= 64) print t
+    }' "$1" |
     LC_ALL=C sort -u
 }
 
@@ -1116,7 +1123,12 @@ book_tags() {
   [ -f "$vault/index.md" ] || return 0
   recount_tags "$vault/index.md" >"$out" || return 1
   if ! tr -d '\r' <"$vault/index.md" | cmp -s - "$out"; then
-    cat "$out" >"$vault/index.md" || return 1
+    # Windows line ends stay Windows line ends.
+    if [ -n "$(tr -cd '\r' <"$vault/index.md" | head -c 1)" ]; then
+      sed 's/$/\r/' "$out" >"$vault/index.md" || return 1
+    else
+      cat "$out" >"$vault/index.md" || return 1
+    fi
     printf '%s\n' index.md >>"$UPLOAD_FILE"
   fi
   rm -f "$out"
@@ -2615,9 +2627,12 @@ fi
 # R-SS-15: how heavy the sync down is, numbers only: the files and bytes of
 # the local copy and the seconds it took. When the time passes 20 s in
 # normal use, the partial download (spec D-5) moves up.
-sync_seconds=$(($(date +%s) - sync_started))
-sync_files=$(find "$VAULT_DIR" -type f | wc -l | tr -d ' ')
-sync_bytes=$(du -sb "$VAULT_DIR" | cut -f 1)
+# Best effort: a failure here never fails the run.
+sync_seconds=$(($(date +%s) - sync_started)) || sync_seconds=0
+sync_files=$(find "$VAULT_DIR" -type f 2>/dev/null | wc -l | tr -d ' ') || sync_files=0
+sync_bytes=$(du -sb "$VAULT_DIR" 2>/dev/null | cut -f 1) || sync_bytes=0
+[[ $sync_files =~ ^[0-9]+$ ]] || sync_files=0
+[[ $sync_bytes =~ ^[0-9]+$ ]] || sync_bytes=0
 log "$STEP: $sync_files files, $(awk -v b="$sync_bytes" 'BEGIN { printf "%.1f", b / 1048576 }') MB, $sync_seconds s"
 
 STEP='check rulebook'

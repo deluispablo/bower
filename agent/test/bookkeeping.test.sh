@@ -145,3 +145,36 @@ expect_eq "$(check_rows "$FIXTURES/index-before.md" "$ROOT/v23-changed.md")" '1 
 expect_eq "$(check_rows "$FIXTURES/index-before.md" "$FIXTURES/index-before.md")" '0 0' 'unchanged: nothing checked'
 expect_eq "$(check_rows "$ROOT/missing.md" "$FIXTURES/index-before.md")" '2 4' 'no index before: every row'
 echo "ok $CASE"
+
+CASE='invalid section tag'
+# A section line whose tag is not a valid tag (here one carrying wikilink
+# brackets, and one over 64 characters) stays as it is, uncounted, and
+# never reaches a `Tag added:` line.
+long="#$(printf 'a%.0s' $(seq 1 64))"
+printf '%s\n' '# Index' '- [[a.pdf]] · PDF · #lease · A lease · filed by Bower' '' '## Tags' \
+  '- #Foo]]bar[[x · Not a tag · 3' "- $long · Too long · 1" >"$ROOT/invalid.md"
+expect_eq "$(recount_tags "$ROOT/invalid.md")" "$(printf '%s\n' '# Index' \
+  '- [[a.pdf]] · PDF · #lease · A lease · filed by Bower' '' '## Tags' \
+  '- #Foo]]bar[[x · Not a tag · 3' "- $long · Too long · 1" '- #lease · — · 1')" \
+  'invalid tag lines kept as they are, uncounted (before the first tag line, they stay first)'
+expect_eq "$(section_tags "$ROOT/invalid.md")" '' 'no invalid tag is listed'
+fresh "$ROOT/invalid.md"
+book_tags "$ROOT/vault" /dev/null "$STAMP"
+expect_eq "$(grep 'Tag added:' "$ROOT/vault/log.md")" '- 2026-01-15 09:00 · Tag added: #lease' \
+  'only the valid tag is logged'
+echo "ok $CASE"
+
+CASE='two sections'
+printf '%s\n' '# Index' '- [[a.pdf]] · PDF · #lease · A lease · filed by Bower' '' '## Tags' \
+  '- #lease · Leases · 1' '' '## Tags' '- #second · Not read · 1' >"$ROOT/two.md"
+expect_eq "$(section_tags "$ROOT/two.md")" '#lease' 'only the first section is read'
+expect_eq "$(recount_tags "$ROOT/two.md")" "$(cat "$ROOT/two.md")" 'the second section is left alone'
+echo "ok $CASE"
+
+CASE='crlf kept'
+sed 's/$/\r/' "$FIXTURES/index-after.md" >"$ROOT/after-crlf.md"
+fresh "$ROOT/after-crlf.md"
+book_tags "$ROOT/vault" "$FIXTURES/index-before.md" "$STAMP"
+expect_eq "$(sed 's/$/\r/' "$FIXTURES/index-expected.md" | cmp -s - "$ROOT/vault/index.md" && echo same)" same \
+  'a CRLF index.md is written back with CRLF'
+echo "ok $CASE"
