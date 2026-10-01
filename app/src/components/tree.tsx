@@ -475,6 +475,63 @@ export function useBowerWritten(
   return ids;
 }
 
+/** Which notes Bower wrote (the bird, "Bower note") and which of those are
+ * its answers ("Bower answer", `type: answer`). */
+export interface BowerNotes {
+  written: ReadonlySet<string>;
+  answers: ReadonlySet<string>;
+}
+
+/**
+ * `BowerNotes` for `notes`, read from each note's frontmatter (the cache
+ * first), so a row, card or pin names a note's kind the way every other
+ * place does (`kindLabel`, K-14). A note that cannot be read keeps the
+ * plain "Note".
+ */
+export function useBowerNotes(notes: readonly DriveFile[]): BowerNotes {
+  const [found, setFound] = useState<BowerNotes>({
+    written: new Set(),
+    answers: new Set(),
+  });
+  const key = notes
+    .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
+    .join();
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      notes.map(
+        async (note): Promise<{ id: string; answer: boolean } | null> => {
+          const kind = fileKind(note);
+          if (kind !== 'note' && kind !== 'markdown') return null;
+          try {
+            const meta = await loadNoteMeta(note);
+            return isBowerWritten(meta)
+              ? { id: note.id, answer: meta.type === 'answer' }
+              : null;
+          } catch (err: unknown) {
+            console.error('Could not read who wrote a note', err);
+            return null;
+          }
+        },
+      ),
+    ).then((rows) => {
+      if (cancelled) return;
+      const mine = rows.filter(
+        (row): row is { id: string; answer: boolean } => row !== null,
+      );
+      setFound({
+        written: new Set(mine.map((row) => row.id)),
+        answers: new Set(mine.filter((row) => row.answer).map((row) => row.id)),
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `key` stands for `notes`, which is a new array on every render.
+  }, [key]);
+  return found;
+}
+
 export interface TreeProps {
   index: VaultIndex;
   /** The host: row height and text size (spec §3.14). */
