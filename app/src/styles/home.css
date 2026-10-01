@@ -24,9 +24,14 @@
   min-width: 0;
 }
 
+/* The bird's box and the gap that stands in for it while an overlay shows
+   its own bird are the same size, so the page never jumps (and a scrolled
+   page keeps its place) when the quick switcher or a sheet opens. */
 .home-greeting-bird,
 .home-greeting-bird-gap {
+  display: flex;
   flex: none;
+  line-height: 0;
 }
 
 /* R-HM-8: the bird faces right in every pose; Looking's hop-turn would
