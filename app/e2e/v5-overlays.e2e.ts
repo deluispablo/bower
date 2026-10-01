@@ -28,6 +28,11 @@ async function openNote(page: Page): Promise<void> {
       .filter({ hasText: /10-43 Buckley St, Moonee Ponds/ }),
   ).click();
   await expect(page).toHaveURL(/\/note\//);
+  // The note's chunk loads after the URL changes: wait for its heading, so
+  // "More" is the note's and not Home's still on screen.
+  await expect(
+    page.getByRole('heading', { level: 1, name: /10-43 Buckley St/ }),
+  ).toBeVisible();
 }
 
 const more = (page: Page): Locator =>
