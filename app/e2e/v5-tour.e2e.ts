@@ -43,8 +43,8 @@ test.describe('the tour', () => {
     await page.goto('/');
     const tour = page.getByRole('dialog', { name: 'Home' });
     await expect(tour.getByRole('button', { name: 'Back' })).toHaveCount(0);
-    await tour.getByRole('button', { name: 'Next: Notes' }).click();
-    const notes = page.getByRole('dialog', { name: 'Notes' });
+    await tour.getByRole('button', { name: 'Next: Folders' }).click();
+    const notes = page.getByRole('dialog', { name: 'Folders' });
     await expect(notes.getByText('Tour · 2 of 4')).toBeVisible();
     await notes.getByRole('button', { name: 'Back' }).click();
     await expect(
@@ -54,6 +54,45 @@ test.describe('the tour', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(page.getByText(SKIP_TOAST)).toBeVisible();
+  });
+
+  test('on a desktop the bird faces the sidebar row and step 2 rings the explorer', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the sidebar is desktop');
+    await page.goto('/');
+    const tour = page.getByRole('dialog', { name: 'Home' });
+    await expect(tour.getByText('Tour · 1 of 4')).toBeVisible();
+    const bird = page.locator('.tour-bird svg');
+    await expect(bird).toHaveClass(/\bflip\b/);
+    await expect(bird).not.toHaveClass(/\bpd\b/);
+    await tour.getByRole('button', { name: 'Next: Folders' }).click();
+    const spot = await page.locator('.tour-spot').boundingBox();
+    const tree = await visible(page.locator('.explorer-tree')).boundingBox();
+    if (spot === null || tree === null) throw new Error('no ring');
+    expect(spot.y + spot.height).toBeGreaterThan(tree.y);
+  });
+
+  test('Show me around from a Help goes to Home and starts at step 1 (R-TR-4)', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page
+      .getByRole('dialog', { name: 'Home' })
+      .getByRole('button', { name: 'Skip' })
+      .click();
+    await page.goto('/settings');
+    // The ⋯ menu's "Help and about this" sends this event (`requestHelp`).
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('bower:open-help', { cancelable: true }));
+    });
+    const help = page.getByRole('dialog', { name: 'Settings' });
+    await expect(help.getByText('Help and about this')).toBeVisible();
+    await help.getByRole('button', { name: 'Show me around' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(
+      page.getByRole('dialog', { name: 'Home' }).getByText('Tour · 1 of 4'),
+    ).toBeVisible();
   });
 
   test('Skip ends it with the replay toast', async ({ page }) => {
@@ -66,13 +105,10 @@ test.describe('the tour', () => {
     await expect(page.getByText(SKIP_TOAST)).toBeVisible();
   });
 
-  test('on a desktop, "Let\'s go" goes to Bower', async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', 'phones stay on Home');
+  test('"Let\'s go" opens the Bower tab (R-TR-5)', async ({ page }) => {
     await page.goto('/');
     const tour = page.getByRole('dialog');
-    for (const next of ['Next: Notes', 'Next: Add', 'Next: Bower']) {
+    for (const next of ['Next: Folders', 'Next: Add', 'Next: Bower']) {
       await tour.getByRole('button', { name: next }).click();
     }
     await tour.getByRole('button', { name: "Let's go" }).click();
