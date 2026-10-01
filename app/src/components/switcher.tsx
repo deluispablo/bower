@@ -1426,9 +1426,9 @@ function SwitcherPanel({
           <div class="switcher-field">
             <SearchField
               variant="input"
-              // SE-Query draws the same 52 px field, 40 px mic and 16 px
-              // text at 375 and 1280 (#950).
-              size="phone"
+              // Owner review O-R4: 44 px with a 32 px mic on desktop, 52 px
+              // with a 40 px mic on the phone (over SE-Query-1280).
+              size={desktop ? 'desktop' : 'phone'}
               value={query}
               onChange={setQuery}
               onClose={closeSwitcher}
