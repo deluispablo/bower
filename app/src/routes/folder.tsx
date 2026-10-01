@@ -390,39 +390,42 @@ function FolderBody({
           onClose={() => setMenuOpen(false)}
         />
       )}
-      {showCompare && compare !== null ? (
+      {showCompare && compare !== null && (
         <CompareSlot
           notes={compare.notes}
           folderPath={contents.path}
           label={compare.label}
           tabId="folder-tab-compare"
         />
-      ) : (
-        <div
-          id="folder-panel-list"
-          {...(compare !== null && {
-            role: 'tabpanel',
-            'aria-labelledby': 'folder-tab-list',
-          })}
-        >
-          {items !== null && (
-            <items.FolderItems
-              contents={contents}
-              titles={titles}
-              catalogue={catalogue}
-              now={now}
-              desktop={desktop}
-              folderOfFolders={folderOfFolders}
-              waiting={waiting}
-              onPreview={onPreview}
-              onSummary={onSummary}
-              onAsk={ask}
-              onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
-              onOpen={onNavigate}
-            />
-          )}
-        </div>
       )}
+      {/* The list stays mounted (hidden) under Compare, so the meta line
+          keeps the K-31 count of List, whichever tab shows first. */}
+      <div
+        id="folder-panel-list"
+        hidden={showCompare}
+        {...(compare !== null && {
+          role: 'tabpanel',
+          'aria-labelledby': 'folder-tab-list',
+        })}
+      >
+        {items !== null && (
+          <items.FolderItems
+            contents={contents}
+            titles={titles}
+            catalogue={catalogue}
+            now={now}
+            desktop={desktop}
+            folderOfFolders={folderOfFolders}
+            waiting={waiting}
+            onPreview={onPreview}
+            onSummary={onSummary}
+            onAsk={ask}
+            onUp={upHref === undefined ? undefined : () => onNavigate(upHref)}
+            onOpen={onNavigate}
+            active={!showCompare}
+          />
+        )}
+      </div>
     </section>
   );
 }

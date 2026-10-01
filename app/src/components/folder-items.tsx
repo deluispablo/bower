@@ -442,6 +442,9 @@ export interface FolderItemsProps {
   onUp?: (() => void) | undefined;
   /** Opens a row's address (Enter, double click). */
   onOpen?: (href: string) => void;
+  /** False while another tab (Compare) shows: the list stays mounted, so
+   * its counts keep the meta line right, but takes no keys. */
+  active?: boolean;
 }
 
 /** The row the preview shows: the chosen one, else the first row. */
@@ -480,6 +483,7 @@ export function FolderItems({
   onAsk,
   onUp,
   onOpen,
+  active = true,
 }: FolderItemsProps): JSX.Element {
   const fresh = useNew();
   const [quick, setQuick] = useState<FolderRow | null>(null);
@@ -855,7 +859,7 @@ export function FolderItems({
   };
 
   useEffect(() => {
-    if (!desktop || folderOfFolders) return;
+    if (!desktop || folderOfFolders || !active) return;
     function onKeyDown(event: KeyboardEvent): void {
       const { orderedRows, layout, onUp, onOpen } = live.current;
       if (event.defaultPrevented) return;
@@ -913,7 +917,7 @@ export function FolderItems({
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [desktop, folderOfFolders]);
+  }, [desktop, folderOfFolders, active]);
 
   const VirtualList = loaded?.VirtualList;
   const choice: FilterSortChoice = { sort: view.sort, kind, layout };
