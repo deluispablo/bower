@@ -27,6 +27,7 @@ import { IconChevronRight } from '../components/icons.js';
 import { useJustFiled } from '../components/just-filed-row.js';
 import { ListRow } from '../components/list-row.js';
 import { NoteMenu } from '../components/note-menu.js';
+import { answeredLine } from '../components/run-summary.js';
 import { HOME_CRUMBS, PageHeader } from '../components/page-header.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import type { Run } from '../api.js';
@@ -267,6 +268,7 @@ function DesktopTable({
 function Summary({ run, now }: { run: Run; now: number }): JSX.Element {
   const outcome = outcomeFromRun(run);
   const badge = runBadge(outcome);
+  const answered = answeredLine(outcome);
   return (
     <Card class="just-filed-summary">
       <h2 class="just-filed-when">
@@ -281,6 +283,7 @@ function Summary({ run, now }: { run: Run; now: number }): JSX.Element {
         <StatTile label="Updated" value={outcome.updated} />
         <StatTile label="Needs you" value={outcome.needsYou} />
       </div>
+      {answered !== '' && <p class="run-summary-answered">{answered}</p>}
     </Card>
   );
 }

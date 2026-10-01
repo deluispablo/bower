@@ -450,35 +450,54 @@ function HealthTile({
 }
 
 /** Which of the Recent notes Bower wrote (the bird icon, "Bower note"),
+ * and which of those are its answers ("Bower answer", `type: answer`),
  * read from each note's frontmatter (the cache first). A note that cannot
  * be read keeps the plain row. */
-function useBowerWritten(notes: readonly DriveFile[]): ReadonlySet<string> {
-  const [ids, setIds] = useState<ReadonlySet<string>>(new Set());
+interface BowerNotes {
+  written: ReadonlySet<string>;
+  answers: ReadonlySet<string>;
+}
+
+function useBowerWritten(notes: readonly DriveFile[]): BowerNotes {
+  const [found, setFound] = useState<BowerNotes>({
+    written: new Set(),
+    answers: new Set(),
+  });
   const key = notes
     .map((note) => `${note.id}:${note.modifiedTime ?? ''}`)
     .join();
   useEffect(() => {
     let cancelled = false;
     void Promise.all(
-      notes.map(async (note): Promise<string | null> => {
-        try {
-          const meta = await loadNoteMeta(note);
-          return isBowerWritten(meta) ? note.id : null;
-        } catch (err: unknown) {
-          console.error('Reading a note for Recent failed', err);
-          return null;
-        }
-      }),
-    ).then((found) => {
+      notes.map(
+        async (note): Promise<{ id: string; answer: boolean } | null> => {
+          try {
+            const meta = await loadNoteMeta(note);
+            return isBowerWritten(meta)
+              ? { id: note.id, answer: meta.type === 'answer' }
+              : null;
+          } catch (err: unknown) {
+            console.error('Reading a note for Recent failed', err);
+            return null;
+          }
+        },
+      ),
+    ).then((rows) => {
       if (cancelled) return;
-      setIds(new Set(found.filter((id): id is string => id !== null)));
+      const mine = rows.filter(
+        (row): row is { id: string; answer: boolean } => row !== null,
+      );
+      setFound({
+        written: new Set(mine.map((row) => row.id)),
+        answers: new Set(mine.filter((row) => row.answer).map((row) => row.id)),
+      });
     });
     return () => {
       cancelled = true;
     };
     // `key` stands for `notes`, which is a new array on every render.
   }, [key]);
-  return ids;
+  return found;
 }
 
 /** The parent folder's name and its root, for the row's "where". */
@@ -520,7 +539,8 @@ export function RecentRows({
           name: note.name,
           mimeType: note.mimeType,
           path: note.path,
-          bowerWritten: bower.has(note.id),
+          bowerWritten: bower.written.has(note.id),
+          answer: bower.answers.has(note.id),
         };
         const where = whereOf(note.path);
         return (

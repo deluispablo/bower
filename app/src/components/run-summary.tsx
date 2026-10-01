@@ -23,6 +23,16 @@ const TILE_LABELS: Readonly<Record<string, string>> = {
   left: 'Still in your inbox',
 };
 
+/**
+ * The line under the tiles when the run answered questions ("Also: 1
+ * answered."), so a run that answered one never reads as four zeros;
+ * `''` when it answered none. The tiles keep the board's four.
+ */
+export function answeredLine(outcome: RunOutcome): string {
+  const answered = outcome.answered ?? 0;
+  return answered > 0 ? `Also: ${String(answered)} answered.` : '';
+}
+
 /** A tile's label by its key (`summaryTiles`). */
 export function tileLabel(key: string): string {
   return TILE_LABELS[key] ?? key;
@@ -101,6 +111,7 @@ export function RunSummary({
   // One StatTile each (spec §3.20, AR-Run): the label over the number,
   // "Filed", "New notes", "Updated", "Needs you".
   const tiles = summaryTiles(outcome);
+  const answered = answeredLine(outcome);
   return (
     <div class="run-summary-box">
       <ul
@@ -117,6 +128,7 @@ export function RunSummary({
           </li>
         ))}
       </ul>
+      {answered !== '' && <p class="run-summary-answered">{answered}</p>}
     </div>
   );
 }

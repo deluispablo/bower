@@ -32,7 +32,9 @@ vi.mock('../src/note-meta.js', async (importOriginal) => {
       Promise.resolve(
         file.id === 'flat'
           ? FLAT_META
-          : { fields: {}, bowerOrigins: {}, not_stated: [] },
+          : file.id === 'answer'
+            ? { type: 'answer', fields: {}, bowerOrigins: {}, not_stated: [] }
+            : { fields: {}, bowerOrigins: {}, not_stated: [] },
       ),
   };
 });
@@ -122,6 +124,14 @@ describe('RecentRows (#617)', () => {
         parents: [],
         modifiedTime: '2026-09-27T09:00:00Z',
       },
+      {
+        id: 'answer',
+        name: '2026-09-27 Which flat first.md',
+        mimeType: 'text/markdown',
+        path: 'Answers/2026-09-27 Which flat first.md',
+        parents: [],
+        modifiedTime: '2026-09-27T08:00:00Z',
+      },
     ];
     root = document.createElement('div');
     document.body.append(root);
@@ -137,7 +147,11 @@ describe('RecentRows (#617)', () => {
     });
     // Let the note's frontmatter resolve.
     await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
-    const [flat, plain] = Array.from(root.querySelectorAll('li'));
+    const [flat, plain, answer] = Array.from(root.querySelectorAll('li'));
+    // #920: Bower's answer says so, never "Note · Answers".
+    expect(answer?.querySelector('.list-row-meta')?.textContent).toBe(
+      'Bower answer · Answers',
+    );
     // R-HM-4: the kind and the parent after its root dot; no facts, no
     // MD/FILE badge, no full path.
     expect(flat?.querySelector('.list-row-meta')?.textContent).toBe(

@@ -325,7 +325,13 @@ export class DemoServer {
     steps.push({
       at: DONE_MS,
       apply: () => {
-        for (const reply of replies) this.applyReply(reply, date);
+        // The answers are new notes, reported as the runner reports what
+        // it created (R-RUNNER-1): the summary says "1 answered".
+        const answers = replies.flatMap((reply) => {
+          const path = this.applyReply(reply, date);
+          return path === null ? [] : [path];
+        });
+        if (answers.length > 0) run.created = answers;
         this.appendLog(
           filed.map(
             ({ name, folder, at }) =>
@@ -374,16 +380,19 @@ export class DemoServer {
     return typeof content === 'string' ? content.replace(/\s+$/, '') : '';
   }
 
-  private applyReply(reply: Reply, date: string): void {
+  /** Writes the reply; returns the answer note's path, `null` for a rule. */
+  private applyReply(reply: Reply, date: string): string | null {
     if (reply.kind === 'answer') {
+      const path = `Answers/${date} ${reply.title}.md`;
       this.vault.write(
-        `Answers/${date} ${reply.title}.md`,
-        `---\ntags: [answer]\ncreated: ${date}\nupdated: ${date}\n---\n\n${reply.body}\n`,
+        path,
+        `---\ntype: answer\ntags: [answer]\ncreated: ${date}\nupdated: ${date}\n---\n\n${reply.body}\n`,
       );
-      return;
+      return path;
     }
     const rules = `${this.textAt('Rules.md')}\n\n${reply.heading}\n${reply.rule}\n`;
     this.vault.write('Rules.md', rules);
+    return null;
   }
 
   /** `YYYY-MM-DD HH:MM` in UTC, as the agent stamps `log.md`. */

@@ -63,6 +63,13 @@
   color: var(--color-warn);
 }
 
+/* "Also: 1 answered." under the tiles: the questions a run answered. */
+.run-summary-answered {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
 .run-summary-inline {
   font-variant-numeric: tabular-nums;
 }

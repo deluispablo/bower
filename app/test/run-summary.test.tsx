@@ -64,6 +64,21 @@ describe('RunSummary', () => {
       '1 updated',
       '1 needs you',
     ]);
+    expect(el.querySelector('.run-summary-answered')).toBeNull();
+  });
+
+  it('stats: a run that answered a question says so under the tiles (#920)', () => {
+    const answered = outcomeFromRun(
+      buildRun('done', {
+        items: [],
+        created: ['Answers/2026-09-30 Which flat first.md'],
+        updated: [],
+      }),
+    );
+    const el = mount(<RunSummary outcome={answered} size="stats" />);
+    expect(el.querySelector('.run-summary-answered')?.textContent).toBe(
+      'Also: 1 answered.',
+    );
   });
 
   it('stats: zeros greyed (no opacity), needs you amber', () => {
