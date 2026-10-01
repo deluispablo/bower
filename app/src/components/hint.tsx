@@ -119,7 +119,7 @@ export function Hint({
         <button
           type="button"
           class="hint-dismiss"
-          aria-label="Dismiss this tip"
+          aria-label="Hide this tip"
           onClick={() => {
             dismissHint(id);
             setDismissed(true);
@@ -150,7 +150,7 @@ export interface FileTipProps {
  * The file tip (spec §3.29, R-HINT-1, boards FI-Main and FI-Bottom): the
  * bird 28, "Want a note on it?", and a button that opens Ask Bower about
  * the file prefilled with "Summarise this and list what matters"; the page
- * stays. ✕ dismisses it for this file, for good on this device.
+ * stays. ✕ ("Hide this tip") hides it for this file, for good on this device.
  */
 export function FileTip({ file, filedAsItIs }: FileTipProps): JSX.Element {
   return (
