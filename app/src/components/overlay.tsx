@@ -127,16 +127,17 @@ function lockPage(): () => void {
 }
 
 /**
- * Places a desktop popover 6 px under `opener`, right edges aligned (spec
- * §3.10), kept inside the window: flipped above when there is no room
- * below, and to the right of a button too near the left edge.
+ * Places a desktop popover 6 px under `opener`, opening to the right from
+ * the button's left edge (the *-More boards win over spec §3.10's right
+ * alignment, #920 DA-4), kept inside the window: flipped above when there
+ * is no room below, and pulled left when the button is near the right edge.
  */
 function anchorTo(panel: HTMLElement, opener: Element | null): void {
   if (opener === null || opener === document.body) return;
   const rect = opener.getBoundingClientRect();
   const width = Math.min(POPOVER_WIDTH, window.innerWidth * 0.88);
   const maxLeft = window.innerWidth - width - ANCHOR_GAP;
-  const left = Math.max(ANCHOR_GAP, Math.min(rect.right - width, maxLeft));
+  const left = Math.max(ANCHOR_GAP, Math.min(rect.left, maxLeft));
   // Under the opener; above it when there is no room below; clamped into
   // the window when neither side fits.
   const height = panel.offsetHeight;
