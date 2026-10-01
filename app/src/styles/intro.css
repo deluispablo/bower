@@ -158,15 +158,16 @@
   gap: 5px;
 }
 
+/* Board dots: 7 px, the active one a 22 px pill. */
 .intro-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
   background: var(--color-border-strong);
 }
 
 .intro-dot--active {
-  width: 16px;
+  width: 22px;
   background: var(--color-brand);
 }
 
@@ -182,9 +183,13 @@
   gap: var(--space-3);
 }
 
-.intro-back {
-  min-width: 96px;
-  min-height: 50px;
+/* The footer buttons as the boards draw them: 120 px wide, 12 px corners,
+ * Next and the last button bold. */
+.intro-back,
+.intro-next {
+  min-width: 120px;
+  min-height: 48px;
+  border-radius: var(--radius-card);
 }
 
 /* An outline button. The sign-in screen does not load `add.css`, where
@@ -202,10 +207,9 @@
 
 .intro-next {
   margin-left: auto;
-  min-width: 120px;
-  min-height: 50px;
   border: none;
   font-size: 1.0625rem;
+  font-weight: var(--weight-bold);
 }
 
 /* The illustrations. */
