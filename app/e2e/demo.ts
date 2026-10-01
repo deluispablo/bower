@@ -96,6 +96,16 @@ export async function openHome(page: Page): Promise<void> {
   await expect(tour).toBeHidden();
 }
 
+/**
+ * Waits until the start-up screen (`#boot`, #984) is gone. Playwright's own
+ * clicks and hovers already wait for an element nothing covers; raw input
+ * (CDP touch events, page.mouse) does not, so a test that sends it waits
+ * here first.
+ */
+export async function bootGone(page: Page): Promise<void> {
+  await expect(page.locator('#boot')).toHaveCount(0);
+}
+
 /** Follows the shell's navigation link called `name` (sidebar or bottom nav). */
 export async function navigate(page: Page, name: RegExp): Promise<void> {
   await visible(page.getByRole('link', { name })).click();
