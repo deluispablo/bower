@@ -936,6 +936,18 @@ button.page-bare-back {
     display: none;
   }
 
+  /* A bar with nothing to show on desktop (no breadcrumb, no chip) takes
+     no row at all (#920 DA-17). */
+  .topbar:not(
+    :has(
+      .topbar-chip,
+      .topbar-breadcrumb:not(:empty),
+      .topbar-crumb .breadcrumb
+    )
+  ) {
+    display: none;
+  }
+
   .topbar-breadcrumb:not(:empty) {
     display: block;
     flex: 0 1 auto;
