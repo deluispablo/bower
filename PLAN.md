@@ -1,93 +1,54 @@
 # PLAN.md
 
-Resume point for the tech lead: v6, the redesign of every screen (milestones M47 to M51). The v5 plan (M34 to M46, shipped on 30 Sep 2026) is in this file's git history.
+Resume point for the tech lead: M52, a faster tidy-up session. The v6 plan (M47 to M51, shipped to production on 1 Oct 2026 from `main` 9d660829) is in this file's git history.
 
-## Sources
+## Source
 
-- The boards: the owner's private canvas "Bower v5: current vs fixed" (v124), one tab per screen, phone 375 and desktop 1280, current versus proposed. Link and board paths are in every issue.
-- The written design: the owner's private document "Final design decisions" with two tabs. "Final design decisions" holds rules G-1 to G-24, the per-screen decisions and the change log. "UI implementation spec" holds the requirement IDs, the components and the screens, and starts with the "Owner review, 30 Sep 2026" block that overrides the rest.
-- A local snapshot for the agents, kept outside the repo because the boards contain personal data: `C:/Users/delui/Proyectos/bower-design-v6/` (boards, renders, spec, decisions, canon K-1 to K-35).
-- Tie-break in every issue: Owner review > board > canon > spec > decisions.
+- The spec: `docs/superpowers/2026-10-01-session-speed-spec.md` (R-SS-1 to R-SS-17, decisions D-1 to D-10), approved by the owner on 1 Oct 2026.
+- GitHub issues #961 to #968 hold the detail. This file holds the order, the process and the state.
 
-GitHub issues #902 to #923 are the source of truth for detail. This file holds the order, the process and the state.
+## Process
 
-## Process (owner's ruling, 30 Sep 2026)
+1. Every subagent runs on Opus 5.5 at medium effort, at most five at once, in its own worktree, and owns a disjoint set of files per wave.
+2. Each PR: CI green; for PRs that change `agent/run.sh` (#961, #965, #966, #967), a code-reviewer subagent checks safety first: the agent's clean environment, nothing from the vault in logs or artifacts, `CLAUDE.md` always restored, Drive writes only through the existing paths. Then the lead reads the diff and merges (squash).
+3. The benchmark (`agent/bench/`, from #961) runs on the lead's machine, with a synthetic vault and the operator's own Claude Code login: no Drive, no GitHub, no real data. It runs as a baseline on `main` after #961, again after #965, and as the final measure after #967.
+4. Production only with the owner's yes, at the end:
+   - redeploy the runner with `scripts/new-instance.sh`;
+   - deploy the Worker;
+   - the owner applies rules v24 in Settings;
+   - the next lint starts the index backfill.
 
-1. Every change is built and checked on the **local** demo (`pnpm -C app build:demo`, or `pnpm -C app dev` with `VITE_DEMO=1`). The demo is never deployed publicly.
-2. Each PR, before merge: CI green; then a designer subagent and an app-tester subagent compare the PR on the local demo with its boards and the written design, and both must report OK. The lead reads the diff and merges (squash).
-3. The demo fixture (I-0) is the data contract. The real Worker, runner and rulebook are changed only in M51, after the design gate (M50) and the owner's sign-off.
-4. Production (the owner's instance) is deployed once, at the end of M51, after every milestone is done and approved.
-5. Every subagent runs on Opus 5.5 at medium effort. At most five run at once. Each owns a disjoint set of files per wave (hot files are listed in each issue).
-6. CI does not deploy: merges to `main` only run checks (the Worker step is a dry run).
+## State (1 Oct 2026)
 
-## State (30 Sep 2026)
+- The spec and this plan are in review.
+- Wave 1 is dispatched.
 
-- Plan created. No development dispatched yet.
-- Milestones M18 and M34 to M46 closed (all issues done).
+## Milestone
 
-## Milestones
-
-- **M47 · v6 demo world and foundations.** Contains: CI speed (#902), the demo account rebuilt to the boards' world and data contract (#903), dark tokens and primitives (#904), and one source of truth for names, kinds, dates, counts and the file icon (#905). Source: plan-final M47 and Revision 2; spec §2, §3.5, §3.16, §5; canon K-31. Relation: starts at once. Done when the local demo shows Alex's Housing Search Australia › Moonee Ponds with "Listings" and "Projects · 7 things", every token and primitive exists with the light theme unchanged, and the helpers are unit-tested.
-- **M48 · v6 shared components on the demo.** Contains: the shell (#906), overlays, ⋯ and the Help template (#907), lists and Bower's note box (#908), one explorer (#909), and the one text box with the mic (#910). Source: spec §3 with the Owner review block; plan-review §3. Relation: needs M47; #910 starts after #907 and #909 merge. Done when every shared component matches its boards at 375 and 1280 on the local demo, including the six Composer state boards in the Bower tab.
-- **M49 · v6 screens on the demo.** Contains: folder views (#911), Compare and per-folder statuses (#916), note and file (#912), Home and Just filed (#913), Add and the tidy-up run (#914), the Bower tab (#915), Search and Settings (#917), intro (#918), then every Help text and the tour (#919). Source: spec §4 and each screen's boards; plan-review §6. Relation: needs M48; #916 after #911; #919 last. Done when every screen's boards have a matching screen on the local demo at 375 and 1280, each PR carrying the screenshots next to its boards.
-- **M50 · v6 design gate.** Contains: the designer and app-tester walk of the whole local demo against all 209 boards and the fixes (#920), then the owner's sign-off. Source: plan-final Revision 2 point 3; spec §1.2, §1.4, §8. Relation: after M49; blocks M51. Done when both reviews report OK on `main`'s demo and the owner signs off.
-- **M51 · v6 real data under the new UI.** Contains: Bower choosing statuses per folder (#921), the remaining real contracts and real-browser dictation (#922), the docs (#923), and the production deploy as the last step. Source: plan-final Revision 2 point 4; decisions E-7; spec §5. Relation: after M50's sign-off; last. Done when a signed-in person on production (the owner's instance) sees the v6 app with their own data, Compare shows the folder's own status list, and the docs describe it.
+**M52 · A faster tidy-up session.** One tidy-up session gets faster without an app change. Done when the benchmark's one-file cases run the agent step in 2 minutes or less with at least half the turns of the baseline, and every quality check passes.
 
 ## Issues
 
-Wave = order in the dependency graph. Budget = the agent's own ceiling (tool calls / minutes).
+Budget = the agent's own ceiling (tool calls / minutes).
 
-| Issue | Key | Title | Milestone | Wave | Depends on | Budget | Status |
-|---|---|---|---|---|---|---|---|
-| #902 | I-00 | CI in under three minutes: shard the end-to-end tests, fix the three flaky ones, skip heavy jobs on docs-only changes | M47 | 0 | — | 70 / 90 min | merged (#925) |
-| #903 | I-0 | Demo account that matches the boards: Alex, Housing Search Australia › Moonee Ponds › Listings, Job Search Australia › Applications, Areas › Visa & Immigration, run history and per-folder status lists | M47 | 0 | — (merge after #902, see decisions) | 90 / 90 min | merged (#934) |
-| #904 | I-1 | Design foundations: dark tokens, icons, buttons, chips, cards and stat tile, badges, labels, segmented control, the round button, states and hit areas, bird sizes | M47 | 0 | — | 110 / 120 min | merged (#928) |
-| #905 | I-2 | One source of truth for names, kinds, dates, counts, who filed what, and the file icon | M47 | 0 | — | 80 / 80 min | merged (#929) |
-| #906 | I-3 | App shell: phone top bar, tab bar with "Folders", avatar, desktop sidebar frame and nav, PageHeader, breadcrumbs with parents only | M48 | 1 | #904, #905 | 90 / 90 min | merged (#930) |
-| #907 | I-4 | Overlays, the ⋯ menu and the Help template: side panel 440, sheets that hug, popover 320, one centred dialog, toast, destructive confirm | M48 | 1 | #904 | 110 / 120 min | merged (#928) |
-| #908 | I-5 | Lists and Bower's note box: one list row, grid tile, folder card, loading, empty and error states, and the note box that folds | M48 | 1 | #904, #905 | 90 / 90 min | merged (#932) |
-| #909 | I-6 | One explorer in three hosts: desktop sidebar contents, phone drawer with edge swipe, the Folders tab, and the Move to… picker | M48 | 1 | #904, #905 | 120 / 120 min | merged (#933) |
-| #910 | I-7 | The one text box: Composer with the round mic in every state, the search field with the same box and mic, the Ask sheet, Rename and Add a paragraph | M48 | 1b | #904, #905, #907, #909 | 120 / 120 min | merged (#935) |
-| #911 | I-8a | Folder views: project folder, list, grid and folder of folders, with segments, Filter & sort, the desktop preview column and folder cards | M49 | 2a | #906, #907, #908, #909, #910 | 120 / 120 min | merged (#937) |
-| #912 | I-9 | Note and file pages: one header with (i) and ⋯, About this note or file as a phone sheet and a desktop column, the file tip, and the n of N footer | M49 | 2a | #906, #907, #908, #909, #910 | 100 / 100 min | merged (#940) |
-| #913 | I-10 | Home and Just filed: greeting, bird and bubble, stat tiles, Pinned and Edit pinned, Recent, the latest run and earlier tidy-ups | M49 | 2a | #906, #907, #908, #909, #910 | 100 / 100 min | merged (#939) |
-| #914 | I-11 | Add and the tidy-up run: new pile, doors, pile rows, Paste a link, waiting piles, the confirm, the running sheet, the run chip and the Done sheet | M49 | 2a | #906, #907, #908, #909, #910 | 120 / 120 min | merged (#936) |
-| #915 | I-12 | Bower tab: the page around the text box, the bird that listens only while dictating, Things you can ask, Rules, Requests and Activity, and a rule opened | M49 | 2a | #906, #907, #908, #909, #910 | 90 / 90 min | merged (#938) |
-| #916 | I-8b | Compare and status: phone cards, desktop table, sort, Columns, and a status select that reads the folder's own status list | M49 | 2b | #903, #911 (and M48) | 90 / 90 min | merged (#942) |
-| #917 | I-13 | Search and Settings: the Search screen (also from Home and from a tag), and Settings with Look as a segmented control and the key box as a text box with the mic | M49 | 2b | #906, #907, #908, #909, #910 | 90 / 90 min | merged (#943) |
-| #918 | I-14b | Intro: five pages with the real text box and note box as pictures, 40 px heroes, the bird's pose per page | M49 | 2b | #908, #910 (and M48) | 50 / 60 min | merged (#941) |
-| #919 | I-14a | Every Help text and the tour: one Help per screen in the approved words, tap on the phone and click on desktop, and a tour that uses the same words | M49 | 3 | #911, #916, #912, #913, #914, #915, #917, #918 | 90 / 90 min | merged (#944) |
-| #920 | I-15a | Design gate: walk the local demo against every board, fix the differences, one element one look, accessible names audit | M50 | 4 | all of M49 | 120 / 120 min (revise from findings) | merged (#946–#949; owner sign-off 1 Oct) |
-| #921 | I-8c | Bower chooses the status list for each folder: rulebook version, the agent writes it in the hub note, the runner checks it, the app reads it on real data | M51 | 5 | #920 (owner sign-off), #916 | 80 / 90 min | merged (#957); real-data check on production pending |
-| #922 | I-16 | Real data under the new UI: run start time, who filed a file, Drive ids, one title per file, search index fields, and dictation on real browsers | M51 | 5 | #920 (owner sign-off) | 90 / 100 min | merged (#958) |
-| #923 | I-15b | Docs for v6 and the production release: ARCHITECTURE, runbook, brand, README screenshots, changelog, then deploy production | M51 | 6 | #921, #922 | 60 / 70 min | merged (#959); production deployed 1 Oct |
+| Issue | Title | Wave | Depends on | Owns | Budget | Status |
+|---|---|---|---|---|---|---|
+| #961 | Runner session stats and a local benchmark | 1 | — | `agent/run.sh`, `agent/bench/**`, `agent/test/**`, `.gitignore` | 120 / 120 | in-progress |
+| #962 | Rules v24: section markers, index rows, Tags, scans, text copies | 1 | — | `vault-template/CLAUDE.md`, `vault-template/index.md`, `api/src/template.generated.ts`, `docs/changelog.md`, app parser tests | 90 / 90 | in-progress |
+| #963 | fix(api): queued run fails after 17 minutes | 1 | — | `api/src/process.ts`, `api/test/process.test.ts`, `api/test/status.test.ts` | 30 / 30 | merged (#970) |
+| #964 | chore(agent): pandoc from a cached release binary | 1 | — | `agent/workflows/*.yml` | 40 / 40 | in-progress |
+| #965 | Model and effort per run | 2 | #961, #964 | `agent/run.sh`, `agent/workflows/*.yml`, `agent/test/**`, `docs/runbook.md` | 50 / 50 | pending |
+| #966 | Context pack: cut rulebook, tags, folders, corrections, shorter prompts | 3 | #965, #962 | `agent/run.sh`, `agent/prompts/*`, `agent/test/**` | 120 / 120 | pending |
+| #967 | Bookkeeping after the session | 4 | #966 | `agent/run.sh`, `agent/test/**` | 100 / 100 | pending |
+| #968 | Docs and final benchmark | 5 | #967 | `docs/runbook.md`, `ARCHITECTURE.md`, the spec's Result section | 40 / 40 | pending |
 
 ## Waves
 
-- 0: I-00 (CI first), I-1, I-2; then I-0 after I-00.
-- 1: I-3, I-4, I-5, I-6. 1b: I-7 after I-4 and I-6.
-- 2a: I-8a, I-9, I-10, I-11, I-12. 2b: I-8b (after I-8a), I-13, I-14b.
-- 3: I-14a (every Help text and the tour).
-- 4: I-15a design gate, then the owner's sign-off.
-- 5: I-8c, I-16. 6: I-15b docs, then the production deploy (lead, with the owner's yes).
+- 1: #961, #962, #963, #964, in parallel; their files do not overlap.
+- 2: #965. 3: #966. 4: #967. `agent/run.sh` is the hot file, so these run in series.
+- 5: #968, the final benchmark and the quality review (lead), then production with the owner's yes.
 
 ## Decisions taken for this plan
 
-E-3 Folders (labels only; route `/notes`, kind "Notes" unchanged). E-4 overridden: every text box and search field has the microphone; blocked dictation shows it crossed out. E-5 "new" per device. E-6 no "Try asking" card. E-7 statuses chosen by Bower per folder (hub note `statuses:`, kind list as fallback). E-8 Health check tile on desktop Home only. E-9 no "Done · 1 filed" pill, no sidebar "Just filed". E-10, E-11 ⋯ on Home and Add as drawn. E-12 demo subfolder "Listings". E-13 the sparkle stays. E-14 the tree. E-15 the spec's new copy approved. E-16 the spec's order replaces the review-tab waves. E-17 the root crumb reveals the tree. Light theme: unchanged.
-
-## Production deploy (1 Oct 2026)
-
-v6 was deployed to production from main at 9d660829:
-- Worker version 17d93053;
-- the runner in the instance repo, with the run.sh that checks folder status lists;
-- the Pages app, 128.8 KB startup, with the Picker key.
-
-Health checks passed, and the signed-in app serves the v6 screens.
-
-The audit fixes (#950, PRs #951–#956) went in before the deploy.
-
-Owner actions:
-- apply rulebook v23 under Settings → Advanced → "Update Bower's rules";
-- test on a real phone: the edge swipe and the iOS keyboard;
-- verify the folder statuses on the first v23 tidy-up, which closes #921.
-
+- R-SS-14 shrank: the Worker already fails stale runs (`QUEUED_STALE_MS`, `RUNNING_STALE_MS`, the job-conclusion fallback). #963 only shortens the queued window to 17 minutes.
+- The owner's run of 1 Oct 2026 (job not picked up during GitHub's Actions incident) is not re-run: its ticket expired. The owner sends it again from the app.
