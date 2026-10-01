@@ -15,7 +15,7 @@ import type { Run, RunItem, SetAsideItem, SetAsideReason } from './api.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
 import { runCounts, things } from './home.js';
-import { outcomeCounts, outcomeFromRun } from './run-outcome.js';
+import { answerTitle, outcomeCounts, outcomeFromRun } from './run-outcome.js';
 import type { OutcomeAction, RunOutcome } from './run-outcome.js';
 import { shortDay } from './rules.js';
 import { displayPath, paraKindOf } from './navigation.js';
@@ -395,6 +395,7 @@ export function isProcessedPath(path: string): boolean {
 export const GROUP_ORDER: readonly OutcomeAction[] = [
   'needs',
   'new',
+  'answered',
   'updated',
   'filed',
 ];
@@ -402,6 +403,7 @@ export const GROUP_ORDER: readonly OutcomeAction[] = [
 export const ACTION_TAG: Readonly<Record<OutcomeAction, string>> = {
   needs: 'Needs you',
   new: 'New note',
+  answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
 };
@@ -409,6 +411,7 @@ export const ACTION_TAG: Readonly<Record<OutcomeAction, string>> = {
 const GROUP_HEADING: Readonly<Record<OutcomeAction, string>> = {
   needs: 'Needs you',
   new: 'New notes',
+  answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
 };
@@ -463,7 +466,10 @@ function tableRow(
   const row: TableRow = {
     key: `${action}:${path}`,
     action,
-    title: linkTitleFromFileName(name) ?? fileTitle(name),
+    title:
+      action === 'answered'
+        ? answerTitle(path)
+        : (linkTitleFromFileName(name) ?? fileTitle(name)),
     kind,
     name,
     folder: folderLabel(folderOf(path)),

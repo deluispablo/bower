@@ -49,6 +49,13 @@ describe('outcomeFromRun (R-RUN-1)', () => {
       updated: [],
     });
     expect(outcome).toMatchObject({ created: 0, answered: 1 });
+    expect(outcome.items).toEqual([
+      {
+        action: 'answered',
+        title: 'Which flat first',
+        path: 'Answers/2026-09-30 Which flat first.md',
+      },
+    ]);
     expect(outcomeCounts(outcome)).toBe('1 answered');
     expect(runSentence(outcome, { now: NOW })).toContain(': 1 answered.');
   });

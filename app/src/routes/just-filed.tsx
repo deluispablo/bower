@@ -126,6 +126,7 @@ function rowItem(row: TableRow): {
   mimeType: string;
   root: TableRow['para'];
   bowerWritten: boolean;
+  answer: boolean;
   href?: string;
 } {
   return {
@@ -134,7 +135,8 @@ function rowItem(row: TableRow): {
     name: row.name,
     mimeType: '',
     root: row.para,
-    bowerWritten: row.action === 'new',
+    bowerWritten: row.action === 'new' || row.action === 'answered',
+    answer: row.action === 'answered',
     ...(row.href !== undefined && { href: row.href }),
   };
 }
@@ -195,6 +197,7 @@ const TAG_TONE: Readonly<
 > = {
   filed: 'filed',
   new: 'new',
+  answered: 'filed',
   updated: 'filed',
   needs: 'check',
 };

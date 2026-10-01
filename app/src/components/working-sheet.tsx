@@ -395,6 +395,7 @@ export function sheetSteps(
 /** The tag on a row. */
 export const ACTION_TAG: Record<OutcomeAction, string> = {
   new: 'New note',
+  answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
   needs: 'Needs you',
@@ -426,8 +427,9 @@ export interface SheetRow {
 const ACTION_ORDER: Record<OutcomeAction, number> = {
   needs: 0,
   new: 1,
-  updated: 2,
-  filed: 3,
+  answered: 2,
+  updated: 3,
+  filed: 4,
 };
 
 /** The items with what needs the person first, then the rest in the order
@@ -639,6 +641,7 @@ function Rows({ rows }: { rows: readonly SheetRow[] }): JSX.Element | null {
 /** The Badge tone of each row tag (AR-Run: "Filed"). */
 const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
   new: 'new',
+  answered: 'done',
   updated: 'done',
   filed: 'filed',
   needs: 'check',
@@ -648,7 +651,9 @@ const ACTION_TONE: Record<OutcomeAction, BadgeTone> = {
  * kind in words, the folder after its root dot, and the tag as a Badge. */
 function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
   const name = row.name ?? row.title;
-  const kind = kindLabel({ name, mimeType: '' });
+  // A Bower answer reads as on Home (#920): the bird, "Bower answer".
+  const answer = row.action === 'answered';
+  const kind = kindLabel({ name, mimeType: '', bowerWritten: answer, answer });
   const title =
     linkTitleFromFileName(name) === null ? displayName(row.title) : row.title;
   const meta = [kind, row.note]
@@ -663,6 +668,7 @@ function SheetListRow({ row }: { row: SheetRow }): JSX.Element {
           name,
           mimeType: '',
           root: row.iconRoot ?? row.para,
+          bowerWritten: answer,
         }}
         meta={meta}
         {...(row.where === ''

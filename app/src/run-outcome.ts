@@ -22,7 +22,7 @@ import { isContextNote } from './run-progress.js';
 
 export type OutcomeState = 'running' | 'done' | 'partial' | 'failed';
 
-export type OutcomeAction = 'new' | 'updated' | 'filed' | 'needs';
+export type OutcomeAction = 'new' | 'answered' | 'updated' | 'filed' | 'needs';
 
 export interface OutcomeItem {
   action: OutcomeAction;
@@ -186,7 +186,13 @@ function buildItems(raw: RawOutcome): OutcomeItem[] {
   }
   for (const path of raw.created) {
     if (isContextNote(path)) continue;
-    items.push({ action: 'new', title: titleOf(path), path });
+    // An answer is its own action (#920): "Answered", titled by its
+    // question, never a "New note".
+    items.push(
+      isAnswerPath(path)
+        ? { action: 'answered', title: answerTitle(path), path }
+        : { action: 'new', title: titleOf(path), path },
+    );
   }
   for (const change of raw.updated) {
     const entry: OutcomeItem = {
@@ -213,8 +219,14 @@ function buildItems(raw: RawOutcome): OutcomeItem[] {
 }
 
 /** An answer note: `Answers/<date> <question>.md`, directly in `Answers/`. */
-function isAnswerPath(path: string): boolean {
+export function isAnswerPath(path: string): boolean {
   return /^Answers\/[^/]+\.md$/i.test(path);
+}
+
+/** An answer's title: its question, the file name without the date the
+ * agent puts first (`2026-09-30 Which flat first.md`) or the `.md`. */
+export function answerTitle(path: string): string {
+  return titleOf(path).replace(/^\d{4}-\d{2}-\d{2} +/, '');
 }
 
 function build(raw: RawOutcome): RunOutcome {
@@ -222,10 +234,8 @@ function build(raw: RawOutcome): RunOutcome {
   const count = (action: OutcomeAction): number =>
     items.filter((item) => item.action === action).length;
   const filed = count('filed');
-  const answered = items.filter(
-    (item) => item.action === 'new' && isAnswerPath(item.path),
-  ).length;
-  const created = count('new') - answered;
+  const answered = count('answered');
+  const created = count('new');
   const updated = count('updated');
   const left = raw.left.length;
   const requests = raw.items.filter((item) => item.kind === 'request').length;

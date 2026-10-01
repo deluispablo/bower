@@ -101,6 +101,28 @@ describe('tableRows', () => {
     ]);
   });
 
+  it('lists a Bower answer as Answered, titled by its question (#920)', () => {
+    const answered = tableRows(
+      {
+        ...run,
+        items: [],
+        setAside: [],
+        created: ['Answers/2026-09-29 Which flat first.md'],
+        updated: [],
+        left: [],
+      },
+      null,
+    );
+    expect(answered).toHaveLength(1);
+    expect(answered[0]).toMatchObject({
+      action: 'answered',
+      title: 'Which flat first',
+    });
+    expect(groupRows(answered).map((group) => group.heading)).toEqual([
+      'Answered · 1',
+    ]);
+  });
+
   it('shows the New chip only on an unseen new note, never beside Filed', () => {
     const filed = rows.find((row) => row.action === 'filed');
     const note = rows.find((row) => row.action === 'new');
