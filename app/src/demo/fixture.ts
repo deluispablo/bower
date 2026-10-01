@@ -2412,7 +2412,6 @@ Home insurance on 3 November, and the streaming service every month until you ca
   ...V6_WORLD,
 ];
 
-
 // --- Test states (#735, spec §7c item 4) --------------------------------
 // Extra vault shapes and run states the v5 tests need. Nothing here is part
 // of the demo's normal story: `FIXTURE_FILES` and `DEMO_RUNS` stay as they

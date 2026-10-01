@@ -233,11 +233,7 @@ describe('Note screen (#609)', () => {
     expect(head?.getAttribute('aria-expanded')).toBe('true');
 
     // Box (summary, details), then the body: in that order.
-    const order = [
-      '.bower-note-box-summary',
-      '.details',
-      '.markdown h2',
-    ];
+    const order = ['.bower-note-box-summary', '.details', '.markdown h2'];
     const positions = order.map((selector) => {
       const element = root.querySelector(selector);
       return element === null

@@ -74,7 +74,7 @@ function roots(): string[] {
 }
 
 describe('the v6 demo world (#903)', () => {
-  it('never dates a file later than the viewer\'s clock (#920 T-1)', () => {
+  it("never dates a file later than the viewer's clock (#920 T-1)", () => {
     const now = Date.now();
     const later = FIXTURE_FILES.filter(
       (file) => Date.parse(file.modifiedTime) > now,
@@ -325,7 +325,7 @@ describe('the v6 demo world (#903)', () => {
     expect(EMPTY_INBOX_FILES.length).toBeLessThan(FIXTURE_FILES.length);
   });
 
-  it("log.md matches the runs: every filed row knows where it went (#920 DB-16)", () => {
+  it('log.md matches the runs: every filed row knows where it went (#920 DB-16)', () => {
     const log = FIXTURE_FILES.find((file) => file.path === 'log.md');
     const cards = activityCards({
       runs: DEMO_RUNS,

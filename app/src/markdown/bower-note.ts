@@ -382,9 +382,7 @@ function legendHtml(rows: readonly BoxRow[]): string {
   );
   if (present.length === 0) return '';
   const words = present
-    .map(
-      (kind) => `<b class="bower-legend-${kind}">${ORIGIN_WORDS[kind]}</b>`,
-    )
+    .map((kind) => `<b class="bower-legend-${kind}">${ORIGIN_WORDS[kind]}</b>`)
     .join(', ');
   return `<div class="bower-note-legend">· from ${words}</div>`;
 }
