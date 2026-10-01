@@ -51,7 +51,7 @@ describe('RunSummary', () => {
 
   const names = (el: HTMLElement): string[] =>
     [...el.querySelectorAll('.run-summary-tile')].map(
-      (t) => t.textContent ?? '',
+      (t) => t.getAttribute('aria-label') ?? '',
     );
 
   it('stats: a labelled list, one "{n} {label}" item per tile', () => {
@@ -82,7 +82,12 @@ describe('RunSummary', () => {
     const inline = mount(<RunSummary outcome={partial} size="inline" />);
     expect(tiles.join(' · ')).toBe(inline.textContent);
     const last = stats.querySelectorAll('.run-summary-tile')[3];
-    expect(last?.textContent).toMatch(/^\d+ still in your inbox$/);
+    expect(last?.getAttribute('aria-label')).toMatch(
+      /^\d+ still in your inbox$/,
+    );
+    expect(last?.querySelector('.stat-tile-label')?.textContent).toBe(
+      'Still in your inbox',
+    );
     expect(last?.classList.contains('run-summary-warn')).toBe(true);
   });
 

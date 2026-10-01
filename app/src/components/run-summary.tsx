@@ -10,7 +10,13 @@ import type { JSX } from 'preact';
 
 import { outcomeCounts } from '../run-outcome.js';
 import type { RunOutcome } from '../run-outcome.js';
+import { StatTile } from './card.js';
 import '../styles/run-summary.css';
+
+/** A tile's label as the board writes it: "new notes" → "New notes". */
+export function tileLabel(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
 
 export interface RunSummaryProps {
   outcome: RunOutcome;
@@ -82,6 +88,8 @@ export function RunSummary({
     return <span class="run-summary-inline">{text}</span>;
   }
 
+  // One StatTile each (spec §3.20, AR-Run): the label over the number,
+  // "Filed", "New notes", "Updated", "Needs you".
   const tiles = summaryTiles(outcome);
   return (
     <div class="run-summary-box">
@@ -93,9 +101,9 @@ export function RunSummary({
           <li
             class={`run-summary-tile${tile.value === 0 ? ' run-summary-zero' : ''}${tile.warn ? ' run-summary-warn' : ''}`}
             key={tile.key}
+            aria-label={`${tile.value} ${tile.label}`}
           >
-            <span class="run-summary-value">{tile.value}</span>{' '}
-            <span class="run-summary-label">{tile.label}</span>
+            <StatTile label={tileLabel(tile.label)} value={tile.value} />
           </li>
         ))}
       </ul>

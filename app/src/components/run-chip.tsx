@@ -113,6 +113,9 @@ function finishedModel(run: Run, input: ChipInput): ChipModel | null {
   const counts = outcomeCounts(outcome, { short: true });
   const spoken = outcomeCounts(outcome).split(' · ').join(', ');
   if (outcome.state === 'done') {
+    // E-9 (lead ruling): no "Done · N filed" pill on desktop; the Home
+    // bubble and "See what changed" are the way in. The phone keeps it.
+    if (input.desktop) return null;
     const name = `Tidy-up done: ${spoken === '' ? 'nothing new' : spoken}. See what changed`;
     return finish({
       state: 'done',
