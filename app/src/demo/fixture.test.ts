@@ -184,6 +184,7 @@ describe('the v6 demo world (#903)', () => {
       'accepted',
       'not for me',
       'turned down',
+      'declined',
     ]);
     expect(FOLDER_STATUSES[MOONEE_PONDS]).toEqual(housing.statuses);
     expect(FOLDER_STATUSES[APPLICATIONS]).toEqual(jobs.statuses);
@@ -195,9 +196,10 @@ describe('the v6 demo world (#903)', () => {
       if (
         offer.name === 'Senior Consultant - Data Engineer, Altis Consulting'
       ) {
-        // The old value LI-Compare-375 draws: an extra option (#916).
+        // The old value LI-Compare-375 draws: kept as the list's last
+        // value, as the rulebook says (#921).
         expect(offer.status).toBe('declined');
-        expect(jobs.statuses).not.toContain('declined');
+        expect(FOLDER_STATUSES[APPLICATIONS]?.at(-1)).toBe('declined');
       } else {
         expect(jobs.statuses).toContain(offer.status);
       }
