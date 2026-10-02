@@ -36,6 +36,10 @@ import {
 import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
+import {
+  pagerItems,
+  useBowerPagesUnder,
+} from '../components/bower-folder-pages.js';
 import { PendingRequestLine } from '../components/pending-request-line.js';
 import { QuestionsAbout } from '../components/questions-about.js';
 import type { NoteFolderLink } from '../components/note-properties.js';
@@ -471,12 +475,18 @@ export function Note() {
   // The one sibling list (R-API-9, K-31): About's "In this folder" and the
   // footer both read it, in the tree's own order.
   const sort = getPref('explorerSort');
+  // The page Bower wrote for the folder is not one of its things (K-31):
+  // left out, "n of N" agrees with the folder's own count (R-SYS-7).
+  const bowerPages = useBowerPagesUnder(
+    file === undefined ? [] : [folderOf(file.path)],
+    index,
+  );
   const items = useMemo(
     () =>
       index === null || file === undefined
         ? []
-        : siblings(file, buildTree(index, sort)),
-    [index, file, sort],
+        : pagerItems(siblings(file, buildTree(index, sort)), bowerPages),
+    [index, file, sort, bowerPages],
   );
   const aboutColumn = useMediaQuery('(min-width: 1200px)');
 

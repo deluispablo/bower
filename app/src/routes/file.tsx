@@ -25,7 +25,10 @@ import {
 } from '../components/about-panel.js';
 import type { AboutPanelProps } from '../components/about-panel.js';
 import { BackLink } from '../components/back-link.js';
-import { useBowerPagesUnder } from '../components/bower-folder-pages.js';
+import {
+  pagerItems,
+  useBowerPagesUnder,
+} from '../components/bower-folder-pages.js';
 import { DrivePreview } from '../components/drive-preview.js';
 import { FileTip, Hint } from '../components/hint.js';
 import { IconSparkle } from '../components/icons.js';
@@ -413,19 +416,6 @@ function NoPreview({
       )}
     </div>
   );
-}
-
-/**
- * The things the file page walks (About's "In this folder", the pager):
- * its siblings without the pages Bower wrote for the folder (K-31), so the
- * pager's "n of N" is the folder's own count (`folderCount`, R-SYS-7).
- * Pure.
- */
-export function pagerItems(
-  items: readonly DriveFile[],
-  bowerPages: ReadonlySet<string>,
-): DriveFile[] {
-  return items.filter((item) => !bowerPages.has(item.id));
 }
 
 interface Companion {

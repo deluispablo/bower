@@ -12,8 +12,8 @@ import { describe, expect, it } from 'vitest';
 import type { DriveFile } from '../src/drive.js';
 import { siblings } from '../src/folder-view.js';
 import { buildTree, folderCount } from '../src/navigation.js';
+import { pagerItems } from '../src/components/bower-folder-pages.js';
 import { pagerPlace } from '../src/components/pager.js';
-import { pagerItems } from '../src/routes/file.js';
 import { buildVaultIndex } from '../src/vault-index.js';
 
 const FOLDER = '2-Areas/Finance';
