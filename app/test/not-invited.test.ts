@@ -12,7 +12,11 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ demo: false }));
+const state = vi.hoisted(() => ({
+  demo: false,
+  status: 'signed-out' as 'loading' | 'signed-out' | 'signed-in',
+  email: 'you@example.com' as string | undefined,
+}));
 const location = { path: '/not-invited', route: vi.fn() };
 const signOut = vi.fn(() => Promise.resolve());
 const refresh = vi.fn(() => Promise.resolve());
@@ -28,7 +32,8 @@ vi.mock('preact-iso', () => ({
 
 vi.mock('../src/session.js', () => ({
   useSession: () => ({
-    notInvitedEmail: 'you@example.com',
+    status: state.status,
+    notInvitedEmail: state.email,
     signOut,
     refresh,
   }),
@@ -52,9 +57,26 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   state.demo = false;
+  state.status = 'signed-out';
+  state.email = 'you@example.com';
+  location.route.mockClear();
 });
 
 describe('NotInvited', () => {
+  it('goes to Sign in when there is no session (#1004)', () => {
+    state.email = undefined;
+    mount();
+    expect(location.route).toHaveBeenCalledWith('/login', true);
+    expect(root.textContent).toBe('');
+  });
+
+  it('stays while the session is still loading', () => {
+    state.email = undefined;
+    state.status = 'loading';
+    mount();
+    expect(location.route).not.toHaveBeenCalled();
+  });
+
   it('shows its usual content outside the demo', () => {
     state.demo = false;
     mount();
