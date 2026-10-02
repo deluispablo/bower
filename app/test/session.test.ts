@@ -10,7 +10,9 @@ import { ApiError, getMe } from '../src/api.js';
 import type { Me } from '../src/api.js';
 import { bootState } from '../src/boot-screen.js';
 import { loadCachedMe } from '../src/cache.js';
+import forgetDevice from '../src/forget.js';
 import { markIntroSeen } from '../src/intro.js';
+import { SIGNED_OUT_KEY, reportUnauthorized } from '../src/session-guard.js';
 import {
   SessionProvider,
   decideRedirect,
@@ -365,5 +367,108 @@ describe('SessionProvider on load (#985, R-BOOT-14)', () => {
     expect(session?.notInvitedEmail).toBe('you@example.com');
     expect(bootStateMock).not.toHaveBeenCalled();
     expect(path).toBe('/not-invited');
+  });
+});
+
+describe('SessionProvider when the session ends elsewhere (#994)', () => {
+  const me = {
+    email: 'you@example.com',
+    vault: { folderId: 'FOLDER_ID', inboxFolderId: 'INBOX_ID', name: 'Bower' },
+    quota: { used: 0, limit: 10 },
+    needsReauth: false,
+    hasApiKey: false,
+  } as Me;
+  const forgetMock = vi.mocked(forgetDevice);
+
+  let root: HTMLElement;
+  let session: Session | undefined;
+  let path = '';
+
+  function Probe(): null {
+    session = useSession();
+    path = useLocation().path;
+    return null;
+  }
+
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
+  async function mountSignedIn(): Promise<void> {
+    vi.mocked(getMe).mockResolvedValue(me);
+    markIntroSeen(localStorage);
+    history.replaceState(null, '', '/settings');
+    await act(() => {
+      render(
+        h(LocationProvider, null, h(SessionProvider, null, h(Probe, null))),
+        root,
+      );
+    });
+    await settle();
+    expect(session?.status).toBe('signed-in');
+  }
+
+  beforeEach(() => {
+    root = document.createElement('div');
+    document.body.append(root);
+    session = undefined;
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.mocked(loadCachedMe).mockReturnValue(undefined);
+    forgetMock.mockResolvedValue(undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    render(null, root);
+    root.remove();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it('signs this tab out when another tab announces a sign-out', async () => {
+    await mountSignedIn();
+    await act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: SIGNED_OUT_KEY, newValue: '1' }),
+      );
+    });
+    await settle();
+    expect(session?.status).toBe('signed-out');
+    expect(path).toBe('/login');
+    expect(forgetMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('signs this tab out on a 401 from the Worker, once', async () => {
+    await mountSignedIn();
+    await act(() => {
+      reportUnauthorized();
+      reportUnauthorized();
+    });
+    await settle();
+    expect(session?.status).toBe('signed-out');
+    expect(path).toBe('/login');
+    expect(forgetMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a tab that is not signed in alone', async () => {
+    vi.mocked(getMe).mockRejectedValue(new ApiError(0, 'network', 'x'));
+    history.replaceState(null, '', '/');
+    await act(() => {
+      render(
+        h(LocationProvider, null, h(SessionProvider, null, h(Probe, null))),
+        root,
+      );
+    });
+    await settle();
+    await act(() => {
+      reportUnauthorized();
+    });
+    expect(session?.status).toBe('loading');
+    expect(forgetMock).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@
  */
 
 import type { DriveToken } from './drive.js';
+import { reportUnauthorized } from './session-guard.js';
 
 const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
 
@@ -76,6 +77,10 @@ export async function apiFetch<T>(
   } catch {
     throw new ApiError(0, 'network', 'Could not reach the server.');
   }
+
+  // Any 401 means this tab's session is gone (#994): `session.tsx` drops
+  // the Drive token and sends the tab to sign-in.
+  if (response.status === 401) reportUnauthorized();
 
   if (response.status === 204) {
     return undefined as T;

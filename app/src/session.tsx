@@ -22,7 +22,13 @@ import {
   saveCachedMe,
   setIndexFolder,
 } from './cache.js';
-import { driveFetch, folderNameOf, watchFolder } from './drive.js';
+import {
+  driveFetch,
+  folderNameOf,
+  invalidateToken,
+  setSessionCheck,
+  watchFolder,
+} from './drive.js';
 import forgetDevice from './forget.js';
 import {
   FOLDER_FIELDS,
@@ -32,6 +38,14 @@ import {
 import type { FolderState } from './folder-state.js';
 import { introSeen } from './intro.js';
 import { isLearnPath } from './learn.js';
+import {
+  announceSignOut,
+  listenForSignOut,
+  markSessionChecked,
+  onUnauthorized,
+  recheckSession,
+  watchVisibility,
+} from './session-guard.js';
 
 export type SessionStatus = 'loading' | 'signed-out' | 'signed-in';
 
@@ -259,6 +273,13 @@ export function SessionProvider({ children }: SessionProviderProps) {
   folderIdRef.current = folderId;
   const lastCheckRef = useRef(0);
   const followingRef = useRef(false);
+  const statusRef = useRef<SessionStatus>(state.status);
+  statusRef.current = state.status;
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  // Set while this tab is signing itself out, so the 401s its own sign-out
+  // provokes (`logout` after "Sign out everywhere") do not end it twice.
+  const endingRef = useRef(false);
 
   const recheckFolder = async (): Promise<FolderState> => {
     const id = folderIdRef.current;
@@ -292,12 +313,14 @@ export function SessionProvider({ children }: SessionProviderProps) {
     let cancelled = false;
     getMe()
       .then((me) => {
+        markSessionChecked();
         if (cancelled) return;
         setState(stateFromMe(me));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
+          markSessionChecked();
           const wasSignedIn = hadSessionInThisTab();
           clearHadSessionMarker();
           setState({ status: 'signed-out' });
@@ -398,19 +421,60 @@ export function SessionProvider({ children }: SessionProviderProps) {
     };
   }, []);
 
+  // #994: the session ended out of this tab's sight (signed out in another
+  // tab, or a 401 from the Worker): drop the Drive token at once, go to
+  // sign-in, and clear the device the way sign-out does.
+  useEffect(() => {
+    const endSession = (): void => {
+      if (statusRef.current !== 'signed-in' || endingRef.current) return;
+      endingRef.current = true;
+      invalidateToken();
+      clearHadSessionMarker();
+      statusRef.current = 'signed-out';
+      setState({ status: 'signed-out' });
+      routeRef.current('/login');
+      void forgetDevice().finally(() => {
+        endingRef.current = false;
+      });
+    };
+    const checkSession = (): Promise<void> => recheckSession(getMe);
+    onUnauthorized(endSession);
+    setSessionCheck(checkSession);
+    const stopListening = listenForSignOut(endSession);
+    const stopWatching = watchVisibility(document, () => {
+      if (statusRef.current !== 'signed-in') return;
+      checkSession().catch(() => {
+        // A 401: `apiFetch` already reported it and `endSession` ran.
+      });
+    });
+    return () => {
+      onUnauthorized(null);
+      setSessionCheck(null);
+      stopListening();
+      stopWatching();
+    };
+  }, []);
+
   const signOut = async (): Promise<void> => {
+    endingRef.current = true;
     try {
       await logout();
     } catch (err) {
       console.error(err);
     }
+    // Every other tab of this browser drops its Drive token now (#994).
+    announceSignOut();
     // Clear the device whether the logout request succeeded or not: the
     // Worker session cookie is what matters least here, the notes cached
     // on this device are what matters most. Also covers delete-account
     // (`routes/settings.tsx`), which calls `signOut()` once the account
     // itself is gone.
     clearHadSessionMarker();
-    await forgetDevice();
+    try {
+      await forgetDevice();
+    } finally {
+      endingRef.current = false;
+    }
     setState({ status: 'signed-out' });
     route('/login');
   };
