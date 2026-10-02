@@ -282,6 +282,20 @@ grep -qF -- "- [[1-Projects/Flat hunt/Job ad summary.md]] · Note · #job-ad · 
 expect_eq "$(sed -n '4,5p' "$V/1-Projects/Flat hunt/Job ad summary.md")" \
   "$(printf 'See [[%s]] and [[%s|the ad]].\nAlso [[Lease]].' "${SHORT%.pdf}" "$SHORT")" 'the links follow the rename'
 if grep -qF -- "$LONG90" "$V/index.md"; then die 'the long name in index.md'; fi
+# A file already there under the agent's long name: refused as name before
+# any shortening, and a note linking that name keeps its link.
+fresh
+echo old >"$V/1-Projects/Flat hunt/$LONG90"
+printf -- '---\nby: bower\n---\nSee [[%s]].\n' "${LONG90%.pdf}" >"$V/1-Projects/Flat hunt/Old ad.md"
+{
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tA new ad\n' "$LONG90"
+  printf 'note\t1-Projects/Flat hunt/Old ad.md\t1-Projects/Flat hunt/%s\t#job-ad\tThe old ad\n' "$LONG90"
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIP_REASONS" '0 1 1 name' 'refused as name, the note booked'
+[ -f "$V/0-Inbox/scan0001.pdf" ] && [ ! -e "$V/1-Projects/Flat hunt/$SHORT" ] || die 'shortened past an existing file'
+grep -qF -- "See [[${LONG90%.pdf}]]." "$V/1-Projects/Flat hunt/Old ad.md" || die 'a link to the existing file changed'
+grep -qF -- "· [[1-Projects/Flat hunt/$LONG90]]" "$V/index.md" || die 'the note row lost the existing original'
 echo "ok $CASE"
 
 CASE='repeated long names'

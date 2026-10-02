@@ -1859,6 +1859,9 @@ sheet_file_line() {
     # to the first file, so a second one is refused, as a repeated short
     # name is.
     ! sheet_has "$dest/$name" ${SHEET_MAP_FROM[@]+"${SHEET_MAP_FROM[@]}"} || return 1
+    # A file there under the long name: links that name it mean that file,
+    # so nothing is shortened or remapped.
+    ! sheet_taken "$vault/$dest" "$name" || return 1
     final=$(sheet_name_short "$name" "$vault/$dest") || return 1
   else
     ! sheet_taken "$vault/$dest" "$name" || return 1
