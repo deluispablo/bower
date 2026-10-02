@@ -255,19 +255,24 @@ expect_eq "$(sheet_name_short "$(printf 'word %.0s' {1..20})end" "$ROOT/none")" 
 fresh
 echo ad1 >"$V/0-Inbox/scan0002.pdf"
 echo ad2 >"$V/0-Inbox/scan0003.pdf"
-printf '%s\n' 0-Inbox/scan0002.pdf 0-Inbox/scan0003.pdf >>"$PENDING"
+echo ad3 >"$V/0-Inbox/scan0004.pdf"
+printf '%s\n' 0-Inbox/scan0002.pdf 0-Inbox/scan0003.pdf 0-Inbox/scan0004.pdf >>"$PENDING"
 # The note Bower wrote for the first ad, with links to the name it chose.
 printf -- '---\nby: bower\n---\nSee [[%s]] and [[%s|the ad]].\nAlso [[Lease]].\n' "${LONG90%.pdf}" "$LONG90" \
   >"$V/1-Projects/Flat hunt/Job ad summary.md"
 {
   printf 'file\t0-Inbox/scan0002.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe first ad\n' "$LONG90"
-  printf 'file\t0-Inbox/scan0003.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe second ad\n' "$LONG90"
+  printf 'file\t0-Inbox/scan0003.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe second ad\n' "${LONG90/role/job}"
+  # The same long name again for this folder: refused, its links go to the first.
+  printf 'file\t0-Inbox/scan0004.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe third ad\n' "$LONG90"
   printf 'note\t1-Projects/Flat hunt/Job ad summary.md\t1-Projects/Flat hunt/%s\t#job-ad\tSummary of the ad\n' "$LONG90"
 } >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
-expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '2 1 0' 'shortened, not skipped'
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '2 1 1' 'shortened, the repeated long name skipped'
 expect_eq "$(cat "$V/1-Projects/Flat hunt/$SHORT")" ad1 'the first ad under the short name'
 expect_eq "$(cat "$V/1-Projects/Flat hunt/$SHORT2")" ad2 'the second ad with (2)'
+[ -f "$V/0-Inbox/scan0004.pdf" ] || die 'a repeated long name was filed'
+expect_eq "$SHEET_SKIP_REASONS" '1 name' 'the repeated long name is a name'
 [ ! -e "$V/1-Projects/Flat hunt/$LONG90" ] || die 'filed under the long name'
 grep -qF -- "- [[$SHORT]] The first ad" "$V/1-Projects/Flat hunt/Flat hunt.md" || die 'the hub line'
 grep -qF -- "- [[1-Projects/Flat hunt/$SHORT2]] · PDF · #job-ad · The second ad · filed by Bower" "$V/index.md" ||

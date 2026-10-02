@@ -1855,6 +1855,10 @@ sheet_file_line() {
     # One shortening per pending file in a run, whatever the sheet repeats.
     ! sheet_has "$src" ${SHEET_SHORT_SRC[@]+"${SHEET_SHORT_SRC[@]}"} || return 1
     SHEET_SHORT_SRC+=("$src")
+    # A long name already used for this folder: the links that name it go
+    # to the first file, so a second one is refused, as a repeated short
+    # name is.
+    ! sheet_has "$dest/$name" ${SHEET_MAP_FROM[@]+"${SHEET_MAP_FROM[@]}"} || return 1
     final=$(sheet_name_short "$name" "$vault/$dest") || return 1
   else
     ! sheet_taken "$vault/$dest" "$name" || return 1
