@@ -84,7 +84,7 @@ describe('WorkingSheet outside the demo', () => {
     expect(document.body.textContent).toContain(
       'You can close this: the tidy-up carries on.',
     );
-    expect(document.body.textContent).toContain('it takes a few minutes');
+    expect(document.body.textContent).toMatch(/Started \d\d:\d\d · /);
     expect(document.body.textContent).not.toContain(DEMO_REASSURANCE_LEAD);
   });
 });
@@ -100,7 +100,7 @@ describe('WorkingSheet in a demo build', () => {
   it('shows the start time from the demo run, as on real data (R-API-4)', () => {
     state.demo = true;
     mount();
-    expect(document.body.textContent).toContain('it takes a few minutes');
+    expect(document.body.textContent).toMatch(/Started \d\d:\d\d · /);
     expect(document.body.textContent).not.toContain(DEMO_PLAYING_BACK);
   });
 

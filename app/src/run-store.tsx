@@ -59,7 +59,12 @@ import type { PileConfirm } from './pile-groups.js';
 import { getPiles, prunePiles, usePiles } from './pile-store.js';
 import type { InboxCount } from './inbox-count.js';
 import { outcomeFromRun, runSentence } from './run-outcome.js';
-import { processedKind, visiblePendingCount } from './run-progress.js';
+import {
+  nextTickDelay,
+  processedKind,
+  runStartMs,
+  visiblePendingCount,
+} from './run-progress.js';
 import { useSession } from './session.js';
 import {
   invalidateAfterRun,
@@ -619,13 +624,38 @@ export interface RunStore extends RunState {
   /** The confirmation's "Add more first": closes it, no run starts. */
   dismissConfirm: () => void;
   /**
-   * One shared clock (#513), ticking every minute: Home's Inbox card, the
+   * One shared clock (#513), ticking every minute (on the run's own
+   * minutes while one goes, #1001): Home's Inbox card, the
    * Last tidy-up card and the working sheet all read elapsed time off this
    * same value now, rather than each keeping its own — that used to drift
    * a minute apart at the boundary ("started 3 min ago" on the card,
    * "Started 4 min ago" on the sheet at the same moment).
    */
   now: number;
+  /**
+   * A run just ended and the listing is being read again (#1001): until it
+   * answers, the inbox still lists what the run moved away. Home shows the
+   * inbox as updating and the confirmation waits, so nothing offers a
+   * tidy-up of things that are gone.
+   */
+  refreshingAfterRun: boolean;
+}
+
+/**
+ * The post-run refresh (#1001): drop the cached index, then read the
+ * listing again. Resolves once both are over, failed or not; a failure is
+ * logged, never thrown, so the caller can always clear its "updating" flag.
+ */
+export async function refreshAfterRun(
+  invalidate: () => Promise<void>,
+  refresh: () => Promise<void>,
+): Promise<void> {
+  try {
+    await invalidate();
+    await refresh();
+  } catch (err) {
+    console.error('Reading the folder again after a tidy-up failed', err);
+  }
 }
 
 const RunContext = createContext<RunStore | undefined>(undefined);
@@ -672,11 +702,32 @@ export function RunProvider({ children }: RunProviderProps) {
   // instead of each keeping its own `now`/tick state on its own interval —
   // those used to disagree by a minute right at the boundary, since they
   // advanced at different moments.
+  // #1001: while a run goes, it ticks right after each whole minute of the
+  // run (`nextTickDelay`), so "2 min" never reads a minute late.
   const [now, setNow] = useState(() => Date.now());
+  const activeStart =
+    state.phase === 'queued' ||
+    state.phase === 'running' ||
+    state.phase === 'starting'
+      ? state.run === null
+        ? null
+        : runStartMs(state.run)
+      : null;
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = (): void => {
+      timer = setTimeout(
+        () => {
+          setNow(Date.now());
+          tick();
+        },
+        nextTickDelay(Date.now(), activeStart),
+      );
+    };
+    setNow(Date.now());
+    tick();
+    return () => clearTimeout(timer);
+  }, [activeStart]);
 
   const poll = useCallback(async (): Promise<void> => {
     try {
@@ -697,6 +748,9 @@ export function RunProvider({ children }: RunProviderProps) {
     // interval effect below takes over from there.
   }, [hasVault, poll]);
 
+  const [refreshingAfterRun, setRefreshingAfterRun] = useState(false);
+  const refreshGeneration = useRef(0);
+
   // On `done`, and on `stale` after the Worker's timeout (the run may have
   // filed part of the inbox before it stopped answering): the vault content
   // may have changed underneath, so drop the cached index and refresh it.
@@ -715,7 +769,17 @@ export function RunProvider({ children }: RunProviderProps) {
     if (state.phase === 'done' && state.run !== null) {
       prunePiles(processedNames(state.run));
     }
-    void invalidateAfterRun().then(() => refresh());
+    // #1001: until the listing is read again, the inbox still shows what
+    // the run just moved away. Home and the confirmation read this flag, so
+    // no stale count and no live Tidy up show in the meantime.
+    // Only the latest refresh clears the flag, should two overlap.
+    const generation = ++refreshGeneration.current;
+    setRefreshingAfterRun(true);
+    void refreshAfterRun(invalidateAfterRun, refresh).then(() => {
+      if (refreshGeneration.current === generation) {
+        setRefreshingAfterRun(false);
+      }
+    });
   }, [state.phase, state.run, refresh]);
 
   // On `stale` (#564): the Worker lost track, but the runner may have
@@ -875,7 +939,13 @@ export function RunProvider({ children }: RunProviderProps) {
 
   // A tidy-up's count reads the listing as it is now, so it fills in when
   // the listing resolves while the dialog is open (R-CONF-2, R-CONF-3).
-  const inbox: InboxCount = inboxCount(files, vaultStatus === 'loading');
+  // While the post-run refresh is in flight the listing still holds what
+  // the run moved (#1001): the dialog waits for the fresh one, as it does
+  // for the first load, so "Yes, tidy up" never starts on gone items.
+  const inbox: InboxCount = inboxCount(
+    files,
+    vaultStatus === 'loading' || refreshingAfterRun,
+  );
   const confirmCount =
     confirmScope === 'instructions' ? requestCount : inboxTotal(inbox);
   const confirmLoading = confirmScope === 'all' && inbox.status === 'loading';
@@ -958,6 +1028,7 @@ export function RunProvider({ children }: RunProviderProps) {
     confirmTidyUp,
     dismissConfirm,
     keptCount: keptCountFor(state.run, kept),
+    refreshingAfterRun,
     now,
   };
 

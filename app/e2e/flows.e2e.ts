@@ -829,7 +829,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toContainText(
     'In the demo the bird plays back a real run in twenty seconds',
   );
-  await expect(sheet).toContainText('it takes a few minutes');
+  await expect(sheet).toContainText(/Started \d\d:\d\d · /);
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed
@@ -953,7 +953,7 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: SHEET_NAME });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
-  await expect(sheet.getByText(/it takes a few minutes/)).toBeVisible();
+  await expect(sheet.getByText(/Started \d\d:\d\d · /)).toBeVisible();
   await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(

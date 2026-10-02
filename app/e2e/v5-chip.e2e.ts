@@ -28,7 +28,7 @@ test('phone: the bar sits above the tab bar and never covers the last row (R-CHI
   await expect(bar.getByRole('status')).toBeVisible();
   await expect(
     bar.getByRole('button', {
-      name: /^Tidying up 2 things, \d+ minutes? so far\. Show progress$/,
+      name: /^Tidying up 2 things, (less than a minute|\d+ min) so far\. Show progress$/,
     }),
   ).toBeVisible();
 

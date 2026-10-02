@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { FOLDER_MIME } from '../src/drive.js';
 import {
+  refreshAfterRun,
   lastFinishedRun,
   nextPollDelay,
   pendingCount,
@@ -701,5 +702,34 @@ describe('startConfirmedTidyUp (#769, R-PILE-7)', () => {
       { type: 'starting' },
       { type: 'reset' },
     ]);
+  });
+});
+
+describe('refreshAfterRun (#1001)', () => {
+  it('drops the index, then reads the listing again, in that order', async () => {
+    const calls: string[] = [];
+    await refreshAfterRun(
+      () => {
+        calls.push('invalidate');
+        return Promise.resolve();
+      },
+      () => {
+        calls.push('refresh');
+        return Promise.resolve();
+      },
+    );
+    expect(calls).toEqual(['invalidate', 'refresh']);
+  });
+
+  it('resolves and logs when a step fails, so the updating flag clears', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(
+      refreshAfterRun(
+        () => Promise.reject(new Error('IndexedDB blocked')),
+        () => Promise.resolve(),
+      ),
+    ).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 });

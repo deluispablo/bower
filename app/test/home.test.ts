@@ -9,6 +9,10 @@ import {
   greetingFor,
   homeStateFor,
   inboxLine,
+  inboxViewFor,
+  healthTileNote,
+  recentRequestTitle,
+  REQUEST_FALLBACK,
   homeTiles,
   lastTidyUpCounts,
   lastTidyUpNote,
@@ -446,6 +450,14 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
 });
 
 describe('homeTiles (E-8)', () => {
+  it('words the Health check tile as the Health page does (#1004)', () => {
+    expect(healthTileNote(false, undefined)).toBe('Next check: Sunday.');
+    expect(healthTileNote(true, 0)).toBe('Next check: Sunday.');
+    expect(healthTileNote(true, 1)).toBe('1 small thing to fix');
+    expect(healthTileNote(true, 3)).toBe('3 small things to fix');
+    expect(healthTileNote(false, 3)).toBe('Next check: Sunday.');
+  });
+
   it('shows Health check on desktop only', () => {
     expect(homeTiles(false)).toEqual(['Inbox', 'Last tidy-up']);
     expect(homeTiles(true)).toEqual(['Inbox', 'Last tidy-up', 'Health check']);
@@ -560,5 +572,144 @@ describe('Home while it loads (#950)', () => {
     expect(
       isHomeLoading({ status: 'idle', indexReady: false, hasFolder: false }),
     ).toBe(false);
+  });
+});
+
+describe('Home while the listing is read again after a run (#1001)', () => {
+  const waiting = [
+    '0-Inbox/Lease agreement 2026.pdf',
+    '0-Inbox/Scan of a letter.jpg',
+    '0-Inbox/Tomato seedlings.md',
+    '0-Inbox/Bower - 2026-09-27 0815 What do I still need.md',
+    '0-Inbox/Added after the run.pdf',
+  ];
+
+  it('takes what the run moved off the count and marks it updating', () => {
+    expect(
+      inboxViewFor({ pending: 5, refreshing: true, run: DONE_RUN, waiting }),
+    ).toEqual({ pending: 1, updating: true });
+  });
+
+  it('leaves the count alone once the fresh listing is in', () => {
+    expect(
+      inboxViewFor({ pending: 5, refreshing: false, run: DONE_RUN, waiting }),
+    ).toEqual({ pending: 5, updating: false });
+  });
+
+  it('never goes below zero, and ignores paths the listing no longer has', () => {
+    expect(
+      inboxViewFor({
+        pending: 1,
+        refreshing: true,
+        run: DONE_RUN,
+        waiting: waiting.slice(0, 1),
+      }),
+    ).toEqual({ pending: 0, updating: true });
+  });
+
+  it('keeps the run result on Home: no Waiting state, no live Tidy up', () => {
+    const state = homeStateFor({
+      phase: 'idle',
+      pending: 28,
+      lastFinished: DONE_RUN,
+      loading: false,
+      indexReady: true,
+      refreshing: true,
+    });
+    expect(state).toBe('done');
+    const parts = bubbleFor({
+      state,
+      pending: 28,
+      offline: false,
+      error: false,
+      editingPins: false,
+      lastFinished: DONE_RUN,
+      now: Date.parse('2026-09-27T08:06:00Z'),
+      updating: true,
+    });
+    expect(text(parts)).not.toMatch(/in your inbox/);
+    expect(links(parts).some((link) => link.startsWith('tidy-up'))).toBe(false);
+  });
+
+  it("turns a partly done run's Finish link into plain words while updating", () => {
+    const parts = bubbleFor({
+      state: 'partial',
+      pending: 2,
+      offline: false,
+      error: false,
+      editingPins: false,
+      lastFinished: PARTIAL_RUN,
+      now: Date.parse('2026-09-27T08:09:00Z'),
+      updating: true,
+    });
+    expect(text(parts)).toContain('Finish the tidy-up');
+    expect(links(parts).some((link) => link.startsWith('tidy-up'))).toBe(false);
+  });
+
+  it('goes back to Waiting once the refresh is over', () => {
+    expect(
+      homeStateFor({
+        phase: 'idle',
+        pending: 1,
+        lastFinished: DONE_RUN,
+        loading: false,
+        indexReady: true,
+        refreshing: false,
+      }),
+    ).toBe('waiting');
+  });
+});
+
+describe('recentRequestTitle: Recent reads a request by its words (#1001)', () => {
+  const name =
+    'Bower - 2026-10-02 1027 Move “photo.png” (2-AreasImmigrationphoto.png) to 3-Resources..md';
+  const note = [
+    '---',
+    'tags: [instruction]',
+    'date: 2026-10-02T10:27:00.000Z',
+    'via: app',
+    '---',
+    '',
+    'Move “photo.png” (2-Areas/Immigration/photo.png) to 3-Resources.',
+    '',
+  ].join('\n');
+
+  it('uses the note body, with the paths as the Requests row shows them', () => {
+    const title = recentRequestTitle(name, note);
+    expect(title).toBe(
+      'Move “photo.png” (Areas › Immigration › photo.png) to Resources.',
+    );
+    expect(title).not.toContain('Bower - ');
+    expect(title).not.toContain('2-AreasImmigration');
+  });
+
+  it('never shows the file name before the text is read', () => {
+    expect(recentRequestTitle(name, undefined)).toBe(REQUEST_FALLBACK);
+    expect(recentRequestTitle(name, '---\nvia: app\n---\n\n')).toBe(
+      REQUEST_FALLBACK,
+    );
+  });
+
+  it('reads a plain request by its first line', () => {
+    expect(
+      recentRequestTitle(
+        'Bower - 2026-10-02 0815 What do I still need.md',
+        '---\ntags: [instruction]\n---\n\nWhat do I still need for the visa?\nAnd the lease.\n',
+      ),
+    ).toBe('What do I still need for the visa?');
+  });
+
+  it('calls Add\'s "What is this?" note and a pile note what the Bower tab does', () => {
+    expect(
+      recentRequestTitle('Bower - 2026-10-02 1027 Context.md', undefined),
+    ).toBe('About the files you added');
+    expect(
+      recentRequestTitle('Bower - 2026-10-02 1027-05 Context 3f.md', note),
+    ).toBe('About the files you added');
+  });
+
+  it('leaves every other note alone', () => {
+    expect(recentRequestTitle('Lease agreement 2026.md', note)).toBeNull();
+    expect(recentRequestTitle('Bower notes.md', note)).toBeNull();
   });
 });

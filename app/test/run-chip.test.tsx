@@ -61,8 +61,17 @@ describe('chipModel: the four states', () => {
       state: 'running',
       title: 'Tidying up 2 things',
       detail: '2 min',
-      name: 'Tidying up 2 things, 2 minutes so far. Show progress',
+      name: 'Tidying up 2 things, 2 min so far. Show progress',
     });
+    // The one run clock (#1001): from the tap, "less than a minute" first.
+    const early = chipModel(
+      input({
+        phase: 'running',
+        run,
+        now: Date.parse(run.requestedAt) + 3_000,
+      }),
+    );
+    expect(early?.detail).toBe('less than a minute');
     const desktop = chipModel(
       input({ phase: 'running', run, now, desktop: true }),
     );
@@ -208,7 +217,7 @@ describe('RunChip', () => {
     });
     expect(said()).toBe('Tidying up 2 things');
     expect(root.querySelector('button')?.getAttribute('aria-label')).toContain(
-      '3 minutes so far',
+      '3 min so far',
     );
   });
 

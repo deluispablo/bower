@@ -6,7 +6,6 @@ import { WORKING_STAGE_HEIGHT } from '../src/components/bower-working.js';
 import {
   ACTION_TAG,
   clockTime,
-  minutesLabel,
   needsFirst,
   partialFolder,
   rowFor,
@@ -16,6 +15,7 @@ import {
   sheetSteps,
   sheetTimeLine,
   sheetTitle,
+  withRunStart,
 } from '../src/components/working-sheet.js';
 import { buildRun } from './fixtures/run-outcome-builders.js';
 
@@ -79,18 +79,34 @@ describe('the time line', () => {
     expect(clockTime(at(9, 5))).toBe('09:05');
     expect(clockTime('not a date')).toBe('');
     expect(clockTime(undefined)).toBe('');
-    expect(minutesLabel(5 * 60_000)).toBe('5 min');
-    expect(minutesLabel(10_000)).toBe('under a minute');
   });
 
-  it('running: started, so far, usually', () => {
+  it('running: started and so far, from the one run clock (#1001)', () => {
     expect(sheetTimeLine('running', outcome, start + 2 * 60_000)).toBe(
-      'Started 13:52 · 2 min so far · usually 3 to 6 min',
+      'Started 13:52 · 2 min so far',
+    );
+    expect(sheetTimeLine('running', outcome, start + 10_000)).toBe(
+      'Started 13:52 · less than a minute so far',
     );
   });
 
   it('running in the demo says it is a playback', () => {
     expect(sheetTimeLine('running', outcome, start, true)).toBe('Playing back');
+  });
+
+  it('done: starts at the tap, the same start as the running line (#1001)', () => {
+    const done = {
+      ...outcome,
+      state: 'done',
+      startedAt: at(13, 53),
+      finishedAt: at(13, 57),
+    } as RunOutcome;
+    const run = { requestedAt: at(13, 52), startedAt: at(13, 53) };
+    expect(sheetTimeLine('done', withRunStart(done, run), start)).toBe(
+      '13:52 to 13:57 · 5 min',
+    );
+    expect(withRunStart(done, null)).toBe(done);
+    expect(withRunStart(done, { requestedAt: 'nope' })).toBe(done);
   });
 
   it('done: from, to and how long', () => {

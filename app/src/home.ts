@@ -6,12 +6,14 @@
  */
 
 import type { Run } from './api.js';
-import { sinceLabel } from './bower-tab.js';
+import { CONTEXT_TITLE, sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
 import { outcomeCounts, outcomeFromRun, runSentence } from './run-outcome.js';
-import { processedKind } from './run-progress.js';
+import { isContextNote, processedKind } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
+import { requestRowText } from './move-request.js';
+import { firstLine, instructionBody } from './tell.js';
 
 /**
  * Home's states (C.4): things waiting, the first day (nothing waiting and
@@ -36,6 +38,9 @@ export interface HomeStateInput {
   loading: boolean; /** `false` while there is no index at all: a finished run then does not
    * leave Loading (the inbox count is not known). Left out, as before. */
   indexReady?: boolean;
+  /** The listing is being read again after a run (`refreshingAfterRun`,
+   * #1001): what it lists as waiting may already be gone. */
+  refreshing?: boolean;
 }
 
 /**
@@ -72,6 +77,13 @@ export function homeStateFor(input: HomeStateInput): HomeState {
   }
   if (phase === 'done') return 'done';
   if (loading && input.indexReady === false) return 'loading';
+  // #1001: right after a run the listing still shows what it moved away,
+  // so the run's own result speaks until the fresh listing is in, never
+  // "N things in your inbox" with a live Tidy up.
+  if (input.refreshing === true && outcome !== null) {
+    if (outcome.state === 'partial') return 'partial';
+    return outcome.state === 'failed' ? 'failed' : 'done';
+  }
   if (pending > 0) {
     // D31: with no bar on Home, the greeting keeps telling the result while
     // the only things waiting are the ones the run left for the person.
@@ -140,6 +152,7 @@ export interface RunCounts {
  * note (#444) as neither. The working sheet reads the same kinds, so the
  * two never drift apart.
  */
+// Unlike `outcomeFromRun(run).filed`, a report without `items` counts its request notes as answered, not filed.
 export function runCounts(run: Run): RunCounts {
   let answered = 0;
   let filed = 0;
@@ -230,6 +243,9 @@ export interface BubbleInput {
   now: number;
   /** Desktop says "click", the phone "tap" (K-27). */
   desktop?: boolean;
+  /** The listing is being read again after a run (#1001): no Tidy up link
+   * may start a run on things that are gone; its words stay as text. */
+  updating?: boolean;
 }
 
 /**
@@ -280,6 +296,14 @@ export function doneNotes(run: Run | null): string[] {
  * failed to load come first: nothing else can be said with confidence.
  */
 export function bubbleFor(input: BubbleInput): BubblePart[] {
+  const parts = bubbleParts(input);
+  if (input.updating !== true) return parts;
+  return parts.map((part) =>
+    typeof part !== 'string' && part.link === 'tidy-up' ? part.text : part,
+  );
+}
+
+function bubbleParts(input: BubbleInput): BubblePart[] {
   const { state, pending, offline, error, editingPins, lastFinished, now } =
     input;
   if (offline) return ["No signal here. I'll keep an eye out."];
@@ -349,6 +373,21 @@ export function homeTiles(desktop: boolean): string[] {
     : ['Inbox', 'Last tidy-up'];
 }
 
+/**
+ * The Health check tile's line (desktop, E-8): "2 small things to fix"
+ * when the last report found some, else "Next check: Sunday.", the Health
+ * page's own words (#1004).
+ */
+export function healthTileNote(
+  reportKnown: boolean,
+  findings: number | undefined,
+): string {
+  if (reportKnown && findings !== undefined && findings > 0) {
+    return `${String(findings)} small ${findings === 1 ? 'thing' : 'things'} to fix`;
+  }
+  return 'Next check: Sunday.';
+}
+
 /** What `birdStateFor` needs: the state, the network, a run just done. */
 export interface BirdStateInput {
   state: HomeState;
@@ -404,4 +443,77 @@ export function inboxLine(state: HomeState, pending: number): string {
   return pending > 0
     ? 'waiting to be filed'
     : 'Nothing waiting. Add something.';
+}
+
+/** What the Inbox tile shows (#1001). */
+export interface InboxView {
+  /** The count on the tile. */
+  pending: number;
+  /** The listing is being read again after a run: the tile says
+   * "Updating…" and offers no Tidy up. */
+  updating: boolean;
+}
+
+/** The Inbox tile's line while the listing is read again after a run. */
+export const INBOX_UPDATING = 'Updating…';
+
+/**
+ * The Inbox tile's count and whether it is updating (#1001). While the
+ * listing is read again after a run, the things the run reports it took
+ * (`run.processed`) that the old listing still shows as waiting are taken
+ * off the count, so the tile never reads the inbox as it was before the
+ * run. Add's "What is this?" note never counted, so it is never taken off.
+ */
+export function inboxViewFor(input: {
+  pending: number;
+  refreshing: boolean;
+  /** The run that just ended, or `null`. */
+  run: Run | null;
+  /** The paths the listing shows as waiting (`run-progress.ts#waitingPaths`). */
+  waiting: readonly string[];
+}): InboxView {
+  const { pending, refreshing, run, waiting } = input;
+  if (!refreshing) return { pending, updating: false };
+  const listed = new Set(waiting);
+  const moved = (run?.processed ?? []).filter(
+    (path) => listed.has(path) && !isContextNote(path),
+  ).length;
+  return { pending: Math.max(0, pending - moved), updating: true };
+}
+
+/** An instruction note's file name: `Bower - YYYY-MM-DD HHmm[-ss] ….md`. */
+const REQUEST_NOTE_NAME =
+  /^Bower - \d{4}-\d{2}-\d{2} \d{4}(?:-\d{2})? .*\.md$/i;
+
+/** What Recent calls a request note whose words are not on this device. */
+export const REQUEST_FALLBACK = 'Your request to Bower';
+
+/**
+ * The title Recent gives a request note (#1001): its words, never its
+ * dated file name, which lost every slash of a path it quoted ("Move
+ * “x.png” (2-AreasImmigrationx.png) to …"). Add's "What is this?" note
+ * and a pile's note read "About the files you added", as on the Bower
+ * tab; a move or rename reads as the Requests row does
+ * (`requestRowText`). `text` is the note's content when it has been read,
+ * else the plain fallback. `null` for any other note, which keeps its own
+ * title.
+ *
+ * A small local helper: #997 words Requests the same way and may land a
+ * shared one later.
+ */
+export function recentRequestTitle(
+  name: string,
+  text: string | undefined,
+): string | null {
+  if (!REQUEST_NOTE_NAME.test(name)) return null;
+  if (isContextNote(name)) return CONTEXT_TITLE;
+  if (text === undefined) return REQUEST_FALLBACK;
+  const line = firstLine(
+    instructionBody(text)
+      .split('\n')
+      .map((part) => part.trim())
+      .filter((part) => part !== '')
+      .join('\n'),
+  );
+  return line === '' ? REQUEST_FALLBACK : requestRowText(line);
 }

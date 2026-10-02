@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Run } from '../src/api.js';
-import { sinceLabel } from '../src/bower-tab.js';
 import {
   workingBird,
   workingClasses,
@@ -12,10 +11,8 @@ import {
   SHEET_LINGER_MS,
   nothingLost,
   sheetVisible,
-  startedAgo,
   workingStateFor,
 } from '../src/components/working-sheet.js';
-import { tidyUpAgo } from '../src/home.js';
 
 describe('workingBird', () => {
   it('tidies while queued or running, shows off when done, is confused when failed or over quota', () => {
@@ -137,35 +134,5 @@ describe('doneNotes', () => {
     expect(doneNotes({ ...base, refused: ['a.md', 'b.md'] })).toEqual([
       '2 changes were refused; nothing was lost.',
     ]);
-  });
-});
-
-describe('startedAgo', () => {
-  const requestedAt = '2026-09-27T12:00:00.000Z';
-  const nowMs = Date.parse(requestedAt);
-
-  it('says "just now" under a minute', () => {
-    expect(startedAgo(requestedAt, nowMs)).toBe('Started just now');
-    expect(startedAgo(requestedAt, nowMs + 59_000)).toBe('Started just now');
-  });
-
-  it('counts whole minutes since', () => {
-    expect(startedAgo(requestedAt, nowMs + 60_000)).toBe('Started 1 min ago');
-    expect(startedAgo(requestedAt, nowMs + 5 * 60_000)).toBe(
-      'Started 5 min ago',
-    );
-  });
-
-  // #513: the Inbox card ("started n min ago"), the Last tidy-up card
-  // ("n min ago") and the sheet ("Started n min ago") all read off the
-  // same `sinceLabel` (`bower-tab.ts`) now, sharing the run store's one
-  // clock -- so for the same instant, none of them can land on a
-  // different minute than the others.
-  it('agrees with sinceLabel and tidyUpAgo for the same instant', () => {
-    const at = nowMs + 3 * 60_000 + 59_000; // 3 min 59 s later
-    const label = sinceLabel(requestedAt, at);
-    expect(label).toBe('3 min ago');
-    expect(startedAgo(requestedAt, at)).toBe(`Started ${label}`);
-    expect(tidyUpAgo(requestedAt, at)).toBe(label);
   });
 });

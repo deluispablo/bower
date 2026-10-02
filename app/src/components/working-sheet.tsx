@@ -29,7 +29,6 @@ import type { Run, RunPhase as StepPhase } from '../api.js';
 import { isDemo } from '../api.js';
 import { durationWords } from '../activity.js';
 import { linkTitleFromFileName } from '../add.js';
-import { sinceLabel } from '../bower-tab.js';
 import { doneNotes, things } from '../home.js';
 import { JUST_FILED_PATH } from '../just-filed.js';
 import {
@@ -66,7 +65,7 @@ import type { ParaKind } from './folder-mark.js';
 import { IconCheck, IconClose } from './icons.js';
 import { ListRow } from './list-row.js';
 import { kindLabel } from '../meta-line.js';
-import { startedLine } from '../run-progress.js';
+import { runStartMs, startedLine } from '../run-progress.js';
 import { OVERLAY_PRIORITY } from '../overlay-queue.js';
 import { Overlay } from './overlay.js';
 import { Queued } from './queued-overlay.js';
@@ -125,16 +124,6 @@ export function workingStateFor(phase: RunPhase): WorkingState | null {
     case 'idle':
       return null;
   }
-}
-
-/**
- * "Started n min ago" ("Started just now" under a minute): `sinceLabel`
- * (`bower-tab.ts`, #513) is the one helper behind every "ago" text a run
- * shows off, so Home's Inbox card and anything else can never disagree at
- * the same moment.
- */
-export function startedAgo(requestedAt: string, nowMs: number): string {
-  return `Started ${sinceLabel(requestedAt, nowMs)}`;
 }
 
 /** The extra lines under the Done summary (spec A.3/A.5), shared with Home. */
@@ -284,16 +273,12 @@ export function clockTime(iso: string | undefined): string {
   return `${two(date.getHours())}:${two(date.getMinutes())}`;
 }
 
-/** "5 min", or "under a minute". */
-export function minutesLabel(ms: number): string {
-  const minutes = Math.round(Math.max(0, ms) / 60_000);
-  return minutes < 1 ? 'under a minute' : `${minutes} min`;
-}
-
 /**
- * The line under the title: "Started 13:52 · 2 min so far · usually 3 to 6
- * min" while it goes, "13:52 to 13:57 · 5 min" when done, "13:44 to 13:51 ·
- * stopped after 7 min" when it stopped.
+ * The line under the title: "Started 13:52 · 2 min so far" while it goes
+ * (`run-progress.ts#startedLine`, the one run clock, #1001), "13:52 to
+ * 13:57 · 5 min" when done, "13:44 to 13:51 · stopped after 7 min" when it
+ * stopped. The sheet itself passes the run's own times while it goes; this
+ * running branch is the fallback for an outcome alone.
  */
 export function sheetTimeLine(
   state: SheetState,
@@ -304,12 +289,10 @@ export function sheetTimeLine(
   if (state === 'quota') return '';
   if (state === 'running') {
     if (demo) return DEMO_PLAYING_BACK;
-    const started = clockTime(outcome?.startedAt);
-    const startMs = Date.parse(outcome?.startedAt ?? '');
-    if (started === '' || Number.isNaN(startMs)) {
-      return 'Started just now · usually 3 to 6 min';
-    }
-    return `Started ${started} · ${minutesLabel(nowMs - startMs)} so far · usually 3 to 6 min`;
+    return startedLine(
+      outcome === null ? null : { startedAt: outcome.startedAt },
+      nowMs,
+    );
   }
   if (outcome === null) return '';
   const from = clockTime(outcome.startedAt);
@@ -320,6 +303,22 @@ export function sheetTimeLine(
     Date.parse(outcome.finishedAt ?? '') - Date.parse(outcome.startedAt),
   );
   return `${from} to ${to} · ${state === 'done' ? length : `stopped after ${length}`}`;
+}
+
+/**
+ * The outcome with its start set to the run's one start (#1001): the tap
+ * (`requestedAt`), else the runner's `startedAt`, so the done and stopped
+ * line ("13:52 to 13:57") starts where the running line did.
+ */
+export function withRunStart(
+  outcome: RunOutcome | null,
+  run: { requestedAt?: string; startedAt?: string } | null,
+): RunOutcome | null {
+  if (outcome === null || run === null) return outcome;
+  const start = runStartMs(run);
+  return start === null
+    ? outcome
+    : { ...outcome, startedAt: new Date(start).toISOString() };
 }
 
 export type StepStatus = 'done' | 'active' | 'todo' | 'stopped';
@@ -840,8 +839,8 @@ export function WorkingSheet({
   const heading = sheetTitle(state, state === 'running' ? total : undefined);
   const timeLine =
     state === 'running'
-      ? startedLine(run)
-      : sheetTimeLine(state, outcome, now, isDemo());
+      ? startedLine(run, now)
+      : sheetTimeLine(state, withRunStart(outcome, run), now, isDemo());
   const steps = sheetSteps(
     state,
     outcome === null

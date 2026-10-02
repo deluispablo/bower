@@ -49,11 +49,15 @@ import {
   bubbleFor,
   finishedRunFor,
   greetingFor,
+  healthTileNote,
   homeStateFor,
   homeTiles,
+  INBOX_UPDATING,
   inboxLine,
+  inboxViewFor,
   isHomeLoading,
   lastTidyUpNote,
+  recentRequestTitle,
   restingBird,
   things,
   tidyUpAgo,
@@ -63,7 +67,7 @@ import { JUST_FILED_PATH } from '../just-filed.js';
 import { kindLabel, shortDate } from '../meta-line.js';
 import {
   displayName,
-  folderCounts,
+  folderHref,
   folderOf,
   paraKindOf,
   recentNotes,
@@ -76,7 +80,9 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { outcomeFromRun } from '../run-outcome.js';
+import { elapsedWords, waitingPaths } from '../run-progress.js';
 import { runningCount, useRun } from '../run-store.js';
+import type { RunPhase } from '../run-store.js';
 import { useSession } from '../session.js';
 import type { DriveFile } from '../drive.js';
 import { ACTIVITY_PATH, FOLDERS_PATH } from '../shell-routes.js';
@@ -97,6 +103,10 @@ const LazyTour = lazyOverlay(() =>
   import('../components/help-sheet.js').then((m) => m.Tour),
 );
 const Tour = LazyTour.Component;
+
+/** Pinned counts its folders from the index (#1010); Home shows Pinned
+ * only once the index is there, so its fallback counts are never needed. */
+const NO_NOTE_COUNTS: ReadonlyMap<string, number> = new Map();
 
 /** Recent shows this many rows; "All in Folders" opens the rest. */
 const RECENT_ROWS = 5;
@@ -229,21 +239,31 @@ function SkeletonTile({
   );
 }
 
+/** Where the Inbox tile leads when it is a link (#1001): the inbox folder,
+ * on every screen size. */
+export const INBOX_HREF = folderHref('0-Inbox');
+
 /** The Inbox tile (S-HM-9): the count, its line, and Tidy up while things
- * wait. */
-function InboxTile({
+ * wait; "Updating…" and no Tidy up while the listing is read again after a
+ * run (#1001). Exported for its own render test. */
+export function InboxTile({
   state,
   pending,
+  updating = false,
   onOpenSheet,
 }: {
   state: HomeState;
   pending: number;
+  updating?: boolean;
   /** Opens the working sheet: where "Being tidied up" leads. */
   onOpenSheet: () => void;
 }): JSX.Element {
   if (state === 'loading')
     return <SkeletonTile label="Inbox" icon={<IconInbox />} />;
-  const line = inboxLine(state, pending);
+  const line =
+    updating && state !== 'running'
+      ? INBOX_UPDATING
+      : inboxLine(state, pending);
   if (state === 'running') {
     return (
       <ActionTile label="Inbox" icon={<IconInbox />} value={pending} active>
@@ -259,6 +279,7 @@ function InboxTile({
     );
   }
   const waits =
+    !updating &&
     pending > 0 &&
     (state === 'waiting' || state === 'failed' || state === 'partial');
   if (waits) {
@@ -278,7 +299,7 @@ function InboxTile({
   }
   return (
     <TileLink
-      href={pending === 0 ? '/add' : '/notes'}
+      href={pending === 0 && !updating ? '/add' : INBOX_HREF}
       label={`Inbox: ${String(pending)}. ${line}`}
     >
       <StatTile
@@ -292,19 +313,25 @@ function InboxTile({
   );
 }
 
+/** A run is in flight: its own state speaks, not the post-run refresh. */
+function runActive(phase: RunPhase): boolean {
+  return phase === 'starting' || phase === 'queued' || phase === 'running';
+}
+
 /** The run in flight, for the tile's "Running · 1 min". */
 export interface ActiveRun {
-  startedAt: string;
+  /** When the run was asked for (the tap): the one start (#1001). */
+  requestedAt?: string;
+  /** The runner's own start, only when `requestedAt` is missing. */
+  startedAt?: string;
   total: number;
 }
 
-/** "Running · 2 min": whole minutes since the run started, at least one. */
-function runningFor(startedAt: string, now: number): string {
-  const minutes = Math.max(
-    1,
-    Math.floor((now - new Date(startedAt).getTime()) / 60_000) || 1,
-  );
-  return `Running · ${String(minutes)} min`;
+/** "Running · 2 min" ("Running · less than a minute" at first): the one
+ * run clock (`run-progress.ts#elapsedWords`, #1001). */
+function runningFor(active: ActiveRun, now: number): string {
+  const elapsed = elapsedWords(active, now);
+  return elapsed === null ? 'Running' : `Running · ${elapsed}`;
 }
 
 /**
@@ -344,7 +371,7 @@ export function LastTidyUpCard({
         <ActionTile
           label="Tidy-up"
           icon={<IconClock />}
-          value={runningFor(active.startedAt, now)}
+          value={runningFor(active, now)}
           note={things(active.total)}
           active
         />
@@ -520,6 +547,64 @@ export function RecentRows({
 }
 
 /**
+ * Recent's titles with each request note read by its words (#1001,
+ * `recentRequestTitle`): the note's text comes through the vault's note
+ * cache (`getNoteText`), only for the request notes on screen. Until it is
+ * read, or when it cannot be, the plain fallback stands in, never the file
+ * name.
+ */
+function useRecentTitles(
+  notes: readonly DriveFile[],
+  titles: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  const { getNoteText } = useVault();
+  const [texts, setTexts] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  const requests = notes.filter(
+    (note) => recentRequestTitle(note.name, undefined) !== null,
+  );
+  const key = requests
+    .map((note) => `${note.id}@${note.modifiedTime ?? ''}`)
+    .join('|');
+  const requestsRef = useRef(requests);
+  requestsRef.current = requests;
+  useEffect(() => {
+    if (key === '') return undefined;
+    let cancelled = false;
+    void Promise.all(
+      requestsRef.current.map(
+        async (note): Promise<[string, string] | null> => {
+          try {
+            return [note.id, await getNoteText(note.id)];
+          } catch (err) {
+            console.error('Reading a request for Recent failed', err);
+            return null;
+          }
+        },
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setTexts(
+        new Map(
+          entries.filter((entry): entry is [string, string] => entry !== null),
+        ),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, getNoteText]);
+  if (requests.length === 0) return titles;
+  const merged = new Map(titles);
+  for (const note of requests) {
+    const title = recentRequestTitle(note.name, texts.get(note.id));
+    if (title !== null) merged.set(note.id, title);
+  }
+  return merged;
+}
+
+/**
  * The run the Last tidy-up tile and the bubble speak about: the run store's
  * `lastFinished`, or, when this session has not seen one finish, the newest
  * of the Worker's history (`GET /runs`), so the tile never says "Not yet"
@@ -551,8 +636,16 @@ export function Home(): JSX.Element {
     useVault();
   // `now` is the run store's own shared clock, so the bubble, the tiles and
   // the working sheet always agree on how long ago something happened.
-  const { phase, run, lastFinished, now, tidyUp, openSheet, keptCount } =
-    useRun();
+  const {
+    phase,
+    run,
+    lastFinished,
+    now,
+    tidyUp,
+    openSheet,
+    keptCount,
+    refreshingAfterRun,
+  } = useRun();
   const online = useOnline();
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -565,14 +658,19 @@ export function Home(): JSX.Element {
   const showAppFiles = getPref('showAppFiles');
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
-  const recentTitles = useNoteTitles(recent);
-  // The same total the working sheet counts against.
-  const pending = inboxTotal(inboxCount(files, status === 'loading'));
+  const recentTitles = useRecentTitles(recent, useNoteTitles(recent));
+  // The same total the working sheet counts against; right after a run,
+  // less what the run took while the listing is read again (#1001).
+  const inboxView = inboxViewFor({
+    pending: inboxTotal(inboxCount(files, status === 'loading')),
+    refreshing: refreshingAfterRun && !runActive(phase),
+    run: settled,
+    waiting: waitingPaths(files),
+  });
+  const pending = inboxView.pending;
   // R-AD-8: while a tidy-up runs, the bubble and the card read the count it
   // was confirmed with, as the chip and the sheet do.
   const runPending = runningCount(keptCount, run?.total) ?? pending;
-  const noteCounts =
-    index === null ? new Map<string, number>() : folderCounts(index);
   const pinnedItems = index === null ? [] : pinned(index);
   const editingPins = editing && pinnedItems.length > 0;
 
@@ -587,10 +685,7 @@ export function Home(): JSX.Element {
     reportTime === undefined
       ? 'Not checked yet'
       : sentenceCase(relativeTime(reportDayStart(reportTime), now));
-  const healthNote =
-    reportTime !== undefined && findings !== undefined && findings > 0
-      ? `${String(findings)} small ${findings === 1 ? 'thing' : 'things'} to fix`
-      : 'Runs every Sunday.';
+  const healthNote = healthTileNote(reportTime !== undefined, findings);
 
   const offline = !online;
   const loading = isHomeLoading({
@@ -608,6 +703,7 @@ export function Home(): JSX.Element {
     // Before the index is there, nothing about the inbox is known yet: a
     // finished run must not make the tiles read "0 · Nothing waiting".
     indexReady: index !== null,
+    refreshing: inboxView.updating,
   });
 
   // A play-once pose (the first day's hello, the dance after a run) plays
@@ -638,6 +734,7 @@ export function Home(): JSX.Element {
       lastFinished: lastRun,
       now,
       desktop: wide,
+      updating: inboxView.updating,
     }),
     onTidyUp: tidyUp,
     onFailure: openSheet,
@@ -729,13 +826,21 @@ export function Home(): JSX.Element {
       )}
 
       <div class="home-tiles">
-        <InboxTile state={state} pending={pending} onOpenSheet={openSheet} />
+        <InboxTile
+          state={state}
+          pending={pending}
+          updating={inboxView.updating}
+          onOpenSheet={openSheet}
+        />
         <LastTidyUpCard
           state={state}
           run={lastRun}
           now={now}
           active={{
-            startedAt: run?.startedAt ?? run?.requestedAt ?? '',
+            ...(run?.requestedAt !== undefined && {
+              requestedAt: run.requestedAt,
+            }),
+            ...(run?.startedAt !== undefined && { startedAt: run.startedAt }),
             total: runPending,
           }}
           onOpenSheet={openSheet}
@@ -764,7 +869,7 @@ export function Home(): JSX.Element {
       ) : (
         <PinnedSection
           items={pinnedItems}
-          noteCounts={noteCounts}
+          noteCounts={NO_NOTE_COUNTS}
           onUnpinNote={unpinNote}
           onUnpinFolder={unpinFolder}
           onUnpinFile={unpinFile}

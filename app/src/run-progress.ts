@@ -375,36 +375,70 @@ export function destinationsLabel(rows: readonly RunRow[]): string | null {
   return names.length === 0 ? null : names.slice(0, 3).join(' · ');
 }
 
-/** The running sheet's promise under its title (AD-Running board; K-30). */
-export const RUN_LENGTH_WORDS = 'it takes a few minutes';
+/** The words for a run under a minute old (#1001). */
+export const UNDER_A_MINUTE = 'less than a minute';
 
-/**
- * When the running tidy-up started (R-API-4): the run's own `startedAt`
- * (the Worker and the demo both set it), else when it was asked for, as
- * the local "11:57"; `null` when neither parses.
- */
-export function runStartTime(run: {
+interface RunTimes {
   startedAt?: string | undefined;
   requestedAt?: string | undefined;
-}): string | null {
-  for (const iso of [run.startedAt, run.requestedAt]) {
+}
+
+/**
+ * The one start of a run on every surface (#1001): when it was asked for,
+ * the tap on "Yes, tidy up" (`requestedAt`), so Home's tile, the chip, the
+ * bar, the sheet and Activity read the same instant on every device; the
+ * runner's own `startedAt` only when the request time is missing or does
+ * not parse. `null` when neither parses.
+ */
+export function runStartMs(run: RunTimes): number | null {
+  for (const iso of [run.requestedAt, run.startedAt]) {
     if (iso === undefined) continue;
-    const at = new Date(iso);
-    if (Number.isNaN(at.getTime())) continue;
-    const two = (n: number): string => String(n).padStart(2, '0');
-    return `${two(at.getHours())}:${two(at.getMinutes())}`;
+    const at = Date.parse(iso);
+    if (!Number.isNaN(at)) return at;
   }
   return null;
 }
 
-/** "Started 11:57 · it takes a few minutes" (S-AD-20 as the board words
- * it); "Started just now · …" before the run reports a time. */
-export function startedLine(
-  run: {
-    startedAt?: string | undefined;
-    requestedAt?: string | undefined;
-  } | null,
-): string {
+/**
+ * The one elapsed formatter for a running tidy-up (#1001): "less than a
+ * minute" under 60 s, then whole minutes rounded down ("2 min"). `null`
+ * when the start is not known.
+ */
+export function elapsedWords(run: RunTimes, now: number): string | null {
+  const start = runStartMs(run);
+  if (start === null) return null;
+  const minutes = Math.floor(Math.max(0, now - start) / 60_000);
+  return minutes < 1 ? UNDER_A_MINUTE : `${String(minutes)} min`;
+}
+
+/**
+ * How long until the shared clock should tick again (#1001): right after
+ * the next whole minute of the running run, so "2 min" turns into "3 min"
+ * on the second, never up to a minute late; every minute when no run goes.
+ */
+export function nextTickDelay(now: number, start: number | null): number {
+  if (start === null || now < start) return 60_000;
+  return 60_000 - ((now - start) % 60_000) + 50;
+}
+
+/**
+ * When the running tidy-up started, as the local "11:57" (R-API-4): the
+ * same instant as `runStartMs`, so every device shows the same time;
+ * `null` when neither time parses.
+ */
+export function runStartTime(run: RunTimes): string | null {
+  const start = runStartMs(run);
+  if (start === null) return null;
+  const at = new Date(start);
+  const two = (n: number): string => String(n).padStart(2, '0');
+  return `${two(at.getHours())}:${two(at.getMinutes())}`;
+}
+
+/** "Started 13:52 · 2 min so far" (the run sheet in the runs spec);
+ * "Started just now" before the run has a time. */
+export function startedLine(run: RunTimes | null, now: number): string {
   const time = run === null ? null : runStartTime(run);
-  return `Started ${time ?? 'just now'} · ${RUN_LENGTH_WORDS}`;
+  const elapsed = run === null ? null : elapsedWords(run, now);
+  if (time === null || elapsed === null) return 'Started just now';
+  return `Started ${time} · ${elapsed} so far`;
 }
