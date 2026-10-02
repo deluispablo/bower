@@ -6,6 +6,9 @@ import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { COPIED_MS, NoteMenu } from '../src/components/note-menu.js';
+import { Toast } from '../src/components/toast.js';
+import { runPinAction } from '../src/pin-action.js';
+import { dismissToast } from '../src/toast-store.js';
 import { OverlayHost } from '../src/components/overlay.js';
 import type { NoteMenuProps } from '../src/components/note-menu.js';
 import type { DriveFile } from '../src/drive.js';
@@ -263,6 +266,37 @@ describe('NoteMenu', () => {
     expect(onTogglePin).toHaveBeenCalledOnce();
   });
 
+  it('confirms Pin to Home and Unpin with the toast the tree shows (#1002)', async () => {
+    // Wired as `note.tsx` wires it: the row calls `runPinAction`, which
+    // toasts "Pinned to Home" or "Unpinned" once the pin is written.
+    const pinNote = vi.fn(() => Promise.resolve());
+    for (const [pinned, label, message] of [
+      [false, 'Pin to Home', 'Pinned to Home'],
+      [true, 'Unpin from Home', 'Unpinned'],
+    ] as const) {
+      dismissToast();
+      mount(true, vi.fn(), pinned, () => {
+        void runPinAction(pinNote, pinned ? 'Unpinned' : 'Pinned to Home');
+      });
+      const toastRoot = document.createElement('div');
+      document.body.append(toastRoot);
+      void act(() => {
+        render(h(Toast, null), toastRoot);
+      });
+      click(rowByText(label));
+      await flush();
+      await flush();
+      expect(toastRoot.querySelector('[role="status"]')?.textContent).toContain(
+        message,
+      );
+      void act(() => {
+        render(null, toastRoot);
+        render(null, root);
+      });
+    }
+    expect(pinNote).toHaveBeenCalledTimes(2);
+    dismissToast();
+  });
   it('shows the bird in Ask for a note Bower wrote (K-29, #910)', () => {
     mountFor({
       file: NOTE,
