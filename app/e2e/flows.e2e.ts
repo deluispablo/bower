@@ -953,7 +953,7 @@ test('the working sheet: the bird between Inbox and the folders, the rows as the
   // line (#363), and the item being read.
   const sheet = page.getByRole('dialog', { name: SHEET_NAME });
   await expect(sheet.locator('.working-sheet-stage')).toContainText('Inbox');
-  await expect(sheet.getByText(/it takes a few minutes/)).toBeVisible();
+  await expect(sheet.getByText(/Started \d\d:\d\d · /)).toBeVisible();
   await expect(sheet.getByText('A recording.')).toBeVisible();
   await expect(
     sheet.getByText(
