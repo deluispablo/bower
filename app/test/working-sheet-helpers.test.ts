@@ -15,6 +15,7 @@ import {
   sheetSteps,
   sheetTimeLine,
   sheetTitle,
+  withRunStart,
 } from '../src/components/working-sheet.js';
 import { buildRun } from './fixtures/run-outcome-builders.js';
 
@@ -91,6 +92,21 @@ describe('the time line', () => {
 
   it('running in the demo says it is a playback', () => {
     expect(sheetTimeLine('running', outcome, start, true)).toBe('Playing back');
+  });
+
+  it('done: starts at the tap, the same start as the running line (#1001)', () => {
+    const done = {
+      ...outcome,
+      state: 'done',
+      startedAt: at(13, 53),
+      finishedAt: at(13, 57),
+    } as RunOutcome;
+    const run = { requestedAt: at(13, 52), startedAt: at(13, 53) };
+    expect(sheetTimeLine('done', withRunStart(done, run), start)).toBe(
+      '13:52 to 13:57 · 5 min',
+    );
+    expect(withRunStart(done, null)).toBe(done);
+    expect(withRunStart(done, { requestedAt: 'nope' })).toBe(done);
   });
 
   it('done: from, to and how long', () => {

@@ -152,7 +152,7 @@ export interface RunCounts {
  * note (#444) as neither. The working sheet reads the same kinds, so the
  * two never drift apart.
  */
-// TODO(#1011): read `filed` from `outcomeFromRun(run).filed` once #1011 makes it "has a `to` outside 0-Inbox".
+// Unlike `outcomeFromRun(run).filed`, a report without `items` counts its request notes as answered, not filed.
 export function runCounts(run: Run): RunCounts {
   let answered = 0;
   let filed = 0;
