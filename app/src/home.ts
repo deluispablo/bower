@@ -373,6 +373,21 @@ export function homeTiles(desktop: boolean): string[] {
     : ['Inbox', 'Last tidy-up'];
 }
 
+/**
+ * The Health check tile's line (desktop, E-8): "2 small things to fix"
+ * when the last report found some, else "Next check: Sunday.", the Health
+ * page's own words (#1004).
+ */
+export function healthTileNote(
+  reportKnown: boolean,
+  findings: number | undefined,
+): string {
+  if (reportKnown && findings !== undefined && findings > 0) {
+    return `${String(findings)} small ${findings === 1 ? 'thing' : 'things'} to fix`;
+  }
+  return 'Next check: Sunday.';
+}
+
 /** What `birdStateFor` needs: the state, the network, a run just done. */
 export interface BirdStateInput {
   state: HomeState;

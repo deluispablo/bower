@@ -10,6 +10,7 @@ import {
   homeStateFor,
   inboxLine,
   inboxViewFor,
+  healthTileNote,
   recentRequestTitle,
   REQUEST_FALLBACK,
   homeTiles,
@@ -449,6 +450,14 @@ describe('bubbleFor (the C.4 table, as the boards write it)', () => {
 });
 
 describe('homeTiles (E-8)', () => {
+  it('words the Health check tile as the Health page does (#1004)', () => {
+    expect(healthTileNote(false, undefined)).toBe('Next check: Sunday.');
+    expect(healthTileNote(true, 0)).toBe('Next check: Sunday.');
+    expect(healthTileNote(true, 1)).toBe('1 small thing to fix');
+    expect(healthTileNote(true, 3)).toBe('3 small things to fix');
+    expect(healthTileNote(false, 3)).toBe('Next check: Sunday.');
+  });
+
   it('shows Health check on desktop only', () => {
     expect(homeTiles(false)).toEqual(['Inbox', 'Last tidy-up']);
     expect(homeTiles(true)).toEqual(['Inbox', 'Last tidy-up', 'Health check']);

@@ -49,6 +49,7 @@ import {
   bubbleFor,
   finishedRunFor,
   greetingFor,
+  healthTileNote,
   homeStateFor,
   homeTiles,
   INBOX_UPDATING,
@@ -684,10 +685,7 @@ export function Home(): JSX.Element {
     reportTime === undefined
       ? 'Not checked yet'
       : sentenceCase(relativeTime(reportDayStart(reportTime), now));
-  const healthNote =
-    reportTime !== undefined && findings !== undefined && findings > 0
-      ? `${String(findings)} small ${findings === 1 ? 'thing' : 'things'} to fix`
-      : 'Runs every Sunday.';
+  const healthNote = healthTileNote(reportTime !== undefined, findings);
 
   const offline = !online;
   const loading = isHomeLoading({
