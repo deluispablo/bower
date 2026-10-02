@@ -12,10 +12,16 @@ import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({
+interface State {
+  demo: boolean;
+  status: 'loading' | 'signed-out' | 'signed-in';
+  email: string | undefined;
+}
+
+const state = vi.hoisted((): State => ({
   demo: false,
-  status: 'signed-out' as 'loading' | 'signed-out' | 'signed-in',
-  email: 'you@example.com' as string | undefined,
+  status: 'signed-out',
+  email: 'you@example.com',
 }));
 const location = { path: '/not-invited', route: vi.fn() };
 const signOut = vi.fn(() => Promise.resolve());
