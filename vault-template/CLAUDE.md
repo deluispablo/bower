@@ -1,8 +1,8 @@
 ---
 tags: [meta, personal]
 created: 2026-09-26
-updated: 2026-10-01
-bower_rules_version: 25
+updated: 2026-10-02
+bower_rules_version: 26
 ---
 
 # CLAUDE.md — Vault rulebook (Bower base)
@@ -87,7 +87,7 @@ Example rows, a listing and its companion note:
      - an existing folder under `1-Projects/`, `2-Areas/`, `3-Resources/` or `4-Archives/`;
      - a new direct subfolder of one of those four (the runner creates it and its hub note);
      - `0-Inbox/Processed` (raw clips once their note is written, unconvertible documents, duplicates).
-   - `<file name>`: the base name to give it, keeping the original extension (the same name when it already says what it is), as **File names (originals)** says.
+   - `<file name>`: the base name to give it, keeping the original extension (the same name when it already says what it is), as **File names (originals)** says. A kept name may be any length; a name you make up is at most 60 characters with the extension, and the runner shortens a longer new one.
    - Tags and description: as the row format above says, 1 to 5 tags and at most 100 characters. Use `-` for both when the destination is `0-Inbox/Processed`.
 2. `note<TAB><note path><TAB><original path or -><TAB><#tag #tag><TAB><description>` books a note you wrote in this run (a companion note, a text copy, an answer, a clip's note) at its final path.
    - The original path is the original's path after filing, or `-` when the note has no original.
@@ -130,8 +130,8 @@ Omit fields that do not apply. Extra fields are fine when useful.
 - Every note must be reachable from `index.md` or from a hub note. No orphans.
 
 ### File names (originals)
-- Keep a name that already says what the file is (`Lease agreement 2026.pdf`), in whatever language it is.
-- A name that says nothing (`IMG_4471.jpg`, `scan0001.pdf`, `Document (3).pdf`, a string of digits) gets one from the content: `<where or who>, <what it is>.<ext>` (`Arlington Road, window sign.jpg`, `Corner shop, receipt 2026-03-14.jpg`), at most 60 characters with the extension, which stays as it was.
+- Keep a name that already says what the file is (`Lease agreement 2026.pdf`), in whatever language it is, at any length: a kept name is never shortened (`Tenancy agreement for 14 Arlington Road, London NW1, November 2026 to October 2027.pdf` stays as it is).
+- A name that says nothing (`IMG_4471.jpg`, `scan0001.pdf`, `Document (3).pdf`, a string of digits) gets one from the content: `<where or who>, <what it is>.<ext>` (`Arlington Road, window sign.jpg`, `Corner shop, receipt 2026-03-14.jpg`), at most 60 characters with the extension, which stays as it was. The runner shortens a longer name you make up.
 - Never put the owner's name or any other person's name in a file name: say where, or which organisation (a shop, an employer, an agency).
 - A converted document and its `.md` keep one base name. When the name is taken in the folder, add ` 2`, ` 3` before the extension.
 
@@ -197,7 +197,17 @@ by: bower
 3. Optionally one line `More in [[<checklist note>]].` when a checklist note in `Resources/` fits; never invent a note that does not exist, and create one only when asked.
 4. Last, one section `## What Bower used` with one list item per source, no more than one line each, the sources' names in plain words, `[[wikilinks]]` for notes: `- the four listings`, `- [[Offer letter, Northwind Data]] and [[Cycle to Work agreement]]`, `- routes and area prices from the web`. The app shows it as one line: "Used: the four listings, your offer letter and Cycle to Work agreement, routes and area prices from the web." Name only what you actually used, and a web source only when you looked something up.
 Leave a closing part out when it has nothing to say; a short answer needs none of them.
-Write the answer directly at its path in `Answers/` and book it with a `note` line on the filing sheet (see **index.md and log.md**), original `-`.
+Write the answer directly at its path in `Answers/` and book it with a `note` line on the filing sheet (see **index.md and log.md**). Its original is `-`, except for an answer about a filed item.
+
+**An answer about a filed item.** The app writes a question about one file or note as an instruction note whose text starts `About <file name>: ` and then the question. The answer still goes to `Answers/`, and it is tied to that item:
+- Find the item by that name in `index.md` (Grep for the name) and take its path from its row.
+- Book the answer's `note` line with that path as the original, so the answer's `index.md` row ends `· [[<item path>]]` and the item shows the question with a link to its answer.
+- When no row has that name, or more than one does, book the answer with original `-` and say so in its box, ending `— Check`.
+
+Example: the instruction note says `About Arlington Road, listing.pdf: when can I move in?`, and the row `- [[1-Projects/Flat hunt/Arlington Road, listing.pdf]] · PDF · …` names the item. The answer's line:
+```
+note<TAB>Answers/2026-10-02 When can I move in.md<TAB>1-Projects/Flat hunt/Arlington Road, listing.pdf<TAB>#rental-listing #flat-hunt<TAB>When the Arlington Road flat is free to move into
+```
 
 When you answer about a filed PDF of no listed kind that has no text copy, write its text copy as Ingest step 6 says and book it with a `note` line. The runner adds the document text after the run.
 
@@ -427,6 +437,8 @@ The owner is talking to you through the app. Before you start, the runner checks
    - **Apply a rule to what is already filed** (a note whose text is `Apply this rule to what is already filed: <rule>`, sent from a rule's menu in the app): the rule is already in `Rules.md`; never touch `Rules.md` for this job, and do nothing but log it when the rule is paused there. Go through the folders the rule names (when it names none, the folders that hold the kind of note or file it is about) and move or rename each note or original the rule covers that is not yet where, or as, the rule says. For each one, update the hub notes (the runner updates its `index.md` row and links and logs the move) and append `Correction: <from folder> -> <to folder> (<YYYY-MM-DD>)` to `log.md`, ending `, renamed from <old name>` for a rename. These lines never count towards a proposal: the rule already exists. When nothing needs to change, append `Applied rule: nothing to move (<YYYY-MM-DD>)`.
 3. **Question** ("what is…", "when did…", "where is…"):
    - Run the Query workflow and write the answer to `Answers/<YYYY-MM-DD> <question>.md`.
+
+**A note about a filed item** (its text starts `About <file name>: `, as the app writes a question asked from a file or note): an answer or analysis it asks for goes to `Answers/` as usual, booked with that item's path as its original, as **An answer about a filed item** says; never with original `-` when the item is found.
 
 If the note is ambiguous, pick the most likely reading, say so at the top of what you produce, and never invent a rule the owner did not ask for.
 
