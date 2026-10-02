@@ -29,6 +29,10 @@ const CLOSED: SwitcherOpenState = { open: false, initialQuery: '' };
 
 let state: SwitcherOpenState = CLOSED;
 const listeners = new Set<(state: SwitcherOpenState) => void>();
+/** What was typed before the field could take it (`typeAhead`). */
+let typedAhead = '';
+/** The open field's way in (`setTypeAheadSink`), once it is there. */
+let typeInto: ((text: string) => void) | null = null;
 
 function set(next: SwitcherOpenState): void {
   state = next;
@@ -37,11 +41,66 @@ function set(next: SwitcherOpenState): void {
 
 /** Opens the switcher, optionally prefilling the field (the `/search` route's `q`). */
 export function openSwitcher(initialQuery = ''): void {
+  typedAhead = '';
   set({ open: true, initialQuery });
 }
 
 export function closeSwitcher(): void {
+  typedAhead = '';
+  typeInto = null;
   set(CLOSED);
+}
+
+// --- Typing ahead of the field (#998) -----------------------------------------
+//
+// The panel loads on first use, so the first characters typed straight after
+// Ctrl/Cmd+K arrive before its field exists, or before it has focus. While
+// the switcher is open, `typeAhead` keeps what is typed with nothing focused
+// and hands it to the field as soon as the field says where to put it.
+
+/**
+ * The open panel's field takes typed text through `sink` (and focus);
+ * anything typed before it was there is handed over at once. `null` when
+ * the field goes.
+ */
+export function setTypeAheadSink(sink: ((text: string) => void) | null): void {
+  typeInto = sink;
+  if (sink === null || typedAhead === '') return;
+  const text = typedAhead;
+  typedAhead = '';
+  sink(text);
+}
+
+/**
+ * A keydown while the switcher is open: a character typed outside any
+ * field or dialog (the field not there yet, or not focused yet) goes to
+ * the field, or waits for it. Anything else is left alone.
+ */
+export function typeAhead(event: KeyboardEvent): void {
+  if (!state.open) return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // Keys for a field, or for anything in a dialog (the switcher's own
+  // chips and rows), stay where they are; the page behind (its heading,
+  // a link, nothing at all) is where they land while the field loads.
+  const target = event.target;
+  if (
+    target instanceof HTMLElement &&
+    (target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable ||
+      target.closest('[role="dialog"]') !== null)
+  ) {
+    return;
+  }
+  if (event.key.length === 1) {
+    event.preventDefault();
+    if (typeInto === null) typedAhead += event.key;
+    else typeInto(event.key);
+  } else if (event.key === 'Backspace' && typeInto === null) {
+    event.preventDefault();
+    typedAhead = typedAhead.slice(0, -1);
+  }
 }
 
 /** The switcher's own open state; re-renders the subscriber when it changes. */

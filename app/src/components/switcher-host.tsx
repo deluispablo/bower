@@ -14,6 +14,7 @@ import {
   openSwitcher,
   recordOpened,
   recordPage,
+  typeAhead,
   useSwitcherOpen,
 } from '../switcher-store.js';
 
@@ -66,6 +67,16 @@ export function SwitcherHost(): JSX.Element | null {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
+
+  // What is typed straight after Ctrl/Cmd+K, while the panel loads, waits
+  // for its field instead of being lost (#998). Listening all along, not
+  // from the open's own render: the first keys come before any effect runs.
+  useEffect(() => {
+    document.addEventListener('keydown', typeAhead, true);
+    return () => {
+      document.removeEventListener('keydown', typeAhead, true);
+    };
+  }, []);
 
   // Mounted for the whole session, so this sees every note or file opened.
   useEffect(() => {

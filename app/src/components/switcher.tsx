@@ -102,6 +102,7 @@ import {
   knownNoteText,
   loadOpened,
   restoreSavedSearchIndex,
+  setTypeAheadSink,
   syncedSearchIndex,
   useSwitcherOpen,
 } from '../switcher-store.js';
@@ -943,11 +944,19 @@ function SwitcherPanel({
       },
       set current(next: HTMLInputElement | null) {
         field = next;
-        if (next === null) return;
+        if (next === null) {
+          setTypeAheadSink(null);
+          return;
+        }
         next.setAttribute('role', 'combobox');
         next.setAttribute('aria-expanded', 'true');
         next.setAttribute('aria-controls', 'switcher-listbox');
         next.setAttribute('autocomplete', 'off');
+        // What was typed before the field was here, or had focus (#998).
+        setTypeAheadSink((text) => {
+          setQuery((current) => current + text);
+          next.focus();
+        });
       },
     };
   });

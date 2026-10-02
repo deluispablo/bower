@@ -20,6 +20,25 @@ test('the switcher opens at once after the page has settled', async ({
   await expect(dialog.getByRole('combobox')).toBeFocused(FAST);
 });
 
+test('what is typed straight after Ctrl K reaches the field while it loads (#998)', async ({
+  page,
+}) => {
+  // The panel's code arrives late, so the keys come before its field.
+  await page.route(/\/assets\/switcher-[^/]*\.js$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await route.continue();
+  });
+  await openHome(page);
+  await page.keyboard.press('Control+k');
+  await page.keyboard.type('kitchen');
+  const dialog = page.getByRole('dialog', { name: 'Quick switcher' });
+  const field = dialog.getByRole('combobox');
+  await expect(field).toHaveValue('kitchen');
+  await expect(field).toBeFocused();
+  await page.keyboard.type(' plan');
+  await expect(field).toHaveValue('kitchen plan');
+});
+
 test('the tidy-up sheet opens at once from its chip', async ({ page }) => {
   await page.addInitScript(() => {
     sessionStorage.setItem('bower:demo:run', 'partial');
