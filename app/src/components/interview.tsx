@@ -1,8 +1,9 @@
 /**
  * The first-run interview's own four screens (#198, spec D.2): one question
  * at a time, the bird asking in a bubble (same shape as onboarding's
- * `.onb-ask`/`.onb-bubble`), a row of chips that fill the answer and a free
- * text field for the owner's own words. Purely presentational: the answers
+ * `.onb-ask`/`.onb-bubble`), a row of chips and a free text field for the
+ * owner's own words (question 1's chips are multi-select and stay apart
+ * from the field; `joinKeepAnswer` joins both on Finish, #999). Purely presentational: the answers
  * live here until "Finish" (`onFinish`), which is `routes/onboarding.tsx`'s
  * (and Settings') job to write through `vault-store.tsx`'s
  * `submitInterview`. "Skip the interview" (`onSkip`) leaves at any question

@@ -159,7 +159,7 @@ async function waitFor(predicate: () => boolean, tries = 40): Promise<void> {
 /** Walks Welcome → folder → Building, resolving `createVault` at once, and
  * lands on Building with "Continue" ready to press. */
 async function reachBuilding(): Promise<void> {
-  await act(() => button('Show me around').click());
+  await act(() => button("Let's start").click());
   createVault.mockResolvedValueOnce(vault);
   await act(() => button('Make a new Bower folder').click());
   await flush();

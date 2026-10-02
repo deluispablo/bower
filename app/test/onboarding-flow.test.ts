@@ -127,8 +127,12 @@ afterEach(() => {
 describe('Onboarding', () => {
   it('goes Welcome → folder → Building → Continue to Home', async () => {
     expect(heading()).toBe("Hi, I'm Bower.");
+    expect(root.textContent).toContain(
+      'First, a home for your notes in your Google Drive. Then a quick look around.',
+    );
+    expect(button('Start without the tour')).toBeDefined();
 
-    void act(() => button('Show me around').click());
+    void act(() => button("Let's start").click());
     expect(heading()).toBe('Where your notes live');
     expect(markTourSeen).not.toHaveBeenCalled();
 
@@ -140,7 +144,21 @@ describe('Onboarding', () => {
     );
     void act(() => button('Make a new Bower folder').click());
     expect(heading()).toBe('Building your bower');
-    expect(root.querySelectorAll('.onb-chip')).toHaveLength(6);
+    expect(
+      Array.from(root.querySelectorAll('.onb-chip')).map((c) => c.textContent),
+    ).toEqual([
+      '0-Inbox',
+      '1-Projects',
+      '2-Areas',
+      '3-Resources',
+      '4-Archives',
+      'Answers',
+      'Clippings',
+    ]);
+    expect(root.textContent).toContain(
+      'A folder called Bower in your Drive, with its folders and a rulebook you can edit. Takes a few seconds.',
+    );
+    expect(root.textContent).not.toMatch(/six folders/);
     expect(root.querySelector('[role="progressbar"]')).not.toBeNull();
     expect(root.textContent).not.toContain('Continue');
 
@@ -156,7 +174,7 @@ describe('Onboarding', () => {
   });
 
   it('skipping the tour on Welcome marks it seen and still asks for the folder', () => {
-    void act(() => button('Skip the tour').click());
+    void act(() => button('Start without the tour').click());
 
     expect(endTour).toHaveBeenCalledWith(false);
     expect(markTourSeen).toHaveBeenCalledWith(me);
@@ -167,7 +185,7 @@ describe('Onboarding', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     createVault.mockRejectedValue(new Error('network'));
 
-    void act(() => button('Show me around').click());
+    void act(() => button("Let's start").click());
     void act(() => button('Make a new Bower folder').click());
     await flush();
 
@@ -183,7 +201,7 @@ describe('Onboarding', () => {
 
 describe('The first-run interview (#198)', () => {
   async function reachInterview(): Promise<void> {
-    void act(() => button('Show me around').click());
+    void act(() => button("Let's start").click());
     createVault.mockResolvedValueOnce(vault);
     void act(() => button('Make a new Bower folder').click());
     await flush();
