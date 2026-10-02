@@ -433,6 +433,13 @@ no_ sheet_free_name "$ROOT/free" 'Lease.pdf'
 expect_eq "$(sheet_free_name "$ROOT/free" 'README')" 'README' 'no extension'
 : >"$ROOT/free/README"
 expect_eq "$(sheet_free_name "$ROOT/free" 'README')" 'README (2)' 'no extension, taken'
+# A suffixed name over 255 bytes is not made; one at 255 is.
+long252="$(printf 'a%.0s' {1..248}).pdf"
+: >"$ROOT/free/$long252"
+no_ sheet_free_name "$ROOT/free" "$long252"
+long251="$(printf 'b%.0s' {1..247}).pdf"
+: >"$ROOT/free/$long251"
+expect_eq "$(sheet_free_name "$ROOT/free" "$long251")" "$(printf 'b%.0s' {1..247}) (2).pdf" 'a suffixed name of 255 bytes'
 # The original's own name, taken in the destination: filed as (2), with its
 # hub line and row; the file that held the name is untouched. A note this
 # run created that names the taken path means the file the run filed: its

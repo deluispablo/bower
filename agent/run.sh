@@ -1476,8 +1476,10 @@ sheet_name_short() {
 # The file name $2 made free in the folder $1, printed: $2 itself when no
 # entry there has it in any letter case (sheet_taken), else ` (2)`,
 # ` (3)`, ... ` (9)` added before the extension, the first that is free, as
-# sheet_name_short does for a shortened name (#1000). Returns 1 when no such
-# name is left or the result is not a safe name.
+# sheet_name_short does for a shortened name (#1000). A suffixed name must
+# also fit in 255 bytes, the most a file name may have on the disks Bower
+# meets. Returns 1 when no such name is left or the result is not a safe
+# name.
 sheet_free_name() {
   local dir=$1 name=$2 ext='' stem n cand
   if ! sheet_taken "$dir" "$name"; then
@@ -1488,7 +1490,7 @@ sheet_free_name() {
   stem=${name%"$ext"}
   for n in 2 3 4 5 6 7 8 9; do
     cand="$stem ($n)$ext"
-    sheet_path_ok "$cand" || return 1
+    sheet_path_ok "$cand" && sheet_bytes_le "$cand" 255 || return 1
     if ! sheet_taken "$dir" "$cand"; then
       printf '%s' "$cand"
       return 0
