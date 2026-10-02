@@ -6,7 +6,7 @@ import { createApp } from '../src/index.js';
 import { QUEUED_STALE_MS, RUNNING_STALE_MS } from '../src/process.js';
 import { issueRunTicket } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { JOB_CHECK_AFTER_MS } from '../src/status.js';
+import { JOB_CHECK_AFTER_MS, settleFromJob } from '../src/status.js';
 import {
   RUN_HISTORY_LIMIT,
   deleteUserData,
@@ -126,6 +126,31 @@ describe('GET /status: the job-conclusion fallback (#315)', () => {
 
     expect(body.run?.state).toBe('failed');
     expect(body.run?.error).toBe('job timed_out');
+    expect(body.run?.reason).toBe('timeout');
+  });
+
+  it('gives a settled failure a reason for people (#1000)', () => {
+    const now = new Date('2026-06-01T12:00:00.000Z');
+    const run: Run = {
+      state: 'running',
+      requestedAt: '2026-06-01T11:00:00.000Z',
+      runId: '42',
+      jobCheckedAt: '2026-06-01T11:59:00.000Z',
+    };
+    expect(settleFromJob(run, 'cancelled', now)).toEqual({
+      state: 'failed',
+      requestedAt: run.requestedAt,
+      runId: '42',
+      error: 'job cancelled',
+      reason: 'unknown',
+      finishedAt: now.toISOString(),
+    });
+    expect(settleFromJob(run, 'failure', now).reason).toBe('unknown');
+    expect(settleFromJob(run, 'timed_out', now).reason).toBe('timeout');
+    const done = settleFromJob(run, 'success', now);
+    expect(done.state).toBe('done');
+    expect(done.reason).toBeUndefined();
+    expect(done.jobCheckedAt).toBeUndefined();
   });
 
   it('leaves a job still going running, and asks again only after a minute', async () => {
@@ -284,6 +309,7 @@ describe('GET /status', () => {
     expect(body.stale).toBe(true);
     expect(body.run?.state).toBe('failed');
     expect(body.run?.error).toBe('stale');
+    expect(body.run?.reason).toBe('timeout');
     expect(await getRun(kv, USER_ID)).toEqual(body.run);
   });
 

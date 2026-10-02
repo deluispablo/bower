@@ -525,7 +525,9 @@ if [ "$1" = sync ] && [ "$2" = vault: ]; then
     fi
     if [ "$SMOKE_SCENARIO" = formats ]; then
       # Report v2 (#598): a video and an Excel file (kinds Bower only
-      # keeps), a photo over the 50 MB limit, and a PDF over 300 pages.
+      # keeps), a photo over the 50 MB limit, and a PDF over 300 pages;
+      # and a song (kept, not read) the agent leaves in the inbox (#1000).
+      echo mp3 >"$remote/0-Inbox/song.mp3"
       echo mp4 >"$remote/0-Inbox/clip.mp4"
       echo xlsx >"$remote/0-Inbox/budget.xlsx"
       truncate -s 51M "$remote/0-Inbox/huge-photo.jpg"
@@ -2887,8 +2889,9 @@ echo "ok the runner reconciles moves the person made"
 
 # 34. Report v2 (#598): the final report and .bower/last-run.json say where
 # each processed item went (`to`) and its old name when it was renamed
-# (`renamedFrom`); a video and an Excel file are set aside as
-# `kept-not-read`, a photo over 50 MB and a PDF over 300 pages as
+# (`renamedFrom`); a video and an Excel file the agent filed are not set
+# aside (#1000: a kept-not-read item that moved is pruned), a song it left
+# in the inbox stays `kept-not-read`, a photo over 50 MB and a PDF over 300 pages as
 # `too-large` (the agent finds those two listed in .bower/too-large.txt, so
 # it files them without reading); the agent's one clause about what it added
 # is read from .bower/added.txt, sent as `added`, and neither file reaches
@@ -2902,10 +2905,10 @@ expect_eq "$(post 2 'p.processed.filter((i) => i.to).map((i) => [i.path, i.to, i
   '0-Inbox/a.pdf>0-Inbox/Processed/a.pdf>|0-Inbox/budget.xlsx>2-Areas/Finance/budget.xlsx>|0-Inbox/clip.mp4>3-Resources/Videos/2026-01-15 clip.mp4>clip.mp4|0-Inbox/huge-photo.jpg>3-Resources/Photos/2026-01-15 huge-photo.jpg>huge-photo.jpg|0-Inbox/long-scan.pdf>3-Resources/long-scan.pdf>' \
   'processed items with to and renamedFrom'
 expect_eq "$(post 2 'p.processed.filter((i) => !i.to).map((i) => i.path).join("|")')" \
-  'Clippings/Bower trick.md|Clippings/b.md' 'processed items that did not move'
+  '0-Inbox/song.mp3|Clippings/Bower trick.md|Clippings/b.md' 'processed items that did not move'
 expect_eq "$(post 2 'p.setAside.map((i) => i.reason + ":" + i.path).join("|")')" \
-  'kept-not-read:0-Inbox/budget.xlsx|kept-not-read:0-Inbox/clip.mp4|too-large:0-Inbox/huge-photo.jpg|too-large:0-Inbox/long-scan.pdf' \
-  'set aside with reasons'
+  'too-large:0-Inbox/huge-photo.jpg|too-large:0-Inbox/long-scan.pdf|kept-not-read:0-Inbox/song.mp3' \
+  'set aside with reasons, the moved kept-not-read items pruned (#1000)'
 expect_eq "$(post 2 p.added)" 'I added bike times to the flats' 'added'
 outcome="$STATE/remote/.bower/last-run.json"
 expect_eq "$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));

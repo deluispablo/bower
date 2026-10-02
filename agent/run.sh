@@ -54,10 +54,14 @@
 #   BOWER_EFFORT_LOW         optional; the effort for a lint, and for an
 #                            ingest with no instruction note and no context
 #                            note (default low)
-#   BOWER_EFFORT_HIGH        optional; the effort for any other ingest
-#                            (default high). Both take low, medium, high,
-#                            xhigh or max; any other value is ignored with a
-#                            warning (see "model and effort" below)
+#   BOWER_EFFORT_MEDIUM      optional; the effort for an ingest whose only
+#                            reason for more is a context note from Add
+#                            (default medium)
+#   BOWER_EFFORT_HIGH        optional; the effort for an ingest given an
+#                            instruction note the app wrote (default high).
+#                            All three take low, medium, high, xhigh or max;
+#                            any other value is ignored with a warning (see
+#                            "model and effort" below)
 #
 # Environment:
 #   CLAUDE_CODE_OAUTH_TOKEN  or ANTHROPIC_API_KEY; not needed when the API
@@ -102,12 +106,12 @@ export -n BOWER_RUN_ALLOW_WEB
 # arrived in the environment (even empty, next to the file) would otherwise
 # stay exported, and printf -v below would hand the file's value to every
 # child's environment (curl, rclone, jq; issue #276).
-export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE BOWER_REPORT_BACKOFF BOWER_MODEL BOWER_EFFORT_LOW BOWER_EFFORT_HIGH
+export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE BOWER_REPORT_BACKOFF BOWER_MODEL BOWER_EFFORT_LOW BOWER_EFFORT_MEDIUM BOWER_EFFORT_HIGH
 secrets_file="${RUNNER_TEMP:-}/bower-secrets"
 if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
-      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE | BOWER_REPORT_BACKOFF | BOWER_MODEL | BOWER_EFFORT_LOW | BOWER_EFFORT_HIGH)
+      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE | BOWER_REPORT_BACKOFF | BOWER_MODEL | BOWER_EFFORT_LOW | BOWER_EFFORT_MEDIUM | BOWER_EFFORT_HIGH)
         printf -v "${line%%=*}" '%s' "${line#*=}"
         ;;
       BOWER_RUN_ALLOW_WEB)
@@ -207,9 +211,11 @@ esac
 readonly SCOPE
 
 # --- model and effort -------------------------------------------------------
-# R-SS-3 (#965): the agent runs on MODEL, at EFFORT_LOW for a lint and for an
-# ingest whose pending list holds no instruction note and no context note,
-# at EFFORT_HIGH otherwise (chosen just before the agent run, below). Both
+# R-SS-3 (#965, #1000): the agent runs on MODEL, at EFFORT_HIGH for an
+# ingest given an instruction note the app wrote, at EFFORT_MEDIUM for an
+# ingest whose only reason for more is a pending context note, and at
+# EFFORT_LOW otherwise, a lint included (choose_effort, in the context pack
+# below). Both
 # are passed to `claude -p` as arguments, never as environment. A setting
 # that does not pass its check falls back to the default with a warning
 # that names the setting, never its value.
@@ -221,7 +227,8 @@ if ! [[ "$MODEL" =~ ^[a-z][a-z0-9.-]*$ ]]; then
 fi
 readonly MODEL
 # Usage: effort_setting <setting name> <default>: sets the variable named
-# after the setting without its BOWER_ prefix (EFFORT_LOW, EFFORT_HIGH).
+# after the setting without its BOWER_ prefix (EFFORT_LOW, EFFORT_MEDIUM,
+# EFFORT_HIGH).
 effort_setting() {
   local value=${!1:-}
   case "$value" in
@@ -235,8 +242,9 @@ effort_setting() {
   printf -v "${1#BOWER_}" '%s' "$value"
 }
 effort_setting BOWER_EFFORT_LOW low
+effort_setting BOWER_EFFORT_MEDIUM medium
 effort_setting BOWER_EFFORT_HIGH high
-readonly EFFORT_LOW EFFORT_HIGH
+readonly EFFORT_LOW EFFORT_MEDIUM EFFORT_HIGH
 
 AGENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly AGENT_DIR
@@ -303,6 +311,7 @@ ROWS_WARNING=''
 # lines.
 readonly SHEET_TAKEN="$WORK_DIR/filing.tsv"
 SHEET_WARNING=''
+SHEET_JSON=''  # the sheet's counts for .bower/last-run.json (sheet_json, #1000)
 # In the vault: the pending files over the size limit, for the agent to file
 # by name and date without reading them (written before the agent starts),
 # and the one clause the agent may write about what it added besides filing
@@ -497,6 +506,9 @@ restore_rulebook() {
 
 on_exit() {
   local rc=$?
+  # Right after the exit status is kept (a trap first would reset it): a
+  # second signal must not cut the final copy-up and report short (#1000).
+  trap '' INT TERM
   restore_rulebook || log "rulebook not restored"
   if [ "$rc" -ne 0 ] && [ "$REPORTED" -eq 0 ]; then
     # An unexpected error that no explicit check caught.
@@ -504,7 +516,13 @@ on_exit() {
     copy_up_after_failure
     report_lists >/dev/null 2>&1 || true
     PROCESSED_JSON=$(moved_items_json 2>/dev/null) || PROCESSED_JSON=''
-    REASON=unknown
+    # #1000: stopped from outside (the job's time limit cancels the step
+    # with SIGINT, then SIGTERM) is a timeout; anything else is unknown.
+    if [ "$STOPPED" -eq 1 ]; then
+      REASON=timeout
+    else
+      REASON=unknown
+    fi
     write_outcome failed "$(failed_sentence)" >/dev/null 2>&1 || true
     write_paths >/dev/null 2>&1 || true
     SUMMARY='' report_final failed "$STEP: unexpected error" >/dev/null 2>&1 || true
@@ -514,7 +532,11 @@ on_exit() {
   rm -rf "$WORK_DIR"
   exit "$rc"
 }
+# A signal from outside ends the run through on_exit, with the reason
+# timeout (#1000), instead of killing the shell before it can report.
+STOPPED=0
 trap on_exit EXIT
+trap 'STOPPED=1; exit 143' INT TERM
 
 # POST a status report. Values go into the payload through jq, never through
 # the log. Every report carries the mode as its kind (ingest or lint), so the
@@ -641,6 +663,9 @@ write_outcome() {
     [ -z "$DISAGREE_JSON" ] || [ "$DISAGREE_JSON" = '[]' ] ||
       args+=(--argjson disagree "$DISAGREE_JSON")
     [ -z "$NEXT_JSON" ] || [ "$NEXT_JSON" = '[]' ] || args+=(--argjson next "$NEXT_JSON")
+    # The filing sheet's counts, skipped lines per reason (#1000). Only
+    # here: the Worker's status report takes no `sheet` field.
+    [ -z "$SHEET_JSON" ] || args+=(--argjson sheet "$SHEET_JSON")
   elif [ "$state" = failed ]; then
     # The items already moved in Drive, as the failed report (R-RUNNER-5).
     [ -z "${PROCESSED_JSON:-}" ] || args+=(--argjson items "$PROCESSED_JSON")
@@ -1253,8 +1278,12 @@ readonly SHEET_MAX_LINES=2000
 readonly SHEET_MAX_BYTES=1048576
 readonly SHEET_MAX_LINE=2048
 
-# The number of characters (not bytes) of $1.
-sheet_chars() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' '; }
+# The number of characters (not bytes) of $1, printed. The checks below
+# use sheet_nchars directly: no process at all (#1000).
+sheet_chars() {
+  sheet_nchars "$1"
+  printf '%s' "$SHEET_N"
+}
 
 # Whether $1 is a safe relative path in the vault: not empty, no `/` at
 # either end, no `//`, no `\`, no drive letter, no control character, no
@@ -1309,8 +1338,14 @@ sheet_path_ok() {
 # the interlinear annotation characters and the tag characters. Matched
 # on their UTF-8 bytes, so the locale does not matter.
 sheet_has_format() {
-  printf '%s' "$1" | LC_ALL=C grep -aqE \
-    $'\xc2\xad|\xd8[\x80-\x85\x9c]|\xdb\x9d|\xdc\x8f|\xe0\xa3\xa2|\xe1\xa0\x8e|\xe2\x80[\x8b-\x8f\xaa-\xae]|\xe2\x81[\xa0-\xa4\xa6-\xaf]|\xef\xbb\xbf|\xef\xbf[\xb9-\xbb]|\xf3\xa0[\x80-\x81]'
+  # Glob patterns on the bytes, in the shell: no process per field (#1000).
+  local LC_ALL=C
+  local t=$1
+  [[ $t == *$'\xc2\xad'* || $t == *$'\xd8'[$'\x80'-$'\x85'$'\x9c']* || $t == *$'\xdb\x9d'* ||
+    $t == *$'\xdc\x8f'* || $t == *$'\xe0\xa3\xa2'* || $t == *$'\xe1\xa0\x8e'* ||
+    $t == *$'\xe2\x80'[$'\x8b'-$'\x8f'$'\xaa'-$'\xae']* ||
+    $t == *$'\xe2\x81'[$'\xa0'-$'\xa4'$'\xa6'-$'\xaf']* || $t == *$'\xef\xbb\xbf'* ||
+    $t == *$'\xef\xbf'[$'\xb9'-$'\xbb']* || $t == *$'\xf3\xa0'[$'\x80'-$'\x81']* ]]
 }
 
 # Whether every segment of the checked path $2 (sheet_path_ok: no glob
@@ -1348,6 +1383,21 @@ sheet_bytes() {
   printf '%s' "${#1}"
 }
 
+# Whether the file names $1 and $2 have the same extension in any letter
+# case (sheet_ext), with no subshell.
+sheet_same_ext() {
+  local a='' b=''
+  [[ $1 != ?*.* ]] || a=${1##*.}
+  [[ $2 != ?*.* ]] || b=${2##*.}
+  [ "${a,,}" = "${b,,}" ]
+}
+
+# Whether $1 is at most $2 bytes long, with no subshell.
+sheet_bytes_le() {
+  local LC_ALL=C
+  [ "${#1}" -le "$2" ]
+}
+
 # Whether $1 is a usable file name for the original named $2, as written:
 # a safe path (sheet_path_ok) of one segment with the original's extension
 # (any letter case). A name the agent kept (exactly $2) may be up to 200
@@ -1357,11 +1407,12 @@ sheet_bytes() {
 sheet_name_ok() {
   sheet_path_ok "$1" || return 1
   [[ $1 != */* ]] || return 1
-  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ] || return 1
+  sheet_same_ext "$1" "$2" || return 1
   if [ "$1" = "$2" ]; then
-    [ "$(sheet_bytes "$1")" -le 200 ]
+    sheet_bytes_le "$1" 200
   else
-    [ "$(sheet_chars "$1")" -le 60 ]
+    sheet_nchars "$1"
+    [ "$SHEET_N" -le 60 ]
   fi
 }
 
@@ -1373,8 +1424,9 @@ sheet_name_long() {
   [ "$1" != "$2" ] || return 1
   sheet_path_ok "$1" || return 1
   [[ $1 != */* ]] || return 1
-  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ] || return 1
-  [ "$(sheet_chars "$1")" -gt 60 ]
+  sheet_same_ext "$1" "$2" || return 1
+  sheet_nchars "$1"
+  [ "$SHEET_N" -gt 60 ]
 }
 
 # The stem of the file name $1: the name without its extension.
@@ -1413,6 +1465,32 @@ sheet_name_short() {
   sheet_path_ok "$cut (2)$ext" || return 1
   for n in 2 3 4 5 6 7 8 9; do
     cand="$cut ($n)$ext"
+    if ! sheet_taken "$dir" "$cand"; then
+      printf '%s' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# The file name $2 made free in the folder $1, printed: $2 itself when no
+# entry there has it in any letter case (sheet_taken), else ` (2)`,
+# ` (3)`, ... ` (9)` added before the extension, the first that is free, as
+# sheet_name_short does for a shortened name (#1000). A suffixed name must
+# also fit in 255 bytes, the most a file name may have on the disks Bower
+# meets. Returns 1 when no such name is left or the result is not a safe
+# name.
+sheet_free_name() {
+  local dir=$1 name=$2 ext='' stem n cand
+  if ! sheet_taken "$dir" "$name"; then
+    printf '%s' "$name"
+    return 0
+  fi
+  [[ $name != ?*.* ]] || ext=.${name##*.}
+  stem=${name%"$ext"}
+  for n in 2 3 4 5 6 7 8 9; do
+    cand="$stem ($n)$ext"
+    sheet_path_ok "$cand" && sheet_bytes_le "$cand" 255 || return 1
     if ! sheet_taken "$dir" "$cand"; then
       printf '%s' "$cand"
       return 0
@@ -1466,12 +1544,24 @@ sheet_cut() {
 # as plain strings only.
 SHEET_MAP_FROM=()
 SHEET_MAP_TO=()
+# The kept names the runner made free with ` (2)`, ` (3)` (#1000), in the
+# same form: SHEET_KEPT_FROM[i] the path as the agent wrote it (a file that
+# was there before), SHEET_KEPT_TO[i] the path the moved file got. Read
+# only for a note this run created (sheet_note_line): such a note means the
+# file the run filed, while a note that was there before keeps meaning the
+# older file.
+SHEET_KEPT_FROM=()
+SHEET_KEPT_TO=()
 # The pending paths whose name the runner tried to shorten this run, the
 # text copies it moved and booked itself (sheet_sibling), and the notes
 # booked without their original (counts only).
 SHEET_SHORT_SRC=()
 SHEET_SIBLINGS=()
 SHEET_UNLINKED_COUNT=0
+# The notes a `note` line booked this run (#1000): a repeated line is not
+# carried out again, so a sheet that repeats one valid line cannot make
+# the runner rewrite index.md once per line.
+declare -A SHEET_BOOKED=()
 
 # Whether $1 is one of $2...: plain string comparison.
 sheet_has() {
@@ -1552,7 +1642,8 @@ sheet_text_ok() {
   [ -n "$1" ] && [ "$1" != - ] || return 1
   [[ $1 != *[[:cntrl:]]* && $1 != *'·'* && $1 != *'[['* && $1 != *']]'* ]] || return 1
   ! sheet_has_format "$1" || return 1
-  [ "$(sheet_chars "$1")" -le "$2" ]
+  sheet_nchars "$1"
+  [ "$SHEET_N" -le "$2" ]
 }
 
 # The row text $1 for a limit of $2 characters, printed: every rule of
@@ -1565,14 +1656,16 @@ sheet_text_ok() {
 sheet_text_fit() {
   local text=$1 max=$2 words=() w acc='' try
   sheet_text_ok "$text" 1000000 || return 1
-  if [ "$(sheet_chars "$text")" -le "$max" ]; then
+  sheet_nchars "$text"
+  if [ "$SHEET_N" -le "$max" ]; then
     printf '%s' "$text"
     return 0
   fi
   read -r -a words <<<"$text"
   for w in "${words[@]}"; do
     try=${acc:+$acc }$w
-    [ "$(sheet_chars "$try")" -le $((max - 1)) ] || break
+    sheet_nchars "$try"
+    [ "$SHEET_N" -le $((max - 1)) ] || break
     acc=$try
   done
   while [[ $acc == *[,\;:\ ] ]]; do acc=${acc%?}; done
@@ -1637,7 +1730,8 @@ sheet_dest_kind() {
     return 0
   fi
   [[ ${dest#*/} != */* ]] || return 1
-  [ "$(sheet_chars "${dest#*/}")" -le 60 ] || return 1
+  sheet_nchars "${dest#*/}"
+  [ "$SHEET_N" -le 60 ] || return 1
   # A folder there under another letter case is not a new one.
   ! sheet_taken "$vault/${dest%%/*}" "${dest#*/}" || return 1
   echo new
@@ -1819,20 +1913,27 @@ sheet_index_row() {
 # changed nothing, when the line is not usable: the pending path is not on
 # the pending list or not a file there; the destination is not one
 # sheet_dest_kind accepts; the file name is not usable (sheet_name_ok, or
-# sheet_name_long for a changed name over 60 characters) or, as written,
-# names a file that is there already (in any letter case); the tags or the
+# sheet_name_long for a changed name over 60 characters) or, changed by
+# the agent, names a file that is there already (in any letter case); the
+# tags or the
 # description are not in the v24 form (both `-` for 0-Inbox/Processed);
 # index.md or the folder's hub note is a link or not a plain file
 # (sheet_index_ok, sheet_hub_plan). A failed mkdir or mv also skips the
 # line. A changed name over 60 characters is shortened (sheet_name_short,
 # which also picks ` (2)`, ` (3)` on a clash) and the rename is kept in
-# SHEET_MAP_FROM and SHEET_MAP_TO for the `note` lines. Otherwise moves the
+# SHEET_MAP_FROM and SHEET_MAP_TO for the `note` lines. A kept name (the
+# original's own) that is taken there gets ` (2)`, ` (3)` the same way
+# (sheet_free_name, #1000) instead of being refused, so the file does not
+# stay in the inbox run after run; that rename is kept apart, in
+# SHEET_KEPT_FROM and SHEET_KEPT_TO, for the notes this run created only,
+# since the taken name already means the file that holds it everywhere
+# else. Otherwise moves the
 # file in the local copy, then writes its hub line (in the folder's hub
 # note, made for a new folder) and its index row; nothing more for
 # Processed. Returns 2 when one of those writes fails after the move.
 sheet_file_line() {
   local vault=$1 pending=$2 before=$3 day=$4 src=$5 dest=$6 name=$7 tags=$8 desc=$9
-  local kind target plan='' arr=() final short=0
+  local kind target plan='' arr=() final short=0 remap=1
   SHEET_WHY=path
   sheet_path_ok "$src" pending || return 1
   grep -qxF -- "$src" "$pending" || return 1
@@ -1868,8 +1969,13 @@ sheet_file_line() {
     ! sheet_taken "$vault/$dest" "$name" || return 1
     final=$(sheet_name_short "$name" "$vault/$dest") || return 1
   else
-    ! sheet_taken "$vault/$dest" "$name" || return 1
     final=$name
+    if sheet_taken "$vault/$dest" "$name"; then
+      # A name the agent made up and that is taken is its mistake: refused.
+      [ "$name" = "${src##*/}" ] || return 1
+      final=$(sheet_free_name "$vault/$dest" "$name") || return 1
+      remap=0
+    fi
   fi
   target="$dest/$final"
   SHEET_WHY=other
@@ -1880,9 +1986,12 @@ sheet_file_line() {
   mkdir -p -- "$vault/$dest" 2>/dev/null || return 1
   mv -n -- "$vault/$src" "$vault/$target" 2>/dev/null || return 1
   [ -f "$vault/$target" ] && [ ! -e "$vault/$src" ] || return 1
-  if [ "$final" != "$name" ]; then
+  if [ "$final" != "$name" ] && [ "$remap" -eq 1 ]; then
     SHEET_MAP_FROM+=("$dest/$name")
     SHEET_MAP_TO+=("$target")
+  elif [ "$final" != "$name" ]; then
+    SHEET_KEPT_FROM+=("$dest/$name")
+    SHEET_KEPT_TO+=("$target")
   fi
   if [ "$kind" != processed ]; then
     read -r -a arr <<<"$tags"
@@ -1891,7 +2000,8 @@ sheet_file_line() {
     sheet_index_row "$vault" "- [[$target]] · $(sheet_type_of "$final") · $tags · $desc · filed by Bower" "$target" ||
       return 2
   fi
-  sheet_sibling "$vault" "$before" "$day" "$src" "$dest" "$name" "$final" "$kind" "$tags" "$desc" || return 2
+  sheet_sibling "$vault" "$before" "$day" "$src" "$dest" "$name" "$final" "$kind" "$tags" "$desc" \
+    "$remap" || return 2
 }
 
 # The text copy the runner made this run for the original $4 (pandoc's
@@ -1899,17 +2009,19 @@ sheet_file_line() {
 # writes nothing in the vault), once that original is filed (#995): the
 # vault $1, the manifest before the run $2, the date $3, then the file
 # line's destination $5, name as written $6, name used $7, destination kind
-# $8 (sheet_dest_kind), tags $9 and description ${10}. A copy still where
+# $8 (sheet_dest_kind), tags $9, description ${10} and ${11}, 0 when the
+# file's rename is not mapped (a kept name made free). A copy still where
 # the runner wrote it, a plain file, moves next to the original as
-# `<final stem>.md`, unless that name is taken there or not a safe path
-# (it then stays where it was). Outside Processed it is booked as a note
-# whose original is the filed file: its hub line and its index row, with
-# the file line's tags and description. When the agent's name was
-# shortened, `<agent's stem>.md` in the destination maps to it, so a `note`
-# line for the copy finds it. Returns 2 when a write fails.
+# `<final stem>.md`, or with ` (2)`, ` (3)` when that name is taken there
+# (sheet_free_name, #1000); with no free safe name it stays where it was.
+# Outside Processed it is booked as a note whose original is the filed
+# file: its hub line and its index row, with the file line's tags and
+# description. When the agent's name was shortened, `<agent's stem>.md` in
+# the destination maps to it, so a `note` line for the copy finds it.
+# Returns 2 when a write fails.
 sheet_sibling() {
   local vault=$1 before=$2 day=$3 src=$4 dest=$5 name=$6 final=$7 kind=$8 tags=$9 desc=${10}
-  local sib stem note plan row
+  local remap=${11:-1} sib stem note plan row free
   [ -n "${SHEET_CONVERTED:-}" ] && [ -f "$SHEET_CONVERTED" ] || return 0
   [[ ${src##*/} == ?*.* ]] || return 0
   sib="${src%.*}.md"
@@ -1917,12 +2029,13 @@ sheet_sibling() {
   grep -qxF -- "$sib" "$SHEET_CONVERTED" || return 0
   [ -f "$vault/$sib" ] && [ ! -L "$vault/$sib" ] || return 0
   stem=$(sheet_stem "$final")
-  note="$dest/$stem.md"
-  sheet_path_ok "$note" || return 0
-  ! sheet_taken "$vault/$dest" "$stem.md" || return 0
+  sheet_path_ok "$dest/$stem.md" || return 0
+  free=$(sheet_free_name "$vault/$dest" "$stem.md") || return 0
+  stem=$(sheet_stem "$free")
+  note="$dest/$free"
   mv -n -- "$vault/$sib" "$vault/$note" 2>/dev/null || return 0
   [ -f "$vault/$note" ] && [ ! -e "$vault/$sib" ] || return 0
-  if [ "$final" != "$name" ]; then
+  if [ "$final" != "$name" ] && [ "$remap" -eq 1 ]; then
     SHEET_MAP_FROM+=("$dest/$(sheet_stem "$name").md")
     SHEET_MAP_TO+=("$note")
   fi
@@ -1981,11 +2094,21 @@ sheet_note_line() {
   # A copy the runner booked already (sheet_sibling): its row and hub line
   # are written, and SHEET_REPEAT tells the caller not to count it again.
   SHEET_UNLINKED=0 SHEET_REPEAT=0
-  if sheet_has "$note" ${SHEET_SIBLINGS[@]+"${SHEET_SIBLINGS[@]}"}; then
+  if [ -n "${SHEET_BOOKED[$note]+x}" ] ||
+    sheet_has "$note" ${SHEET_SIBLINGS[@]+"${SHEET_SIBLINGS[@]}"}; then
     SHEET_REPEAT=1
     return 0
   fi
   sheet_note_ok "$vault" "$note" "$before" || return 1
+  # A note this run created (its path not in the manifest before) also
+  # follows a kept name the runner made free (#1000): its original and its
+  # links mean the file the run filed. Local copies of the maps, so nothing
+  # outside this line sees the addition.
+  if [ "${#SHEET_KEPT_FROM[@]}" -gt 0 ] && ! P="$note" awk '{ p = $0; sub(/^[^ ]* [^ ]* /, "", p) }
+    p == ENVIRON["P"] { f = 1; exit } END { exit !f }' "$before"; then
+    local SHEET_MAP_FROM=(${SHEET_MAP_FROM[@]+"${SHEET_MAP_FROM[@]}"} "${SHEET_KEPT_FROM[@]}")
+    local SHEET_MAP_TO=(${SHEET_MAP_TO[@]+"${SHEET_MAP_TO[@]}"} "${SHEET_KEPT_TO[@]}")
+  fi
   # An original the runner filed under a shorter name (#995).
   orig=$(sheet_mapped "$orig")
   # An original that is not a file there now (its `file` line was refused,
@@ -2020,6 +2143,7 @@ sheet_note_line() {
   row="- [[$note]] · Note · $tags · $desc · filed by Bower"
   [ "$orig" = - ] || row+=" · [[$orig]]"
   sheet_index_row "$vault" "$row" "$note" || return 2
+  SHEET_BOOKED[$note]=1
 }
 
 # One `tag` line: the vault $1, then the tag and its meaning. Returns 1
@@ -2071,7 +2195,9 @@ sheet_split() {
 # check refuses, is skipped. At most SHEET_MAX_LINES lines are read, the
 # rest are skipped. Sets SHEET_FILED, SHEET_NOTES, SHEET_TAGS and
 # SHEET_SKIPPED (counts only), SHEET_SKIP_REASONS (the skipped lines per
-# reason) and SHEET_UNLINKED_COUNT, the `note` lines booked without their
+# reason, as text), SHEET_SKIP_COUNTS (the same per reason, an associative
+# array: description, path, name, tag, other; sheet_json) and
+# SHEET_UNLINKED_COUNT, the `note` lines booked without their
 # original (not skipped, so in neither of the two). Returns 1 when a write
 # fails.
 apply_filing_sheet() {
@@ -2082,7 +2208,9 @@ apply_filing_sheet() {
   local vault=$1 sheet=$2 pending=$3 before=$4 day=$5 line total read rc pass reason
   local lines=()
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
+  declare -gA SHEET_SKIP_COUNTS=([description]=0 [path]=0 [name]=0 [tag]=0 [other]=0)
   SHEET_MAP_FROM=() SHEET_MAP_TO=() SHEET_SHORT_SRC=() SHEET_SIBLINGS=() SHEET_UNLINKED_COUNT=0
+  SHEET_BOOKED=() SHEET_KEPT_FROM=() SHEET_KEPT_TO=()
   SHEET_CONVERTED=${6:-}
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
   total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)
@@ -2141,9 +2269,20 @@ apply_filing_sheet() {
   done
   SHEET_SKIP_REASONS=''
   for reason in description path name tag other; do
+    SHEET_SKIP_COUNTS[$reason]=${why[$reason]}
     [ "${why[$reason]}" -eq 0 ] ||
       SHEET_SKIP_REASONS+="${SHEET_SKIP_REASONS:+, }${why[$reason]} $reason"
   done
+}
+
+# The sheet's counts for the run report (#1000), after apply_filing_sheet:
+# { filed, notes, tags, skipped, skippedBy: { description, path, name, tag,
+# other } }, counts only, never a path or a field of the sheet.
+sheet_json() {
+  printf '{"filed":%d,"notes":%d,"tags":%d,"skipped":%d,"skippedBy":{"description":%d,"path":%d,"name":%d,"tag":%d,"other":%d}}\n' \
+    "${SHEET_FILED:-0}" "${SHEET_NOTES:-0}" "${SHEET_TAGS:-0}" "${SHEET_SKIPPED:-0}" \
+    "${SHEET_SKIP_COUNTS[description]:-0}" "${SHEET_SKIP_COUNTS[path]:-0}" \
+    "${SHEET_SKIP_COUNTS[name]:-0}" "${SHEET_SKIP_COUNTS[tag]:-0}" "${SHEET_SKIP_COUNTS[other]:-0}"
 }
 # <<< filing sheet
 
@@ -2636,6 +2775,8 @@ copy_up_after_failure() {
 #   vault_missing      the Bower folder is gone from Drive or in the Bin (R-VAULT-7)
 #   unknown            anything else (the default)
 fail() {
+  # A signal now must not cut the copy-up and the report short (#1000).
+  trap '' INT TERM
   local error=$1
   REASON=${2:-unknown}
   REPORTED=1
@@ -2980,6 +3121,37 @@ fill_placeholders() {
     }
     { print }'
 }
+# The effort and the rulebook sections for a run of mode $1 (#965, #1000),
+# with RULES_WRITABLE $2 and the pending list after the pre-scan in file
+# $3. Sets EFFORT and CONTEXT_MODES:
+# - an ingest given an instruction note the app wrote (RULES_WRITABLE 1):
+#   EFFORT_HIGH, with the `instructions` sections;
+# - an ingest whose only reason for more is a pending context note from
+#   Add (is_context_note): EFFORT_MEDIUM, also with the `instructions`
+#   sections, because how a context note is handled is written in the
+#   rulebook's **Instructions** section (`<!-- load: instructions -->`);
+# - anything else, a lint included: EFFORT_LOW, with only the run's own
+#   mode (`ingest` or `lint`).
+choose_effort() {
+  local mode=$1 writable=$2 pending=$3 path
+  EFFORT=$EFFORT_LOW
+  CONTEXT_MODES=("$mode")
+  [ "$mode" = ingest ] || return 0
+  if [ "$writable" -eq 1 ]; then
+    EFFORT=$EFFORT_HIGH
+    CONTEXT_MODES+=(instructions)
+    return 0
+  fi
+  [ -f "$pending" ] || return 0
+  while IFS= read -r path; do
+    [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
+    if is_context_note "$path"; then
+      EFFORT=$EFFORT_MEDIUM
+      CONTEXT_MODES+=(instructions)
+      return 0
+    fi
+  done <"$pending"
+}
 # <<< context pack
 
 # Whether pending path $1 belongs to an instructions-only run: an
@@ -3027,10 +3199,13 @@ processed_json() {
   items_json
 }
 
+# >>> run report (#1000): agent/test/bookkeeping.test.sh runs this block as is.
 # The processed list from KINDS_FILE, as a JSON array of { path, kind }.
 # Report v2 (#598): with a moves file ("<old><TAB><new>", MOVES_FILE), an
 # item that moved also carries `to` (its new path) and, when its file name
-# changed, `renamedFrom` (the old name).
+# changed, `renamedFrom` (the old name). `to` comes only from that file, the
+# moves the runner found and carried out, never from what the agent said:
+# an item that did not move has none (#1000).
 items_json() {
   local path kind to='' moves=${1:-} only_moved=${2:-} args
   while IFS=$'\t' read -r path kind; do
@@ -3129,6 +3304,32 @@ set_aside_json() {
     printf '[%s]\n' "$items"
   }
 }
+
+# Drops from SET_ASIDE_FILE each `kept-not-read` item that moved, by the
+# moves file $1 ("<old><TAB><new>"): it was filed by its name, so it is
+# not left aside (#1000). Any other reason, and a kept item that did not
+# move, stays. Returns 1 when the file cannot be rewritten.
+prune_set_aside() {
+  [ -f "$1" ] && [ -f "$SET_ASIDE_FILE" ] || return 0
+  awk -F '\t' 'FILENAME == ARGV[1] { if ($2 != "") moved[$1] = 1; next }
+    !($1 == "kept-not-read" && ($2 in moved))' "$1" "$SET_ASIDE_FILE" >"$SET_ASIDE_FILE.tmp" &&
+    mv -f -- "$SET_ASIDE_FILE.tmp" "$SET_ASIDE_FILE"
+}
+
+# The number of processed files (KINDS_FILE, kind `file`: not a request or
+# a context note moved to Processed) that moved, by the moves file
+# $1 ("<old><TAB><new>"): what the run really filed, logged as the
+# "originals filed" count instead of the agent's own `Filed:` line (#1000).
+moved_count() {
+  if [ ! -f "$1" ] || [ ! -f "$KINDS_FILE" ]; then
+    echo 0
+    return 0
+  fi
+  awk -F '\t' 'FILENAME == ARGV[1] { if ($2 != "") moved[$1] = 1; next }
+    $1 != "" && $2 == "file" && ($1 in moved) && !seen[$1]++ { n++ }
+    END { print n + 0 }' "$1" "$KINDS_FILE"
+}
+# <<< run report
 
 # The agent's one clause about what it added besides filing (#598), from
 # ADDED_NOTE: its first non-empty line, trimmed and cut to MAX_ADDED_LENGTH
@@ -3490,7 +3691,7 @@ STEP='fetch vault info'
 log "$STEP"
 if ! http_code=$(curl -sS -o "$VAULT_JSON" -w '%{http_code}' \
   -H "Authorization: Bearer $API_CREDENTIAL" "$API_BASE"); then
-  fail "$STEP: request failed"
+  fail "$STEP: request failed" unknown
 fi
 case "$http_code" in
   200) ;;
@@ -3502,9 +3703,16 @@ case "$http_code" in
     # #276; docs/runbook.md, Troubleshooting). Saying which saves looking
     # for a wrong key that is not there.
     if [ -n "$(field error 2>/dev/null || true)" ]; then
-      fail "$STEP: HTTP $http_code"
+      # #1000: the Worker no longer takes this run's ticket (401, 403) or no
+      # longer knows the vault or its user (404): the person's account or
+      # sign-in, which the app's drive_unavailable words ask them to renew
+      # by signing in again. Any other answer is the Worker's own fault.
+      case "$http_code" in
+        401 | 403 | 404) fail "$STEP: HTTP $http_code" drive_unavailable ;;
+      esac
+      fail "$STEP: HTTP $http_code" unknown
     fi
-    fail "$STEP: HTTP $http_code, not answered by the Worker"
+    fail "$STEP: HTTP $http_code, not answered by the Worker" unknown
     ;;
 esac
 
@@ -3521,15 +3729,15 @@ REQUESTED_AT=$(field requestedAt)
 # live in shell variables only, and the file is gone long before the agent
 # starts.
 if ! rm -f "$VAULT_JSON"; then
-  fail "$STEP: could not delete the answer"
+  fail "$STEP: could not delete the answer" unknown
 fi
 if [ -z "$FOLDER_ID" ] || [ -z "$ACCESS_TOKEN" ] || [ -z "$EXPIRES_AT" ]; then
-  fail "$STEP: incomplete answer"
+  fail "$STEP: incomplete answer" unknown
 fi
 
 MAX_TURNS=${BOWER_MAX_TURNS:-$API_MAX_TURNS}
 case "$MAX_TURNS" in
-  '' | *[!0-9]*) fail "$STEP: max turns is not a number" ;;
+  '' | *[!0-9]*) fail "$STEP: max turns is not a number" unknown ;;
 esac
 
 if [ -n "$USER_API_KEY" ]; then
@@ -3582,14 +3790,14 @@ fi
 # this is uploaded.
 STEP='permission policy'
 if [ ! -f "$SETTINGS_FILE" ]; then
-  fail "$STEP: claude-settings.json missing next to run.sh"
+  fail "$STEP: claude-settings.json missing next to run.sh" unknown
 fi
 if ! {
   mkdir -p "$VAULT_DIR/.claude" &&
     rm -f "$VAULT_DIR/.claude/settings.local.json" &&
     cp "$SETTINGS_FILE" "$VAULT_DIR/.claude/settings.json"
 }; then
-  fail "$STEP: copy failed"
+  fail "$STEP: copy failed" unknown
 fi
 
 # --- reconcile --------------------------------------------------------------
@@ -3638,7 +3846,7 @@ if [ "$MODE" = ingest ] && [ "$SCOPE" = instructions ]; then
     if in_instructions_scope "$path"; then
       printf '%s\n' "$path" >>"$WORK_DIR/in-scope.txt"
     else
-      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside"
+      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside" unknown
       held=$((held + 1))
     fi
   done 3<"$PENDING_FILE"
@@ -3663,14 +3871,14 @@ fi
 # is. No REQUESTED_AT (an older Worker), no hold. The log counts, never
 # names.
 if [ "$MODE" = ingest ] && [[ "$REQUESTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$ ]]; then
-  cutoff=$(hold_cutoff "$REQUESTED_AT") || fail "$STEP: could not read when the run was asked for"
+  cutoff=$(hold_cutoff "$REQUESTED_AT") || fail "$STEP: could not read when the run was asked for" unknown
   : >"$WORK_DIR/held.txt"
   while IFS= read -r path <&3; do
     [ -n "$path" ] || continue
     if [ -n "$(find "$VAULT_DIR/$path" -maxdepth 0 -newermt "$cutoff" 2>/dev/null)" ]; then
       printf '%s\n' "$path" >>"$WORK_DIR/held.txt"
       if is_context_note "$path"; then
-        applies_to "$path" >>"$WORK_DIR/held.txt" || fail "$STEP: could not read a context note"
+        applies_to "$path" >>"$WORK_DIR/held.txt" || fail "$STEP: could not read a context note" unknown
       fi
     fi
   done 3<"$PENDING_FILE"
@@ -3679,7 +3887,7 @@ if [ "$MODE" = ingest ] && [[ "$REQUESTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-
   while IFS= read -r path <&3; do
     [ -n "$path" ] || continue
     if grep -Fxq -- "$path" "$WORK_DIR/held.txt"; then
-      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside"
+      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside" unknown
       held=$((held + 1))
     else
       printf '%s\n' "$path" >>"$WORK_DIR/not-held.txt"
@@ -3700,7 +3908,7 @@ log "$PENDING_COUNT files pending"
 if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then
   STEP='report done'
   log "$STEP"
-  report_lists || fail "$STEP: report lists not built"
+  report_lists || fail "$STEP: report lists not built" unknown
   write_outcome done 'Nothing new to tidy up.'
   write_file_facts
   write_paths
@@ -3717,7 +3925,7 @@ fi
 STEP='report running'
 log "$STEP"
 if ! PROCESSED_JSON='' report running; then
-  fail "$STEP: API unreachable"
+  fail "$STEP: API unreachable" unknown
 fi
 
 # The local copy is still exactly what sync down fetched: record it, so the
@@ -3730,14 +3938,14 @@ log "$STEP"
 # updated notes (R-RUNNER-1).
 rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST" "$VAULT_DIR/$UPDATED_NOTE" "$VAULT_DIR/$CHECKS_NOTE" "$VAULT_DIR/$NEXT_NOTE"
 if ! manifest >"$MANIFEST_BEFORE"; then
-  fail "$STEP: listing the local copy failed"
+  fail "$STEP: listing the local copy failed" unknown
 fi
 if ! keep_pre_run_copy; then
-  fail "$STEP: keeping a pre-run copy failed"
+  fail "$STEP: keeping a pre-run copy failed" unknown
 fi
 # R-RUNNER-9: each note's status now, for the status History lines.
 if ! snapshot_status 2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: reading the statuses failed"
+  fail "$STEP: reading the statuses failed" unknown
 fi
 
 # Keeps a copy of the text file $2 (a document's converted text) as the text
@@ -3936,7 +4144,7 @@ if [ "$MODE" = ingest ]; then
   pending_now="$WORK_DIR/pending-after-scan.txt"
   [ -f "$pending_now" ] || pending_now=$PENDING_FILE
   if ! set_aside "$pending_now"; then
-    fail "$STEP: listing failed"
+    fail "$STEP: listing failed" unknown
   fi
   SET_ASIDE_JSON=$(set_aside_json)
 fi
@@ -4002,28 +4210,9 @@ if [ "$MODE" = ingest ]; then
 else
   report_phase writing
 fi
-# The effort (see "model and effort" above): high for an ingest whose agent
-# is given an instruction note the app wrote (RULES_WRITABLE, from the
-# instruction allow-list above) or a context note still pending.
-# The same test picks the rulebook sections (R-SS-5): `ingest`, plus
-# `instructions` when the effort is high for that reason; `lint` for a lint.
-EFFORT=$EFFORT_LOW
-CONTEXT_MODES=("$MODE")
-if [ "$MODE" = ingest ]; then
-  if [ "$RULES_WRITABLE" -eq 1 ]; then
-    EFFORT=$EFFORT_HIGH
-    CONTEXT_MODES+=(instructions)
-  else
-    while IFS= read -r path; do
-      [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
-      if is_context_note "$path"; then
-        EFFORT=$EFFORT_HIGH
-        CONTEXT_MODES+=(instructions)
-        break
-      fi
-    done <"$pending_now"
-  fi
-fi
+# The effort and the rulebook sections (see "model and effort" above and
+# choose_effort in the context pack).
+choose_effort "$MODE" "$RULES_WRITABLE" "${pending_now:-}"
 readonly EFFORT
 # R-SS-6 (#966): the run's facts, filled into the prompt the way
 # {{ALREADY_WRITTEN}} is, so the agent never reads index.md or log.md to
@@ -4053,20 +4242,20 @@ log "$context_line"
 PROMPT=$(printf '%s\n' "$PROMPT" | fill_placeholders "$WORK_DIR")
 STEP='rulebook'
 if ! take_rulebook_out; then
-  fail "$STEP: could not move CLAUDE.md out"
+  fail "$STEP: could not move CLAUDE.md out" unknown
 fi
 if ! build_system_prompt "${CONTEXT_MODES[@]}" >"$SYSTEM_FILE" 2>/dev/null; then
-  fail "$STEP: system prompt not built"
+  fail "$STEP: system prompt not built" unknown
 fi
 log "$STEP: $(wc -c <"$SYSTEM_FILE" | tr -d ' ') bytes for ${CONTEXT_MODES[*]}"
 # R-SS-9, R-SS-10: index.md as the session starts, for the tag recount and
 # the row check after it. Kept in the work dir, never logged.
 rm -f "$INDEX_BEFORE"
 [ ! -f "$VAULT_DIR/index.md" ] || cp "$VAULT_DIR/index.md" "$INDEX_BEFORE" ||
-  fail "$STEP: index.md not kept"
+  fail "$STEP: index.md not kept" unknown
 # #978: the session starts with no filing sheet, so an old one is never
 # carried out again.
-rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: old filing sheet not removed"
+rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: old filing sheet not removed" unknown
 # Logged right before the agent starts: the next line is its stats, so the
 # two timestamps bound the agent's own time (agent/bench/run-bench.sh).
 STEP='agent run'
@@ -4089,16 +4278,16 @@ agent_rc=$?
 set -e
 # R-SS-5: CLAUDE.md goes back before anything reads or copies the local copy.
 if ! restore_rulebook; then
-  fail "$STEP: CLAUDE.md not restored"
+  fail "$STEP: CLAUDE.md not restored" unknown
 fi
 # #978: the filing sheet leaves the local copy at once, so no copy up, the
 # one after a failure included, ever takes it to Drive. Only a plain file
 # is kept; anything else at its path is removed.
 rm -f "$SHEET_TAKEN"
 if [ -f "$VAULT_DIR/$SHEET_FILE" ] && [ ! -L "$VAULT_DIR/$SHEET_FILE" ]; then
-  mv -- "$VAULT_DIR/$SHEET_FILE" "$SHEET_TAKEN" || fail "$STEP: filing sheet not taken"
+  mv -- "$VAULT_DIR/$SHEET_FILE" "$SHEET_TAKEN" || fail "$STEP: filing sheet not taken" unknown
 fi
-rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: filing sheet not taken"
+rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: filing sheet not taken" unknown
 # The agent's closing lines (the report parsed below) are the final result
 # event's text; with no result event (a crash, a timeout) AGENT_OUT is empty,
 # as an empty text output was.
@@ -4155,7 +4344,7 @@ if [ -f "$SHEET_TAKEN" ]; then
     "$(date -u +%F)" "$CONVERTED_FILE" 2>>"$WORK_DIR/filing-sheet.err"; then
     # The message names vault paths: it stays in the work dir, which is
     # never uploaded, not in the logs.
-    fail "$STEP: filing sheet failed"
+    fail "$STEP: filing sheet failed" unknown
   fi
   # Counts only, with the skipped lines per reason (#978 follow-up).
   # Notes booked without their original (#995) are not skipped lines.
@@ -4163,6 +4352,7 @@ if [ -f "$SHEET_TAKEN" ]; then
   [ "$SHEET_UNLINKED_COUNT" -eq 0 ] ||
     unlinked="; $SHEET_UNLINKED_COUNT $([ "$SHEET_UNLINKED_COUNT" -eq 1 ] && echo 'note booked without its' || echo 'notes booked without their') original"
   log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped${SHEET_SKIP_REASONS:+ (skipped: $SHEET_SKIP_REASONS)}$unlinked"
+  SHEET_JSON=$(sheet_json) || SHEET_JSON=''
   [ "$SHEET_SKIPPED" -eq 0 ] ||
     SHEET_WARNING="Warning: $SHEET_SKIPPED filing $([ "$SHEET_SKIPPED" -eq 1 ] && echo 'decision was' || echo 'decisions were') not usable and skipped; what they named stays where it was."
 fi
@@ -4170,19 +4360,19 @@ if ! audit || ! record_saved_keys; then
   fail "$STEP: copy failed" drive_unavailable
 fi
 if ! find_moves; then
-  fail "$STEP: move failed"
+  fail "$STEP: move failed" unknown
 fi
 # R-RUNNER-7: the documents' full text goes into their text copies now that
 # the renames are known, then the names are audited.
 if ! append_document_text || ! audit_note_names; then
-  fail "$STEP: text copy failed"
+  fail "$STEP: text copy failed" unknown
 fi
 # R-SS-10: the index rows the session added or changed, checked against the
 # v24 form (check_rows); a bad row is counted, never refused or rewritten,
 # and the count is a warning in the summary. Before the bookkeeping phase,
 # so a link the runner rewrites for a move is not counted as the agent's.
 if [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -f "$VAULT_DIR/index.md" ]; then
-  rows_checked=$(check_rows "$INDEX_BEFORE" "$VAULT_DIR/index.md") || fail "$STEP: row check failed"
+  rows_checked=$(check_rows "$INDEX_BEFORE" "$VAULT_DIR/index.md") || fail "$STEP: row check failed" unknown
   bad_rows=${rows_checked% *}
   [ "${rows_checked#* }" -eq 0 ] || log "row check: $bad_rows of ${rows_checked#* } rows not in the expected form"
   [ "$bad_rows" -eq 0 ] ||
@@ -4190,30 +4380,35 @@ if [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -f "$VAULT_DIR/index.md" ]; then
 fi
 # E-7 (#921): an unusable folder status list in a changed hub note is removed.
 if ! check_hub_statuses; then
-  fail "$STEP: status list check failed"
+  fail "$STEP: status list check failed" unknown
 fi
 if ! move_up; then
-  fail "$STEP: move failed"
+  fail "$STEP: move failed" unknown
 fi
 # A failing tool's own message names vault paths: it goes to a private log.
 if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')" \
   2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: bookkeeping failed"
+  fail "$STEP: bookkeeping failed" unknown
 fi
 # R-RUNNER-9: the mechanical History lines, now that the moves are booked.
 if ! write_history 2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: bookkeeping failed"
+  fail "$STEP: bookkeeping failed" unknown
 fi
 # R-SS-9, R-SS-13: the tag counts in index.md and a `Tag added:` line per
 # new tag, after the moves are booked, so both files go up with the rest.
 # None after a refused run: nothing of it is saved.
 if [ "$TOO_MANY_CHANGES" -eq 0 ] &&
   ! book_tags "$VAULT_DIR" "$INDEX_BEFORE" "$(date -u '+%F %H:%M')" 2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: bookkeeping failed"
+  fail "$STEP: bookkeeping failed" unknown
 fi
 # Report v2 (#598): each processed item that moved carries where it went.
 if [ "$MODE" = ingest ] && [ -n "$PROCESSED_JSON" ]; then
   PROCESSED_JSON=$(items_json "$MOVES_FILE")
+fi
+# A kept-not-read item that moved is filed, not set aside (#1000).
+if [ "$MODE" = ingest ] && [ -n "$SET_ASIDE_JSON" ]; then
+  prune_set_aside "$MOVES_FILE" || fail "$STEP: set-aside list not pruned" unknown
+  SET_ASIDE_JSON=$(set_aside_json)
 fi
 if ! copy_up "$UPLOAD_FILE"; then
   fail "$STEP: copy failed" drive_unavailable
@@ -4247,7 +4442,7 @@ done 3<"$PENDING_FILE"
 STEP='report done'
 log "$STEP"
 if ! report_lists; then
-  fail "$STEP: report lists not built"
+  fail "$STEP: report lists not built" unknown
 fi
 # The agent's final report is its last lines: six for an ingest (Processed,
 # Filed, Created, Updated, Rules, Problems; issue #368), five for a lint (no
@@ -4255,8 +4450,9 @@ fi
 report_lines=5
 [ "$MODE" != ingest ] || report_lines=6
 SUMMARY=$(tail -n "$report_lines" "$AGENT_OUT")
-filed=$(awk '/^Filed: [0-9]+ files?$/ { n = $2 } END { print n }' <<<"$SUMMARY")
-[ -z "$filed" ] || log "$filed originals filed"
+# The originals the run really filed: the processed items that moved, not
+# the agent's own `Filed:` line (#1000). A count, never a name.
+[ "$MODE" != ingest ] || log "$(moved_count "$MOVES_FILE") originals filed"
 if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
   # Nothing was saved, so nothing was processed, whatever the agent said.
   SUMMARY="Refused: too many changes (more than $MAX_CHANGES files). Nothing was saved."

@@ -218,3 +218,37 @@ expect_eq "$(fill_placeholders "$FILL_DIR" <<<"$template")" "$(join 'Tags:' '{{P
   'Folders:' '- 2-Areas/Trap · See {{PENDING}} and {{BACKFILL}}' 'Pending:' '- `0-Inbox/a.pdf`' \
   'Rows:' '(none)' 'Kept: {{TAGS}} inline' '{{UNKNOWN}}')" 'filled prompt'
 echo "ok $CASE"
+
+# 14. The effort (choose_effort, #1000): high with the instructions sections
+#     for an ingest given an instruction note the app wrote; medium, also
+#     with the instructions sections (a context note's handling is in the
+#     rulebook's Instructions section), when a pending context note is the
+#     only reason; low with only the run's own mode otherwise, a lint
+#     included. A context note no longer in the folder does not count.
+CASE=effort
+block=$(sed -n '/^is_context_note() {/,/^}/p' "$HERE/../run.sh")
+[ -n "$block" ] || die 'no is_context_note in run.sh'
+eval "$block"
+EFFORT_LOW=L EFFORT_MEDIUM=M EFFORT_HIGH=H
+EFFORT_VAULT="$ROOT/effort-vault"
+mkdir -p "$EFFORT_VAULT/0-Inbox"
+printf -- '---\nkind: context\n---\nReceipts for the flat\n\n## Applies to\n- a.pdf\n' \
+  >"$EFFORT_VAULT/0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md"
+printf -- '---\nkind: note\n---\nkind: context\n' >"$EFFORT_VAULT/0-Inbox/plain.md"
+echo pdf >"$EFFORT_VAULT/0-Inbox/a.pdf"
+printf '%s\n' 0-Inbox/a.pdf 0-Inbox/plain.md >"$ROOT/effort-plain.txt"
+printf '%s\n' 0-Inbox/a.pdf '0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md' >"$ROOT/effort-context.txt"
+printf '%s\n' 0-Inbox/a.pdf '0-Inbox/Bower - 2026-01-15 0915-00 Context gone.md' >"$ROOT/effort-gone.txt"
+effort_of() {
+  local VAULT_DIR=$EFFORT_VAULT
+  choose_effort "$@"
+  printf '%s %s' "$EFFORT" "${CONTEXT_MODES[*]}"
+}
+expect_eq "$(effort_of ingest 1 "$ROOT/effort-plain.txt")" 'H ingest instructions' 'instruction note'
+expect_eq "$(effort_of ingest 1 "$ROOT/effort-context.txt")" 'H ingest instructions' 'instruction and context notes'
+expect_eq "$(effort_of ingest 0 "$ROOT/effort-context.txt")" 'M ingest instructions' 'context note only'
+expect_eq "$(effort_of ingest 0 "$ROOT/effort-plain.txt")" 'L ingest' 'plain tidy-up'
+expect_eq "$(effort_of ingest 0 "$ROOT/effort-gone.txt")" 'L ingest' 'context note gone'
+expect_eq "$(effort_of ingest 0 "$ROOT/none.txt")" 'L ingest' 'no pending list'
+expect_eq "$(effort_of lint 0 '')" 'L lint' 'lint'
+echo "ok $CASE"

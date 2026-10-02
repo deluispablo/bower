@@ -95,16 +95,19 @@ export function isActiveRun(run: Run | undefined, now: Date): boolean {
 }
 
 /**
- * `run`, marked `failed` with `error: 'stale'` and `finishedAt = now`: what
- * a stale `queued` or `running` run becomes once nothing will ever report
- * on it. Everything else on `run` (`requestedAt`, `startedAt`, `runId`) is
- * kept, since a stale run has no `summary` or `processed` to drop.
+ * `run`, marked `failed` with `error: 'stale'`, `reason: 'timeout'` and
+ * `finishedAt = now`: what a stale `queued` or `running` run becomes once
+ * nothing will ever report on it. It ran out of time without a word, so the
+ * app says it took too long (#1000), not "something went wrong". Everything
+ * else on `run` (`requestedAt`, `startedAt`, `runId`) is kept, since a stale
+ * run has no `summary` or `processed` to drop.
  */
 export function markStale(run: Run, now: Date): Run {
   return {
     ...run,
     state: 'failed',
     error: 'stale',
+    reason: 'timeout',
     finishedAt: now.toISOString(),
   };
 }
