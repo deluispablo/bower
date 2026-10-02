@@ -508,21 +508,24 @@ export function requestRows({
   // A rule kept from this screen and the same rule read back from
   // `Rules.md` are one row: matched by the text `keepRule` writes (#997).
   const keyOf = (text: string): string => text.trim().toLowerCase();
-  const keptAt = new Map(
-    justKept.map((item) => [keyOf(keptRuleText(item.text)), item.since]),
+  // The words the person sent stay the row's words once Rules.md has it.
+  const keptBy = new Map(
+    justKept.map((item) => [keyOf(keptRuleText(item.text)), item]),
   );
+
   const inRules = new Set<string>();
   for (const rule of rules) {
     if (rule.paused || rule.origin?.toLowerCase() !== OWNER_ORIGIN) continue;
     // The interview's rule stays under Rules only (#997).
     if (INTERVIEW_RULE.test(rule.text)) continue;
     inRules.add(keyOf(rule.text));
+    const kept = keptBy.get(keyOf(rule.text));
     rows.push({
       key: `rule-${String(rule.line)}`,
       state: 'kept',
-      text: rule.text,
+      text: kept?.text ?? rule.text,
       kind: 'rule',
-      since: keptAt.get(keyOf(rule.text)) ?? dayStart(rule.date) ?? '',
+      since: kept?.since ?? dayStart(rule.date) ?? '',
       fileId: null,
     });
   }

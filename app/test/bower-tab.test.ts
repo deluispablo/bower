@@ -559,6 +559,7 @@ describe('Requests tell what really happened (#997)', () => {
     expect(rows[0]).toMatchObject({
       state: 'kept',
       since: '2026-10-02T10:40:00.000Z',
+      text: sentence,
     });
   });
 });
