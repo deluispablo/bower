@@ -226,7 +226,10 @@ describe('The first-run interview (#198)', () => {
     void act(() => button('Home').click());
     void act(() => button('Finance').click());
 
-    expect(root.textContent).toContain('3 of 3: Health, Career, Home');
+    expect(root.textContent).toContain('Picked: Health, Career, Home');
+    expect(root.textContent).toContain(
+      'Up to three. Unpick one to add another.',
+    );
   });
 
   it('shows the write error and lets the owner move on anyway', async () => {

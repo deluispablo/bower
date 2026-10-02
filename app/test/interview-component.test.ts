@@ -102,3 +102,51 @@ describe('Question 1: what you will keep here (#999)', () => {
     );
   });
 });
+
+describe('Question 3: areas (#999)', () => {
+  function keyEnter(field: HTMLInputElement | HTMLTextAreaElement): void {
+    field.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+  }
+
+  function addOwn(name: string): void {
+    const field = input('Add your own area');
+    void act(() => type(field, name));
+    void act(() => keyEnter(field));
+  }
+
+  it('shows an own area as a picked chip that a tap removes', () => {
+    nextTimes(2);
+    addOwn('Garden');
+
+    expect(button('Garden').getAttribute('aria-pressed')).toBe('true');
+    expect(root.textContent).toContain('Picked: Garden');
+
+    void act(() => button('Garden').click());
+    expect(
+      Array.from(root.querySelectorAll('button')).some(
+        (b) => b.textContent === 'Garden',
+      ),
+    ).toBe(false);
+    expect(root.textContent).not.toContain('Picked:');
+  });
+
+  it('at three, disables the field with the limit line and lists them', () => {
+    nextTimes(2);
+    void act(() => button('Health').click());
+    void act(() => button('Career').click());
+    addOwn('Garden');
+
+    expect(input('Add your own area').disabled).toBe(true);
+    expect(root.textContent).toContain(
+      'Up to three. Unpick one to add another.',
+    );
+    expect(root.textContent).toContain('Picked: Health, Career, Garden');
+    expect(root.textContent).not.toMatch(/3 of 3/);
+
+    void act(() => button('Career').click());
+    expect(input('Add your own area').disabled).toBe(false);
+    expect(root.textContent).not.toContain('Up to three.');
+  });
+});

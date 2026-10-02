@@ -39,6 +39,9 @@ const AREA_CHIPS = [
 
 const MAX_AREAS = 3;
 
+/** Under the own-area field once three areas are picked (#999). */
+const AREA_LIMIT_HINT = 'Up to three. Unpick one to add another.';
+
 const STYLE_CHIPS = [
   'Short and plain',
   'Detailed, with dates',
@@ -145,6 +148,7 @@ export function Interview({
   const [example, setExample] = useState('');
 
   const last = question === 3;
+  const areaLimitReached = areas.length >= MAX_AREAS;
 
   function addCustomArea(): void {
     const name = customArea.trim();
@@ -226,7 +230,10 @@ export function Interview({
       {question === 2 && (
         <div class="interview-question">
           <ChipRow
-            chips={AREA_CHIPS}
+            chips={[
+              ...AREA_CHIPS,
+              ...areas.filter((a) => !AREA_CHIPS.includes(a)),
+            ]}
             value={areas}
             onPick={(chip) => setAreas((prev) => toggleArea(prev, chip))}
           />
@@ -240,13 +247,12 @@ export function Interview({
               value={customArea}
               onChange={setCustomArea}
               onCommit={addCustomArea}
-              disabled={areas.length >= MAX_AREAS}
+              disabled={areaLimitReached}
+              hint={areaLimitReached ? AREA_LIMIT_HINT : null}
             />
           </div>
           {areas.length > 0 && (
-            <p class="onb-note">
-              {areas.length} of {MAX_AREAS}: {areas.join(', ')}
-            </p>
+            <p class="onb-note">Picked: {areas.join(', ')}</p>
           )}
         </div>
       )}
