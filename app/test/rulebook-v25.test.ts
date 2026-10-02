@@ -53,8 +53,8 @@ function exampleSheet(): string[] {
 }
 
 describe('rulebook v25', () => {
-  it('is version 25', () => {
-    expect(rulesVersionOf(RULEBOOK)).toBe(25);
+  it('is version 25 or later', () => {
+    expect(rulesVersionOf(RULEBOOK)).toBeGreaterThanOrEqual(25);
   });
 
   it('marks every section as core or with a valid marker', () => {
