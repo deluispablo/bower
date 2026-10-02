@@ -8,6 +8,7 @@
 import { useEffect } from 'preact/hooks';
 
 import { JUST_FILED_PATH } from './just-filed.js';
+import { FOLDERS_PATH, FOLDERS_TAB_LABEL } from './shell-routes.js';
 
 const SUFFIX = ' · Bower';
 
@@ -17,7 +18,8 @@ const SCREEN_TITLES: Readonly<Record<string, string>> = {
   '/not-invited': 'Not invited',
   '/privacy': 'Privacy',
   '/terms': 'Terms',
-  '/notes': 'Notes',
+  // The tab's label, not its route (#998): the tab reads Folders.
+  [FOLDERS_PATH]: FOLDERS_TAB_LABEL,
   '/add': 'Add',
   '/bower': 'Bower',
   '/ideas': 'Ideas',
