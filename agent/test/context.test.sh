@@ -252,3 +252,21 @@ expect_eq "$(effort_of ingest 0 "$ROOT/effort-gone.txt")" 'L ingest' 'context no
 expect_eq "$(effort_of ingest 0 "$ROOT/none.txt")" 'L ingest' 'no pending list'
 expect_eq "$(effort_of lint 0 '')" 'L lint' 'lint'
 echo "ok $CASE"
+
+# 15. A pile's context note is an allowed instruction candidate too, but only
+#     a candidate that is not a context note asks for the high effort (#1017).
+CASE='real instruction'
+block=$(sed -n '/^any_real_instruction() {/,/^}/p' "$HERE/../run.sh")
+[ -n "$block" ] || die 'no any_real_instruction in run.sh'
+eval "$block"
+printf -- '---\nkind: instruction\n---\nFrom now on, file receipts by month\n' \
+  >"$EFFORT_VAULT/0-Inbox/Bower - 2026-01-15 0916-00 Rule.md"
+real_of() {
+  local VAULT_DIR=$EFFORT_VAULT
+  if printf '%s\n' "$@" | any_real_instruction; then echo yes; else echo no; fi
+}
+expect_eq "$(real_of '0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md')" no 'context note only'
+expect_eq "$(real_of '0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md' '0-Inbox/Bower - 2026-01-15 0916-00 Rule.md')" yes 'context and instruction'
+expect_eq "$(real_of '0-Inbox/Bower - 2026-01-15 0916-00 Gone.md')" no 'instruction gone'
+expect_eq "$(real_of)" no 'none'
+echo "ok $CASE"

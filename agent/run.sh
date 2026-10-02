@@ -2811,6 +2811,20 @@ is_context_note() {
     END { exit !found }' "$VAULT_DIR/$1"
 }
 
+# Whether any vault path on stdin (an allowed instruction candidate) is
+# still in the folder and is not a context note: a real instruction, which
+# asks for the high effort (#1017). A context note alone does not.
+any_real_instruction() {
+  local path found=1
+  while IFS= read -r path; do
+    [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
+    if ! is_context_note "$path"; then
+      found=0
+    fi
+  done
+  return "$found"
+}
+
 # The files context note $1 (a vault path) applies to: each bullet of its
 # `## Applies to` list (app/src/add.ts contextNote), a name as it is in
 # 0-Inbox/, printed as a vault path; a bullet that already names 0-Inbox/
@@ -4211,8 +4225,15 @@ else
   report_phase writing
 fi
 # The effort and the rulebook sections (see "model and effort" above and
-# choose_effort in the context pack).
-choose_effort "$MODE" "$RULES_WRITABLE" "${pending_now:-}"
+# choose_effort in the context pack). A pile's context note is an
+# instruction-shaped note the app wrote, so it sets RULES_WRITABLE too;
+# only an allowed note that is not a context note asks for high (#1017).
+has_instruction=0
+if [ "$MODE" = ingest ] && [ "$RULES_WRITABLE" -eq 1 ] &&
+  LC_ALL=C comm -23 "$CANDIDATES_FILE" "$FLAGGED_FILE" | any_real_instruction; then
+  has_instruction=1
+fi
+choose_effort "$MODE" "$has_instruction" "${pending_now:-}"
 readonly EFFORT
 # R-SS-6 (#966): the run's facts, filled into the prompt the way
 # {{ALREADY_WRITTEN}} is, so the agent never reads index.md or log.md to
