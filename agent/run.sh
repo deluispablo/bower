@@ -3316,7 +3316,8 @@ prune_set_aside() {
     mv -f -- "$SET_ASIDE_FILE.tmp" "$SET_ASIDE_FILE"
 }
 
-# The number of processed items (KINDS_FILE) that moved, by the moves file
+# The number of processed files (KINDS_FILE, kind `file`: not a request or
+# a context note moved to Processed) that moved, by the moves file
 # $1 ("<old><TAB><new>"): what the run really filed, logged as the
 # "originals filed" count instead of the agent's own `Filed:` line (#1000).
 moved_count() {
@@ -3325,7 +3326,7 @@ moved_count() {
     return 0
   fi
   awk -F '\t' 'FILENAME == ARGV[1] { if ($2 != "") moved[$1] = 1; next }
-    $1 != "" && ($1 in moved) && !seen[$1]++ { n++ }
+    $1 != "" && $2 == "file" && ($1 in moved) && !seen[$1]++ { n++ }
     END { print n + 0 }' "$1" "$KINDS_FILE"
 }
 # <<< run report

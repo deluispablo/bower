@@ -226,6 +226,11 @@ expect_eq "$(moved_count "$ROOT/moves.txt")" 2 'the pending items that moved, no
 : >"$ROOT/no-moves.txt"
 expect_eq "$(moved_count "$ROOT/no-moves.txt")" 0 'nothing moved'
 expect_eq "$(moved_count "$ROOT/missing.txt")" 0 'no moves file'
+cp "$ROOT/moves.txt" "$ROOT/moves-context.txt"
+printf '%s\t%s\n' '0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md' \
+  '0-Inbox/Processed/Bower - 2026-01-15 0915-00 Context ab.md' >>"$ROOT/moves-context.txt"
+expect_eq "$(grep -c . "$ROOT/moves-context.txt")" 4 'the context note move is in the file'
+expect_eq "$(moved_count "$ROOT/moves-context.txt")" 2 'a context note moved to Processed is not an original filed'
 echo "ok $CASE"
 
 CASE='set aside'
