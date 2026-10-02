@@ -58,6 +58,7 @@ import {
   displayName,
   driveFileUrl,
   driveFolderUrl,
+  folderCount,
   folderHref,
   folderOf,
   paraKindOf,
@@ -65,7 +66,6 @@ import {
 } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
 import { hubNotePath } from '../folder-statuses.js';
-import { isFolderPage } from '../folder-view.js';
 import { ITEM_KIND_WORDS } from '../kinds.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { noteTitle } from '../note-title.js';
@@ -112,6 +112,7 @@ import { useMediaQuery } from '../use-media-query.js';
 import { FILE_KIND_LABELS, fileKind, isAppFile } from '../vault-index.js';
 import type { VaultIndex } from '../vault-index.js';
 import { useVault } from '../vault-store.js';
+import { useBowerPagesUnder } from './bower-folder-pages.js';
 import { ListRow } from './list-row.js';
 import { FolderMark } from './folder-mark.js';
 import {
@@ -268,53 +269,6 @@ function useBowerNotes(files: readonly DriveFile[]): {
   }, [key]);
 
   return { bower: ids, answers };
-}
-
-/**
- * Which listed folders have their own page (K-31, L-5): a same-name note
- * Bower wrote (`isFolderPage`), which the folder page neither lists nor
- * counts. Read like `useBowerNotes`; a folder whose note is not read yet
- * keeps the plain count until it is. Folder paths.
- */
-function useFolderPages(
-  folders: readonly string[],
-  index: VaultIndex | null,
-): ReadonlySet<string> {
-  const [paths, setPaths] = useState<ReadonlySet<string>>(() => new Set());
-  const asked = useRef(new Set<string>());
-  const gone = useRef(false);
-  const key = folders.slice(0, EXTRAS_MAX).join('\n');
-
-  useEffect(
-    () => () => {
-      gone.current = true;
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (index === null) return;
-    for (const folder of folders.slice(0, EXTRAS_MAX)) {
-      const hub = index.byPath.get(hubNotePath(folder));
-      if (hub === undefined) continue;
-      const ask = `${hub.id}:${hub.modifiedTime ?? ''}`;
-      if (asked.current.has(ask)) continue;
-      asked.current.add(ask);
-      loadNoteMeta(hub).then(
-        (meta) => {
-          if (gone.current || !isFolderPage(hub, meta)) return;
-          setPaths((prev) =>
-            prev.has(folder) ? prev : new Set(prev).add(folder),
-          );
-        },
-        (err: unknown) => {
-          console.error("A folder's own note could not be read", err);
-        },
-      );
-    }
-  }, [key, index]);
-
-  return paths;
 }
 
 function useTagged(
@@ -587,23 +541,6 @@ function whereOf(hit: Pick<SearchHit, 'path'>): {
   };
 }
 
-/** How many things sit directly in the folder at `path`. */
-function childCount(index: VaultIndex, path: string): number {
-  const prefix = `${path}/`;
-  let count = 0;
-  for (const list of [index.folders, index.notes, index.files]) {
-    for (const file of list) {
-      if (
-        file.path.startsWith(prefix) &&
-        !file.path.slice(prefix.length).includes('/')
-      ) {
-        count += 1;
-      }
-    }
-  }
-  return count;
-}
-
 function tailFor(file: DriveFile, now: number): string | null {
   return file.modifiedTime === undefined
     ? null
@@ -620,7 +557,7 @@ function rowFromHit(hit: SearchHit, index: VaultIndex, now: number): RowModel {
     para,
     where,
     kindWord: hit.kindWord,
-    count: hit.kind === 'folder' ? childCount(index, hit.file.path) : null,
+    count: hit.kind === 'folder' ? folderCount(index, hit.file.path) : null,
     snippet: hit.snippet,
     tail: tailFor(hit.file, now),
     root: hit.root,
@@ -673,7 +610,7 @@ function rowFromFile(
     para,
     where,
     kindWord: kind === 'file' ? FILE_KIND_LABELS[fileKind(file)] : '',
-    count: kind === 'folder' ? childCount(index, file.path) : null,
+    count: kind === 'folder' ? folderCount(index, file.path) : null,
     snippet: null,
     tail,
     root: paraKindOf(file.path.split('/')[0] ?? ''),
@@ -1226,8 +1163,9 @@ function SwitcherPanel({
     now,
   ]);
 
-  // K-31: a folder's count is the folder page's, so its own page (a
-  // same-name note Bower wrote) is not one of its things (#950 F-5).
+  // A folder's count is `folderCount` (R-SYS-7, #998), the number Pinned
+  // and the folder cards show: a page Bower wrote for it or for a folder
+  // under it is not one of its things (K-31, #950 F-5).
   const listedFolders = useMemo(
     () =>
       rawSections.flatMap((section) =>
@@ -1237,22 +1175,28 @@ function SwitcherPanel({
       ),
     [rawSections],
   );
-  const folderPages = useFolderPages(listedFolders, index);
+  const folderPages = useBowerPagesUnder(
+    listedFolders.slice(0, EXTRAS_MAX),
+    index,
+  );
   const sections = useMemo(
     (): Section[] =>
-      folderPages.size === 0
+      folderPages.size === 0 || index === null
         ? rawSections
         : rawSections.map((section) => ({
             ...section,
             rows: section.rows.map((row) =>
-              row.count !== null &&
-              row.count > 0 &&
-              folderPages.has(row.file.path)
-                ? { ...row, count: row.count - 1 }
+              row.kind === 'folder'
+                ? {
+                    ...row,
+                    count: folderCount(index, row.file.path, {
+                      exclude: folderPages,
+                    }),
+                  }
                 : row,
             ),
           })),
-    [rawSections, folderPages],
+    [rawSections, folderPages, index],
   );
 
   const matchingCommands = useMemo(() => {

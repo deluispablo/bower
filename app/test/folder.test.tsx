@@ -270,9 +270,10 @@ describe('Folder of folders (#911, R-AR-*)', () => {
     const card = root.querySelector(
       'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
     );
-    // Everything inside, its two folders included (K-31, #950).
+    // Every note and file inside, at every depth; folders are not things
+    // (`folderCount`, R-SYS-7, #998).
     expect(card?.querySelector('.folder-card-meta')?.textContent).toBe(
-      '6 things · updated today',
+      '4 things · updated today',
     );
     const empty = root.querySelector(
       'a.folder-card[href="/folder/1-Projects/Empty%20project"]',

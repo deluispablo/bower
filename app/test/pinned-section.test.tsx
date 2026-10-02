@@ -22,12 +22,23 @@ import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PinnedSection } from '../src/components/pinned-section.js';
+import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
+import { folderCount } from '../src/navigation.js';
+import { buildVaultIndex } from '../src/vault-index.js';
+import type { VaultIndex } from '../src/vault-index.js';
 import type {
   PinnedFile,
   PinnedFolder,
   PinnedNote,
 } from '../src/vault-store.js';
+
+// The section reads the index for its folder counts (`folderCount`, #998);
+// `null` keeps `noteCounts`, as before the index has loaded.
+const vault = vi.hoisted(() => ({ index: null as VaultIndex | null }));
+vi.mock('../src/vault-store.js', () => ({
+  useVault: () => ({ index: vault.index }),
+}));
 
 function noteFile(id: string, name: string, path: string): DriveFile {
   return {
@@ -120,6 +131,34 @@ describe('PinnedSection', () => {
     ).map((el) => el.textContent);
     expect(names).toEqual(['Flat hunt', 'Shopping list']);
     expect(root.textContent).toContain('Projects · 12 things');
+  });
+
+  it('counts a pinned folder with `folderCount` once the index is here (#998)', () => {
+    const dir = (id: string, path: string): DriveFile => ({
+      ...noteFile(id, path.slice(path.lastIndexOf('/') + 1), path),
+      mimeType: FOLDER_MIME,
+    });
+    // Two notes and a PDF, one note in a subfolder: 3 things.
+    const index = buildVaultIndex([
+      dir('d0', '1-Projects'),
+      dir('d1', '1-Projects/Flat hunt'),
+      dir('d2', '1-Projects/Flat hunt/Visits'),
+      noteFile('n1', 'Budget.md', '1-Projects/Flat hunt/Budget.md'),
+      noteFile('n2', 'Visit.md', '1-Projects/Flat hunt/Visits/Visit.md'),
+      {
+        ...noteFile('p1', 'Lease.pdf', '1-Projects/Flat hunt/Lease.pdf'),
+        mimeType: 'application/pdf',
+      },
+    ]);
+    vault.index = index;
+    try {
+      mount([PINNED_FOLDER]);
+      const count = folderCount(index, '1-Projects/Flat hunt');
+      expect(count).toBe(3);
+      expect(root.textContent).toContain(`Projects · ${count} things`);
+    } finally {
+      vault.index = null;
+    }
   });
 
   it('shows a pinned file as a tile with its title that opens /file/:id', () => {

@@ -254,8 +254,7 @@ export function MoveToSheet({
     onClose();
   }
 
-  const destination =
-    chosen === '' ? '' : displayName(chosen);
+  const destination = chosen === '' ? '' : displayName(chosen);
 
   return (
     <Overlay kind="sheet" labelledBy="move-to-title" onClose={onClose}>

@@ -482,27 +482,6 @@ export function folderPagesUnder(
   return pages;
 }
 
-/**
- * A subfolder's count on its row and card, the same K-31 count as its own
- * page: everything inside it, the folders under it included, but not a
- * page Bower wrote for a folder (`bowerPages`, the ids of those pages that
- * are Bower's). `things` is `folderContents`' notes and files inside.
- */
-export function subfolderThings(
-  sub: { path: string; things: number },
-  folders: readonly Pick<DriveFile, 'path'>[],
-  byPath: ReadonlyMap<string, DriveFile>,
-  bowerPages: ReadonlySet<string>,
-): number {
-  const inside = folders.filter((folder) =>
-    folder.path.startsWith(`${sub.path}/`),
-  ).length;
-  const pages = folderPagesUnder(folders, byPath, sub.path).filter((page) =>
-    bowerPages.has(page.id),
-  ).length;
-  return Math.max(0, sub.things + inside - pages);
-}
-
 /** How many rows "Recently changed in <folder>" lists. */
 export const RECENT_MAX = 5;
 
