@@ -9,7 +9,7 @@ import type { Run } from './api.js';
 import { sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
 import { outcomeCounts, outcomeFromRun, runSentence } from './run-outcome.js';
-import { processedKind } from './run-progress.js';
+import { isContextNote, processedKind } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
 
@@ -36,6 +36,9 @@ export interface HomeStateInput {
   loading: boolean; /** `false` while there is no index at all: a finished run then does not
    * leave Loading (the inbox count is not known). Left out, as before. */
   indexReady?: boolean;
+  /** The listing is being read again after a run (`refreshingAfterRun`,
+   * #1001): what it lists as waiting may already be gone. */
+  refreshing?: boolean;
 }
 
 /**
@@ -72,6 +75,13 @@ export function homeStateFor(input: HomeStateInput): HomeState {
   }
   if (phase === 'done') return 'done';
   if (loading && input.indexReady === false) return 'loading';
+  // #1001: right after a run the listing still shows what it moved away,
+  // so the run's own result speaks until the fresh listing is in, never
+  // "N things in your inbox" with a live Tidy up.
+  if (input.refreshing === true && outcome !== null) {
+    if (outcome.state === 'partial') return 'partial';
+    return outcome.state === 'failed' ? 'failed' : 'done';
+  }
   if (pending > 0) {
     // D31: with no bar on Home, the greeting keeps telling the result while
     // the only things waiting are the ones the run left for the person.
@@ -230,6 +240,9 @@ export interface BubbleInput {
   now: number;
   /** Desktop says "click", the phone "tap" (K-27). */
   desktop?: boolean;
+  /** The listing is being read again after a run (#1001): no Tidy up link
+   * may start a run on things that are gone; its words stay as text. */
+  updating?: boolean;
 }
 
 /**
@@ -280,6 +293,14 @@ export function doneNotes(run: Run | null): string[] {
  * failed to load come first: nothing else can be said with confidence.
  */
 export function bubbleFor(input: BubbleInput): BubblePart[] {
+  const parts = bubbleParts(input);
+  if (input.updating !== true) return parts;
+  return parts.map((part) =>
+    typeof part !== 'string' && part.link === 'tidy-up' ? part.text : part,
+  );
+}
+
+function bubbleParts(input: BubbleInput): BubblePart[] {
   const { state, pending, offline, error, editingPins, lastFinished, now } =
     input;
   if (offline) return ["No signal here. I'll keep an eye out."];
@@ -404,4 +425,40 @@ export function inboxLine(state: HomeState, pending: number): string {
   return pending > 0
     ? 'waiting to be filed'
     : 'Nothing waiting. Add something.';
+}
+
+/** What the Inbox tile shows (#1001). */
+export interface InboxView {
+  /** The count on the tile. */
+  pending: number;
+  /** The listing is being read again after a run: the tile says
+   * "Updating…" and offers no Tidy up. */
+  updating: boolean;
+}
+
+/** The Inbox tile's line while the listing is read again after a run. */
+export const INBOX_UPDATING = 'Updating…';
+
+/**
+ * The Inbox tile's count and whether it is updating (#1001). While the
+ * listing is read again after a run, the things the run reports it took
+ * (`run.processed`) that the old listing still shows as waiting are taken
+ * off the count, so the tile never reads the inbox as it was before the
+ * run. Add's "What is this?" note never counted, so it is never taken off.
+ */
+export function inboxViewFor(input: {
+  pending: number;
+  refreshing: boolean;
+  /** The run that just ended, or `null`. */
+  run: Run | null;
+  /** The paths the listing shows as waiting (`run-progress.ts#waitingPaths`). */
+  waiting: readonly string[];
+}): InboxView {
+  const { pending, refreshing, run, waiting } = input;
+  if (!refreshing) return { pending, updating: false };
+  const listed = new Set(waiting);
+  const moved = (run?.processed ?? []).filter(
+    (path) => listed.has(path) && !isContextNote(path),
+  ).length;
+  return { pending: Math.max(0, pending - moved), updating: true };
 }

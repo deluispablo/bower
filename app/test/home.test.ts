@@ -9,6 +9,7 @@ import {
   greetingFor,
   homeStateFor,
   inboxLine,
+  inboxViewFor,
   homeTiles,
   lastTidyUpCounts,
   lastTidyUpNote,
@@ -560,5 +561,90 @@ describe('Home while it loads (#950)', () => {
     expect(
       isHomeLoading({ status: 'idle', indexReady: false, hasFolder: false }),
     ).toBe(false);
+  });
+});
+
+describe('Home while the listing is read again after a run (#1001)', () => {
+  const waiting = [
+    '0-Inbox/Lease agreement 2026.pdf',
+    '0-Inbox/Scan of a letter.jpg',
+    '0-Inbox/Tomato seedlings.md',
+    '0-Inbox/Bower - 2026-09-27 0815 What do I still need.md',
+    '0-Inbox/Added after the run.pdf',
+  ];
+
+  it('takes what the run moved off the count and marks it updating', () => {
+    expect(
+      inboxViewFor({ pending: 5, refreshing: true, run: DONE_RUN, waiting }),
+    ).toEqual({ pending: 1, updating: true });
+  });
+
+  it('leaves the count alone once the fresh listing is in', () => {
+    expect(
+      inboxViewFor({ pending: 5, refreshing: false, run: DONE_RUN, waiting }),
+    ).toEqual({ pending: 5, updating: false });
+  });
+
+  it('never goes below zero, and ignores paths the listing no longer has', () => {
+    expect(
+      inboxViewFor({
+        pending: 1,
+        refreshing: true,
+        run: DONE_RUN,
+        waiting: waiting.slice(0, 1),
+      }),
+    ).toEqual({ pending: 0, updating: true });
+  });
+
+  it('keeps the run result on Home: no Waiting state, no live Tidy up', () => {
+    const state = homeStateFor({
+      phase: 'idle',
+      pending: 28,
+      lastFinished: DONE_RUN,
+      loading: false,
+      indexReady: true,
+      refreshing: true,
+    });
+    expect(state).toBe('done');
+    const parts = bubbleFor({
+      state,
+      pending: 28,
+      offline: false,
+      error: false,
+      editingPins: false,
+      lastFinished: DONE_RUN,
+      now: Date.parse('2026-09-27T08:06:00Z'),
+      updating: true,
+    });
+    expect(text(parts)).not.toMatch(/in your inbox/);
+    expect(links(parts).some((link) => link.startsWith('tidy-up'))).toBe(false);
+  });
+
+  it("turns a partly done run's Finish link into plain words while updating", () => {
+    const parts = bubbleFor({
+      state: 'partial',
+      pending: 2,
+      offline: false,
+      error: false,
+      editingPins: false,
+      lastFinished: PARTIAL_RUN,
+      now: Date.parse('2026-09-27T08:09:00Z'),
+      updating: true,
+    });
+    expect(text(parts)).toContain('Finish the tidy-up');
+    expect(links(parts).some((link) => link.startsWith('tidy-up'))).toBe(false);
+  });
+
+  it('goes back to Waiting once the refresh is over', () => {
+    expect(
+      homeStateFor({
+        phase: 'idle',
+        pending: 1,
+        lastFinished: DONE_RUN,
+        loading: false,
+        indexReady: true,
+        refreshing: false,
+      }),
+    ).toBe('waiting');
   });
 });

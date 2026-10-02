@@ -51,7 +51,9 @@ import {
   greetingFor,
   homeStateFor,
   homeTiles,
+  INBOX_UPDATING,
   inboxLine,
+  inboxViewFor,
   isHomeLoading,
   lastTidyUpNote,
   restingBird,
@@ -64,6 +66,7 @@ import { kindLabel, shortDate } from '../meta-line.js';
 import {
   displayName,
   folderCounts,
+  folderHref,
   folderOf,
   paraKindOf,
   recentNotes,
@@ -76,7 +79,9 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { outcomeFromRun } from '../run-outcome.js';
+import { waitingPaths } from '../run-progress.js';
 import { runningCount, useRun } from '../run-store.js';
+import type { RunPhase } from '../run-store.js';
 import { useSession } from '../session.js';
 import type { DriveFile } from '../drive.js';
 import { ACTIVITY_PATH, FOLDERS_PATH } from '../shell-routes.js';
@@ -229,21 +234,31 @@ function SkeletonTile({
   );
 }
 
+/** Where the Inbox tile leads when it is a link (#1001): the inbox folder,
+ * on every screen size. */
+export const INBOX_HREF = folderHref('0-Inbox');
+
 /** The Inbox tile (S-HM-9): the count, its line, and Tidy up while things
- * wait. */
-function InboxTile({
+ * wait; "Updating…" and no Tidy up while the listing is read again after a
+ * run (#1001). Exported for its own render test. */
+export function InboxTile({
   state,
   pending,
+  updating = false,
   onOpenSheet,
 }: {
   state: HomeState;
   pending: number;
+  updating?: boolean;
   /** Opens the working sheet: where "Being tidied up" leads. */
   onOpenSheet: () => void;
 }): JSX.Element {
   if (state === 'loading')
     return <SkeletonTile label="Inbox" icon={<IconInbox />} />;
-  const line = inboxLine(state, pending);
+  const line =
+    updating && state !== 'running'
+      ? INBOX_UPDATING
+      : inboxLine(state, pending);
   if (state === 'running') {
     return (
       <ActionTile label="Inbox" icon={<IconInbox />} value={pending} active>
@@ -259,6 +274,7 @@ function InboxTile({
     );
   }
   const waits =
+    !updating &&
     pending > 0 &&
     (state === 'waiting' || state === 'failed' || state === 'partial');
   if (waits) {
@@ -278,7 +294,7 @@ function InboxTile({
   }
   return (
     <TileLink
-      href={pending === 0 ? '/add' : '/notes'}
+      href={pending === 0 && !updating ? '/add' : INBOX_HREF}
       label={`Inbox: ${String(pending)}. ${line}`}
     >
       <StatTile
@@ -290,6 +306,11 @@ function InboxTile({
       />
     </TileLink>
   );
+}
+
+/** A run is in flight: its own state speaks, not the post-run refresh. */
+function runActive(phase: RunPhase): boolean {
+  return phase === 'starting' || phase === 'queued' || phase === 'running';
 }
 
 /** The run in flight, for the tile's "Running · 1 min". */
@@ -551,8 +572,16 @@ export function Home(): JSX.Element {
     useVault();
   // `now` is the run store's own shared clock, so the bubble, the tiles and
   // the working sheet always agree on how long ago something happened.
-  const { phase, run, lastFinished, now, tidyUp, openSheet, keptCount } =
-    useRun();
+  const {
+    phase,
+    run,
+    lastFinished,
+    now,
+    tidyUp,
+    openSheet,
+    keptCount,
+    refreshingAfterRun,
+  } = useRun();
   const online = useOnline();
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -566,8 +595,15 @@ export function Home(): JSX.Element {
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
   const recentTitles = useNoteTitles(recent);
-  // The same total the working sheet counts against.
-  const pending = inboxTotal(inboxCount(files, status === 'loading'));
+  // The same total the working sheet counts against; right after a run,
+  // less what the run took while the listing is read again (#1001).
+  const inboxView = inboxViewFor({
+    pending: inboxTotal(inboxCount(files, status === 'loading')),
+    refreshing: refreshingAfterRun && !runActive(phase),
+    run: settled,
+    waiting: waitingPaths(files),
+  });
+  const pending = inboxView.pending;
   // R-AD-8: while a tidy-up runs, the bubble and the card read the count it
   // was confirmed with, as the chip and the sheet do.
   const runPending = runningCount(keptCount, run?.total) ?? pending;
@@ -608,6 +644,7 @@ export function Home(): JSX.Element {
     // Before the index is there, nothing about the inbox is known yet: a
     // finished run must not make the tiles read "0 · Nothing waiting".
     indexReady: index !== null,
+    refreshing: inboxView.updating,
   });
 
   // A play-once pose (the first day's hello, the dance after a run) plays
@@ -638,6 +675,7 @@ export function Home(): JSX.Element {
       lastFinished: lastRun,
       now,
       desktop: wide,
+      updating: inboxView.updating,
     }),
     onTidyUp: tidyUp,
     onFailure: openSheet,
@@ -729,7 +767,12 @@ export function Home(): JSX.Element {
       )}
 
       <div class="home-tiles">
-        <InboxTile state={state} pending={pending} onOpenSheet={openSheet} />
+        <InboxTile
+          state={state}
+          pending={pending}
+          updating={inboxView.updating}
+          onOpenSheet={openSheet}
+        />
         <LastTidyUpCard
           state={state}
           run={lastRun}
