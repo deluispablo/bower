@@ -203,7 +203,7 @@ export const HELP_ROWS: Readonly<Record<HelpScreen, HelpSheetCopy>> = {
       {
         icon: 'sparkle',
         lead: 'Tidy up',
-        text: 'files the whole pile in one go. Add everything first: a tidy-up takes a few minutes and uses your Claude plan.',
+        text: 'files the whole pile in one go. Add everything first: a tidy-up takes a few minutes and uses the Claude plan this Bower runs on.',
       },
     ],
   },

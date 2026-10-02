@@ -797,7 +797,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   // count line and what a tidy-up costs; the demo-only sentence of #489 is gone.
   await expect(confirm).toContainText('3 things in your inbox');
   await expect(confirm).toContainText(
-    'A tidy-up takes a few minutes and uses one run of your Claude plan.',
+    'A tidy-up takes a few minutes and uses one run of the Claude plan this Bower runs on.',
   );
   // The demo's amber line (#363, `Demo-Tidy-Confirm` board, handover
   // C.10): tidy up here never runs the model.
@@ -1336,7 +1336,7 @@ test('Requests: every state, Edit, Remove, and Just this, now for the requests o
   await openMore(edited);
   await expect(
     page.getByRole('menuitem', { name: /Just this, now/ }),
-  ).toContainText('uses one run of your Claude plan');
+  ).toContainText('uses one run of the Claude plan this Bower runs on');
   await shot(page, testInfo, 'bower-requests-do-it-now');
   await page.getByRole('menuitem', { name: /Just this, now/ }).click();
   const sheet = page.getByRole('dialog', { name: SHEET_NAME });
