@@ -10,7 +10,7 @@ import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
   buildFolderModel,
-  folderCount,
+  segmentsTotal,
   isFolderPage,
   listedUnder,
   segmentSubfolders,
@@ -77,7 +77,7 @@ function countOf(path: string): number {
     origins: new Map(),
     catalogueFiles: new Map(),
   });
-  return folderCount({ subfolders: contents.subfolders.length, model });
+  return segmentsTotal({ subfolders: contents.subfolders.length, model });
 }
 
 describe('a folder’s own page', () => {

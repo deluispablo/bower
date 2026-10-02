@@ -409,7 +409,7 @@ export function isFolderPage(
   return isNamedAfterFolder(file) && isBowerWritten(meta, file);
 }
 
-/** What `folderCount` adds up: the folder's subfolders and its model. */
+/** What `segmentsTotal` adds up: the folder's subfolders and its model. */
 export interface FolderCountInput {
   /** How many subfolders the folder shows (they count as originals). */
   subfolders: number;
@@ -435,7 +435,7 @@ export function folderSegments(folder: FolderCountInput): {
  * the meta line ("7 things"), the Filter's "Show 7 things" and search's
  * "7 things" can never disagree with Originals 1 + By Bower 6.
  */
-export function folderCount(folder: FolderCountInput): number {
+export function segmentsTotal(folder: FolderCountInput): number {
   const { originals, bower } = folderSegments(folder);
   return originals + bower;
 }

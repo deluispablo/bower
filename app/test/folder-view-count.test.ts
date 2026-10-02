@@ -6,7 +6,7 @@ import { FOLDER_MIME } from '../src/drive.js';
 import type { DriveFile } from '../src/drive.js';
 import {
   buildFolderModel,
-  folderCount,
+  segmentsTotal,
   folderSegments,
   siblings,
 } from '../src/folder-view.js';
@@ -58,7 +58,7 @@ const files: DriveFile[] = [
   ),
 ];
 
-describe('folderCount', () => {
+describe('segmentsTotal', () => {
   const index = buildVaultIndex(files);
   const contents = folderContents(index, DIR);
   if (contents === null) throw new Error('fixture');
@@ -80,12 +80,12 @@ describe('folderCount', () => {
 
   it('adds up to the segments: 7 = Originals 1 + By Bower 6', () => {
     expect(folderSegments(folder)).toEqual({ originals: 1, bower: 6 });
-    expect(folderCount(folder)).toBe(7);
+    expect(segmentsTotal(folder)).toBe(7);
   });
 
   it('counts an empty folder as nothing', () => {
     expect(
-      folderCount({ subfolders: 0, model: { originals: [], bower: [] } }),
+      segmentsTotal({ subfolders: 0, model: { originals: [], bower: [] } }),
     ).toBe(0);
   });
 });

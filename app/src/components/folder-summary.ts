@@ -1,6 +1,6 @@
 /**
  * The folder's summary for the header's meta line (K-31, R-PF-2): its one
- * count (`folderCount`), its lifecycle and when it last changed. Computed
+ * count (`segmentsTotal`), its lifecycle and when it last changed. Computed
  * at the route from the folder's own data, so the meta reads the same
  * whichever tab (List or Compare) shows first (#920). The list body
  * (`folder-items.tsx`) builds its rows from the same hooks.
@@ -18,7 +18,11 @@ import { parseCatalogueFiles } from '../companion.js';
 import type { DriveFile } from '../drive.js';
 import type { Origin } from '../file-origin.js';
 import { CATALOGUE_PATH } from '../file-origin.js';
-import { buildFolderModel, folderCount, isFolderPage } from '../folder-view.js';
+import {
+  buildFolderModel,
+  segmentsTotal,
+  isFolderPage,
+} from '../folder-view.js';
 import type { FolderModel } from '../folder-view.js';
 import type { FolderContents } from '../navigation.js';
 import { loadNoteMeta, peekNoteMeta } from '../note-meta.js';
@@ -243,7 +247,7 @@ export function useFolderModel(
 }
 
 /** The meta line's summary, from the folder's data alone (K-31): the same
- * `folderCount` as List's segments, whatever the page shows. */
+ * `segmentsTotal` as List's segments, whatever the page shows. */
 export function useFolderSummary(
   contents: FolderContents,
   catalogue: ReadonlyMap<string, Origin>,
@@ -257,7 +261,7 @@ export function useFolderSummary(
     : {
         failed,
         retry,
-        count: folderCount({
+        count: segmentsTotal({
           subfolders: contents.subfolders.length,
           model,
         }),

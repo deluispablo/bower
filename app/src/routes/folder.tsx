@@ -30,6 +30,7 @@ import {
 import { useLocation, useRoute } from 'preact-iso';
 
 import { BackLink } from '../components/back-link.js';
+import { useBowerPagesUnder } from '../components/bower-folder-pages.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PageHeader, crumbsFor } from '../components/page-header.js';
 import { QuickLookPane } from '../components/quick-look.js';
@@ -55,6 +56,7 @@ import {
   breadcrumb,
   displayName,
   folderContents,
+  folderCount,
   folderHref,
   paraKindOf,
 } from '../navigation.js';
@@ -381,16 +383,23 @@ function FolderBody({
   const known = shownPath.current === contents.path;
   const compare = known ? lastCompare : null;
   const showCompare = comparing && compare !== null;
-  // The meta's count from the folder's own data (K-31, `folderCount`), the
-  // same for List and Compare whichever shows first (#920).
+  // The meta's count, the same for List and Compare whichever shows first
+  // (#920): `folderCount` (R-SYS-7, #998), the number Pinned, search and
+  // the folder cards show, Bower's pages for a folder left out (K-31). A
+  // folder of folders keeps counting its folders.
   const summary = useFolderSummary(contents, catalogue, folderOfFolders);
+  const bowerPages = useBowerPagesUnder([contents.path], index);
+  const count =
+    folderOfFolders || index === null
+      ? summary.count
+      : folderCount(index, contents.path, { exclude: bowerPages });
   const meta = metaLine(
     {
       name: contents.name,
       mimeType: FOLDER_MIME,
       root: para,
       rootName: topName,
-      count: summary.count,
+      count,
       countUnit: summary.unit,
       ...(summary.lifecycle !== undefined && {
         lifecycle: summary.lifecycle,

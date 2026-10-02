@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OverlayHost } from '../src/components/overlay.js';
 import { FOLDER_MIME } from '../src/drive.js';
+import { folderCount } from '../src/navigation.js';
 import type { RequestRow } from '../src/bower-tab.js';
 import type { DriveFile } from '../src/drive.js';
 import { buildVaultIndex } from '../src/vault-index.js';
@@ -246,6 +247,22 @@ describe('Folder counts agree (K-31, R-PF-2)', () => {
     });
     expect(document.body.querySelector('.filter-sort-done')?.textContent).toBe(
       'Show 6 things',
+    );
+  });
+
+  it('the header counts with folderCount, as Pinned, search and the cards do (#998)', async () => {
+    useFlatHuntWithPair();
+    // One more note deeper down: the folder's own list does not change.
+    const nested = file('1-Projects/Flat hunt/Viewings/Second visit.md');
+    const deeper = buildVaultIndex([...files, listingPdf, listingNote, nested]);
+    index = deeper;
+    mount();
+    await listReady();
+    await waitUntil(() => segs().join('|') === 'All|Originals 5|By Bower 1');
+    const count = folderCount(deeper, DIR);
+    expect(count).toBe(7);
+    await waitUntil(
+      () => metaText() === `Projects · ${count} things · updated today`,
     );
   });
 
