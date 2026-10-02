@@ -21,8 +21,9 @@
  *
  * Requests (#344, #756, spec §6.7) lists every request with its state, read
  * from the Bower folder and the finished runs (`requestRows`): In your
- * inbox, Being done now, Done and Did not finish (with the run's counts:
- * a request never vanishes), Answered, Rule kept. A waiting or
+ * inbox, Being done now, Done and Did not finish (with when: a request
+ * never vanishes), Answered, Rule kept; each in the words the person
+ * wrote, a question once, the interview's rule under Rules only. A waiting or
  * did-not-finish row has a More menu: Edit fills the box with the note's
  * words and Send then rewrites that note; "Just this, now" starts an
  * instructions-only run through the shared helper (`run-now.ts`); Remove
@@ -40,7 +41,6 @@ import {
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 
-import type { Run } from '../api.js';
 import {
   answerNotes,
   clockLabel,
@@ -53,6 +53,9 @@ import {
   requestRows,
   sentenceKind,
   stateLabel,
+  processedRequestNotes,
+  requestRules,
+  ruleConfirm,
   waitingNotes,
 } from '../bower-tab.js';
 import type {
@@ -110,8 +113,7 @@ import {
   ruleBullet,
 } from '../rules.js';
 import type { Rule, RuleRef } from '../rules.js';
-import { JUST_FILED_PATH, runKey } from '../just-filed.js';
-import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
+import { JUST_FILED_PATH } from '../just-filed.js';
 import { RUN_NOW_LABEL, RUN_NOW_LINE, useRunNow } from '../run-now.js';
 import type { RunNow } from '../run-now.js';
 import { IDEAS_PATH } from '../shell-routes.js';
@@ -296,8 +298,6 @@ interface RequestsListProps {
   now: number;
   /** When the run in flight started (ISO-8601), for "started 13:52". */
   runStarted: string | null;
-  /** The finished runs, for a done row's counts. */
-  runs: readonly Run[];
   /** "Just this, now": its disabled states and how to start it. */
   runNow: RunNow;
   /** A write is under way: the row buttons wait. */
@@ -311,22 +311,15 @@ interface RequestsListProps {
 function RequestMeta({
   row,
   runStarted,
-  runs,
   onRules,
-}: Pick<RequestsListProps, 'runStarted' | 'runs' | 'onRules'> & {
+}: Pick<RequestsListProps, 'runStarted' | 'onRules'> & {
   row: RequestRow;
 }): JSX.Element {
   // Always the day and the time ("29 Sep, 12:31"): relative words are
   // for Home only (K-16).
   const when = requestWhen(row.since);
-  const run = runs.find((item) => runKey(item) === row.runKey);
-  const counts =
-    row.state === 'done' && run !== undefined
-      ? outcomeCounts(outcomeFromRun(run), { short: true })
-      : '';
   const meta = requestMeta(row, {
     when,
-    counts,
     startedAt: clockLabel(runStarted ?? row.since),
   });
   switch (row.state) {
@@ -456,7 +449,6 @@ function RequestMenu({
 function RequestsList({
   rows,
   runStarted,
-  runs,
   runNow,
   busy,
   onRules,
@@ -488,7 +480,6 @@ function RequestsList({
               <RequestMeta
                 row={row}
                 runStarted={runStarted}
-                runs={runs}
                 onRules={onRules}
               />
               {(row.state === 'waiting' || row.state === 'failed') &&
@@ -614,11 +605,6 @@ export function Bower(): JSX.Element {
     });
   }
 
-  // Waiting instructions and answered notes both, so an answered row can
-  // read the question it actually holds, not just the short title in its
-  // file name (#465).
-  const texts = useNoteTexts([...waitingNotes(files), ...answerNotes(files)]);
-
   // A request sent from here counts as seen once a listing shows its note:
   // from then on the listing alone says whether it is still waiting (#491).
   useEffect(() => {
@@ -643,6 +629,15 @@ export function Bower(): JSX.Element {
     lastFinished?.finishedAt ?? null,
   );
   const runs = runsLoad.status === 'ready' ? runsLoad.runs : [];
+  // Waiting instructions and answered notes both, so an answered row can
+  // read the question it actually holds, not just the short title in its
+  // file name (#465); and the notes done runs left in `Processed/`, so a
+  // done row reads the words the person wrote (#997).
+  const texts = useNoteTexts([
+    ...waitingNotes(files),
+    ...answerNotes(files),
+    ...processedRequestNotes(files, runs),
+  ]);
   const rows = requestRows({
     runs,
     files,
@@ -651,7 +646,9 @@ export function Bower(): JSX.Element {
     justSent,
     runSince: inFlight ? (run?.requestedAt ?? null) : null,
     rules:
-      rulesLoad.status === 'ready' ? allRules(parseRules(rulesLoad.text)) : [],
+      rulesLoad.status === 'ready'
+        ? requestRules(parseRules(rulesLoad.text))
+        : [],
     justKept,
   }).filter((row) => row.fileId === null || !removed.has(row.fileId));
   // First time: the folder and the rules are read, and nothing was ever
@@ -772,7 +769,7 @@ export function Bower(): JSX.Element {
     ]);
     setText('');
     setSegment('requests');
-    setSendConfirm(already ? 'Already in your rules' : 'Kept as a rule');
+    setSendConfirm(ruleConfirm(already, inFlight));
   }
 
   async function handleSend(): Promise<void> {
@@ -946,7 +943,6 @@ export function Bower(): JSX.Element {
                 ? (run.startedAt ?? run.requestedAt)
                 : null
             }
-            runs={runs}
             runNow={runNow}
             busy={sending}
             onRules={() => {

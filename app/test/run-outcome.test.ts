@@ -4,12 +4,15 @@ import {
   cleanDisagree,
   cleanNext,
   cleanQuote,
+  isAnswerPath,
+  KEPT_NOTE,
   outcomeCounts,
   outcomeFromLastRun,
   outcomeFromRun,
   runSentence,
 } from '../src/run-outcome.js';
 import type { RunOutcome } from '../src/run-outcome.js';
+import { lastTidyUpCounts } from '../src/home.js';
 import { buildLastRun, buildRun } from './fixtures/run-outcome-builders.js';
 
 const NOW = Date.parse('2026-09-29T10:18:00.000Z');
@@ -413,5 +416,170 @@ describe('the demo done fixtures carry both parts (R-MEAN-2)', () => {
     expect(outcomeFromRun(buildRun('done')).next).toHaveLength(2);
     expect(outcomeFromLastRun(buildLastRun('done')).disagree).toHaveLength(2);
     expect(outcomeFromLastRun(buildLastRun('done')).next).toHaveLength(2);
+  });
+});
+
+describe('what a run really did (#997)', () => {
+  const LONG =
+    '0-Inbox/2-AreasFinanceTaxes2026 statement for the year from the bank and the broker.pdf';
+  // The production test's shape: one file filed, one the filing sheet
+  // refused (no `to`, and in `left` too), a spreadsheet kept where it went,
+  // a link read and parked, and Bower's own proposals note.
+  const real = buildRun('done', {
+    processed: undefined,
+    items: [
+      {
+        path: '0-Inbox/receipt.pdf',
+        kind: 'file',
+        to: '2-Areas/Home/Receipt.pdf',
+      },
+      { path: LONG, kind: 'file' },
+      {
+        path: '0-Inbox/budget.xlsx',
+        kind: 'file',
+        to: '2-Areas/Finance/budget.xlsx',
+      },
+      {
+        path: '0-Inbox/Link - example.com 2026-10-02 0930.md',
+        kind: 'file',
+        to: '0-Inbox/Processed/Link - example.com 2026-10-02 0930.md',
+      },
+      { path: '0-Inbox/Bower - 2026-10-02 0931 Ask.md', kind: 'request' },
+    ],
+    setAside: [{ path: '0-Inbox/budget.xlsx', reason: 'kept-not-read' }],
+    created: [
+      '3-Resources/Links/Example page.md',
+      'Answers/Bower - Proposals.md',
+      'Answers/2026-10-02 Which bank.md',
+    ],
+    updated: [],
+    left: [LONG],
+  });
+
+  it('files only what has a destination outside the inbox', () => {
+    const outcome = outcomeFromRun(real);
+    const filed = outcome.items.filter((item) => item.action === 'filed');
+    expect(filed.map((item) => item.to)).toEqual([
+      '2-Areas/Home/Receipt.pdf',
+      '2-Areas/Finance/budget.xlsx',
+    ]);
+    expect(outcome.filed).toBe(2);
+  });
+
+  it('lists a refused file once, as needs you', () => {
+    const outcome = outcomeFromRun(real);
+    const named = outcome.items.filter((item) => item.path === LONG);
+    expect(named).toEqual([
+      { action: 'needs', title: LONG.slice('0-Inbox/'.length), path: LONG },
+    ]);
+    expect(outcome).toMatchObject({ needsYou: 1, left: 1 });
+  });
+
+  it('files a set-aside spreadsheet that has a destination, with its note', () => {
+    const outcome = outcomeFromRun(real);
+    expect(
+      outcome.items.find((item) => item.path === '0-Inbox/budget.xlsx'),
+    ).toEqual({
+      action: 'filed',
+      title: 'budget.xlsx',
+      path: '0-Inbox/budget.xlsx',
+      to: '2-Areas/Finance/budget.xlsx',
+      note: KEPT_NOTE,
+    });
+  });
+
+  it('reads an older report that lists the kept file by where it went', () => {
+    const outcome = outcomeFromRun(
+      buildRun('done', {
+        processed: undefined,
+        items: [
+          {
+            path: '0-Inbox/budget.xlsx',
+            kind: 'file',
+            to: '2-Areas/Finance/budget.xlsx',
+          },
+        ],
+        setAside: [
+          { path: '2-Areas/Finance/budget.xlsx', reason: 'kept-not-read' },
+        ],
+        created: [],
+        updated: [],
+        left: [],
+      }),
+    );
+    expect(outcome).toMatchObject({ filed: 1, needsYou: 0 });
+  });
+
+  it('keeps a set-aside file still in the inbox as needs you', () => {
+    const outcome = outcomeFromRun(
+      buildRun('done', {
+        processed: undefined,
+        items: [{ path: '0-Inbox/odd.bin', kind: 'file' }],
+        setAside: [{ path: '0-Inbox/odd.bin', reason: 'unconvertible' }],
+        created: [],
+        updated: [],
+        left: [],
+      }),
+    );
+    expect(outcome).toMatchObject({ filed: 0, needsYou: 1 });
+    expect(outcome.items).toHaveLength(1);
+  });
+
+  it('neither files nor flags a link read into Processed', () => {
+    const outcome = outcomeFromRun(real);
+    expect(
+      outcome.items.some((item) => item.path.includes('Link - example.com')),
+    ).toBe(false);
+  });
+
+  it('never counts Bower’s own files as answered or new', () => {
+    const outcome = outcomeFromRun(real);
+    expect(isAnswerPath('Answers/Bower - Proposals.md')).toBe(false);
+    expect(isAnswerPath('Answers/2026-10-02 Which bank.md')).toBe(true);
+    expect(outcome).toMatchObject({ answered: 1, created: 1 });
+    expect(
+      outcome.items.some(
+        (item) => item.path === 'Answers/Bower - Proposals.md',
+      ),
+    ).toBe(false);
+  });
+
+  it('says the same counts everywhere (Home’s Last tidy-up line)', () => {
+    const outcome = outcomeFromRun(real);
+    expect(outcomeCounts(outcome, { short: true })).toBe(
+      '2 filed · 1 new · 1 answered · 1 needs you',
+    );
+    expect(lastTidyUpCounts(real)).toBe(
+      '2 filed · 1 new · 1 answered · 1 needs you',
+    );
+  });
+
+  it('still counts a report from before v2 (no `to` at all) as filed', () => {
+    const outcome = outcomeFromRun(
+      buildRun('done', {
+        processed: undefined,
+        items: [
+          { path: '0-Inbox/a.pdf', kind: 'file' },
+          { path: '0-Inbox/b.pdf', kind: 'file' },
+        ],
+        created: [],
+        updated: [],
+        left: ['0-Inbox/b.pdf'],
+      }),
+    );
+    expect(outcome).toMatchObject({ filed: 1, needsYou: 1 });
+  });
+
+  it('never lists an item named in setAside and left twice', () => {
+    const outcome = outcomeFromLastRun({
+      ...buildLastRun('done'),
+      items: [{ path: '0-Inbox/x.zip', kind: 'file' }],
+      setAside: [{ path: '0-Inbox/x.zip', reason: 'too-large' }],
+      left: ['0-Inbox/x.zip'],
+    });
+    expect(
+      outcome.items.filter((item) => item.action === 'needs'),
+    ).toHaveLength(1);
+    expect(outcome.needsYou).toBe(1);
   });
 });

@@ -441,6 +441,19 @@ describe('the confirmation line under the box (#507)', () => {
     expect(confirmLine()).toBe('Will go with the next tidy-up');
   });
 
+  it('says a rule kept mid-run applies from the next tidy-up (#997)', async () => {
+    state.phase = 'running';
+    state.run = {
+      state: 'running',
+      requestedAt: '2026-09-27T09:00:00.000Z',
+    };
+    await mount();
+    await send('From now on, never archive Money notes');
+    expect(confirmLine()).toBe(
+      'Rule kept. It applies from the next tidy-up; this one already started.',
+    );
+  });
+
   it('shows nothing sent idle (the row itself is confirmation enough)', async () => {
     await mount();
     await send('Which flat should I visit first?');
@@ -550,11 +563,21 @@ describe('Requests (#344)', () => {
     expect(menuItem('Remove from the inbox')).toBeDefined();
   });
 
-  it("a done request reads the run store's shared clock, with its run's counts and a link to Just filed (#513, R-REQ-1, R-REQ-4)", async () => {
-    state.files = [];
-    state.notes = {};
+  it("a done request reads the run store's shared clock, in the person's words, with a link to Just filed and no run totals (#513, R-REQ-1, R-REQ-4, #997)", async () => {
     const doneName = 'Bower - 2026-09-27 0815 Make a packing list.md';
     const path = `0-Inbox/${doneName}`;
+    // The note the run left in Processed: its words, not its short name.
+    state.files = [
+      {
+        ...question,
+        id: 'P_ID',
+        name: doneName,
+        path: `0-Inbox/Processed/${doneName}`,
+      },
+    ];
+    state.notes = {
+      P_ID: `${head}Make a packing list for the trip to the coast\n`,
+    };
     state.runs = [
       {
         state: 'done',
@@ -573,11 +596,15 @@ describe('Requests (#344)', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    const done = row('Make a packing list');
-    expect(done?.textContent).toContain('Done');
+    // The runs come first, then the note they name is read.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const done = row('Make a packing list for the trip to the coast');
     expect(done?.textContent).toContain(
-      `${requestWhen('2026-09-27T08:26:00.000Z')} · 1 new · 1 updated`,
+      `Done · ${requestWhen('2026-09-27T08:26:00.000Z')}`,
     );
+    expect(done?.textContent).not.toContain('1 new');
     const link = done?.querySelector('a');
     expect(link?.textContent).toBe('See what came of it');
     expect(link?.getAttribute('href')).toBe('/just-filed?run=RUN_ID');

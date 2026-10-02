@@ -12,6 +12,9 @@ import {
   requestMeta,
   requestRows,
   isPileNoteName,
+  keptRuleText,
+  processedRequestNotes,
+  requestRules,
   waitingNotes,
   requestTargetPath,
   requestsForNote,
@@ -438,6 +441,129 @@ describe('requests and their runs (#756, R-REQ-1)', () => {
   });
 });
 
+describe('Requests tell what really happened (#997)', () => {
+  const base = (extra: Partial<RequestsInput>): RequestsInput => ({
+    files: [],
+    fetchedAt: '2026-10-02T11:00:00.000Z',
+    texts: new Map(),
+    justSent: [],
+    runSince: null,
+    rules: [],
+    justKept: [],
+    runs: [],
+    ...extra,
+  });
+  const renameName =
+    'Bower - 2026-10-02 1000 Rename 2-AreasFinanceStatement 2026.pdf to V.md';
+  const askName = 'Bower - 2026-10-02 1001 Which bank charges less.md';
+  const run: Run = {
+    state: 'done',
+    runId: 'run-9',
+    requestedAt: '2026-10-02T10:20:00.000Z',
+    finishedAt: '2026-10-02T10:31:00.000Z',
+    items: [
+      {
+        path: `0-Inbox/${renameName}`,
+        kind: 'request',
+        to: `0-Inbox/Processed/${renameName}`,
+      },
+      { path: `0-Inbox/${askName}`, kind: 'request' },
+    ],
+    created: ['Answers/2026-10-02 Which bank charges less.md'],
+    updated: [{ path: '2-Areas/Finance/Bank.md' }],
+  };
+  const processed = file(`0-Inbox/Processed/${renameName}`);
+  const asked = file(`0-Inbox/Processed/${askName}`);
+  const answer = file(
+    'Answers/2026-10-02 Which bank charges less.md',
+    '2026-10-02T10:30:00.000Z',
+  );
+  const words =
+    'Rename 2-Areas/Finance/Statement 2026.pdf to Vida bank statement 2026';
+  const texts = new Map([
+    [processed.id, instructionNote(words, new Date(2026, 9, 2, 10, 0))],
+    [
+      asked.id,
+      instructionNote('Which bank charges less?', new Date(2026, 9, 2, 10, 1)),
+    ],
+  ]);
+
+  it('titles a done request with the words the person wrote', () => {
+    const rows = requestRows(
+      base({ files: [processed, asked, answer], texts, runs: [run] }),
+    );
+    const done = rows.find((row) => row.state === 'done');
+    expect(done?.text).toBe(words);
+    expect(processedRequestNotes([processed, asked, answer], [run])).toEqual([
+      processed,
+      asked,
+    ]);
+  });
+
+  it('falls back to the title in the name when the note is not read', () => {
+    const rows = requestRows(base({ files: [], runs: [run] }));
+    expect(rows.find((row) => row.state === 'done')?.text).toBe(
+      'Rename 2-AreasFinanceStatement 2026.pdf to V',
+    );
+  });
+
+  it('lists an answered question once, as Answered', () => {
+    const rows = requestRows(
+      base({ files: [processed, asked, answer], texts, runs: [run] }),
+    );
+    const bank = rows.filter((row) => /bank charges less/i.test(row.text));
+    expect(bank.map((row) => row.state)).toEqual(['answered']);
+  });
+
+  it('says a done request is done, when, and never the run totals', () => {
+    expect(
+      requestMeta(
+        { state: 'done' },
+        { when: requestWhen(run.finishedAt ?? '') },
+      ),
+    ).toBe(`Done · ${requestWhen('2026-10-02T10:31:00.000Z')}`);
+  });
+
+  it('keeps the interview’s rule under Rules only', () => {
+    const md = [
+      '# Rules',
+      '',
+      '## Filing',
+      "- Receipts go under Finance (owner's request, 2026-10-01)",
+      '',
+      '## From the interview',
+      "- Titles and tags: short, in English (owner's request, 2026-10-01)",
+      '',
+    ].join('\n');
+    const rules = requestRules(parseRules(md));
+    expect(rules.map((rule) => rule.text)).toEqual([
+      'Receipts go under Finance',
+    ]);
+    // Even read from a file that moved it out of its own section.
+    const rows = requestRows(base({ rules: allRules(parseRules(md)) }));
+    expect(rows.map((row) => row.text)).toEqual(['Receipts go under Finance']);
+  });
+
+  it('shows a rule just sent once, before and after Rules.md has it', () => {
+    const sentence = 'From now on, receipts go under Finance.';
+    expect(keptRuleText(sentence)).toBe('Receipts go under Finance');
+    const justKept = [{ text: sentence, since: '2026-10-02T10:40:00.000Z' }];
+    expect(requestRows(base({ justKept })).map((row) => row.state)).toEqual([
+      'kept',
+    ]);
+    const md = "- Receipts go under Finance (owner's request, 2026-10-02)\n";
+    const rows = requestRows(
+      base({ justKept, rules: allRules(parseRules(md)) }),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      state: 'kept',
+      since: '2026-10-02T10:40:00.000Z',
+      text: sentence,
+    });
+  });
+});
+
 describe('requestMeta (#756)', () => {
   it('says each state in the board words', () => {
     expect(requestMeta({ state: 'waiting' }, { when: '' })).toBe(
@@ -446,14 +572,9 @@ describe('requestMeta (#756)', () => {
     expect(
       requestMeta({ state: 'tidying' }, { when: '', startedAt: '13:52' }),
     ).toBe('started 13:52');
-    expect(
-      requestMeta(
-        { state: 'done' },
-        { when: 'today, 13:26', counts: '4 new · 4 updated' },
-      ),
-    ).toBe('today, 13:26 · 4 new · 4 updated');
-    expect(requestMeta({ state: 'done' }, { when: 'today, 13:26' })).toBe(
-      'today, 13:26',
+    // A done request says when, never the whole run's counts (#997).
+    expect(requestMeta({ state: 'done' }, { when: '2 Oct, 10:31' })).toBe(
+      'Done · 2 Oct, 10:31',
     );
     expect(requestMeta({ state: 'failed' }, { when: 'today, 12:59' })).toBe(
       'today, 12:59 · still in your inbox for the next tidy-up',
