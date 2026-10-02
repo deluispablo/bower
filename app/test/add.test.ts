@@ -750,8 +750,11 @@ describe('Add', () => {
   it('clears the field and greys out Save again, so a second press cannot resave it (#493)', () => {
     const input = saveLink('https://example.com/page');
     expect(input.value).toBe('');
-    // The box is empty again: its round button is the mic, not the arrow.
-    expect(() => buttonNamed('Save the link')).toThrow();
+    // The box is empty again: a link box has no mic (#1004), so its arrow
+    // stays and is inert until there is text.
+    expect(buttonNamed('Save the link').getAttribute('aria-disabled')).toBe(
+      'true',
+    );
   });
 
   it("a saved link's row shows the address, not the note's file name (#508)", async () => {
