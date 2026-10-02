@@ -34,6 +34,10 @@ const PARA_KINDS: readonly ParaKind[] = [
 
 const NUMERIC_PREFIX = /^(\d{1,2})-/;
 
+/** A top folder's own name: one digit, a dash and one word ("2-Areas",
+ * "0-Inbox"). Only such a name loses its prefix on screen. */
+const TOP_FOLDER_NAME = /^\d-(\p{L}+)$/u;
+
 /** A file extension: a dot and one to five letters or digits, at least one a
  * letter, so "v1.2" keeps its number. */
 const EXTENSION = /\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,5}$/;
@@ -46,9 +50,11 @@ export interface DisplayNameOptions {
 /**
  * The one name every screen shows for a folder or a file (R-API-8,
  * R-META-5, K-17): the last segment of `name` (a path works too), without
- * its numeric prefix ("2-Areas" → "Areas", "0-Inbox" → "Inbox"), without
  * its extension unless `keepExtension`, and with underscores read as
- * spaces. A name that would come out empty is kept whole, so nothing ever
+ * spaces. A top folder's prefix goes too ("2-Areas" → "Areas", "0-Inbox"
+ * → "Inbox"), but only for a name that is exactly one digit, a dash and
+ * one word and is not inside another folder (#998): a file or a subfolder
+ * keeps its number ("10-43 Example St.md" → "10-43 Example St"). A name that would come out empty is kept whole, so nothing ever
  * shows as an empty label. A number in place of `options` (the index, when
  * `displayName` is passed straight to `Array#map`) is ignored.
  */
@@ -59,7 +65,8 @@ export function displayName(
   const keepExtension =
     typeof options === 'object' && options.keepExtension === true;
   const last = name.slice(name.lastIndexOf('/') + 1) || name;
-  let shown = last.replace(NUMERIC_PREFIX, '');
+  const nested = name.split('/').filter(Boolean).length > 1;
+  let shown = nested ? last : last.replace(TOP_FOLDER_NAME, '$1');
   if (!keepExtension) {
     const bare = shown.replace(EXTENSION, '');
     if (bare !== '') shown = bare;
@@ -70,14 +77,20 @@ export function displayName(
 
 /**
  * `path` with every segment through `displayName`, joined by `separator`
- * ("2-Areas/Cooking" → "Areas / Cooking").
+ * ("2-Areas/Cooking" → "Areas / Cooking"). Only the first segment is a top
+ * folder, so only it can lose a prefix ("2-Areas/3-Plans" → "Areas /
+ * 3-Plans").
  */
 export function displayPath(path: string, separator = ' / '): string {
   // A full path names the file exactly, so its extension stays.
   return path
     .split('/')
     .filter(Boolean)
-    .map((part) => displayName(part, { keepExtension: true }))
+    .map((part, at) =>
+      at === 0
+        ? displayName(part, { keepExtension: true })
+        : displayName(`_/${part}`, { keepExtension: true }),
+    )
     .join(separator);
 }
 
@@ -324,9 +337,10 @@ export function buildTree(
 }
 
 /**
- * How many notes each folder holds, subfolders included, keyed by folder
- * path (Pinned's own "n notes", `pinned-section.tsx`/`home.tsx`, where the
- * count is stated as notes and only notes). Every visible folder has an
+ * How many things each folder holds, subfolders included, keyed by folder
+ * path: `folderCount` for every folder at once (Pinned's fallback before
+ * the Bower pages are read, `pinned-section.tsx`/`home.tsx`; with
+ * `includeFiles` off, notes only). Every visible folder has an
  * entry, empty ones at 0; the root ('') has none. Folder notes are already
  * left out of `index.notes`, so they never count; Bower's own files
  * (`isAppFile`) never count either, so a folder's number always matches
@@ -364,6 +378,48 @@ export function folderCounts(
     for (const file of index.files) addUp(file.path);
   }
   return counts;
+}
+
+export interface FolderCountOptions {
+  /** Count Bower's own files (`isAppFile`) too: the `showAppFiles`
+   * preference. They never sit inside a real folder, so this only matters
+   * for the root. */
+  showAppFiles?: boolean;
+  /** Ids left out: the pages Bower wrote for a folder (K-31, #950), which
+   * only the notes' frontmatter tells apart. */
+  exclude?: ReadonlySet<string>;
+}
+
+/**
+ * The one count of "things" in a folder (R-SYS-7, #998): every note and
+ * every other file under `path`, subfolders included, the folders
+ * themselves not counted; Bower's own files left out unless shown, and
+ * anything in `exclude` left out. Pinned, search and the folder cards all
+ * read it, so one folder never shows two numbers. `folderCounts` is the
+ * same rule for every folder at once. `''` counts the whole Bower folder.
+ */
+export function folderCount(
+  index: VaultIndex,
+  path: string,
+  options: FolderCountOptions = {},
+): number {
+  const prefix = path === '' ? '' : `${path}/`;
+  const exclude = options.exclude;
+  let count = 0;
+  for (const note of index.notes) {
+    if (!note.path.startsWith(prefix)) continue;
+    if (exclude?.has(note.id) === true) continue;
+    if (options.showAppFiles !== true && isAppFile(note.path, note.name)) {
+      continue;
+    }
+    count += 1;
+  }
+  for (const file of index.files) {
+    if (!file.path.startsWith(prefix)) continue;
+    if (exclude?.has(file.id) === true) continue;
+    count += 1;
+  }
+  return count;
 }
 
 function nodeMatches(name: string, query: string): boolean {

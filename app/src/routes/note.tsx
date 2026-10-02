@@ -96,7 +96,7 @@ function Back({ crumbs }: { crumbs: BreadcrumbSegment[] }): JSX.Element {
 function folderLinkFor(path: string): NoteFolderLink | undefined {
   const parent = folderOf(path);
   if (parent === '') return undefined;
-  const name = displayName(parent.slice(parent.lastIndexOf('/') + 1));
+  const name = displayName(parent);
   return { name, href: folderHref(parent) };
 }
 

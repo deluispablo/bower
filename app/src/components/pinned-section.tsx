@@ -10,8 +10,9 @@
  * drops out. Nothing pinned: S-HM-16.
  *
  * `items` is `vault-store.tsx#pinned(index)`, already newest-pin-first;
- * `noteCounts` is `navigation.ts#folderCounts(index)`, for a pinned
- * folder's own count.
+ * A pinned folder's count is `navigation.ts#folderCount`, Bower's pages
+ * for a folder left out (K-31); `noteCounts` (`folderCounts(index)`) is
+ * the fallback while the index is not loaded.
  */
 
 import type { JSX } from 'preact';
@@ -20,12 +21,19 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { FOLDER_MIME } from '../drive.js';
 import type { DriveFile } from '../drive.js';
 import { metaLine } from '../meta-line.js';
-import { folderHref, folderOf, paraKindOf } from '../navigation.js';
+import {
+  folderCount,
+  folderHref,
+  folderOf,
+  paraKindOf,
+} from '../navigation.js';
 import { noteTitle } from '../note-title.js';
 import { openSwitcher } from '../switcher-store.js';
+import { useVault } from '../vault-store.js';
 import type { PinnedItem } from '../vault-store.js';
 import { fileTitle } from '../vault-index.js';
 import { BowerMark } from './bird.js';
+import { useBowerPagesUnder } from './bower-folder-pages.js';
 import { FileIcon } from './file-icon.js';
 import type { FileIconItem } from './file-icon.js';
 import { IconClose } from './icons.js';
@@ -204,6 +212,27 @@ export function PinnedSection({
     .map((item) => item.file);
   const titles = useNoteTitles(noteFiles);
   const bower = useBowerNotes(noteFiles);
+  // A pinned folder's count is `folderCount` (R-SYS-7, #998), the number
+  // search and the folder cards show; `noteCounts` only until the index
+  // is here.
+  const { index } = useVault();
+  const folderPaths = shown.flatMap((item) => {
+    if (item.kind === 'folder') return [item.path];
+    const folder = item.kind === 'note' ? folderOf(item.file.path) : '';
+    return folder !== '' && item.file.name === `${lastName(folder)}.md`
+      ? [folder]
+      : [];
+  });
+  const bowerPages = useBowerPagesUnder(folderPaths, index);
+  const counts =
+    index === null
+      ? noteCounts
+      : new Map(
+          folderPaths.map((path) => [
+            path,
+            folderCount(index, path, { exclude: bowerPages }),
+          ]),
+        );
 
   if (items.length === 0 && pending === null) {
     return (
@@ -221,7 +250,7 @@ export function PinnedSection({
   const live = shown.map((item) =>
     tileFor(
       item,
-      noteCounts,
+      counts,
       titles,
       bower,
       onUnpinNote,

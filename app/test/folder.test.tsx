@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OverlayHost } from '../src/components/overlay.js';
 import { FOLDER_MIME } from '../src/drive.js';
+import { folderCount } from '../src/navigation.js';
 import type { RequestRow } from '../src/bower-tab.js';
 import type { DriveFile } from '../src/drive.js';
 import { buildVaultIndex } from '../src/vault-index.js';
@@ -249,6 +250,22 @@ describe('Folder counts agree (K-31, R-PF-2)', () => {
     );
   });
 
+  it('the header counts with folderCount, as Pinned, search and the cards do (#998)', async () => {
+    useFlatHuntWithPair();
+    // One more note deeper down: the folder's own list does not change.
+    const nested = file('1-Projects/Flat hunt/Viewings/Second visit.md');
+    const deeper = buildVaultIndex([...files, listingPdf, listingNote, nested]);
+    index = deeper;
+    mount();
+    await listReady();
+    await waitUntil(() => segs().join('|') === 'All|Originals 5|By Bower 1');
+    const count = folderCount(deeper, DIR);
+    expect(count).toBe(7);
+    await waitUntil(
+      () => metaText() === `Projects · ${count} things · updated today`,
+    );
+  });
+
   it('a folder of folders counts its folders and keeps Originals 0 (AR-Main)', async () => {
     mount();
     await subfoldersReady();
@@ -270,9 +287,10 @@ describe('Folder of folders (#911, R-AR-*)', () => {
     const card = root.querySelector(
       'a.folder-card[href="/folder/1-Projects/Flat%20hunt"]',
     );
-    // Everything inside, its two folders included (K-31, #950).
+    // Every note and file inside, at every depth; folders are not things
+    // (`folderCount`, R-SYS-7, #998).
     expect(card?.querySelector('.folder-card-meta')?.textContent).toBe(
-      '6 things · updated today',
+      '4 things · updated today',
     );
     const empty = root.querySelector(
       'a.folder-card[href="/folder/1-Projects/Empty%20project"]',

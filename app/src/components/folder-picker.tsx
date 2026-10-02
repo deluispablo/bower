@@ -95,7 +95,7 @@ export function FolderChoice({
     const root = paraKindOf(topOf(node.path));
     const expandable = isMoving ? subjectHasFolders : node.folders.length > 0;
     const expanded = !isMoving && openPaths.has(node.path);
-    const label = displayName(node.name);
+    const label = displayName(node.path || node.name);
     return (
       <div
         key={node.path}
@@ -254,8 +254,7 @@ export function MoveToSheet({
     onClose();
   }
 
-  const destination =
-    chosen === '' ? '' : displayName(chosen.slice(chosen.lastIndexOf('/') + 1));
+  const destination = chosen === '' ? '' : displayName(chosen);
 
   return (
     <Overlay kind="sheet" labelledBy="move-to-title" onClose={onClose}>

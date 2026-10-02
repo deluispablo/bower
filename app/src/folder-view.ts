@@ -409,7 +409,7 @@ export function isFolderPage(
   return isNamedAfterFolder(file) && isBowerWritten(meta, file);
 }
 
-/** What `folderCount` adds up: the folder's subfolders and its model. */
+/** What `segmentsTotal` adds up: the folder's subfolders and its model. */
 export interface FolderCountInput {
   /** How many subfolders the folder shows (they count as originals). */
   subfolders: number;
@@ -435,7 +435,7 @@ export function folderSegments(folder: FolderCountInput): {
  * the meta line ("7 things"), the Filter's "Show 7 things" and search's
  * "7 things" can never disagree with Originals 1 + By Bower 6.
  */
-export function folderCount(folder: FolderCountInput): number {
+export function segmentsTotal(folder: FolderCountInput): number {
   const { originals, bower } = folderSegments(folder);
   return originals + bower;
 }
@@ -480,27 +480,6 @@ export function folderPagesUnder(
     if (page !== undefined) pages.push(page);
   }
   return pages;
-}
-
-/**
- * A subfolder's count on its row and card, the same K-31 count as its own
- * page: everything inside it, the folders under it included, but not a
- * page Bower wrote for a folder (`bowerPages`, the ids of those pages that
- * are Bower's). `things` is `folderContents`' notes and files inside.
- */
-export function subfolderThings(
-  sub: { path: string; things: number },
-  folders: readonly Pick<DriveFile, 'path'>[],
-  byPath: ReadonlyMap<string, DriveFile>,
-  bowerPages: ReadonlySet<string>,
-): number {
-  const inside = folders.filter((folder) =>
-    folder.path.startsWith(`${sub.path}/`),
-  ).length;
-  const pages = folderPagesUnder(folders, byPath, sub.path).filter((page) =>
-    bowerPages.has(page.id),
-  ).length;
-  return Math.max(0, sub.things + inside - pages);
 }
 
 /** How many rows "Recently changed in <folder>" lists. */

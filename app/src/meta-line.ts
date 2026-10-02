@@ -171,7 +171,7 @@ export interface MetaItem extends KindItem {
   parentName?: string;
   /** A folder's lifecycle when set ("Active"), kept as written. */
   lifecycle?: string;
-  /** A folder's count (`folder-view.ts#folderCount`). */
+  /** A folder's count (`folder-view.ts#segmentsTotal`). */
   count?: number;
   /** What `count` counts: things (default) or subfolders (folder of folders). */
   countUnit?: 'thing' | 'folder';

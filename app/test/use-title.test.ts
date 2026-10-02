@@ -22,6 +22,10 @@ describe('titleForPath', () => {
     expect(titleForPath('/')).toBe('Home · Bower');
   });
 
+  it('names /notes after its tab, Folders (#998)', () => {
+    expect(titleForPath('/notes')).toBe('Folders · Bower');
+  });
+
   it('ignores a query and a trailing slash', () => {
     expect(titleForPath('/welcome?from=login')).toBe('Welcome · Bower');
     expect(titleForPath('/terms/')).toBe('Terms · Bower');

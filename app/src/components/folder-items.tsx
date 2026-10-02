@@ -44,16 +44,14 @@ import {
   kindOptions,
   rowsFor,
   sortRows,
-  folderPagesUnder,
   listedUnder,
   segmentSubfolders,
-  isFolderPage,
-  subfolderThings,
 } from '../folder-view.js';
 import type { FolderRow, FolderSort, OriginFilter } from '../folder-view.js';
-import { loadNoteMeta, peekNoteMeta } from '../note-meta.js';
+import { peekNoteMeta } from '../note-meta.js';
 import {
   displayName,
+  folderCount,
   folderHref,
   folderOf,
   paraKindOf,
@@ -66,6 +64,7 @@ import { useVault } from '../vault-store.js';
 import { FILE_KIND_LABELS, fileKind, fileTitle } from '../vault-index.js';
 import type { FileKind } from '../vault-index.js';
 import { Badge } from './badge.js';
+import { useBowerPagesUnder } from './bower-folder-pages.js';
 import { FilterSortSheet } from './filter-sort-sheet.js';
 import type { FilterSortChoice } from './filter-sort-sheet.js';
 import { FolderCard } from './folder-card.js';
@@ -91,51 +90,6 @@ function things(n: number): string {
 /** A subfolder as a row of the one list (R-PF-5, board PF-Main): the folder
  * outline in its root's colour, its name, and "6 things" with a chevron at
  * the right. */
-/**
- * Which of `pages` are a folder's own page Bower wrote (`isFolderPage`),
- * read from each note's frontmatter (the cache first, Drive once), so a
- * count does not depend on which notes happen to be cached: every such page
- * at every depth is left out (K-31, #950).
- */
-function useBowerFolderPages(pages: readonly DriveFile[]): ReadonlySet<string> {
-  // What this tab already read (#922): a card's count is never guessed.
-  const [ids, setIds] = useState<ReadonlySet<string>>(
-    () =>
-      new Set(
-        pages
-          .filter((page) => {
-            const meta = peekNoteMeta(page);
-            return meta !== undefined && isFolderPage(page, meta);
-          })
-          .map((page) => page.id),
-      ),
-  );
-  const key = pages
-    .map((page) => `${page.id}:${page.modifiedTime ?? ''}`)
-    .join(',');
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all(
-      pages.map((page) =>
-        loadNoteMeta(page).then(
-          (meta) => (isFolderPage(page, meta) ? page.id : null),
-          (err: unknown) => {
-            console.error("A folder's own page could not be read", err);
-            return null;
-          },
-        ),
-      ),
-    ).then((found) => {
-      if (cancelled) return;
-      setIds(new Set(found.filter((id): id is string => id !== null)));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [key]);
-  return ids;
-}
-
 export function SubfolderRow({
   folder,
 }: {
@@ -401,23 +355,23 @@ export function FolderItems({
   const [quick, setQuick] = useState<FolderRow | null>(null);
   const { index } = useVault();
   const byPath = index?.byPath ?? NO_FILES;
-  // K-31 on a subfolder's row and card: the same count as its own page, so
-  // a page Bower wrote for a folder is not one of its things (#950).
-  const folderPages = useMemo(
-    () =>
-      contents.subfolders.flatMap((sub) =>
-        folderPagesUnder(index?.folders ?? [], byPath, sub.path),
-      ),
-    [contents.subfolders, index, byPath],
+  // A subfolder's row and card count `folderCount` (R-SYS-7, #998), the
+  // number Pinned and search show; a page Bower wrote for a folder is not
+  // one of its things (K-31, #950).
+  const bowerPages = useBowerPagesUnder(
+    contents.subfolders.map((sub) => sub.path),
+    index,
   );
-  const bowerPages = useBowerFolderPages(folderPages);
   const subfolders = useMemo(
     () =>
       contents.subfolders.map((sub) => ({
         ...sub,
-        things: subfolderThings(sub, index?.folders ?? [], byPath, bowerPages),
+        things:
+          index === null
+            ? sub.things
+            : folderCount(index, sub.path, { exclude: bowerPages }),
       })),
-    [contents.subfolders, index, byPath, bowerPages],
+    [contents.subfolders, index, bowerPages],
   );
   const [view, onView] = useFolderView(contents.path);
   const { model } = useFolderModel(contents, catalogue);

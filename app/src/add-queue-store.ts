@@ -110,6 +110,37 @@ export function followUploads(
   return uploads.subscribe(sync);
 }
 
+/** A file of a pile, as far as the pending count needs it. */
+export interface PendingPileItem {
+  name: string;
+  state: QueueStatus;
+}
+
+/**
+ * The one pending count of Add (R-CONF-2, D33, #998): what the inbox
+ * listing already holds (`inboxTotal`, the number Home and the confirm
+ * sheet read) plus the piles' files still on their way, which the listing
+ * cannot hold yet: the open pile's above all. Add's "Tidy up <n> things"
+ * and "Waiting for the tidy-up" both show it, so the open pile is never
+ * left out. A landed file is the listing's to count (one missing from it
+ * was already filed); a failed one never counts. `inboxNames` is the
+ * listing's names directly in the inbox.
+ */
+export function pendingTotal(
+  inboxTotal: number,
+  inboxNames: ReadonlySet<string>,
+  piles: readonly { items: readonly PendingPileItem[] }[],
+): number {
+  const extra = new Set<string>();
+  for (const pile of piles) {
+    for (const item of pile.items) {
+      if (item.state !== 'waiting' && item.state !== 'uploading') continue;
+      if (!inboxNames.has(item.name)) extra.add(item.name);
+    }
+  }
+  return inboxTotal + extra.size;
+}
+
 let queue: QueueItem[] = [];
 const listeners = new Set<(queue: QueueItem[]) => void>();
 
