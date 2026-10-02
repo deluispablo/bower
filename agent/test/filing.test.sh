@@ -278,6 +278,49 @@ expect_eq "$(sed -n '4,5p' "$V/1-Projects/Flat hunt/Job ad summary.md")" \
 if grep -qF -- "$LONG90" "$V/index.md"; then die 'the long name in index.md'; fi
 echo "ok $CASE"
 
+# --- converted siblings (#995) -------------------------------------------------------
+CASE='converted siblings'
+fresh
+CONVERTED="$ROOT/converted.txt"
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer from North Ltd\n' \
+  >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '1 1 0' 'the copy is booked as a note'
+[ ! -e "$V/0-Inbox/offer.md" ] || die 'the copy stayed in the inbox'
+expect_eq "$(cat "$V/1-Projects/Job hunt/Offer letter.md")" 'offer text' 'the copy next to its original'
+grep -qF -- '- [[1-Projects/Job hunt/Offer letter.md]] · Note · #job-offer · Offer from North Ltd · filed by Bower · [[1-Projects/Job hunt/Offer letter.docx]]' \
+  "$V/index.md" || die 'the row of the copy, with its original'
+expect_eq "$(sed -n '/^## Notes & documents$/,$p' "$V/1-Projects/Job hunt/Job hunt.md")" "$(printf '%s\n' \
+  '## Notes & documents' '- [[Offer letter.docx]] Offer from North Ltd' '- [[Offer letter]] Offer from North Ltd')" \
+  'the hub lines'
+# A .md the runner did not make stays where it is.
+fresh
+: >"$CONVERTED"
+printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'not the runner'"'"'s copy'
+[ -f "$V/0-Inbox/offer.md" ] && [ ! -e "$V/1-Projects/Job hunt/Offer letter.md" ] || die 'a copy the runner did not make moved'
+# Set aside in Processed: the copy goes with it, with no row.
+fresh
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+printf 'file\t0-Inbox/offer.docx\t0-Inbox/Processed\toffer.docx\t-\t-\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'Processed'
+[ -f "$V/0-Inbox/Processed/offer.md" ] && [ ! -e "$V/0-Inbox/offer.md" ] || die 'the copy did not follow to Processed'
+if grep -q 'offer' "$V/index.md"; then die 'a row for Processed'; fi
+# A taken name: the copy stays where it was.
+fresh
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+mkdir -p "$V/1-Projects/Job hunt"
+echo 'the agent wrote this' >"$V/1-Projects/Job hunt/offer letter.MD"
+printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'a taken name'
+[ -f "$V/0-Inbox/offer.md" ] || die 'the copy overwrote a file'
+expect_eq "$(cat "$V/1-Projects/Job hunt/offer letter.MD")" 'the agent wrote this' 'the taken file is untouched'
+echo "ok $CASE"
+
 # --- note and tag lines -------------------------------------------------------------
 CASE='note lines'
 fresh

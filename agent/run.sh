@@ -282,6 +282,9 @@ readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
 # ("<reason><TAB><path>"), all in the work dir.
 readonly KINDS_FILE="$WORK_DIR/kinds.txt"
 readonly UNCONVERTED_FILE="$WORK_DIR/unconverted.txt"
+# The Markdown copies the conversion wrote in the vault this run, one path
+# per line, so the filing sheet moves each one with its original (#995).
+readonly CONVERTED_FILE="$WORK_DIR/converted.txt"
 readonly SET_ASIDE_FILE="$WORK_DIR/set-aside.txt"
 # The text of each pending document (R-RUNNER-7, R-AG-9), kept before the agent
 # runs so nothing it writes can change it: one "<file name><TAB><text file or
@@ -1820,12 +1823,55 @@ sheet_file_line() {
     SHEET_MAP_FROM+=("$dest/$name")
     SHEET_MAP_TO+=("$target")
   fi
+  if [ "$kind" != processed ]; then
+    read -r -a arr <<<"$tags"
+    tags="${arr[*]}"
+    sheet_hub_write "$vault" "$plan" "$final" "$desc" "$day" "$tags" || return 2
+    sheet_index_row "$vault" "- [[$target]] · $(sheet_type_of "$final") · $tags · $desc · filed by Bower" "$target" ||
+      return 2
+  fi
+  sheet_sibling "$vault" "$before" "$day" "$src" "$dest" "$name" "$final" "$kind" "$tags" "$desc" || return 2
+}
+
+# The text copy the runner made this run for the original $4 (pandoc's
+# `<stem>.md` next to it, listed in the file SHEET_CONVERTED; pdftotext
+# writes nothing in the vault), once that original is filed (#995): the
+# vault $1, the manifest before the run $2, the date $3, then the file
+# line's destination $5, name as written $6, name used $7, destination kind
+# $8 (sheet_dest_kind), tags $9 and description ${10}. A copy still where
+# the runner wrote it, a plain file, moves next to the original as
+# `<final stem>.md`, unless that name is taken there or not a safe path
+# (it then stays where it was). Outside Processed it is booked as a note
+# whose original is the filed file: its hub line and its index row, with
+# the file line's tags and description. When the agent's name was
+# shortened, `<agent's stem>.md` in the destination maps to it, so a `note`
+# line for the copy finds it. Returns 2 when a write fails.
+sheet_sibling() {
+  local vault=$1 before=$2 day=$3 src=$4 dest=$5 name=$6 final=$7 kind=$8 tags=$9 desc=${10}
+  local sib stem note plan row
+  [ -n "${SHEET_CONVERTED:-}" ] && [ -f "$SHEET_CONVERTED" ] || return 0
+  [[ ${src##*/} == ?*.* ]] || return 0
+  sib="${src%.*}.md"
+  [ "$sib" != "$src" ] || return 0
+  grep -qxF -- "$sib" "$SHEET_CONVERTED" || return 0
+  [ -f "$vault/$sib" ] && [ ! -L "$vault/$sib" ] || return 0
+  stem=$(sheet_stem "$final")
+  note="$dest/$stem.md"
+  sheet_path_ok "$note" || return 0
+  ! sheet_taken "$vault/$dest" "$stem.md" || return 0
+  mv -n -- "$vault/$sib" "$vault/$note" 2>/dev/null || return 0
+  [ -f "$vault/$note" ] && [ ! -e "$vault/$sib" ] || return 0
+  if [ "$final" != "$name" ]; then
+    SHEET_MAP_FROM+=("$dest/$(sheet_stem "$name").md")
+    SHEET_MAP_TO+=("$note")
+  fi
   [ "$kind" != processed ] || return 0
-  read -r -a arr <<<"$tags"
-  tags="${arr[*]}"
-  sheet_hub_write "$vault" "$plan" "$final" "$desc" "$day" "$tags" || return 2
-  sheet_index_row "$vault" "- [[$target]] · $(sheet_type_of "$final") · $tags · $desc · filed by Bower" "$target" ||
-    return 2
+  plan=$(sheet_hub_plan "$vault" "$dest" "$before") || return 2
+  [ "$plan" != "$note" ] || plan=''
+  sheet_hub_write "$vault" "$plan" "$stem" "$desc" "$day" "$tags" || return 2
+  row="- [[$note]] · Note · $tags · $desc · filed by Bower · [[$dest/$final]]"
+  sheet_index_row "$vault" "$row" "$note" || return 2
+  SHEET_NOTES=$((${SHEET_NOTES:-0} + 1))
 }
 
 # Whether the note $2 (vault $1, the manifest before the run $3) may be
@@ -1867,6 +1913,8 @@ sheet_note_line() {
   local vault=$1 before=$2 day=$3 note=$4 orig=$5 tags=$6 desc=$7
   local dir name row plan='' arr=()
   SHEET_WHY=path
+  # A text copy the runner moved under a shorter name (sheet_sibling).
+  note=$(sheet_mapped "$note")
   sheet_note_ok "$vault" "$note" "$before" || return 1
   SHEET_WHY=original
   # An original the runner filed under a shorter name (#995).
@@ -1938,7 +1986,9 @@ sheet_split() {
 }
 
 # Carries out the filing sheet $2 in the vault $1: the pending list $3, the
-# manifest before the run $4, today's date $5. The `file` lines first, in
+# manifest before the run $4, today's date $5, and $6, the list of the text
+# copies the runner made this run (one path per line; none when empty or
+# missing; sheet_sibling) in SHEET_CONVERTED. The `file` lines first, in
 # order, so a `note` line's original is checked where it was filed; then
 # the `note` and `tag` lines. A blank line is ignored; any other line that
 # is not one of the three kinds with its number of fields, or that its
@@ -1954,6 +2004,7 @@ apply_filing_sheet() {
   local lines=()
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
   SHEET_MAP_FROM=() SHEET_MAP_TO=()
+  SHEET_CONVERTED=${6:-}
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
   total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)
   # At most SHEET_MAX_BYTES and SHEET_MAX_LINES are read.
@@ -3651,6 +3702,7 @@ pdf_text() {
 # to a private log file.
 STEP='convert documents'
 : >"$UNCONVERTED_FILE"
+: >"$CONVERTED_FILE"
 : >"$DOC_TEXT_MAP"
 mkdir -p "$DOC_TEXT_DIR"
 if [ "$MODE" = ingest ]; then
@@ -3674,6 +3726,7 @@ if [ "$MODE" = ingest ]; then
     if (cd "$VAULT_DIR" && pandoc --sandbox -f "$from" -t gfm --wrap=none \
       -o "$sibling" -- "$path") </dev/null >>"$PANDOC_LOG" 2>&1; then
       keep_doc_text "$path" "$VAULT_DIR/$sibling"
+      printf '%s\n' "$sibling" >>"$CONVERTED_FILE"
       converted=$((converted + 1))
     else
       rm -f "$VAULT_DIR/$sibling"
@@ -4013,7 +4066,7 @@ if [ -f "$SHEET_TAKEN" ]; then
   [ -f "$sheet_pending" ] || sheet_pending=$PENDING_FILE
   [ "$MODE" = ingest ] || sheet_pending=/dev/null
   if ! apply_filing_sheet "$VAULT_DIR" "$SHEET_TAKEN" "$sheet_pending" "$MANIFEST_BEFORE" \
-    "$(date -u +%F)" 2>>"$WORK_DIR/filing-sheet.err"; then
+    "$(date -u +%F)" "$CONVERTED_FILE" 2>>"$WORK_DIR/filing-sheet.err"; then
     # The message names vault paths: it stays in the work dir, which is
     # never uploaded, not in the logs.
     fail "$STEP: filing sheet failed"
