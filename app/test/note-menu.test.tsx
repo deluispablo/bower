@@ -275,9 +275,14 @@ describe('NoteMenu', () => {
       [true, 'Unpin from Home', 'Unpinned'],
     ] as const) {
       dismissToast();
-      mount(true, vi.fn(), pinned, () => {
-        void runPinAction(pinNote, pinned ? 'Unpinned' : 'Pinned to Home');
-      });
+      mount(
+        true,
+        vi.fn(),
+        pinned,
+        vi.fn(() => {
+          void runPinAction(pinNote, pinned ? 'Unpinned' : 'Pinned to Home');
+        }),
+      );
       const toastRoot = document.createElement('div');
       document.body.append(toastRoot);
       void act(() => {
