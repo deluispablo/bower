@@ -1,0 +1,29 @@
+/* "Questions about this" on a file or note page
+   (`components/questions-about.tsx`, #1003). */
+
+.questions-about {
+  margin: var(--space-4) 0;
+}
+
+.questions-about-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.questions-about-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.questions-about-line {
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+
+.questions-about-line a {
+  display: inline-block;
+  padding: var(--space-2) 0;
+}

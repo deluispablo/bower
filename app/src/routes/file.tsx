@@ -39,6 +39,7 @@ import { NoteBody, loadImage } from '../components/note-body.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PendingRequestLine } from '../components/pending-request-line.js';
 import { PhotoViewer } from '../components/photo-viewer.js';
+import { QuestionsAbout } from '../components/questions-about.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { TablePreview, parseCsv } from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
@@ -905,6 +906,13 @@ export function FileScreen(): JSX.Element {
       {companion !== null && companion !== undefined && (
         <BowerNote file={file} companion={companion} index={index} />
       )}
+      <QuestionsAbout
+        path={file.path}
+        names={[file.name, displayName(file.name)]}
+        index={index}
+        rows={requests}
+        getNoteText={getNoteText}
+      />
 
       <Pager
         id={file.id}

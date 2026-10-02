@@ -37,6 +37,7 @@ import { NoteBody } from '../components/note-body.js';
 import { NoteEditor } from '../components/note-editor.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PendingRequestLine } from '../components/pending-request-line.js';
+import { QuestionsAbout } from '../components/questions-about.js';
 import type { NoteFolderLink } from '../components/note-properties.js';
 import { crumbsFor, PageHeader } from '../components/page-header.js';
 import { Pager } from '../components/pager.js';
@@ -860,6 +861,15 @@ export function Note() {
                 Bower adds its insights next time it touches this note.
               </p>
             )}
+          {index !== null && (
+            <QuestionsAbout
+              path={file.path}
+              names={[title, file.name.replace(/\.md$/i, '')]}
+              index={index}
+              rows={requests}
+              getNoteText={getNoteText}
+            />
+          )}
           <NoteBody html={checked?.rest ?? opening?.rest ?? ''} />
           {textCopy !== null && documentParts !== null && (
             <>
