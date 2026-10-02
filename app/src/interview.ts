@@ -269,8 +269,10 @@ export function interviewGreeting(name?: string): string {
   return `${hi} Four quick questions so I file things your way. Skip anything you like.`;
 }
 
-/** "1 of 4 · What will you keep here?" for the zero-based `index`. */
+/** "Question 1 of 4 · What will you keep here?" for the zero-based
+ * `index`: the text counter, kept when the onboarding's own dots stand in
+ * for the interview's (#999). */
 export function interviewQuestionLabel(index: number): string {
   const total = INTERVIEW_QUESTIONS.length;
-  return `${index + 1} of ${total} · ${INTERVIEW_QUESTIONS[index] ?? ''}`;
+  return `Question ${index + 1} of ${total} · ${INTERVIEW_QUESTIONS[index] ?? ''}`;
 }

@@ -216,6 +216,15 @@ describe('The first-run interview (#198)', () => {
     expect(location.route).toHaveBeenCalledWith('/');
   });
 
+  it('shows one row of dots, the onboarding’s, and a text counter (#999)', async () => {
+    await reachInterview();
+    expect(root.querySelectorAll('.onb-dots')).toHaveLength(1);
+    expect(root.querySelector('.interview-dots')).toBeNull();
+    expect(root.textContent).toContain('Question 1 of 4');
+    void act(() => button('Next').click());
+    expect(root.textContent).toContain('Question 2 of 4');
+  });
+
   it('does not add a fourth area', async () => {
     await reachInterview();
     void act(() => button('Next').click());
@@ -254,6 +263,8 @@ describe('The first-run interview (#198)', () => {
     remount({ step: 'interview', from: 'settings' });
     expect(heading()).toBe('Tell Bower about yourself');
     expect(root.querySelector('.onb-dots')).toBeNull();
+    expect(root.querySelectorAll('.interview-dots span')).toHaveLength(4);
+    expect(root.textContent).toContain('Question 1 of 4');
 
     void act(() => button('Skip').click());
     expect(location.route).toHaveBeenCalledWith('/settings');

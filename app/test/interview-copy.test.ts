@@ -20,10 +20,12 @@ describe('interview copy (#584, board Flow-01-Welcome)', () => {
     );
   });
 
-  it('numbers the questions "N of 4"', () => {
-    expect(interviewQuestionLabel(0)).toBe('1 of 4 · What will you keep here?');
+  it('numbers the questions "Question N of 4"', () => {
+    expect(interviewQuestionLabel(0)).toBe(
+      'Question 1 of 4 · What will you keep here?',
+    );
     expect(interviewQuestionLabel(1)).toBe(
-      '2 of 4 · Which languages do your notes come in?',
+      'Question 2 of 4 · Which languages do your notes come in?',
     );
   });
 

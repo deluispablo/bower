@@ -63,8 +63,8 @@ export interface InterviewProps {
   /** Focus target when this screen appears (`onboarding.tsx`'s own
    * new-screen-focus effect, same as every other first-run step). */
   headingRef: Ref<HTMLHeadingElement>;
-  /** The dots row for the first-run flow, or nothing when this is a
-   * standalone replay from Settings. */
+  /** The dots row for the first-run flow, shown instead of the interview's
+   * own four; nothing when this is a standalone replay from Settings. */
   dots?: JSX.Element;
   /** The notes folder was one the person already had (or this is a replay
    * from Settings), so there are notes whose style question 4 can offer
@@ -328,12 +328,15 @@ export function Interview({
         </div>
       </div>
 
-      <div class="interview-dots" aria-hidden="true">
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} class={i === question ? 'is-on' : undefined} />
-        ))}
-      </div>
-      {dots}
+      {/* One row of dots: the first-run flow's own when it passes them,
+          the interview's four otherwise (the Settings replay). */}
+      {dots ?? (
+        <div class="interview-dots" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <span key={i} class={i === question ? 'is-on' : undefined} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
