@@ -320,6 +320,12 @@ function createMarked(index: VaultIndex, options: RenderOptions): Marked {
     ],
     hooks: {
       processAllTokens: (tokens) => transformBowerSections(tokens),
+      // Every table sits in a box that scrolls sideways (#1002), so a wide
+      // table in a narrow column scrolls instead of breaking its words.
+      postprocess: (html) =>
+        html
+          .replace(/<table\b/g, '<div class="markdown-table"><table')
+          .replace(/<\/table>/g, '</table></div>'),
     },
     renderer: {
       // Links into the Bower folder: notes open in the app, other files in

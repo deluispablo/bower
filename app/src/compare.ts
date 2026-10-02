@@ -630,8 +630,8 @@ export function cellText(
     return applyHref(note) === null ? NONE : 'Apply';
   if (column.field === undefined) return '';
   if (column.field.group === SCORE_GROUP) {
-    const score = numberOf(note.fields[column.id]);
-    return score === null ? '' : `${Math.round(score)}/100`;
+    const score = scoreOf(note);
+    return score === null ? '' : `${score}/100`;
   }
   const text = formatFieldValue(column.field, note.fields[column.id]);
   if (text === '') {
@@ -657,6 +657,20 @@ export function numberOf(raw: unknown): number | null {
   const value = Number((match[2] ?? '').replace(/,/g, ''));
   if (!Number.isFinite(value)) return null;
   return match[1] === '-' || match[1] === '−' ? -value : value;
+}
+
+/**
+ * The note's score as the Fit cell shows it: `score`, else `fit`, a whole
+ * number from 0 to 100 (81, "81" or "81/100"); `null` when it has neither.
+ * Bower writes either key, so the Fit column reads both, and so does its
+ * sort.
+ */
+export function scoreOf(note: Pick<CompareNote, 'fields'>): number | null {
+  for (const key of ['score', 'fit']) {
+    const value = numberOf(note.fields[key]);
+    if (value !== null && value >= 0 && value <= 100) return Math.round(value);
+  }
+  return null;
 }
 
 /** A `YYYY-MM-DD` or `YYYY-MM` date (or a `Date`) as a UTC timestamp,
@@ -725,6 +739,8 @@ function sortValue(
         : madeForBadge(note).toLowerCase();
     }
     if (extra.virtual === 'apply') return applyHref(note);
+    // The Fit or score column sorts by what its cell shows.
+    if (extra.field?.group === SCORE_GROUP) return scoreOf(note);
     const raw = note.fields[column];
     if (extra.field?.type === 'date') return dateOf(raw);
     if (extra.field?.type === 'text') {

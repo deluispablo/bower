@@ -463,3 +463,45 @@ describe('the job offers table (LI-Compare)', () => {
     );
   });
 });
+
+// --- Fit sorts by the score the cell shows (#1002) --------------------------
+
+describe('sorting job offers by Fit', () => {
+  // Bower writes the score as `score` (vault CLAUDE.md), sometimes as
+  // `fit`, as a number or as "44/100"; the Fit cell shows score, else fit.
+  const offers = [
+    note('Northwind, analyst', 'job-offer', { salary: 52000, score: 44 }),
+    note('Contoso, engineer', 'job-offer', { salary: 61000, score: '66/100' }),
+    note('Fabrikam, designer', 'job-offer', { salary: 48000, fit: 50 }),
+  ];
+  const sortable = tableColumns(jobKind, offers).filter(
+    (column) => column.field !== undefined && column.id !== 'title',
+  );
+  const order = (direction: 'asc' | 'desc'): string[] =>
+    sortNotes(jobKind, offers, { column: 'fit', direction }, sortable).map(
+      (n) => n.name,
+    );
+
+  it('puts the best fit first', () => {
+    expect(order('desc')).toEqual([
+      'Contoso, engineer.md',
+      'Fabrikam, designer.md',
+      'Northwind, analyst.md',
+    ]);
+  });
+
+  it('puts the worst fit first', () => {
+    expect(order('asc')).toEqual([
+      'Northwind, analyst.md',
+      'Fabrikam, designer.md',
+      'Contoso, engineer.md',
+    ]);
+  });
+
+  it('is the default sort, best first', () => {
+    expect(defaultSort(jobKind, sortable)).toEqual({
+      column: 'fit',
+      direction: 'desc',
+    });
+  });
+});

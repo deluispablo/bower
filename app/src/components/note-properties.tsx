@@ -7,9 +7,8 @@
 
 import type { ComponentChildren, JSX } from 'preact';
 
-import { fileDate } from '../file-preview.js';
 import { kindById } from '../kinds.js';
-import { shortDate } from '../meta-line.js';
+import { writtenWords } from '../meta-line.js';
 import type { NoteProperties } from '../markdown/frontmatter.js';
 import type { NoteMeta } from '../note-meta.js';
 import { showToast } from '../toast-store.js';
@@ -91,12 +90,7 @@ export function NotePropertiesList({
   const day =
     properties.created === undefined
       ? undefined
-      : (() => {
-          const date = fileDate(properties.created);
-          return date === null
-            ? properties.created
-            : shortDate(date, Date.now());
-        })();
+      : writtenWords(properties.created, Date.now());
   return (
     <dl class="about-props">
       {folder !== undefined && (
