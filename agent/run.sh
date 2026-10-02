@@ -506,6 +506,9 @@ restore_rulebook() {
 
 on_exit() {
   local rc=$?
+  # Right after the exit status is kept (a trap first would reset it): a
+  # second signal must not cut the final copy-up and report short (#1000).
+  trap '' INT TERM
   restore_rulebook || log "rulebook not restored"
   if [ "$rc" -ne 0 ] && [ "$REPORTED" -eq 0 ]; then
     # An unexpected error that no explicit check caught.
@@ -2748,6 +2751,8 @@ copy_up_after_failure() {
 #   vault_missing      the Bower folder is gone from Drive or in the Bin (R-VAULT-7)
 #   unknown            anything else (the default)
 fail() {
+  # A signal now must not cut the copy-up and the report short (#1000).
+  trap '' INT TERM
   local error=$1
   REASON=${2:-unknown}
   REPORTED=1
