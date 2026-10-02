@@ -1455,8 +1455,14 @@ grep -Fq '· <Type> · <#tag #tag> · <description> · <origin>' <<<"$RULEBOOK" 
   die 'the rulebook does not index filed originals with their type (#368)'
 grep -Fq '`<where or who>, <what it is>.<ext>`' <<<"$RULEBOOK" ||
   die 'the rulebook has no naming rule for originals whose name says nothing (#369)'
-grep -Fq 'at most 60 characters' <<<"$RULEBOOK" ||
-  die 'the rulebook does not cap a new file name at 60 characters (#369)'
+grep -Fq 'a name you make up is at most 60 characters with the extension, and the runner shortens a longer new one' <<<"$RULEBOOK" ||
+  die 'the rulebook does not cap a new file name at 60 characters (#369, #996)'
+grep -Fq 'A kept name may be any length' <<<"$RULEBOOK" ||
+  die 'the rulebook limits a kept file name (#996)'
+grep -Fq "Book the answer's \`note\` line with that path as the original" <<<"$RULEBOOK" ||
+  die 'the rulebook does not tie an answer about a file to it (#996)'
+grep -Fq 'Could not open the link this run. (from the file) — Check' <<<"$RULEBOOK" ||
+  die 'the rulebook has no clip note for a link Bower cannot open (#996)'
 grep -Fq "Never put the owner's name or any other person's name in a file name" <<<"$RULEBOOK" ||
   die 'the rulebook lets a person name reach a file name (#369)'
 grep -Fq 'starts with the **A note from Bower** template' <<<"$INGEST_PROMPT" ||
