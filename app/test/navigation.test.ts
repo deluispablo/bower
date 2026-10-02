@@ -538,8 +538,14 @@ describe('displayName and displayPath', () => {
     expect(displayName('Cooking')).toBe('Cooking');
   });
 
-  it('strips only a one- or two-digit prefix', () => {
-    expect(displayName('10-Work')).toBe('Work');
+  it('strips only a top folder prefix: one digit, a dash, one word (#998)', () => {
+    expect(displayName('10-Work')).toBe('10-Work');
+    expect(displayName('10-43 Example St.md')).toBe('10-43 Example St');
+    expect(displayName('2-Areas')).toBe('Areas');
+    expect(displayName('4-Archives')).toBe('Archives');
+    expect(displayName('1-Plan.md')).toBe('1-Plan');
+    expect(displayName('2-Areas/3-Plans')).toBe('3-Plans');
+    expect(displayName('3-Day trip')).toBe('3-Day trip');
     expect(displayName('2024-Trip')).toBe('2024-Trip');
     expect(displayName('2026-09 Receipts')).toBe('2026-09 Receipts');
     expect(paraKindOf('2024-Trip')).toBeNull();
@@ -554,6 +560,7 @@ describe('displayName and displayPath', () => {
     expect(displayPath('2-Areas/Cooking')).toBe('Areas / Cooking');
     expect(displayPath('2-Areas/Cooking', '/')).toBe('Areas/Cooking');
     expect(displayPath('')).toBe('');
+    expect(displayPath('2-Areas/3-Plans')).toBe('Areas / 3-Plans');
   });
 });
 

@@ -34,6 +34,10 @@ const PARA_KINDS: readonly ParaKind[] = [
 
 const NUMERIC_PREFIX = /^(\d{1,2})-/;
 
+/** A top folder's own name: one digit, a dash and one word ("2-Areas",
+ * "0-Inbox"). Only such a name loses its prefix on screen. */
+const TOP_FOLDER_NAME = /^\d-(\p{L}+)$/u;
+
 /** A file extension: a dot and one to five letters or digits, at least one a
  * letter, so "v1.2" keeps its number. */
 const EXTENSION = /\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,5}$/;
@@ -46,9 +50,11 @@ export interface DisplayNameOptions {
 /**
  * The one name every screen shows for a folder or a file (R-API-8,
  * R-META-5, K-17): the last segment of `name` (a path works too), without
- * its numeric prefix ("2-Areas" → "Areas", "0-Inbox" → "Inbox"), without
  * its extension unless `keepExtension`, and with underscores read as
- * spaces. A name that would come out empty is kept whole, so nothing ever
+ * spaces. A top folder's prefix goes too ("2-Areas" → "Areas", "0-Inbox"
+ * → "Inbox"), but only for a name that is exactly one digit, a dash and
+ * one word and is not inside another folder (#998): a file or a subfolder
+ * keeps its number ("10-43 Example St.md" → "10-43 Example St"). A name that would come out empty is kept whole, so nothing ever
  * shows as an empty label. A number in place of `options` (the index, when
  * `displayName` is passed straight to `Array#map`) is ignored.
  */
@@ -59,7 +65,8 @@ export function displayName(
   const keepExtension =
     typeof options === 'object' && options.keepExtension === true;
   const last = name.slice(name.lastIndexOf('/') + 1) || name;
-  let shown = last.replace(NUMERIC_PREFIX, '');
+  const nested = name.split('/').filter(Boolean).length > 1;
+  let shown = nested ? last : last.replace(TOP_FOLDER_NAME, '$1');
   if (!keepExtension) {
     const bare = shown.replace(EXTENSION, '');
     if (bare !== '') shown = bare;
@@ -70,14 +77,20 @@ export function displayName(
 
 /**
  * `path` with every segment through `displayName`, joined by `separator`
- * ("2-Areas/Cooking" → "Areas / Cooking").
+ * ("2-Areas/Cooking" → "Areas / Cooking"). Only the first segment is a top
+ * folder, so only it can lose a prefix ("2-Areas/3-Plans" → "Areas /
+ * 3-Plans").
  */
 export function displayPath(path: string, separator = ' / '): string {
   // A full path names the file exactly, so its extension stays.
   return path
     .split('/')
     .filter(Boolean)
-    .map((part) => displayName(part, { keepExtension: true }))
+    .map((part, at) =>
+      at === 0
+        ? displayName(part, { keepExtension: true })
+        : displayName(`_/${part}`, { keepExtension: true }),
+    )
     .join(separator);
 }
 

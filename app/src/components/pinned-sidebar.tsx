@@ -59,9 +59,7 @@ export function PinnedSidebar({
           if (item.kind === 'folder') {
             const root = paraKindOf(item.path.split('/')[0] ?? '');
             const top = !item.path.includes('/');
-            const name = displayName(
-              item.path.slice(item.path.lastIndexOf('/') + 1),
-            );
+            const name = displayName(item.path);
             return (
               <a
                 key={item.path}
