@@ -25,6 +25,7 @@ import {
 } from '../components/about-panel.js';
 import type { AboutPanelProps } from '../components/about-panel.js';
 import { BackLink } from '../components/back-link.js';
+import { useBowerPagesUnder } from '../components/bower-folder-pages.js';
 import { DrivePreview } from '../components/drive-preview.js';
 import { FileTip, Hint } from '../components/hint.js';
 import { IconSparkle } from '../components/icons.js';
@@ -414,6 +415,19 @@ function NoPreview({
   );
 }
 
+/**
+ * The things the file page walks (About's "In this folder", the pager):
+ * its siblings without the pages Bower wrote for the folder (K-31), so the
+ * pager's "n of N" is the folder's own count (`folderCount`, R-SYS-7).
+ * Pure.
+ */
+export function pagerItems(
+  items: readonly DriveFile[],
+  bowerPages: ReadonlySet<string>,
+): DriveFile[] {
+  return items.filter((item) => !bowerPages.has(item.id));
+}
+
 interface Companion {
   note: DriveFile;
   text: string;
@@ -720,12 +734,18 @@ export function FileScreen(): JSX.Element {
   // The one sibling list (R-API-9, K-31), in the tree's order: About's
   // "In this folder" and the footer both read it.
   const sort = getPref('explorerSort');
+  // The page Bower wrote for the folder is not one of its things (K-31):
+  // left out, "n of N" agrees with the folder's own count (R-SYS-7).
+  const bowerPages = useBowerPagesUnder(
+    file === undefined ? [] : [folderOf(file.path)],
+    index,
+  );
   const items = useMemo(
     () =>
       index === null || file === undefined
         ? []
-        : siblings(file, buildTree(index, sort)),
-    [index, file, sort],
+        : pagerItems(siblings(file, buildTree(index, sort)), bowerPages),
+    [index, file, sort, bowerPages],
   );
   const aboutColumn = useMediaQuery('(min-width: 1200px)');
   const now = Date.now();
@@ -746,9 +766,7 @@ export function FileScreen(): JSX.Element {
             folderPath === ''
               ? undefined
               : {
-                  name: displayName(
-                    folderPath.slice(folderPath.lastIndexOf('/') + 1),
-                  ),
+                  name: displayName(folderPath),
                   href: folderHref(folderPath),
                 },
           items,
@@ -809,7 +827,7 @@ export function FileScreen(): JSX.Element {
     thumbnailBroken && load.status === 'thumbnail' ? { status: 'none' } : load;
   const topFolder = folder.split('/')[0] ?? '';
   const para = folder === '' ? null : paraKindOf(topFolder);
-  const folderName = displayName(folder.slice(folder.lastIndexOf('/') + 1));
+  const folderName = displayName(folder);
   // The photo viewer's counter walks the folder's photos and files only, not
   // its notes (#704).
   const viewerSiblings = items.filter((item) => fileKind(item) !== 'note');
