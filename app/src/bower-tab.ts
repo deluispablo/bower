@@ -277,6 +277,21 @@ export function keptRuleText(sentence: string): string {
   return allRules(parseRules(bullet))[0]?.text ?? sentence.trim();
 }
 
+/** The line under the box once a rule sentence is kept while a run is in
+ * flight: the run already read the rules (#997). */
+export const RULE_KEPT_MID_RUN =
+  'Rule kept. It applies from the next tidy-up; this one already started.';
+
+/**
+ * The confirmation under the box after a rule sentence (#507, #997):
+ * "Already in your rules", else, mid-run, `RULE_KEPT_MID_RUN`, else "Kept
+ * as a rule".
+ */
+export function ruleConfirm(already: boolean, inFlight: boolean): string {
+  if (already) return 'Already in your rules';
+  return inFlight ? RULE_KEPT_MID_RUN : 'Kept as a rule';
+}
+
 /** The instruction note a done run left in `0-Inbox/Processed/`: at the
  * request item's `to`, else under its own name there. */
 function processedPathsOf(item: { path: string; to?: string }): string[] {

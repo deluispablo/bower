@@ -55,6 +55,7 @@ import {
   stateLabel,
   processedRequestNotes,
   requestRules,
+  ruleConfirm,
   waitingNotes,
 } from '../bower-tab.js';
 import type {
@@ -768,7 +769,7 @@ export function Bower(): JSX.Element {
     ]);
     setText('');
     setSegment('requests');
-    setSendConfirm(already ? 'Already in your rules' : 'Kept as a rule');
+    setSendConfirm(ruleConfirm(already, inFlight));
   }
 
   async function handleSend(): Promise<void> {
