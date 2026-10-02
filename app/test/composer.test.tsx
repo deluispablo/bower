@@ -70,7 +70,9 @@ function line(root: HTMLElement): HTMLElement {
 }
 
 function type(root: HTMLElement, value: string): void {
-  const field = root.querySelector<HTMLTextAreaElement>('textarea');
+  const field = root.querySelector<HTMLTextAreaElement | HTMLInputElement>(
+    'textarea, input',
+  );
   if (field === null) throw new Error('no field');
   void act(() => {
     field.value = value;
@@ -370,7 +372,7 @@ describe('Composer', () => {
     );
   });
 
-  it('draws the key box as a password field in mono with the mic', () => {
+  it('draws the key box as a password field in mono with no mic', () => {
     const root = mount('', {
       inputType: 'password',
       commitLabel: 'Save the key',
@@ -379,6 +381,22 @@ describe('Composer', () => {
     expect(input?.getAttribute('type')).toBe('password');
     expect(input?.getAttribute('autocomplete')).toBe('off');
     expect(input?.classList.contains('composer-mono')).toBe(true);
-    expect(button(root).dataset.state).toBe('mic');
+    expect(button(root).dataset.state).toBe('arrow');
+    expect(button(root).getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelector('[aria-label="Dictate"]')).toBeNull();
+  });
+
+  it('offers no mic on a link field, and the arrow once there is text', () => {
+    const root = mount('', { inputType: 'url', commitLabel: 'Save link' });
+    expect(root.querySelector('[aria-label="Dictate"]')).toBeNull();
+    expect(button(root).getAttribute('aria-disabled')).toBe('true');
+    type(root, 'https://example.com');
+    expect(button(root).dataset.state).toBe('arrow');
+    expect(button(root).getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('lets the caller turn dictation off on a text box', () => {
+    const root = mount('', { dictation: false, mode: 'save', rows: 3 });
+    expect(root.querySelector('button')).toBeNull();
   });
 });
