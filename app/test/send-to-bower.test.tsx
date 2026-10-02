@@ -89,13 +89,11 @@ describe('askExplainer (R-ASK-3)', () => {
     );
   });
 
-  it('puts a note or file answer next to it, by name', () => {
-    expect(askExplainer({ name: 'CV insights', kind: 'note' })).toBe(
-      'Bower answers at the next tidy-up and puts the answer next to CV insights.',
-    );
-    expect(askExplainer({ name: 'Passport copy', kind: 'file' })).toContain(
-      'next to Passport copy.',
-    );
+  it('says a note or file answer goes in Answers and is linked here (#1003)', () => {
+    const line =
+      'Bower answers at the next tidy-up. The answer goes in Answers, and it is linked here.';
+    expect(askExplainer({ name: 'CV insights', kind: 'note' })).toBe(line);
+    expect(askExplainer({ name: 'Passport copy', kind: 'file' })).toBe(line);
   });
 });
 
@@ -131,11 +129,12 @@ describe('Ask sheet', () => {
     );
     expect(body().textContent).toContain('The arrow puts it in your inbox');
     expect(body().textContent).toContain(
-      'puts the answer next to CV insights.',
+      'The answer goes in Answers, and it is linked here.',
     );
+    expect(body().textContent).not.toContain('next to CV insights');
     expect(named('Just this, now').getAttribute('aria-disabled')).toBe('true');
     expect(body().textContent).toContain(
-      'Uses one run of your Claude plan. The rest of the inbox waits.',
+      'Uses one run of the Claude plan this Bower runs on. The rest of the inbox waits.',
     );
   });
 
