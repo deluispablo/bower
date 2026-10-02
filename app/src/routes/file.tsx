@@ -25,6 +25,10 @@ import {
 } from '../components/about-panel.js';
 import type { AboutPanelProps } from '../components/about-panel.js';
 import { BackLink } from '../components/back-link.js';
+import {
+  pagerItems,
+  useBowerPagesUnder,
+} from '../components/bower-folder-pages.js';
 import { DrivePreview } from '../components/drive-preview.js';
 import { FileTip, Hint } from '../components/hint.js';
 import { IconSparkle } from '../components/icons.js';
@@ -39,6 +43,7 @@ import { NoteBody, loadImage } from '../components/note-body.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PendingRequestLine } from '../components/pending-request-line.js';
 import { PhotoViewer } from '../components/photo-viewer.js';
+import { QuestionsAbout, waitingAbout } from '../components/questions-about.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { TablePreview, parseCsv } from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
@@ -719,12 +724,18 @@ export function FileScreen(): JSX.Element {
   // The one sibling list (R-API-9, K-31), in the tree's order: About's
   // "In this folder" and the footer both read it.
   const sort = getPref('explorerSort');
+  // The page Bower wrote for the folder is not one of its things (K-31):
+  // left out, "n of N" agrees with the folder's own count (R-SYS-7).
+  const bowerPages = useBowerPagesUnder(
+    file === undefined ? [] : [folderOf(file.path)],
+    index,
+  );
   const items = useMemo(
     () =>
       index === null || file === undefined
         ? []
-        : siblings(file, buildTree(index, sort)),
-    [index, file, sort],
+        : pagerItems(siblings(file, buildTree(index, sort)), bowerPages),
+    [index, file, sort, bowerPages],
   );
   const aboutColumn = useMediaQuery('(min-width: 1200px)');
   const now = Date.now();
@@ -745,9 +756,7 @@ export function FileScreen(): JSX.Element {
             folderPath === ''
               ? undefined
               : {
-                  name: displayName(
-                    folderPath.slice(folderPath.lastIndexOf('/') + 1),
-                  ),
+                  name: displayName(folderPath),
                   href: folderHref(folderPath),
                 },
           items,
@@ -808,7 +817,7 @@ export function FileScreen(): JSX.Element {
     thumbnailBroken && load.status === 'thumbnail' ? { status: 'none' } : load;
   const topFolder = folder.split('/')[0] ?? '';
   const para = folder === '' ? null : paraKindOf(topFolder);
-  const folderName = displayName(folder.slice(folder.lastIndexOf('/') + 1));
+  const folderName = displayName(folder);
   // The photo viewer's counter walks the folder's photos and files only, not
   // its notes (#704).
   const viewerSiblings = items.filter((item) => fileKind(item) !== 'note');
@@ -823,6 +832,9 @@ export function FileScreen(): JSX.Element {
     },
     { view: 'title', now },
   );
+  const askNames = [file.name, displayName(file.name)];
+  // A question about this file waiting in the inbox (#1003).
+  const asked = waitingAbout(requests, askNames)[0];
   const sourceKind = sourceKindOf(file);
   const source = file.appProperties?.bowerSource;
 
@@ -899,12 +911,25 @@ export function FileScreen(): JSX.Element {
       {policy.bowerReads === 'yes' &&
         companion === null &&
         source === undefined && (
-          <FileTip file={file} filedAsItIs={origin === 'filed'} />
+          <FileTip
+            key={file.id}
+            file={file}
+            filedAsItIs={origin === 'filed'}
+            {...(asked !== undefined && { asked: asked.fileId })}
+            onUndone={() => void refresh()}
+          />
         )}
 
       {companion !== null && companion !== undefined && (
         <BowerNote file={file} companion={companion} index={index} />
       )}
+      <QuestionsAbout
+        path={file.path}
+        names={askNames}
+        index={index}
+        rows={requests}
+        getNoteText={getNoteText}
+      />
 
       <Pager
         id={file.id}

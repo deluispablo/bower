@@ -20,7 +20,7 @@ import { undoRequestNote, writeRequestNote } from '../move-request.js';
 import type { ParaKind } from '../navigation.js';
 import { useOnline } from '../online.js';
 import { close, open, OVERLAY_PRIORITY } from '../overlay-queue.js';
-import { RUN_NOW_LABEL, RUN_NOW_LINE, useRunNow } from '../run-now.js';
+import { RUN_NOW_LABEL, useRunNow } from '../run-now.js';
 import { useSession } from '../session.js';
 import { showToast } from '../toast-store.js';
 import { useVault } from '../vault-store.js';
@@ -43,12 +43,16 @@ export const ASK_SENT_TOAST =
 export interface AskItem {
   /** The name as the person reads it ("Moonee Ponds", "Areas"). */
   name: string;
-  /** A folder's answer goes in it; a note's or file's next to it (K-29). */
+  /** Every answer goes in Answers; a note's or file's is linked from its
+   * page (#1003). */
   kind: 'folder' | 'note' | 'file';
   /** The item for its own icon in the context line (FileIcon 18). */
   icon?: FileIconItem;
   /** The request note's words; `About <name>: <question>` by default. */
   buildText?: (question: string) => string;
+  /** Called once "Put in the inbox" wrote the note, with its Drive id
+   * (`null` when Drive did not say): the file tip's waiting state. */
+  onSent?: (id: string | null) => void;
 }
 
 export interface AskOptions {
@@ -58,10 +62,23 @@ export interface AskOptions {
 
 /** The explainer's second line (R-ASK-3). */
 export function askExplainer(item: Pick<AskItem, 'name' | 'kind'>): string {
-  return item.kind === 'folder'
-    ? `Bower answers at the next tidy-up and puts the answer in ${item.name}.`
-    : `Bower answers at the next tidy-up and puts the answer next to ${item.name}.`;
+  return item.kind === 'folder' ? ASK_FOLDER_EXPLAINER : ASK_ITEM_EXPLAINER;
 }
+
+/** The explainer for a folder (#1003): rules v26 put every answer in
+ * Answers, a folder's too. */
+export const ASK_FOLDER_EXPLAINER =
+  'Bower answers at the next tidy-up. The answer goes in Answers.';
+
+/** The explainer for a note or a file (#1003): the answer stays in
+ * Answers, and the item's page links to it ("Questions about this"). */
+export const ASK_ITEM_EXPLAINER =
+  'Bower answers at the next tidy-up. The answer goes in Answers, and it is linked here.';
+
+/** "Just this, now"'s cost line (the owner's ruling for every plan string,
+ * 2 Oct 2026). */
+export const ASK_NOW_LINE =
+  'Uses one run of the Claude plan this Bower runs on.';
 
 export interface AskSheetProps {
   item: AskItem;
@@ -119,6 +136,7 @@ export function AskSheet({
     }
     void refresh();
     if (when === 'later') {
+      item.onSent?.(id);
       showToast(
         ASK_SENT_TOAST,
         undefined,
@@ -193,7 +211,7 @@ export function AskSheet({
           {RUN_NOW_LABEL}
         </button>
         <p class="ask-now-line">
-          {runNow.reason ?? `${RUN_NOW_LINE} The rest of the inbox waits.`}
+          {runNow.reason ?? `${ASK_NOW_LINE} The rest of the inbox waits.`}
         </p>
       </div>
     </Overlay>

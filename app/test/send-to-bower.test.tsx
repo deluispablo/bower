@@ -83,19 +83,17 @@ afterEach(() => {
 });
 
 describe('askExplainer (R-ASK-3)', () => {
-  it('puts a folder answer in the folder', () => {
+  it('says a folder answer goes in Answers too (#1003)', () => {
     expect(askExplainer({ name: 'Moonee Ponds', kind: 'folder' })).toBe(
-      'Bower answers at the next tidy-up and puts the answer in Moonee Ponds.',
+      'Bower answers at the next tidy-up. The answer goes in Answers.',
     );
   });
 
-  it('puts a note or file answer next to it, by name', () => {
-    expect(askExplainer({ name: 'CV insights', kind: 'note' })).toBe(
-      'Bower answers at the next tidy-up and puts the answer next to CV insights.',
-    );
-    expect(askExplainer({ name: 'Passport copy', kind: 'file' })).toContain(
-      'next to Passport copy.',
-    );
+  it('says a note or file answer goes in Answers and is linked here (#1003)', () => {
+    const line =
+      'Bower answers at the next tidy-up. The answer goes in Answers, and it is linked here.';
+    expect(askExplainer({ name: 'CV insights', kind: 'note' })).toBe(line);
+    expect(askExplainer({ name: 'Passport copy', kind: 'file' })).toBe(line);
   });
 });
 
@@ -131,11 +129,12 @@ describe('Ask sheet', () => {
     );
     expect(body().textContent).toContain('The arrow puts it in your inbox');
     expect(body().textContent).toContain(
-      'puts the answer next to CV insights.',
+      'The answer goes in Answers, and it is linked here.',
     );
+    expect(body().textContent).not.toContain('next to CV insights');
     expect(named('Just this, now').getAttribute('aria-disabled')).toBe('true');
     expect(body().textContent).toContain(
-      'Uses one run of your Claude plan. The rest of the inbox waits.',
+      'Uses one run of the Claude plan this Bower runs on. The rest of the inbox waits.',
     );
   });
 
@@ -165,6 +164,20 @@ describe('Ask sheet', () => {
     );
     expect(currentToast()?.action?.label).toBe('Undo');
     expect(body().querySelector('.overlay-panel')).toBeNull();
+  });
+
+  it('tells the asking card the request note is in the inbox (#1003)', async () => {
+    const onSent = vi.fn();
+    void act(() => {
+      openAsk({ name: 'Payslip', kind: 'file', onSent });
+    });
+    void act(() => {
+      box().value = 'What is the net pay?';
+      box().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    void act(() => named('Put in the inbox').click());
+    await flush();
+    expect(onSent).toHaveBeenCalledWith('REQUEST_ID');
   });
 
   it('keeps the text and says so when the note could not be written', async () => {
@@ -198,7 +211,9 @@ describe('Ask sheet', () => {
         buildText: (value) => `About Moonee Ponds: ${value}`,
       });
     });
-    expect(body().textContent).toContain('puts the answer in Moonee Ponds.');
+    expect(body().textContent).toContain(
+      'Bower answers at the next tidy-up. The answer goes in Answers.',
+    );
     expect(box().value).toBe('What is still missing here?');
   });
 });

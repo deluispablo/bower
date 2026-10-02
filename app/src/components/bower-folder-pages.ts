@@ -86,3 +86,16 @@ export function useBowerPagesUnder(
   );
   return useBowerFolderPages(pages);
 }
+
+/**
+ * The things a note or file page walks (About's "In this folder", the
+ * pager): its siblings without the pages Bower wrote for the folder
+ * (K-31), so the pager's "n of N" is the folder's own count
+ * (`folderCount`, R-SYS-7, #1003). Pure.
+ */
+export function pagerItems(
+  items: readonly DriveFile[],
+  bowerPages: ReadonlySet<string>,
+): DriveFile[] {
+  return items.filter((item) => !bowerPages.has(item.id));
+}
