@@ -15,8 +15,16 @@ import type { Run } from '../src/api.js';
 
 const NOW = Date.parse('2026-09-30T11:10:00.000Z');
 
-vi.mock('../src/run-store.js', () => ({
-  useRun: () => ({ phase: 'idle', run: null, now: NOW }),
+const store: {
+  phase: string;
+  run: Run | null;
+  keptCount: number | null;
+  openSheet: () => void;
+} = { phase: 'idle', run: null, keptCount: null, openSheet: () => {} };
+
+vi.mock('../src/run-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/run-store.js')>()),
+  useRun: () => ({ ...store, now: NOW }),
 }));
 
 vi.mock('../src/vault-store.js', async (importOriginal) => ({
@@ -94,5 +102,66 @@ describe('ActivityPanel (#915)', () => {
   it('shows the run state as a Badge', () => {
     mount([run('2026-09-30T10:58:00.000Z', ['Passport copy.pdf'])]);
     expect(root.querySelector('.badge-done')?.textContent).toBe('Done');
+  });
+});
+
+describe('Activity while a tidy-up runs (R-HOME-3, #1001)', () => {
+  afterEach(() => {
+    store.phase = 'idle';
+    store.run = null;
+    store.keptCount = null;
+    store.openSheet = () => {};
+  });
+
+  function running(): void {
+    store.phase = 'running';
+    store.run = {
+      state: 'running',
+      requestedAt: new Date(NOW - 2 * 60_000 - 20_000).toISOString(),
+      startedAt: new Date(NOW - 60_000).toISOString(),
+      total: 3,
+    };
+  }
+
+  it('shows the running run first, never "No tidy-up yet"', () => {
+    running();
+    mount([]);
+    const text = root.textContent ?? '';
+    expect(text).not.toContain('No tidy-up yet');
+    const first = root.querySelector('.activity-card');
+    expect(first?.classList.contains('activity-card--running')).toBe(true);
+    expect(first?.textContent).toContain('Running');
+    expect(first?.textContent).toContain('Tidying up 3 things.');
+    expect(first?.textContent).toMatch(/Started \d\d:\d\d · 2 min so far/);
+  });
+
+  it('puts it above the finished runs and opens the sheet', () => {
+    running();
+    store.keptCount = 4;
+    const openSheet = vi.fn();
+    store.openSheet = openSheet;
+    mount([run('2026-09-30T10:58:00.000Z', ['Passport copy.pdf'])]);
+    const cards = root.querySelectorAll('.activity-card');
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.textContent).toContain('Tidying up 4 things.');
+    root
+      .querySelector<HTMLButtonElement>('.activity-card--running button')
+      ?.click();
+    expect(openSheet).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the running run while the history is still loading', () => {
+    running();
+    void act(() => {
+      render(h(ActivityPanel, { load: { status: 'loading' } }), root);
+    });
+    expect(root.textContent).not.toContain('Reading what Bower did');
+    expect(root.querySelector('.activity-card--running')).not.toBeNull();
+  });
+
+  it('says nothing of a run once it is over', () => {
+    mount([]);
+    expect(root.textContent).toContain('No tidy-up yet');
+    expect(root.querySelector('.activity-card--running')).toBeNull();
   });
 });

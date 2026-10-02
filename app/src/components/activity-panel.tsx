@@ -3,7 +3,8 @@
  * Desktop-Bower): one card per tidy-up, newest first, built by
  * `activity.ts` from the Worker's run history (`GET /runs`) and `log.md`.
  * The first card is the last tidy-up, the one Home's Last tidy-up card
- * links to (`ACTIVITY_PATH`).
+ * links to (`ACTIVITY_PATH`); while a tidy-up runs, the running one comes
+ * first (R-HOME-3, #1001), so Activity never says "No tidy-up yet" then.
  */
 
 import { useEffect, useState } from 'preact/hooks';
@@ -17,7 +18,9 @@ import type { DriveFile } from '../drive.js';
 import { kindLabel } from '../meta-line.js';
 import { displayName, paraKindOf } from '../navigation.js';
 import type { ParaKind } from '../navigation.js';
-import { useRun } from '../run-store.js';
+import { startedLine } from '../run-progress.js';
+import { runningCount, useRun } from '../run-store.js';
+import type { RunPhase } from '../run-store.js';
 import { useVault } from '../vault-store.js';
 import {
   IconChat,
@@ -218,6 +221,54 @@ function Card({
   );
 }
 
+/** A run is in flight: from "Yes, tidy up" until it reports an end. */
+function runInFlight(phase: RunPhase): boolean {
+  return phase === 'starting' || phase === 'queued' || phase === 'running';
+}
+
+/**
+ * The running tidy-up's card (#1001): "Running", how many things, the one
+ * run clock ("Started 10:05 · 2 min so far") and a way to the progress
+ * sheet. Exported for its own render test.
+ */
+export function RunningCard({
+  run,
+  count,
+  now,
+  onOpen,
+}: {
+  run: Run | null;
+  /** The confirmed count, else the run's own total. */
+  count: number | undefined;
+  now: number;
+  onOpen: () => void;
+}): JSX.Element {
+  const what =
+    count === undefined
+      ? 'Tidying up.'
+      : `Tidying up ${String(count)} ${count === 1 ? 'thing' : 'things'}.`;
+  return (
+    <li class="card activity-card activity-card--running">
+      <p class="activity-head">
+        <IconClock />
+        <b>{startedLine(run, now)}</b>
+        <Badge tone="new" class="activity-badge">
+          Running
+        </Badge>
+      </p>
+      <p class="activity-counts">{what}</p>
+      <button
+        type="button"
+        class="activity-more"
+        aria-haspopup="dialog"
+        onClick={onOpen}
+      >
+        Show progress
+      </button>
+    </li>
+  );
+}
+
 /**
  * The finished runs (`GET /runs`), read when `enabled` and again whenever a
  * run ends in this session (`finishedKey`, so the new card shows). Shared by
@@ -250,11 +301,25 @@ export function useRuns(
 
 export function ActivityPanel({ load }: { load: RunsLoad }): JSX.Element {
   const { index, files } = useVault();
-  const { now } = useRun();
+  const { now, phase, run, keptCount, openSheet } = useRun();
+  const running = runInFlight(phase) ? (
+    <RunningCard
+      run={run}
+      count={runningCount(keptCount, run?.total)}
+      now={now}
+      onOpen={openSheet}
+    />
+  ) : null;
   const logLoad = useFileText(index?.byPath.get(LOG_PATH));
 
   if (load.status === 'loading') {
-    return <p class="bower-panel-note">Reading what Bower did…</p>;
+    return running === null ? (
+      <p class="bower-panel-note">Reading what Bower did…</p>
+    ) : (
+      <ol class="activity-cards" aria-label="Tidy-ups, newest first">
+        {running}
+      </ol>
+    );
   }
   if (load.status === 'error') {
     return (
@@ -269,7 +334,7 @@ export function ActivityPanel({ load }: { load: RunsLoad }): JSX.Element {
     files,
     now,
   });
-  if (cards.length === 0) {
+  if (cards.length === 0 && running === null) {
     return (
       <p class="bower-panel-note">
         No tidy-up yet. What each one did will show here: what went where, and
@@ -280,6 +345,7 @@ export function ActivityPanel({ load }: { load: RunsLoad }): JSX.Element {
   return (
     <>
       <ol class="activity-cards" aria-label="Tidy-ups, newest first">
+        {running}
         {cards.map((card) => (
           <Card key={card.key} card={card} files={files} />
         ))}
