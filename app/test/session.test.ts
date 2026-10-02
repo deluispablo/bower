@@ -455,6 +455,24 @@ describe('SessionProvider when the session ends elsewhere (#994)', () => {
     expect(forgetMock).toHaveBeenCalledTimes(1);
   });
 
+  it('tells the other tabs when this tab signs out', async () => {
+    await mountSignedIn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    await act(async () => {
+      await session?.signOut();
+    });
+    await settle();
+    vi.unstubAllGlobals();
+    expect(setItem).toHaveBeenCalledWith(SIGNED_OUT_KEY, expect.any(String));
+    expect(session?.status).toBe('signed-out');
+    expect(path).toBe('/login');
+    expect(forgetMock).toHaveBeenCalledTimes(1);
+  });
+
   it('leaves a tab that is not signed in alone', async () => {
     vi.mocked(getMe).mockRejectedValue(new ApiError(0, 'network', 'x'));
     history.replaceState(null, '', '/');
