@@ -42,11 +42,14 @@ const MAX_AREAS = 3;
 /** Under the own-area field once three areas are picked (#999). */
 const AREA_LIMIT_HINT = 'Up to three. Unpick one to add another.';
 
-const STYLE_CHIPS = [
-  'Short and plain',
-  'Detailed, with dates',
-  'Match my existing notes',
-];
+const MATCH_EXISTING = 'Match my existing notes';
+
+/** Question 4's chips: "Match my existing notes" only when there are notes
+ * to match, i.e. the person picked a folder they already had (#999). */
+function styleChips(existingFolder: boolean): readonly string[] {
+  const base = ['Short and plain', 'Detailed, with dates'];
+  return existingFolder ? [...base, MATCH_EXISTING] : base;
+}
 
 export interface InterviewProps {
   /** The whole interview was finished: the last question's "Finish". */
@@ -63,6 +66,10 @@ export interface InterviewProps {
   /** The dots row for the first-run flow, or nothing when this is a
    * standalone replay from Settings. */
   dots?: JSX.Element;
+  /** The notes folder was one the person already had (or this is a replay
+   * from Settings), so there are notes whose style question 4 can offer
+   * to match. A Bower folder made seconds ago has none. */
+  existingFolder: boolean;
 }
 
 interface ChipRowProps {
@@ -136,6 +143,7 @@ export function Interview({
   error,
   headingRef,
   dots,
+  existingFolder,
 }: InterviewProps): JSX.Element {
   const firstName = useFirstName();
   const [question, setQuestion] = useState(0);
@@ -260,7 +268,7 @@ export function Interview({
       {question === 3 && (
         <div class="interview-question">
           <ChipRow
-            chips={STYLE_CHIPS}
+            chips={styleChips(existingFolder)}
             value={titleStyle}
             onPick={setTitleStyle}
           />

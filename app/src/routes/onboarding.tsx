@@ -562,6 +562,7 @@ export function Onboarding(): JSX.Element {
         error={interviewError}
         headingRef={heading}
         dots={replayingFromSettings ? undefined : <Dots step={step} />}
+        existingFolder={replayingFromSettings || mode === 'select'}
       />
     );
   }

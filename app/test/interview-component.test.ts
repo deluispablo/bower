@@ -45,6 +45,7 @@ function mount(props: Partial<InterviewProps> = {}): void {
         busy: false,
         error: null,
         headingRef: createRef<HTMLHeadingElement>(),
+        existingFolder: false,
         ...props,
       }),
       root,
@@ -148,5 +149,26 @@ describe('Question 3: areas (#999)', () => {
     void act(() => button('Career').click());
     expect(input('Add your own area').disabled).toBe(false);
     expect(root.textContent).not.toContain('Up to three.');
+  });
+});
+
+describe('Question 4: titles and tags (#999)', () => {
+  function hasChip(label: string): boolean {
+    return Array.from(root.querySelectorAll('button')).some(
+      (b) => b.textContent === label,
+    );
+  }
+
+  it('leaves out "Match my existing notes" for a new, empty folder', () => {
+    nextTimes(3);
+    expect(hasChip('Short and plain')).toBe(true);
+    expect(hasChip('Match my existing notes')).toBe(false);
+  });
+
+  it('offers "Match my existing notes" for a folder the person had', () => {
+    unmount();
+    mount({ existingFolder: true });
+    nextTimes(3);
+    expect(hasChip('Match my existing notes')).toBe(true);
   });
 });
