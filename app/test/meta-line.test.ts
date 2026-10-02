@@ -9,6 +9,7 @@ import {
   metaLine,
   shortDate,
   sizeWords,
+  writtenWords,
 } from '../src/meta-line.js';
 
 /** 30 Sep 2026, 09:15 local time: every test injects this clock. */
@@ -258,5 +259,30 @@ describe('metaLine', () => {
     expect(meta.text).toBe(
       'Folder · Housing Search Australia · 7 things · updated today',
     );
+  });
+});
+
+describe('writtenWords (About: Written)', () => {
+  // Local dates, so the test reads the same in every time zone.
+  const now = new Date(2026, 9, 2, 12, 0);
+
+  it('shows a date with no time as the day, never as a time', () => {
+    expect(writtenWords('2026-10-02', now)).toBe('2 Oct');
+    expect(writtenWords('2026-09-28', now)).toBe('28 Sep');
+    expect(writtenWords('2025-09-28', now)).toBe('28 Sep 2025');
+  });
+
+  it('shows the real local time of a date and time written today', () => {
+    const written = new Date(2026, 9, 2, 10, 18);
+    expect(writtenWords(written.toISOString(), now)).toBe('10:18');
+    expect(writtenWords('2026-10-02T10:18:00', now)).toBe('10:18');
+  });
+
+  it('shows the day of a date and time written before today', () => {
+    expect(writtenWords('2026-09-30T08:05:00', now)).toBe('30 Sep');
+  });
+
+  it('keeps text that is not a date as it is', () => {
+    expect(writtenWords('last spring', now)).toBe('last spring');
   });
 });

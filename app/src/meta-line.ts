@@ -76,6 +76,25 @@ export function shortDate(date: DateInput, now: DateInput): string {
 }
 
 /**
+ * When a note was written, for About's Written row: a frontmatter date with
+ * a time follows `shortDate` (the local time today, else the day); a date
+ * with no time ("2026-10-02") is that local day, never a time, so it does
+ * not read "02:00" east of UTC. Text that is not a date comes back as is.
+ */
+export function writtenWords(value: string, now: DateInput): string {
+  const today = toDate(now);
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (day !== null) {
+    const date = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
+    if (Number.isNaN(date.getTime()) || Number.isNaN(today.getTime())) {
+      return value;
+    }
+    return dayMonth(date, today);
+  }
+  const words = shortDate(value, today);
+  return words === '' ? value : words;
+}
+/**
  * The day in words for "updated …" and "filed by Bower …": "today",
  * "yesterday", else the day and month as `shortDate` writes them.
  */
