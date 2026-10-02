@@ -47,7 +47,9 @@ import {
   NOTHING_FILED,
   previewRows,
   runBadge,
+  runInFlight,
   runKey,
+  runningLine,
   runLine,
   SAY_LABEL,
   showsNewChip,
@@ -61,6 +63,7 @@ import { kindLabel } from '../meta-line.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { isLinkNote } from '../note-title.js';
 import { outcomeFromRun, runSentence } from '../run-outcome.js';
+import { useRun } from '../run-store.js';
 import { markAllSeen } from '../seen.js';
 import { ACTIVITY_PATH } from '../shell-routes.js';
 import { showToast } from '../toast-store.js';
@@ -512,6 +515,11 @@ export function JustFiled(): JSX.Element {
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const origins = useOrigins(index);
+  // The run in flight, read only from the run store (#997).
+  const current = useRun();
+  const running = runInFlight(current.phase)
+    ? runningLine(current.run, current.now)
+    : null;
 
   const tableRowsNow = useMemo(
     () => (latest === null ? [] : tableRows(latest, index, origins)),
@@ -531,7 +539,10 @@ export function JustFiled(): JSX.Element {
   }
 
   let body: JSX.Element;
-  if (latest === null) {
+  if (latest === null && running !== null) {
+    // A first run in flight: its block says it all (R-HOME-3).
+    body = <></>;
+  } else if (latest === null) {
     body = loaded ? (
       <div class="just-filed-none">
         <Bird state="looking" size={52} />
@@ -595,6 +606,11 @@ export function JustFiled(): JSX.Element {
           />
         )}
       </div>
+      {running !== null && (
+        <Card class="just-filed-running">
+          <p role="status">{running}</p>
+        </Card>
+      )}
       {body}
       <Earlier
         runs={earlier}

@@ -46,6 +46,36 @@ export const JUST_MARK_ALL = 'Mark all seen';
 /** The Done sheet's link (R-JUST-5). */
 export const JUST_SEE_WHERE = 'See where everything went';
 
+/** The running run's block ends with this (#997). */
+export const RUNNING_TAIL = 'What it did shows here when it ends.';
+
+/**
+ * The first block while a run is in flight (#997, R-HOME-3: never "No
+ * tidy-ups yet" then): "Tidying up 28 things · 2 min so far. What it did
+ * shows here when it ends." The count is the run's `total` when it has
+ * one; the minutes count from its start (else when it was asked for).
+ */
+export function runningLine(
+  run: Pick<Run, 'total' | 'startedAt' | 'requestedAt'> | null,
+  now: number,
+): string {
+  const what =
+    run?.total === undefined || run.total <= 0
+      ? 'your things'
+      : things(run.total);
+  const started = Date.parse(run?.startedAt ?? run?.requestedAt ?? '');
+  const minutes = Number.isNaN(started)
+    ? 0
+    : Math.floor(Math.max(0, now - started) / 60_000);
+  const so = minutes < 1 ? 'just started' : `${String(minutes)} min so far`;
+  return `Tidying up ${what} · ${so}. ${RUNNING_TAIL}`;
+}
+
+/** Whether the run store has a run in flight, for Just filed's first block. */
+export function runInFlight(phase: string): boolean {
+  return phase === 'starting' || phase === 'queued' || phase === 'running';
+}
+
 /** `just.row`: "Just filed · 6". */
 export function rowLabel(count: number): string {
   return `Just filed · ${String(count)}`;

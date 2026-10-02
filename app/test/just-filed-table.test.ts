@@ -15,6 +15,8 @@ import {
   NAME_TOO_LONG,
   noteOrigins,
   originLine,
+  runInFlight,
+  runningLine,
   pickRun,
   runKey,
   NOTHING_LOST,
@@ -330,5 +332,45 @@ describe('the Activity fallback shows no raw Moved lines (R-JUST-1)', () => {
     ].join('\n');
     expect(parseLog(log)).toEqual([]);
     expect(JSON.stringify(fallbackLines(old, log, NOW))).not.toMatch(/Moved/);
+  });
+});
+
+describe('the run in flight (#997, R-HOME-3)', () => {
+  const started = '2026-09-29T13:52:00.000Z';
+  const at = (minutes: number): number =>
+    Date.parse(started) + minutes * 60_000;
+
+  it('says how many things and how long so far', () => {
+    expect(
+      runningLine(
+        { total: 28, startedAt: started, requestedAt: started },
+        at(2.5),
+      ),
+    ).toBe(
+      'Tidying up 28 things · 2 min so far. What it did shows here when it ends.',
+    );
+  });
+
+  it('reads a run with no total or start yet', () => {
+    expect(runningLine({ requestedAt: started }, at(0.2))).toBe(
+      'Tidying up your things · just started. What it did shows here when it ends.',
+    );
+    expect(runningLine(null, at(1))).toBe(
+      'Tidying up your things · just started. What it did shows here when it ends.',
+    );
+    expect(runningLine({ total: 1, requestedAt: started }, at(1))).toBe(
+      'Tidying up 1 thing · 1 min so far. What it did shows here when it ends.',
+    );
+  });
+
+  it('shows only while a run is starting, queued or running', () => {
+    expect(['starting', 'queued', 'running'].map(runInFlight)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(['idle', 'done', 'failed', 'stale', 'quota'].some(runInFlight)).toBe(
+      false,
+    );
   });
 });
