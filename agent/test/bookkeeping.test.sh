@@ -178,3 +178,61 @@ book_tags "$ROOT/vault" "$FIXTURES/index-before.md" "$STAMP"
 expect_eq "$(sed 's/$/\r/' "$FIXTURES/index-expected.md" | cmp -s - "$ROOT/vault/index.md" && echo same)" same \
   'a CRLF index.md is written back with CRLF'
 echo "ok $CASE"
+
+# --- the run report (#1000) ----------------------------------------------------
+# The functions between run.sh's "run report" markers, on a kinds file and
+# a moves file as the run writes them (fake paths only). jq is the real
+# one when installed, otherwise the Node stand-in.
+if ! command -v jq >/dev/null 2>&1; then
+  mkdir -p "$ROOT/bin"
+  cp "$HERE/jq-stand-in.js" "$ROOT/bin/jq.js"
+  printf '#!/usr/bin/env bash\nexec node -e "$(cat %q)" -- "$@"\n' "$ROOT/bin/jq.js" >"$ROOT/bin/jq"
+  chmod +x "$ROOT/bin/jq"
+  PATH="$ROOT/bin:$PATH"
+fi
+block=$(sed -n '/^# >>> run report (#1000)/,/^# <<< run report/p' "$HERE/../run.sh")
+[ -n "$block" ] || die 'no run report block in run.sh'
+eval "$block"
+KINDS_FILE="$ROOT/kinds.txt"
+SET_ASIDE_FILE="$ROOT/set-aside.txt"
+printf '%s\t%s\n' 0-Inbox/a.pdf file 0-Inbox/b.mp4 file 'Clippings/c d.md' file \
+  '0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md' context >"$KINDS_FILE"
+# Two pending items moved, one renamed; a move of a file that was not
+# pending (a note the agent wrote) is not an item.
+printf '%s\t%s\n' 0-Inbox/a.pdf 2-Areas/Finance/a.pdf 0-Inbox/b.mp4 '3-Resources/Videos/2026-01-15 b.mp4' \
+  3-Resources/Old.md 3-Resources/New.md >"$ROOT/moves.txt"
+
+CASE='to only from a move'
+items=$(items_json "$ROOT/moves.txt")
+expect_eq "$items" "$(printf '[%s]' "$(paste -sd, - <<'JSON'
+{"path":"0-Inbox/a.pdf","kind":"file","to":"2-Areas/Finance/a.pdf"}
+{"path":"0-Inbox/b.mp4","kind":"file","to":"3-Resources/Videos/2026-01-15 b.mp4","renamedFrom":"b.mp4"}
+{"path":"Clippings/c d.md","kind":"file"}
+{"path":"0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md","kind":"context"}
+JSON
+)")" 'every item, `to` only on the two that moved'
+expect_eq "$(items_json "$ROOT/moves.txt" moved | grep -o '"path"' | grep -c .)" 2 'only the moved ones'
+expect_eq "$(items_json)" "$(printf '[%s]' "$(paste -sd, - <<'JSON'
+{"path":"0-Inbox/a.pdf","kind":"file"}
+{"path":"0-Inbox/b.mp4","kind":"file"}
+{"path":"Clippings/c d.md","kind":"file"}
+{"path":"0-Inbox/Bower - 2026-01-15 0915-00 Context ab.md","kind":"context"}
+JSON
+)")" 'no moves file: no `to` at all'
+echo "ok $CASE"
+
+CASE='moved count'
+expect_eq "$(moved_count "$ROOT/moves.txt")" 2 'the pending items that moved, not other moves'
+: >"$ROOT/no-moves.txt"
+expect_eq "$(moved_count "$ROOT/no-moves.txt")" 0 'nothing moved'
+expect_eq "$(moved_count "$ROOT/missing.txt")" 0 'no moves file'
+echo "ok $CASE"
+
+CASE='set aside'
+printf '%s\t%s\n' kept-not-read 0-Inbox/b.mp4 quarantined '0-Inbox/Bower - x.md' >"$SET_ASIDE_FILE"
+expect_eq "$(set_aside_json)" \
+  '[{"path":"0-Inbox/b.mp4","reason":"kept-not-read"},{"path":"0-Inbox/Bower - x.md","reason":"quarantined"}]' \
+  'each with its reason'
+: >"$SET_ASIDE_FILE"
+expect_eq "$(set_aside_json)" '[]' 'nothing set aside'
+echo "ok $CASE"

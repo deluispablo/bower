@@ -311,6 +311,7 @@ ROWS_WARNING=''
 # lines.
 readonly SHEET_TAKEN="$WORK_DIR/filing.tsv"
 SHEET_WARNING=''
+SHEET_JSON=''  # the sheet's counts for .bower/last-run.json (sheet_json, #1000)
 # In the vault: the pending files over the size limit, for the agent to file
 # by name and date without reading them (written before the agent starts),
 # and the one clause the agent may write about what it added besides filing
@@ -649,6 +650,9 @@ write_outcome() {
     [ -z "$DISAGREE_JSON" ] || [ "$DISAGREE_JSON" = '[]' ] ||
       args+=(--argjson disagree "$DISAGREE_JSON")
     [ -z "$NEXT_JSON" ] || [ "$NEXT_JSON" = '[]' ] || args+=(--argjson next "$NEXT_JSON")
+    # The filing sheet's counts, skipped lines per reason (#1000). Only
+    # here: the Worker's status report takes no `sheet` field.
+    [ -z "$SHEET_JSON" ] || args+=(--argjson sheet "$SHEET_JSON")
   elif [ "$state" = failed ]; then
     # The items already moved in Drive, as the failed report (R-RUNNER-5).
     [ -z "${PROCESSED_JSON:-}" ] || args+=(--argjson items "$PROCESSED_JSON")
@@ -2079,7 +2083,9 @@ sheet_split() {
 # check refuses, is skipped. At most SHEET_MAX_LINES lines are read, the
 # rest are skipped. Sets SHEET_FILED, SHEET_NOTES, SHEET_TAGS and
 # SHEET_SKIPPED (counts only), SHEET_SKIP_REASONS (the skipped lines per
-# reason) and SHEET_UNLINKED_COUNT, the `note` lines booked without their
+# reason, as text), SHEET_SKIP_COUNTS (the same per reason, an associative
+# array: description, path, name, tag, other; sheet_json) and
+# SHEET_UNLINKED_COUNT, the `note` lines booked without their
 # original (not skipped, so in neither of the two). Returns 1 when a write
 # fails.
 apply_filing_sheet() {
@@ -2090,6 +2096,7 @@ apply_filing_sheet() {
   local vault=$1 sheet=$2 pending=$3 before=$4 day=$5 line total read rc pass reason
   local lines=()
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
+  declare -gA SHEET_SKIP_COUNTS=([description]=0 [path]=0 [name]=0 [tag]=0 [other]=0)
   SHEET_MAP_FROM=() SHEET_MAP_TO=() SHEET_SHORT_SRC=() SHEET_SIBLINGS=() SHEET_UNLINKED_COUNT=0
   SHEET_CONVERTED=${6:-}
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
@@ -2149,9 +2156,20 @@ apply_filing_sheet() {
   done
   SHEET_SKIP_REASONS=''
   for reason in description path name tag other; do
+    SHEET_SKIP_COUNTS[$reason]=${why[$reason]}
     [ "${why[$reason]}" -eq 0 ] ||
       SHEET_SKIP_REASONS+="${SHEET_SKIP_REASONS:+, }${why[$reason]} $reason"
   done
+}
+
+# The sheet's counts for the run report (#1000), after apply_filing_sheet:
+# { filed, notes, tags, skipped, skippedBy: { description, path, name, tag,
+# other } }, counts only, never a path or a field of the sheet.
+sheet_json() {
+  printf '{"filed":%d,"notes":%d,"tags":%d,"skipped":%d,"skippedBy":{"description":%d,"path":%d,"name":%d,"tag":%d,"other":%d}}\n' \
+    "${SHEET_FILED:-0}" "${SHEET_NOTES:-0}" "${SHEET_TAGS:-0}" "${SHEET_SKIPPED:-0}" \
+    "${SHEET_SKIP_COUNTS[description]:-0}" "${SHEET_SKIP_COUNTS[path]:-0}" \
+    "${SHEET_SKIP_COUNTS[name]:-0}" "${SHEET_SKIP_COUNTS[tag]:-0}" "${SHEET_SKIP_COUNTS[other]:-0}"
 }
 # <<< filing sheet
 
@@ -3066,10 +3084,13 @@ processed_json() {
   items_json
 }
 
+# >>> run report (#1000): agent/test/bookkeeping.test.sh runs this block as is.
 # The processed list from KINDS_FILE, as a JSON array of { path, kind }.
 # Report v2 (#598): with a moves file ("<old><TAB><new>", MOVES_FILE), an
 # item that moved also carries `to` (its new path) and, when its file name
-# changed, `renamedFrom` (the old name).
+# changed, `renamedFrom` (the old name). `to` comes only from that file, the
+# moves the runner found and carried out, never from what the agent said:
+# an item that did not move has none (#1000).
 items_json() {
   local path kind to='' moves=${1:-} only_moved=${2:-} args
   while IFS=$'\t' read -r path kind; do
@@ -3168,6 +3189,20 @@ set_aside_json() {
     printf '[%s]\n' "$items"
   }
 }
+
+# The number of processed items (KINDS_FILE) that moved, by the moves file
+# $1 ("<old><TAB><new>"): what the run really filed, logged as the
+# "originals filed" count instead of the agent's own `Filed:` line (#1000).
+moved_count() {
+  if [ ! -f "$1" ] || [ ! -f "$KINDS_FILE" ]; then
+    echo 0
+    return 0
+  fi
+  awk -F '\t' 'FILENAME == ARGV[1] { if ($2 != "") moved[$1] = 1; next }
+    $1 != "" && ($1 in moved) && !seen[$1]++ { n++ }
+    END { print n + 0 }' "$1" "$KINDS_FILE"
+}
+# <<< run report
 
 # The agent's one clause about what it added besides filing (#598), from
 # ADDED_NOTE: its first non-empty line, trimmed and cut to MAX_ADDED_LENGTH
@@ -4183,6 +4218,7 @@ if [ -f "$SHEET_TAKEN" ]; then
   [ "$SHEET_UNLINKED_COUNT" -eq 0 ] ||
     unlinked="; $SHEET_UNLINKED_COUNT $([ "$SHEET_UNLINKED_COUNT" -eq 1 ] && echo 'note booked without its' || echo 'notes booked without their') original"
   log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped${SHEET_SKIP_REASONS:+ (skipped: $SHEET_SKIP_REASONS)}$unlinked"
+  SHEET_JSON=$(sheet_json) || SHEET_JSON=''
   [ "$SHEET_SKIPPED" -eq 0 ] ||
     SHEET_WARNING="Warning: $SHEET_SKIPPED filing $([ "$SHEET_SKIPPED" -eq 1 ] && echo 'decision was' || echo 'decisions were') not usable and skipped; what they named stays where it was."
 fi
@@ -4275,8 +4311,9 @@ fi
 report_lines=5
 [ "$MODE" != ingest ] || report_lines=6
 SUMMARY=$(tail -n "$report_lines" "$AGENT_OUT")
-filed=$(awk '/^Filed: [0-9]+ files?$/ { n = $2 } END { print n }' <<<"$SUMMARY")
-[ -z "$filed" ] || log "$filed originals filed"
+# The originals the run really filed: the processed items that moved, not
+# the agent's own `Filed:` line (#1000). A count, never a name.
+[ "$MODE" != ingest ] || log "$(moved_count "$MOVES_FILE") originals filed"
 if [ "$TOO_MANY_CHANGES" -eq 1 ]; then
   # Nothing was saved, so nothing was processed, whatever the agent said.
   SUMMARY="Refused: too many changes (more than $MAX_CHANGES files). Nothing was saved."

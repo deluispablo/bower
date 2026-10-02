@@ -709,8 +709,15 @@ expect_eq "$SHEET_SKIPPED $SHEET_NOTES" '5 1' 'five lines skipped, the note book
 expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 other' \
   'counted per reason'
 expect_eq "$SHEET_UNLINKED_COUNT" 1 'the note without its original, counted apart'
+# The report's `sheet` object (#1000): the same counts, per reason, no path.
+expect_eq "$(sheet_json)" \
+  '{"filed":0,"notes":1,"tags":0,"skipped":5,"skippedBy":{"description":1,"path":1,"name":1,"tag":1,"other":1}}' \
+  'the sheet counts for the report'
 fresh
 : >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
 expect_eq "$SHEET_SKIP_REASONS" '' 'no reason when nothing is skipped'
+expect_eq "$(sheet_json)" \
+  '{"filed":0,"notes":0,"tags":0,"skipped":0,"skippedBy":{"description":0,"path":0,"name":0,"tag":0,"other":0}}' \
+  'an empty sheet counts nothing'
 echo "ok $CASE"
