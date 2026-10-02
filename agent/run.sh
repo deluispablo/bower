@@ -513,7 +513,13 @@ on_exit() {
     copy_up_after_failure
     report_lists >/dev/null 2>&1 || true
     PROCESSED_JSON=$(moved_items_json 2>/dev/null) || PROCESSED_JSON=''
-    REASON=unknown
+    # #1000: stopped from outside (the job's time limit cancels the step
+    # with SIGINT, then SIGTERM) is a timeout; anything else is unknown.
+    if [ "$STOPPED" -eq 1 ]; then
+      REASON=timeout
+    else
+      REASON=unknown
+    fi
     write_outcome failed "$(failed_sentence)" >/dev/null 2>&1 || true
     write_paths >/dev/null 2>&1 || true
     SUMMARY='' report_final failed "$STEP: unexpected error" >/dev/null 2>&1 || true
@@ -523,7 +529,11 @@ on_exit() {
   rm -rf "$WORK_DIR"
   exit "$rc"
 }
+# A signal from outside ends the run through on_exit, with the reason
+# timeout (#1000), instead of killing the shell before it can report.
+STOPPED=0
 trap on_exit EXIT
+trap 'STOPPED=1; exit 143' INT TERM
 
 # POST a status report. Values go into the payload through jq, never through
 # the log. Every report carries the mode as its kind (ingest or lint), so the
@@ -3564,7 +3574,7 @@ STEP='fetch vault info'
 log "$STEP"
 if ! http_code=$(curl -sS -o "$VAULT_JSON" -w '%{http_code}' \
   -H "Authorization: Bearer $API_CREDENTIAL" "$API_BASE"); then
-  fail "$STEP: request failed"
+  fail "$STEP: request failed" unknown
 fi
 case "$http_code" in
   200) ;;
@@ -3576,9 +3586,16 @@ case "$http_code" in
     # #276; docs/runbook.md, Troubleshooting). Saying which saves looking
     # for a wrong key that is not there.
     if [ -n "$(field error 2>/dev/null || true)" ]; then
-      fail "$STEP: HTTP $http_code"
+      # #1000: the Worker no longer takes this run's ticket (401, 403) or no
+      # longer knows the vault or its user (404): the person's account or
+      # sign-in, which the app's drive_unavailable words ask them to renew
+      # by signing in again. Any other answer is the Worker's own fault.
+      case "$http_code" in
+        401 | 403 | 404) fail "$STEP: HTTP $http_code" drive_unavailable ;;
+      esac
+      fail "$STEP: HTTP $http_code" unknown
     fi
-    fail "$STEP: HTTP $http_code, not answered by the Worker"
+    fail "$STEP: HTTP $http_code, not answered by the Worker" unknown
     ;;
 esac
 
@@ -3595,15 +3612,15 @@ REQUESTED_AT=$(field requestedAt)
 # live in shell variables only, and the file is gone long before the agent
 # starts.
 if ! rm -f "$VAULT_JSON"; then
-  fail "$STEP: could not delete the answer"
+  fail "$STEP: could not delete the answer" unknown
 fi
 if [ -z "$FOLDER_ID" ] || [ -z "$ACCESS_TOKEN" ] || [ -z "$EXPIRES_AT" ]; then
-  fail "$STEP: incomplete answer"
+  fail "$STEP: incomplete answer" unknown
 fi
 
 MAX_TURNS=${BOWER_MAX_TURNS:-$API_MAX_TURNS}
 case "$MAX_TURNS" in
-  '' | *[!0-9]*) fail "$STEP: max turns is not a number" ;;
+  '' | *[!0-9]*) fail "$STEP: max turns is not a number" unknown ;;
 esac
 
 if [ -n "$USER_API_KEY" ]; then
@@ -3656,14 +3673,14 @@ fi
 # this is uploaded.
 STEP='permission policy'
 if [ ! -f "$SETTINGS_FILE" ]; then
-  fail "$STEP: claude-settings.json missing next to run.sh"
+  fail "$STEP: claude-settings.json missing next to run.sh" unknown
 fi
 if ! {
   mkdir -p "$VAULT_DIR/.claude" &&
     rm -f "$VAULT_DIR/.claude/settings.local.json" &&
     cp "$SETTINGS_FILE" "$VAULT_DIR/.claude/settings.json"
 }; then
-  fail "$STEP: copy failed"
+  fail "$STEP: copy failed" unknown
 fi
 
 # --- reconcile --------------------------------------------------------------
@@ -3712,7 +3729,7 @@ if [ "$MODE" = ingest ] && [ "$SCOPE" = instructions ]; then
     if in_instructions_scope "$path"; then
       printf '%s\n' "$path" >>"$WORK_DIR/in-scope.txt"
     else
-      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside"
+      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside" unknown
       held=$((held + 1))
     fi
   done 3<"$PENDING_FILE"
@@ -3737,14 +3754,14 @@ fi
 # is. No REQUESTED_AT (an older Worker), no hold. The log counts, never
 # names.
 if [ "$MODE" = ingest ] && [[ "$REQUESTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$ ]]; then
-  cutoff=$(hold_cutoff "$REQUESTED_AT") || fail "$STEP: could not read when the run was asked for"
+  cutoff=$(hold_cutoff "$REQUESTED_AT") || fail "$STEP: could not read when the run was asked for" unknown
   : >"$WORK_DIR/held.txt"
   while IFS= read -r path <&3; do
     [ -n "$path" ] || continue
     if [ -n "$(find "$VAULT_DIR/$path" -maxdepth 0 -newermt "$cutoff" 2>/dev/null)" ]; then
       printf '%s\n' "$path" >>"$WORK_DIR/held.txt"
       if is_context_note "$path"; then
-        applies_to "$path" >>"$WORK_DIR/held.txt" || fail "$STEP: could not read a context note"
+        applies_to "$path" >>"$WORK_DIR/held.txt" || fail "$STEP: could not read a context note" unknown
       fi
     fi
   done 3<"$PENDING_FILE"
@@ -3753,7 +3770,7 @@ if [ "$MODE" = ingest ] && [[ "$REQUESTED_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-
   while IFS= read -r path <&3; do
     [ -n "$path" ] || continue
     if grep -Fxq -- "$path" "$WORK_DIR/held.txt"; then
-      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside"
+      rm -f "$VAULT_DIR/$path" || fail "$STEP: could not set a file aside" unknown
       held=$((held + 1))
     else
       printf '%s\n' "$path" >>"$WORK_DIR/not-held.txt"
@@ -3774,7 +3791,7 @@ log "$PENDING_COUNT files pending"
 if [ "$MODE" = ingest ] && [ "$PENDING_COUNT" -eq 0 ]; then
   STEP='report done'
   log "$STEP"
-  report_lists || fail "$STEP: report lists not built"
+  report_lists || fail "$STEP: report lists not built" unknown
   write_outcome done 'Nothing new to tidy up.'
   write_file_facts
   write_paths
@@ -3791,7 +3808,7 @@ fi
 STEP='report running'
 log "$STEP"
 if ! PROCESSED_JSON='' report running; then
-  fail "$STEP: API unreachable"
+  fail "$STEP: API unreachable" unknown
 fi
 
 # The local copy is still exactly what sync down fetched: record it, so the
@@ -3804,14 +3821,14 @@ log "$STEP"
 # updated notes (R-RUNNER-1).
 rm -f "$VAULT_DIR/$ADDED_NOTE" "$VAULT_DIR/$TOO_LARGE_LIST" "$VAULT_DIR/$UPDATED_NOTE" "$VAULT_DIR/$CHECKS_NOTE" "$VAULT_DIR/$NEXT_NOTE"
 if ! manifest >"$MANIFEST_BEFORE"; then
-  fail "$STEP: listing the local copy failed"
+  fail "$STEP: listing the local copy failed" unknown
 fi
 if ! keep_pre_run_copy; then
-  fail "$STEP: keeping a pre-run copy failed"
+  fail "$STEP: keeping a pre-run copy failed" unknown
 fi
 # R-RUNNER-9: each note's status now, for the status History lines.
 if ! snapshot_status 2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: reading the statuses failed"
+  fail "$STEP: reading the statuses failed" unknown
 fi
 
 # Keeps a copy of the text file $2 (a document's converted text) as the text
@@ -4010,7 +4027,7 @@ if [ "$MODE" = ingest ]; then
   pending_now="$WORK_DIR/pending-after-scan.txt"
   [ -f "$pending_now" ] || pending_now=$PENDING_FILE
   if ! set_aside "$pending_now"; then
-    fail "$STEP: listing failed"
+    fail "$STEP: listing failed" unknown
   fi
   SET_ASIDE_JSON=$(set_aside_json)
 fi
@@ -4108,20 +4125,20 @@ log "$context_line"
 PROMPT=$(printf '%s\n' "$PROMPT" | fill_placeholders "$WORK_DIR")
 STEP='rulebook'
 if ! take_rulebook_out; then
-  fail "$STEP: could not move CLAUDE.md out"
+  fail "$STEP: could not move CLAUDE.md out" unknown
 fi
 if ! build_system_prompt "${CONTEXT_MODES[@]}" >"$SYSTEM_FILE" 2>/dev/null; then
-  fail "$STEP: system prompt not built"
+  fail "$STEP: system prompt not built" unknown
 fi
 log "$STEP: $(wc -c <"$SYSTEM_FILE" | tr -d ' ') bytes for ${CONTEXT_MODES[*]}"
 # R-SS-9, R-SS-10: index.md as the session starts, for the tag recount and
 # the row check after it. Kept in the work dir, never logged.
 rm -f "$INDEX_BEFORE"
 [ ! -f "$VAULT_DIR/index.md" ] || cp "$VAULT_DIR/index.md" "$INDEX_BEFORE" ||
-  fail "$STEP: index.md not kept"
+  fail "$STEP: index.md not kept" unknown
 # #978: the session starts with no filing sheet, so an old one is never
 # carried out again.
-rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: old filing sheet not removed"
+rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: old filing sheet not removed" unknown
 # Logged right before the agent starts: the next line is its stats, so the
 # two timestamps bound the agent's own time (agent/bench/run-bench.sh).
 STEP='agent run'
@@ -4144,16 +4161,16 @@ agent_rc=$?
 set -e
 # R-SS-5: CLAUDE.md goes back before anything reads or copies the local copy.
 if ! restore_rulebook; then
-  fail "$STEP: CLAUDE.md not restored"
+  fail "$STEP: CLAUDE.md not restored" unknown
 fi
 # #978: the filing sheet leaves the local copy at once, so no copy up, the
 # one after a failure included, ever takes it to Drive. Only a plain file
 # is kept; anything else at its path is removed.
 rm -f "$SHEET_TAKEN"
 if [ -f "$VAULT_DIR/$SHEET_FILE" ] && [ ! -L "$VAULT_DIR/$SHEET_FILE" ]; then
-  mv -- "$VAULT_DIR/$SHEET_FILE" "$SHEET_TAKEN" || fail "$STEP: filing sheet not taken"
+  mv -- "$VAULT_DIR/$SHEET_FILE" "$SHEET_TAKEN" || fail "$STEP: filing sheet not taken" unknown
 fi
-rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: filing sheet not taken"
+rm -rf -- "${VAULT_DIR:?}/$SHEET_FILE" || fail "$STEP: filing sheet not taken" unknown
 # The agent's closing lines (the report parsed below) are the final result
 # event's text; with no result event (a crash, a timeout) AGENT_OUT is empty,
 # as an empty text output was.
@@ -4210,7 +4227,7 @@ if [ -f "$SHEET_TAKEN" ]; then
     "$(date -u +%F)" "$CONVERTED_FILE" 2>>"$WORK_DIR/filing-sheet.err"; then
     # The message names vault paths: it stays in the work dir, which is
     # never uploaded, not in the logs.
-    fail "$STEP: filing sheet failed"
+    fail "$STEP: filing sheet failed" unknown
   fi
   # Counts only, with the skipped lines per reason (#978 follow-up).
   # Notes booked without their original (#995) are not skipped lines.
@@ -4226,19 +4243,19 @@ if ! audit || ! record_saved_keys; then
   fail "$STEP: copy failed" drive_unavailable
 fi
 if ! find_moves; then
-  fail "$STEP: move failed"
+  fail "$STEP: move failed" unknown
 fi
 # R-RUNNER-7: the documents' full text goes into their text copies now that
 # the renames are known, then the names are audited.
 if ! append_document_text || ! audit_note_names; then
-  fail "$STEP: text copy failed"
+  fail "$STEP: text copy failed" unknown
 fi
 # R-SS-10: the index rows the session added or changed, checked against the
 # v24 form (check_rows); a bad row is counted, never refused or rewritten,
 # and the count is a warning in the summary. Before the bookkeeping phase,
 # so a link the runner rewrites for a move is not counted as the agent's.
 if [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -f "$VAULT_DIR/index.md" ]; then
-  rows_checked=$(check_rows "$INDEX_BEFORE" "$VAULT_DIR/index.md") || fail "$STEP: row check failed"
+  rows_checked=$(check_rows "$INDEX_BEFORE" "$VAULT_DIR/index.md") || fail "$STEP: row check failed" unknown
   bad_rows=${rows_checked% *}
   [ "${rows_checked#* }" -eq 0 ] || log "row check: $bad_rows of ${rows_checked#* } rows not in the expected form"
   [ "$bad_rows" -eq 0 ] ||
@@ -4246,26 +4263,26 @@ if [ "$TOO_MANY_CHANGES" -eq 0 ] && [ -f "$VAULT_DIR/index.md" ]; then
 fi
 # E-7 (#921): an unusable folder status list in a changed hub note is removed.
 if ! check_hub_statuses; then
-  fail "$STEP: status list check failed"
+  fail "$STEP: status list check failed" unknown
 fi
 if ! move_up; then
-  fail "$STEP: move failed"
+  fail "$STEP: move failed" unknown
 fi
 # A failing tool's own message names vault paths: it goes to a private log.
 if ! book_moves "$VAULT_DIR" "$BOOKED_OLD" "$BOOKED_NEW" "$(date -u '+%F %H:%M')" \
   2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: bookkeeping failed"
+  fail "$STEP: bookkeeping failed" unknown
 fi
 # R-RUNNER-9: the mechanical History lines, now that the moves are booked.
 if ! write_history 2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: bookkeeping failed"
+  fail "$STEP: bookkeeping failed" unknown
 fi
 # R-SS-9, R-SS-13: the tag counts in index.md and a `Tag added:` line per
 # new tag, after the moves are booked, so both files go up with the rest.
 # None after a refused run: nothing of it is saved.
 if [ "$TOO_MANY_CHANGES" -eq 0 ] &&
   ! book_tags "$VAULT_DIR" "$INDEX_BEFORE" "$(date -u '+%F %H:%M')" 2>>"$LOG_DIR/bookkeeping.err"; then
-  fail "$STEP: bookkeeping failed"
+  fail "$STEP: bookkeeping failed" unknown
 fi
 # Report v2 (#598): each processed item that moved carries where it went.
 if [ "$MODE" = ingest ] && [ -n "$PROCESSED_JSON" ]; then
@@ -4303,7 +4320,7 @@ done 3<"$PENDING_FILE"
 STEP='report done'
 log "$STEP"
 if ! report_lists; then
-  fail "$STEP: report lists not built"
+  fail "$STEP: report lists not built" unknown
 fi
 # The agent's final report is its last lines: six for an ingest (Processed,
 # Filed, Created, Updated, Rules, Problems; issue #368), five for a lint (no

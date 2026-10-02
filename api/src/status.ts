@@ -27,7 +27,7 @@ import { getWorkflowRun } from './github.js';
 import type { FetchLike } from './google.js';
 import { markStale, runStaleness } from './process.js';
 import { deleteRunTicket, getRun, listRuns, putRun } from './store.js';
-import type { Run } from './types.js';
+import type { Run, RunFailureReason } from './types.js';
 
 /** What `GET /status` answers. */
 export interface StatusBody {
@@ -67,14 +67,21 @@ export function jobCheckDue(run: Run | undefined, now: Date): boolean {
 /**
  * `run` settled from its GitHub job's `conclusion` at `now`: `success` is
  * `done`; anything else (`failure`, `cancelled`, `timed_out`, …) is
- * `failed` with `error: 'job <conclusion>'`. The runner's own report never
- * arrived, so there is no summary or processed list to keep.
+ * `failed` with `error: 'job <conclusion>'` and a reason for the app
+ * (#1000): `timed_out`, and `cancelled` (what the job's time limit ends a
+ * step with), are `timeout`; any other conclusion is `unknown`. The
+ * runner's own report never arrived, so there is no summary or processed
+ * list to keep.
  */
 export function settleFromJob(run: Run, conclusion: string, now: Date): Run {
   const settled: Run = { ...run, finishedAt: now.toISOString() };
   delete settled.jobCheckedAt;
   if (conclusion === 'success') return { ...settled, state: 'done' };
-  return { ...settled, state: 'failed', error: `job ${conclusion}` };
+  const reason: RunFailureReason =
+    conclusion === 'timed_out' || conclusion === 'cancelled'
+      ? 'timeout'
+      : 'unknown';
+  return { ...settled, state: 'failed', error: `job ${conclusion}`, reason };
 }
 
 /**

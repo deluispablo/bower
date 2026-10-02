@@ -244,7 +244,7 @@ describe('isActiveRun', () => {
 });
 
 describe('markStale', () => {
-  it('marks failed with error stale, sets finishedAt, keeps the rest', () => {
+  it('marks failed with error stale and reason timeout, sets finishedAt, keeps the rest (#1000)', () => {
     const now = new Date('2026-06-01T12:00:00.000Z');
     const run: Run = {
       state: 'running',
@@ -259,6 +259,7 @@ describe('markStale', () => {
       startedAt: run.startedAt,
       runId: 'r1',
       error: 'stale',
+      reason: 'timeout',
       finishedAt: now.toISOString(),
     });
   });

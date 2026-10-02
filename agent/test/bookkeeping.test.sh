@@ -236,3 +236,19 @@ expect_eq "$(set_aside_json)" \
 : >"$SET_ASIDE_FILE"
 expect_eq "$(set_aside_json)" '[]' 'nothing set aside'
 echo "ok $CASE"
+
+# Every failure tells the app why (#1000): each `fail` call in run.sh names
+# a reason the app knows (app/src/run-failure.ts), so none reads "Something
+# went wrong" for want of one. A call whose reason is computed must be the
+# agent's exit code (agent_failure_reason).
+CASE='fail reasons'
+calls=$(grep -nE '(^|[^_[:alnum:]])fail "' "$HERE/../run.sh" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+[ -n "$calls" ] || die 'no fail calls found'
+bare=$(grep -vE 'fail "[^"]*" (drive_unavailable|timeout|model_unavailable|vault_changed|vault_missing|unknown)([[:space:]]|;|\)|$)' <<<"$calls" |
+  grep -vF 'fail "$STEP: exit $agent_rc" "$(agent_failure_reason "$agent_rc")"' || true)
+expect_eq "$bare" '' 'fail calls without a known reason'
+known=$(sed -n '/^export const RUN_FAILURE_REASONS = \[/,/^\]/p' "$HERE/../../api/src/types.ts" |
+  grep -oE "'[a-z_]+'" | tr -d "'" | LC_ALL=C sort | paste -sd ' ' -)
+expect_eq "$known" 'drive_unavailable model_unavailable timeout unknown vault_changed vault_missing' \
+  'the reasons the Worker accepts'
+echo "ok $CASE"
