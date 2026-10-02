@@ -1275,8 +1275,12 @@ readonly SHEET_MAX_LINES=2000
 readonly SHEET_MAX_BYTES=1048576
 readonly SHEET_MAX_LINE=2048
 
-# The number of characters (not bytes) of $1.
-sheet_chars() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' '; }
+# The number of characters (not bytes) of $1, printed. The checks below
+# use sheet_nchars directly: no process at all (#1000).
+sheet_chars() {
+  sheet_nchars "$1"
+  printf '%s' "$SHEET_N"
+}
 
 # Whether $1 is a safe relative path in the vault: not empty, no `/` at
 # either end, no `//`, no `\`, no drive letter, no control character, no
@@ -1331,8 +1335,14 @@ sheet_path_ok() {
 # the interlinear annotation characters and the tag characters. Matched
 # on their UTF-8 bytes, so the locale does not matter.
 sheet_has_format() {
-  printf '%s' "$1" | LC_ALL=C grep -aqE \
-    $'\xc2\xad|\xd8[\x80-\x85\x9c]|\xdb\x9d|\xdc\x8f|\xe0\xa3\xa2|\xe1\xa0\x8e|\xe2\x80[\x8b-\x8f\xaa-\xae]|\xe2\x81[\xa0-\xa4\xa6-\xaf]|\xef\xbb\xbf|\xef\xbf[\xb9-\xbb]|\xf3\xa0[\x80-\x81]'
+  # Glob patterns on the bytes, in the shell: no process per field (#1000).
+  local LC_ALL=C
+  local t=$1
+  [[ $t == *$'\xc2\xad'* || $t == *$'\xd8'[$'\x80'-$'\x85'$'\x9c']* || $t == *$'\xdb\x9d'* ||
+    $t == *$'\xdc\x8f'* || $t == *$'\xe0\xa3\xa2'* || $t == *$'\xe1\xa0\x8e'* ||
+    $t == *$'\xe2\x80'[$'\x8b'-$'\x8f'$'\xaa'-$'\xae']* ||
+    $t == *$'\xe2\x81'[$'\xa0'-$'\xa4'$'\xa6'-$'\xaf']* || $t == *$'\xef\xbb\xbf'* ||
+    $t == *$'\xef\xbf'[$'\xb9'-$'\xbb']* || $t == *$'\xf3\xa0'[$'\x80'-$'\x81']* ]]
 }
 
 # Whether every segment of the checked path $2 (sheet_path_ok: no glob
@@ -1370,6 +1380,21 @@ sheet_bytes() {
   printf '%s' "${#1}"
 }
 
+# Whether the file names $1 and $2 have the same extension in any letter
+# case (sheet_ext), with no subshell.
+sheet_same_ext() {
+  local a='' b=''
+  [[ $1 != ?*.* ]] || a=${1##*.}
+  [[ $2 != ?*.* ]] || b=${2##*.}
+  [ "${a,,}" = "${b,,}" ]
+}
+
+# Whether $1 is at most $2 bytes long, with no subshell.
+sheet_bytes_le() {
+  local LC_ALL=C
+  [ "${#1}" -le "$2" ]
+}
+
 # Whether $1 is a usable file name for the original named $2, as written:
 # a safe path (sheet_path_ok) of one segment with the original's extension
 # (any letter case). A name the agent kept (exactly $2) may be up to 200
@@ -1379,11 +1404,12 @@ sheet_bytes() {
 sheet_name_ok() {
   sheet_path_ok "$1" || return 1
   [[ $1 != */* ]] || return 1
-  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ] || return 1
+  sheet_same_ext "$1" "$2" || return 1
   if [ "$1" = "$2" ]; then
-    [ "$(sheet_bytes "$1")" -le 200 ]
+    sheet_bytes_le "$1" 200
   else
-    [ "$(sheet_chars "$1")" -le 60 ]
+    sheet_nchars "$1"
+    [ "$SHEET_N" -le 60 ]
   fi
 }
 
@@ -1395,8 +1421,9 @@ sheet_name_long() {
   [ "$1" != "$2" ] || return 1
   sheet_path_ok "$1" || return 1
   [[ $1 != */* ]] || return 1
-  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ] || return 1
-  [ "$(sheet_chars "$1")" -gt 60 ]
+  sheet_same_ext "$1" "$2" || return 1
+  sheet_nchars "$1"
+  [ "$SHEET_N" -gt 60 ]
 }
 
 # The stem of the file name $1: the name without its extension.
@@ -1435,6 +1462,30 @@ sheet_name_short() {
   sheet_path_ok "$cut (2)$ext" || return 1
   for n in 2 3 4 5 6 7 8 9; do
     cand="$cut ($n)$ext"
+    if ! sheet_taken "$dir" "$cand"; then
+      printf '%s' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# The file name $2 made free in the folder $1, printed: $2 itself when no
+# entry there has it in any letter case (sheet_taken), else ` (2)`,
+# ` (3)`, ... ` (9)` added before the extension, the first that is free, as
+# sheet_name_short does for a shortened name (#1000). Returns 1 when no such
+# name is left or the result is not a safe name.
+sheet_free_name() {
+  local dir=$1 name=$2 ext='' stem n cand
+  if ! sheet_taken "$dir" "$name"; then
+    printf '%s' "$name"
+    return 0
+  fi
+  [[ $name != ?*.* ]] || ext=.${name##*.}
+  stem=${name%"$ext"}
+  for n in 2 3 4 5 6 7 8 9; do
+    cand="$stem ($n)$ext"
+    sheet_path_ok "$cand" || return 1
     if ! sheet_taken "$dir" "$cand"; then
       printf '%s' "$cand"
       return 0
@@ -1494,6 +1545,10 @@ SHEET_MAP_TO=()
 SHEET_SHORT_SRC=()
 SHEET_SIBLINGS=()
 SHEET_UNLINKED_COUNT=0
+# The notes a `note` line booked this run (#1000): a repeated line is not
+# carried out again, so a sheet that repeats one valid line cannot make
+# the runner rewrite index.md once per line.
+declare -A SHEET_BOOKED=()
 
 # Whether $1 is one of $2...: plain string comparison.
 sheet_has() {
@@ -1574,7 +1629,8 @@ sheet_text_ok() {
   [ -n "$1" ] && [ "$1" != - ] || return 1
   [[ $1 != *[[:cntrl:]]* && $1 != *'·'* && $1 != *'[['* && $1 != *']]'* ]] || return 1
   ! sheet_has_format "$1" || return 1
-  [ "$(sheet_chars "$1")" -le "$2" ]
+  sheet_nchars "$1"
+  [ "$SHEET_N" -le "$2" ]
 }
 
 # The row text $1 for a limit of $2 characters, printed: every rule of
@@ -1587,14 +1643,16 @@ sheet_text_ok() {
 sheet_text_fit() {
   local text=$1 max=$2 words=() w acc='' try
   sheet_text_ok "$text" 1000000 || return 1
-  if [ "$(sheet_chars "$text")" -le "$max" ]; then
+  sheet_nchars "$text"
+  if [ "$SHEET_N" -le "$max" ]; then
     printf '%s' "$text"
     return 0
   fi
   read -r -a words <<<"$text"
   for w in "${words[@]}"; do
     try=${acc:+$acc }$w
-    [ "$(sheet_chars "$try")" -le $((max - 1)) ] || break
+    sheet_nchars "$try"
+    [ "$SHEET_N" -le $((max - 1)) ] || break
     acc=$try
   done
   while [[ $acc == *[,\;:\ ] ]]; do acc=${acc%?}; done
@@ -1659,7 +1717,8 @@ sheet_dest_kind() {
     return 0
   fi
   [[ ${dest#*/} != */* ]] || return 1
-  [ "$(sheet_chars "${dest#*/}")" -le 60 ] || return 1
+  sheet_nchars "${dest#*/}"
+  [ "$SHEET_N" -le 60 ] || return 1
   # A folder there under another letter case is not a new one.
   ! sheet_taken "$vault/${dest%%/*}" "${dest#*/}" || return 1
   echo new
@@ -1841,20 +1900,25 @@ sheet_index_row() {
 # changed nothing, when the line is not usable: the pending path is not on
 # the pending list or not a file there; the destination is not one
 # sheet_dest_kind accepts; the file name is not usable (sheet_name_ok, or
-# sheet_name_long for a changed name over 60 characters) or, as written,
-# names a file that is there already (in any letter case); the tags or the
+# sheet_name_long for a changed name over 60 characters) or, changed by
+# the agent, names a file that is there already (in any letter case); the
+# tags or the
 # description are not in the v24 form (both `-` for 0-Inbox/Processed);
 # index.md or the folder's hub note is a link or not a plain file
 # (sheet_index_ok, sheet_hub_plan). A failed mkdir or mv also skips the
 # line. A changed name over 60 characters is shortened (sheet_name_short,
 # which also picks ` (2)`, ` (3)` on a clash) and the rename is kept in
-# SHEET_MAP_FROM and SHEET_MAP_TO for the `note` lines. Otherwise moves the
+# SHEET_MAP_FROM and SHEET_MAP_TO for the `note` lines. A kept name (the
+# original's own) that is taken there gets ` (2)`, ` (3)` the same way
+# (sheet_free_name, #1000) instead of being refused, so the file does not
+# stay in the inbox run after run; that rename is not mapped, since the
+# taken name already means the file that holds it. Otherwise moves the
 # file in the local copy, then writes its hub line (in the folder's hub
 # note, made for a new folder) and its index row; nothing more for
 # Processed. Returns 2 when one of those writes fails after the move.
 sheet_file_line() {
   local vault=$1 pending=$2 before=$3 day=$4 src=$5 dest=$6 name=$7 tags=$8 desc=$9
-  local kind target plan='' arr=() final short=0
+  local kind target plan='' arr=() final short=0 remap=1
   SHEET_WHY=path
   sheet_path_ok "$src" pending || return 1
   grep -qxF -- "$src" "$pending" || return 1
@@ -1890,8 +1954,13 @@ sheet_file_line() {
     ! sheet_taken "$vault/$dest" "$name" || return 1
     final=$(sheet_name_short "$name" "$vault/$dest") || return 1
   else
-    ! sheet_taken "$vault/$dest" "$name" || return 1
     final=$name
+    if sheet_taken "$vault/$dest" "$name"; then
+      # A name the agent made up and that is taken is its mistake: refused.
+      [ "$name" = "${src##*/}" ] || return 1
+      final=$(sheet_free_name "$vault/$dest" "$name") || return 1
+      remap=0
+    fi
   fi
   target="$dest/$final"
   SHEET_WHY=other
@@ -1902,7 +1971,7 @@ sheet_file_line() {
   mkdir -p -- "$vault/$dest" 2>/dev/null || return 1
   mv -n -- "$vault/$src" "$vault/$target" 2>/dev/null || return 1
   [ -f "$vault/$target" ] && [ ! -e "$vault/$src" ] || return 1
-  if [ "$final" != "$name" ]; then
+  if [ "$final" != "$name" ] && [ "$remap" -eq 1 ]; then
     SHEET_MAP_FROM+=("$dest/$name")
     SHEET_MAP_TO+=("$target")
   fi
@@ -1913,7 +1982,8 @@ sheet_file_line() {
     sheet_index_row "$vault" "- [[$target]] · $(sheet_type_of "$final") · $tags · $desc · filed by Bower" "$target" ||
       return 2
   fi
-  sheet_sibling "$vault" "$before" "$day" "$src" "$dest" "$name" "$final" "$kind" "$tags" "$desc" || return 2
+  sheet_sibling "$vault" "$before" "$day" "$src" "$dest" "$name" "$final" "$kind" "$tags" "$desc" \
+    "$remap" || return 2
 }
 
 # The text copy the runner made this run for the original $4 (pandoc's
@@ -1921,17 +1991,19 @@ sheet_file_line() {
 # writes nothing in the vault), once that original is filed (#995): the
 # vault $1, the manifest before the run $2, the date $3, then the file
 # line's destination $5, name as written $6, name used $7, destination kind
-# $8 (sheet_dest_kind), tags $9 and description ${10}. A copy still where
+# $8 (sheet_dest_kind), tags $9, description ${10} and ${11}, 0 when the
+# file's rename is not mapped (a kept name made free). A copy still where
 # the runner wrote it, a plain file, moves next to the original as
-# `<final stem>.md`, unless that name is taken there or not a safe path
-# (it then stays where it was). Outside Processed it is booked as a note
-# whose original is the filed file: its hub line and its index row, with
-# the file line's tags and description. When the agent's name was
-# shortened, `<agent's stem>.md` in the destination maps to it, so a `note`
-# line for the copy finds it. Returns 2 when a write fails.
+# `<final stem>.md`, or with ` (2)`, ` (3)` when that name is taken there
+# (sheet_free_name, #1000); with no free safe name it stays where it was.
+# Outside Processed it is booked as a note whose original is the filed
+# file: its hub line and its index row, with the file line's tags and
+# description. When the agent's name was shortened, `<agent's stem>.md` in
+# the destination maps to it, so a `note` line for the copy finds it.
+# Returns 2 when a write fails.
 sheet_sibling() {
   local vault=$1 before=$2 day=$3 src=$4 dest=$5 name=$6 final=$7 kind=$8 tags=$9 desc=${10}
-  local sib stem note plan row
+  local remap=${11:-1} sib stem note plan row free
   [ -n "${SHEET_CONVERTED:-}" ] && [ -f "$SHEET_CONVERTED" ] || return 0
   [[ ${src##*/} == ?*.* ]] || return 0
   sib="${src%.*}.md"
@@ -1939,12 +2011,13 @@ sheet_sibling() {
   grep -qxF -- "$sib" "$SHEET_CONVERTED" || return 0
   [ -f "$vault/$sib" ] && [ ! -L "$vault/$sib" ] || return 0
   stem=$(sheet_stem "$final")
-  note="$dest/$stem.md"
-  sheet_path_ok "$note" || return 0
-  ! sheet_taken "$vault/$dest" "$stem.md" || return 0
+  sheet_path_ok "$dest/$stem.md" || return 0
+  free=$(sheet_free_name "$vault/$dest" "$stem.md") || return 0
+  stem=$(sheet_stem "$free")
+  note="$dest/$free"
   mv -n -- "$vault/$sib" "$vault/$note" 2>/dev/null || return 0
   [ -f "$vault/$note" ] && [ ! -e "$vault/$sib" ] || return 0
-  if [ "$final" != "$name" ]; then
+  if [ "$final" != "$name" ] && [ "$remap" -eq 1 ]; then
     SHEET_MAP_FROM+=("$dest/$(sheet_stem "$name").md")
     SHEET_MAP_TO+=("$note")
   fi
@@ -2003,7 +2076,8 @@ sheet_note_line() {
   # A copy the runner booked already (sheet_sibling): its row and hub line
   # are written, and SHEET_REPEAT tells the caller not to count it again.
   SHEET_UNLINKED=0 SHEET_REPEAT=0
-  if sheet_has "$note" ${SHEET_SIBLINGS[@]+"${SHEET_SIBLINGS[@]}"}; then
+  if [ -n "${SHEET_BOOKED[$note]+x}" ] ||
+    sheet_has "$note" ${SHEET_SIBLINGS[@]+"${SHEET_SIBLINGS[@]}"}; then
     SHEET_REPEAT=1
     return 0
   fi
@@ -2042,6 +2116,7 @@ sheet_note_line() {
   row="- [[$note]] · Note · $tags · $desc · filed by Bower"
   [ "$orig" = - ] || row+=" · [[$orig]]"
   sheet_index_row "$vault" "$row" "$note" || return 2
+  SHEET_BOOKED[$note]=1
 }
 
 # One `tag` line: the vault $1, then the tag and its meaning. Returns 1
@@ -2108,6 +2183,7 @@ apply_filing_sheet() {
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
   declare -gA SHEET_SKIP_COUNTS=([description]=0 [path]=0 [name]=0 [tag]=0 [other]=0)
   SHEET_MAP_FROM=() SHEET_MAP_TO=() SHEET_SHORT_SRC=() SHEET_SIBLINGS=() SHEET_UNLINKED_COUNT=0
+  SHEET_BOOKED=()
   SHEET_CONVERTED=${6:-}
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
   total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)

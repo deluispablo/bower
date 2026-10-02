@@ -43,6 +43,8 @@ T=$'\t'
 # hub note, an existing area folder with no hub note, a note filed before
 # the run, and an index; the pending list and the manifest before the run.
 fresh() {
+  # A new run: no note booked yet (apply_filing_sheet resets it too).
+  SHEET_BOOKED=()
   rm -rf "$V"
   mkdir -p "$V/0-Inbox/Processed" "$V/Clippings" "$V/1-Projects/Flat hunt" "$V/2-Areas/Finance" \
     "$V/3-Resources" "$V/.bower" "$V/Answers"
@@ -390,16 +392,84 @@ apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CON
 expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'Processed'
 [ -f "$V/0-Inbox/Processed/offer.md" ] && [ ! -e "$V/0-Inbox/offer.md" ] || die 'the copy did not follow to Processed'
 if grep -q 'offer' "$V/index.md"; then die 'a row for Processed'; fi
-# A taken name: the copy stays where it was.
+# A taken name (#1000): the copy gets ` (2)` like a shortened name and is
+# booked, instead of staying in the inbox unbooked.
 fresh
 printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
 mkdir -p "$V/1-Projects/Job hunt"
 echo 'the agent wrote this' >"$V/1-Projects/Job hunt/offer letter.MD"
 printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer\n' >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
-expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'a taken name'
-[ -f "$V/0-Inbox/offer.md" ] || die 'the copy overwrote a file'
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 1' 'a taken name: the copy booked under (2)'
+[ ! -e "$V/0-Inbox/offer.md" ] || die 'the copy stayed in the inbox'
+expect_eq "$(cat "$V/1-Projects/Job hunt/Offer letter (2).md")" 'offer text' 'the copy under (2)'
 expect_eq "$(cat "$V/1-Projects/Job hunt/offer letter.MD")" 'the agent wrote this' 'the taken file is untouched'
+grep -qF -- '- [[1-Projects/Job hunt/Offer letter (2).md]] · Note · #job-offer · Offer · filed by Bower · [[1-Projects/Job hunt/Offer letter.docx]]' \
+  "$V/index.md" || die 'the row of the copy under (2)'
+grep -qxF -- '- [[Offer letter (2)]] Offer' "$V/1-Projects/Job hunt/Job hunt.md" || die 'the hub line of the copy under (2)'
+# Every suffix taken too: the copy stays where it was, the original filed.
+fresh
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+mkdir -p "$V/1-Projects/Job hunt"
+: >"$V/1-Projects/Job hunt/Offer letter.md"
+for n in 2 3 4 5 6 7 8 9; do : >"$V/1-Projects/Job hunt/Offer letter ($n).md"; done
+printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'every name taken'
+[ -f "$V/0-Inbox/offer.md" ] || die 'the copy overwrote a file'
+echo "ok $CASE"
+
+# --- kept names taken (#1000) ---------------------------------------------------------
+CASE='kept names taken'
+fresh
+mkdir -p "$ROOT/free"
+expect_eq "$(sheet_free_name "$ROOT/free" 'Lease.pdf')" 'Lease.pdf' 'a free name as it is'
+: >"$ROOT/free/lease.PDF"
+expect_eq "$(sheet_free_name "$ROOT/free" 'Lease.pdf')" 'Lease (2).pdf' 'taken in another letter case'
+: >"$ROOT/free/Lease (2).pdf"
+expect_eq "$(sheet_free_name "$ROOT/free" 'Lease.pdf')" 'Lease (3).pdf' 'the next free suffix'
+for n in 3 4 5 6 7 8 9; do : >"$ROOT/free/Lease ($n).pdf"; done
+no_ sheet_free_name "$ROOT/free" 'Lease.pdf'
+expect_eq "$(sheet_free_name "$ROOT/free" 'README')" 'README' 'no extension'
+: >"$ROOT/free/README"
+expect_eq "$(sheet_free_name "$ROOT/free" 'README')" 'README (2)' 'no extension, taken'
+# The original's own name, taken in the destination: filed as (2), with its
+# hub line and row; the file that held the name is untouched, and a note
+# naming that file keeps its original.
+echo lease >"$V/0-Inbox/Lease.pdf"
+printf '%s\n' 0-Inbox/Lease.pdf >>"$PENDING"
+printf -- '---\nby: bower\n---\nAbout the old lease.\n' >"$V/1-Projects/Flat hunt/Lease notes.md"
+{
+  printf 'file\t0-Inbox/Lease.pdf\t1-Projects/Flat hunt\tLease.pdf\t#flat\tThe new lease\n'
+  printf 'note\t1-Projects/Flat hunt/Lease notes.md\t1-Projects/Flat hunt/Lease.pdf\t#flat\tNotes on the lease\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '1 1 0' 'the kept name filed under (2)'
+[ ! -e "$V/0-Inbox/Lease.pdf" ] || die 'the kept name stayed in the inbox'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/Lease (2).pdf")" lease 'the new lease under (2)'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/Lease.pdf")" lease 'the old lease untouched'
+grep -qxF -- '- [[Lease (2).pdf]] The new lease' "$V/1-Projects/Flat hunt/Flat hunt.md" || die 'the hub line under (2)'
+grep -qF -- '- [[1-Projects/Flat hunt/Lease (2).pdf]] · PDF · #flat · The new lease · filed by Bower' \
+  "$V/index.md" || die 'the row under (2)'
+grep -qF -- '· [[1-Projects/Flat hunt/Lease.pdf]]' "$V/index.md" || die 'the note lost the existing original'
+# A name the agent made up that is taken is still refused.
+fresh
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Lease.pdf '#flat' 'Made-up name taken'
+[ -f "$V/0-Inbox/scan0001.pdf" ] || die 'a made-up taken name moved the file'
+# The same kept name twice for one folder: (2) for the second.
+fresh
+
+echo first >"$V/0-Inbox/Notes.md"
+echo second >"$V/Clippings/Notes.md"
+printf '%s\n' 0-Inbox/Notes.md Clippings/Notes.md >>"$PENDING"
+{
+  printf 'file\t0-Inbox/Notes.md\t1-Projects/Flat hunt\tNotes.md\t#flat\tFirst notes\n'
+  printf 'file\tClippings/Notes.md\t1-Projects/Flat hunt\tNotes.md\t#flat\tSecond notes\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_SKIPPED" '2 0' 'both filed'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/Notes.md") $(cat "$V/1-Projects/Flat hunt/Notes (2).md")" 'first second' \
+  'the second as (2)'
 echo "ok $CASE"
 
 # --- no orphans (#995) ----------------------------------------------------------------
@@ -720,4 +790,38 @@ expect_eq "$SHEET_SKIP_REASONS" '' 'no reason when nothing is skipped'
 expect_eq "$(sheet_json)" \
   '{"filed":0,"notes":0,"tags":0,"skipped":0,"skippedBy":{"description":0,"path":0,"name":0,"tag":0,"other":0}}' \
   'an empty sheet counts nothing'
+echo "ok $CASE"
+
+# --- a full sheet in time (#1000) -------------------------------------------------------
+# A sheet at the line cap, every line as costly as a hostile agent can make
+# it: `file` lines that pass every check up to the last (a taken name) with
+# a long description of short words to shorten, `note` lines for a note the
+# run did not write, a valid `note` line repeated, and new tags with long
+# meanings, each added to `## Tags`. It must be handled well inside the
+# job's 20-minute limit: under 2 minutes on Linux (CI's runners; the time
+# is printed for the pull request). Elsewhere (Windows starts a process
+# far more slowly) a tenth of the sheet is run and only timed.
+CASE='full sheet timing'
+fresh
+words=$(printf 'ab %.0s' {1..150})
+echo 'written this run' >"$V/3-Resources/Mine.md"
+lines=$SHEET_MAX_LINES
+[ "$(uname -s)" = Linux ] || lines=$((SHEET_MAX_LINES / 10))
+for n in $(seq 1 $((lines / 5))); do
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\tLease.pdf\t#flat #scan\t%s\n' "$words"
+  printf 'note\t3-Resources/Old.md\t1-Projects/Flat hunt/Lease.pdf\t#flat\t%s\n' "$words"
+  printf 'note\t3-Resources/Mine.md\t-\t#flat\tWritten this run\n'
+  printf 'tag\t#tag-%s\t%s\n' "$n" "$words"
+  printf 'file\t0-Inbox/receipt.jpg\t2-Areas/Finance\tReceipt %s.png\t#flat\t%s\n' "$n" "$words"
+done >"$V/.bower/filing.tsv"
+expect_eq "$(grep -c . "$V/.bower/filing.tsv")" "$lines" 'the sheet at the cap'
+start=$SECONDS
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+took=$((SECONDS - start))
+echo "sheet timing: $lines lines in $took s ($(uname -s))"
+expect_eq "$SHEET_NOTES $SHEET_TAGS" "1 $((lines / 5))" 'the note booked once, every tag added'
+expect_eq "$SHEET_SKIPPED" $((lines / 5 * 3)) 'the costly lines skipped'
+if [ "$(uname -s)" = Linux ]; then
+  [ "$took" -lt 120 ] || die "a full sheet took $took s"
+fi
 echo "ok $CASE"
