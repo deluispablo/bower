@@ -113,6 +113,17 @@ export function folderNameOf(file: unknown): string | null {
   return typeof name === 'string' && name !== '' ? name : null;
 }
 
+let sessionCheck: (() => Promise<void>) | null = null;
+
+/**
+ * Registers the session check `getToken` runs before it asks the Worker for
+ * a new token (#994, `session.tsx`: `GET /me` when the last check is older
+ * than a minute). A rejection stops the request. Pass `null` to stop.
+ */
+export function setSessionCheck(check: (() => Promise<void>) | null): void {
+  sessionCheck = check;
+}
+
 let expectedFolderId: string | null = null;
 let onFolderMismatch: (() => void) | null = null;
 
@@ -139,8 +150,10 @@ export interface GetTokenOptions {
 
 /**
  * The current Drive access token, fetched from the Worker when none is
- * cached or the cached one expires within 60 s. Concurrent callers share one
- * request. A Worker `ApiError` (for example code `reauth`) propagates.
+ * cached or the cached one expires within 60 s, after the session check
+ * (`setSessionCheck`). Concurrent callers share one request. A Worker
+ * `ApiError` (for example code `reauth`, or a 401 for a session that ended)
+ * propagates.
  */
 export function getToken(options: GetTokenOptions = {}): Promise<DriveToken> {
   const fresh = options.fresh ?? false;
@@ -149,7 +162,12 @@ export function getToken(options: GetTokenOptions = {}): Promise<DriveToken> {
   }
   if (pendingToken !== null) return pendingToken;
 
-  const request = getDriveToken(fresh).then(
+  const check = sessionCheck;
+  const asked =
+    check === null
+      ? getDriveToken(fresh)
+      : check().then(() => getDriveToken(fresh));
+  const request = asked.then(
     (token) => {
       if (pendingToken === request) {
         cachedToken = token;
