@@ -1386,43 +1386,33 @@ sheet_stem() {
 # free in the folder $2, printed: the extension kept, the stem cut at the
 # last word boundary that fits (a first word that does not fit alone is cut
 # by characters), trailing spaces and punctuation trimmed, and ` (2)`,
-# ` (3)`, ... added before the extension while the name is taken there in
-# any letter case (sheet_taken). Pure string work, no pattern built from
-# the name. Returns 1 when no such name is left or the result is not a
-# safe name.
+# ` (3)`, ... ` (9)` added before the extension while the name is taken
+# there in any letter case (sheet_taken). Pure string work, no pattern
+# built from the name; the stem is cut once with no suffix and once for
+# the suffixes (all four characters long), with no process per word, so a
+# hostile sheet cannot make it slow. Returns 1 when no such name is left
+# or the result is not a safe name.
 sheet_name_short() {
   local LC_ALL=C
-  local name=$1 dir=$2 ext='' stem words=() w acc try n suffix budget cand
+  local name=$1 dir=$2 ext="" stem words=() n cut cand len
   [[ $name != ?*.* ]] || ext=.${name##*.}
   stem=${name%"$ext"}
   read -r -a words <<<"$stem"
   [ "${#words[@]}" -gt 0 ] || return 1
-  for n in 1 {2..99}; do
-    suffix=''
-    [ "$n" -eq 1 ] || suffix=" ($n)"
-    budget=$((60 - $(sheet_chars "$ext$suffix")))
-    [ "$budget" -gt 0 ] || return 1
-    acc=''
-    for w in "${words[@]}"; do
-      try=${acc:+$acc }$w
-      [ "$(sheet_chars "$try")" -le "$budget" ] || break
-      acc=$try
-    done
-    if [ -z "$acc" ]; then
-      acc=${words[0]}
-      while [ -n "$acc" ] && [ "$(sheet_chars "$acc")" -gt "$budget" ]; do
-        # One character off the end: its UTF-8 continuation bytes, then
-        # its first byte.
-        while [[ $acc == *[$'\x80'-$'\xbf'] ]]; do acc=${acc%?}; done
-        acc=${acc%?}
-      done
-    fi
-    while [[ $acc == *[' ,;:.!_&+(-'] || $acc == *'–' || $acc == *'—' ]]; do
-      if [[ $acc == *[' ,;:.!_&+(-'] ]]; then acc=${acc%?}; else acc=${acc%???}; fi
-    done
-    [ -n "$acc" ] || return 1
-    cand=$acc$suffix$ext
-    sheet_path_ok "$cand" || return 1
+  sheet_nchars "$ext"
+  len=$SHEET_N
+  sheet_cut $((60 - len)) "${words[@]}" || return 1
+  cand=$SHEET_CUT$ext
+  sheet_path_ok "$cand" || return 1
+  if ! sheet_taken "$dir" "$cand"; then
+    printf '%s' "$cand"
+    return 0
+  fi
+  sheet_cut $((60 - len - 4)) "${words[@]}" || return 1
+  cut=$SHEET_CUT
+  sheet_path_ok "$cut (2)$ext" || return 1
+  for n in 2 3 4 5 6 7 8 9; do
+    cand="$cut ($n)$ext"
     if ! sheet_taken "$dir" "$cand"; then
       printf '%s' "$cand"
       return 0
@@ -1431,11 +1421,68 @@ sheet_name_short() {
   return 1
 }
 
+# SHEET_N: the number of characters of $1 (its bytes less the UTF-8
+# continuation bytes), counted in the shell with no process.
+sheet_nchars() {
+  local LC_ALL=C
+  local s=${1//[$'\x80'-$'\xbf']/}
+  SHEET_N=${#s}
+}
+
+# SHEET_CUT: the words $2... joined by spaces, as many as fit in $1
+# characters (the first word alone cut by characters when it does not fit),
+# then trailing spaces and punctuation trimmed. Returns 1 when nothing is
+# left. No process is started.
+sheet_cut() {
+  local LC_ALL=C
+  local budget=$1 acc='' w
+  shift
+  [ "$budget" -gt 0 ] || return 1
+  for w in "$@"; do
+    sheet_nchars "${acc:+$acc }$w"
+    [ "$SHEET_N" -le "$budget" ] || break
+    acc=${acc:+$acc }$w
+  done
+  if [ -z "$acc" ]; then
+    acc=$1
+    sheet_nchars "$acc"
+    while [ -n "$acc" ] && [ "$SHEET_N" -gt "$budget" ]; do
+      # One character off the end: its UTF-8 continuation bytes, then its
+      # first byte.
+      while [[ $acc == *[$'\x80'-$'\xbf'] ]]; do acc=${acc%?}; done
+      acc=${acc%?}
+      sheet_nchars "$acc"
+    done
+  fi
+  while [[ $acc == *[' ,;:.!_&+(-'] || $acc == *'–' || $acc == *'—' ]]; do
+    if [[ $acc == *[' ,;:.!_&+(-'] ]]; then acc=${acc%?}; else acc=${acc%???}; fi
+  done
+  SHEET_CUT=$acc
+  [ -n "$acc" ]
+}
+
 # The renames the runner made this run (#995), in step: SHEET_MAP_FROM[i]
 # is a path as the agent wrote it, SHEET_MAP_TO[i] the path used. Compared
 # as plain strings only.
 SHEET_MAP_FROM=()
 SHEET_MAP_TO=()
+# The pending paths whose name the runner tried to shorten this run, the
+# text copies it moved and booked itself (sheet_sibling), and the notes
+# booked without their original (counts only).
+SHEET_SHORT_SRC=()
+SHEET_SIBLINGS=()
+SHEET_UNLINKED_COUNT=0
+
+# Whether $1 is one of $2...: plain string comparison.
+sheet_has() {
+  local x=$1
+  shift
+  while [ "$#" -gt 0 ]; do
+    [ "$1" != "$x" ] || return 0
+    shift
+  done
+  return 1
+}
 
 # The path $1 as the runner filed it: its entry in SHEET_MAP_TO when the
 # agent's path is in SHEET_MAP_FROM, else $1 as it is.
@@ -1805,6 +1852,9 @@ sheet_file_line() {
   fi
   SHEET_WHY=name
   if [ "$short" -eq 1 ]; then
+    # One shortening per pending file in a run, whatever the sheet repeats.
+    ! sheet_has "$src" ${SHEET_SHORT_SRC[@]+"${SHEET_SHORT_SRC[@]}"} || return 1
+    SHEET_SHORT_SRC+=("$src")
     final=$(sheet_name_short "$name" "$vault/$dest") || return 1
   else
     ! sheet_taken "$vault/$dest" "$name" || return 1
@@ -2013,7 +2063,7 @@ apply_filing_sheet() {
   local vault=$1 sheet=$2 pending=$3 before=$4 day=$5 line total read rc pass reason
   local lines=()
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
-  SHEET_MAP_FROM=() SHEET_MAP_TO=()
+  SHEET_MAP_FROM=() SHEET_MAP_TO=() SHEET_SHORT_SRC=() SHEET_SIBLINGS=() SHEET_UNLINKED_COUNT=0
   SHEET_CONVERTED=${6:-}
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
   total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)

@@ -241,7 +241,8 @@ echo "ok $CASE"
 
 CASE='shortened names'
 SHORT='Example Corp is hiring a data analyst in Leeds, for a.pdf'
-SHORT2='Example Corp is hiring a data analyst in Leeds, for (2).pdf'
+SHORT_STEM='Example Corp is hiring a data analyst in Leeds, for'
+SHORT2="$SHORT_STEM (2).pdf"
 expect_eq "$(sheet_name_short "$LONG90" "$ROOT/none")" "$SHORT" 'cut at the last word that fits'
 expect_eq "$(sheet_chars "$SHORT2")" 59 'the second name'
 # Trailing punctuation trimmed, a first word that does not fit cut by characters.
@@ -276,6 +277,50 @@ grep -qF -- "- [[1-Projects/Flat hunt/Job ad summary.md]] · Note · #job-ad · 
 expect_eq "$(sed -n '4,5p' "$V/1-Projects/Flat hunt/Job ad summary.md")" \
   "$(printf 'See [[%s]] and [[%s|the ad]].\nAlso [[Lease]].' "${SHORT%.pdf}" "$SHORT")" 'the links follow the rename'
 if grep -qF -- "$LONG90" "$V/index.md"; then die 'the long name in index.md'; fi
+echo "ok $CASE"
+
+CASE='repeated long names'
+# Suffixes stop at (9).
+fresh
+mkdir -p "$ROOT/full"
+: >"$ROOT/full/$SHORT"
+for n in 2 3 4 5 6 7 8; do : >"$ROOT/full/$SHORT_STEM ($n).pdf"; done
+expect_eq "$(sheet_name_short "$LONG90" "$ROOT/full")" "$SHORT_STEM (9).pdf" 'the last suffix'
+: >"$ROOT/full/$SHORT_STEM (9).pdf"
+no_ sheet_name_short "$LONG90" "$ROOT/full"
+# A repeated long-name line is shortened at most once: each attempt is
+# counted through a wrapper around sheet_name_short.
+eval "real_$(declare -f sheet_name_short)"
+sheet_name_short() {
+  echo try >>"$ROOT/short-tries"
+  real_sheet_name_short "$@"
+}
+# Every candidate taken, the line 50 times: tried once, nothing filed, and
+# far from the job's time limit (the bound is loose for slow test machines;
+# most of the time is the checks every line goes through).
+fresh
+: >"$ROOT/short-tries"
+for f in "$ROOT"/full/*; do : >"$V/1-Projects/Flat hunt/${f##*/}"; done
+for n in $(seq 50); do
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe ad\n' "$LONG90"
+done >"$V/.bower/filing.tsv"
+start=$SECONDS
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+[ $((SECONDS - start)) -le 600 ] || die "50 repeated lines took $((SECONDS - start)) s"
+expect_eq "$SHEET_FILED $SHEET_SKIPPED" '0 50' 'every name taken: nothing filed'
+expect_eq "$(grep -c . "$ROOT/short-tries")" 1 'one shortening attempt'
+[ -f "$V/0-Inbox/scan0001.pdf" ] || die 'moved with every name taken'
+# Names free, the line three times: filed once.
+fresh
+: >"$ROOT/short-tries"
+for n in 1 2 3; do
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe ad\n' "$LONG90"
+done >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_SKIPPED" '1 2' 'filed once'
+expect_eq "$(grep -c . "$ROOT/short-tries")" 1 'one shortening attempt'
+[ -f "$V/1-Projects/Flat hunt/$SHORT" ] || die 'not filed under the short name'
+eval "$(declare -f real_sheet_name_short | sed '1s/^real_//')"
 echo "ok $CASE"
 
 # --- converted siblings (#995) -------------------------------------------------------
