@@ -18,6 +18,7 @@ import {
   INTERVIEW_TIP,
   interviewGreeting,
   interviewQuestionLabel,
+  joinKeepAnswer,
   type InterviewAnswers,
 } from '../interview.js';
 import { useSession } from '../session.js';
@@ -91,6 +92,14 @@ function ChipRow({ chips, value, onPick }: ChipRowProps): JSX.Element {
   );
 }
 
+/** `picked` with `chip` toggled: removed if present, added at the end
+ * otherwise (question 1 has no limit). */
+function toggleChip(picked: readonly string[], chip: string): string[] {
+  return picked.includes(chip)
+    ? picked.filter((c) => c !== chip)
+    : [...picked, chip];
+}
+
 /** `areas` with `name` toggled: removed if present, added (up to `MAX_AREAS`)
  * otherwise. */
 function toggleArea(areas: readonly string[], name: string): string[] {
@@ -127,7 +136,8 @@ export function Interview({
 }: InterviewProps): JSX.Element {
   const firstName = useFirstName();
   const [question, setQuestion] = useState(0);
-  const [keep, setKeep] = useState('');
+  const [keepChips, setKeepChips] = useState<string[]>([]);
+  const [keepText, setKeepText] = useState('');
   const [languages, setLanguages] = useState('');
   const [areas, setAreas] = useState<string[]>([]);
   const [customArea, setCustomArea] = useState('');
@@ -147,7 +157,13 @@ export function Interview({
 
   function next(): void {
     if (last) {
-      onFinish({ keep, languages, areas, titleStyle, example });
+      onFinish({
+        keep: joinKeepAnswer(keepChips, keepText),
+        languages,
+        areas,
+        titleStyle,
+        example,
+      });
       return;
     }
     setQuestion((q) => q + 1);
@@ -171,14 +187,18 @@ export function Interview({
 
       {question === 0 && (
         <div class="interview-question">
-          <ChipRow chips={INTERVIEW_KEEP_CHIPS} value={keep} onPick={setKeep} />
+          <ChipRow
+            chips={INTERVIEW_KEEP_CHIPS}
+            value={keepChips}
+            onPick={(chip) => setKeepChips((prev) => toggleChip(prev, chip))}
+          />
           <Composer
             mode="save"
             rows={1}
             label="What you will keep here"
             placeholder="Or say it your way"
-            value={keep}
-            onChange={setKeep}
+            value={keepText}
+            onChange={setKeepText}
             onCommit={keepAsTyped}
           />
         </div>

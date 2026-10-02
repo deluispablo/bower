@@ -246,6 +246,21 @@ export const INTERVIEW_KEEP_CHIPS: readonly string[] = [
   'A project',
 ];
 
+/**
+ * The first question's answer: the chips the person picked, in the order
+ * they picked them, then what they typed, joined with ", ". Blank parts and
+ * a typed part that repeats a picked chip are left out.
+ */
+export function joinKeepAnswer(
+  picked: readonly string[],
+  typed: string,
+): string {
+  const parts = picked.map((p) => p.trim()).filter((p) => p !== '');
+  const own = typed.trim();
+  if (own !== '' && !parts.includes(own)) parts.push(own);
+  return parts.join(', ');
+}
+
 /** "Hi Alex. Four quick questions so I file things your way. Skip anything
  * you like." Without a name: "Hi." */
 export function interviewGreeting(name?: string): string {
