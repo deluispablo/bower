@@ -19,6 +19,7 @@ import type { LastRunOutcome } from './last-run.js';
 import { failureCopy, failureReason } from './run-failure.js';
 import type { RunFailureReason } from './run-failure.js';
 import { isContextNote } from './run-progress.js';
+import { isAppFile } from './vault-index.js';
 
 export type OutcomeState = 'running' | 'done' | 'partial' | 'failed';
 
@@ -42,7 +43,7 @@ export interface RunOutcome {
   state: OutcomeState;
   startedAt: string;
   finishedAt?: string;
-  /** Files moved out of the inbox (`items[kind=file].to`). */
+  /** Files moved out of the inbox: a `to` outside `0-Inbox/` (#997). */
   filed: number;
   /** Notes written that did not exist before, answers left out. */
   created: number;
@@ -52,7 +53,8 @@ export interface RunOutcome {
   answered?: number;
   /** Notes that existed and changed. */
   updated: number;
-  /** Things the person must deal with: set aside plus left in the inbox. */
+  /** Things the person must deal with, each once: set aside and not filed,
+   * left in the inbox, or named with no destination (#997). */
   needsYou: number;
   /** Requests (Bower notes) the run answered or kept: a request-only run is
    * still a done run, never "Nothing new". */
@@ -154,38 +156,135 @@ function titleOf(path: string): string {
   return baseName(path).replace(/\.md$/i, '');
 }
 
+/** Where Bower parks what it read but did not file: a saved link, a request. */
+const PROCESSED_PREFIX = '0-Inbox/Processed/';
+
+/** What a set-aside file Bower filed says about itself (R-JUST-2). */
+export const KEPT_NOTE = 'Bower keeps it, not reads it.';
+
+/** Whether `to` is a real destination: a path outside `0-Inbox/`. */
+export function isFiledPath(to: string | undefined): boolean {
+  return (
+    to !== undefined &&
+    to !== '' &&
+    to !== '0-Inbox' &&
+    !to.startsWith('0-Inbox/')
+  );
+}
+
+/** Whether `to` is in `0-Inbox/Processed/`: read, then parked, not filed. */
+export function isReadPath(to: string | undefined): boolean {
+  return to !== undefined && to.startsWith(PROCESSED_PREFIX);
+}
+
+/**
+ * One of Bower's own files, which "Show Bower's own files" hides
+ * (`isAppFile`), or anything under a dot-folder: never an answer or a new
+ * note of the person's.
+ */
+export function isBowerOwnPath(path: string): boolean {
+  return (
+    isAppFile(path, baseName(path)) ||
+    path.split('/').some((segment) => segment.startsWith('.'))
+  );
+}
+
+/**
+ * The run's items. Filed means a `to` outside `0-Inbox/` (a set-aside file
+ * with one included, noted `KEPT_NOTE`); a file read and parked in
+ * `0-Inbox/Processed/` is neither filed nor needs you (Just filed lists it
+ * as Read); anything else the run named needs you, once, whether the
+ * report lists it in `items`, `setAside` or `left`. A report from before
+ * v2, with no `to` at all, still counts a file it did not leave as filed.
+ */
 function buildItems(raw: RawOutcome): OutcomeItem[] {
-  const items: OutcomeItem[] = [];
-  const asideKeys = new Set(raw.setAside.map((aside) => aside.path));
+  const filed: OutcomeItem[] = [];
+  const needs: OutcomeItem[] = [];
+  const asideByPath = new Map(raw.setAside.map((aside) => [aside.path, aside]));
+  const asideDone = new Set<SetAsideItem>();
+  const left = new Set(raw.left);
+  const legacy = !raw.items.some(
+    (item) => item.kind === 'file' && item.to !== undefined && item.to !== '',
+  );
   const seen = new Set<string>();
-  for (const item of raw.items) {
-    if (item.kind !== 'file') continue;
-    const to = item.to === undefined || item.to === '' ? undefined : item.to;
-    // A runner from before report v2 says an item was filed but not where:
-    // it still counts as filed, so a done run never reads "Nothing new".
-    // One it set aside is not filed.
-    if (to === undefined && asideKeys.has(item.path)) continue;
-    seen.add(item.path);
+  const needsAt = new Set<string>();
+  const needsYou = (path: string): void => {
+    if (needsAt.has(path)) return;
+    needsAt.add(path);
+    needs.push({ action: 'needs', title: baseName(path), path });
+  };
+  const fileAt = (
+    path: string,
+    to: string | undefined,
+    from: string | undefined,
+    kept: boolean,
+  ): void => {
     const entry: OutcomeItem = {
       action: 'filed',
-      title: baseName(to ?? item.path),
-      path: item.path,
+      title: baseName(to ?? path),
+      path,
     };
     if (to !== undefined) entry.to = to;
-    if (item.renamedFrom !== undefined) entry.from = item.renamedFrom;
-    items.push(entry);
+    if (from !== undefined) entry.from = from;
+    if (kept) entry.note = KEPT_NOTE;
+    filed.push(entry);
+  };
+  const unfiled: string[] = [];
+  for (const item of raw.items) {
+    if (item.kind !== 'file' || seen.has(item.path)) continue;
+    seen.add(item.path);
+    const to = item.to === undefined || item.to === '' ? undefined : item.to;
+    const aside =
+      asideByPath.get(item.path) ??
+      (to === undefined ? undefined : asideByPath.get(to));
+    if (isFiledPath(to)) {
+      if (aside !== undefined) asideDone.add(aside);
+      fileAt(item.path, to, item.renamedFrom, aside !== undefined);
+    } else if (isReadPath(to)) {
+      if (aside !== undefined) asideDone.add(aside);
+    } else if (
+      legacy &&
+      to === undefined &&
+      aside === undefined &&
+      !left.has(item.path)
+    ) {
+      // A runner from before report v2 says an item was filed but not
+      // where: it still counts as filed, so a done run never reads
+      // "Nothing new".
+      fileAt(item.path, undefined, item.renamedFrom, false);
+    } else if (aside === undefined) {
+      unfiled.push(item.path);
+    }
   }
   if (raw.ended === 'done') {
     for (const path of raw.processed ?? []) {
-      if (seen.has(path) || asideKeys.has(path) || isContextNote(path)) {
+      if (
+        seen.has(path) ||
+        asideByPath.has(path) ||
+        left.has(path) ||
+        isContextNote(path)
+      ) {
         continue;
       }
       seen.add(path);
-      items.push({ action: 'filed', title: baseName(path), path });
+      fileAt(path, undefined, undefined, false);
     }
   }
+  for (const aside of raw.setAside) {
+    if (asideDone.has(aside)) continue;
+    // An older report lists a set-aside file by where it was kept.
+    if (isFiledPath(aside.path)) {
+      fileAt(aside.path, aside.path, undefined, true);
+    } else {
+      needsYou(aside.path);
+    }
+  }
+  for (const path of raw.left) needsYou(path);
+  for (const path of unfiled) needsYou(path);
+
+  const items: OutcomeItem[] = [...filed];
   for (const path of raw.created) {
-    if (isContextNote(path)) continue;
+    if (isContextNote(path) || isBowerOwnPath(path)) continue;
     // An answer is its own action (#920): "Answered", never a "New note".
     // The views title it as every list does (`useTitlesAt`).
     items.push(
@@ -205,22 +304,14 @@ function buildItems(raw: RawOutcome): OutcomeItem[] {
     }
     items.push(entry);
   }
-  for (const item of raw.setAside) {
-    items.push({
-      action: 'needs',
-      title: baseName(item.path),
-      path: item.path,
-    });
-  }
-  for (const path of raw.left) {
-    items.push({ action: 'needs', title: baseName(path), path });
-  }
+  items.push(...needs);
   return items;
 }
 
-/** An answer note: `Answers/<date> <question>.md`, directly in `Answers/`. */
+/** An answer note: `Answers/<date> <question>.md`, directly in `Answers/`;
+ * Bower's own files there (`Answers/Bower - Proposals.md`) are not answers. */
 export function isAnswerPath(path: string): boolean {
-  return /^Answers\/[^/]+\.md$/i.test(path);
+  return /^Answers\/[^/]+\.md$/i.test(path) && !isBowerOwnPath(path);
 }
 
 function build(raw: RawOutcome): RunOutcome {
@@ -245,7 +336,7 @@ function build(raw: RawOutcome): RunOutcome {
     created,
     answered,
     updated,
-    needsYou: raw.setAside.length + left,
+    needsYou: count('needs'),
     requests,
     left,
     items,

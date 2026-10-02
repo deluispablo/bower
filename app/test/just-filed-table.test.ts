@@ -87,17 +87,21 @@ describe('tableRows', () => {
     expect(rows.find((row) => row.action === 'updated')?.changed).toBe(
       'Added the boiler date',
     );
-    const needs = rows.find((row) => row.action === 'needs');
-    expect(needs?.changed).toMatch(/can't read/);
-    expect(needs?.sayHref).toBe('/bower?text=About%20IMG_1.heic%3A%20');
+    // A set-aside file with a destination is filed, never "Needs you" (#997).
+    expect(
+      rows.find((row) => row.action === 'filed' && row.name === 'IMG_1.heic'),
+    ).toMatchObject({
+      changed: 'Bower keeps it, not reads it.',
+      folder: 'Projects › Flat hunt',
+    });
+    expect(rows.some((row) => row.action === 'needs')).toBe(false);
   });
 
   it('groups for the phone: Needs you, New notes, Updated, Filed', () => {
     expect(groupRows(rows).map((group) => group.heading)).toEqual([
-      'Needs you · 1',
       'New notes · 1',
       'Updated · 1',
-      'Filed · 1',
+      'Filed · 2',
     ]);
   });
 

@@ -14,8 +14,8 @@ import type { ActivityRow } from './activity.js';
 import type { Run, SetAsideReason } from './api.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
-import { runCounts, things } from './home.js';
-import { outcomeCounts, outcomeFromRun } from './run-outcome.js';
+import { things } from './home.js';
+import { isFiledPath, outcomeCounts, outcomeFromRun } from './run-outcome.js';
 import type { OutcomeAction, RunOutcome } from './run-outcome.js';
 import { shortDay } from './rules.js';
 import { displayPath, paraKindOf } from './navigation.js';
@@ -192,9 +192,10 @@ export function setAsideSentence(
   }
 }
 
-/** How many things a run filed, set-aside ones included (`Just filed · 6`). */
+/** How many things a run filed (`Just filed · 6`): what went to a folder,
+ * set-aside ones included; what stayed in the inbox is not filed (#997). */
 export function filedCount(run: Run): number {
-  return runCounts(run).filed;
+  return outcomeFromRun(run).filed;
 }
 
 /** Ids of the run's filed items that are not in `seen`. */
@@ -205,7 +206,7 @@ export function unseenIds(
 ): Set<string> {
   const ids = new Set<string>();
   for (const item of run.items ?? []) {
-    if (item.to === undefined) continue;
+    if (!isFiledPath(item.to) || item.to === undefined) continue;
     const file = fileAt(index, item.to);
     if (file !== undefined && !seen.has(file.id)) ids.add(file.id);
   }
@@ -407,10 +408,7 @@ export function tableRows(run: Run, index: VaultIndex | null): TableRow[] {
   const seen = new Set<string>();
   for (const item of outcome.items) {
     const path = item.action === 'filed' ? (item.to ?? item.path) : item.path;
-    if (item.action === 'filed') {
-      if (isProcessedPath(path)) continue;
-      if (aside.has(path) || aside.has(item.path)) continue;
-    }
+    if (item.action === 'filed' && isProcessedPath(path)) continue;
     const row = tableRow(item.action, path, index);
     if (seen.has(row.key)) continue;
     seen.add(row.key);
@@ -428,6 +426,11 @@ export function tableRows(run: Run, index: VaultIndex | null): TableRow[] {
     }
     if (item.action === 'updated' && item.note !== undefined) {
       row.changed = item.note;
+    }
+    // A set-aside file Bower filed: kept where it went, not read (#997).
+    if (item.action === 'filed' && item.note !== undefined) {
+      row.changed =
+        row.oldName === undefined ? item.note : `renamed · ${item.note}`;
     }
     if (item.action === 'needs') {
       const reason = aside.get(item.path);
