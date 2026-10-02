@@ -3705,9 +3705,12 @@ pdf_text() {
 # --- convert documents ------------------------------------------------------
 # The agent has no pandoc, so Office, HTML and EPUB files pending in 0-Inbox/
 # and Clippings/ are converted here, before it runs: each becomes a Markdown
-# sibling with the same base name (report.docx -> report.md), which the agent
-# files and then moves to 0-Inbox/Processed/ with the original (ingest.md).
-# A file whose sibling already exists is left as it is. --sandbox keeps
+# sibling with the same base name (report.docx -> report.md), which goes to
+# the same folder as its original, with the original's final base name
+# (the rulebook's converted-document rule): the agent moves it, or the
+# filing sheet does when the agent filed only the original (each sibling
+# is listed in CONVERTED_FILE; sheet_sibling). A file whose sibling already
+# exists is left as it is. --sandbox keeps
 # pandoc to the one input file: no other file, no URL, no network. Taken
 # after the manifest, so the siblings are new files and go up with the
 # agent's changes. A lint processes nothing, so it converts nothing. A file
