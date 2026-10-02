@@ -1339,14 +1339,27 @@ sheet_ext() {
   printf '%s' "${e,,}"
 }
 
-# Whether $1 is a usable file name for the original named $2: a safe path
-# (sheet_path_ok) of one segment, at most 60 characters, with the
-# original's extension (any letter case).
+# The number of bytes (not characters) of $1.
+sheet_bytes() {
+  local LC_ALL=C
+  printf '%s' "${#1}"
+}
+
+# Whether $1 is a usable file name for the original named $2, as written:
+# a safe path (sheet_path_ok) of one segment with the original's extension
+# (any letter case). A name the agent kept (exactly $2) may be up to 200
+# bytes long: the rulebook keeps a name that already says what the file
+# is, whatever its length (#995). A name the agent changed is at most 60
+# characters.
 sheet_name_ok() {
   sheet_path_ok "$1" || return 1
   [[ $1 != */* ]] || return 1
-  [ "$(sheet_chars "$1")" -le 60 ] || return 1
-  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ]
+  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ] || return 1
+  if [ "$1" = "$2" ]; then
+    [ "$(sheet_bytes "$1")" -le 200 ]
+  else
+    [ "$(sheet_chars "$1")" -le 60 ]
+  fi
 }
 
 # Whether $1 holds 1 to 5 tags in the rules v24 form, as row_ok checks

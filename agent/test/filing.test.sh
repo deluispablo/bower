@@ -207,6 +207,31 @@ file_line Clippings/page.md 0-Inbox/Processed page.md - -
 if grep -q 'page.md' "$V/index.md"; then die 'a row for Processed'; fi
 echo "ok $CASE"
 
+# --- long names (#995) ---------------------------------------------------------------
+LONG90='Example Corp is hiring a data analyst in Leeds, for a hybrid role, apply by 17 October.pdf'
+CASE='kept long names'
+expect_eq "$(sheet_chars "$LONG90")" 90 'the long name'
+yes_ sheet_name_ok "$LONG90" "$LONG90"
+long200="$(printf 'a%.0s' {1..196}).pdf"
+long250="$(printf 'a%.0s' {1..246}).pdf"
+yes_ sheet_name_ok "$long200" "$long200"
+no_ sheet_name_ok "$long250" "$long250"
+no_ sheet_name_ok "Job ad, $LONG90" "$LONG90"
+# Kept, but still a safe single segment.
+no_ sheet_name_ok 'Invoice #12.pdf' 'Invoice #12.pdf'
+no_ sheet_name_ok 'a/b.pdf' 'a/b.pdf'
+fresh
+echo ad >"$V/0-Inbox/$LONG90"
+printf '%s\n' "0-Inbox/$LONG90" >>"$PENDING"
+printf 'file\t0-Inbox/%s\t1-Projects/Job hunt\t%s\t#job-ad\tA data analyst role in Leeds\n' "$LONG90" "$LONG90" \
+  >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_SKIPPED" '1 0' 'the kept long name is filed'
+[ -f "$V/1-Projects/Job hunt/$LONG90" ] && [ ! -e "$V/0-Inbox/$LONG90" ] || die 'the kept long name not moved'
+grep -qF -- "- [[1-Projects/Job hunt/$LONG90]] · PDF · #job-ad · A data analyst role in Leeds · filed by Bower" \
+  "$V/index.md" || die 'no row for the kept long name'
+echo "ok $CASE"
+
 # --- note and tag lines -------------------------------------------------------------
 CASE='note lines'
 fresh
