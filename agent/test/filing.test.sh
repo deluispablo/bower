@@ -416,7 +416,7 @@ printf -- '---\nby: bower\n---\nAnother.\n' >"$V/1-Projects/Job hunt/Other.md"
 } >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
 expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '0 2 1' 'the notes are booked, the file line skipped'
-expect_eq "$SHEET_SKIP_REASONS" '1 name, 2 original-unlinked' 'counted as original-unlinked'
+expect_eq "$SHEET_SKIP_REASONS $SHEET_UNLINKED_COUNT" '1 name 2' 'counted apart from the skipped lines'
 grep -qxF -- '- [[1-Projects/Job hunt/Offer summary.md]] · Note · #job-offer · Summary of the offer · filed by Bower' \
   "$V/index.md" || die 'the row with original -'
 grep -qxF -- '- [[1-Projects/Job hunt/Other.md]] · Note · #job-offer · Another note · filed by Bower' "$V/index.md" ||
@@ -706,8 +706,9 @@ echo 'changed' >>"$V/3-Resources/Old.md"
 printf 'note\t3-Resources/Old.md\t3-Resources/Gone.pdf\t#flat\tChanged\n' >>"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
 expect_eq "$SHEET_SKIPPED $SHEET_NOTES" '5 1' 'five lines skipped, the note booked'
-expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 original-unlinked, 1 other' \
+expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 other' \
   'counted per reason'
+expect_eq "$SHEET_UNLINKED_COUNT" 1 'the note without its original, counted apart'
 fresh
 : >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"

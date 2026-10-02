@@ -2070,10 +2070,10 @@ sheet_split() {
 # is not one of the three kinds with its number of fields, or that its
 # check refuses, is skipped. At most SHEET_MAX_LINES lines are read, the
 # rest are skipped. Sets SHEET_FILED, SHEET_NOTES, SHEET_TAGS and
-# SHEET_SKIPPED (counts only), and SHEET_SKIP_REASONS, the skipped lines
-# per reason plus `original-unlinked`: the `note` lines booked without
-# their original (not skipped, so not in SHEET_SKIPPED). Returns 1 when a
-# write fails.
+# SHEET_SKIPPED (counts only), SHEET_SKIP_REASONS (the skipped lines per
+# reason) and SHEET_UNLINKED_COUNT, the `note` lines booked without their
+# original (not skipped, so in neither of the two). Returns 1 when a write
+# fails.
 apply_filing_sheet() {
   # Bytes, not characters, everywhere below: a line that is not valid UTF-8
   # is counted the same way by every count, so the warning never
@@ -2094,7 +2094,7 @@ apply_filing_sheet() {
   done
   SHEET_SKIPPED=$((total - read))
   [ "$SHEET_SKIPPED" -ge 0 ] || SHEET_SKIPPED=0
-  local -A why=([description]=0 [path]=0 [name]=0 [tag]=0 [original-unlinked]=0 [other]=$SHEET_SKIPPED)
+  local -A why=([description]=0 [path]=0 [name]=0 [tag]=0 [other]=$SHEET_SKIPPED)
   for pass in file other; do
     for line in ${lines[@]+"${lines[@]}"}; do
       [[ $line == *[^[:space:]]* ]] || continue
@@ -2119,7 +2119,7 @@ apply_filing_sheet() {
           if [ "$rc" -eq 0 ] && [ "$SHEET_REPEAT" -eq 0 ]; then
             SHEET_NOTES=$((SHEET_NOTES + 1))
             # Booked without its original: counted, not skipped.
-            [ "$SHEET_UNLINKED" -eq 0 ] || why[original-unlinked]=$((${why[original-unlinked]} + 1))
+            [ "$SHEET_UNLINKED" -eq 0 ] || SHEET_UNLINKED_COUNT=$((SHEET_UNLINKED_COUNT + 1))
           fi
           ;;
         tag:3:other)
@@ -2140,7 +2140,7 @@ apply_filing_sheet() {
     done
   done
   SHEET_SKIP_REASONS=''
-  for reason in description path name tag original-unlinked other; do
+  for reason in description path name tag other; do
     [ "${why[$reason]}" -eq 0 ] ||
       SHEET_SKIP_REASONS+="${SHEET_SKIP_REASONS:+, }${why[$reason]} $reason"
   done
@@ -4158,7 +4158,11 @@ if [ -f "$SHEET_TAKEN" ]; then
     fail "$STEP: filing sheet failed"
   fi
   # Counts only, with the skipped lines per reason (#978 follow-up).
-  log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped${SHEET_SKIP_REASONS:+ (skipped: $SHEET_SKIP_REASONS)}"
+  # Notes booked without their original (#995) are not skipped lines.
+  unlinked=''
+  [ "$SHEET_UNLINKED_COUNT" -eq 0 ] ||
+    unlinked="; $SHEET_UNLINKED_COUNT $([ "$SHEET_UNLINKED_COUNT" -eq 1 ] && echo 'note booked without its' || echo 'notes booked without their') original"
+  log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped${SHEET_SKIP_REASONS:+ (skipped: $SHEET_SKIP_REASONS)}$unlinked"
   [ "$SHEET_SKIPPED" -eq 0 ] ||
     SHEET_WARNING="Warning: $SHEET_SKIPPED filing $([ "$SHEET_SKIPPED" -eq 1 ] && echo 'decision was' || echo 'decisions were') not usable and skipped; what they named stays where it was."
 fi
