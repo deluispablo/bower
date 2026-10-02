@@ -1902,9 +1902,10 @@ sheet_note_ok() {
 
 # One `note` line: the vault $1, the manifest before the run $2, the date
 # $3, then the line's four fields. Returns 1, having changed nothing, when
-# the note may not be booked (sheet_note_ok), the original is neither `-`
-# nor a file there now (after the moves), or the tags or the description
-# are not in the v24 form. An original the runner filed under a shorter
+# the note may not be booked (sheet_note_ok), or the tags or the
+# description are not in the v24 form. An original that is not a file there
+# now (after the moves) is dropped: the note is booked with original `-`
+# and SHEET_UNLINKED is 1 (else 0). An original the runner filed under a shorter
 # name is read as that name (sheet_mapped), and the note's links to the
 # long name are rewritten (sheet_relink). Otherwise writes the note's hub
 # line (outside Answers/) and its index row, which ends
@@ -1916,11 +1917,17 @@ sheet_note_line() {
   # A text copy the runner moved under a shorter name (sheet_sibling).
   note=$(sheet_mapped "$note")
   sheet_note_ok "$vault" "$note" "$before" || return 1
-  SHEET_WHY=original
   # An original the runner filed under a shorter name (#995).
   orig=$(sheet_mapped "$orig")
+  # An original that is not a file there now (its `file` line was refused,
+  # or it names nothing) does not keep the note out (#995): the note is
+  # booked with original `-`, and SHEET_UNLINKED tells the caller.
+  SHEET_UNLINKED=0
   if [ "$orig" != - ]; then
-    sheet_path_ok "$orig" && [ -f "$vault/$orig" ] && [ ! -L "$vault/$orig" ] || return 1
+    if ! { sheet_path_ok "$orig" && [ -f "$vault/$orig" ] && [ ! -L "$vault/$orig" ]; }; then
+      orig=-
+      SHEET_UNLINKED=1
+    fi
   fi
   SHEET_WHY=tag
   sheet_tags_ok "$tags" || return 1
@@ -1994,7 +2001,10 @@ sheet_split() {
 # is not one of the three kinds with its number of fields, or that its
 # check refuses, is skipped. At most SHEET_MAX_LINES lines are read, the
 # rest are skipped. Sets SHEET_FILED, SHEET_NOTES, SHEET_TAGS and
-# SHEET_SKIPPED (counts only). Returns 1 when a write fails.
+# SHEET_SKIPPED (counts only), and SHEET_SKIP_REASONS, the skipped lines
+# per reason plus `original-unlinked`: the `note` lines booked without
+# their original (not skipped, so not in SHEET_SKIPPED). Returns 1 when a
+# write fails.
 apply_filing_sheet() {
   # Bytes, not characters, everywhere below: a line that is not valid UTF-8
   # is counted the same way by every count, so the warning never
@@ -2015,7 +2025,7 @@ apply_filing_sheet() {
   done
   SHEET_SKIPPED=$((total - read))
   [ "$SHEET_SKIPPED" -ge 0 ] || SHEET_SKIPPED=0
-  local -A why=([description]=0 [path]=0 [name]=0 [tag]=0 [original]=0 [other]=$SHEET_SKIPPED)
+  local -A why=([description]=0 [path]=0 [name]=0 [tag]=0 [original-unlinked]=0 [other]=$SHEET_SKIPPED)
   for pass in file other; do
     for line in ${lines[@]+"${lines[@]}"}; do
       [[ $line == *[^[:space:]]* ]] || continue
@@ -2037,7 +2047,11 @@ apply_filing_sheet() {
           ;;
         note:5:other)
           sheet_note_line "$vault" "$before" "$day" "${SHEET_FIELDS[@]:1}" || rc=$?
-          [ "$rc" -ne 0 ] || SHEET_NOTES=$((SHEET_NOTES + 1))
+          if [ "$rc" -eq 0 ]; then
+            SHEET_NOTES=$((SHEET_NOTES + 1))
+            # Booked without its original: counted, not skipped.
+            [ "$SHEET_UNLINKED" -eq 0 ] || why[original-unlinked]=$((${why[original-unlinked]} + 1))
+          fi
           ;;
         tag:3:other)
           sheet_tag_line "$vault" "${SHEET_FIELDS[@]:1}" || rc=$?
@@ -2057,7 +2071,7 @@ apply_filing_sheet() {
     done
   done
   SHEET_SKIP_REASONS=''
-  for reason in description path name tag original other; do
+  for reason in description path name tag original-unlinked other; do
     [ "${why[$reason]}" -eq 0 ] ||
       SHEET_SKIP_REASONS+="${SHEET_SKIP_REASONS:+, }${why[$reason]} $reason"
   done

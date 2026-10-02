@@ -321,6 +321,30 @@ expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'a taken name'
 expect_eq "$(cat "$V/1-Projects/Job hunt/offer letter.MD")" 'the agent wrote this' 'the taken file is untouched'
 echo "ok $CASE"
 
+# --- no orphans (#995) ----------------------------------------------------------------
+CASE='original unlinked'
+fresh
+mkdir -p "$V/1-Projects/Job hunt"
+printf -- '---\nby: bower\n---\nA summary.\n' >"$V/1-Projects/Job hunt/Offer summary.md"
+printf -- '---\nby: bower\n---\nAnother.\n' >"$V/1-Projects/Job hunt/Other.md"
+{
+  # The original's line is refused (a changed extension): it stays in the inbox.
+  printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.pdf\t#job-offer\tOffer\n'
+  printf 'note\t1-Projects/Job hunt/Offer summary.md\t1-Projects/Job hunt/Offer letter.pdf\t#job-offer\tSummary of the offer\n'
+  printf 'note\t1-Projects/Job hunt/Other.md\t../../outside.pdf\t#job-offer\tAnother note\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '0 2 1' 'the notes are booked, the file line skipped'
+expect_eq "$SHEET_SKIP_REASONS" '1 name, 2 original-unlinked' 'counted as original-unlinked'
+grep -qxF -- '- [[1-Projects/Job hunt/Offer summary.md]] · Note · #job-offer · Summary of the offer · filed by Bower' \
+  "$V/index.md" || die 'the row with original -'
+grep -qxF -- '- [[1-Projects/Job hunt/Other.md]] · Note · #job-offer · Another note · filed by Bower' "$V/index.md" ||
+  die 'the row of a note whose original is a traversal'
+grep -qxF -- '- [[Offer summary]] Summary of the offer' "$V/1-Projects/Job hunt/Job hunt.md" || die 'the hub line'
+if grep -qF -- 'outside' "$V/index.md"; then die 'the refused original was written'; fi
+[ -f "$V/0-Inbox/offer.docx" ] || die 'the refused file moved'
+echo "ok $CASE"
+
 # --- note and tag lines -------------------------------------------------------------
 CASE='note lines'
 fresh
@@ -343,8 +367,8 @@ refused_note '0-Inbox/receipt.jpg' - '#flat' 'Not a note'
 refused_note '0-Inbox/new.md' - '#flat' 'Outside the folders'
 refused_note '.claude/x.md' - '#flat' 'Protected'
 refused_note '1-Projects/../CLAUDE.md' - '#flat' 'Traversal'
-refused_note '1-Projects/Job hunt/Offer summary.md' '1-Projects/Job hunt/Gone.docx' '#job' 'Original not there'
-refused_note '1-Projects/Job hunt/Offer summary.md' '../x' '#job' 'Original traversal'
+# An original not there does not save a line that is bad for another reason.
+refused_note '1-Projects/Job hunt/Offer summary.md' '1-Projects/Job hunt/Gone.docx' '#Job' 'Bad tag'
 refused_note '1-Projects/Job hunt/Offer summary.md' - '#Job' 'Bad tag'
 refused_note '1-Projects/Job hunt/Offer summary.md' - '#job' ''
 [ ! -e "$V/1-Projects/Job hunt/Job hunt.md" ] || die 'a refused note made a hub note'
@@ -600,8 +624,9 @@ fresh
 echo 'changed' >>"$V/3-Resources/Old.md"
 printf 'note\t3-Resources/Old.md\t3-Resources/Gone.pdf\t#flat\tChanged\n' >>"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
-expect_eq "$SHEET_SKIPPED" 6 'six lines skipped'
-expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 original, 1 other' 'counted per reason'
+expect_eq "$SHEET_SKIPPED $SHEET_NOTES" '5 1' 'five lines skipped, the note booked'
+expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 original-unlinked, 1 other' \
+  'counted per reason'
 fresh
 : >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
