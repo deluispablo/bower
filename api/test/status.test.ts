@@ -142,10 +142,11 @@ describe('GET /status: the job-conclusion fallback (#315)', () => {
       requestedAt: run.requestedAt,
       runId: '42',
       error: 'job cancelled',
-      reason: 'timeout',
+      reason: 'unknown',
       finishedAt: now.toISOString(),
     });
     expect(settleFromJob(run, 'failure', now).reason).toBe('unknown');
+    expect(settleFromJob(run, 'timed_out', now).reason).toBe('timeout');
     const done = settleFromJob(run, 'success', now);
     expect(done.state).toBe('done');
     expect(done.reason).toBeUndefined();
