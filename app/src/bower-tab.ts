@@ -10,8 +10,15 @@ import type { Run } from './api.js';
 import { FOLDER_MIME } from './drive.js';
 import type { DriveFile } from './drive.js';
 import { relativeTime } from './navigation.js';
-import { OWNER_ORIGIN, shortDay } from './rules.js';
-import type { Rule } from './rules.js';
+import {
+  allRules,
+  dropRuleLead,
+  OWNER_ORIGIN,
+  parseRules,
+  ruleBullet,
+  shortDay,
+} from './rules.js';
+import type { ParsedRules, Rule } from './rules.js';
 import { firstLine, instructionBody, isContextNote } from './tell.js';
 
 /**
@@ -68,7 +75,7 @@ export interface KeptSentence {
 /**
  * Where a request stands (#344, #756, spec §6.7): waiting for the next
  * tidy-up, in the run in flight, done or did not finish (with its run's
- * counts, R-REQ-1), answered, or kept as a rule.
+ * time, R-REQ-1), answered, or kept as a rule.
  */
 export type RequestState =
   'waiting' | 'tidying' | 'done' | 'failed' | 'answered' | 'kept';
@@ -242,6 +249,65 @@ function baseName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }
 
+/** The heading the first-run interview writes its rule under
+ * (`interview.ts`, `## From the interview`). */
+const INTERVIEW_TOPIC = 'From the interview';
+
+/** The rule the interview writes ("Titles and tags: …"), wherever it is. */
+const INTERVIEW_RULE = /^Titles and tags:/i;
+
+/**
+ * The rules Requests may list: every rule but the interview's, which stays
+ * under Rules only (#997).
+ */
+export function requestRules(parsed: ParsedRules): Rule[] {
+  return allRules({
+    ...parsed,
+    groups: parsed.groups.filter((group) => group.topic !== INTERVIEW_TOPIC),
+  });
+}
+
+/**
+ * The text `Rules.md` keeps for a rule sentence sent from the box: the
+ * same bullet `keepRule` writes (`ruleBullet(dropRuleLead(…))`), read
+ * back, so the row kept from this screen and the saved rule are one row.
+ */
+export function keptRuleText(sentence: string): string {
+  const bullet = ruleBullet(dropRuleLead(sentence), '2000-01-01');
+  return allRules(parseRules(bullet))[0]?.text ?? sentence.trim();
+}
+
+/** The instruction note a done run left in `0-Inbox/Processed/`: at the
+ * request item's `to`, else under its own name there. */
+function processedPathsOf(item: { path: string; to?: string }): string[] {
+  const name = baseName(item.path);
+  return [item.to ?? '', `${INBOX}/Processed/${name}`].filter((p) => p !== '');
+}
+
+/**
+ * The instruction notes the finished runs moved to `0-Inbox/Processed/`,
+ * so Requests can read the words the person wrote rather than the short
+ * title in the note's name (#997).
+ */
+export function processedRequestNotes(
+  files: readonly DriveFile[],
+  runs: readonly Run[],
+): DriveFile[] {
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  const out = new Map<string, DriveFile>();
+  for (const run of runs) {
+    if (run.state !== 'done') continue;
+    for (const item of run.items ?? []) {
+      if (item.kind !== 'request' && item.kind !== 'question') continue;
+      for (const path of processedPathsOf(item)) {
+        const file = byPath.get(path);
+        if (file !== undefined) out.set(file.id, file);
+      }
+    }
+  }
+  return [...out.values()];
+}
+
 /**
  * Every request and what came of it, newest first (#344, spec C.7), all
  * derived from the Bower folder:
@@ -330,18 +396,36 @@ export function requestRows({
     });
   }
 
-  // Done: the run took the note out of the inbox. It stays listed with the
-  // run's counts and never vanishes (R-REQ-1, fixes 1.11 and W3).
+  // Done: the run took the note out of the inbox. It stays listed, in the
+  // words the person wrote, and never vanishes (R-REQ-1, fixes 1.11 and
+  // W3). Its words come from the note it left in `Processed/`, else what
+  // this screen sent, else the short title in its name (#997).
+  const byPath = new Map(files.map((file) => [file.path, file]));
   for (const run of finished) {
     if (run.state !== 'done') continue;
+    // A question the run answered is listed once, as its answer (#997).
+    const answered = (run.created ?? []).some(
+      (path) =>
+        path === `${ANSWERS}/${baseName(path)}` &&
+        ANSWER_NAME.test(baseName(path)),
+    );
     for (const item of run.items ?? []) {
       if (item.kind !== 'request') continue;
       const name = baseName(item.path);
       if (isPileNoteName(name)) continue;
       if (listed.has(name)) continue;
-      listed.add(name);
+      const kept = processedPathsOf(item)
+        .map((path) => byPath.get(path))
+        .find((file) => file !== undefined);
+      const note = kept === undefined ? undefined : texts.get(kept.id);
+      if (note !== undefined && isContextNote(note)) continue;
       const title = REQUEST_NAME.exec(name)?.[6] ?? name.replace(/\.md$/i, '');
-      const words = sentByName.get(name)?.text ?? title;
+      const words =
+        note === undefined
+          ? (sentByName.get(name)?.text ?? title)
+          : instructionBody(note);
+      if (answered && sentenceKind(words) === 'question') continue;
+      listed.add(name);
       rows.push({
         key: `done-${keyOfRun(run)}-${name}`,
         state: 'done',
@@ -406,22 +490,29 @@ export function requestRows({
     });
   }
 
-  const keptAt = new Map(justKept.map((item) => [item.text, item.since]));
+  // A rule kept from this screen and the same rule read back from
+  // `Rules.md` are one row: matched by the text `keepRule` writes (#997).
+  const keyOf = (text: string): string => text.trim().toLowerCase();
+  const keptAt = new Map(
+    justKept.map((item) => [keyOf(keptRuleText(item.text)), item.since]),
+  );
   const inRules = new Set<string>();
   for (const rule of rules) {
     if (rule.paused || rule.origin?.toLowerCase() !== OWNER_ORIGIN) continue;
-    inRules.add(rule.text);
+    // The interview's rule stays under Rules only (#997).
+    if (INTERVIEW_RULE.test(rule.text)) continue;
+    inRules.add(keyOf(rule.text));
     rows.push({
       key: `rule-${String(rule.line)}`,
       state: 'kept',
       text: rule.text,
       kind: 'rule',
-      since: keptAt.get(rule.text) ?? dayStart(rule.date) ?? '',
+      since: keptAt.get(keyOf(rule.text)) ?? dayStart(rule.date) ?? '',
       fileId: null,
     });
   }
   for (const [i, item] of justKept.entries()) {
-    if (inRules.has(item.text)) continue;
+    if (inRules.has(keyOf(keptRuleText(item.text)))) continue;
     rows.push({
       key: `kept-${String(i)}`,
       state: 'kept',
@@ -521,8 +612,6 @@ export function stateLabel(row: Pick<RequestRow, 'state'>): string {
 export interface RequestMetaInput {
   /** "today, 13:26" (`cardWhen`, lower-cased at its start). */
   when: string;
-  /** The run's counts ("4 new · 4 updated"), `''` when there are none. */
-  counts?: string;
   /** "13:52": when the run in flight started, on this device's clock. */
   startedAt?: string;
 }
@@ -538,7 +627,7 @@ export function lowerFirst(text: string): string {
  */
 export function requestMeta(
   row: Pick<RequestRow, 'state'>,
-  { when, counts = '', startedAt = '' }: RequestMetaInput,
+  { when, startedAt = '' }: RequestMetaInput,
 ): string {
   switch (row.state) {
     case 'waiting':
@@ -546,7 +635,8 @@ export function requestMeta(
     case 'tidying':
       return startedAt === '' ? 'being done now' : `started ${startedAt}`;
     case 'done':
-      return counts === '' ? when : `${when} · ${counts}`;
+      // "Done · 2 Oct, 10:31": never the whole run's counts (#997).
+      return `Done · ${when}`;
     case 'failed':
       return `${when} · still in your inbox for the next tidy-up`;
     case 'answered':
