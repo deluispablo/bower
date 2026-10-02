@@ -16,7 +16,9 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 
 import { loadThumbnail } from '../cache.js';
+import { thumbnailLinkOf } from '../drive.js';
 import type { DriveFile } from '../drive.js';
+import { thumbnailUrl } from '../file-preview.js';
 import { parseFrontmatter } from '../markdown/frontmatter.js';
 import { kindLabel } from '../meta-line.js';
 import { useVault } from '../vault-store.js';
@@ -129,23 +131,29 @@ export function Thumb({
     if (!wanted || !inView) return;
     let cancelled = false;
     let objectUrl: string | null = null;
-    loadThumbnail(file).then(
-      (blob) => {
+    loadThumbnail(file)
+      .then(async (blob) => {
         if (cancelled) return;
         if (blob !== undefined) {
           objectUrl = URL.createObjectURL(blob);
           setSrc(objectUrl);
-        } else if (
-          file.thumbnailLink !== undefined &&
-          navigator.onLine !== false
-        ) {
-          // The fetch was refused (CSP, CORS) or Drive had nothing cached:
-          // an <img> is allowed where a fetch is not.
-          setSrc(file.thumbnailLink);
+          return;
         }
-      },
-      (err: unknown) => console.error('Could not load a thumbnail', err),
-    );
+        if (navigator.onLine === false) return;
+        // The fetch was refused (CSP, CORS) or Drive had nothing cached:
+        // an <img> is allowed where a fetch is not. A file from the index
+        // has no link of its own (the preview column's photo, #1004), so
+        // ask Drive for one.
+        if (file.thumbnailLink !== undefined) {
+          setSrc(file.thumbnailLink);
+          return;
+        }
+        const url = thumbnailUrl(await thumbnailLinkOf(file.id));
+        if (!cancelled && url !== null) setSrc(url);
+      })
+      .catch((err: unknown) =>
+        console.error('Could not load a thumbnail', err),
+      );
     return () => {
       cancelled = true;
       if (objectUrl !== null) URL.revokeObjectURL(objectUrl);

@@ -63,14 +63,28 @@ describe('previewKind', () => {
     );
   });
 
-  it('gives Office files and video to Drive', () => {
+  it('gives video to Drive, and skips its frame for Office files (#1004)', () => {
     expect(
       previewKind({
         name: 'Costs.xlsx',
         mimeType:
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       }),
-    ).toBe('drive');
+    ).toBe('none');
+    expect(
+      previewKind({
+        name: 'Letter.docx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    ).toBe('none');
+    expect(
+      previewKind({
+        name: 'Deck.pptx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      }),
+    ).toBe('none');
     expect(previewKind({ name: 'Walk.mp4', mimeType: 'video/mp4' })).toBe(
       'drive',
     );
