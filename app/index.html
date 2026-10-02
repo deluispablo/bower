@@ -159,6 +159,10 @@
       #boot[data-leaving] .boot-bird {
         animation: none;
       }
+      /* The hand-over (#1004): the line goes at once, only the bird fades. */
+      #boot[data-leaving] .boot-line {
+        visibility: hidden;
+      }
       @keyframes boot-in {
         to {
           opacity: 1;

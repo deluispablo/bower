@@ -146,6 +146,57 @@ test.describe('nothing clips Bower in the states he shows himself', () => {
     await expectRoom(page, 'the tour');
   });
 
+  // §6.21 rule 4 (#1004): on every step Bower stands clear of the card's
+  // text and buttons.
+  test('the tour, every step, clear of the card', async ({ page }) => {
+    await page.goto('/');
+    const dialog = page.getByRole('dialog', { name: 'Home' });
+    for (let step = 1; step <= 4; step += 1) {
+      await expect(page.getByText(`Tour · ${step} of 4`)).toBeVisible();
+      await page.waitForTimeout(100);
+      const card = await page.locator('.tour-card').boundingBox();
+      const bird = page.locator('.tour-bird');
+      if ((await bird.count()) > 0 && card !== null) {
+        const box = await bird.boundingBox();
+        if (box !== null) {
+          const apart =
+            box.x + box.width <= card.x ||
+            card.x + card.width <= box.x ||
+            box.y + box.height <= card.y ||
+            card.y + card.height <= box.y;
+          expect(apart, `step ${step}: the bird is over the card`).toBe(true);
+        }
+      }
+      if (step < 4) {
+        await page
+          .locator('.tour-card')
+          .getByRole('button', { name: /^Next/ })
+          .click();
+      }
+    }
+    await expect(dialog.or(page.locator('.tour-card'))).toBeVisible();
+  });
+
+  // The start-up hand-over (#1004): "Opening Bower…" goes at once.
+  test('the boot line hides as soon as the boot screen leaves', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const hidden = await page.evaluate(() => {
+      const boot =
+        document.getElementById('boot') ??
+        Object.assign(document.createElement('div'), { id: 'boot' });
+      if (!boot.isConnected) {
+        boot.innerHTML = '<p class="boot-line">Opening Bower…</p>';
+        document.body.append(boot);
+      }
+      boot.setAttribute('data-leaving', '');
+      const line = boot.querySelector('.boot-line');
+      return line === null ? null : getComputedStyle(line).visibility;
+    });
+    expect(hidden).toBe('hidden');
+  });
+
   test('an empty folder', async ({ page }) => {
     await page.goto(EMPTY_FOLDER);
     await expect(page.locator('.empty-folder svg.b')).toBeVisible();

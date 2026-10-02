@@ -382,6 +382,42 @@ describe('HelpSheet', () => {
   });
 });
 
+describe('placeTour keeps Bower off the card (§6.21 rule 4, #1004)', () => {
+  const sidebarTab = { top: 300, left: 16, width: 220, height: 36 };
+  const sidebar = { top: 0, left: 0, width: 252, height: 900 };
+
+  it('moves the desktop bird above a card that sits where he would stand', () => {
+    const card = { top: 260, left: 250, width: 420, height: 240 };
+    const place = placeTour(sidebarTab, sidebar, 1440, 900, card);
+    expect(place.bird).toEqual({ left: '252px', top: '172px' });
+  });
+
+  it('moves him below the card when there is no room above', () => {
+    const card = { top: 40, left: 250, width: 420, height: 300 };
+    const place = placeTour(sidebarTab, sidebar, 1440, 900, card);
+    expect(place.bird).toEqual({ left: '252px', top: '348px' });
+  });
+
+  it('leaves the phone bird out rather than over the card', () => {
+    const card = { top: 600, left: 0, width: 390, height: 170 };
+    const place = placeTour(
+      { top: 770, left: 100, width: 90, height: 56 },
+      { top: 760, left: 0, width: 390, height: 84 },
+      390,
+      844,
+      card,
+    );
+    expect(place.bird).toBeNull();
+    expect(place.spot).not.toBeNull();
+  });
+
+  it('changes nothing when the card is clear of him', () => {
+    const card = { top: 40, left: 600, width: 420, height: 200 };
+    const place = placeTour(sidebarTab, sidebar, 1440, 900, card);
+    expect(place.bird).toEqual(placeTour(sidebarTab, sidebar, 1440, 900).bird);
+  });
+});
+
 describe('placeTour', () => {
   it('stands the bird on the phone tab bar, centred over the tab', () => {
     const place = placeTour(
