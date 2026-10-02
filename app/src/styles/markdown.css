@@ -53,7 +53,7 @@
 .markdown ul,
 .markdown ol,
 .markdown pre,
-.markdown table,
+.markdown .markdown-table,
 .markdown blockquote,
 .markdown .callout {
   margin: 0 0 var(--space-4);
@@ -126,19 +126,29 @@
 /* A note-body table as the board's Key facts (NO-Main, NO-Fold): the full
    width, 14 px, label and value rows split by a divider, no cell borders;
    a header row, when the note writes one, is a 13 px muted line. */
+/* The table's box (`render.ts`) scrolls sideways when the table is wider
+   than the column (#1002): words never break to make it fit. */
+.markdown .markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .markdown table {
   width: 100%;
+  margin: 0;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
 
 .markdown th,
 .markdown td {
+  min-width: 5rem;
   padding: var(--space-3);
   border-bottom: 1px solid var(--color-border-subtle);
   text-align: left;
   vertical-align: top;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 
 .markdown th {

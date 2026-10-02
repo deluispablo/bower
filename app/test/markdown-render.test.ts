@@ -85,6 +85,17 @@ describe('renderNote', () => {
     expect(note.html).not.toMatch(/\son\w+=/i);
   });
 
+  it('puts every table in a box that scrolls sideways (#1002)', () => {
+    const note = renderNote(
+      '| Offer | Fit |\n| --- | --- |\n| Senior data engineer | 79 |\n',
+      index,
+    );
+    const root = dom(note.html);
+    const box = root.querySelector('div.markdown-table');
+    expect(box?.children).toHaveLength(1);
+    expect(box?.firstElementChild?.tagName).toBe('TABLE');
+    expect(root.querySelectorAll('table')).toHaveLength(1);
+  });
   it('renders a long note with tables, tasks and links', () => {
     const source = longNote();
     expect(source.split('\n')).toHaveLength(200);
