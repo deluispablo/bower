@@ -41,7 +41,7 @@ This app's use of information received from Google APIs adheres to the [Google A
 
 ## Signing out
 
-Signing in keeps you signed in on that device for at most 30 days; then you sign in again. **Settings → Sign out** signs out this device. **Settings → Sign out everywhere** signs you out on every device where you are signed in to Bower, this one included, for example after using a shared computer or losing a phone. Neither changes your notes or your Bower folder.
+Signing in keeps you signed in on that device for at most 30 days; then you sign in again. **Settings → Sign out** signs out this device, every open Bower tab in this browser included, at once. **Settings → Sign out everywhere** signs you out on every device where you are signed in to Bower, this one included, for example after using a shared computer or losing a phone. Bower on another device stops at its next request to Bower, and in any case within one hour, when its short-lived access to your Google Drive runs out. Neither changes your notes or your Bower folder.
 
 ## How to delete everything
 
