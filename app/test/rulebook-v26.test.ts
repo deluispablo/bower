@@ -111,7 +111,7 @@ describe('rulebook v26', () => {
       expect(section('An answer')).toContain(
         '`About Arlington Road, listing.pdf: when can I move in?`',
       );
-      const [line] = sheetAfter(section('An answer'), 'The answer\'s line:');
+      const [line] = sheetAfter(section('An answer'), "The answer's line:");
       expect(line).toEqual([
         'note',
         'Answers/2026-10-02 When can I move in.md',
@@ -150,7 +150,9 @@ describe('rulebook v26', () => {
       const example =
         'Tenancy agreement for 14 Arlington Road, London NW1, November 2026 to October 2027.pdf';
       expect(example.length).toBeGreaterThan(60);
-      expect(section('Page conventions')).toContain(`\`${example}\` stays as it is`);
+      expect(section('Page conventions')).toContain(
+        `\`${example}\` stays as it is`,
+      );
     });
 
     it('limits only a made-up name to 60 characters', () => {
@@ -170,7 +172,7 @@ describe('rulebook v26', () => {
       'when you have no web tools this run. Never try to reach the link.',
       "Write a short clip note at its final place: the folder a context note or the link's own words point to, else `3-Resources`.",
       "It has `source: <the link's address>`",
-      'the person\'s words from the link note (if any), and this box line: `> Could not open the link this run. (from the file) — Check`.',
+      "the person's words from the link note (if any), and this box line: `> Could not open the link this run. (from the file) — Check`.",
       "Give the raw link note a `file` line to `0-Inbox/Processed` (`-` for tags and description), and book the clip note with a `note` line whose original is the link note's path after filing.",
     ])('Ingest says: %s', (sentence) => {
       expect(section('Ingest')).toContain(sentence);
