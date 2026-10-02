@@ -43,8 +43,8 @@ export const ASK_SENT_TOAST =
 export interface AskItem {
   /** The name as the person reads it ("Moonee Ponds", "Areas"). */
   name: string;
-  /** A folder's answer goes in it; a note's or file's in Answers, linked
-   * from its page (#1003). */
+  /** Every answer goes in Answers; a note's or file's is linked from its
+   * page (#1003). */
   kind: 'folder' | 'note' | 'file';
   /** The item for its own icon in the context line (FileIcon 18). */
   icon?: FileIconItem;
@@ -62,10 +62,13 @@ export interface AskOptions {
 
 /** The explainer's second line (R-ASK-3). */
 export function askExplainer(item: Pick<AskItem, 'name' | 'kind'>): string {
-  return item.kind === 'folder'
-    ? `Bower answers at the next tidy-up and puts the answer in ${item.name}.`
-    : ASK_ITEM_EXPLAINER;
+  return item.kind === 'folder' ? ASK_FOLDER_EXPLAINER : ASK_ITEM_EXPLAINER;
 }
+
+/** The explainer for a folder (#1003): rules v26 put every answer in
+ * Answers, a folder's too. */
+export const ASK_FOLDER_EXPLAINER =
+  'Bower answers at the next tidy-up. The answer goes in Answers.';
 
 /** The explainer for a note or a file (#1003): the answer stays in
  * Answers, and the item's page links to it ("Questions about this"). */

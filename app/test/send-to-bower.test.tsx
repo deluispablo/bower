@@ -83,9 +83,9 @@ afterEach(() => {
 });
 
 describe('askExplainer (R-ASK-3)', () => {
-  it('puts a folder answer in the folder', () => {
+  it('says a folder answer goes in Answers too (#1003)', () => {
     expect(askExplainer({ name: 'Moonee Ponds', kind: 'folder' })).toBe(
-      'Bower answers at the next tidy-up and puts the answer in Moonee Ponds.',
+      'Bower answers at the next tidy-up. The answer goes in Answers.',
     );
   });
 
@@ -211,7 +211,9 @@ describe('Ask sheet', () => {
         buildText: (value) => `About Moonee Ponds: ${value}`,
       });
     });
-    expect(body().textContent).toContain('puts the answer in Moonee Ponds.');
+    expect(body().textContent).toContain(
+      'Bower answers at the next tidy-up. The answer goes in Answers.',
+    );
     expect(box().value).toBe('What is still missing here?');
   });
 });

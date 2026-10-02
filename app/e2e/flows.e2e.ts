@@ -2523,7 +2523,7 @@ test('a file opens on its own screen: the photo inline, the PDF without a previe
   await expect(ask.getByText('About Kitchen Refresh')).toBeVisible();
   await expect(
     ask.getByText(
-      'Bower answers at the next tidy-up and puts the answer in Kitchen Refresh.',
+      'Bower answers at the next tidy-up. The answer goes in Answers.',
     ),
   ).toBeVisible();
 });
