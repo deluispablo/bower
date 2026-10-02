@@ -127,8 +127,12 @@ afterEach(() => {
 describe('Onboarding', () => {
   it('goes Welcome → folder → Building → Continue to Home', async () => {
     expect(heading()).toBe("Hi, I'm Bower.");
+    expect(root.textContent).toContain(
+      'First, a home for your notes in your Google Drive. Then a quick look around.',
+    );
+    expect(button('Start without the tour')).toBeDefined();
 
-    void act(() => button('Show me around').click());
+    void act(() => button("Let's start").click());
     expect(heading()).toBe('Where your notes live');
     expect(markTourSeen).not.toHaveBeenCalled();
 
@@ -140,7 +144,21 @@ describe('Onboarding', () => {
     );
     void act(() => button('Make a new Bower folder').click());
     expect(heading()).toBe('Building your bower');
-    expect(root.querySelectorAll('.onb-chip')).toHaveLength(6);
+    expect(
+      Array.from(root.querySelectorAll('.onb-chip')).map((c) => c.textContent),
+    ).toEqual([
+      '0-Inbox',
+      '1-Projects',
+      '2-Areas',
+      '3-Resources',
+      '4-Archives',
+      'Answers',
+      'Clippings',
+    ]);
+    expect(root.textContent).toContain(
+      'A folder called Bower in your Drive, with its folders and a rulebook you can edit. Takes a few seconds.',
+    );
+    expect(root.textContent).not.toMatch(/six folders/);
     expect(root.querySelector('[role="progressbar"]')).not.toBeNull();
     expect(root.textContent).not.toContain('Continue');
 
@@ -156,7 +174,7 @@ describe('Onboarding', () => {
   });
 
   it('skipping the tour on Welcome marks it seen and still asks for the folder', () => {
-    void act(() => button('Skip the tour').click());
+    void act(() => button('Start without the tour').click());
 
     expect(endTour).toHaveBeenCalledWith(false);
     expect(markTourSeen).toHaveBeenCalledWith(me);
@@ -167,7 +185,7 @@ describe('Onboarding', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     createVault.mockRejectedValue(new Error('network'));
 
-    void act(() => button('Show me around').click());
+    void act(() => button("Let's start").click());
     void act(() => button('Make a new Bower folder').click());
     await flush();
 
@@ -183,7 +201,7 @@ describe('Onboarding', () => {
 
 describe('The first-run interview (#198)', () => {
   async function reachInterview(): Promise<void> {
-    void act(() => button('Show me around').click());
+    void act(() => button("Let's start").click());
     createVault.mockResolvedValueOnce(vault);
     void act(() => button('Make a new Bower folder').click());
     await flush();
@@ -216,6 +234,15 @@ describe('The first-run interview (#198)', () => {
     expect(location.route).toHaveBeenCalledWith('/');
   });
 
+  it('shows one row of dots, the onboarding’s, and a text counter (#999)', async () => {
+    await reachInterview();
+    expect(root.querySelectorAll('.onb-dots')).toHaveLength(1);
+    expect(root.querySelector('.interview-dots')).toBeNull();
+    expect(root.textContent).toContain('Question 1 of 4');
+    void act(() => button('Next').click());
+    expect(root.textContent).toContain('Question 2 of 4');
+  });
+
   it('does not add a fourth area', async () => {
     await reachInterview();
     void act(() => button('Next').click());
@@ -226,7 +253,10 @@ describe('The first-run interview (#198)', () => {
     void act(() => button('Home').click());
     void act(() => button('Finance').click());
 
-    expect(root.textContent).toContain('3 of 3: Health, Career, Home');
+    expect(root.textContent).toContain('Picked: Health, Career, Home');
+    expect(root.textContent).toContain(
+      'Up to three. Unpick one to add another.',
+    );
   });
 
   it('shows the write error and lets the owner move on anyway', async () => {
@@ -251,6 +281,8 @@ describe('The first-run interview (#198)', () => {
     remount({ step: 'interview', from: 'settings' });
     expect(heading()).toBe('Tell Bower about yourself');
     expect(root.querySelector('.onb-dots')).toBeNull();
+    expect(root.querySelectorAll('.interview-dots span')).toHaveLength(4);
+    expect(root.textContent).toContain('Question 1 of 4');
 
     void act(() => button('Skip').click());
     expect(location.route).toHaveBeenCalledWith('/settings');

@@ -2,12 +2,12 @@
  * First run (spec §7, #149; the Drive step of #219; the interview of #198):
  * five screens in one route, with local state.
  *
- * 1. Welcome: the bird says hello. "Show me around" and "Skip the tour"
- *    both go on to the folder; skipping also records that the tour was
- *    seen, so Home never shows it.
+ * 1. Welcome: the bird says hello. "Let's start" and "Start without the
+ *    tour" both go on to the folder (the tour itself runs later, on Home);
+ *    the second also records that the tour was seen, so Home never shows it.
  * 2. Where your notes live: a new Bower folder (recommended) or one the
  *    person already has, through the Drive picker or a pasted link.
- * 3. Building your bower: while `POST /vault` runs the bird builds, the six
+ * 3. Building your bower: while `POST /vault` runs the bird builds, its
  *    folders appear as chips and a progress bar runs; "Continue" appears
  *    once the folder exists. On an error the bird is confused and the
  *    message says what to do.
@@ -117,14 +117,16 @@ function driveStatusText(mimeType: string, done: boolean): string {
     : `Saving as ${savedAs}…`;
 }
 
-/** The six folders of a new Bower folder, as the Building screen shows them. */
+/** The folders of a new Bower folder (`vault-template/`), as the Building
+ * screen shows them. */
 const FOLDERS: readonly { name: string; Icon: () => JSX.Element }[] = [
   { name: '0-Inbox', Icon: IconInbox },
   { name: '1-Projects', Icon: IconFolder },
   { name: '2-Areas', Icon: IconFolder },
   { name: '3-Resources', Icon: IconFolder },
-  { name: '4-Archive', Icon: IconFolder },
+  { name: '4-Archives', Icon: IconFolder },
   { name: 'Answers', Icon: IconChat },
+  { name: 'Clippings', Icon: IconInbox },
 ];
 
 /** Where the person is: this route's own steps, then the three tour steps. */
@@ -443,16 +445,16 @@ export function Onboarding(): JSX.Element {
             Hi, I'm Bower.
           </h1>
           <p class="onb-lead">
-            I keep your notes tidy, in a folder in your own Google Drive. Want a
-            quick look around?
+            First, a home for your notes in your Google Drive. Then a quick look
+            around.
           </p>
         </div>
         <div class="auth-actions">
           <button type="button" class="button onb-primary" onClick={goToFolder}>
-            Show me around
+            Let's start
           </button>
           <button type="button" class="button-link" onClick={skipTour}>
-            Skip the tour
+            Start without the tour
           </button>
         </div>
         <Dots step={step} />
@@ -483,7 +485,7 @@ export function Onboarding(): JSX.Element {
           <span class="onb-card-text">
             <span class="onb-card-title">Make a new Bower folder</span>
             <span class="onb-card-hint">
-              A folder called Bower in your Drive, with six folders and a
+              A folder called Bower in your Drive, with its folders and a
               rulebook inside. Recommended.
             </span>
           </span>
@@ -562,6 +564,7 @@ export function Onboarding(): JSX.Element {
         error={interviewError}
         headingRef={heading}
         dots={replayingFromSettings ? undefined : <Dots step={step} />}
+        existingFolder={replayingFromSettings || mode === 'select'}
       />
     );
   }
@@ -677,8 +680,8 @@ export function Onboarding(): JSX.Element {
         </h1>
         <p class="onb-lead">
           {mode === 'create'
-            ? 'A folder called Bower in your Drive, six folders inside, and a rulebook you can edit. Takes a few seconds.'
-            : 'Your own folder, with the six folders and the rulebook added where they are missing. Takes a few seconds.'}
+            ? 'A folder called Bower in your Drive, with its folders and a rulebook you can edit. Takes a few seconds.'
+            : 'Your own folder, with Bower’s folders and the rulebook added where they are missing. Takes a few seconds.'}
         </p>
       </div>
 

@@ -1,8 +1,9 @@
 /**
  * The first-run interview's own four screens (#198, spec D.2): one question
  * at a time, the bird asking in a bubble (same shape as onboarding's
- * `.onb-ask`/`.onb-bubble`), a row of chips that fill the answer and a free
- * text field for the owner's own words. Purely presentational: the answers
+ * `.onb-ask`/`.onb-bubble`), a row of chips and a free text field for the
+ * owner's own words (question 1's chips are multi-select and stay apart
+ * from the field; `joinKeepAnswer` joins both on Finish, #999). Purely presentational: the answers
  * live here until "Finish" (`onFinish`), which is `routes/onboarding.tsx`'s
  * (and Settings') job to write through `vault-store.tsx`'s
  * `submitInterview`. "Skip the interview" (`onSkip`) leaves at any question
@@ -18,6 +19,7 @@ import {
   INTERVIEW_TIP,
   interviewGreeting,
   interviewQuestionLabel,
+  joinKeepAnswer,
   type InterviewAnswers,
 } from '../interview.js';
 import { useSession } from '../session.js';
@@ -38,11 +40,17 @@ const AREA_CHIPS = [
 
 const MAX_AREAS = 3;
 
-const STYLE_CHIPS = [
-  'Short and plain',
-  'Detailed, with dates',
-  'Match my existing notes',
-];
+/** Under the own-area field once three areas are picked (#999). */
+const AREA_LIMIT_HINT = 'Up to three. Unpick one to add another.';
+
+const MATCH_EXISTING = 'Match my existing notes';
+
+/** Question 4's chips: "Match my existing notes" only when there are notes
+ * to match, i.e. the person picked a folder they already had (#999). */
+function styleChips(existingFolder: boolean): readonly string[] {
+  const base = ['Short and plain', 'Detailed, with dates'];
+  return existingFolder ? [...base, MATCH_EXISTING] : base;
+}
 
 export interface InterviewProps {
   /** The whole interview was finished: the last question's "Finish". */
@@ -56,9 +64,13 @@ export interface InterviewProps {
   /** Focus target when this screen appears (`onboarding.tsx`'s own
    * new-screen-focus effect, same as every other first-run step). */
   headingRef: Ref<HTMLHeadingElement>;
-  /** The dots row for the first-run flow, or nothing when this is a
-   * standalone replay from Settings. */
+  /** The dots row for the first-run flow, shown instead of the interview's
+   * own four; nothing when this is a standalone replay from Settings. */
   dots?: JSX.Element;
+  /** The notes folder was one the person already had (or this is a replay
+   * from Settings), so there are notes whose style question 4 can offer
+   * to match. A Bower folder made seconds ago has none. */
+  existingFolder: boolean;
 }
 
 interface ChipRowProps {
@@ -89,6 +101,14 @@ function ChipRow({ chips, value, onPick }: ChipRowProps): JSX.Element {
       ))}
     </div>
   );
+}
+
+/** `picked` with `chip` toggled: removed if present, added at the end
+ * otherwise (question 1 has no limit). */
+function toggleChip(picked: readonly string[], chip: string): string[] {
+  return picked.includes(chip)
+    ? picked.filter((c) => c !== chip)
+    : [...picked, chip];
 }
 
 /** `areas` with `name` toggled: removed if present, added (up to `MAX_AREAS`)
@@ -124,10 +144,12 @@ export function Interview({
   error,
   headingRef,
   dots,
+  existingFolder,
 }: InterviewProps): JSX.Element {
   const firstName = useFirstName();
   const [question, setQuestion] = useState(0);
-  const [keep, setKeep] = useState('');
+  const [keepChips, setKeepChips] = useState<string[]>([]);
+  const [keepText, setKeepText] = useState('');
   const [languages, setLanguages] = useState('');
   const [areas, setAreas] = useState<string[]>([]);
   const [customArea, setCustomArea] = useState('');
@@ -135,6 +157,7 @@ export function Interview({
   const [example, setExample] = useState('');
 
   const last = question === 3;
+  const areaLimitReached = areas.length >= MAX_AREAS;
 
   function addCustomArea(): void {
     const name = customArea.trim();
@@ -147,7 +170,13 @@ export function Interview({
 
   function next(): void {
     if (last) {
-      onFinish({ keep, languages, areas, titleStyle, example });
+      onFinish({
+        keep: joinKeepAnswer(keepChips, keepText),
+        languages,
+        areas,
+        titleStyle,
+        example,
+      });
       return;
     }
     setQuestion((q) => q + 1);
@@ -171,14 +200,18 @@ export function Interview({
 
       {question === 0 && (
         <div class="interview-question">
-          <ChipRow chips={INTERVIEW_KEEP_CHIPS} value={keep} onPick={setKeep} />
+          <ChipRow
+            chips={INTERVIEW_KEEP_CHIPS}
+            value={keepChips}
+            onPick={(chip) => setKeepChips((prev) => toggleChip(prev, chip))}
+          />
           <Composer
             mode="save"
             rows={1}
             label="What you will keep here"
             placeholder="Or say it your way"
-            value={keep}
-            onChange={setKeep}
+            value={keepText}
+            onChange={setKeepText}
             onCommit={keepAsTyped}
           />
         </div>
@@ -206,7 +239,10 @@ export function Interview({
       {question === 2 && (
         <div class="interview-question">
           <ChipRow
-            chips={AREA_CHIPS}
+            chips={[
+              ...AREA_CHIPS,
+              ...areas.filter((a) => !AREA_CHIPS.includes(a)),
+            ]}
             value={areas}
             onPick={(chip) => setAreas((prev) => toggleArea(prev, chip))}
           />
@@ -220,13 +256,12 @@ export function Interview({
               value={customArea}
               onChange={setCustomArea}
               onCommit={addCustomArea}
-              disabled={areas.length >= MAX_AREAS}
+              disabled={areaLimitReached}
+              hint={areaLimitReached ? AREA_LIMIT_HINT : null}
             />
           </div>
           {areas.length > 0 && (
-            <p class="onb-note">
-              {areas.length} of {MAX_AREAS}: {areas.join(', ')}
-            </p>
+            <p class="onb-note">Picked: {areas.join(', ')}</p>
           )}
         </div>
       )}
@@ -234,7 +269,7 @@ export function Interview({
       {question === 3 && (
         <div class="interview-question">
           <ChipRow
-            chips={STYLE_CHIPS}
+            chips={styleChips(existingFolder)}
             value={titleStyle}
             onPick={setTitleStyle}
           />
@@ -294,12 +329,15 @@ export function Interview({
         </div>
       </div>
 
-      <div class="interview-dots" aria-hidden="true">
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} class={i === question ? 'is-on' : undefined} />
-        ))}
-      </div>
-      {dots}
+      {/* One row of dots: the first-run flow's own when it passes them,
+          the interview's four otherwise (the Settings replay). */}
+      {dots ?? (
+        <div class="interview-dots" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <span key={i} class={i === question ? 'is-on' : undefined} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

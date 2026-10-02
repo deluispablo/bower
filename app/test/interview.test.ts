@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import aboutMeTemplate from '../../vault-template/About-Me.md?raw';
 import rulesTemplate from '../../vault-template/Rules.md?raw';
-import { interviewToFiles, replaceSection } from '../src/interview.js';
+import {
+  interviewToFiles,
+  joinKeepAnswer,
+  replaceSection,
+} from '../src/interview.js';
 import type { InterviewAnswers } from '../src/interview.js';
 import { parseRules } from '../src/rules.js';
 
@@ -175,5 +179,20 @@ describe('interviewToFiles', () => {
     expect(second.aboutMe).toContain('- What to keep here: Work notes');
     expect(second.aboutMe).not.toContain('Everything I capture');
     expect(second.aboutMe).toContain('## Who I am');
+  });
+});
+
+describe('joinKeepAnswer (#999)', () => {
+  it('joins the picked chips and the typed words with ", "', () => {
+    expect(joinKeepAnswer(['Work', 'Money', 'A project'], 'My move')).toBe(
+      'Work, Money, A project, My move',
+    );
+  });
+
+  it('leaves out blank parts and a typed repeat of a chip', () => {
+    expect(joinKeepAnswer([], '  ')).toBe('');
+    expect(joinKeepAnswer(['Work'], '')).toBe('Work');
+    expect(joinKeepAnswer([], ' My move ')).toBe('My move');
+    expect(joinKeepAnswer(['Work'], 'Work')).toBe('Work');
   });
 });

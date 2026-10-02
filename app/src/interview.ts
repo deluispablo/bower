@@ -246,6 +246,21 @@ export const INTERVIEW_KEEP_CHIPS: readonly string[] = [
   'A project',
 ];
 
+/**
+ * The first question's answer: the chips the person picked, in the order
+ * they picked them, then what they typed, joined with ", ". Blank parts and
+ * a typed part that repeats a picked chip are left out.
+ */
+export function joinKeepAnswer(
+  picked: readonly string[],
+  typed: string,
+): string {
+  const parts = picked.map((p) => p.trim()).filter((p) => p !== '');
+  const own = typed.trim();
+  if (own !== '' && !parts.includes(own)) parts.push(own);
+  return parts.join(', ');
+}
+
 /** "Hi Alex. Four quick questions so I file things your way. Skip anything
  * you like." Without a name: "Hi." */
 export function interviewGreeting(name?: string): string {
@@ -254,8 +269,10 @@ export function interviewGreeting(name?: string): string {
   return `${hi} Four quick questions so I file things your way. Skip anything you like.`;
 }
 
-/** "1 of 4 · What will you keep here?" for the zero-based `index`. */
+/** "Question 1 of 4 · What will you keep here?" for the zero-based
+ * `index`: the text counter, kept when the onboarding's own dots stand in
+ * for the interview's (#999). */
 export function interviewQuestionLabel(index: number): string {
   const total = INTERVIEW_QUESTIONS.length;
-  return `${index + 1} of ${total} · ${INTERVIEW_QUESTIONS[index] ?? ''}`;
+  return `Question ${index + 1} of ${total} · ${INTERVIEW_QUESTIONS[index] ?? ''}`;
 }
