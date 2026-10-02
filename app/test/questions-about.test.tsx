@@ -57,7 +57,7 @@ function row(text: string, state: RequestRow['state']): RequestRow {
     key: `row:${text}`,
     state,
     text,
-    kind: 'question' as RequestRow['kind'],
+    kind: 'question',
     since: '2026-10-02T08:30:00Z',
     fileId: 'REQUEST_ID',
   };
@@ -98,7 +98,7 @@ async function mount(
     for (let i = 0; i < 8; i += 1) await Promise.resolve();
   });
   await settle();
-  return host as HTMLElement;
+  return host;
 }
 
 describe('answersAbout', () => {
