@@ -1542,6 +1542,14 @@ sheet_cut() {
 # as plain strings only.
 SHEET_MAP_FROM=()
 SHEET_MAP_TO=()
+# The kept names the runner made free with ` (2)`, ` (3)` (#1000), in the
+# same form: SHEET_KEPT_FROM[i] the path as the agent wrote it (a file that
+# was there before), SHEET_KEPT_TO[i] the path the moved file got. Read
+# only for a note this run created (sheet_note_line): such a note means the
+# file the run filed, while a note that was there before keeps meaning the
+# older file.
+SHEET_KEPT_FROM=()
+SHEET_KEPT_TO=()
 # The pending paths whose name the runner tried to shorten this run, the
 # text copies it moved and booked itself (sheet_sibling), and the notes
 # booked without their original (counts only).
@@ -1914,8 +1922,10 @@ sheet_index_row() {
 # SHEET_MAP_FROM and SHEET_MAP_TO for the `note` lines. A kept name (the
 # original's own) that is taken there gets ` (2)`, ` (3)` the same way
 # (sheet_free_name, #1000) instead of being refused, so the file does not
-# stay in the inbox run after run; that rename is not mapped, since the
-# taken name already means the file that holds it. Otherwise moves the
+# stay in the inbox run after run; that rename is kept apart, in
+# SHEET_KEPT_FROM and SHEET_KEPT_TO, for the notes this run created only,
+# since the taken name already means the file that holds it everywhere
+# else. Otherwise moves the
 # file in the local copy, then writes its hub line (in the folder's hub
 # note, made for a new folder) and its index row; nothing more for
 # Processed. Returns 2 when one of those writes fails after the move.
@@ -1977,6 +1987,9 @@ sheet_file_line() {
   if [ "$final" != "$name" ] && [ "$remap" -eq 1 ]; then
     SHEET_MAP_FROM+=("$dest/$name")
     SHEET_MAP_TO+=("$target")
+  elif [ "$final" != "$name" ]; then
+    SHEET_KEPT_FROM+=("$dest/$name")
+    SHEET_KEPT_TO+=("$target")
   fi
   if [ "$kind" != processed ]; then
     read -r -a arr <<<"$tags"
@@ -2085,6 +2098,15 @@ sheet_note_line() {
     return 0
   fi
   sheet_note_ok "$vault" "$note" "$before" || return 1
+  # A note this run created (its path not in the manifest before) also
+  # follows a kept name the runner made free (#1000): its original and its
+  # links mean the file the run filed. Local copies of the maps, so nothing
+  # outside this line sees the addition.
+  if [ "${#SHEET_KEPT_FROM[@]}" -gt 0 ] && ! P="$note" awk '{ p = $0; sub(/^[^ ]* [^ ]* /, "", p) }
+    p == ENVIRON["P"] { f = 1; exit } END { exit !f }' "$before"; then
+    local SHEET_MAP_FROM=(${SHEET_MAP_FROM[@]+"${SHEET_MAP_FROM[@]}"} "${SHEET_KEPT_FROM[@]}")
+    local SHEET_MAP_TO=(${SHEET_MAP_TO[@]+"${SHEET_MAP_TO[@]}"} "${SHEET_KEPT_TO[@]}")
+  fi
   # An original the runner filed under a shorter name (#995).
   orig=$(sheet_mapped "$orig")
   # An original that is not a file there now (its `file` line was refused,
@@ -2186,7 +2208,7 @@ apply_filing_sheet() {
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
   declare -gA SHEET_SKIP_COUNTS=([description]=0 [path]=0 [name]=0 [tag]=0 [other]=0)
   SHEET_MAP_FROM=() SHEET_MAP_TO=() SHEET_SHORT_SRC=() SHEET_SIBLINGS=() SHEET_UNLINKED_COUNT=0
-  SHEET_BOOKED=()
+  SHEET_BOOKED=() SHEET_KEPT_FROM=() SHEET_KEPT_TO=()
   SHEET_CONVERTED=${6:-}
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
   total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)

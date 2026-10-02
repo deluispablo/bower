@@ -44,7 +44,7 @@ T=$'\t'
 # the run, and an index; the pending list and the manifest before the run.
 fresh() {
   # A new run: no note booked yet (apply_filing_sheet resets it too).
-  SHEET_BOOKED=()
+  SHEET_BOOKED=() SHEET_KEPT_FROM=() SHEET_KEPT_TO=()
   rm -rf "$V"
   mkdir -p "$V/0-Inbox/Processed" "$V/Clippings" "$V/1-Projects/Flat hunt" "$V/2-Areas/Finance" \
     "$V/3-Resources" "$V/.bower" "$V/Answers"
@@ -434,24 +434,34 @@ expect_eq "$(sheet_free_name "$ROOT/free" 'README')" 'README' 'no extension'
 : >"$ROOT/free/README"
 expect_eq "$(sheet_free_name "$ROOT/free" 'README')" 'README (2)' 'no extension, taken'
 # The original's own name, taken in the destination: filed as (2), with its
-# hub line and row; the file that held the name is untouched, and a note
-# naming that file keeps its original.
+# hub line and row; the file that held the name is untouched. A note this
+# run created that names the taken path means the file the run filed: its
+# original and its links follow the (2). A note that was there before and
+# changed in this run keeps meaning the older file.
 echo lease >"$V/0-Inbox/Lease.pdf"
 printf '%s\n' 0-Inbox/Lease.pdf >>"$PENDING"
-printf -- '---\nby: bower\n---\nAbout the old lease.\n' >"$V/1-Projects/Flat hunt/Lease notes.md"
+printf -- '---\nby: bower\n---\nAbout the new lease.\n' >"$V/1-Projects/Flat hunt/Lease notes.md"
+echo 'See [[Lease.pdf]].' >>"$V/1-Projects/Flat hunt/Lease notes.md"
+echo 'Also [[Lease.pdf]].' >>"$V/3-Resources/Old.md"
 {
   printf 'file\t0-Inbox/Lease.pdf\t1-Projects/Flat hunt\tLease.pdf\t#flat\tThe new lease\n'
   printf 'note\t1-Projects/Flat hunt/Lease notes.md\t1-Projects/Flat hunt/Lease.pdf\t#flat\tNotes on the lease\n'
+  printf 'note\t3-Resources/Old.md\t1-Projects/Flat hunt/Lease.pdf\t#flat\tThe old note\n'
 } >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
-expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '1 1 0' 'the kept name filed under (2)'
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '1 2 0' 'the kept name filed under (2)'
 [ ! -e "$V/0-Inbox/Lease.pdf" ] || die 'the kept name stayed in the inbox'
 expect_eq "$(cat "$V/1-Projects/Flat hunt/Lease (2).pdf")" lease 'the new lease under (2)'
 expect_eq "$(cat "$V/1-Projects/Flat hunt/Lease.pdf")" lease 'the old lease untouched'
 grep -qxF -- '- [[Lease (2).pdf]] The new lease' "$V/1-Projects/Flat hunt/Flat hunt.md" || die 'the hub line under (2)'
 grep -qF -- '- [[1-Projects/Flat hunt/Lease (2).pdf]] · PDF · #flat · The new lease · filed by Bower' \
   "$V/index.md" || die 'the row under (2)'
-grep -qF -- '· [[1-Projects/Flat hunt/Lease.pdf]]' "$V/index.md" || die 'the note lost the existing original'
+grep -qF -- '- [[1-Projects/Flat hunt/Lease notes.md]] · Note · #flat · Notes on the lease · filed by Bower · [[1-Projects/Flat hunt/Lease (2).pdf]]' \
+  "$V/index.md" || die 'the new note does not point to the file the run filed'
+grep -qxF -- 'See [[Lease (2).pdf]].' "$V/1-Projects/Flat hunt/Lease notes.md" || die 'the new note link not followed'
+grep -qF -- '- [[3-Resources/Old.md]] · Note · #flat · The old note · filed by Bower · [[1-Projects/Flat hunt/Lease.pdf]]' \
+  "$V/index.md" || die 'the older note lost the existing original'
+grep -qxF -- 'Also [[Lease.pdf]].' "$V/3-Resources/Old.md" || die 'the older note link changed'
 # A name the agent made up that is taken is still refused.
 fresh
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Lease.pdf '#flat' 'Made-up name taken'
