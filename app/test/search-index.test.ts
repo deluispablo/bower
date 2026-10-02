@@ -304,3 +304,29 @@ describe('a Bower answer in Search (#950 F-4)', () => {
     expect(hit?.kindWord).toBe('Bower answer');
   });
 });
+
+describe('a Bower note in Search (#998, D10)', () => {
+  const files = [
+    folder('b0', '1-Projects'),
+    file('b1', '1-Projects/Moving plan.md', 'text/markdown'),
+    file('b2', '1-Projects/Packing list.md', 'text/markdown'),
+  ];
+  const vault = buildVaultIndex(files);
+  const handle = buildSearchIndex(
+    vault,
+    new Map([
+      ['b1', '---\nby: bower\n---\n# Moving plan\nThe boxes.'],
+      ['b2', '---\nby: person\n---\n# Packing list\nThe boxes.'],
+    ]),
+  );
+
+  it('reads "Bower note" for what Bower wrote, as every list does', () => {
+    const hit = searchVault(handle, vault, 'moving').notes[0];
+    expect(hit?.kindWord).toBe('Bower note');
+  });
+
+  it('reads "Note" for what the person wrote', () => {
+    const hit = searchVault(handle, vault, 'packing').notes[0];
+    expect(hit?.kindWord).toBe('Note');
+  });
+});

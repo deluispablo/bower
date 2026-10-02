@@ -16,12 +16,14 @@ import MiniSearch from 'minisearch';
 import type { SearchResult } from 'minisearch';
 
 import { loadSearchIndex, saveSearchIndex } from './cache.js';
+import { isBowerWritten } from './bower-written.js';
 import { ITEM_KIND_WORDS } from './kinds.js';
 import { parseFrontmatter } from './markdown/frontmatter.js';
 import type { DriveFile } from './drive.js';
 import { FOLDER_MIME } from './drive.js';
 import { displayName, folderOf, paraKindOf } from './navigation.js';
 import type { ParaKind } from './navigation.js';
+import { noteMetaFrom } from './note-meta.js';
 import { isLinkNote, noteTitle } from './note-title.js';
 import { snippet, toPlainWords } from './search.js';
 import {
@@ -212,12 +214,20 @@ function kindWordOf(
   if (kind === 'folder') return 'Folder';
   // A Bower answer reads as in the list, the grid and the note (R-LI-2,
   // K-14): one kind word on every surface.
-  if (
-    kind === 'note' &&
-    text !== undefined &&
-    parseFrontmatter(text).data.type === 'answer'
-  ) {
-    return ITEM_KIND_WORDS['bower-answer'];
+  if (kind === 'note' && text !== undefined) {
+    const { data, body } = parseFrontmatter(text);
+    if (data.type === 'answer') return ITEM_KIND_WORDS['bower-answer'];
+    // One rule for who wrote a note (D10, #998): what Bower wrote reads
+    // "Bower note" here as in every list.
+    if (
+      isBowerWritten(noteMetaFrom(data), {
+        body,
+        path: file.path,
+        name: file.name,
+      })
+    ) {
+      return ITEM_KIND_WORDS['bower-note'];
+    }
   }
   return FILE_KIND_LABELS[fileKind(file)];
 }

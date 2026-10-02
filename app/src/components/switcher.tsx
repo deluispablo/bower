@@ -1217,6 +1217,13 @@ function SwitcherPanel({
     [flatRows],
   );
   const { bower, answers } = useBowerNotes(noteFiles);
+  // A hit whose indexed text says Bower wrote it (`isBowerWritten`, D10)
+  // reads "Bower note" before its frontmatter is read again (#998).
+  const isBower = (row: RowModel | null): boolean =>
+    row !== null &&
+    (bower.has(row.file.id) ||
+      row.kindWord === ITEM_KIND_WORDS['bower-note'] ||
+      row.kindWord === ITEM_KIND_WORDS['bower-answer']);
   const isAnswer = (row: RowModel | null): boolean =>
     row !== null &&
     (answers.has(row.file.id) ||
@@ -1599,7 +1606,7 @@ function SwitcherPanel({
                           id={`switcher-option-${position}`}
                           row={row}
                           selected={position === highlightedIndex}
-                          bowerWritten={bower.has(row.file.id)}
+                          bowerWritten={isBower(row)}
                           answer={isAnswer(row)}
                           now={now}
                           onActivate={activateRow}
@@ -1679,9 +1686,7 @@ function SwitcherPanel({
             {desktop && tag === null && (
               <SearchPreview
                 row={highlightedRow}
-                bowerWritten={
-                  highlightedRow !== null && bower.has(highlightedRow.file.id)
-                }
+                bowerWritten={isBower(highlightedRow)}
                 answer={isAnswer(highlightedRow)}
                 now={now}
                 onOpen={activateRow}
