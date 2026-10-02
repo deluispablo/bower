@@ -1,34 +1,26 @@
 # PLAN.md
 
-Resume point for the tech lead: M52, a faster tidy-up session, and M53, the filing sheet. The v6 plan (M47 to M51, shipped to production on 1 Oct 2026 from `main` 9d660829) is in this file's git history.
+Resume point for the tech lead: M55, fixes from the production test of 2 Oct 2026. M52–M54 (faster tidy-up, filing sheet, start-up screen) shipped to production on 2 Oct 2026 from `main` 545496b7; their plan is in this file's git history.
 
 ## Source
 
-- The spec: `docs/superpowers/2026-10-01-session-speed-spec.md` (R-SS-1 to R-SS-17, decisions D-1 to D-10), approved by the owner on 1 Oct 2026.
-- GitHub issues #961 to #968 and #974 (M52), #977 and #978 (M53) hold the detail. This file holds the order, the process and the state.
+- The production test report of 2 Oct 2026 (held by the lead, not committed: it was written from the owner's real documents). Finding IDs (1.1, 4.3, …) in the issues refer to it.
+- Designer and tech-lead verdicts on the findings, folded into the issues.
+- Owner rulings, 2 Oct 2026:
+  - effort: high only for real instructions, medium for a run whose only reason is a context note, low otherwise;
+  - an answer about a file stays in `Answers/`, and the file shows the question with a link to its answer;
+  - "your Claude plan" becomes "the Claude plan this Bower runs on".
 
 ## Process
 
 1. Every subagent runs on Opus 5.5 at medium effort, at most five at once, in its own worktree, and owns a disjoint set of files per wave.
-2. Each PR: CI green; for PRs that change `agent/run.sh` (#961, #965, #966, #967), a code-reviewer subagent checks safety first: the agent's clean environment, nothing from the vault in logs or artifacts, `CLAUDE.md` always restored, Drive writes only through the existing paths. Then the lead reads the diff and merges (squash).
-3. The benchmark (`agent/bench/`, from #961) runs on the lead's machine, with a synthetic vault and the operator's own Claude Code login: no Drive, no GitHub, no real data. It runs as a baseline on `main` after #961, again after #965, and as the final measure after #967.
-4. Production only with the owner's yes, at the end:
-   - redeploy the runner with `scripts/new-instance.sh`;
-   - deploy the Worker;
-   - deploy the app (Pages);
-   - the owner applies rules v25 in Settings;
-   - the next lint starts the index backfill.
-
-## State (1 Oct 2026)
-
-- M52: every issue merged except #968 (docs and the final benchmark), in review.
-- M53: #977 merged; #978 (the runner side) in review as PR #982.
-- The final benchmark is in the spec's section 8: every case filed correctly, the agent step 39 % to 67 % faster on cases 1 to 4 and 17 % on case 5.
-- Next: production, with the owner's yes (see Process, step 4).
+2. Each PR: CI green; the lead reads the diff and merges (squash). PRs that change `agent/run.sh` (#995, #1000) get a reviewer subagent first.
+3. After #1000 merges, the lead runs the benchmark (`agent/bench/run-bench.sh m55`) and compares with the M52 final numbers.
+4. Production only with the owner's yes, at the end: Worker, runner (`scripts/new-instance.sh`), app (Pages); then the owner applies rules v26 in Settings.
 
 ## Milestone
 
-**M52 · A faster tidy-up session.** One tidy-up session gets faster without an app change. Done when the benchmark's one-file cases run the agent step in 2 minutes or less with at least half the turns of the baseline, and every quality check passes.
+**M55 · Fixes from the production test** (GitHub milestone 56). Done when a fresh account can add a pile with long-named files, a link and a question, tidy up, and see every item filed with the truth in Just filed, Requests and Home, while signing out in one tab ends Drive access in the others.
 
 ## Issues
 
@@ -36,32 +28,24 @@ Budget = the agent's own ceiling (tool calls / minutes).
 
 | Issue | Title | Wave | Depends on | Owns | Budget | Status |
 |---|---|---|---|---|---|---|
-| #961 | Runner session stats and a local benchmark | 1 | — | `agent/run.sh`, `agent/bench/**`, `agent/test/**`, `.gitignore` | 120 / 120 | merged (#973) |
-| #962 | Rules v24: section markers, index rows, Tags, scans, text copies | 1 | — | `vault-template/CLAUDE.md`, `vault-template/index.md`, `api/src/template.generated.ts`, `docs/changelog.md`, app parser tests | 90 / 90 | merged (#971) |
-| #963 | fix(api): queued run fails after 17 minutes | 1 | — | `api/src/process.ts`, `api/test/process.test.ts`, `api/test/status.test.ts` | 30 / 30 | merged (#970) |
-| #964 | chore(agent): pandoc from a cached release binary | 1 | — | `agent/workflows/*.yml` | 40 / 40 | merged (#972) |
-| #965 | Model and effort per run | 2 | #961, #964 | `agent/run.sh`, `agent/workflows/*.yml`, `agent/test/**`, `docs/runbook.md` | 50 / 50 | merged (#975) |
-| #966 | Context pack: cut rulebook, tags, folders, corrections, shorter prompts | 3 | #965, #962 | `agent/run.sh`, `agent/prompts/*`, `agent/test/**` | 120 / 120 | merged (#980) |
-| #967 | Bookkeeping after the session | 4 | #966 | `agent/run.sh`, `agent/test/**` | 100 / 100 | merged (#981) |
-| #974 | Benchmark: a large synthetic folder | 2 | #961 | `agent/bench/**`, `.gitignore` | — | merged (#976) |
-| #968 | Docs and final benchmark | 5 | #967, #978 | `docs/runbook.md`, `ARCHITECTURE.md`, `agent/README.md`, `PLAN.md`, the spec's Result section | 50 / 50 | in review |
-
-**M53 · The filing sheet.** The agent writes its filing decisions to `.bower/filing.tsv`; the runner checks each line and carries it out in the local copy, and the existing pipeline repeats the moves in Drive. Added after the first final benchmark showed that Sonnet at low effort filed nothing.
-
-| Issue | Title | Depends on | Owns | Status |
-|---|---|---|---|---|
-| #977 | Rules v25: the filing sheet | #962 | `vault-template/CLAUDE.md`, `api/src/template.generated.ts`, `app/src/rulebook-retired.ts`, app rulebook tests, `docs/changelog.md` | merged (#979) |
-| #978 | Runner files from the sheet | #977, #967 | `agent/run.sh`, `agent/prompts/ingest.md`, `agent/test/**` | in review (#982) |
+| #994 | Security: signing out in one tab leaves the other tabs reading Drive | 1 | — | session and Drive token code in `app/src`, settings sign-out, security notes | 90 / 90 | pending |
+| #995 | fix(agent): the filing sheet files long names instead of refusing them forever | 1 | — | `agent/run.sh`, `agent/test/filing.test.sh` | 120 / 120 | pending |
+| #996 | Rules v26: answers tied to their file, kept names of any length, unreadable links | 1 | — | `vault-template/CLAUDE.md`, `api/src/template.generated.ts`, `app/src/rulebook-retired.ts`, rulebook tests, `agent/test/smoke.sh`, `docs/changelog.md` | 90 / 90 | pending |
+| #997 | fix(app): Just filed and Requests tell what really happened | 1 | — | `run-outcome.ts`, `just-filed.*`, `bower-tab.ts`, Requests in `routes/bower.tsx`, Bower box confirmation | 120 / 120 | pending |
+| #998 | fix(app): one name and one count for every item, on every screen | 1 | — | `navigation.ts`, pinned, quick switcher, folder items, `routes/add.tsx`, `add-queue-store.ts`, `shell-routes.ts` | 100 / 100 | pending |
+| #999 | fix(app): onboarding questions keep what the person picks | 1 (next free slot) | — | `routes/onboarding.tsx`, `components/interview.tsx`, `interview.ts` | 90 / 90 | pending |
+| #1000 | fix(agent): medium effort for piles with a line, truthful run report, failure reasons | 2 | #995 | `agent/run.sh`, agent tests (not smoke), workflows (effort var), `api/src/process.ts`, `api/src/status.ts`, runbook, ARCHITECTURE | 120 / 120 | blocked |
+| #1001 | fix(app): no stale inbox after a run, one run clock, the running run in Activity | 2 | — | `run-store.tsx`, `vault-store.tsx` (refresh state), `routes/home.tsx`, `home.ts`, `activity-panel.tsx`, run chip/bar/sheet, `run-progress.ts` | 100 / 100 | pending |
+| #1002 | fix(app): Compare sorts by Fit; note time, pin toast and tables | 2 | — | `compare.ts`, `note-menu.tsx`, about panel / meta formatter, note table CSS | 80 / 80 | pending |
+| #1003 | A file shows the questions asked about it, linked to their answers | 2 | #996, #998 | `routes/file.tsx`, `routes/note.tsx`, new component, `send-to-bower.tsx`, `hint.tsx` card state | 90 / 90 | blocked |
+| #1004 | Polish from the production test: dictation, accessibility, copy, previews | 2 | — | Composer, add file inputs, learn, delete/login banner, not-invited, system-state, health, search no-results, preview pane, `file-preview.ts`, tour bird, plan copy | 120 / 120 | pending |
 
 ## Waves
 
-- 1: #961, #962, #963, #964, in parallel; their files do not overlap.
-- 2: #965. 3: #966. 4: #967. `agent/run.sh` is the hot file, so these run in series.
-- 5: #977, then #978 (M53).
-- 6: #968, the final benchmark and the quality review (lead), then production with the owner's yes.
+- Wave 1: #994, #995, #996, #997, #998 at once; #999 when the first one finishes.
+- Wave 2: #1000 after #995; #1001, #1002, #1004 as slots free; #1003 after #996 and #998.
+- Shared files: `agent/run.sh` (#995 then #1000); `agent/test/smoke.sh` only #996; `home.tsx` only #1001; `file.tsx` only #1003; the quick switcher: #998 owns it, #1004 touches only its no-results view after #998 merges.
 
-## Decisions taken for this plan
+## State (2 Oct 2026)
 
-- R-SS-14 shrank: the Worker already fails stale runs (`QUEUED_STALE_MS`, `RUNNING_STALE_MS`, the job-conclusion fallback). #963 only shortens the queued window to 17 minutes.
-- The owner's run of 1 Oct 2026 (job not picked up during GitHub's Actions incident) is not re-run: its ticket expired. The owner sends it again from the app.
-- Sonnet 5.5 at low effort is safe only with the filing sheet: before the context pack and the sheet, plain tidy-ups ended in 9 to 12 seconds with nothing filed. Low effort ships together with rules v25 and #978's runner, never before.
+- M55 planned; issues #994–#1004 created; wave 1 dispatching.
