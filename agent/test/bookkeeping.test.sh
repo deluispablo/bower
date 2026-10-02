@@ -235,6 +235,16 @@ expect_eq "$(set_aside_json)" \
   'each with its reason'
 : >"$SET_ASIDE_FILE"
 expect_eq "$(set_aside_json)" '[]' 'nothing set aside'
+# A kept-not-read item that moved is pruned; one that did not move, and
+# any other reason, stay (#1000).
+printf '%s\t%s\n' kept-not-read 0-Inbox/b.mp4 kept-not-read 0-Inbox/song.mp3 too-large 0-Inbox/a.pdf \
+  quarantined '0-Inbox/Bower - x.md' >"$SET_ASIDE_FILE"
+prune_set_aside "$ROOT/moves.txt"
+expect_eq "$(set_aside_json)" \
+  '[{"path":"0-Inbox/song.mp3","reason":"kept-not-read"},{"path":"0-Inbox/a.pdf","reason":"too-large"},{"path":"0-Inbox/Bower - x.md","reason":"quarantined"}]' \
+  'the moved kept-not-read item pruned'
+prune_set_aside "$ROOT/missing.txt"
+expect_eq "$(grep -c . "$SET_ASIDE_FILE")" 3 'no moves file: nothing pruned'
 echo "ok $CASE"
 
 # Every failure tells the app why (#1000): each `fail` call in run.sh names

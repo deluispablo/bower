@@ -3276,6 +3276,17 @@ set_aside_json() {
   }
 }
 
+# Drops from SET_ASIDE_FILE each `kept-not-read` item that moved, by the
+# moves file $1 ("<old><TAB><new>"): it was filed by its name, so it is
+# not left aside (#1000). Any other reason, and a kept item that did not
+# move, stays. Returns 1 when the file cannot be rewritten.
+prune_set_aside() {
+  [ -f "$1" ] && [ -f "$SET_ASIDE_FILE" ] || return 0
+  awk -F '\t' 'FILENAME == ARGV[1] { if ($2 != "") moved[$1] = 1; next }
+    !($1 == "kept-not-read" && ($2 in moved))' "$1" "$SET_ASIDE_FILE" >"$SET_ASIDE_FILE.tmp" &&
+    mv -f -- "$SET_ASIDE_FILE.tmp" "$SET_ASIDE_FILE"
+}
+
 # The number of processed items (KINDS_FILE) that moved, by the moves file
 # $1 ("<old><TAB><new>"): what the run really filed, logged as the
 # "originals filed" count instead of the agent's own `Filed:` line (#1000).
@@ -4363,6 +4374,11 @@ fi
 # Report v2 (#598): each processed item that moved carries where it went.
 if [ "$MODE" = ingest ] && [ -n "$PROCESSED_JSON" ]; then
   PROCESSED_JSON=$(items_json "$MOVES_FILE")
+fi
+# A kept-not-read item that moved is filed, not set aside (#1000).
+if [ "$MODE" = ingest ] && [ -n "$SET_ASIDE_JSON" ]; then
+  prune_set_aside "$MOVES_FILE" || fail "$STEP: set-aside list not pruned" unknown
+  SET_ASIDE_JSON=$(set_aside_json)
 fi
 if ! copy_up "$UPLOAD_FILE"; then
   fail "$STEP: copy failed" drive_unavailable
