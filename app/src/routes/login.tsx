@@ -14,8 +14,14 @@ import { useSession } from '../session.js';
 import '../styles/auth.css';
 import '../styles/learn.css';
 
+/** What Sign in says after Delete my account (`/login?deleted=1`). */
+export const ACCOUNT_DELETED =
+  'Your account is deleted. Your Bower folder is still in your Google Drive.';
+
 export function Login() {
   const { error } = useSession();
+  const deleted =
+    new URLSearchParams(window.location.search).get('deleted') === '1';
 
   return (
     <section class="auth-screen auth-screen--login">
@@ -28,6 +34,11 @@ export function Login() {
           Your notes, kept tidy, in your own Google Drive.
         </p>
       </div>
+      {deleted && (
+        <p class="auth-notice" role="status">
+          {ACCOUNT_DELETED}
+        </p>
+      )}
       {error && <p class="auth-error">{error}</p>}
       <a href={loginUrl()} class="button auth-google">
         <IconGoogle />
