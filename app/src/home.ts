@@ -152,6 +152,7 @@ export interface RunCounts {
  * note (#444) as neither. The working sheet reads the same kinds, so the
  * two never drift apart.
  */
+// TODO(#1011): read `filed` from `outcomeFromRun(run).filed` once #1011 makes it "has a `to` outside 0-Inbox".
 export function runCounts(run: Run): RunCounts {
   let answered = 0;
   let filed = 0;

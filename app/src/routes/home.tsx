@@ -66,7 +66,6 @@ import { JUST_FILED_PATH } from '../just-filed.js';
 import { kindLabel, shortDate } from '../meta-line.js';
 import {
   displayName,
-  folderCounts,
   folderHref,
   folderOf,
   paraKindOf,
@@ -103,6 +102,10 @@ const LazyTour = lazyOverlay(() =>
   import('../components/help-sheet.js').then((m) => m.Tour),
 );
 const Tour = LazyTour.Component;
+
+/** Pinned counts its folders from the index (#1010); Home shows Pinned
+ * only once the index is there, so its fallback counts are never needed. */
+const NO_NOTE_COUNTS: ReadonlyMap<string, number> = new Map();
 
 /** Recent shows this many rows; "All in Folders" opens the rest. */
 const RECENT_ROWS = 5;
@@ -667,8 +670,6 @@ export function Home(): JSX.Element {
   // R-AD-8: while a tidy-up runs, the bubble and the card read the count it
   // was confirmed with, as the chip and the sheet do.
   const runPending = runningCount(keptCount, run?.total) ?? pending;
-  const noteCounts =
-    index === null ? new Map<string, number>() : folderCounts(index);
   const pinnedItems = index === null ? [] : pinned(index);
   const editingPins = editing && pinnedItems.length > 0;
 
@@ -870,7 +871,7 @@ export function Home(): JSX.Element {
       ) : (
         <PinnedSection
           items={pinnedItems}
-          noteCounts={noteCounts}
+          noteCounts={NO_NOTE_COUNTS}
           onUnpinNote={unpinNote}
           onUnpinFolder={unpinFolder}
           onUnpinFile={unpinFile}
