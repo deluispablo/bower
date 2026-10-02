@@ -258,8 +258,15 @@ echo ad2 >"$V/0-Inbox/scan0003.pdf"
 echo ad3 >"$V/0-Inbox/scan0004.pdf"
 printf '%s\n' 0-Inbox/scan0002.pdf 0-Inbox/scan0003.pdf 0-Inbox/scan0004.pdf >>"$PENDING"
 # The note Bower wrote for the first ad, with links to the name it chose.
-printf -- '---\nby: bower\n---\nSee [[%s]] and [[%s|the ad]].\nAlso [[Lease]].\n' "${LONG90%.pdf}" "$LONG90" \
-  >"$V/1-Projects/Flat hunt/Job ad summary.md"
+FH='1-Projects/Flat hunt'
+links() { # $1 the name, as the links use it
+  printf 'See [[%s]] and [[%s|the ad]].\nAlso [[Lease]].\n' "${1%.pdf}" "$1"
+  printf 'Path [[%s/%s]], [[%s/%s#Pay]], [[%s#Pay]], [[%s#^key]].\n' "$FH" "$1" "$FH" "${1%.pdf}" "${1%.pdf}" "$1"
+}
+{
+  printf -- '---\nby: bower\n---\n'
+  links "$LONG90"
+} >"$V/1-Projects/Flat hunt/Job ad summary.md"
 {
   printf 'file\t0-Inbox/scan0002.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe first ad\n' "$LONG90"
   printf 'file\t0-Inbox/scan0003.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe second ad\n' "${LONG90/role/job}"
@@ -279,8 +286,8 @@ grep -qF -- "- [[1-Projects/Flat hunt/$SHORT2]] · PDF · #job-ad · The second 
   die 'the row of the second ad'
 grep -qF -- "- [[1-Projects/Flat hunt/Job ad summary.md]] · Note · #job-ad · Summary of the ad · filed by Bower · [[1-Projects/Flat hunt/$SHORT]]" \
   "$V/index.md" || die 'the note row points to the short name'
-expect_eq "$(sed -n '4,5p' "$V/1-Projects/Flat hunt/Job ad summary.md")" \
-  "$(printf 'See [[%s]] and [[%s|the ad]].\nAlso [[Lease]].' "${SHORT%.pdf}" "$SHORT")" 'the links follow the rename'
+expect_eq "$(sed -n '4,6p' "$V/1-Projects/Flat hunt/Job ad summary.md")" "$(links "$SHORT")" \
+  'the links follow the rename, by name, stem, path and heading'
 if grep -qF -- "$LONG90" "$V/index.md"; then die 'the long name in index.md'; fi
 # A file already there under the agent's long name: refused as name before
 # any shortening, and a note linking that name keeps its link.

@@ -1497,35 +1497,39 @@ sheet_mapped() {
   printf '%s' "$1"
 }
 
-# Replaces every `[[<from>]]` and `[[<from>|` in the note $2 (vault $1) by
-# the renamed form, for each rename this run made, by name and by stem: a
-# literal replace (awk index, no regex built from a name). A note whose
-# content was held before the run (the manifest $3) is left as it is: the
-# move phase finds a moved file by its content. Returns 1 when a rewrite
-# fails.
+# Replaces every link to a name the runner changed this run in the note $2
+# (vault $1) by the renamed form: `[[<x>]]`, `[[<x>|` and `[[<x>#`, where
+# <x> is the agent's name, its stem, its path from the top of the folder
+# or that path without the extension. A literal replace (awk index, no
+# regex built from a name). A note whose content was held before the run
+# (the manifest $3) is left as it is: the move phase finds a moved file by
+# its content. Returns 1 when a rewrite fails.
 sheet_relink() {
-  local file="$1/$2" before=$3 key i f t old new
+  local file="$1/$2" before=$3 key i j f t from to suf old new
+  local froms=() tos=()
   [ "${#SHEET_MAP_FROM[@]}" -gt 0 ] || return 0
   key=$(cksum <"$file" | awk '{ print $1 " " $2 }') || return 1
   ! K="$key" awk '$1 " " $2 == ENVIRON["K"] { f = 1; exit } END { exit !f }' "$before" || return 0
   for i in "${!SHEET_MAP_FROM[@]}"; do
-    f=${SHEET_MAP_FROM[$i]##*/}
-    t=${SHEET_MAP_TO[$i]##*/}
-    for old in "[[$f]]" "[[$f|" "[[$(sheet_stem "$f")]]" "[[$(sheet_stem "$f")|"; do
-      grep -qF -- "$old" "$file" || continue
-      case "$old" in
-        "[[$f]]") new="[[$t]]" ;;
-        "[[$f|") new="[[$t|" ;;
-        *']]') new="[[$(sheet_stem "$t")]]" ;;
-        *) new="[[$(sheet_stem "$t")|" ;;
-      esac
-      O="$old" N="$new" sheet_rewrite "$file" '
+    from=${SHEET_MAP_FROM[$i]}
+    to=${SHEET_MAP_TO[$i]}
+    f=${from##*/}
+    t=${to##*/}
+    froms=("$f" "$(sheet_stem "$f")" "$from" "${from%/*}/$(sheet_stem "$f")")
+    tos=("$t" "$(sheet_stem "$t")" "$to" "${to%/*}/$(sheet_stem "$t")")
+    for j in 0 1 2 3; do
+      for suf in ']]' '|' '#'; do
+        old="[[${froms[$j]}$suf"
+        new="[[${tos[$j]}$suf"
+        grep -qF -- "$old" "$file" || continue
+        O="$old" N="$new" sheet_rewrite "$file" '
         { sub(/\r$/, ""); s = $0; out = ""
           while ((i = index(s, ENVIRON["O"])) > 0) {
             out = out substr(s, 1, i - 1) ENVIRON["N"]
             s = substr(s, i + length(ENVIRON["O"]))
           }
           print out s }' || return 1
+      done
     done
   done
 }
