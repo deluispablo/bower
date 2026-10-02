@@ -135,6 +135,53 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
+function overlaps(a: Box, b: Box): boolean {
+  return (
+    a.left < b.left + b.width &&
+    b.left < a.left + a.width &&
+    a.top < b.top + b.height &&
+    b.top < a.top + a.height
+  );
+}
+
+/**
+ * Keeps Bower off the tour card (§6.21 rule 4: he never covers text or a
+ * control). Beside the sidebar he moves above or below the card, whichever
+ * fits; on the tab bar, or with no room, he is left out.
+ */
+function clearOfCard(
+  placed: TourPlacement,
+  card: Box | null,
+  height: number,
+): TourPlacement {
+  const bird = placed.bird;
+  if (bird === null || card === null) return placed;
+  const left = parseFloat(bird.left ?? '0');
+  const top =
+    bird.top !== undefined
+      ? parseFloat(bird.top)
+      : height - parseFloat(bird.bottom ?? '0') - TOUR_BIRD_SIZE;
+  const box = (y: number): Box => ({
+    top: y,
+    left,
+    width: TOUR_BIRD_SIZE,
+    height: TOUR_BIRD_SIZE,
+  });
+  if (!overlaps(box(top), card)) return placed;
+  if (placed.facing === 'left') {
+    const above = card.top - TOUR_BIRD_SIZE - EDGE;
+    const below = card.top + card.height + EDGE;
+    const y =
+      above >= EDGE
+        ? above
+        : below + TOUR_BIRD_SIZE <= height - EDGE
+          ? below
+          : null;
+    if (y !== null) return { ...placed, bird: { left: px(left), top: px(y) } };
+  }
+  return { ...placed, bird: null };
+}
+
 /**
  * Where the ring and Bower go for the lit `tab` in a `width` x `height`
  * viewport (spec §4.15, TR-*-Fixed boards). On a bottom tab bar (`bar` in
@@ -144,6 +191,16 @@ function clamp(value: number, min: number, max: number): number {
  * edge, level with its middle, turned to face it and pointing at it.
  */
 export function placeTour(
+  tab: Box | null,
+  bar: Box | null,
+  width: number,
+  height: number,
+  card: Box | null = null,
+): TourPlacement {
+  return clearOfCard(placeOnTab(tab, bar, width, height), card, height);
+}
+
+function placeOnTab(
   tab: Box | null,
   bar: Box | null,
   width: number,
@@ -251,11 +308,17 @@ function measureTarget(el: Element | null): Box | null {
  * also hands back the lit tab and its box, for the copy over the scrim. */
 function useTourPlacement(
   tab: HelpTab,
+  card: { current: HTMLElement | null },
 ): TourPlacement & { target: HTMLElement | null; box: Box | null } {
   const [target, setTarget] = useState<HTMLElement | null>(null);
-  const [boxes, setBoxes] = useState<{ tab: Box | null; bar: Box | null }>({
+  const [boxes, setBoxes] = useState<{
+    tab: Box | null;
+    bar: Box | null;
+    card: Box | null;
+  }>({
     tab: null,
     bar: null,
+    card: null,
   });
   const [viewport, setViewport] = useState(() => ({
     width: window.innerWidth,
@@ -268,7 +331,11 @@ function useTourPlacement(
     target?.classList.add('help-tab-on');
     const bar = target?.closest('nav') ?? target;
     const update = (): void => {
-      setBoxes({ tab: measureTarget(target), bar: measure(bar) });
+      setBoxes({
+        tab: measureTarget(target),
+        bar: measure(bar),
+        card: measure(card.current),
+      });
       setViewport({ width: window.innerWidth, height: window.innerHeight });
     };
     update();
@@ -282,7 +349,13 @@ function useTourPlacement(
   }, [tab]);
 
   return {
-    ...placeTour(boxes.tab, boxes.bar, viewport.width, viewport.height),
+    ...placeTour(
+      boxes.tab,
+      boxes.bar,
+      viewport.width,
+      viewport.height,
+      boxes.card,
+    ),
     target,
     box: boxes.tab,
   };
@@ -515,7 +588,8 @@ function TourCard({
   const tab = TOUR_TABS[index] ?? 'home';
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const copy = tourSheet(tab, { desktop, demo: isDemo() });
-  const place = useTourPlacement(tab);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const place = useTourPlacement(tab, cardRef);
   // No focus box when the tour opens (TR-*); the first key press brings the
   // ring back for keyboard users.
   const [quiet, setQuiet] = useState(true);
@@ -553,6 +627,7 @@ function TourCard({
         document.body,
       )}
       <div
+        ref={cardRef}
         class={`help-panel tour-card${quiet ? ' tour-quiet' : ''}`}
         onKeyDown={() => {
           setQuiet(false);

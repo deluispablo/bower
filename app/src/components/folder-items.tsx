@@ -804,7 +804,7 @@ export function FolderItems({
 
   function body(): JSX.Element {
     if (emptyFolder) {
-      return <EmptyFolder onAsk={() => onAsk?.()} />;
+      return <EmptyFolder inbox={para === 'inbox'} onAsk={() => onAsk?.()} />;
     }
     if (folderOfFolders && view.origin === 'all') {
       return (

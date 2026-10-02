@@ -41,7 +41,7 @@ const rows: Row[] = [
     "Kept, not read: Bower can't read this kind of photo yet",
     null,
   ],
-  ['word', 'yes', 'drive-preview', null, null, null],
+  ['word', 'yes', 'none', null, null, null],
   ['opendocument', 'yes', 'drive-preview', null, null, null],
   ['web', 'yes', 'drive-preview', null, null, null],
   ['doc', 'yes', 'text', 'Saved as text', null, null],
@@ -50,7 +50,7 @@ const rows: Row[] = [
   [
     'excel',
     'no',
-    'drive-preview',
+    'none',
     OFFICE,
     'Kept, not read: a Google Sheet works instead',
     OFFICE,
@@ -58,7 +58,7 @@ const rows: Row[] = [
   [
     'powerpoint',
     'no',
-    'drive-preview',
+    'none',
     OFFICE,
     'Kept, not read: a Google Sheet works instead',
     OFFICE,

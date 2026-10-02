@@ -114,8 +114,11 @@ describe('start-up screen markup (R-BOOT-2)', () => {
     expect(block(STYLE, '#boot[data-leaving] .boot-bird {')).toContain(
       'animation: none;',
     );
-    // The line keeps its fade-in animation: no leaving rule touches it.
-    expect(STYLE).not.toMatch(/\[data-leaving\][^{]*\.boot-line/);
+    // The line goes at once when the hand-over starts (#1004), never
+    // half-faded over the app; its fade-in animation is left as it is.
+    const line = block(STYLE, '#boot[data-leaving] .boot-line {');
+    expect(line).toContain('visibility: hidden;');
+    expect(line).not.toContain('animation');
   });
 
   it('shows the hint and the retry link by CSS alone at 8 s with no state (R-BOOT-6)', () => {

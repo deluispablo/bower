@@ -21,7 +21,8 @@ import { useRun } from './run-store.js';
 /** The one name of this choice, everywhere. */
 export const RUN_NOW_LABEL = 'Just this, now';
 /** Its line: what it costs. */
-export const RUN_NOW_LINE = 'Uses one run of your Claude plan.';
+export const RUN_NOW_LINE =
+  'Uses one run of the Claude plan this Bower runs on.';
 
 export type RunNowBlock = 'running' | 'offline' | 'quota';
 

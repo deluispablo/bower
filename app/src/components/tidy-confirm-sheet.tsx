@@ -48,7 +48,7 @@ export const CONFIRM_SUB = 'Tidy up now, or add the rest of the pile first.';
 
 /** CONF-5: what a tidy-up costs; no number (Q4). */
 export const CONFIRM_COST =
-  'A tidy-up takes a few minutes and uses one run of your Claude plan.';
+  'A tidy-up takes a few minutes and uses one run of the Claude plan this Bower runs on.';
 
 /** The piles variant's line under the count (R-PILE-5). */
 export const CONFIRM_PILES_NOTE = 'Bower reads each pile with its own note.';
@@ -107,7 +107,7 @@ export function requestConfirmSentenceParts(count: number): {
   const possessive = count === 1 ? 'its' : 'their';
   return {
     lead,
-    rest: `${verb} waiting. Do it now runs ${pronoun} on ${possessive} own, in one turn of your Claude plan.`,
+    rest: `${verb} waiting. Do it now runs ${pronoun} on ${possessive} own, in one turn of the Claude plan this Bower runs on.`,
   };
 }
 

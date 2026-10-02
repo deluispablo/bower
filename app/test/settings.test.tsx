@@ -28,11 +28,13 @@ const updateSettings = vi.fn(() =>
   Promise.resolve({ hasApiKey: false, allowWeb: false }),
 );
 const location = { path: '/settings', route: vi.fn() };
+const deleteAccount = vi.fn(() => Promise.resolve());
 
 vi.mock('../src/api.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/api.js')>()),
   isDemo: () => false,
   updateSettings,
+  deleteAccount,
 }));
 
 vi.mock('preact-iso', () => ({
@@ -146,6 +148,23 @@ describe('Settings › account actions', () => {
     });
     expect(document.body.textContent).toContain('Delete your Bower account?');
     expect(buttonNamed('Delete my account')).toBeDefined();
+  });
+
+  it('lands on Sign in saying the account is deleted (#1004)', async () => {
+    mount(baseMe);
+    void act(() => {
+      buttonNamed('Delete my Bower account (your Bower folder stays)')?.click();
+    });
+    await act(async () => {
+      buttonNamed('Delete my account')?.click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(deleteAccount).toHaveBeenCalled();
+    expect(signOut).toHaveBeenCalled();
+    expect(location.route).toHaveBeenCalledWith('/login?deleted=1');
   });
 });
 

@@ -183,3 +183,42 @@ test('the first Tab on a root folder reaches Skip to content (#920 T-2)', async 
     page.getByRole('link', { name: 'Skip to content' }),
   ).toBeFocused();
 });
+
+test('Add keeps its file inputs out of the accessibility tree (#1004)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.goto('/add');
+  const inputs = page.locator('input[type="file"]');
+  await expect(inputs.first()).toBeAttached();
+  for (const input of await inputs.all()) {
+    const out = await input.evaluate(
+      (el) =>
+        (el as HTMLInputElement).hidden ||
+        (el.getAttribute('aria-hidden') === 'true' &&
+          el.getAttribute('tabindex') === '-1'),
+    );
+    expect(out).toBe(true);
+  }
+  // Chromium names a visible file input "Choose File(s)" and reads "No
+  // file(s) chosen"; the app's own button is "Choose files".
+  const tree = await page.locator('body').ariaSnapshot();
+  expect(tree).not.toMatch(/Choose Files?\b|No files? chosen/);
+});
+
+test('the Learn letter badges stay out of the accessibility tree (#1004)', async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.goto('/learn');
+  const marks = page.locator('.learn-examples .folder-mark');
+  await expect(marks.first()).toBeAttached();
+  for (const mark of await marks.all()) {
+    await expect(mark).toHaveAttribute('aria-hidden', 'true');
+  }
+  // A row's name starts with its title, never with the badge's letter.
+  for (const row of await page.locator('.learn-examples .learn-row').all()) {
+    const title = await row.locator('.learn-row-title').innerText();
+    await expect(row).toHaveAccessibleName(new RegExp(`^${title}`));
+  }
+});

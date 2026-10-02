@@ -8,6 +8,7 @@ import {
   hasTag,
   loadRecentSearches,
   noResultsLine,
+  scopedNoResultsLine,
   saveRecentSearch,
   searchGroupLabel,
   searchTitle,
@@ -317,5 +318,8 @@ describe('the no-results and offline lines (#917, R-SE-6)', () => {
       'Nothing matches “flat”. Try fewer words, or another folder.',
     );
     expect(OFFLINE_LINE).toBe('Offline: searching what is on this device.');
+    expect(scopedNoResultsLine('lisbon', 'Flat hunt')).toBe(
+      'Nothing called “lisbon” in Flat hunt.',
+    );
   });
 });

@@ -254,14 +254,14 @@ describe('requestConfirmSentenceParts', () => {
   it('singular: "1 request is waiting…"', () => {
     expect(requestConfirmSentenceParts(1)).toEqual({
       lead: '1 request',
-      rest: 'is waiting. Do it now runs it on its own, in one turn of your Claude plan.',
+      rest: 'is waiting. Do it now runs it on its own, in one turn of the Claude plan this Bower runs on.',
     });
   });
 
   it('plural: "3 requests are waiting…"', () => {
     expect(requestConfirmSentenceParts(3)).toEqual({
       lead: '3 requests',
-      rest: 'are waiting. Do it now runs them on their own, in one turn of your Claude plan.',
+      rest: 'are waiting. Do it now runs them on their own, in one turn of the Claude plan this Bower runs on.',
     });
   });
 });

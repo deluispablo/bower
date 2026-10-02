@@ -61,9 +61,11 @@ const READ_IN_DRIVE: FormatPolicy = {
   appShows: 'drive-preview',
 };
 
+// Word, Excel and PowerPoint: Drive's frame only draws its grey
+// cannot-preview icon for them, so the file screen skips it (#1004).
 const KEPT_OFFICE: FormatPolicy = {
   bowerReads: 'no',
-  appShows: 'drive-preview',
+  appShows: 'none',
   addNotice: OFFICE_NOTICE,
   queueLine: 'Kept, not read: a Google Sheet works instead',
   fileNotice: OFFICE_NOTICE,
@@ -85,7 +87,7 @@ export const FORMAT_POLICIES: Readonly<Record<FileKind, FormatPolicy>> = {
     queueLine: "Kept, not read: Bower can't read this kind of photo yet",
     fileNotice: null,
   },
-  word: READ_IN_DRIVE,
+  word: { ...READ_AS_TEXT, appShows: 'none' },
   opendocument: READ_IN_DRIVE,
   web: READ_IN_DRIVE,
   doc: { ...READ_AS_TEXT, addNotice: 'Saved as text' },

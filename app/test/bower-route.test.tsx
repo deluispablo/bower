@@ -547,7 +547,7 @@ describe('Requests (#344)', () => {
       expect(menuItem(name)).toBeDefined();
     }
     expect(menuItem('Just this, now')?.textContent).toContain(
-      'uses one run of your Claude plan',
+      'uses one run of the Claude plan this Bower runs on',
     );
     expect(menu?.textContent).toContain(
       'runs only this request and leaves everything else in the inbox for the tidy-up. It is off while a tidy-up is running.',

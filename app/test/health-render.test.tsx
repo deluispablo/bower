@@ -67,14 +67,17 @@ const getNoteText = vi.fn<(id: string) => Promise<string>>(() =>
   Promise.resolve(reportText),
 );
 
+const vault = vi.hoisted(() => ({ hasReport: true }));
+
 vi.mock('../src/vault-store.js', async (importOriginal) => {
   const original =
     await importOriginal<typeof import('../src/vault-store.js')>();
   const index = buildVaultIndex([file(REPORT_PATH)]);
+  const empty = buildVaultIndex([]);
   return {
     ...original,
     useVault: () => ({
-      index,
+      index: vault.hasReport ? index : empty,
       status: 'idle',
       error: undefined,
       getNoteText,
@@ -113,6 +116,8 @@ afterEach(() => {
   render(null, root);
   root.remove();
   getNoteText.mockClear();
+  vault.hasReport = true;
+  Reflect.deleteProperty(window, 'matchMedia');
   vi.useRealTimers();
 });
 
@@ -219,5 +224,41 @@ Sunday's check.
     expect(root.querySelector('.health-explainer')?.textContent).toContain(
       'Every Sunday Bower reads through your notes',
     );
+  });
+
+  it('says when the first check comes, not how often (#1004)', async () => {
+    vault.hasReport = false;
+    await mount();
+    expect(root.textContent).toContain(
+      'No health check yet. Next check: Sunday.',
+    );
+    expect(root.textContent).not.toContain('Runs every Sunday.');
+  });
+
+  it('has no way back to the phone-only Folders tab on desktop (#1004)', async () => {
+    reportText = REPORT_WITH_COUNTS;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === '(min-width: 900px)',
+        media: query,
+        addEventListener: (): void => undefined,
+        removeEventListener: (): void => undefined,
+        addListener: (): void => undefined,
+        removeListener: (): void => undefined,
+      }),
+    });
+    await mount();
+    expect(
+      root.querySelector('.page-header-crumbs a[href="/notes"]'),
+    ).toBeNull();
+  });
+
+  it('keeps Folders in the header on the phone', async () => {
+    reportText = REPORT_WITH_COUNTS;
+    await mount();
+    expect(
+      root.querySelector('.page-header-crumbs a[href="/notes"]'),
+    ).not.toBeNull();
   });
 });

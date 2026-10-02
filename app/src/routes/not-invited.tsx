@@ -1,12 +1,15 @@
 /**
  * Not invited (spec §6, Not invited row): the bird confused, the address
  * that signed in (only from the Worker's one-time `/me` answer, kept in
- * session state; after a reload it says "that account"), who to ask,
+ * session state; with no session and no such answer it goes to Sign in), who to ask,
  * "Try another account" (Google's account picker) and "Sign out".
  *
  * Never reached in a demo build: the demo has no allowlist, so it falls
  * back to "Run your own Bower" (#193) instead.
  */
+
+import { useLocation } from 'preact-iso';
+import { useEffect } from 'preact/hooks';
 
 import { isDemo, loginUrl } from '../api.js';
 import { Bird } from '../components/bird.js';
@@ -15,9 +18,18 @@ import { RunYourOwn } from './run-your-own.js';
 import '../styles/auth.css';
 
 export function NotInvited() {
-  const { notInvitedEmail, signOut } = useSession();
+  const { status, notInvitedEmail, signOut } = useSession();
+  const { route } = useLocation();
+  // No session and no sign-in just turned away (a bookmark, a reload):
+  // nothing to explain, so go to Sign in (#1004).
+  const stray =
+    !isDemo() && status === 'signed-out' && notInvitedEmail === undefined;
+  useEffect(() => {
+    if (stray) route('/login', true);
+  }, [stray]);
 
   if (isDemo()) return <RunYourOwn />;
+  if (stray) return null;
 
   return (
     <section class="auth-screen">

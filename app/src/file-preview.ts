@@ -19,7 +19,9 @@ import { FILE_KIND_LABELS, fileKind } from './vault-index.js';
 /**
  * - `image`: the bytes, inline. `text`: a Google Doc exported as text.
  * - `plain`: a text or Markdown file, as it is. `table`: a CSV.
- * - `drive`: Drive's own preview frame (Office files and video).
+ * - `drive`: Drive's own preview frame (OpenDocument files and video).
+ *   Word, Excel and PowerPoint files are `none`: the frame only shows
+ *   Google's grey cannot-preview icon for them (#1004).
  * - `none`: nothing to show (a ZIP, an unknown file). `thumbnail`: Drive's picture.
  */
 export type PreviewKind =
@@ -39,12 +41,12 @@ export function previewKind(
     case 'text':
     case 'markdown':
       return 'plain';
-    case 'excel':
-    case 'powerpoint':
-    case 'word':
     case 'opendocument':
     case 'video':
       return 'drive';
+    case 'excel':
+    case 'powerpoint':
+    case 'word':
     case 'zip':
     case 'file':
       return 'none';

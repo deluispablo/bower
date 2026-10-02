@@ -671,10 +671,14 @@ function SignOutSection(): JSX.Element {
   );
 }
 
+/** Where Delete my account lands: Sign in, saying the account is gone. */
+export const LOGIN_DELETED_PATH = '/login?deleted=1';
+
 /** "Delete my Bower account (your Bower folder stays)" (K-30, C-6): a red
  * text link that asks first (§3.39). */
 function DeleteAccount(): JSX.Element {
   const { signOut } = useSession();
+  const { route } = useLocation();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -687,8 +691,10 @@ function DeleteAccount(): JSX.Element {
     try {
       await deleteAccount();
       // The account is gone; hand back to the sign-in screen the same way
-      // an ordinary sign-out does, forgetting the device too.
+      // an ordinary sign-out does, forgetting the device too, and let it
+      // say so (#1004).
       await signOut();
+      route(LOGIN_DELETED_PATH);
     } catch (err) {
       setError(toMessage(err));
       setBusy(false);

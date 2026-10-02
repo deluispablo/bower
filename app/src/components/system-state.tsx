@@ -41,6 +41,9 @@ export const EMPTY_COPY = {
   originalsInFolders:
     'No originals at this level. Your files are in the folders inside it.',
   bower: 'Nothing by Bower here yet.',
+  /** The empty inbox (#1004): what it is for, not "nothing here". */
+  inboxTitle: 'Nothing waiting.',
+  inboxText: 'Things you add land here until the next tidy-up.',
 } as const;
 
 /** True once `ms` have passed since the first render. */
@@ -128,21 +131,38 @@ export function ErrorLine({
 
 /**
  * The empty folder (R-SYS-4): the looking bird 52, "Nothing here yet." and
- * the way on, with "Add" and "Ask Bower" links.
+ * the way on, with "Add" and "Ask Bower" links. The inbox says what it is
+ * for instead, with Add only (#1004).
  */
 export function EmptyFolder({
   addHref = '/add',
   onAsk,
+  inbox = false,
 }: {
   addHref?: string;
   onAsk: () => void;
+  inbox?: boolean;
 }): JSX.Element {
+  if (inbox) {
+    return (
+      <div class="empty-folder">
+        <Bird state="looking" size={52} />
+        <p class="empty-folder-title">{EMPTY_COPY.inboxTitle}</p>
+        <p class="empty-folder-text">
+          {EMPTY_COPY.inboxText}{' '}
+          <a class="empty-folder-link" href={addHref}>
+            Add
+          </a>
+        </p>
+      </div>
+    );
+  }
   return (
     <div class="empty-folder">
       <Bird state="looking" size={52} />
       <p class="empty-folder-title">{EMPTY_COPY.title}</p>
       <p class="empty-folder-text">
-        Add something, or ask Bower to write about this folder.{' '}
+        {EMPTY_COPY.text}{' '}
         <a class="empty-folder-link" href={addHref}>
           Add
         </a>

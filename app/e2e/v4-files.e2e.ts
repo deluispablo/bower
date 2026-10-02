@@ -109,7 +109,7 @@ test('a video plays from Drive and says Bower cannot watch it (#604)', async ({
   await expect(page).toHaveURL(/\/bower\?text=/);
 });
 
-test('an Excel file shows the Drive preview and Open in Drive to edit (#604)', async ({
+test('an Excel file skips the Drive frame and offers Open in Drive to edit (#604, #1004)', async ({
   page,
 }) => {
   await openFile(
@@ -121,8 +121,11 @@ test('an Excel file shows the Drive preview and Open in Drive to edit (#604)', a
   await expect(page.locator('.page-header-meta')).toContainText(
     'Spreadsheet · 18 KB',
   );
-  await expect(page.getByText('Preview from Google Drive')).toBeVisible();
-  await expect(page.locator('.drive-preview')).toBeVisible();
+  // Drive's frame only draws a grey cannot-preview icon for Office files.
+  await expect(page.locator('.file-preview-note')).toContainText(
+    'Open it in Drive',
+  );
+  await expect(page.locator('.drive-preview')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Open in Drive to edit' }),
   ).toBeVisible();

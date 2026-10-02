@@ -92,6 +92,12 @@ export interface ComposerProps {
    * "Dictate" microphone, whatever speech API the browser has.
    */
   picture?: boolean;
+  /**
+   * Offer the microphone. Off by default for a password or a link: nobody
+   * dictates a key or an address (#1004). The `send` box then shows the
+   * arrow, dimmed until there is text.
+   */
+  dictation?: boolean;
 }
 
 export interface ComposerButton {
@@ -210,7 +216,10 @@ export function Composer({
   autoFocus = false,
   class: rootClass,
   picture = false,
+  dictation: dictationProp,
 }: ComposerProps): JSX.Element {
+  const dictates =
+    dictationProp ?? (inputType !== 'password' && inputType !== 'url');
   const online = useOnline();
   const desktop = useDesktop();
   const field = useRef<Field | null>(null);
@@ -223,8 +232,9 @@ export function Composer({
   });
   const hasText = value.trim() !== '';
   // A picture never asks for the microphone: it draws the resting box.
-  const shownDictation: DictateState = picture ? 'ready' : dictation.state;
-  const button = composerButton({
+  const shownDictation: DictateState =
+    picture || !dictates ? 'ready' : dictation.state;
+  const offered = composerButton({
     mode,
     dictation: shownDictation,
     hasText,
@@ -232,6 +242,13 @@ export function Composer({
     online,
     commitLabel,
   });
+  // No microphone: the arrow stays put and is inert until there is text.
+  const button: ComposerButton | null =
+    dictates || offered.state === 'arrow' || offered.state === 'spinner'
+      ? offered
+      : mode === 'send'
+        ? { state: 'arrow', label: commitLabel, disabled: true }
+        : null;
   const line = composerLine({
     dictation: shownDictation,
     desktop,
@@ -285,10 +302,11 @@ export function Composer({
   }
 
   function press(): void {
-    if (button.state === 'arrow') {
+    if (button?.state === 'arrow') {
       commit();
       return;
     }
+    if (!dictates) return;
     dictation.toggle();
     field.current?.focus();
   }
@@ -339,7 +357,7 @@ export function Composer({
     `composer-rows-${rows}`,
     hasText ? 'composer-filled' : '',
     dictation.state === 'listening' ? 'composer-listening' : '',
-    button.state === 'mic-off' ? 'composer-dictation-off' : '',
+    button?.state === 'mic-off' ? 'composer-dictation-off' : '',
     rootClass ?? '',
   ]
     .filter((c) => c !== '')
@@ -349,7 +367,7 @@ export function Composer({
     <div
       class={classes}
       ref={root}
-      data-state={button.state}
+      data-state={button?.state ?? 'none'}
       onFocusOut={onFocusOut}
       {...(picture && { inert: true, 'aria-hidden': 'true' as const })}
     >
@@ -365,13 +383,15 @@ export function Composer({
         ) : (
           <textarea {...shared} ref={setField} rows={rows} />
         )}
-        <RoundButton
-          state={button.state}
-          label={button.label}
-          onPress={press}
-          {...(button.pressed !== undefined && { pressed: button.pressed })}
-          {...((button.disabled === true || disabled) && { disabled: true })}
-        />
+        {button !== null && (
+          <RoundButton
+            state={button.state}
+            label={button.label}
+            onPress={press}
+            {...(button.pressed !== undefined && { pressed: button.pressed })}
+            {...((button.disabled === true || disabled) && { disabled: true })}
+          />
+        )}
       </div>
       <p
         id={lineId}

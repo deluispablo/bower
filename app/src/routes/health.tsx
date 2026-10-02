@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 
 import { BackLink } from '../components/back-link.js';
 import { Bird } from '../components/bird.js';
+import { useDesktop } from '../components/dictate-button.js';
 import { IconExternalLink } from '../components/icons.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PageHeader } from '../components/page-header.js';
@@ -139,6 +140,11 @@ function SuggestedPointer() {
  * slot on a re-render (`shell-slots.ts`). */
 const BACK = <BackLink href={FOLDERS_PATH} label={FOLDERS_TAB_LABEL} />;
 const HEALTH_CRUMBS = [{ label: FOLDERS_TAB_LABEL, href: FOLDERS_PATH }];
+/** The Folders tab is phone-only: on desktop the header has no way back
+ * to it (#1004); the sidebar is right there. */
+const NO_CRUMBS: readonly { label: string; href: string }[] = [];
+/** The line before the first report (#1004): when, not how often. */
+export const NO_REPORT_YET = 'No health check yet. Next check: Sunday.';
 const TITLE = 'Health check';
 
 /** The page header with ⋯ › "Help and about this", like every screen. */
@@ -148,11 +154,12 @@ function HealthHeader({
   children?: ComponentChildren;
 }): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
+  const desktop = useDesktop();
   return (
     <div class="health-head">
       <PageHeader
         title={TITLE}
-        crumbs={HEALTH_CRUMBS}
+        crumbs={desktop ? NO_CRUMBS : HEALTH_CRUMBS}
         more={{
           expanded: menuOpen,
           onClick: () => setMenuOpen((open) => !open),
@@ -248,7 +255,7 @@ export function Health() {
       <section class="health page-column">
         <HealthHeader />
         <p class="health-explainer">{EXPLAINER}</p>
-        <p>No health check yet. Runs every Sunday.</p>
+        <p>{NO_REPORT_YET}</p>
         <SuggestedPointer />
       </section>
     );
