@@ -8,6 +8,7 @@ import {
   clearFiledAfterRun,
   followUploads,
   getQueue,
+  pendingTotal,
   setQueue,
   uploadPileId,
   useAddQueue,
@@ -838,11 +839,17 @@ export function Add() {
     }
   }
 
-  const { open, waiting } = splitPiles(piles, inboxNameSet(files));
+  const inboxNames = inboxNameSet(files);
+  const { open, waiting } = splitPiles(piles, inboxNames);
   const loading = status === 'loading';
-  // The inbox's own count: the same number Home's card and the "Is that
-  // everything?" sheet show (R-ADD-2).
-  const total = inboxTotal(inboxCount(files, loading));
+  // The inbox's own count (the number Home's card and the "Is that
+  // everything?" sheet show, R-ADD-2), plus the piles' files not listed
+  // yet, the open pile included (R-CONF-2, D33, #998).
+  const total = pendingTotal(
+    inboxTotal(inboxCount(files, loading)),
+    inboxNames,
+    [...(open === undefined ? [] : [open]), ...waiting],
+  );
   const stillUploading = [...(open === undefined ? [] : [open]), ...waiting]
     .map(uploadingCount)
     .reduce((sum, n) => sum + n, 0);
