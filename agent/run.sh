@@ -1929,6 +1929,7 @@ sheet_sibling() {
   row="- [[$note]] · Note · $tags · $desc · filed by Bower · [[$dest/$final]]"
   sheet_index_row "$vault" "$row" "$note" || return 2
   SHEET_NOTES=$((${SHEET_NOTES:-0} + 1))
+  SHEET_SIBLINGS+=("$note")
 }
 
 # Whether the note $2 (vault $1, the manifest before the run $3) may be
@@ -1973,6 +1974,13 @@ sheet_note_line() {
   SHEET_WHY=path
   # A text copy the runner moved under a shorter name (sheet_sibling).
   note=$(sheet_mapped "$note")
+  # A copy the runner booked already (sheet_sibling): its row and hub line
+  # are written, and SHEET_REPEAT tells the caller not to count it again.
+  SHEET_UNLINKED=0 SHEET_REPEAT=0
+  if sheet_has "$note" ${SHEET_SIBLINGS[@]+"${SHEET_SIBLINGS[@]}"}; then
+    SHEET_REPEAT=1
+    return 0
+  fi
   sheet_note_ok "$vault" "$note" "$before" || return 1
   # An original the runner filed under a shorter name (#995).
   orig=$(sheet_mapped "$orig")
@@ -2104,7 +2112,7 @@ apply_filing_sheet() {
           ;;
         note:5:other)
           sheet_note_line "$vault" "$before" "$day" "${SHEET_FIELDS[@]:1}" || rc=$?
-          if [ "$rc" -eq 0 ]; then
+          if [ "$rc" -eq 0 ] && [ "$SHEET_REPEAT" -eq 0 ]; then
             SHEET_NOTES=$((SHEET_NOTES + 1))
             # Booked without its original: counted, not skipped.
             [ "$SHEET_UNLINKED" -eq 0 ] || why[original-unlinked]=$((${why[original-unlinked]} + 1))

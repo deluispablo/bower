@@ -358,6 +358,16 @@ grep -qF -- '- [[1-Projects/Job hunt/Offer letter.md]] · Note · #job-offer · 
 expect_eq "$(sed -n '/^## Notes & documents$/,$p' "$V/1-Projects/Job hunt/Job hunt.md")" "$(printf '%s\n' \
   '## Notes & documents' '- [[Offer letter.docx]] Offer from North Ltd' '- [[Offer letter]] Offer from North Ltd')" \
   'the hub lines'
+# The agent also books the copy with a `note` line: counted once.
+fresh
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+{
+  printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer from North Ltd\n'
+  printf 'note\t1-Projects/Job hunt/Offer letter.md\t1-Projects/Job hunt/Offer letter.docx\t#job-offer\tText of the offer\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '1 1 0' 'the copy counted once'
+expect_eq "$(grep -c 'Job hunt/Offer letter.md' "$V/index.md")" 1 'one row for the copy'
 # A .md the runner did not make stays where it is.
 fresh
 : >"$CONVERTED"
