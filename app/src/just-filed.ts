@@ -15,7 +15,12 @@ import type { Run, SetAsideReason } from './api.js';
 import type { DriveFile } from './drive.js';
 import { formatPolicy } from './formats.js';
 import { things } from './home.js';
-import { isFiledPath, outcomeCounts, outcomeFromRun } from './run-outcome.js';
+import {
+  isFiledPath,
+  isReadPath,
+  outcomeCounts,
+  outcomeFromRun,
+} from './run-outcome.js';
 import type { OutcomeAction, RunOutcome } from './run-outcome.js';
 import { shortDay } from './rules.js';
 import { displayPath, paraKindOf } from './navigation.js';
@@ -305,29 +310,36 @@ export function isProcessedPath(path: string): boolean {
   return /(^|\/)Processed(\/|$)/.test(path);
 }
 
+/** What a table row says Bower did: an outcome action, or `read` for a
+ * saved link Bower read and parked in `0-Inbox/Processed/` (#997). */
+export type RowAction = OutcomeAction | 'read';
+
 /** The order of the groups on a phone (R-JUST-2). */
-export const GROUP_ORDER: readonly OutcomeAction[] = [
+export const GROUP_ORDER: readonly RowAction[] = [
   'needs',
   'new',
   'answered',
   'updated',
   'filed',
+  'read',
 ];
 
-export const ACTION_TAG: Readonly<Record<OutcomeAction, string>> = {
+export const ACTION_TAG: Readonly<Record<RowAction, string>> = {
   needs: 'Needs you',
   new: 'New note',
   answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
+  read: 'Read',
 };
 
-const GROUP_HEADING: Readonly<Record<OutcomeAction, string>> = {
+const GROUP_HEADING: Readonly<Record<RowAction, string>> = {
   needs: 'Needs you',
   new: 'New notes',
   answered: 'Answered',
   updated: 'Updated',
   filed: 'Filed',
+  read: 'Read',
 };
 
 /**
@@ -345,10 +357,23 @@ export const SAY_LABEL = 'Tell Bower what it is';
 export const NO_CHANGE = '—';
 const STILL_WAITING = 'Still in your inbox for the next tidy-up.';
 
+/** The longest file name the runner files (`sheet_name_ok`, agent/run.sh). */
+export const MAX_FILED_NAME = 60;
+
+/** Why a file whose name is over `MAX_FILED_NAME` stayed in the inbox. */
+export const NAME_TOO_LONG =
+  'The name was too long for Bower to file. Rename it, or Bower shortens it next time.';
+
+/** A read link with a note: the link to that note reads this. */
+export const READ_LABEL = 'Read';
+
+/** A read link with no note booked with it. */
+export const READ_NO_NOTE = 'Read, no note';
+
 /** One line of the table: something a tidy-up did (spec §6.6). */
 export interface TableRow {
   key: string;
-  action: OutcomeAction;
+  action: RowAction;
   /** The name it has now, without its extension. */
   title: string;
   /** The name it had, when it was renamed. */
@@ -361,16 +386,19 @@ export interface TableRow {
   href?: string;
   /** The note whose source address the row reads (a saved link). */
   notePath: string;
-  /** "What changed": "renamed", the change note, or the reason it needs you. */
+  /** "What changed": "renamed", the change note, the reason it needs you,
+   * or for a read link `READ_LABEL` or `READ_NO_NOTE`. */
   changed: string;
   /** Needs you: the Bower box prefilled. */
   sayHref?: string;
   /** "From your pile: “…”" when the file came out of a pile (R-PILE-5). */
   origin?: string;
+  /** Read: where the note booked with the link opens. */
+  readHref?: string;
 }
 
 function tableRow(
-  action: OutcomeAction,
+  action: RowAction,
   path: string,
   index: VaultIndex | null,
 ): TableRow {
@@ -395,20 +423,95 @@ function tableRow(
   return row;
 }
 
+/** A row of `index.md`: `- [[<path>]] · … · [[<original>]]`. */
+const ORIGIN_ROW = /^\s*[-*+]\s+\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\](.*)$/;
+const LAST_LINK = /·\s*\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]\s*$/;
+
+/**
+ * The notes `index.md` books with an original (rules v24: a note row that
+ * ends ` · [[<path of the original>]]`): the original's path, lower-cased,
+ * to the note's path. The first row for an original wins. Pure: the caller
+ * reads `index.md`.
+ */
+export function noteOrigins(text: string): Map<string, string> {
+  const origins = new Map<string, string>();
+  for (const line of text.split(/\r\n|\r|\n/)) {
+    const match = ORIGIN_ROW.exec(line);
+    const note = match?.[1]?.trim() ?? '';
+    const original = LAST_LINK.exec(match?.[2] ?? '')?.[1]?.trim() ?? '';
+    if (note === '' || original === '') continue;
+    const key = original.toLowerCase();
+    if (origins.has(key)) continue;
+    origins.set(key, /\.[a-z0-9]{1,5}$/i.test(note) ? note : `${note}.md`);
+  }
+  return origins;
+}
+
+/** The note `origins` books with `original`, matched by path, else by name. */
+function bookedNote(
+  origins: ReadonlyMap<string, string>,
+  original: string,
+): string | undefined {
+  const exact = origins.get(original.toLowerCase());
+  if (exact !== undefined) return exact;
+  const name = baseName(original).toLowerCase();
+  for (const [key, note] of origins) {
+    if (baseName(key) === name) return note;
+  }
+  return undefined;
+}
+
 /**
  * The rows of a run, from its `RunOutcome`: New notes, Updated, Filed and
- * Needs you. Moves of instruction and context notes into `Processed` are
- * bookkeeping and never listed; a link saved as a note lists the note, where
- * it is now (R-JUST-1, R-JUST-4).
+ * Needs you, each thing once. Moves of instruction and context notes into
+ * `Processed` are bookkeeping and never listed; a saved link Bower read
+ * and parked there is listed once as Read, with the note booked with it as
+ * its original when `origins` (`noteOrigins` of `index.md`) has one; that
+ * note is then not listed again as a New note (R-JUST-1, R-JUST-4, #997).
  */
-export function tableRows(run: Run, index: VaultIndex | null): TableRow[] {
+export function tableRows(
+  run: Run,
+  index: VaultIndex | null,
+  origins: ReadonlyMap<string, string> = new Map(),
+): TableRow[] {
   const outcome = outcomeFromRun(run);
   const aside = new Map((run.setAside ?? []).map((i) => [i.path, i.reason]));
+  const reads: TableRow[] = [];
+  const readNotes = new Set<string>();
+  const readSeen = new Set<string>();
+  for (const item of run.items ?? []) {
+    if (item.kind !== 'file' || !isReadPath(item.to) || item.to === undefined) {
+      continue;
+    }
+    if (readSeen.has(item.path)) continue;
+    readSeen.add(item.path);
+    const row = tableRow('read', item.to, index);
+    const note = bookedNote(origins, item.to) ?? bookedNote(origins, item.path);
+    const noteFile = note === undefined ? undefined : fileAt(index, note);
+    row.key = `read:${item.path}`;
+    row.folder = folderLabel('0-Inbox');
+    row.para = null;
+    if (note === undefined) {
+      row.changed = READ_NO_NOTE;
+    } else {
+      readNotes.add(note);
+      row.changed = READ_LABEL;
+      row.notePath = note;
+      row.folder = folderLabel(folderOf(note));
+      row.para = paraOf(note);
+      if (noteFile !== undefined) {
+        row.readHref = hrefFor(noteFile, 'note');
+        row.href = row.readHref;
+      }
+    }
+    reads.push(row);
+  }
   const rows: TableRow[] = [];
   const seen = new Set<string>();
   for (const item of outcome.items) {
     const path = item.action === 'filed' ? (item.to ?? item.path) : item.path;
     if (item.action === 'filed' && isProcessedPath(path)) continue;
+    if (item.action === 'new' && readNotes.has(path)) continue;
     const row = tableRow(item.action, path, index);
     if (seen.has(row.key)) continue;
     seen.add(row.key);
@@ -435,19 +538,21 @@ export function tableRows(run: Run, index: VaultIndex | null): TableRow[] {
     if (item.action === 'needs') {
       const reason = aside.get(item.path);
       row.changed =
-        reason === undefined
-          ? STILL_WAITING
-          : setAsideSentence(reason, row.kind);
+        reason !== undefined
+          ? setAsideSentence(reason, row.kind)
+          : [...row.name].length > MAX_FILED_NAME
+            ? NAME_TOO_LONG
+            : STILL_WAITING;
       row.sayHref = `/bower?text=${encodeURIComponent(`About ${row.name}: `)}`;
       row.folder = folderLabel(folderOf(item.path));
     }
     rows.push(row);
   }
-  return rows;
+  return [...rows, ...reads];
 }
 
 export interface RowGroup {
-  action: OutcomeAction;
+  action: RowAction;
   /** "Needs you · 1". */
   heading: string;
   rows: TableRow[];
@@ -487,7 +592,9 @@ export function originLine(
 export function youAdded(row: TableRow, address: string | undefined): string {
   if (address !== undefined) return address;
   if (row.oldName !== undefined) return row.oldName;
-  return row.action === 'filed' || row.action === 'needs'
+  return row.action === 'filed' ||
+    row.action === 'needs' ||
+    row.action === 'read'
     ? row.name
     : NO_CHANGE;
 }

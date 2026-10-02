@@ -12,6 +12,8 @@ import {
   fallbackLines,
   groupRows,
   isProcessedPath,
+  NAME_TOO_LONG,
+  noteOrigins,
   originLine,
   pickRun,
   runKey,
@@ -21,6 +23,7 @@ import {
   tableRows,
   youAdded,
 } from '../src/just-filed.js';
+import { buildVaultIndex } from '../src/vault-index.js';
 import { buildRun } from './fixtures/run-outcome-builders.js';
 
 const NOW = new Date('2026-09-29T14:00:00').getTime();
@@ -76,7 +79,10 @@ describe('tableRows', () => {
     const note = rows.find((row) => row.action === 'new');
     expect(note?.title).toBe('Three flats near the river');
     expect(note?.folder).toBe('Resources › Links');
-    expect(rows.some((row) => row.name === 'rentals link.md')).toBe(false);
+    // The raw link shows once, as Read; no note is booked with it here.
+    expect(rows.filter((row) => row.name === 'rentals link.md')).toEqual([
+      expect.objectContaining({ action: 'read', changed: 'Read, no note' }),
+    ]);
   });
 
   it('carries renamed, the change note and the reason it needs you', () => {
@@ -102,7 +108,117 @@ describe('tableRows', () => {
       'New notes · 1',
       'Updated · 1',
       'Filed · 2',
+      'Read · 1',
     ]);
+  });
+
+  describe('what a run really did (#997)', () => {
+    const LONG =
+      '0-Inbox/2-AreasFinanceTaxes2026 statement for the year from the bank and the broker.pdf';
+    const LINK = 'Link - example.com 2026-10-02 0930.md';
+    const real: Run = {
+      ...run,
+      items: [
+        {
+          path: '0-Inbox/receipt.pdf',
+          kind: 'file',
+          to: '2-Areas/Home/Receipt.pdf',
+        },
+        { path: LONG, kind: 'file' },
+        { path: '0-Inbox/odd.txt', kind: 'file' },
+        {
+          path: '0-Inbox/budget.xlsx',
+          kind: 'file',
+          to: '2-Areas/Finance/budget.xlsx',
+        },
+        {
+          path: `0-Inbox/${LINK}`,
+          kind: 'file',
+          to: `0-Inbox/Processed/${LINK}`,
+        },
+      ],
+      setAside: [{ path: '0-Inbox/budget.xlsx', reason: 'kept-not-read' }],
+      created: [
+        '3-Resources/Links/Example page.md',
+        'Answers/Bower - Proposals.md',
+      ],
+      updated: [],
+      left: [LONG, '0-Inbox/odd.txt'],
+    };
+    const index = `# Index\n\n## 3-Resources\n- [[3-Resources/Links/Example page.md]] · Note · #link · A page · filed by Bower · [[0-Inbox/Processed/${LINK}]]\n- [[2-Areas/Home/Receipt.pdf]] · PDF · #home · A receipt · filed by Bower\n`;
+    const rows = tableRows(real, null, noteOrigins(index));
+
+    it('lists every thing once', () => {
+      const keys = rows.map((row) => row.name);
+      expect(new Set(keys).size).toBe(keys.length);
+      expect(rows.map((row) => `${row.action}:${row.name}`)).toEqual([
+        'filed:Receipt.pdf',
+        'filed:budget.xlsx',
+        `needs:${LONG.slice('0-Inbox/'.length)}`,
+        'needs:odd.txt',
+        `read:${LINK}`,
+      ]);
+    });
+
+    it('gives a refused long name its real reason', () => {
+      const long = rows.find((row) => row.action === 'needs');
+      expect(long?.changed).toBe(NAME_TOO_LONG);
+      expect(long?.changed).toBe(
+        'The name was too long for Bower to file. Rename it, or Bower shortens it next time.',
+      );
+      expect(rows.find((row) => row.name === 'odd.txt')?.changed).toBe(
+        'Still in your inbox for the next tidy-up.',
+      );
+    });
+
+    it('files the spreadsheet with its note, never Needs you · Inbox', () => {
+      expect(rows.find((row) => row.name === 'budget.xlsx')).toMatchObject({
+        action: 'filed',
+        folder: 'Areas › Finance',
+        changed: 'Bower keeps it, not reads it.',
+      });
+    });
+
+    it('shows a link read into Processed as Read with its note', () => {
+      const read = rows.find((row) => row.action === 'read');
+      expect(read).toMatchObject({
+        changed: 'Read',
+        notePath: '3-Resources/Links/Example page.md',
+        folder: 'Resources › Links',
+        title: 'example.com',
+      });
+      // Its note is the Read row's, not a second New note row.
+      expect(rows.some((row) => row.action === 'new')).toBe(false);
+      expect(rows.some((row) => row.name === 'Bower - Proposals.md')).toBe(
+        false,
+      );
+    });
+
+    it('opens the note of a read link when the index has it', () => {
+      const withNote = tableRows(
+        real,
+        buildVaultIndex([
+          {
+            id: 'n1',
+            name: 'Example page.md',
+            path: '3-Resources/Links/Example page.md',
+            mimeType: 'text/markdown',
+            parents: [],
+          },
+        ]),
+        noteOrigins(index),
+      );
+      expect(withNote.find((row) => row.action === 'read')).toMatchObject({
+        readHref: '/note/n1',
+        href: '/note/n1',
+      });
+    });
+
+    it('reads an older run with no index as Read, no note', () => {
+      expect(
+        tableRows(real, null).find((row) => row.action === 'read')?.changed,
+      ).toBe('Read, no note');
+    });
   });
 
   it('lists a Bower answer as Answered; the view titles it (#920)', () => {

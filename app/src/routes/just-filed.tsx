@@ -43,6 +43,7 @@ import {
   linkAddress,
   moreLabel,
   noListLine,
+  noteOrigins,
   NOTHING_FILED,
   previewRows,
   runBadge,
@@ -55,6 +56,7 @@ import {
 } from '../just-filed.js';
 import type { TableRow } from '../just-filed.js';
 import { linkTitleFromFileName } from '../add.js';
+import { CATALOGUE_PATH } from '../file-origin.js';
 import { kindLabel } from '../meta-line.js';
 import { loadNoteMeta } from '../note-meta.js';
 import { isLinkNote } from '../note-title.js';
@@ -115,6 +117,32 @@ function useAddresses(
   return addresses;
 }
 
+/** The notes `index.md` books with an original (`noteOrigins`), for a read
+ * link's note; empty until it is read, or when it cannot be. */
+function useOrigins(index: VaultIndex | null): ReadonlyMap<string, string> {
+  const { getNoteText } = useVault();
+  const [origins, setOrigins] = useState<ReadonlyMap<string, string>>(
+    new Map(),
+  );
+  const file = index?.byPath.get(CATALOGUE_PATH);
+  useEffect(() => {
+    if (file === undefined) return;
+    let cancelled = false;
+    getNoteText(file.id).then(
+      (text) => {
+        if (!cancelled) setOrigins(noteOrigins(text));
+      },
+      (err: unknown) => {
+        console.error('Reading the catalogue for Just filed failed', err);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [file, getNoteText]);
+  return origins;
+}
+
 /** The parent folder's own name: the last part of "Areas › Visa & Immigration". */
 function parentName(row: TableRow): string {
   const parts = row.folder.split(' › ');
@@ -142,6 +170,26 @@ function rowItem(row: TableRow): {
     answer: row.action === 'answered',
     ...(row.href !== undefined && { href: row.href }),
   };
+}
+
+/** "What changed": the row's line, a read link's note as a link, and the
+ * Bower box for a thing that needs you. */
+function Changed({ row }: { row: TableRow }): JSX.Element {
+  return (
+    <>
+      {row.readHref === undefined ? (
+        row.changed
+      ) : (
+        <a href={row.readHref}>{row.changed}</a>
+      )}
+      {row.sayHref !== undefined && (
+        <>
+          {' '}
+          <a href={row.sayHref}>{SAY_LABEL}</a>
+        </>
+      )}
+    </>
+  );
 }
 
 /** The phone (R-JF-3): "Filed · 1" then ListRows "<kind> · ● <parent>". */
@@ -175,15 +223,9 @@ function PhoneRows({
                     trailing: <IconChevronRight />,
                   })}
                 />
-                {row.action === 'needs' && (
+                {(row.action === 'needs' || row.action === 'read') && (
                   <p class="just-filed-note">
-                    {row.changed}
-                    {row.sayHref !== undefined && (
-                      <>
-                        {' '}
-                        <a href={row.sayHref}>{SAY_LABEL}</a>
-                      </>
-                    )}
+                    <Changed row={row} />
                   </p>
                 )}
               </li>
@@ -203,6 +245,7 @@ const TAG_TONE: Readonly<
   answered: 'filed',
   updated: 'filed',
   needs: 'check',
+  read: 'filed',
 };
 
 /** Desktop (R-JF-3): the table, with "You added" and "Where it is". */
@@ -255,13 +298,7 @@ function DesktopTable({
               </span>
             </td>
             <td class="just-filed-muted">
-              {row.changed}
-              {row.sayHref !== undefined && (
-                <>
-                  {' '}
-                  <a href={row.sayHref}>{SAY_LABEL}</a>
-                </>
-              )}
+              <Changed row={row} />
             </td>
           </tr>
         ))}
@@ -321,14 +358,19 @@ function useTitledRows(rows: readonly TableRow[]): TableRow[] {
 function EarlierBody({
   run,
   index,
+  origins,
   now,
 }: {
   run: Run;
   index: VaultIndex | null;
+  origins: ReadonlyMap<string, string>;
   now: number;
 }): JSX.Element {
   const [all, setAll] = useState(false);
-  const built = useMemo(() => tableRows(run, index), [run, index]);
+  const built = useMemo(
+    () => tableRows(run, index, origins),
+    [run, index, origins],
+  );
   const rows = useTitledRows(built);
   if (!hasDestinations(run)) {
     return <p class="just-filed-earlier-empty">{noListLine(run)}</p>;
@@ -393,10 +435,12 @@ function Earlier({
   runs,
   index,
   now,
+  origins,
   desktop,
 }: {
   runs: readonly Run[];
   index: VaultIndex | null;
+  origins: ReadonlyMap<string, string>;
   now: number;
   desktop: boolean;
 }): JSX.Element | null {
@@ -440,7 +484,12 @@ function Earlier({
               </button>
               {isOpen && (
                 <div id={panelId} class="card just-filed-earlier-panel">
-                  <EarlierBody run={run} index={index} now={now} />
+                  <EarlierBody
+                    run={run}
+                    index={index}
+                    origins={origins}
+                    now={now}
+                  />
                 </div>
               )}
             </li>
@@ -462,10 +511,11 @@ export function JustFiled(): JSX.Element {
     query.run,
   );
   const [menuOpen, setMenuOpen] = useState(false);
+  const origins = useOrigins(index);
 
   const tableRowsNow = useMemo(
-    () => (latest === null ? [] : tableRows(latest, index)),
-    [latest, index],
+    () => (latest === null ? [] : tableRows(latest, index, origins)),
+    [latest, index, origins],
   );
   const rows = useTitledRows(tableRowsNow);
   const addresses = useAddresses(rows, index);
@@ -505,7 +555,12 @@ export function JustFiled(): JSX.Element {
           )
         ) : (
           <div class="just-filed-empty">
-            <EarlierBody run={latest} index={index} now={now} />
+            <EarlierBody
+              run={latest}
+              index={index}
+              origins={origins}
+              now={now}
+            />
           </div>
         )}
         {unseen.size > 0 && (
@@ -541,7 +596,13 @@ export function JustFiled(): JSX.Element {
         )}
       </div>
       {body}
-      <Earlier runs={earlier} index={index} now={now} desktop={desktop} />
+      <Earlier
+        runs={earlier}
+        index={index}
+        origins={origins}
+        now={now}
+        desktop={desktop}
+      />
     </div>
   );
 }
