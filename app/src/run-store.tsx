@@ -59,7 +59,12 @@ import type { PileConfirm } from './pile-groups.js';
 import { getPiles, prunePiles, usePiles } from './pile-store.js';
 import type { InboxCount } from './inbox-count.js';
 import { outcomeFromRun, runSentence } from './run-outcome.js';
-import { processedKind, visiblePendingCount } from './run-progress.js';
+import {
+  nextTickDelay,
+  processedKind,
+  runStartMs,
+  visiblePendingCount,
+} from './run-progress.js';
 import { useSession } from './session.js';
 import {
   invalidateAfterRun,
@@ -619,7 +624,8 @@ export interface RunStore extends RunState {
   /** The confirmation's "Add more first": closes it, no run starts. */
   dismissConfirm: () => void;
   /**
-   * One shared clock (#513), ticking every minute: Home's Inbox card, the
+   * One shared clock (#513), ticking every minute (on the run's own
+   * minutes while one goes, #1001): Home's Inbox card, the
    * Last tidy-up card and the working sheet all read elapsed time off this
    * same value now, rather than each keeping its own — that used to drift
    * a minute apart at the boundary ("started 3 min ago" on the card,
@@ -696,11 +702,32 @@ export function RunProvider({ children }: RunProviderProps) {
   // instead of each keeping its own `now`/tick state on its own interval —
   // those used to disagree by a minute right at the boundary, since they
   // advanced at different moments.
+  // #1001: while a run goes, it ticks right after each whole minute of the
+  // run (`nextTickDelay`), so "2 min" never reads a minute late.
   const [now, setNow] = useState(() => Date.now());
+  const activeStart =
+    state.phase === 'queued' ||
+    state.phase === 'running' ||
+    state.phase === 'starting'
+      ? state.run === null
+        ? null
+        : runStartMs(state.run)
+      : null;
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = (): void => {
+      timer = setTimeout(
+        () => {
+          setNow(Date.now());
+          tick();
+        },
+        nextTickDelay(Date.now(), activeStart),
+      );
+    };
+    setNow(Date.now());
+    tick();
+    return () => clearTimeout(timer);
+  }, [activeStart]);
 
   const poll = useCallback(async (): Promise<void> => {
     try {

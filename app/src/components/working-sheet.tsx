@@ -284,16 +284,12 @@ export function clockTime(iso: string | undefined): string {
   return `${two(date.getHours())}:${two(date.getMinutes())}`;
 }
 
-/** "5 min", or "under a minute". */
-export function minutesLabel(ms: number): string {
-  const minutes = Math.round(Math.max(0, ms) / 60_000);
-  return minutes < 1 ? 'under a minute' : `${minutes} min`;
-}
-
 /**
- * The line under the title: "Started 13:52 · 2 min so far · usually 3 to 6
- * min" while it goes, "13:52 to 13:57 · 5 min" when done, "13:44 to 13:51 ·
- * stopped after 7 min" when it stopped.
+ * The line under the title: "Started 13:52 · 2 min so far" while it goes
+ * (`run-progress.ts#startedLine`, the one run clock, #1001), "13:52 to
+ * 13:57 · 5 min" when done, "13:44 to 13:51 · stopped after 7 min" when it
+ * stopped. The sheet itself passes the run's own times while it goes; this
+ * running branch is the fallback for an outcome alone.
  */
 export function sheetTimeLine(
   state: SheetState,
@@ -304,12 +300,10 @@ export function sheetTimeLine(
   if (state === 'quota') return '';
   if (state === 'running') {
     if (demo) return DEMO_PLAYING_BACK;
-    const started = clockTime(outcome?.startedAt);
-    const startMs = Date.parse(outcome?.startedAt ?? '');
-    if (started === '' || Number.isNaN(startMs)) {
-      return 'Started just now · usually 3 to 6 min';
-    }
-    return `Started ${started} · ${minutesLabel(nowMs - startMs)} so far · usually 3 to 6 min`;
+    return startedLine(
+      outcome === null ? null : { startedAt: outcome.startedAt },
+      nowMs,
+    );
   }
   if (outcome === null) return '';
   const from = clockTime(outcome.startedAt);
@@ -840,7 +834,7 @@ export function WorkingSheet({
   const heading = sheetTitle(state, state === 'running' ? total : undefined);
   const timeLine =
     state === 'running'
-      ? startedLine(run)
+      ? startedLine(run, now)
       : sheetTimeLine(state, outcome, now, isDemo());
   const steps = sheetSteps(
     state,

@@ -79,7 +79,7 @@ import { runPinAction } from '../pin-action.js';
 import { getPref } from '../prefs.js';
 import { inboxCount, inboxTotal } from '../inbox-count.js';
 import { outcomeFromRun } from '../run-outcome.js';
-import { waitingPaths } from '../run-progress.js';
+import { elapsedWords, waitingPaths } from '../run-progress.js';
 import { runningCount, useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { useSession } from '../session.js';
@@ -315,17 +315,18 @@ function runActive(phase: RunPhase): boolean {
 
 /** The run in flight, for the tile's "Running · 1 min". */
 export interface ActiveRun {
-  startedAt: string;
+  /** When the run was asked for (the tap): the one start (#1001). */
+  requestedAt?: string;
+  /** The runner's own start, only when `requestedAt` is missing. */
+  startedAt?: string;
   total: number;
 }
 
-/** "Running · 2 min": whole minutes since the run started, at least one. */
-function runningFor(startedAt: string, now: number): string {
-  const minutes = Math.max(
-    1,
-    Math.floor((now - new Date(startedAt).getTime()) / 60_000) || 1,
-  );
-  return `Running · ${String(minutes)} min`;
+/** "Running · 2 min" ("Running · less than a minute" at first): the one
+ * run clock (`run-progress.ts#elapsedWords`, #1001). */
+function runningFor(active: ActiveRun, now: number): string {
+  const elapsed = elapsedWords(active, now);
+  return elapsed === null ? 'Running' : `Running · ${elapsed}`;
 }
 
 /**
@@ -365,7 +366,7 @@ export function LastTidyUpCard({
         <ActionTile
           label="Tidy-up"
           icon={<IconClock />}
-          value={runningFor(active.startedAt, now)}
+          value={runningFor(active, now)}
           note={things(active.total)}
           active
         />
@@ -778,7 +779,10 @@ export function Home(): JSX.Element {
           run={lastRun}
           now={now}
           active={{
-            startedAt: run?.startedAt ?? run?.requestedAt ?? '',
+            ...(run?.requestedAt !== undefined && {
+              requestedAt: run.requestedAt,
+            }),
+            ...(run?.startedAt !== undefined && { startedAt: run.startedAt }),
             total: runPending,
           }}
           onOpenSheet={openSheet}

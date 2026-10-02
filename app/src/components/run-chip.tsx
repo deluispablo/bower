@@ -23,6 +23,7 @@ import { isDemo } from '../api.js';
 import { JUST_FILED_PATH } from '../just-filed.js';
 import type { Run } from '../api.js';
 import { outcomeCounts, outcomeFromRun } from '../run-outcome.js';
+import { elapsedWords } from '../run-progress.js';
 import { RUN_CHIP_LIFETIME_MS, runningCount, useRun } from '../run-store.js';
 import type { RunPhase } from '../run-store.js';
 import { usesShell } from '../shell-routes.js';
@@ -65,12 +66,6 @@ function plural(n: number, one: string): string {
   return `${n} ${one}${n === 1 ? '' : 's'}`;
 }
 
-function minutesSince(startedAt: string, now: number): number | null {
-  const start = Date.parse(startedAt);
-  if (Number.isNaN(start)) return null;
-  return Math.max(1, Math.floor((now - start) / 60_000));
-}
-
 function finish(model: Omit<ChipModel, 'signature'>): ChipModel {
   return {
     ...model,
@@ -82,11 +77,11 @@ function runningModel(input: ChipInput): ChipModel {
   const active = input.run;
   const total = runningCount(input.count ?? null, active?.total);
   const things = total === undefined ? '' : plural(total, 'thing');
-  const started = active?.startedAt ?? active?.requestedAt;
-  const minutes =
-    started === undefined ? null : minutesSince(started, input.now);
-  const time = minutes === null ? '' : `${minutes} min`;
-  const soFar = minutes === null ? '' : `, ${plural(minutes, 'minute')} so far`;
+  // The one run clock (#1001): the same start and words as Home's tile,
+  // the sheet and Activity.
+  const elapsed = active === null ? null : elapsedWords(active, input.now);
+  const time = elapsed ?? '';
+  const soFar = elapsed === null ? '' : `, ${elapsed} so far`;
   const lead = things === '' ? 'Tidying up' : `Tidying up ${things}`;
   const join = (parts: string[]): string => parts.filter(Boolean).join(' · ');
   return finish({

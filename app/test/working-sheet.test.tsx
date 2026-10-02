@@ -176,7 +176,7 @@ describe('running (R-SHEET-2, R-SHEET-5, R-BIRD-8)', () => {
     const text = dialog()?.textContent ?? '';
     expect(text).toContain('Tidying up 2 things');
     expect(text).toMatch(
-      /Started (\d\d:\d\d|just now) · it takes a few minutes/,
+      /Started (\d\d:\d\d · (less than a minute|\d+ min) so far|just now)/,
     );
     expect(
       dialog()?.querySelector('.working-sheet-stage-from')?.textContent,

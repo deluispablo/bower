@@ -829,7 +829,7 @@ test('Home through the scripted run: waiting, running, done (#321)', async ({
   await expect(sheet).toContainText(
     'In the demo the bird plays back a real run in twenty seconds',
   );
-  await expect(sheet).toContainText('it takes a few minutes');
+  await expect(sheet).toContainText(/Started \d\d:\d\d · /);
 
   // Done: the scripted run files the three items over eight seconds
   // (`src/demo/server.ts`) and the app polls every five. Two were filed

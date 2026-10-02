@@ -11,6 +11,9 @@ import {
   progressFor,
   readingLine,
   readLabels,
+  elapsedWords,
+  nextTickDelay,
+  runStartMs,
   runStartTime,
   startedLine,
   runCounts,
@@ -433,54 +436,82 @@ describe('isContextNote with a pile note name (#770)', () => {
   });
 });
 
-describe('startedLine (R-API-4)', () => {
+describe('the one run clock (R-API-4, #1001)', () => {
   it('reads the run start time as a local clock time', () => {
-    const at = new Date(2026, 8, 30, 11, 57, 12).toISOString();
-    expect(runStartTime({ startedAt: at })).toBe('11:57');
-    expect(startedLine({ startedAt: at, requestedAt: at })).toBe(
-      'Started 11:57 · it takes a few minutes',
-    );
+    const at = new Date(2026, 8, 30, 11, 57, 12);
+    expect(runStartTime({ startedAt: at.toISOString() })).toBe('11:57');
+    expect(
+      startedLine(
+        { startedAt: at.toISOString(), requestedAt: at.toISOString() },
+        at.getTime() + 2 * 60_000,
+      ),
+    ).toBe('Started 11:57 · 2 min so far');
   });
 
-  it("uses the run's startedAt, never the time the sheet opens (gate 15)", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(2026, 8, 30, 14, 2));
+  it("starts at the tap (requestedAt), never the runner's report", () => {
     const run = {
-      requestedAt: new Date(2026, 8, 30, 11, 55).toISOString(),
-      startedAt: new Date(2026, 8, 30, 11, 57).toISOString(),
+      requestedAt: new Date(2026, 8, 30, 10, 5, 40).toISOString(),
+      startedAt: new Date(2026, 8, 30, 10, 6, 30).toISOString(),
     };
-    expect(startedLine(run)).toBe('Started 11:57 · it takes a few minutes');
-    expect(startedLine({ requestedAt: run.requestedAt })).toBe(
-      'Started 11:55 · it takes a few minutes',
-    );
-    vi.useRealTimers();
+    // A device that has the runner's report and one that does not yet
+    // read the same start (one run once showed 10:05 and 10:06).
+    expect(runStartTime(run)).toBe('10:05');
+    expect(runStartTime({ requestedAt: run.requestedAt })).toBe('10:05');
+    expect(runStartMs(run)).toBe(Date.parse(run.requestedAt));
   });
 
-  it('reads startedAt from a real GET /status body (#922)', () => {
-    // The Worker's `StatusBody` as it goes over the wire: the run is the
-    // stored `Run`, `startedAt` an ISO string, the same shape the demo's
-    // `server.status()` answers.
-    const started = new Date(2026, 8, 30, 11, 57);
-    const wire = JSON.parse(
+  it('reads the start from a real GET /status body (#922)', () => {
+    const body = JSON.parse(
       JSON.stringify({
         run: {
           state: 'running',
           requestedAt: new Date(2026, 8, 30, 11, 56).toISOString(),
-          startedAt: started.toISOString(),
+          startedAt: new Date(2026, 8, 30, 11, 57).toISOString(),
           runId: '4242',
         },
         stale: false,
       }),
     ) as { run: { startedAt?: string; requestedAt: string } };
-    expect(startedLine(wire.run)).toBe(
-      'Started 11:57 · it takes a few minutes',
-    );
+    expect(runStartTime(body.run)).toBe('11:56');
   });
 
-  it('falls back to the request time, then to "just now"', () => {
-    const asked = new Date(2026, 8, 30, 9, 5).toISOString();
-    expect(runStartTime({ requestedAt: asked })).toBe('09:05');
+  it('falls back to the runner\'s start, then to "just now"', () => {
+    const started = new Date(2026, 8, 30, 9, 5).toISOString();
+    expect(runStartTime({ requestedAt: 'nope', startedAt: started })).toBe(
+      '09:05',
+    );
     expect(runStartTime({ startedAt: 'nope' })).toBeNull();
-    expect(startedLine(null)).toBe('Started just now · it takes a few minutes');
+    expect(startedLine(null, Date.now())).toBe('Started just now');
+    expect(elapsedWords({}, Date.now())).toBeNull();
+  });
+
+  it('says "less than a minute" under 60 s, then whole minutes rounded down', () => {
+    vi.useFakeTimers();
+    try {
+      const tap = new Date(2026, 10, 2, 10, 5, 0);
+      vi.setSystemTime(tap);
+      const run = { requestedAt: tap.toISOString() };
+      const after = (ms: number): string | null => {
+        vi.setSystemTime(tap.getTime() + ms);
+        return elapsedWords(run, Date.now());
+      };
+      expect(after(3_000)).toBe('less than a minute');
+      expect(after(59_999)).toBe('less than a minute');
+      expect(after(60_000)).toBe('1 min');
+      expect(after(2 * 60_000 + 40_000)).toBe('2 min');
+      expect(after(6 * 60_000 + 59_000)).toBe('6 min');
+      // A clock a little behind the tap never reads as negative.
+      expect(after(-5_000)).toBe('less than a minute');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ticks right after each whole minute of the run', () => {
+    const start = 1_000_000;
+    expect(nextTickDelay(start + 3_000, start)).toBe(57_050);
+    expect(nextTickDelay(start + 2 * 60_000 + 40_000, start)).toBe(20_050);
+    expect(nextTickDelay(start, null)).toBe(60_000);
+    expect(nextTickDelay(start - 1, start)).toBe(60_000);
   });
 });

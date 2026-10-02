@@ -118,6 +118,21 @@ describe('LastTidyUpCard', () => {
     expect(root.textContent).toBe('Tidy-upRunning · 2 min5 things');
   });
 
+  it('running: the one run clock, from the tap (#1001)', async () => {
+    await mount({
+      state: 'running',
+      run: DONE_RUN,
+      active: {
+        requestedAt: '2026-09-27T08:08:57Z',
+        startedAt: '2026-09-27T08:06:00Z',
+        total: 5,
+      },
+    });
+    expect(root.textContent).toBe(
+      'Tidy-upRunning · less than a minute5 things',
+    );
+  });
+
   it('partial: Partly done, the counts, and a tap opens the sheet (R-HOME-2)', async () => {
     const onOpenSheet = vi.fn();
     await mount({ state: 'partial', run: PARTIAL_RUN, onOpenSheet });

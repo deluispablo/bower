@@ -6,7 +6,6 @@ import { WORKING_STAGE_HEIGHT } from '../src/components/bower-working.js';
 import {
   ACTION_TAG,
   clockTime,
-  minutesLabel,
   needsFirst,
   partialFolder,
   rowFor,
@@ -79,13 +78,14 @@ describe('the time line', () => {
     expect(clockTime(at(9, 5))).toBe('09:05');
     expect(clockTime('not a date')).toBe('');
     expect(clockTime(undefined)).toBe('');
-    expect(minutesLabel(5 * 60_000)).toBe('5 min');
-    expect(minutesLabel(10_000)).toBe('under a minute');
   });
 
-  it('running: started, so far, usually', () => {
+  it('running: started and so far, from the one run clock (#1001)', () => {
     expect(sheetTimeLine('running', outcome, start + 2 * 60_000)).toBe(
-      'Started 13:52 · 2 min so far · usually 3 to 6 min',
+      'Started 13:52 · 2 min so far',
+    );
+    expect(sheetTimeLine('running', outcome, start + 10_000)).toBe(
+      'Started 13:52 · less than a minute so far',
     );
   });
 
