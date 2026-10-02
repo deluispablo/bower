@@ -88,6 +88,12 @@ yes_ sheet_name_ok 'Arlington Road, listing.pdf' scan0001.pdf
 yes_ sheet_name_ok 'Receipt.JPG' receipt.jpg
 yes_ sheet_name_ok "$(printf 'a%.0s' {1..56}).pdf" scan.pdf
 no_ sheet_name_ok "$(printf 'a%.0s' {1..57}).pdf" scan.pdf
+# A changed name over 60 characters is shortened instead (#995).
+yes_ sheet_name_long "$(printf 'a%.0s' {1..57}).pdf" scan.pdf
+no_ sheet_name_long "$(printf 'a%.0s' {1..56}).pdf" scan.pdf
+no_ sheet_name_long "$(printf 'a%.0s' {1..57}).pdf" "$(printf 'a%.0s' {1..57}).pdf"
+no_ sheet_name_long "$(printf 'a%.0s' {1..57}).docx" scan.pdf
+no_ sheet_name_long "$(printf 'a%.0s' {1..57}) [1].pdf" scan.pdf
 no_ sheet_name_ok 'listing.docx' scan0001.pdf
 no_ sheet_name_ok 'listing' scan0001.pdf
 no_ sheet_name_ok 'sub/listing.pdf' scan0001.pdf
@@ -160,7 +166,8 @@ refused 0-Inbox/scan0001.pdf '.claude' scan0001.pdf '#flat' 'Protected'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' '../../scan.pdf' '#flat' 'Name traversal'
 refused Clippings/page.md '1-Projects/Flat hunt' CLAUDE.md '#flat' 'Rulebook name'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Lease.pdf '#flat' 'Overwrite'
-refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' "$(printf 'a%.0s' {1..57}).pdf" '#flat' 'Long name'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' "$(printf 'a%.0s' {1..57}).docx" '#flat' 'Long name, other extension'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' "$(printf 'a%.0s' {1..57})/x.pdf" '#flat' 'Long name, two segments'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.docx' '#flat' 'Changed extension'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.pdf' '#Flat' 'Bad tag'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.pdf' '#flat' 'Bad · description'
@@ -230,6 +237,45 @@ expect_eq "$SHEET_FILED $SHEET_SKIPPED" '1 0' 'the kept long name is filed'
 [ -f "$V/1-Projects/Job hunt/$LONG90" ] && [ ! -e "$V/0-Inbox/$LONG90" ] || die 'the kept long name not moved'
 grep -qF -- "- [[1-Projects/Job hunt/$LONG90]] · PDF · #job-ad · A data analyst role in Leeds · filed by Bower" \
   "$V/index.md" || die 'no row for the kept long name'
+echo "ok $CASE"
+
+CASE='shortened names'
+SHORT='Example Corp is hiring a data analyst in Leeds, for a.pdf'
+SHORT2='Example Corp is hiring a data analyst in Leeds, for (2).pdf'
+expect_eq "$(sheet_name_short "$LONG90" "$ROOT/none")" "$SHORT" 'cut at the last word that fits'
+expect_eq "$(sheet_chars "$SHORT2")" 59 'the second name'
+# Trailing punctuation trimmed, a first word that does not fit cut by characters.
+expect_eq "$(sheet_name_short "$(printf 'a%.0s' {1..50}), bbbbbbbbbb.pdf" "$ROOT/none")" \
+  "$(printf 'a%.0s' {1..50}).pdf" 'the comma trimmed'
+expect_eq "$(sheet_name_short "$(printf 'é%.0s' {1..70}).pdf" "$ROOT/none")" "$(printf 'é%.0s' {1..56}).pdf" \
+  'a long word cut by characters'
+expect_eq "$(sheet_name_short "$(printf 'word %.0s' {1..20})end" "$ROOT/none")" \
+  "$(printf 'word %.0s' {1..11})word" 'no extension'
+fresh
+echo ad1 >"$V/0-Inbox/scan0002.pdf"
+echo ad2 >"$V/0-Inbox/scan0003.pdf"
+printf '%s\n' 0-Inbox/scan0002.pdf 0-Inbox/scan0003.pdf >>"$PENDING"
+# The note Bower wrote for the first ad, with links to the name it chose.
+printf -- '---\nby: bower\n---\nSee [[%s]] and [[%s|the ad]].\nAlso [[Lease]].\n' "${LONG90%.pdf}" "$LONG90" \
+  >"$V/1-Projects/Flat hunt/Job ad summary.md"
+{
+  printf 'file\t0-Inbox/scan0002.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe first ad\n' "$LONG90"
+  printf 'file\t0-Inbox/scan0003.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe second ad\n' "$LONG90"
+  printf 'note\t1-Projects/Flat hunt/Job ad summary.md\t1-Projects/Flat hunt/%s\t#job-ad\tSummary of the ad\n' "$LONG90"
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '2 1 0' 'shortened, not skipped'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/$SHORT")" ad1 'the first ad under the short name'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/$SHORT2")" ad2 'the second ad with (2)'
+[ ! -e "$V/1-Projects/Flat hunt/$LONG90" ] || die 'filed under the long name'
+grep -qF -- "- [[$SHORT]] The first ad" "$V/1-Projects/Flat hunt/Flat hunt.md" || die 'the hub line'
+grep -qF -- "- [[1-Projects/Flat hunt/$SHORT2]] · PDF · #job-ad · The second ad · filed by Bower" "$V/index.md" ||
+  die 'the row of the second ad'
+grep -qF -- "- [[1-Projects/Flat hunt/Job ad summary.md]] · Note · #job-ad · Summary of the ad · filed by Bower · [[1-Projects/Flat hunt/$SHORT]]" \
+  "$V/index.md" || die 'the note row points to the short name'
+expect_eq "$(sed -n '4,5p' "$V/1-Projects/Flat hunt/Job ad summary.md")" \
+  "$(printf 'See [[%s]] and [[%s|the ad]].\nAlso [[Lease]].' "${SHORT%.pdf}" "$SHORT")" 'the links follow the rename'
+if grep -qF -- "$LONG90" "$V/index.md"; then die 'the long name in index.md'; fi
 echo "ok $CASE"
 
 # --- note and tag lines -------------------------------------------------------------
