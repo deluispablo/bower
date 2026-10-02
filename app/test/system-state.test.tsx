@@ -115,6 +115,22 @@ describe('EmptyFolder and EmptySegment (#908, R-SYS-4)', () => {
     expect(onAsk).toHaveBeenCalled();
   });
 
+  it('says what the empty inbox is for, with Add only (#1004)', () => {
+    void act(() => {
+      render(h(EmptyFolder, { onAsk: vi.fn(), inbox: true }), host);
+    });
+    expect(host.querySelector('.empty-folder-title')?.textContent).toBe(
+      'Nothing waiting.',
+    );
+    expect(host.querySelector('.empty-folder-text')?.textContent).toBe(
+      'Things you add land here until the next tidy-up. Add',
+    );
+    expect(
+      host.querySelector('a.empty-folder-link')?.getAttribute('href'),
+    ).toBe('/add');
+    expect(host.querySelector('button')).toBeNull();
+  });
+
   it('writes the empty segment lines with no bird', () => {
     void act(() => {
       render(h(EmptySegment, { segment: 'originals' }), host);
