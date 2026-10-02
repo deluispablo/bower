@@ -142,8 +142,14 @@ test('search from the Flat hunt screen is scoped and can be widened', async ({
 
   // Kentish Town is a listing in Flat hunt; the Lisbon trip is elsewhere.
   await field.fill('lisbon');
-  await expect(dialog.getByText(/^Nothing matches/)).toBeVisible();
-  await dialog.getByRole('button', { name: 'Search all folders' }).click();
+  await expect(
+    dialog.getByText('Nothing called “lisbon” in Flat hunt.'),
+  ).toBeVisible();
+  // One way out, the primary one (R-SEARCH-7, #1004).
+  await expect(
+    dialog.getByRole('button', { name: 'Search everywhere' }),
+  ).toHaveCount(1);
+  await dialog.getByRole('button', { name: 'Search everywhere' }).click();
   await expect(
     dialog.getByRole('option', { name: /Lisbon Trip/ }).first(),
   ).toBeVisible();

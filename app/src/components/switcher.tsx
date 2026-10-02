@@ -87,6 +87,7 @@ import {
   hasTag,
   loadRecentSearches,
   noResultsLine,
+  scopedNoResultsLine,
   saveRecentSearch,
   searchGroupLabel,
   searchTitle,
@@ -1539,7 +1540,7 @@ function SwitcherPanel({
               aria-label="Search results"
               tabIndex={0}
             >
-              {scope !== null && !desktop && (
+              {scope !== null && !desktop && !noResults && (
                 <button
                   type="button"
                   class="switcher-link"
@@ -1563,7 +1564,23 @@ function SwitcherPanel({
               {!online && searching && (
                 <p class="switcher-line">{OFFLINE_LINE}</p>
               )}
-              {noResults && (
+              {noResults && scope !== null && (
+                <div class="switcher-none">
+                  <p class="switcher-line">
+                    {scopedNoResultsLine(trimmed, scope.label)}
+                  </p>
+                  <button
+                    type="button"
+                    class="button"
+                    onClick={() => {
+                      setScope(null);
+                    }}
+                  >
+                    Search everywhere
+                  </button>
+                </div>
+              )}
+              {noResults && scope === null && (
                 <div class="switcher-none">
                   <p class="switcher-line">{noResultsLine(trimmed)}</p>
                   <a
@@ -1578,17 +1595,6 @@ function SwitcherPanel({
                   >
                     Ask Bower where it is
                   </a>
-                  {scope !== null && (
-                    <button
-                      type="button"
-                      class="switcher-link"
-                      onClick={() => {
-                        setScope(null);
-                      }}
-                    >
-                      Search all folders
-                    </button>
-                  )}
                 </div>
               )}
               <ul

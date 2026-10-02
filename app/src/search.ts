@@ -196,5 +196,10 @@ export function noResultsLine(query: string): string {
   return `Nothing matches “${query}”. Try fewer words, or another folder.`;
 }
 
+/** The no-results line of a search scoped to one folder (R-SEARCH-7). */
+export function scopedNoResultsLine(query: string, folder: string): string {
+  return `Nothing called “${query}” in ${folder}.`;
+}
+
 /** The offline line (S-SE-9). */
 export const OFFLINE_LINE = 'Offline: searching what is on this device.';
