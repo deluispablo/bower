@@ -39,7 +39,7 @@ import { NoteBody, loadImage } from '../components/note-body.js';
 import { NoteMenu } from '../components/note-menu.js';
 import { PendingRequestLine } from '../components/pending-request-line.js';
 import { PhotoViewer } from '../components/photo-viewer.js';
-import { QuestionsAbout } from '../components/questions-about.js';
+import { QuestionsAbout, waitingAbout } from '../components/questions-about.js';
 import { useShellSlot } from '../components/shell-slots.js';
 import { TablePreview, parseCsv } from '../components/table-preview.js';
 import { useCatalogueOrigins } from '../components/use-catalogue-origins.js';
@@ -824,6 +824,9 @@ export function FileScreen(): JSX.Element {
     },
     { view: 'title', now },
   );
+  const askNames = [file.name, displayName(file.name)];
+  // A question about this file waiting in the inbox (#1003).
+  const asked = waitingAbout(requests, askNames)[0];
   const sourceKind = sourceKindOf(file);
   const source = file.appProperties?.bowerSource;
 
@@ -900,7 +903,13 @@ export function FileScreen(): JSX.Element {
       {policy.bowerReads === 'yes' &&
         companion === null &&
         source === undefined && (
-          <FileTip file={file} filedAsItIs={origin === 'filed'} />
+          <FileTip
+            key={file.id}
+            file={file}
+            filedAsItIs={origin === 'filed'}
+            {...(asked !== undefined && { asked: asked.fileId })}
+            onUndone={() => void refresh()}
+          />
         )}
 
       {companion !== null && companion !== undefined && (
@@ -908,7 +917,7 @@ export function FileScreen(): JSX.Element {
       )}
       <QuestionsAbout
         path={file.path}
-        names={[file.name, displayName(file.name)]}
+        names={askNames}
         index={index}
         rows={requests}
         getNoteText={getNoteText}

@@ -9,8 +9,11 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
+import { deleteFile } from '../drive.js';
 import type { DriveFile } from '../drive.js';
+import { undoRequestNote } from '../move-request.js';
 import { displayName } from '../navigation.js';
+import { showToast } from '../toast-store.js';
 import '../styles/hint.css';
 import { BowerMark } from './bird.js';
 import { IconClose } from './icons.js';
@@ -144,17 +147,83 @@ export interface FileTipProps {
   file: DriveFile;
   /** Bower filed it unchanged: the line says so. */
   filedAsItIs: boolean;
+  /** A question about the file waits in the inbox: its request note's id
+   * (`null` while the listing does not have it). Absent when none waits. */
+  asked?: string | null;
+  /** After Undo took the request note out of the inbox. */
+  onUndone?: () => void;
 }
+
+/** The file tip's waiting state, once a question about the file is in the
+ * inbox (#1003). */
+export const FILE_TIP_WAITING = 'Bower answers at the next tidy-up.';
 
 /**
  * The file tip (spec §3.29, R-HINT-1, boards FI-Main and FI-Bottom): the
  * bird 28, "Want a note on it?", and a button that opens Ask Bower about
  * the file prefilled with "Summarise this and list what matters"; the page
  * stays. ✕ ("Dismiss this tip") hides it for this file, for good on this device.
+ * Once "Put in the inbox" sent a question about it, or one already waits,
+ * it says "Bower answers at the next tidy-up." with Undo instead (#1003).
  */
-export function FileTip({ file, filedAsItIs }: FileTipProps): JSX.Element {
+export function FileTip({
+  file,
+  filedAsItIs,
+  asked,
+  onUndone,
+}: FileTipProps): JSX.Element {
+  // `undefined`: nothing sent from this tip; else the request note's id.
+  const [sent, setSent] = useState<string | null | undefined>(undefined);
+  // The request Undo took back, which the listing may still show a moment.
+  const [undone, setUndone] = useState<string | null>(null);
+  const waiting =
+    sent !== undefined
+      ? sent
+      : asked !== undefined && (asked === null || asked !== undone)
+        ? asked
+        : undefined;
+
+  async function undo(id: string): Promise<void> {
+    const result = await undoRequestNote(deleteFile, id);
+    if (result === 'failed') {
+      showToast("Couldn't take that back. It is still in your inbox.");
+      return;
+    }
+    setUndone(id);
+    setSent(undefined);
+    onUndone?.();
+    showToast('Taken out of your inbox.');
+  }
+
+  if (waiting !== undefined) {
+    return (
+      <Hint
+        key="asked"
+        id={fileTipId(file.id)}
+        variant="state"
+        class="hint-file"
+        icon={<BowerMark size={28} />}
+        actions={
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm hint-file-undo"
+            disabled={waiting === null}
+            onClick={() => {
+              if (waiting !== null) void undo(waiting);
+            }}
+          >
+            Undo
+          </button>
+        }
+      >
+        {FILE_TIP_WAITING}
+      </Hint>
+    );
+  }
+
   return (
     <Hint
+      key="tip"
       id={fileTipId(file.id)}
       variant="tip"
       class="hint-file"
@@ -174,6 +243,7 @@ export function FileTip({ file, filedAsItIs }: FileTipProps): JSX.Element {
                   path: file.path,
                 },
                 buildText: (value) => `About ${file.name}: ${value}`,
+                onSent: (id) => setSent(id),
               },
               { prefill: FILE_TIP_ASK },
             );

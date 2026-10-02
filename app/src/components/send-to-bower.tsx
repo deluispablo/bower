@@ -50,6 +50,9 @@ export interface AskItem {
   icon?: FileIconItem;
   /** The request note's words; `About <name>: <question>` by default. */
   buildText?: (question: string) => string;
+  /** Called once "Put in the inbox" wrote the note, with its Drive id
+   * (`null` when Drive did not say): the file tip's waiting state. */
+  onSent?: (id: string | null) => void;
 }
 
 export interface AskOptions {
@@ -130,6 +133,7 @@ export function AskSheet({
     }
     void refresh();
     if (when === 'later') {
+      item.onSent?.(id);
       showToast(
         ASK_SENT_TOAST,
         undefined,

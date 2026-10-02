@@ -89,6 +89,9 @@ export interface WaitingQuestion {
   question: string;
   /** ISO-8601: when it was sent. */
   since: string;
+  /** The request note's Drive id, for Undo; `null` while the listing
+   * does not have it. */
+  fileId: string | null;
 }
 
 /**
@@ -112,7 +115,12 @@ export function waitingAbout(
     if (prefix === undefined) continue;
     const question = text.slice(prefix.length).trim();
     if (question === '') continue;
-    waiting.push({ key: row.key, question, since: row.since });
+    waiting.push({
+      key: row.key,
+      question,
+      since: row.since,
+      fileId: row.fileId,
+    });
   }
   return waiting;
 }

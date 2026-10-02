@@ -7,9 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const openAsk = vi.fn();
 vi.mock('../src/components/send-to-bower.js', () => ({ openAsk }));
+const deleteFile = vi.hoisted(() => vi.fn());
+vi.mock('../src/drive.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/drive.js')>()),
+  deleteFile,
+}));
 
 const {
   FILE_TIP_ASK,
+  FILE_TIP_WAITING,
   FileTip,
   fileTipId,
   Hint,
@@ -200,5 +206,44 @@ describe('The file tip (#912, R-HINT-1, FI-Main)', () => {
     render(null, root);
     render(h(FileTip, { file, filedAsItIs: true }), root);
     expect(root.querySelector('.hint')).toBeNull();
+  });
+
+  async function flush(): Promise<void> {
+    for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it('turns into "Bower answers at the next tidy-up." with Undo once asked (AC4)', async () => {
+    openAsk.mockClear();
+    deleteFile.mockReset().mockResolvedValue(undefined);
+    const onUndone = vi.fn();
+    host = document.createElement('div');
+    document.body.append(host);
+    render(h(FileTip, { file, filedAsItIs: false, onUndone }), host);
+    const root = host;
+    root.querySelector<HTMLButtonElement>('.hint-file-ask')?.click();
+    const [item] = openAsk.mock.calls[0] as [
+      { onSent?: (id: string | null) => void },
+    ];
+    // "Put in the inbox" wrote the request note.
+    item.onSent?.('REQUEST_ID');
+    await flush();
+    expect(root.textContent).toContain(FILE_TIP_WAITING);
+    expect(root.textContent).not.toContain('Want a note on it?');
+    expect(root.querySelector('.hint')?.getAttribute('role')).toBe('status');
+    const undo = root.querySelector<HTMLButtonElement>('.hint-file-undo');
+    expect(undo?.textContent).toBe('Undo');
+    undo?.click();
+    await flush();
+    expect(deleteFile).toHaveBeenCalledWith('REQUEST_ID');
+    expect(onUndone).toHaveBeenCalledTimes(1);
+    expect(root.textContent).toContain('Want a note on it?');
+  });
+
+  it('shows the waiting state when a question about the file already waits', () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    render(h(FileTip, { file, filedAsItIs: false, asked: 'REQUEST_ID' }), host);
+    expect(host.textContent).toBe(`${FILE_TIP_WAITING}Undo`);
   });
 });

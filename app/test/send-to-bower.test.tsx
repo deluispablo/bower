@@ -166,6 +166,20 @@ describe('Ask sheet', () => {
     expect(body().querySelector('.overlay-panel')).toBeNull();
   });
 
+  it('tells the asking card the request note is in the inbox (#1003)', async () => {
+    const onSent = vi.fn();
+    void act(() => {
+      openAsk({ name: 'Payslip', kind: 'file', onSent });
+    });
+    void act(() => {
+      box().value = 'What is the net pay?';
+      box().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    void act(() => named('Put in the inbox').click());
+    await flush();
+    expect(onSent).toHaveBeenCalledWith('REQUEST_ID');
+  });
+
   it('keeps the text and says so when the note could not be written', async () => {
     mocks.createTextFile.mockRejectedValue(new Error('offline'));
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
