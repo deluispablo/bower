@@ -10,6 +10,8 @@ import {
   homeStateFor,
   inboxLine,
   inboxViewFor,
+  recentRequestTitle,
+  REQUEST_FALLBACK,
   homeTiles,
   lastTidyUpCounts,
   lastTidyUpNote,
@@ -646,5 +648,59 @@ describe('Home while the listing is read again after a run (#1001)', () => {
         refreshing: false,
       }),
     ).toBe('waiting');
+  });
+});
+
+describe('recentRequestTitle: Recent reads a request by its words (#1001)', () => {
+  const name =
+    'Bower - 2026-10-02 1027 Move “photo.png” (2-AreasImmigrationphoto.png) to 3-Resources..md';
+  const note = [
+    '---',
+    'tags: [instruction]',
+    'date: 2026-10-02T10:27:00.000Z',
+    'via: app',
+    '---',
+    '',
+    'Move “photo.png” (2-Areas/Immigration/photo.png) to 3-Resources.',
+    '',
+  ].join('\n');
+
+  it('uses the note body, with the paths as the Requests row shows them', () => {
+    const title = recentRequestTitle(name, note);
+    expect(title).toBe(
+      'Move “photo.png” (Areas › Immigration › photo.png) to Resources.',
+    );
+    expect(title).not.toContain('Bower - ');
+    expect(title).not.toContain('2-AreasImmigration');
+  });
+
+  it('never shows the file name before the text is read', () => {
+    expect(recentRequestTitle(name, undefined)).toBe(REQUEST_FALLBACK);
+    expect(recentRequestTitle(name, '---\nvia: app\n---\n\n')).toBe(
+      REQUEST_FALLBACK,
+    );
+  });
+
+  it('reads a plain request by its first line', () => {
+    expect(
+      recentRequestTitle(
+        'Bower - 2026-10-02 0815 What do I still need.md',
+        '---\ntags: [instruction]\n---\n\nWhat do I still need for the visa?\nAnd the lease.\n',
+      ),
+    ).toBe('What do I still need for the visa?');
+  });
+
+  it('calls Add\'s "What is this?" note and a pile note what the Bower tab does', () => {
+    expect(
+      recentRequestTitle('Bower - 2026-10-02 1027 Context.md', undefined),
+    ).toBe('About the files you added');
+    expect(
+      recentRequestTitle('Bower - 2026-10-02 1027-05 Context 3f.md', note),
+    ).toBe('About the files you added');
+  });
+
+  it('leaves every other note alone', () => {
+    expect(recentRequestTitle('Lease agreement 2026.md', note)).toBeNull();
+    expect(recentRequestTitle('Bower notes.md', note)).toBeNull();
   });
 });

@@ -6,12 +6,14 @@
  */
 
 import type { Run } from './api.js';
-import { sinceLabel } from './bower-tab.js';
+import { CONTEXT_TITLE, sinceLabel } from './bower-tab.js';
 import type { BirdState } from './components/bird-classes.js';
 import { outcomeCounts, outcomeFromRun, runSentence } from './run-outcome.js';
 import { isContextNote, processedKind } from './run-progress.js';
 import type { RunPhase } from './run-store.js';
 import { failureCopy } from './run-failure.js';
+import { requestRowText } from './move-request.js';
+import { firstLine, instructionBody } from './tell.js';
 
 /**
  * Home's states (C.4): things waiting, the first day (nothing waiting and
@@ -461,4 +463,41 @@ export function inboxViewFor(input: {
     (path) => listed.has(path) && !isContextNote(path),
   ).length;
   return { pending: Math.max(0, pending - moved), updating: true };
+}
+
+/** An instruction note's file name: `Bower - YYYY-MM-DD HHmm[-ss] ….md`. */
+const REQUEST_NOTE_NAME =
+  /^Bower - \d{4}-\d{2}-\d{2} \d{4}(?:-\d{2})? .*\.md$/i;
+
+/** What Recent calls a request note whose words are not on this device. */
+export const REQUEST_FALLBACK = 'Your request to Bower';
+
+/**
+ * The title Recent gives a request note (#1001): its words, never its
+ * dated file name, which lost every slash of a path it quoted ("Move
+ * “x.png” (2-AreasImmigrationx.png) to …"). Add's "What is this?" note
+ * and a pile's note read "About the files you added", as on the Bower
+ * tab; a move or rename reads as the Requests row does
+ * (`requestRowText`). `text` is the note's content when it has been read,
+ * else the plain fallback. `null` for any other note, which keeps its own
+ * title.
+ *
+ * A small local helper: #997 words Requests the same way and may land a
+ * shared one later.
+ */
+export function recentRequestTitle(
+  name: string,
+  text: string | undefined,
+): string | null {
+  if (!REQUEST_NOTE_NAME.test(name)) return null;
+  if (isContextNote(name)) return CONTEXT_TITLE;
+  if (text === undefined) return REQUEST_FALLBACK;
+  const line = firstLine(
+    instructionBody(text)
+      .split('\n')
+      .map((part) => part.trim())
+      .filter((part) => part !== '')
+      .join('\n'),
+  );
+  return line === '' ? REQUEST_FALLBACK : requestRowText(line);
 }

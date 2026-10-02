@@ -56,6 +56,7 @@ import {
   inboxViewFor,
   isHomeLoading,
   lastTidyUpNote,
+  recentRequestTitle,
   restingBird,
   things,
   tidyUpAgo,
@@ -542,6 +543,64 @@ export function RecentRows({
 }
 
 /**
+ * Recent's titles with each request note read by its words (#1001,
+ * `recentRequestTitle`): the note's text comes through the vault's note
+ * cache (`getNoteText`), only for the request notes on screen. Until it is
+ * read, or when it cannot be, the plain fallback stands in, never the file
+ * name.
+ */
+function useRecentTitles(
+  notes: readonly DriveFile[],
+  titles: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  const { getNoteText } = useVault();
+  const [texts, setTexts] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  const requests = notes.filter(
+    (note) => recentRequestTitle(note.name, undefined) !== null,
+  );
+  const key = requests
+    .map((note) => `${note.id}@${note.modifiedTime ?? ''}`)
+    .join('|');
+  const requestsRef = useRef(requests);
+  requestsRef.current = requests;
+  useEffect(() => {
+    if (key === '') return undefined;
+    let cancelled = false;
+    void Promise.all(
+      requestsRef.current.map(
+        async (note): Promise<[string, string] | null> => {
+          try {
+            return [note.id, await getNoteText(note.id)];
+          } catch (err) {
+            console.error('Reading a request for Recent failed', err);
+            return null;
+          }
+        },
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setTexts(
+        new Map(
+          entries.filter((entry): entry is [string, string] => entry !== null),
+        ),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, getNoteText]);
+  if (requests.length === 0) return titles;
+  const merged = new Map(titles);
+  for (const note of requests) {
+    const title = recentRequestTitle(note.name, texts.get(note.id));
+    if (title !== null) merged.set(note.id, title);
+  }
+  return merged;
+}
+
+/**
  * The run the Last tidy-up tile and the bubble speak about: the run store's
  * `lastFinished`, or, when this session has not seen one finish, the newest
  * of the Worker's history (`GET /runs`), so the tile never says "Not yet"
@@ -595,7 +654,7 @@ export function Home(): JSX.Element {
   const showAppFiles = getPref('showAppFiles');
   const recent =
     index === null ? [] : recentNotes(index, RECENT_ROWS, showAppFiles);
-  const recentTitles = useNoteTitles(recent);
+  const recentTitles = useRecentTitles(recent, useNoteTitles(recent));
   // The same total the working sheet counts against; right after a run,
   // less what the run took while the listing is read again (#1001).
   const inboxView = inboxViewFor({
