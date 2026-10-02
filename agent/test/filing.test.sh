@@ -88,6 +88,12 @@ yes_ sheet_name_ok 'Arlington Road, listing.pdf' scan0001.pdf
 yes_ sheet_name_ok 'Receipt.JPG' receipt.jpg
 yes_ sheet_name_ok "$(printf 'a%.0s' {1..56}).pdf" scan.pdf
 no_ sheet_name_ok "$(printf 'a%.0s' {1..57}).pdf" scan.pdf
+# A changed name over 60 characters is shortened instead (#995).
+yes_ sheet_name_long "$(printf 'a%.0s' {1..57}).pdf" scan.pdf
+no_ sheet_name_long "$(printf 'a%.0s' {1..56}).pdf" scan.pdf
+no_ sheet_name_long "$(printf 'a%.0s' {1..57}).pdf" "$(printf 'a%.0s' {1..57}).pdf"
+no_ sheet_name_long "$(printf 'a%.0s' {1..57}).docx" scan.pdf
+no_ sheet_name_long "$(printf 'a%.0s' {1..57}) [1].pdf" scan.pdf
 no_ sheet_name_ok 'listing.docx' scan0001.pdf
 no_ sheet_name_ok 'listing' scan0001.pdf
 no_ sheet_name_ok 'sub/listing.pdf' scan0001.pdf
@@ -160,7 +166,8 @@ refused 0-Inbox/scan0001.pdf '.claude' scan0001.pdf '#flat' 'Protected'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' '../../scan.pdf' '#flat' 'Name traversal'
 refused Clippings/page.md '1-Projects/Flat hunt' CLAUDE.md '#flat' 'Rulebook name'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' Lease.pdf '#flat' 'Overwrite'
-refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' "$(printf 'a%.0s' {1..57}).pdf" '#flat' 'Long name'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' "$(printf 'a%.0s' {1..57}).docx" '#flat' 'Long name, other extension'
+refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' "$(printf 'a%.0s' {1..57})/x.pdf" '#flat' 'Long name, two segments'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.docx' '#flat' 'Changed extension'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.pdf' '#Flat' 'Bad tag'
 refused 0-Inbox/scan0001.pdf '1-Projects/Flat hunt' 'Listing.pdf' '#flat' 'Bad · description'
@@ -207,6 +214,218 @@ file_line Clippings/page.md 0-Inbox/Processed page.md - -
 if grep -q 'page.md' "$V/index.md"; then die 'a row for Processed'; fi
 echo "ok $CASE"
 
+# --- long names (#995) ---------------------------------------------------------------
+LONG90='Example Corp is hiring a data analyst in Leeds, for a hybrid role, apply by 17 October.pdf'
+CASE='kept long names'
+expect_eq "$(sheet_chars "$LONG90")" 90 'the long name'
+yes_ sheet_name_ok "$LONG90" "$LONG90"
+long200="$(printf 'a%.0s' {1..196}).pdf"
+long250="$(printf 'a%.0s' {1..246}).pdf"
+yes_ sheet_name_ok "$long200" "$long200"
+no_ sheet_name_ok "$long250" "$long250"
+no_ sheet_name_ok "Job ad, $LONG90" "$LONG90"
+# Kept, but still a safe single segment.
+no_ sheet_name_ok 'Invoice #12.pdf' 'Invoice #12.pdf'
+no_ sheet_name_ok 'a/b.pdf' 'a/b.pdf'
+fresh
+echo ad >"$V/0-Inbox/$LONG90"
+printf '%s\n' "0-Inbox/$LONG90" >>"$PENDING"
+printf 'file\t0-Inbox/%s\t1-Projects/Job hunt\t%s\t#job-ad\tA data analyst role in Leeds\n' "$LONG90" "$LONG90" \
+  >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_SKIPPED" '1 0' 'the kept long name is filed'
+[ -f "$V/1-Projects/Job hunt/$LONG90" ] && [ ! -e "$V/0-Inbox/$LONG90" ] || die 'the kept long name not moved'
+grep -qF -- "- [[1-Projects/Job hunt/$LONG90]] · PDF · #job-ad · A data analyst role in Leeds · filed by Bower" \
+  "$V/index.md" || die 'no row for the kept long name'
+echo "ok $CASE"
+
+CASE='shortened names'
+SHORT='Example Corp is hiring a data analyst in Leeds, for a.pdf'
+SHORT_STEM='Example Corp is hiring a data analyst in Leeds, for'
+SHORT2="$SHORT_STEM (2).pdf"
+expect_eq "$(sheet_name_short "$LONG90" "$ROOT/none")" "$SHORT" 'cut at the last word that fits'
+expect_eq "$(sheet_chars "$SHORT2")" 59 'the second name'
+# Trailing punctuation trimmed, a first word that does not fit cut by characters.
+expect_eq "$(sheet_name_short "$(printf 'a%.0s' {1..50}), bbbbbbbbbb.pdf" "$ROOT/none")" \
+  "$(printf 'a%.0s' {1..50}).pdf" 'the comma trimmed'
+expect_eq "$(sheet_name_short "$(printf 'é%.0s' {1..70}).pdf" "$ROOT/none")" "$(printf 'é%.0s' {1..56}).pdf" \
+  'a long word cut by characters'
+expect_eq "$(sheet_name_short "$(printf 'word %.0s' {1..20})end" "$ROOT/none")" \
+  "$(printf 'word %.0s' {1..11})word" 'no extension'
+fresh
+echo ad1 >"$V/0-Inbox/scan0002.pdf"
+echo ad2 >"$V/0-Inbox/scan0003.pdf"
+echo ad3 >"$V/0-Inbox/scan0004.pdf"
+printf '%s\n' 0-Inbox/scan0002.pdf 0-Inbox/scan0003.pdf 0-Inbox/scan0004.pdf >>"$PENDING"
+# The note Bower wrote for the first ad, with links to the name it chose.
+FH='1-Projects/Flat hunt'
+links() { # $1 the name, as the links use it
+  printf 'See [[%s]] and [[%s|the ad]].\nAlso [[Lease]].\n' "${1%.pdf}" "$1"
+  printf 'Path [[%s/%s]], [[%s/%s#Pay]], [[%s#Pay]], [[%s#^key]].\n' "$FH" "$1" "$FH" "${1%.pdf}" "${1%.pdf}" "$1"
+}
+{
+  printf -- '---\nby: bower\n---\n'
+  links "$LONG90"
+} >"$V/1-Projects/Flat hunt/Job ad summary.md"
+{
+  printf 'file\t0-Inbox/scan0002.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe first ad\n' "$LONG90"
+  printf 'file\t0-Inbox/scan0003.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe second ad\n' "${LONG90/role/job}"
+  # The same long name again for this folder: refused, its links go to the first.
+  printf 'file\t0-Inbox/scan0004.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe third ad\n' "$LONG90"
+  printf 'note\t1-Projects/Flat hunt/Job ad summary.md\t1-Projects/Flat hunt/%s\t#job-ad\tSummary of the ad\n' "$LONG90"
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '2 1 1' 'shortened, the repeated long name skipped'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/$SHORT")" ad1 'the first ad under the short name'
+expect_eq "$(cat "$V/1-Projects/Flat hunt/$SHORT2")" ad2 'the second ad with (2)'
+[ -f "$V/0-Inbox/scan0004.pdf" ] || die 'a repeated long name was filed'
+expect_eq "$SHEET_SKIP_REASONS" '1 name' 'the repeated long name is a name'
+[ ! -e "$V/1-Projects/Flat hunt/$LONG90" ] || die 'filed under the long name'
+grep -qF -- "- [[$SHORT]] The first ad" "$V/1-Projects/Flat hunt/Flat hunt.md" || die 'the hub line'
+grep -qF -- "- [[1-Projects/Flat hunt/$SHORT2]] · PDF · #job-ad · The second ad · filed by Bower" "$V/index.md" ||
+  die 'the row of the second ad'
+grep -qF -- "- [[1-Projects/Flat hunt/Job ad summary.md]] · Note · #job-ad · Summary of the ad · filed by Bower · [[1-Projects/Flat hunt/$SHORT]]" \
+  "$V/index.md" || die 'the note row points to the short name'
+expect_eq "$(sed -n '4,6p' "$V/1-Projects/Flat hunt/Job ad summary.md")" "$(links "$SHORT")" \
+  'the links follow the rename, by name, stem, path and heading'
+if grep -qF -- "$LONG90" "$V/index.md"; then die 'the long name in index.md'; fi
+# A file already there under the agent's long name: refused as name before
+# any shortening, and a note linking that name keeps its link.
+fresh
+echo old >"$V/1-Projects/Flat hunt/$LONG90"
+printf -- '---\nby: bower\n---\nSee [[%s]].\n' "${LONG90%.pdf}" >"$V/1-Projects/Flat hunt/Old ad.md"
+{
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tA new ad\n' "$LONG90"
+  printf 'note\t1-Projects/Flat hunt/Old ad.md\t1-Projects/Flat hunt/%s\t#job-ad\tThe old ad\n' "$LONG90"
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIP_REASONS" '0 1 1 name' 'refused as name, the note booked'
+[ -f "$V/0-Inbox/scan0001.pdf" ] && [ ! -e "$V/1-Projects/Flat hunt/$SHORT" ] || die 'shortened past an existing file'
+grep -qF -- "See [[${LONG90%.pdf}]]." "$V/1-Projects/Flat hunt/Old ad.md" || die 'a link to the existing file changed'
+grep -qF -- "· [[1-Projects/Flat hunt/$LONG90]]" "$V/index.md" || die 'the note row lost the existing original'
+echo "ok $CASE"
+
+CASE='repeated long names'
+# Suffixes stop at (9).
+fresh
+mkdir -p "$ROOT/full"
+: >"$ROOT/full/$SHORT"
+for n in 2 3 4 5 6 7 8; do : >"$ROOT/full/$SHORT_STEM ($n).pdf"; done
+expect_eq "$(sheet_name_short "$LONG90" "$ROOT/full")" "$SHORT_STEM (9).pdf" 'the last suffix'
+: >"$ROOT/full/$SHORT_STEM (9).pdf"
+no_ sheet_name_short "$LONG90" "$ROOT/full"
+# A repeated long-name line is shortened at most once: each attempt is
+# counted through a wrapper around sheet_name_short.
+eval "real_$(declare -f sheet_name_short)"
+sheet_name_short() {
+  echo try >>"$ROOT/short-tries"
+  real_sheet_name_short "$@"
+}
+# Every candidate taken, the line 50 times: tried once, nothing filed, and
+# far from the job's time limit (the bound is loose for slow test machines;
+# most of the time is the checks every line goes through).
+fresh
+: >"$ROOT/short-tries"
+for f in "$ROOT"/full/*; do : >"$V/1-Projects/Flat hunt/${f##*/}"; done
+for n in $(seq 50); do
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe ad\n' "$LONG90"
+done >"$V/.bower/filing.tsv"
+start=$SECONDS
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+[ $((SECONDS - start)) -le 600 ] || die "50 repeated lines took $((SECONDS - start)) s"
+expect_eq "$SHEET_FILED $SHEET_SKIPPED" '0 50' 'every name taken: nothing filed'
+expect_eq "$(grep -c . "$ROOT/short-tries")" 1 'one shortening attempt'
+[ -f "$V/0-Inbox/scan0001.pdf" ] || die 'moved with every name taken'
+# Names free, the line three times: filed once.
+fresh
+: >"$ROOT/short-tries"
+for n in 1 2 3; do
+  printf 'file\t0-Inbox/scan0001.pdf\t1-Projects/Flat hunt\t%s\t#job-ad\tThe ad\n' "$LONG90"
+done >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_SKIPPED" '1 2' 'filed once'
+expect_eq "$(grep -c . "$ROOT/short-tries")" 1 'one shortening attempt'
+[ -f "$V/1-Projects/Flat hunt/$SHORT" ] || die 'not filed under the short name'
+eval "$(declare -f real_sheet_name_short | sed '1s/^real_//')"
+echo "ok $CASE"
+
+# --- converted siblings (#995) -------------------------------------------------------
+CASE='converted siblings'
+fresh
+CONVERTED="$ROOT/converted.txt"
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer from North Ltd\n' \
+  >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '1 1 0' 'the copy is booked as a note'
+[ ! -e "$V/0-Inbox/offer.md" ] || die 'the copy stayed in the inbox'
+expect_eq "$(cat "$V/1-Projects/Job hunt/Offer letter.md")" 'offer text' 'the copy next to its original'
+grep -qF -- '- [[1-Projects/Job hunt/Offer letter.md]] · Note · #job-offer · Offer from North Ltd · filed by Bower · [[1-Projects/Job hunt/Offer letter.docx]]' \
+  "$V/index.md" || die 'the row of the copy, with its original'
+expect_eq "$(sed -n '/^## Notes & documents$/,$p' "$V/1-Projects/Job hunt/Job hunt.md")" "$(printf '%s\n' \
+  '## Notes & documents' '- [[Offer letter.docx]] Offer from North Ltd' '- [[Offer letter]] Offer from North Ltd')" \
+  'the hub lines'
+# The agent also books the copy with a `note` line: counted once.
+fresh
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+{
+  printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer from North Ltd\n'
+  printf 'note\t1-Projects/Job hunt/Offer letter.md\t1-Projects/Job hunt/Offer letter.docx\t#job-offer\tText of the offer\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '1 1 0' 'the copy counted once'
+expect_eq "$(grep -c 'Job hunt/Offer letter.md' "$V/index.md")" 1 'one row for the copy'
+# A .md the runner did not make stays where it is.
+fresh
+: >"$CONVERTED"
+printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'not the runner'"'"'s copy'
+[ -f "$V/0-Inbox/offer.md" ] && [ ! -e "$V/1-Projects/Job hunt/Offer letter.md" ] || die 'a copy the runner did not make moved'
+# Set aside in Processed: the copy goes with it, with no row.
+fresh
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+printf 'file\t0-Inbox/offer.docx\t0-Inbox/Processed\toffer.docx\t-\t-\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'Processed'
+[ -f "$V/0-Inbox/Processed/offer.md" ] && [ ! -e "$V/0-Inbox/offer.md" ] || die 'the copy did not follow to Processed'
+if grep -q 'offer' "$V/index.md"; then die 'a row for Processed'; fi
+# A taken name: the copy stays where it was.
+fresh
+printf '%s\n' 0-Inbox/offer.md >"$CONVERTED"
+mkdir -p "$V/1-Projects/Job hunt"
+echo 'the agent wrote this' >"$V/1-Projects/Job hunt/offer letter.MD"
+printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.docx\t#job-offer\tOffer\n' >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY" "$CONVERTED"
+expect_eq "$SHEET_FILED $SHEET_NOTES" '1 0' 'a taken name'
+[ -f "$V/0-Inbox/offer.md" ] || die 'the copy overwrote a file'
+expect_eq "$(cat "$V/1-Projects/Job hunt/offer letter.MD")" 'the agent wrote this' 'the taken file is untouched'
+echo "ok $CASE"
+
+# --- no orphans (#995) ----------------------------------------------------------------
+CASE='original unlinked'
+fresh
+mkdir -p "$V/1-Projects/Job hunt"
+printf -- '---\nby: bower\n---\nA summary.\n' >"$V/1-Projects/Job hunt/Offer summary.md"
+printf -- '---\nby: bower\n---\nAnother.\n' >"$V/1-Projects/Job hunt/Other.md"
+{
+  # The original's line is refused (a changed extension): it stays in the inbox.
+  printf 'file\t0-Inbox/offer.docx\t1-Projects/Job hunt\tOffer letter.pdf\t#job-offer\tOffer\n'
+  printf 'note\t1-Projects/Job hunt/Offer summary.md\t1-Projects/Job hunt/Offer letter.pdf\t#job-offer\tSummary of the offer\n'
+  printf 'note\t1-Projects/Job hunt/Other.md\t../../outside.pdf\t#job-offer\tAnother note\n'
+} >"$V/.bower/filing.tsv"
+apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
+expect_eq "$SHEET_FILED $SHEET_NOTES $SHEET_SKIPPED" '0 2 1' 'the notes are booked, the file line skipped'
+expect_eq "$SHEET_SKIP_REASONS $SHEET_UNLINKED_COUNT" '1 name 2' 'counted apart from the skipped lines'
+grep -qxF -- '- [[1-Projects/Job hunt/Offer summary.md]] · Note · #job-offer · Summary of the offer · filed by Bower' \
+  "$V/index.md" || die 'the row with original -'
+grep -qxF -- '- [[1-Projects/Job hunt/Other.md]] · Note · #job-offer · Another note · filed by Bower' "$V/index.md" ||
+  die 'the row of a note whose original is a traversal'
+grep -qxF -- '- [[Offer summary]] Summary of the offer' "$V/1-Projects/Job hunt/Job hunt.md" || die 'the hub line'
+if grep -qF -- 'outside' "$V/index.md"; then die 'the refused original was written'; fi
+[ -f "$V/0-Inbox/offer.docx" ] || die 'the refused file moved'
+echo "ok $CASE"
+
 # --- note and tag lines -------------------------------------------------------------
 CASE='note lines'
 fresh
@@ -229,8 +448,8 @@ refused_note '0-Inbox/receipt.jpg' - '#flat' 'Not a note'
 refused_note '0-Inbox/new.md' - '#flat' 'Outside the folders'
 refused_note '.claude/x.md' - '#flat' 'Protected'
 refused_note '1-Projects/../CLAUDE.md' - '#flat' 'Traversal'
-refused_note '1-Projects/Job hunt/Offer summary.md' '1-Projects/Job hunt/Gone.docx' '#job' 'Original not there'
-refused_note '1-Projects/Job hunt/Offer summary.md' '../x' '#job' 'Original traversal'
+# An original not there does not save a line that is bad for another reason.
+refused_note '1-Projects/Job hunt/Offer summary.md' '1-Projects/Job hunt/Gone.docx' '#Job' 'Bad tag'
 refused_note '1-Projects/Job hunt/Offer summary.md' - '#Job' 'Bad tag'
 refused_note '1-Projects/Job hunt/Offer summary.md' - '#job' ''
 [ ! -e "$V/1-Projects/Job hunt/Job hunt.md" ] || die 'a refused note made a hub note'
@@ -486,8 +705,10 @@ fresh
 echo 'changed' >>"$V/3-Resources/Old.md"
 printf 'note\t3-Resources/Old.md\t3-Resources/Gone.pdf\t#flat\tChanged\n' >>"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"
-expect_eq "$SHEET_SKIPPED" 6 'six lines skipped'
-expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 original, 1 other' 'counted per reason'
+expect_eq "$SHEET_SKIPPED $SHEET_NOTES" '5 1' 'five lines skipped, the note booked'
+expect_eq "$SHEET_SKIP_REASONS" '1 description, 1 path, 1 name, 1 tag, 1 other' \
+  'counted per reason'
+expect_eq "$SHEET_UNLINKED_COUNT" 1 'the note without its original, counted apart'
 fresh
 : >"$V/.bower/filing.tsv"
 apply_filing_sheet "$V" "$V/.bower/filing.tsv" "$PENDING" "$BEFORE" "$DAY"

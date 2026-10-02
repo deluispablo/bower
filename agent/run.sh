@@ -282,6 +282,9 @@ readonly QUARANTINED_FILE="$WORK_DIR/quarantined.txt"
 # ("<reason><TAB><path>"), all in the work dir.
 readonly KINDS_FILE="$WORK_DIR/kinds.txt"
 readonly UNCONVERTED_FILE="$WORK_DIR/unconverted.txt"
+# The Markdown copies the conversion wrote in the vault this run, one path
+# per line, so the filing sheet moves each one with its original (#995).
+readonly CONVERTED_FILE="$WORK_DIR/converted.txt"
 readonly SET_ASIDE_FILE="$WORK_DIR/set-aside.txt"
 # The text of each pending document (R-RUNNER-7, R-AG-9), kept before the agent
 # runs so nothing it writes can change it: one "<file name><TAB><text file or
@@ -1339,14 +1342,196 @@ sheet_ext() {
   printf '%s' "${e,,}"
 }
 
-# Whether $1 is a usable file name for the original named $2: a safe path
-# (sheet_path_ok) of one segment, at most 60 characters, with the
-# original's extension (any letter case).
+# The number of bytes (not characters) of $1.
+sheet_bytes() {
+  local LC_ALL=C
+  printf '%s' "${#1}"
+}
+
+# Whether $1 is a usable file name for the original named $2, as written:
+# a safe path (sheet_path_ok) of one segment with the original's extension
+# (any letter case). A name the agent kept (exactly $2) may be up to 200
+# bytes long: the rulebook keeps a name that already says what the file
+# is, whatever its length (#995). A name the agent changed is at most 60
+# characters.
 sheet_name_ok() {
   sheet_path_ok "$1" || return 1
   [[ $1 != */* ]] || return 1
-  [ "$(sheet_chars "$1")" -le 60 ] || return 1
-  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ]
+  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ] || return 1
+  if [ "$1" = "$2" ]; then
+    [ "$(sheet_bytes "$1")" -le 200 ]
+  else
+    [ "$(sheet_chars "$1")" -le 60 ]
+  fi
+}
+
+# Whether $1 is a name the agent changed (not $2, the original's name) that
+# is usable but for its length: a safe path of one segment, with the
+# original's extension, over 60 characters. The runner shortens such a
+# name (sheet_name_short) instead of refusing the line (#995).
+sheet_name_long() {
+  [ "$1" != "$2" ] || return 1
+  sheet_path_ok "$1" || return 1
+  [[ $1 != */* ]] || return 1
+  [ "$(sheet_ext "$1")" = "$(sheet_ext "$2")" ] || return 1
+  [ "$(sheet_chars "$1")" -gt 60 ]
+}
+
+# The stem of the file name $1: the name without its extension.
+sheet_stem() {
+  if [[ $1 == ?*.* ]]; then printf '%s' "${1%.*}"; else printf '%s' "$1"; fi
+}
+
+# The long name $1 (sheet_name_long) shortened to at most 60 characters and
+# free in the folder $2, printed: the extension kept, the stem cut at the
+# last word boundary that fits (a first word that does not fit alone is cut
+# by characters), trailing spaces and punctuation trimmed, and ` (2)`,
+# ` (3)`, ... ` (9)` added before the extension while the name is taken
+# there in any letter case (sheet_taken). Pure string work, no pattern
+# built from the name; the stem is cut once with no suffix and once for
+# the suffixes (all four characters long), with no process per word, so a
+# hostile sheet cannot make it slow. Returns 1 when no such name is left
+# or the result is not a safe name.
+sheet_name_short() {
+  local LC_ALL=C
+  local name=$1 dir=$2 ext="" stem words=() n cut cand len
+  [[ $name != ?*.* ]] || ext=.${name##*.}
+  stem=${name%"$ext"}
+  read -r -a words <<<"$stem"
+  [ "${#words[@]}" -gt 0 ] || return 1
+  sheet_nchars "$ext"
+  len=$SHEET_N
+  sheet_cut $((60 - len)) "${words[@]}" || return 1
+  cand=$SHEET_CUT$ext
+  sheet_path_ok "$cand" || return 1
+  if ! sheet_taken "$dir" "$cand"; then
+    printf '%s' "$cand"
+    return 0
+  fi
+  sheet_cut $((60 - len - 4)) "${words[@]}" || return 1
+  cut=$SHEET_CUT
+  sheet_path_ok "$cut (2)$ext" || return 1
+  for n in 2 3 4 5 6 7 8 9; do
+    cand="$cut ($n)$ext"
+    if ! sheet_taken "$dir" "$cand"; then
+      printf '%s' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# SHEET_N: the number of characters of $1 (its bytes less the UTF-8
+# continuation bytes), counted in the shell with no process.
+sheet_nchars() {
+  local LC_ALL=C
+  local s=${1//[$'\x80'-$'\xbf']/}
+  SHEET_N=${#s}
+}
+
+# SHEET_CUT: the words $2... joined by spaces, as many as fit in $1
+# characters (the first word alone cut by characters when it does not fit),
+# then trailing spaces and punctuation trimmed. Returns 1 when nothing is
+# left. No process is started.
+sheet_cut() {
+  local LC_ALL=C
+  local budget=$1 acc='' w
+  shift
+  [ "$budget" -gt 0 ] || return 1
+  for w in "$@"; do
+    sheet_nchars "${acc:+$acc }$w"
+    [ "$SHEET_N" -le "$budget" ] || break
+    acc=${acc:+$acc }$w
+  done
+  if [ -z "$acc" ]; then
+    acc=$1
+    sheet_nchars "$acc"
+    while [ -n "$acc" ] && [ "$SHEET_N" -gt "$budget" ]; do
+      # One character off the end: its UTF-8 continuation bytes, then its
+      # first byte.
+      while [[ $acc == *[$'\x80'-$'\xbf'] ]]; do acc=${acc%?}; done
+      acc=${acc%?}
+      sheet_nchars "$acc"
+    done
+  fi
+  while [[ $acc == *[' ,;:.!_&+(-'] || $acc == *'–' || $acc == *'—' ]]; do
+    if [[ $acc == *[' ,;:.!_&+(-'] ]]; then acc=${acc%?}; else acc=${acc%???}; fi
+  done
+  SHEET_CUT=$acc
+  [ -n "$acc" ]
+}
+
+# The renames the runner made this run (#995), in step: SHEET_MAP_FROM[i]
+# is a path as the agent wrote it, SHEET_MAP_TO[i] the path used. Compared
+# as plain strings only.
+SHEET_MAP_FROM=()
+SHEET_MAP_TO=()
+# The pending paths whose name the runner tried to shorten this run, the
+# text copies it moved and booked itself (sheet_sibling), and the notes
+# booked without their original (counts only).
+SHEET_SHORT_SRC=()
+SHEET_SIBLINGS=()
+SHEET_UNLINKED_COUNT=0
+
+# Whether $1 is one of $2...: plain string comparison.
+sheet_has() {
+  local x=$1
+  shift
+  while [ "$#" -gt 0 ]; do
+    [ "$1" != "$x" ] || return 0
+    shift
+  done
+  return 1
+}
+
+# The path $1 as the runner filed it: its entry in SHEET_MAP_TO when the
+# agent's path is in SHEET_MAP_FROM, else $1 as it is.
+sheet_mapped() {
+  local i
+  for i in "${!SHEET_MAP_FROM[@]}"; do
+    if [ "${SHEET_MAP_FROM[$i]}" = "$1" ]; then
+      printf '%s' "${SHEET_MAP_TO[$i]}"
+      return 0
+    fi
+  done
+  printf '%s' "$1"
+}
+
+# Replaces every link to a name the runner changed this run in the note $2
+# (vault $1) by the renamed form: `[[<x>]]`, `[[<x>|` and `[[<x>#`, where
+# <x> is the agent's name, its stem, its path from the top of the folder
+# or that path without the extension. A literal replace (awk index, no
+# regex built from a name). A note whose content was held before the run
+# (the manifest $3) is left as it is: the move phase finds a moved file by
+# its content. Returns 1 when a rewrite fails.
+sheet_relink() {
+  local file="$1/$2" before=$3 key i j f t from to suf old new
+  local froms=() tos=()
+  [ "${#SHEET_MAP_FROM[@]}" -gt 0 ] || return 0
+  key=$(cksum <"$file" | awk '{ print $1 " " $2 }') || return 1
+  ! K="$key" awk '$1 " " $2 == ENVIRON["K"] { f = 1; exit } END { exit !f }' "$before" || return 0
+  for i in "${!SHEET_MAP_FROM[@]}"; do
+    from=${SHEET_MAP_FROM[$i]}
+    to=${SHEET_MAP_TO[$i]}
+    f=${from##*/}
+    t=${to##*/}
+    froms=("$f" "$(sheet_stem "$f")" "$from" "${from%/*}/$(sheet_stem "$f")")
+    tos=("$t" "$(sheet_stem "$t")" "$to" "${to%/*}/$(sheet_stem "$t")")
+    for j in 0 1 2 3; do
+      for suf in ']]' '|' '#'; do
+        old="[[${froms[$j]}$suf"
+        new="[[${tos[$j]}$suf"
+        grep -qF -- "$old" "$file" || continue
+        O="$old" N="$new" sheet_rewrite "$file" '
+        { sub(/\r$/, ""); s = $0; out = ""
+          while ((i = index(s, ENVIRON["O"])) > 0) {
+            out = out substr(s, 1, i - 1) ENVIRON["N"]
+            s = substr(s, i + length(ENVIRON["O"]))
+          }
+          print out s }' || return 1
+      done
+    done
+  done
 }
 
 # Whether $1 holds 1 to 5 tags in the rules v24 form, as row_ok checks
@@ -1536,8 +1721,8 @@ sheet_index_ok() {
   [ ! -e "$1/index.md" ] || [ -f "$1/index.md" ]
 }
 
-# Rewrites the file $1 with the awk program $2 (L and S come from the
-# environment), keeping Windows line ends when it has them. Only a plain
+# Rewrites the file $1 with the awk program $2 (its strings, L, S or O and
+# N, come from the environment), keeping Windows line ends when it has them. Only a plain
 # file reached through no link is rewritten; the work file is outside the
 # vault.
 sheet_rewrite() {
@@ -1633,25 +1818,31 @@ sheet_index_row() {
 # the run $3, the date $4, then the line's five fields. Returns 1, having
 # changed nothing, when the line is not usable: the pending path is not on
 # the pending list or not a file there; the destination is not one
-# sheet_dest_kind accepts; the file name is not usable (sheet_name_ok) or
+# sheet_dest_kind accepts; the file name is not usable (sheet_name_ok, or
+# sheet_name_long for a changed name over 60 characters) or, as written,
 # names a file that is there already (in any letter case); the tags or the
 # description are not in the v24 form (both `-` for 0-Inbox/Processed);
 # index.md or the folder's hub note is a link or not a plain file
 # (sheet_index_ok, sheet_hub_plan). A failed mkdir or mv also skips the
-# line. Otherwise moves the file in the local copy, then writes its hub
-# line (in the folder's hub note, made for a new folder) and its index
-# row; nothing more for Processed. Returns 2 when one of those writes
-# fails after the move.
+# line. A changed name over 60 characters is shortened (sheet_name_short,
+# which also picks ` (2)`, ` (3)` on a clash) and the rename is kept in
+# SHEET_MAP_FROM and SHEET_MAP_TO for the `note` lines. Otherwise moves the
+# file in the local copy, then writes its hub line (in the folder's hub
+# note, made for a new folder) and its index row; nothing more for
+# Processed. Returns 2 when one of those writes fails after the move.
 sheet_file_line() {
   local vault=$1 pending=$2 before=$3 day=$4 src=$5 dest=$6 name=$7 tags=$8 desc=$9
-  local kind target plan='' arr=()
+  local kind target plan='' arr=() final short=0
   SHEET_WHY=path
   sheet_path_ok "$src" pending || return 1
   grep -qxF -- "$src" "$pending" || return 1
   [ -f "$vault/$src" ] && [ ! -L "$vault/$src" ] || return 1
   kind=$(sheet_dest_kind "$vault" "$dest") || return 1
   SHEET_WHY=name
-  sheet_name_ok "$name" "${src##*/}" || return 1
+  if ! sheet_name_ok "$name" "${src##*/}"; then
+    sheet_name_long "$name" "${src##*/}" || return 1
+    short=1
+  fi
   if [ "$kind" = processed ]; then
     SHEET_WHY=tag
     [ "$tags" = - ] || return 1
@@ -1663,9 +1854,24 @@ sheet_file_line() {
     SHEET_WHY=description
     desc=$(sheet_text_fit "$desc" 100) || return 1
   fi
-  target="$dest/$name"
   SHEET_WHY=name
-  ! sheet_taken "$vault/$dest" "$name" || return 1
+  if [ "$short" -eq 1 ]; then
+    # One shortening per pending file in a run, whatever the sheet repeats.
+    ! sheet_has "$src" ${SHEET_SHORT_SRC[@]+"${SHEET_SHORT_SRC[@]}"} || return 1
+    SHEET_SHORT_SRC+=("$src")
+    # A long name already used for this folder: the links that name it go
+    # to the first file, so a second one is refused, as a repeated short
+    # name is.
+    ! sheet_has "$dest/$name" ${SHEET_MAP_FROM[@]+"${SHEET_MAP_FROM[@]}"} || return 1
+    # A file there under the long name: links that name it mean that file,
+    # so nothing is shortened or remapped.
+    ! sheet_taken "$vault/$dest" "$name" || return 1
+    final=$(sheet_name_short "$name" "$vault/$dest") || return 1
+  else
+    ! sheet_taken "$vault/$dest" "$name" || return 1
+    final=$name
+  fi
+  target="$dest/$final"
   SHEET_WHY=other
   if [ "$kind" != processed ]; then
     sheet_index_ok "$vault" || return 1
@@ -1674,12 +1880,60 @@ sheet_file_line() {
   mkdir -p -- "$vault/$dest" 2>/dev/null || return 1
   mv -n -- "$vault/$src" "$vault/$target" 2>/dev/null || return 1
   [ -f "$vault/$target" ] && [ ! -e "$vault/$src" ] || return 1
+  if [ "$final" != "$name" ]; then
+    SHEET_MAP_FROM+=("$dest/$name")
+    SHEET_MAP_TO+=("$target")
+  fi
+  if [ "$kind" != processed ]; then
+    read -r -a arr <<<"$tags"
+    tags="${arr[*]}"
+    sheet_hub_write "$vault" "$plan" "$final" "$desc" "$day" "$tags" || return 2
+    sheet_index_row "$vault" "- [[$target]] · $(sheet_type_of "$final") · $tags · $desc · filed by Bower" "$target" ||
+      return 2
+  fi
+  sheet_sibling "$vault" "$before" "$day" "$src" "$dest" "$name" "$final" "$kind" "$tags" "$desc" || return 2
+}
+
+# The text copy the runner made this run for the original $4 (pandoc's
+# `<stem>.md` next to it, listed in the file SHEET_CONVERTED; pdftotext
+# writes nothing in the vault), once that original is filed (#995): the
+# vault $1, the manifest before the run $2, the date $3, then the file
+# line's destination $5, name as written $6, name used $7, destination kind
+# $8 (sheet_dest_kind), tags $9 and description ${10}. A copy still where
+# the runner wrote it, a plain file, moves next to the original as
+# `<final stem>.md`, unless that name is taken there or not a safe path
+# (it then stays where it was). Outside Processed it is booked as a note
+# whose original is the filed file: its hub line and its index row, with
+# the file line's tags and description. When the agent's name was
+# shortened, `<agent's stem>.md` in the destination maps to it, so a `note`
+# line for the copy finds it. Returns 2 when a write fails.
+sheet_sibling() {
+  local vault=$1 before=$2 day=$3 src=$4 dest=$5 name=$6 final=$7 kind=$8 tags=$9 desc=${10}
+  local sib stem note plan row
+  [ -n "${SHEET_CONVERTED:-}" ] && [ -f "$SHEET_CONVERTED" ] || return 0
+  [[ ${src##*/} == ?*.* ]] || return 0
+  sib="${src%.*}.md"
+  [ "$sib" != "$src" ] || return 0
+  grep -qxF -- "$sib" "$SHEET_CONVERTED" || return 0
+  [ -f "$vault/$sib" ] && [ ! -L "$vault/$sib" ] || return 0
+  stem=$(sheet_stem "$final")
+  note="$dest/$stem.md"
+  sheet_path_ok "$note" || return 0
+  ! sheet_taken "$vault/$dest" "$stem.md" || return 0
+  mv -n -- "$vault/$sib" "$vault/$note" 2>/dev/null || return 0
+  [ -f "$vault/$note" ] && [ ! -e "$vault/$sib" ] || return 0
+  if [ "$final" != "$name" ]; then
+    SHEET_MAP_FROM+=("$dest/$(sheet_stem "$name").md")
+    SHEET_MAP_TO+=("$note")
+  fi
   [ "$kind" != processed ] || return 0
-  read -r -a arr <<<"$tags"
-  tags="${arr[*]}"
-  sheet_hub_write "$vault" "$plan" "$name" "$desc" "$day" "$tags" || return 2
-  sheet_index_row "$vault" "- [[$target]] · $(sheet_type_of "$name") · $tags · $desc · filed by Bower" "$target" ||
-    return 2
+  plan=$(sheet_hub_plan "$vault" "$dest" "$before") || return 2
+  [ "$plan" != "$note" ] || plan=''
+  sheet_hub_write "$vault" "$plan" "$stem" "$desc" "$day" "$tags" || return 2
+  row="- [[$note]] · Note · $tags · $desc · filed by Bower · [[$dest/$final]]"
+  sheet_index_row "$vault" "$row" "$note" || return 2
+  SHEET_NOTES=$((${SHEET_NOTES:-0} + 1))
+  SHEET_SIBLINGS+=("$note")
 }
 
 # Whether the note $2 (vault $1, the manifest before the run $3) may be
@@ -1710,19 +1964,39 @@ sheet_note_ok() {
 
 # One `note` line: the vault $1, the manifest before the run $2, the date
 # $3, then the line's four fields. Returns 1, having changed nothing, when
-# the note may not be booked (sheet_note_ok), the original is neither `-`
-# nor a file there now (after the moves), or the tags or the description
-# are not in the v24 form. Otherwise writes the note's hub line (outside
-# Answers/) and its index row, which ends ` · [[<original>]]` when it has
-# one. Returns 2 when a write fails.
+# the note may not be booked (sheet_note_ok), or the tags or the
+# description are not in the v24 form. An original that is not a file there
+# now (after the moves) is dropped: the note is booked with original `-`
+# and SHEET_UNLINKED is 1 (else 0). An original the runner filed under a shorter
+# name is read as that name (sheet_mapped), and the note's links to the
+# long name are rewritten (sheet_relink). Otherwise writes the note's hub
+# line (outside Answers/) and its index row, which ends
+# ` · [[<original>]]` when it has one. Returns 2 when a write fails.
 sheet_note_line() {
   local vault=$1 before=$2 day=$3 note=$4 orig=$5 tags=$6 desc=$7
   local dir name row plan='' arr=()
   SHEET_WHY=path
+  # A text copy the runner moved under a shorter name (sheet_sibling).
+  note=$(sheet_mapped "$note")
+  # A copy the runner booked already (sheet_sibling): its row and hub line
+  # are written, and SHEET_REPEAT tells the caller not to count it again.
+  SHEET_UNLINKED=0 SHEET_REPEAT=0
+  if sheet_has "$note" ${SHEET_SIBLINGS[@]+"${SHEET_SIBLINGS[@]}"}; then
+    SHEET_REPEAT=1
+    return 0
+  fi
   sheet_note_ok "$vault" "$note" "$before" || return 1
-  SHEET_WHY=original
+  # An original the runner filed under a shorter name (#995).
+  orig=$(sheet_mapped "$orig")
+  # An original that is not a file there now (its `file` line was refused,
+  # or it names nothing) does not keep the note out (#995): the note is
+  # booked with original `-`, and SHEET_UNLINKED tells the caller.
+  SHEET_UNLINKED=0
   if [ "$orig" != - ]; then
-    sheet_path_ok "$orig" && [ -f "$vault/$orig" ] && [ ! -L "$vault/$orig" ] || return 1
+    if ! { sheet_path_ok "$orig" && [ -f "$vault/$orig" ] && [ ! -L "$vault/$orig" ]; }; then
+      orig=-
+      SHEET_UNLINKED=1
+    fi
   fi
   SHEET_WHY=tag
   sheet_tags_ok "$tags" || return 1
@@ -1740,6 +2014,8 @@ sheet_note_line() {
   esac
   # A hub note booked itself gets no line in itself.
   [ "$plan" != "$note" ] || plan=''
+  # Its links to a name the runner shortened follow the rename (#995).
+  sheet_relink "$vault" "$note" "$before" || return 2
   sheet_hub_write "$vault" "$plan" "${name%.*}" "$desc" "$day" "$tags" || return 2
   row="- [[$note]] · Note · $tags · $desc · filed by Bower"
   [ "$orig" = - ] || row+=" · [[$orig]]"
@@ -1786,13 +2062,18 @@ sheet_split() {
 }
 
 # Carries out the filing sheet $2 in the vault $1: the pending list $3, the
-# manifest before the run $4, today's date $5. The `file` lines first, in
+# manifest before the run $4, today's date $5, and $6, the list of the text
+# copies the runner made this run (one path per line; none when empty or
+# missing; sheet_sibling) in SHEET_CONVERTED. The `file` lines first, in
 # order, so a `note` line's original is checked where it was filed; then
 # the `note` and `tag` lines. A blank line is ignored; any other line that
 # is not one of the three kinds with its number of fields, or that its
 # check refuses, is skipped. At most SHEET_MAX_LINES lines are read, the
 # rest are skipped. Sets SHEET_FILED, SHEET_NOTES, SHEET_TAGS and
-# SHEET_SKIPPED (counts only). Returns 1 when a write fails.
+# SHEET_SKIPPED (counts only), SHEET_SKIP_REASONS (the skipped lines per
+# reason) and SHEET_UNLINKED_COUNT, the `note` lines booked without their
+# original (not skipped, so in neither of the two). Returns 1 when a write
+# fails.
 apply_filing_sheet() {
   # Bytes, not characters, everywhere below: a line that is not valid UTF-8
   # is counted the same way by every count, so the warning never
@@ -1801,6 +2082,8 @@ apply_filing_sheet() {
   local vault=$1 sheet=$2 pending=$3 before=$4 day=$5 line total read rc pass reason
   local lines=()
   SHEET_FILED=0 SHEET_NOTES=0 SHEET_TAGS=0 SHEET_SKIPPED=0 SHEET_SKIP_REASONS=''
+  SHEET_MAP_FROM=() SHEET_MAP_TO=() SHEET_SHORT_SRC=() SHEET_SIBLINGS=() SHEET_UNLINKED_COUNT=0
+  SHEET_CONVERTED=${6:-}
   [ -f "$sheet" ] && [ ! -L "$sheet" ] || return 0
   total=$(tr -d '\000' <"$sheet" | grep -ac '[^[:space:]]' || true)
   # At most SHEET_MAX_BYTES and SHEET_MAX_LINES are read.
@@ -1811,7 +2094,7 @@ apply_filing_sheet() {
   done
   SHEET_SKIPPED=$((total - read))
   [ "$SHEET_SKIPPED" -ge 0 ] || SHEET_SKIPPED=0
-  local -A why=([description]=0 [path]=0 [name]=0 [tag]=0 [original]=0 [other]=$SHEET_SKIPPED)
+  local -A why=([description]=0 [path]=0 [name]=0 [tag]=0 [other]=$SHEET_SKIPPED)
   for pass in file other; do
     for line in ${lines[@]+"${lines[@]}"}; do
       [[ $line == *[^[:space:]]* ]] || continue
@@ -1833,7 +2116,11 @@ apply_filing_sheet() {
           ;;
         note:5:other)
           sheet_note_line "$vault" "$before" "$day" "${SHEET_FIELDS[@]:1}" || rc=$?
-          [ "$rc" -ne 0 ] || SHEET_NOTES=$((SHEET_NOTES + 1))
+          if [ "$rc" -eq 0 ] && [ "$SHEET_REPEAT" -eq 0 ]; then
+            SHEET_NOTES=$((SHEET_NOTES + 1))
+            # Booked without its original: counted, not skipped.
+            [ "$SHEET_UNLINKED" -eq 0 ] || SHEET_UNLINKED_COUNT=$((SHEET_UNLINKED_COUNT + 1))
+          fi
           ;;
         tag:3:other)
           sheet_tag_line "$vault" "${SHEET_FIELDS[@]:1}" || rc=$?
@@ -1853,7 +2140,7 @@ apply_filing_sheet() {
     done
   done
   SHEET_SKIP_REASONS=''
-  for reason in description path name tag original other; do
+  for reason in description path name tag other; do
     [ "${why[$reason]}" -eq 0 ] ||
       SHEET_SKIP_REASONS+="${SHEET_SKIP_REASONS:+, }${why[$reason]} $reason"
   done
@@ -3487,9 +3774,12 @@ pdf_text() {
 # --- convert documents ------------------------------------------------------
 # The agent has no pandoc, so Office, HTML and EPUB files pending in 0-Inbox/
 # and Clippings/ are converted here, before it runs: each becomes a Markdown
-# sibling with the same base name (report.docx -> report.md), which the agent
-# files and then moves to 0-Inbox/Processed/ with the original (ingest.md).
-# A file whose sibling already exists is left as it is. --sandbox keeps
+# sibling with the same base name (report.docx -> report.md), which goes to
+# the same folder as its original, with the original's final base name
+# (the rulebook's converted-document rule): the agent moves it, or the
+# filing sheet does when the agent filed only the original (each sibling
+# is listed in CONVERTED_FILE; sheet_sibling). A file whose sibling already
+# exists is left as it is. --sandbox keeps
 # pandoc to the one input file: no other file, no URL, no network. Taken
 # after the manifest, so the siblings are new files and go up with the
 # agent's changes. A lint processes nothing, so it converts nothing. A file
@@ -3498,6 +3788,7 @@ pdf_text() {
 # to a private log file.
 STEP='convert documents'
 : >"$UNCONVERTED_FILE"
+: >"$CONVERTED_FILE"
 : >"$DOC_TEXT_MAP"
 mkdir -p "$DOC_TEXT_DIR"
 if [ "$MODE" = ingest ]; then
@@ -3521,6 +3812,7 @@ if [ "$MODE" = ingest ]; then
     if (cd "$VAULT_DIR" && pandoc --sandbox -f "$from" -t gfm --wrap=none \
       -o "$sibling" -- "$path") </dev/null >>"$PANDOC_LOG" 2>&1; then
       keep_doc_text "$path" "$VAULT_DIR/$sibling"
+      printf '%s\n' "$sibling" >>"$CONVERTED_FILE"
       converted=$((converted + 1))
     else
       rm -f "$VAULT_DIR/$sibling"
@@ -3860,13 +4152,17 @@ if [ -f "$SHEET_TAKEN" ]; then
   [ -f "$sheet_pending" ] || sheet_pending=$PENDING_FILE
   [ "$MODE" = ingest ] || sheet_pending=/dev/null
   if ! apply_filing_sheet "$VAULT_DIR" "$SHEET_TAKEN" "$sheet_pending" "$MANIFEST_BEFORE" \
-    "$(date -u +%F)" 2>>"$WORK_DIR/filing-sheet.err"; then
+    "$(date -u +%F)" "$CONVERTED_FILE" 2>>"$WORK_DIR/filing-sheet.err"; then
     # The message names vault paths: it stays in the work dir, which is
     # never uploaded, not in the logs.
     fail "$STEP: filing sheet failed"
   fi
   # Counts only, with the skipped lines per reason (#978 follow-up).
-  log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped${SHEET_SKIP_REASONS:+ (skipped: $SHEET_SKIP_REASONS)}"
+  # Notes booked without their original (#995) are not skipped lines.
+  unlinked=''
+  [ "$SHEET_UNLINKED_COUNT" -eq 0 ] ||
+    unlinked="; $SHEET_UNLINKED_COUNT $([ "$SHEET_UNLINKED_COUNT" -eq 1 ] && echo 'note booked without its' || echo 'notes booked without their') original"
+  log "filing sheet: $SHEET_FILED filed, $SHEET_NOTES notes booked, $SHEET_TAGS tags, $SHEET_SKIPPED lines skipped${SHEET_SKIP_REASONS:+ (skipped: $SHEET_SKIP_REASONS)}$unlinked"
   [ "$SHEET_SKIPPED" -eq 0 ] ||
     SHEET_WARNING="Warning: $SHEET_SKIPPED filing $([ "$SHEET_SKIPPED" -eq 1 ] && echo 'decision was' || echo 'decisions were') not usable and skipped; what they named stays where it was."
 fi
