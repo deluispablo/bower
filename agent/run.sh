@@ -54,10 +54,14 @@
 #   BOWER_EFFORT_LOW         optional; the effort for a lint, and for an
 #                            ingest with no instruction note and no context
 #                            note (default low)
-#   BOWER_EFFORT_HIGH        optional; the effort for any other ingest
-#                            (default high). Both take low, medium, high,
-#                            xhigh or max; any other value is ignored with a
-#                            warning (see "model and effort" below)
+#   BOWER_EFFORT_MEDIUM      optional; the effort for an ingest whose only
+#                            reason for more is a context note from Add
+#                            (default medium)
+#   BOWER_EFFORT_HIGH        optional; the effort for an ingest given an
+#                            instruction note the app wrote (default high).
+#                            All three take low, medium, high, xhigh or max;
+#                            any other value is ignored with a warning (see
+#                            "model and effort" below)
 #
 # Environment:
 #   CLAUDE_CODE_OAUTH_TOKEN  or ANTHROPIC_API_KEY; not needed when the API
@@ -102,12 +106,12 @@ export -n BOWER_RUN_ALLOW_WEB
 # arrived in the environment (even empty, next to the file) would otherwise
 # stay exported, and printf -v below would hand the file's value to every
 # child's environment (curl, rclone, jq; issue #276).
-export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE BOWER_REPORT_BACKOFF BOWER_MODEL BOWER_EFFORT_LOW BOWER_EFFORT_HIGH
+export -n BOWER_API_URL BOWER_RUN_TICKET BOWER_API_KEY BOWER_MAX_TURNS BOWER_ALLOW_WEB BOWER_MAX_CHANGES BOWER_SCOPE BOWER_REPORT_BACKOFF BOWER_MODEL BOWER_EFFORT_LOW BOWER_EFFORT_MEDIUM BOWER_EFFORT_HIGH
 secrets_file="${RUNNER_TEMP:-}/bower-secrets"
 if [ -n "${RUNNER_TEMP:-}" ] && [ -f "$secrets_file" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
-      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE | BOWER_REPORT_BACKOFF | BOWER_MODEL | BOWER_EFFORT_LOW | BOWER_EFFORT_HIGH)
+      BOWER_API_URL | BOWER_RUN_TICKET | BOWER_API_KEY | BOWER_MAX_TURNS | BOWER_ALLOW_WEB | BOWER_MAX_CHANGES | BOWER_SCOPE | BOWER_REPORT_BACKOFF | BOWER_MODEL | BOWER_EFFORT_LOW | BOWER_EFFORT_MEDIUM | BOWER_EFFORT_HIGH)
         printf -v "${line%%=*}" '%s' "${line#*=}"
         ;;
       BOWER_RUN_ALLOW_WEB)
@@ -207,9 +211,11 @@ esac
 readonly SCOPE
 
 # --- model and effort -------------------------------------------------------
-# R-SS-3 (#965): the agent runs on MODEL, at EFFORT_LOW for a lint and for an
-# ingest whose pending list holds no instruction note and no context note,
-# at EFFORT_HIGH otherwise (chosen just before the agent run, below). Both
+# R-SS-3 (#965, #1000): the agent runs on MODEL, at EFFORT_HIGH for an
+# ingest given an instruction note the app wrote, at EFFORT_MEDIUM for an
+# ingest whose only reason for more is a pending context note, and at
+# EFFORT_LOW otherwise, a lint included (choose_effort, in the context pack
+# below). Both
 # are passed to `claude -p` as arguments, never as environment. A setting
 # that does not pass its check falls back to the default with a warning
 # that names the setting, never its value.
@@ -221,7 +227,8 @@ if ! [[ "$MODEL" =~ ^[a-z][a-z0-9.-]*$ ]]; then
 fi
 readonly MODEL
 # Usage: effort_setting <setting name> <default>: sets the variable named
-# after the setting without its BOWER_ prefix (EFFORT_LOW, EFFORT_HIGH).
+# after the setting without its BOWER_ prefix (EFFORT_LOW, EFFORT_MEDIUM,
+# EFFORT_HIGH).
 effort_setting() {
   local value=${!1:-}
   case "$value" in
@@ -235,8 +242,9 @@ effort_setting() {
   printf -v "${1#BOWER_}" '%s' "$value"
 }
 effort_setting BOWER_EFFORT_LOW low
+effort_setting BOWER_EFFORT_MEDIUM medium
 effort_setting BOWER_EFFORT_HIGH high
-readonly EFFORT_LOW EFFORT_HIGH
+readonly EFFORT_LOW EFFORT_MEDIUM EFFORT_HIGH
 
 AGENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly AGENT_DIR
@@ -2980,6 +2988,37 @@ fill_placeholders() {
     }
     { print }'
 }
+# The effort and the rulebook sections for a run of mode $1 (#965, #1000),
+# with RULES_WRITABLE $2 and the pending list after the pre-scan in file
+# $3. Sets EFFORT and CONTEXT_MODES:
+# - an ingest given an instruction note the app wrote (RULES_WRITABLE 1):
+#   EFFORT_HIGH, with the `instructions` sections;
+# - an ingest whose only reason for more is a pending context note from
+#   Add (is_context_note): EFFORT_MEDIUM, also with the `instructions`
+#   sections, because how a context note is handled is written in the
+#   rulebook's **Instructions** section (`<!-- load: instructions -->`);
+# - anything else, a lint included: EFFORT_LOW, with only the run's own
+#   mode (`ingest` or `lint`).
+choose_effort() {
+  local mode=$1 writable=$2 pending=$3 path
+  EFFORT=$EFFORT_LOW
+  CONTEXT_MODES=("$mode")
+  [ "$mode" = ingest ] || return 0
+  if [ "$writable" -eq 1 ]; then
+    EFFORT=$EFFORT_HIGH
+    CONTEXT_MODES+=(instructions)
+    return 0
+  fi
+  [ -f "$pending" ] || return 0
+  while IFS= read -r path; do
+    [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
+    if is_context_note "$path"; then
+      EFFORT=$EFFORT_MEDIUM
+      CONTEXT_MODES+=(instructions)
+      return 0
+    fi
+  done <"$pending"
+}
 # <<< context pack
 
 # Whether pending path $1 belongs to an instructions-only run: an
@@ -4002,28 +4041,9 @@ if [ "$MODE" = ingest ]; then
 else
   report_phase writing
 fi
-# The effort (see "model and effort" above): high for an ingest whose agent
-# is given an instruction note the app wrote (RULES_WRITABLE, from the
-# instruction allow-list above) or a context note still pending.
-# The same test picks the rulebook sections (R-SS-5): `ingest`, plus
-# `instructions` when the effort is high for that reason; `lint` for a lint.
-EFFORT=$EFFORT_LOW
-CONTEXT_MODES=("$MODE")
-if [ "$MODE" = ingest ]; then
-  if [ "$RULES_WRITABLE" -eq 1 ]; then
-    EFFORT=$EFFORT_HIGH
-    CONTEXT_MODES+=(instructions)
-  else
-    while IFS= read -r path; do
-      [ -n "$path" ] && [ -f "$VAULT_DIR/$path" ] || continue
-      if is_context_note "$path"; then
-        EFFORT=$EFFORT_HIGH
-        CONTEXT_MODES+=(instructions)
-        break
-      fi
-    done <"$pending_now"
-  fi
-fi
+# The effort and the rulebook sections (see "model and effort" above and
+# choose_effort in the context pack).
+choose_effort "$MODE" "$RULES_WRITABLE" "${pending_now:-}"
 readonly EFFORT
 # R-SS-6 (#966): the run's facts, filled into the prompt the way
 # {{ALREADY_WRITTEN}} is, so the agent never reads index.md or log.md to
