@@ -44,7 +44,7 @@ Each entry in `harness/features.json`:
    - The fix is committed already: `--fixed-in <sha>` puts that commit's code back as it was before it and expects the same red.
    - No red is possible (a decision kept, a finding not reproduced): `--known-green "<why>"`, only for an entry whose `note` says why.
    - Any other flag is refused. A verify must name its test (`-t "…"` / `-g "…"`) and, once closed, that name must match a real test.
-7. Before stopping: the tree is clean, every gate green, the next step written in `progress.md`.
+7. Before stopping: the tree is clean, every gate green, the next step written under `## Next` in `progress.md` (`pnpm check` refuses an empty one). Every finding entry carries `steps` an evaluator can replay.
 
 ## Roles
 

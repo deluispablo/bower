@@ -506,7 +506,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "Rename and move are last-writer-wins: no check that the file is still where the app saw it.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"changed elsewhere|moved elsewhere\"",
+      "Read those tests: the file is renamed or moved in Drive behind the app, then the app renames or moves it",
+      "Green now: the app refuses with a conflict instead of overwriting the change made elsewhere"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"changed elsewhere|moved elsewhere\"",
     "passes": true
   },
@@ -515,7 +519,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "Ticking a task in a new note makes it new again.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"keeps a seen thing seen\"",
+      "The test marks a new note as seen, then renames it from the app",
+      "Green now: your own change does not make the note new again"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"keeps a seen thing seen\"",
     "passes": true
   },
@@ -524,7 +532,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "An upload in flight survives removing or binning its pile; a lone pile comes back.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"removed while a thing is on its way\"",
+      "The test holds an upload, removes its pile, then lets the upload finish",
+      "Green now: the removed pile does not come back with a lone file in it"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"removed while a thing is on its way\"",
     "passes": true
   },
@@ -533,7 +545,10 @@
     "task": "qa-5",
     "category": "review",
     "what": "A failed addPile can leave an empty pile folder.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"could not be made\"",
+      "Green now: when making a pile fails part way, no empty pile folder is left in Drive"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"could not be made\"",
     "passes": true
   },
@@ -542,7 +557,10 @@
     "task": "qa-5",
     "category": "review",
     "what": "Restoring a path inside a binned pile would rename the pile folder.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"inside a binned pile\"",
+      "Green now: restoring a thing inside a binned pile restores that thing, and the pile folder keeps its name"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"inside a binned pile\"",
     "passes": true
   },
@@ -551,7 +569,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "A Drive change whose journal line fails to write is lost to the runner.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"fails to write once\"",
+      "The test makes the first write of a change line fail",
+      "Green now: the line is written on the retry, so the runner still sees the change"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"fails to write once\"",
     "passes": true
   },
@@ -560,7 +582,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "Two first writes can make two .bower/changes folders.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"two first changes\"",
+      "The test makes two changes at the same moment on a fresh folder",
+      "Green now: only one changes folder is made in Drive"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"two first changes\"",
     "passes": true
   },
@@ -569,7 +595,10 @@
     "task": "qa-5",
     "category": "review",
     "what": "entries() parses the seen list once per new file.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/vault-index.test.ts -t \"reads the seen list once\"",
+      "Green now: listing many new files reads the seen list once, not once per file"
+    ],
     "verify": "pnpm vitest run src/data/vault/vault-index.test.ts -t \"reads the seen list once\"",
     "passes": true
   },
@@ -578,7 +607,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "The screen counts ordered-list tasks, the file writer does not: a tick can hit the wrong task.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/note-format.test.ts -t \"numbered list\"",
+      "The test ticks the second task of a numbered list (\"1. [ ] first\", \"2. [ ] second\")",
+      "Green now: \"second\" is the one ticked, the same task the screen counts"
+    ],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"numbered list\"",
     "passes": true
   },
@@ -587,7 +620,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "Block-list tags and quoted values in frontmatter are misread.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/note-format.test.ts -t \"block-list tags\"",
+      "The test reads a note whose tags are a dash list and whose values are in quotes",
+      "Green now: the tags are flat and shortlist, and quoted values show without their quotes"
+    ],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"block-list tags\"",
     "passes": true
   },
@@ -596,7 +633,12 @@
     "task": "qa-5",
     "category": "review",
     "what": "A failed start leaves a blank screen; demo and fake code ship in the real bundle.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/choose.test.ts -t \"fake sources answer|the demo comes\"",
+      "Then run: pnpm build && node scripts/check-bundle.mjs",
+      "Green now: the pretend and demo sources load on their own, and the check says the real bundle carries no demo or fake code",
+      "Optionally open http://localhost:5190/?scenario=offline&time=instant&source=fake: a message shows, never a blank screen"
+    ],
     "verify": "pnpm vitest run src/data/choose.test.ts -t \"fake sources answer|the demo comes\" && pnpm build && node scripts/check-bundle.mjs",
     "passes": true
   },
@@ -605,7 +647,12 @@
     "task": "qa-5",
     "category": "review",
     "what": "Device data (seen, dismissed, run seen, Add draft) stays after sign-out.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/settings?scenario=default&time=instant",
+      "Click \"Sign out\", then \"Continue with Google\" to come back",
+      "Seen marks, put-away cards and the Add draft from before are gone; your theme choice stays",
+      "To check from a terminal: pnpm vitest run src/data/live -t \"forgets this person\""
+    ],
     "verify": "pnpm vitest run src/data/live -t \"forgets this person\"",
     "passes": true
   },
@@ -614,7 +661,10 @@
     "task": "qa-5",
     "category": "review",
     "what": "Journal entries carry only a path; add the Drive file id while the format is v1.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"names the Drive file\"",
+      "Green now: each change line written to the changes folder carries the Drive file id as well as its path"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"names the Drive file\"",
     "passes": true
   },
@@ -623,7 +673,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "The service worker's fallback would answer the Worker's paths on a shared origin.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"never answers the Worker\"",
+      "The test opens the built app with the service worker on, then goes to the Worker's addresses",
+      "Green now: the service worker never answers those addresses with the app page"
+    ],
     "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"never answers the Worker\"",
     "passes": true,
     "note": "The denylist shipped with the first PWA commit (2885a08), so --fixed-in would undo the whole PWA. Red checked by hand on 2026-10-04: without the Worker's paths in navigateFallbackDenylist the test fails."
@@ -633,7 +687,11 @@
     "task": "qa-5",
     "category": "review",
     "what": "Some calls swallow errors silently (.catch(() => undefined), a then with () => null); the rule is one sentence to the person or details to the console.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
+      "Then run: rg -n \"catch\\(\\(\\) => (undefined|null)\" src",
+      "Green now, and the search finds nothing outside tests: every failure says one sentence to the person or logs to the console"
+    ],
     "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
     "passes": true
   },
@@ -642,7 +700,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "A journal line that cannot be written (offline) is lost; a retry after a lost answer can write it twice and the change shows twice.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/journal.test.ts -t \"outbox|twice\"",
+      "The tests write a change line while offline, and retry one after a lost answer",
+      "Green now: the line waits in the outbox and is sent later, and a retry never writes it twice"
+    ],
     "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"outbox|twice\"",
     "passes": true
   },
@@ -651,7 +713,12 @@
     "task": "qa-6",
     "category": "review",
     "what": "Turning web lookups on or off reaches nothing: /process sends only the scope; the Worker contract expects allow_web.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/settings?scenario=default&time=instant&source=fake and turn on the web lookups setting",
+      "Go to Home and run a tidy-up",
+      "To check what is sent, in a terminal run: pnpm vitest run src/data/worker src/data/live -t \"allow web\"",
+      "Green now: the tidy-up request carries allowWeb with your choice, not just the scope"
+    ],
     "verify": "pnpm vitest run src/data/worker src/data/live -t \"allow web\"",
     "passes": true
   },
@@ -660,7 +727,12 @@
     "task": "qa-6",
     "category": "review",
     "what": "Folder counts disagree between the card or row (everything inside) and the folder's own header (what is directly in it).",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/files?scenario=default&time=instant",
+      "Note the count on the Projects card, then click it",
+      "The count under the Projects heading is the same number",
+      "Note the count on the Flat hunt row, click it: its heading shows the same count"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"one counting rule for folders\"",
     "passes": true
   },
@@ -669,7 +741,12 @@
     "task": "qa-6",
     "category": "review",
     "what": "Move to: Enter with an empty search box moves the file to the first folder.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
+      "In the folder tree, right-click Lease draft and choose \"Move to…\"",
+      "Press Enter without typing anything",
+      "The Move to dialog stays open and nothing is moved (no \"Moved Lease draft\" message)"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Enter in an empty Move to does nothing\"",
     "passes": true
   },
@@ -678,7 +755,12 @@
     "task": "qa-6",
     "category": "review",
     "what": "On the pretend Drive, a reload mid tidy-up leaves the inbox half filed with no run; the running situation starts a new run on every reload.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=demo&source=fake",
+      "Click \"Tidy up 15 things\" on Home, then \"Tidy up 15 things\" in the sheet",
+      "While it runs, reload the page",
+      "Home now shows the tidy-up as stopped and the inbox as it was, not half filed with no run; with scenario=running a reload does not start a new run"
+    ],
     "verify": "pnpm vitest run src/data/fake -t \"reload\"",
     "passes": true
   },
@@ -687,7 +769,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The swallowed-errors check misses catch {} blocks, .catch(() => []|false) and toasts with no console.error.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
+      "Read the test: it also looks for empty catch {} blocks, .catch(() => []) or false, and toasts with no console.error",
+      "Green now: none of those are left in src"
+    ],
     "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
     "passes": true,
     "note": "Reopened by the qa-6 review: only half done (see qa-7 entries)."
@@ -697,7 +783,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The copy check reads only .tsx; words in .ts files (run words, BowerError messages, journal lines) go unchecked.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/copy.test.ts -t \"no file names\"",
+      "Read the test: it reads .ts files too, not only .tsx",
+      "Green now: run words, error messages and change lines in .ts files are checked for file names and jargon"
+    ],
     "verify": "pnpm vitest run src/copy.test.ts -t \"no file names\"",
     "passes": true
   },
@@ -706,7 +796,12 @@
     "task": "qa-6",
     "category": "review",
     "what": "The loading-states fix is pinned only by pure-function tests; reverting the components would stay green.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=slow&time=instant&source=fake",
+      "While it loads, the bottom bar says \"Looking at the inbox…\", never \"Nothing waiting\" or \"0 things\"",
+      "From a terminal: pnpm vitest run src/features/tidy/StatusBar.test.tsx src/features/bower/BowerPanel.test.tsx -t \"loading\"",
+      "Green now: the screens themselves are tested, so undoing the component fix turns them red"
+    ],
     "verify": "pnpm vitest run src/features/tidy/StatusBar.test.tsx src/features/bower/BowerPanel.test.tsx -t \"loading\"",
     "passes": true
   },
@@ -715,7 +810,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "About 20 verify commands name a directory or file, not the test; deleting the pinning test keeps them green. done.sh should fail when no test matches.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/harness.test.ts -t \"must name its test\" && node scripts/check-harness.mjs",
+      "Look at harness/features.json: every verify names a test with -t or -g",
+      "Green now: a verify that names only a file or folder fails the check"
+    ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"must name its test\" && node scripts/check-harness.mjs",
     "passes": true
   },
@@ -724,7 +823,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "Nothing stops a hand edit of passes or verify; done.sh does not show red before green.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/harness.test.ts -t \"needs a proof|loses its proof\" && node scripts/check-harness.mjs",
+      "Try it: flip one passes to true by hand and rerun node scripts/check-harness.mjs (then undo)",
+      "The check fails: an entry needs a proof line showing red then green, and changing its verify loses the proof"
+    ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"needs a proof|loses its proof\" && node scripts/check-harness.mjs",
     "passes": true
   },
@@ -733,7 +836,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "ConfirmBin says \"The 1 thing inside go with it … get them back\".",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
+      "In the folder tree, right-click a folder with one thing in it and choose \"Move to Bin\"",
+      "The question now reads \"The thing inside goes with it. You can get it back…\"; with 3 things it reads \"The 3 things inside go with it. You can get them back…\""
+    ],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"agree\"",
     "passes": true
   },
@@ -742,7 +849,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "If search fails, the palette says \"Looking in your notes…\" forever.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/features/palette -t \"says when search fails\"",
+      "The test opens search, makes it fail, and types \"Tally\"",
+      "Green now: the search says \"Search did not answer…\" instead of \"Looking in your notes…\" forever"
+    ],
     "verify": "pnpm vitest run src/features/palette -t \"says when search fails\"",
     "passes": true
   },
@@ -751,7 +862,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "A YAML list that is not indented (tags:\\n- a) is misread.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/note-format.test.ts -t \"not indented\"",
+      "The test reads tags written as \"tags:\" then \"- flat\" and \"- shortlist\" with no indent",
+      "Green now: the tags are flat and shortlist"
+    ],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"not indented\"",
     "passes": true
   },
@@ -760,7 +875,12 @@
     "task": "qa-6",
     "category": "polish",
     "what": "Add's duplicate check misses drafts restored after a reload.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/add?scenario=empty&time=instant",
+      "Add a PDF file, then reload the page: the pile shows \"Add this file again\"",
+      "Add the same file again",
+      "The pile has one item, not two, and the button says \"Put 1 thing in the inbox\""
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a file added again after a reload is not doubled\"",
     "passes": true
   },
@@ -769,7 +889,12 @@
     "task": "qa-6",
     "category": "review",
     "what": "Sign-out keeps open folders, selection and the toured mark in memory; its failure toast logs nothing.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant and open Projects and Flat hunt in the tree, select one, bookmark a note",
+      "Go to Settings, click \"Sign out\", then \"Continue with Google\"",
+      "The tree is closed again, nothing is selected and there are no bookmarks",
+      "From a terminal: pnpm vitest run src/app/ui-store.test.ts -t \"sign-out\" is green"
+    ],
     "verify": "pnpm vitest run src/app/ui-store.test.ts -t \"sign-out\"",
     "passes": true
   },
@@ -778,7 +903,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "Undo of a pile removed mid-upload loses the late things; a failed bin of a late file brings a lone pile back.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"late\"",
+      "The tests remove a pile while a file is still uploading, then Undo; and make the Bin of the late file fail",
+      "Green now: Undo brings back the late things too, and a failed Bin does not bring back a lone pile"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"late\"",
     "passes": true
   },
@@ -787,7 +916,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "stillAsSeen checks name and parent but not modifiedTime; the metadata update ignores it.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/drive-vault.test.ts -t \"changed elsewhere\"",
+      "Decided against: a text change elsewhere is not a conflict for a rename or move; a new name or place is",
+      "Green: renaming after the text changed elsewhere goes through; after a rename or move elsewhere it is refused"
+    ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"changed elsewhere\"",
     "passes": true,
     "note": "Decided against the finding: a rename or move does not touch the text, so a text change elsewhere is not a conflict (pinned by a test); a change of name or place is (stillAsSeen)."
@@ -797,7 +930,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The fixture says dates are relative to the demo's start, but timeline dates are fixed text checked against 2026-10-04.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/docs.test.ts src/data/demo -t \"timeline dates work|timeline date is after\"",
+      "Look at the demo fixture: its timeline dates follow the demo start, as its comment says",
+      "Green now: no timeline date in the demo is after today, whatever day you run it"
+    ],
     "verify": "pnpm vitest run src/docs.test.ts src/data/demo -t \"timeline dates work|timeline date is after\"",
     "passes": true
   },
@@ -806,7 +943,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The PWA route test is a string match and skips /me, /vault, /runs, /push; it should navigate with the service worker active.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"never answers the Worker\"",
+      "Read the test: it goes to /me, /vault, /runs and /push with the service worker active",
+      "Green now: none of those addresses gets the app page from the service worker"
+    ],
     "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"never answers the Worker\"",
     "passes": true
   },
@@ -815,7 +956,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The architecture test ignores import() and relative imports.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/architecture.test.ts -t \"dynamic and relative|screens never import\"",
+      "Read the test: it follows import() and relative paths too",
+      "Green now: no screen reaches a data source other than through the provider, however it imports"
+    ],
     "verify": "pnpm vitest run src/architecture.test.ts -t \"dynamic and relative|screens never import\"",
     "passes": true
   },
@@ -824,7 +969,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "The tour test says the pretend Drive starts over on reload (no longer true).",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/docs.test.ts -t \"stale comment\"",
+      "Open the tour test in e2e/",
+      "Green now: no comment says the pretend Drive starts over on reload"
+    ],
     "verify": "pnpm vitest run src/docs.test.ts -t \"stale comment\"",
     "passes": true
   },
@@ -833,7 +982,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The landing fix is a hand edit of an exported file; the next export undoes it, and the rule against hand edits was dropped.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/docs.test.ts -t \"the landing has no placeholder\"",
+      "Look at the landing source and AGENTS.md",
+      "Green now: the fix lives in the landing source, so a new export keeps it, and the rule against hand edits of exported files is back"
+    ],
     "verify": "pnpm vitest run src/docs.test.ts -t \"the landing has no placeholder\"",
     "passes": true
   },
@@ -842,7 +995,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "AGENTS.md lost two rules: brand-line tokens for text, never \"the bird\" in copy.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/docs.test.ts -t \"AGENTS.md keeps\"",
+      "Open AGENTS.md",
+      "It again says text uses the brand-line tokens and copy never says \"the bird\""
+    ],
     "verify": "pnpm vitest run src/docs.test.ts -t \"AGENTS.md keeps\"",
     "passes": true
   },
@@ -851,7 +1008,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "done.sh commits everything with git add -A, so two entries can land in one commit.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/harness.test.ts -t \"one entry per commit\"",
+      "Read harness/done.sh: it stages only the files of one entry, not git add -A",
+      "Green now: two entries cannot land in one commit"
+    ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"one entry per commit\"",
     "passes": true,
     "note": "Reopened by the qa-6 review: only half done (see qa-7 entries)."
@@ -861,7 +1022,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The pretend runner always reports no questions, so the test cannot tell \"only new questions\" from \"never asks\".",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/fake src/data/contract -t \"new questions\"",
+      "The pretend runner now asks a new question (about the Saltmere weekend)",
+      "Green now: the report lists only that new question, while the old ones stay in the questions list"
+    ],
     "verify": "pnpm vitest run src/data/fake src/data/contract -t \"new questions\"",
     "passes": true
   },
@@ -870,7 +1035,11 @@
     "task": "qa-6",
     "category": "bug",
     "what": "Settings shows Alex and you@example.com for every user, the real app included.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/features/settings -t \"shows who is signed in\"",
+      "The test signs in as Sam (sam@example.com) and opens Settings",
+      "Green now: Settings shows Sam and sam@example.com, never Alex"
+    ],
     "verify": "pnpm vitest run src/features/settings -t \"shows who is signed in\"",
     "passes": true
   },
@@ -879,7 +1048,12 @@
     "task": "qa-6",
     "category": "polish",
     "what": "Escape after typing a new note's name still opens the note.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
+      "In the folder tree, right-click Resources and choose \"New note\"",
+      "Type \"Soup ideas\", then press Escape",
+      "No note opens, and neither \"Untitled\" nor \"Soup ideas\" is left in the tree"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new note's name takes it back\"",
     "passes": true
   },
@@ -888,7 +1062,13 @@
     "task": "qa-6",
     "category": "polish",
     "what": "The side panel's stopped tidy-up card stays until the next run, with no way to put it away.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=fail-run&time=instant",
+      "Click \"Tidy up 15 things\" on Home, then \"Tidy up 15 things\" in the sheet",
+      "Wait for \"The tidy-up stopped\" in the sheet, then press Escape",
+      "In the side panel, click \"Put it away\" on the stopped tidy-up card",
+      "The card is gone, and it stays gone after a reload"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a stopped tidy-up can be put away\"",
     "passes": true
   },
@@ -897,7 +1077,11 @@
     "task": "qa-6",
     "category": "review",
     "what": "The 120-character limit applies to rename only, not to New note or New folder names.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/contract -t \"longer than 120\"",
+      "In the app (http://localhost:5190/?scenario=default&time=instant), name a new note or folder with more than 120 characters",
+      "It is refused as too long, as a rename is; the test is green"
+    ],
     "verify": "pnpm vitest run src/data/contract -t \"longer than 120\"",
     "passes": true
   },
@@ -1006,7 +1190,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "Dates read three ways: 28 sept, 28 Sept, 29 Sep.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/app/words.test.ts -t \"one way to write a day\"",
+      "In the app (http://localhost:5190/?scenario=default&time=instant), look at dates in Activity and note timelines",
+      "Every day reads one way, like \"28 Sep\"; today reads \"today, …\""
+    ],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"one way to write a day\"",
     "passes": true
   },
@@ -1015,7 +1203,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "The run sheet says \"Usually about 5.\" with no unit.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=running&time=demo",
+      "Open the running tidy-up sheet",
+      "The clock line ends \"Usually about 5 minutes.\", with the unit"
+    ],
     "verify": "pnpm vitest run src/features/tidy/run-words.test.ts -t \"minutes\"",
     "passes": true
   },
@@ -1024,7 +1216,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "The bookmark toast says \"at the top of Files\" on the desktop, where bookmarks are in the Bookmarks tab.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
+      "In the folder tree, right-click Lease draft and choose \"Bookmark\"",
+      "The message says \"Bookmarked. Find it in the Bookmarks tab.\""
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the bookmark toast says where bookmarks are\"",
     "passes": true
   },
@@ -1033,7 +1229,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts…), Home by their notes.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant (on a phone width, http://localhost:5190/files?scenario=default&time=instant)",
+      "In the folder tree, open Inbox",
+      "Piles show by their names, like \"Receipts from the Saltmere weekend\", as Home shows them; none starts with a date like 2026-10-03"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the tree names piles as Home does\"",
     "passes": true
   },
@@ -1042,7 +1242,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "Tree sort uses the extension: Untitled (2) before Untitled, Brackwater 2025 receipts.pdf before Brackwater 2025.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant and make two new notes in one folder (Untitled, Untitled (2)), sorted by name A to Z",
+      "Untitled comes before Untitled (2)",
+      "From a terminal: pnpm vitest run src/data/tree.test.ts -t \"sorts names as people read them\" (also checks Brackwater 2025 before Brackwater 2025 receipts.pdf)"
+    ],
     "verify": "pnpm vitest run src/data/tree.test.ts -t \"sorts names as people read them\"",
     "passes": true
   },
@@ -1051,7 +1255,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "A new note named straight away leaves two journal lines (New note, then Renamed).",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
+      "In the folder tree, right-click Resources, choose \"New note\", type \"Soup ideas\" and press Enter",
+      "Open Activity: one line for the new note \"Soup ideas\", no separate \"Renamed\" line"
+    ],
     "verify": "pnpm vitest run src/data/contract -t \"one line for a new thing\"",
     "passes": true
   },
@@ -1060,7 +1268,12 @@
     "task": "qa-6",
     "category": "polish",
     "what": "Closing the failure sheet with Close removes the Home card, with Esc it stays.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=fail-run&time=instant",
+      "Click \"Tidy up 15 things\" on Home, then \"Tidy up 15 things\" in the sheet",
+      "Wait for \"The tidy-up stopped\", then close the sheet with Escape (another time, with its \"Close\" button)",
+      "Either way, Home keeps the \"The tidy-up stopped\" card with \"Try again\" until you click \"Got it\""
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"closing a stopped tidy-up is the same however you close it\"",
     "passes": true,
     "note": "Unified on keeping the Home card (with Try again) until \"Got it\", however the sheet is closed; the older robustness test pins the same."
@@ -1070,7 +1283,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "The demo asks to keep a receipts rule that already exists.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant and look at Bower's questions",
+      "No question asks to keep a rule for receipts (or any rule already in Rules)",
+      "From a terminal: pnpm vitest run src/data/demo -t \"no question asks for a rule that exists\" is green"
+    ],
     "verify": "pnpm vitest run src/data/demo -t \"no question asks for a rule that exists\"",
     "passes": true
   },
@@ -1079,7 +1296,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "Search matches markdown itself: \"[ ]\" finds task boxes; a table snippet starts with an empty cell.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant and open search",
+      "Type \"[ ]\": nothing is found",
+      "Type \"Planned\": the snippets are plain text and none starts with an empty table cell or a \"|\""
+    ],
     "verify": "pnpm vitest run src/data/contract -t \"search reads text, not markdown\"",
     "passes": true
   },
@@ -1088,7 +1309,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "Timeline sources that are saved links are not links.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md?scenario=default&time=instant",
+      "In the timeline, find the source \"flat-listing.example\"",
+      "It is a link to https://flat-listing.example that opens in a new tab"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a saved link in the timeline is a link\"",
     "passes": true
   },
@@ -1097,7 +1322,12 @@
     "task": "qa-6",
     "category": "polish",
     "what": "On the pretend Drive, Delete account only says nothing is deleted; the real flow is never exercised.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/settings?scenario=default&time=instant",
+      "Click \"Delete\", read the question (\"Your Bower folder and everything in it stay in your Drive.\"), click \"Delete my account\"",
+      "You land on the sign-in page with \"Your account is gone\"",
+      "Reload: still signed out, \"Continue with Google\" shows"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"deleting the account signs out and forgets\"",
     "passes": true
   },
@@ -1106,7 +1336,12 @@
     "task": "qa-6",
     "category": "polish",
     "what": "After a tour in a tab, choosing First sign-in again opens Home, not the welcome.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=first&time=instant",
+      "Click \"Show me around\", then \"Skip\"",
+      "Click \"Demo situations\", pick \"Alex, with piles waiting\"; then again \"Demo situations\", pick \"First sign-in: no Bower folder yet\"",
+      "The welcome shows again, with \"Your folder is ready\", not Home"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"first sign-in can be chosen again\"",
     "passes": true
   },
@@ -1115,7 +1350,11 @@
     "task": "qa-6",
     "category": "polish",
     "what": "When notifications are blocked, only a passing toast says so; the row never does.",
-    "steps": [],
+    "steps": [
+      "In the browser, block notifications for the app's address",
+      "Open http://localhost:5190/settings?scenario=default&time=instant",
+      "The notifications row itself says \"Blocked in this browser. Allow them in its settings to turn this on.\""
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the notifications row says when they are blocked\"",
     "passes": true
   },
@@ -1124,7 +1363,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "A verify can name a test that no longer exists, or a pattern too loose or empty; nothing re-checks it after closing.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/harness.test.ts -t \"a pattern must match a test\"",
+      "Try it: change one verify in harness/features.json to a test name that does not exist and run node scripts/check-harness.mjs (then undo)",
+      "The check fails: every verify pattern must match a real test, not be empty or too loose"
+    ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"a pattern must match a test\"",
     "passes": true
   },
@@ -1133,7 +1376,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "reprove.mjs can sign any entry without a red step and erases the history; a proof line can be appended by hand.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/harness.test.ts -t \"reproved only for the entries before the rule\"",
+      "Read scripts/reprove.mjs and the proofs file",
+      "Green now: reprove signs only entries from before the rule, keeps the history, and a hand-appended proof line fails the check"
+    ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"reproved only for the entries before the rule\"",
     "passes": true
   },
@@ -1142,7 +1389,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "--green-before is a free-text escape; done.sh commits everything; a mistyped flag skips the red step.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/harness.test.ts -t \"done.sh takes fixed-in\"",
+      "Try: bash harness/done.sh with a mistyped flag",
+      "It stops with an error; done.sh takes --fixed-in, shows red before green, and has no free-text escape"
+    ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"done.sh takes fixed-in\"",
     "passes": true
   },
@@ -1151,7 +1402,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "The swallowed-errors check misses .then(ok, onError); Home and the Bower tab swallow errors there.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
+      "Read the test: it also checks the second handler of .then(ok, onError)",
+      "Green now: Home and the Bower tab say or log their errors there"
+    ],
     "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
     "passes": true
   },
@@ -1160,7 +1415,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "The copy check skips two-word strings in .tsx (aria-label=\"Your vault\" would pass).",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/copy.test.ts -t \"two words are copy\"",
+      "Try: add aria-label=\"Your vault\" to any screen and rerun (then undo)",
+      "The check fails: two-word strings in .tsx are read as copy"
+    ],
     "verify": "pnpm vitest run src/copy.test.ts -t \"two words are copy\"",
     "passes": true
   },
@@ -1169,7 +1428,11 @@
     "task": "qa-7",
     "category": "bug",
     "what": "\"Your account is gone\" can show after an ordinary sign-out when a delete failed; DELETE /me has no unit test.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/settings?scenario=default&time=instant, click \"Sign out\"",
+      "The sign-in page shows no \"Your account is gone\" message",
+      "From a terminal: pnpm vitest run src/data/worker src/data/live -t \"delete\" is green: DELETE /me is tested, and the goodbye shows only when the delete went through"
+    ],
     "verify": "pnpm vitest run src/data/worker src/data/live -t \"delete\"",
     "passes": true
   },
@@ -1178,7 +1441,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "The journal outbox is sent only with the next change (a tidy-up can miss it); a lost answer leaves two files; flushing can lose a line; the runner counts duplicates.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/vault/journal.test.ts src/data/fake src/data/live -t \"outbox\"",
+      "The tests leave a line in the outbox, then start a tidy-up, lose an answer, and flush",
+      "Green now: the outbox is sent before a tidy-up, a lost answer leaves one file, no line is lost and the runner counts each change once"
+    ],
     "verify": "pnpm vitest run src/data/vault/journal.test.ts src/data/fake src/data/live -t \"outbox\"",
     "passes": true
   },
@@ -1187,7 +1454,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "The plan and AGENTS.md still say every write passes its modifiedTime, against the stale-check decision.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/docs.test.ts -t \"content write\"",
+      "Open AGENTS.md and the plan in docs/superpowers/plans/",
+      "They now say only content writes pass modifiedTime; renames and moves check name and place"
+    ],
     "verify": "pnpm vitest run src/docs.test.ts -t \"content write\"",
     "passes": true
   },
@@ -1196,7 +1467,11 @@
     "task": "qa-7",
     "category": "polish",
     "what": "The Bin question counts everything inside while the row counts what is directly in it, without saying so.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
+      "In the folder tree, right-click Projects (it has folders inside) and choose \"Move to Bin\"",
+      "The question says \"Everything inside goes with it: N things, counting what is in its folders.\""
+    ],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"counts everything inside\"",
     "passes": true
   },
@@ -1205,7 +1480,13 @@
     "task": "qa-7",
     "category": "polish",
     "what": "The panel's Put it away and Home's Got it dismiss one stopped run two ways.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=fail-run&time=instant",
+      "Click \"Tidy up 15 things\" on Home, then \"Tidy up 15 things\" in the sheet",
+      "Wait for \"The tidy-up stopped\" in the sheet, then press Escape",
+      "In the side panel, click \"Put it away\"",
+      "The panel card, the Home \"The tidy-up stopped\" card and the footer line all go; another time, \"Got it\" on Home also clears the panel card"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"put away is Got it|puts the panel.s card away\"",
     "passes": true
   },
@@ -1214,7 +1495,11 @@
     "task": "qa-7",
     "category": "polish",
     "what": "A timeline source given as a full https:// address is not a link; a .url name turns into a wrong address.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/features/note -t \"web address\"",
+      "The tests give a timeline source as https://flat-listing.example/listing/3?from=a and as \"Flat listing.url\"",
+      "Green now: the full address is a link shown without https://, and a .url file name is not turned into an address"
+    ],
     "verify": "pnpm vitest run src/features/note -t \"web address\"",
     "passes": true
   },
@@ -1223,7 +1508,12 @@
     "task": "qa-7",
     "category": "polish",
     "what": "A run cut by a reload during filing says Nothing was moved, which can be false.",
-    "steps": [],
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=demo&source=fake",
+      "Click \"Tidy up 15 things\" twice and reload while it is putting things away",
+      "The stopped card says some things may be in their new places, not \"Nothing was moved\"",
+      "From a terminal: pnpm vitest run src/data/fake -t \"reload during filing\" is green"
+    ],
     "verify": "pnpm vitest run src/data/fake -t \"reload during filing\"",
     "passes": true
   },
@@ -1232,7 +1522,12 @@
     "task": "qa-7",
     "category": "polish",
     "what": "Move to: with several matches, an exact folder name cannot be picked with Enter; Enter in an empty box says nothing.",
-    "steps": [],
+    "steps": [
+      "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
+      "In the folder tree, right-click Lease draft and choose \"Move to…\"",
+      "Press Enter in the empty box: it says \"Type a folder name, or pick one with the arrows.\"",
+      "Type \"areas\" and press Enter: \"Moved Lease draft.pdf to Areas\", though other folders match too"
+    ],
     "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"Move to: \"",
     "passes": true
   },
@@ -1241,7 +1536,11 @@
     "task": "qa-7",
     "category": "polish",
     "what": "The name-length check strips a dot-suffix from folder names too.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/data/tree.test.ts -t \"folder names keep their dots\"",
+      "The test names a folder with 118 letters then \".v2\"",
+      "Green now: the folder name is too long (121 characters), while a note of the same name is fine"
+    ],
     "verify": "pnpm vitest run src/data/tree.test.ts -t \"folder names keep their dots\"",
     "passes": true
   },
@@ -1250,7 +1549,11 @@
     "task": "qa-7",
     "category": "review",
     "what": "The outbox keeps unsent lines (with note names) after sign-out without saying why.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/docs.test.ts -t \"outbox stays at sign-out\"",
+      "Open src/data/device.ts and AGENTS.md",
+      "Both say why the journal outbox stays at sign-out"
+    ],
     "verify": "pnpm vitest run src/docs.test.ts -t \"outbox stays at sign-out\"",
     "passes": true
   },
@@ -1259,16 +1562,24 @@
     "task": "qa-7",
     "category": "review",
     "what": "Most findings have no steps for the evaluator to replay; the progress log has no next step.",
-    "steps": [],
-    "verify": "node scripts/check-harness.mjs",
-    "passes": false
+    "steps": [
+      "In a terminal at the repo root, run: node scripts/check-harness.mjs",
+      "Look at harness/features.json and the end of harness/progress.md",
+      "It passes: every finding has steps to replay, and the progress log ends with the next step"
+    ],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"every finding has steps|the progress log says the next step\"",
+    "passes": true
   },
   {
     "id": "weak-tests",
     "task": "qa-7",
     "category": "review",
     "what": "Some tests are vacuous or pin helpers, not screens: the demo question test, goWithIt, signout toured, late-bin retry, new-note on the phone.",
-    "steps": [],
+    "steps": [
+      "In a terminal at the repo root, run: pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file|Bin fails\"",
+      "Read those tests",
+      "Green now: each one checks what the screen or the Drive shows, and fails if the fix is undone"
+    ],
     "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file|Bin fails\"",
     "passes": false
   }

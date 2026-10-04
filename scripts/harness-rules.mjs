@@ -36,6 +36,7 @@ export function problems(features, proofs, tests, legacy = new Set()) {
     if (f.passes && proof?.hash !== hashOf(f.verify)) bad.push(`${f.id}: passes without a proof for its current verify (close it with harness/done.sh)`);
     if (f.passes && proof?.how === 'reproved' && typeof f.task !== 'number' && !legacy.has(f.id)) bad.push(`${f.id}: a "reproved" proof is only for the entries before the proof rule; close it with harness/done.sh`);
     if (typeof f.task !== 'string') continue;
+    if (!Array.isArray(f.steps) || !f.steps.some((x) => typeof x === 'string' && x.trim())) bad.push(`${f.id}: no steps (how a person sees it, for an evaluator to replay)`);
     for (const p of f.verify.split('&&').map((x) => x.trim())) {
       const named = /vitest run|playwright test|e2e-both/.test(p);
       if (!named) continue;
@@ -104,4 +105,12 @@ export function notStaged(status) {
     .filter((l) => l.startsWith('??') || l[1] !== ' ')
     .map((l) => l.slice(3))
     .filter((p) => !p.startsWith('harness/'));
+}
+
+/** harness/progress.md must say what comes next: a "## Next" section with at least one line. */
+export function nextProblems(text) {
+  const m = /^## Next\s*\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text);
+  if (!m) return 'harness/progress.md has no "## Next" section: write the next step before stopping';
+  if (!/^- \S/m.test(m[1] ?? '')) return 'harness/progress.md: "## Next" is empty: write the next step before stopping';
+  return null;
 }

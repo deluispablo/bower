@@ -2,32 +2,33 @@
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { doneArgs, hashOf, notStaged, othersFlipped, problems, readProofs } from '../scripts/harness-rules.mjs';
+import { doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs } from '../scripts/harness-rules.mjs';
 
-type Entry = { id: string; task: string | number; verify: string; passes: boolean };
+type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
+const S = ['Open Home.', 'See it.'];
 const V = 'pnpm vitest run src/x.test.ts -t "it works"';
 const proofOf = (e: Entry): Map<string, string> => readProofs(`${e.id}\t${hashOf(e.verify)}\t2026-10-04\tred\n`) as Map<string, string>;
 
 describe('the harness', () => {
   it('an entry that passes needs a proof from done.sh', () => {
-    const e: Entry = { id: 'a', task: 'qa-6', verify: V, passes: true };
+    const e: Entry = { id: 'a', task: 'qa-6', steps: S, verify: V, passes: true };
     expect(problems([e], new Map())).toHaveLength(1);
     expect(problems([e], proofOf(e))).toEqual([]);
   });
 
   it('a verify changed after closing loses its proof', () => {
-    const e: Entry = { id: 'a', task: 'qa-6', verify: V, passes: true };
+    const e: Entry = { id: 'a', task: 'qa-6', steps: S, verify: V, passes: true };
     const proofs = proofOf(e);
     expect(problems([{ ...e, verify: `${V} || true` }], proofs)).toHaveLength(1);
   });
 
   it('a verify must name its test', () => {
     const bad: Entry[] = [
-      { id: 'u', task: 'qa-6', verify: 'pnpm vitest run src/data', passes: false },
-      { id: 'e', task: 'qa-6', verify: 'bash scripts/e2e-both.sh e2e/qa6.spec.ts', passes: false },
+      { id: 'u', task: 'qa-6', steps: S, verify: 'pnpm vitest run src/data', passes: false },
+      { id: 'e', task: 'qa-6', steps: S, verify: 'bash scripts/e2e-both.sh e2e/qa6.spec.ts', passes: false },
     ];
     expect(problems(bad, new Map())).toHaveLength(2);
-    expect(problems([{ id: 'ok', task: 'qa-6', verify: 'bash scripts/e2e-both.sh e2e/a.spec.ts -g "a whole name"', passes: false }], new Map())).toEqual([]);
+    expect(problems([{ id: 'ok', task: 'qa-6', steps: S, verify: 'bash scripts/e2e-both.sh e2e/a.spec.ts -g "a whole name"', passes: false }], new Map())).toEqual([]);
   });
 
   it('one entry per commit', () => {
@@ -45,7 +46,7 @@ describe('the harness', () => {
 
   it('a pattern must match a test, and be a real name', () => {
     const tests = { unit: ['the journal outbox: a line waits'], e2e: ['Add warns about a file you already have'] };
-    const ok: Entry = { id: 'a', task: 'qa-7', verify: 'pnpm vitest run src/x -t "outbox: a line waits" && bash scripts/e2e-both.sh e2e/x.spec.ts -g "already have"', passes: false };
+    const ok: Entry = { id: 'a', task: 'qa-7', steps: S, verify: 'pnpm vitest run src/x -t "outbox: a line waits" && bash scripts/e2e-both.sh e2e/x.spec.ts -g "already have"', passes: false };
     expect(problems([ok], new Map(), tests)).toEqual([]);
     const gone: Entry = { ...ok, verify: 'pnpm vitest run src/x -t "a test that is gone"' };
     // An open entry may name a test not written yet; a closed one may not.
@@ -59,7 +60,7 @@ describe('the harness', () => {
 
   it('reproved only for the entries before the rule', () => {
     const legacy: Entry = { id: 'old', task: 3, verify: V, passes: true };
-    const recent: Entry = { id: 'new', task: 'qa-7', verify: V, passes: true };
+    const recent: Entry = { id: 'new', task: 'qa-7', steps: S, verify: V, passes: true };
     const proofs = readProofs(`old\t${hashOf(V)}\t2026-10-04\treproved\nnew\t${hashOf(V)}\t2026-10-04\treproved\n`);
     expect(problems([legacy], proofs)).toEqual([]);
     expect(problems([recent], proofs)[0]).toMatch(/reproved/);
@@ -71,5 +72,20 @@ describe('the harness', () => {
     expect(() => doneArgs(['a', 'msg', '--green-befor', 'x'], {})).toThrow(/unknown/);
     expect(() => doneArgs(['a', 'msg', '--known-green', 'why'], {})).toThrow(/note/);
     expect(doneArgs(['a', 'msg', '--known-green', 'why'], { note: 'decided' })).toMatchObject({ mode: 'known-green', reason: 'why' });
+  });
+
+  it('every finding has steps an evaluator can replay', () => {
+    const tests = { unit: ['it works'], e2e: [] };
+    const bare = { id: 'a', task: 'qa-7', verify: V, passes: false };
+    expect(problems([bare], new Map(), tests).some((m: string) => /no steps/.test(m))).toBe(true);
+    expect(problems([{ ...bare, steps: ['Open Home.', 'See the card.'] }], new Map(), tests)).toEqual([]);
+    // The phase plan's numbered tasks have their steps in the plan.
+    expect(problems([{ ...bare, task: 3 }], new Map(), tests)).toEqual([]);
+  });
+
+  it('the progress log says the next step', () => {
+    expect(nextProblems('# Progress\n\n- 2026-10-04: a passes\n')).toMatch(/Next/);
+    expect(nextProblems('# Progress\n\n## Next\n\n## Log\n')).toMatch(/Next/);
+    expect(nextProblems('# Progress\n\n## Next\n\n- Fix the rest of qa-7.\n\n## Log\n')).toBeNull();
   });
 });
