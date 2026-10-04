@@ -150,3 +150,4 @@ restore-rows-dropped	3552111a88fe1948	2026-10-04	red (fixed in db81dc9)
 undo-toast-time	68570c5aeb493075	2026-10-04	red
 runner-names-things	9f811565ce6c69b7	2026-10-04	red
 try-again-sheet	fe0292d506c7c09d	2026-10-04	red
+palette-label-once	1ec889d727cba459	2026-10-04	red (fixed in caffd75)

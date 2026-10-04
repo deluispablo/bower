@@ -1827,6 +1827,6 @@
       "The dialog is named once."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"the palette is named once\"",
-    "passes": false
+    "passes": true
   }
 ]
