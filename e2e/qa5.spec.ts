@@ -196,3 +196,20 @@ test('closing the browser question says how to ask again', async ({ page }) => {
   await expect(page.getByRole('status').getByText(/Turn it on again/)).toBeVisible();
   await expect(sw).toHaveAttribute('aria-checked', 'false');
 });
+
+test('the landing page opens without console errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/landing/index.html');
+  await expect(page.getByRole('link', { name: 'GitHub' }).first()).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1500);
+  expect(errors.filter((e) => !/fonts\.g/.test(e))).toEqual([]);
+  // The drawings still get their shapes once the page runs.
+  expect(await page.locator('path[d]').count()).toBeGreaterThan(5);
+});
+
+test('run your own Bower opens the repo', async ({ page }) => {
+  await open(page, '/', 'signed-out');
+  await expect(page.getByRole('link', { name: /Run your own Bower/ })).toHaveAttribute('href', 'https://github.com/deluispablo/bower');
+});

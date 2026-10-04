@@ -337,7 +337,7 @@
       "/landing/index.html"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the landing page opens without console errors\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "github-links",

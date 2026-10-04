@@ -38,3 +38,4 @@
 - 2026-10-04: dead-bookmarks passes — fix(bookmarks): a bookmark to something gone is dropped once the folder is listed
 - 2026-10-04: instructions-run-copy passes — fix(tidy): reading your changes has its own steps, scene and timing; it never shows as Just filed
 - 2026-10-04: notify-feedback passes — fix(settings): turning on notifications says what the browser is doing, and why it stays off
+- 2026-10-04: landing-console passes — fix(landing): placeholders in drawings use the runtime's own attribute form, so the page logs no errors

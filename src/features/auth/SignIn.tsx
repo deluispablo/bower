@@ -61,7 +61,7 @@ export function SignIn() {
         <nav aria-label="About" className={s.links}>
           <Link to="/privacy">Privacy</Link>
           <Link to="/terms">Terms</Link>
-          <a href="https://github.com/deluispablo" rel="noreferrer">
+          <a href="https://github.com/deluispablo/bower" rel="noreferrer">
             Run your own Bower
           </a>
         </nav>
