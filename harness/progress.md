@@ -68,3 +68,4 @@
 - 2026-10-04: the duplicate-warning e2e no longer adds one file twice to a pile (the new rule refuses it); it covers Leave it out and Add it anyway.
 - 2026-10-04: harness-guards passes — fix(harness): an entry passes only with a proof written by done.sh: red first, a test run, its verify unchanged
 - 2026-10-04: verify-names-tests passes — fix(harness): every verify names its test; done.sh refuses a verify that runs none
+- 2026-10-04: one-entry-per-commit passes — fix(harness): done.sh refuses a change that flips more than one entry
