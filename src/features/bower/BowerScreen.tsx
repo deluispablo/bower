@@ -156,7 +156,7 @@ export function BowerScreen() {
           Your rules
         </h2>
         <p className="muted" style={{ fontSize: 15, marginBottom: 6 }}>
-          Bower follows these in every tidy-up. They live in Rules.md in your folder.
+          Bower follows these in every tidy-up. They are kept with your notes, in your Bower folder.
         </p>
         <ul>
           {(rules ?? []).map((r) => (

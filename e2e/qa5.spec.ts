@@ -164,7 +164,7 @@ test('reading your changes does not look like filing', async ({ page }) => {
   await page.getByRole('button', { name: 'anything from the dentist goes in health' }).click();
   await page.getByRole('button', { name: 'Keep this rule' }).click();
   await page.getByRole('link', { name: /^Home/ }).first().click();
-  await page.getByRole('button', { name: 'Let Bower read them now' }).click();
+  await page.getByRole('button', { name: /Let Bower read (it|them) now/ }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Reading your changes', { timeout: 12_000 });
   await expect(dialog).not.toContainText('Putting them away');

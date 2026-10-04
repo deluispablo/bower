@@ -381,7 +381,7 @@
       "Pile screen, Bower tab, tour, Home"
     ],
     "verify": "pnpm vitest run src/copy.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "side-panel-state",

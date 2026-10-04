@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, type Pile } from '@/data/types';
-import { PILE_NOTE, thingsIn } from '@/data/piles';
+import { thingsIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
 import { ago, plural } from '@/app/words';
 import { Button, IconButton } from '@/ui/Button';
@@ -152,7 +152,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         }}
       />
       <div className={s.noteFoot}>
-        <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? `Saved as ${PILE_NOTE} with the pile.` : 'No note yet.'}</span>
+        <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>
         {changed && !locked && (
           <Button size="sm" disabled={busy} onClick={() => void save()}>
             {busy ? 'Saving…' : 'Save the note'}

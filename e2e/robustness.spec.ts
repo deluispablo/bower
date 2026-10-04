@@ -71,7 +71,7 @@ test('letting Bower read your changes gives a short run with no replay', async (
   await page.getByRole('button', { name: 'anything from the dentist goes in health' }).click();
   await page.getByRole('button', { name: 'Keep this rule' }).click();
   await page.getByRole('link', { name: /Home/ }).first().click();
-  await page.getByRole('button', { name: 'Let Bower read them now' }).click();
+  await page.getByRole('button', { name: /Let Bower read (it|them) now/ }).click();
   await expect(page.getByText(/Done\. Bower read your changes/).last()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Watch what Bower did' })).toHaveCount(0);
 });

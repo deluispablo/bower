@@ -185,7 +185,7 @@ function YourChanges({ running }: { running: boolean }) {
         Since the last tidy-up
       </h2>
       <p className="muted" style={{ fontSize: 15 }}>
-        Bower reads {list.length === 1 ? 'this' : `these ${list.length}`} in the next tidy-up, so it knows what you changed and where to look.
+        Bower reads {list.length === 1 ? 'this change' : `these ${list.length} changes`} in the next tidy-up, so it knows what you changed and where to look.
       </p>
       <ul className={s.changes}>
         {list.slice(-5).reverse().map((c) => (
@@ -195,7 +195,7 @@ function YourChanges({ running }: { running: boolean }) {
       {list.length > 5 && <p className="muted" style={{ fontSize: 14 }}>and {plural(list.length - 5, 'more change')}</p>}
       {!running && (
         <Button size="sm" variant="ghost" onClick={() => void runs.start('instructions').then(() => useUi.getState().setTidy(true), () => toast('It did not start. Try again.'))}>
-          Let Bower read them now
+          {list.length === 1 ? 'Let Bower read it now' : 'Let Bower read them now'}
         </Button>
       )}
     </section>

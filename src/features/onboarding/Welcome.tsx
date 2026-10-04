@@ -18,8 +18,8 @@ const MEANING: Record<ParaRoot, string> = {
 
 const STEPS = [
   { title: 'Throw it in', text: 'Add photos, PDFs, links and notes as they come. Group the ones that belong together and say what they are.' },
-  { title: 'Tap Tidy up', text: 'Bower reads each one, names it, writes what matters into your notes and files it. About five minutes; close the app if you like.' },
-  { title: 'Find it later', text: 'Everything lives in your own Drive, in folders you can open anywhere, Obsidian included.' },
+  { title: 'Tap Tidy up', text: 'Bower reads each one, names it, writes what matters into your notes and files it. About 5 minutes; close the app if you like.' },
+  { title: 'Find it later', text: 'Everything lives in your own Drive, in folders you can open anywhere, in any notes app.' },
 ];
 
 const TOURED = 'bower:toured';
