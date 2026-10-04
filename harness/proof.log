@@ -101,3 +101,4 @@ loading-claims-more	f1b8b3d9c20a763f	2026-10-04	red
 bookmark-toast	6db8b7b2b6c2bce5	2026-10-04	red
 pile-folder-names	c0726a59142bee45	2026-10-04	red
 fail-card-close	5a355e79d93ca3fa	2026-10-04	red
+failed-card-dismiss	1a3aa85010dac8ff	2026-10-04	green-before: landed in 0a2c48e with fail-card-close; red seen before it

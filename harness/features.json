@@ -887,7 +887,7 @@
     "what": "The side panel's stopped tidy-up card stays until the next run, with no way to put it away.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a stopped tidy-up can be put away\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "rename-length-create",
