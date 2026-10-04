@@ -18,7 +18,7 @@ describeVaultContract(
     const vault = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set() });
     // Session and runs arrive with the Worker (Task 10); nothing here touches them yet.
     const sources = { vault } as unknown as Sources;
-    return { sources, dispose: () => vault.dispose(), tidyUp: async () => notYet() };
+    return { sources, dispose: () => vault.dispose(), tidyUp: async () => notYet(), settle: () => vault.settled() };
   },
-  { skip: ['inbox', 'bower', 'tidy'] },
+  { skip: ['tidy'] },
 );

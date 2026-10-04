@@ -14,6 +14,8 @@ export interface ContractWorld {
   dispose(): void;
   /** Runs one tidy-up to its end on the world's own clock; `during` runs while it is going. */
   tidyUp(during?: () => Promise<void>): Promise<RunState | null>;
+  /** Waits for work a source finishes after answering (uploads); the demo has none. */
+  settle?(): Promise<void>;
 }
 
 const LEASE = 'Projects/Flat hunt/Lease draft.pdf';
@@ -118,6 +120,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       it('addPile with a line makes Inbox/<day> <line>/ with Pile note.md', async () => {
         const { vault } = await open();
         await vault.addPile({ text: 'Receipts from the weekend', items: [{ name: 'a.pdf', kind: 'pdf', origin: 'x' }, { name: 'b.jpg', kind: 'image', origin: 'x' }] });
+        await world?.settle?.();
         const folder = findNode(await vault.tree(), 'Inbox')?.children?.find((n) => / Receipts from the weekend$/.test(n.name));
         expect(folder?.name).toMatch(/^\d{4}-\d{2}-\d{2} Receipts from the weekend$/);
         expect(folder?.children?.map((n) => n.name).sort()).toEqual(['Pile note.md', 'a.pdf', 'b.jpg']);
@@ -130,6 +133,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       it('a lone thing with no line sits at the inbox root', async () => {
         const { vault } = await open();
         await vault.addPile({ text: '', items: [{ name: 'lonely.pdf', kind: 'pdf', origin: 'x' }] });
+        await world?.settle?.();
         expect(names(await vault.tree(), 'Inbox')).toContain('lonely.pdf');
         expect((await vault.piles()).find((p) => p.path === 'Inbox/lonely.pdf')?.items).toHaveLength(1);
       });
@@ -137,6 +141,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       it('a pasted link becomes a .url file inside its pile folder', async () => {
         const { vault } = await open();
         await vault.addPile({ text: 'Car insurance renewal', items: [{ name: 'insurer.example/renewal', kind: 'link', origin: 'x', url: 'https://insurer.example/renewal' }] });
+        await world?.settle?.();
         const folder = findNode(await vault.tree(), 'Inbox')?.children?.find((n) => / Car insurance renewal$/.test(n.name));
         expect(folder?.children?.map((n) => n.name).sort()).toEqual(['Pile note.md', 'insurer.example - renewal.url']);
       });
@@ -144,6 +149,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       it('a pile can be only a note', async () => {
         const { vault } = await open();
         const p = await vault.addPile({ text: 'Bins go out on Tuesday nights', items: [] });
+        await world?.settle?.();
         expect(p.items).toEqual([]);
         expect((await vault.piles()).find((x) => x.id === p.id)?.text).toBe('Bins go out on Tuesday nights');
         await expect(vault.addPile({ text: '  ', items: [] })).rejects.toMatchObject({ code: 'conflict' });
@@ -152,6 +158,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       it('removePile bins the whole pile', async () => {
         const { vault } = await open();
         const p = await vault.addPile({ text: 'Old letters', items: [{ name: 'c.pdf', kind: 'pdf', origin: 'x' }] });
+        await world?.settle?.();
         await vault.removePile(p.id);
         expect((await vault.piles()).some((x) => x.id === p.id)).toBe(false);
         expect(names(await vault.tree(), 'Inbox').some((n) => n.endsWith('Old letters'))).toBe(false);
@@ -160,6 +167,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       it('updatePile changes the note', async () => {
         const { vault } = await open();
         const p = await vault.addPile({ text: 'Bins on Tuesday', items: [] });
+        await world?.settle?.();
         await vault.updatePile(p.id, 'Bins on Tuesday nights');
         expect((await vault.piles()).find((x) => x.id === p.id)?.text).toBe('Bins on Tuesday nights');
         await expect(vault.updatePile(p.id, '  ')).rejects.toThrow(/needs its note/);
@@ -282,6 +290,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         const { vault } = await open();
         const run = await world?.tidyUp(async () => {
           await vault.addPile({ text: 'Late arrival', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x' }] });
+          await world?.settle?.();
         });
         expect(run?.phase).toBe('done');
         const left = await vault.piles();

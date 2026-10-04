@@ -7,9 +7,10 @@
 import type { FakeDrive } from '../drive/fake-drive';
 import { DemoWorld } from '../demo/world';
 import type { Scenario } from '../demo/scenario';
-import { PILE_NOTE } from '../piles';
+import { PILE_NOTE, safeInboxName } from '../piles';
 import type { TreeNode } from '../types';
 import { serializeNote } from '../vault/note-format';
+import { serializeRules } from '../vault/rules-format';
 import { BOWER_FOLDER, PROP, SYSTEM, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from '../vault/layout';
 
 /** Scenarios that differ only in how the app is reached seed like the default. */
@@ -31,7 +32,24 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
       ids.set(path, id);
       return id;
     };
-    const pileNotes = new Map((await vault.piles()).filter((p) => p.path && p.text).map((p) => [`${p.path}/${PILE_NOTE}`, p.text]));
+    const piles = await vault.piles();
+    const pileNotes = new Map(piles.filter((p) => p.path && p.text).map((p) => [`${p.path}/${PILE_NOTE}`, p.text]));
+    // Each inbox file keeps the name it was added under and where it came from.
+    const inboxProps = new Map<string, Record<string, string>>();
+    for (const p of piles) {
+      if (!p.path) continue;
+      const lone = !p.path.slice('Inbox/'.length).includes('/') && p.items.length === 1 && !p.text && p.path !== 'Inbox';
+      const taken = new Set<string>();
+      for (const it of p.items) {
+        const base = safeInboxName(it);
+        const dot = base.lastIndexOf('.');
+        let name = base;
+        for (let n = 2; taken.has(name.toLowerCase()); n++) name = dot > 0 ? `${base.slice(0, dot)} (${n})${base.slice(dot)}` : `${base} (${n})`;
+        taken.add(name.toLowerCase());
+        inboxProps.set(lone ? p.path : `${p.path}/${name}`, { [PROP.asAdded]: it.name, [PROP.origin]: it.origin, [PROP.kind]: it.kind });
+      }
+    }
+    const rulesText = serializeRules(await vault.rules());
 
     const write = async (n: TreeNode): Promise<void> => {
       const cut = n.path.lastIndexOf('/');
@@ -40,10 +58,10 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
       if (n.type === 'folder') {
         id = await folderId(n.path);
       } else {
-        const props: Record<string, string> = {};
+        const props: Record<string, string> = { ...inboxProps.get(n.path) };
         if (n.byBower) props[PROP.by] = 'bower';
         if (n.isNew) props[PROP.isNew] = '1';
-        const text = pileNotes.get(n.path) ?? (n.kind === 'note' ? serializeNote({ ...(await vault.note(n.path)), byBower: !!n.byBower }) : n.kind === 'link' ? `[InternetShortcut]\nURL=https://${n.name.replace(/\.url$/, '')}\n` : `A made-up ${n.kind ?? 'file'} for the demo.\n`);
+        const text = n.path === 'Rules.md' ? rulesText : pileNotes.get(n.path) ?? (n.kind === 'note' ? serializeNote({ ...(await vault.note(n.path)), byBower: !!n.byBower }) : n.kind === 'link' ? `[InternetShortcut]\nURL=https://${n.name.replace(/\.url$/, '')}\n` : `A made-up ${n.kind ?? 'file'} for the demo.\n`);
         id = (await drive.createText(await folderId(parentPath), n.name, text, Object.keys(props).length ? props : undefined)).id;
       }
       drive.setTimes(id, n.created, n.modified);
@@ -56,7 +74,7 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
     const json = (name: string, body: unknown): Promise<unknown> => drive.createText(sys, name, `${JSON.stringify(body, null, 2)}\n`);
     await json('questions.json', { v: 1, questions: await vault.questions() } satisfies QuestionsFile);
     await json('suggestions.json', { v: 1, suggestions: await vault.suggestions() } satisfies SuggestionsFile);
-    await json('requests.json', { v: 1, done: {} } satisfies RequestsFile);
+    await json('requests.json', { v: 1, done: [] } satisfies RequestsFile);
     await json('hashes.json', { v: 1, hashes: {} });
     const run = await runs.current();
     if (run) {

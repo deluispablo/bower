@@ -46,7 +46,7 @@
     "task": 7,
     "what": "Piles, rules, requests, questions and suggestions on Drive",
     "verify": "pnpm vitest run src/data/vault src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "add-files",

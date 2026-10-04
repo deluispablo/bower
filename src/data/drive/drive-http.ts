@@ -99,8 +99,8 @@ export class DriveHttp implements DriveApi {
     return (await this.call(`${API}/files/${id}?alt=media`)).text();
   }
 
-  async createFolder(parentId: string, name: string): Promise<DriveFile> {
-    return this.json(`${API}/files?fields=${FIELDS}`, 'POST', { name, mimeType: FOLDER, parents: [parentId] });
+  async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
+    return this.json(`${API}/files?fields=${FIELDS}`, 'POST', { name, mimeType: FOLDER, parents: [parentId], ...(appProperties ? { appProperties } : {}) });
   }
 
   async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
@@ -108,8 +108,8 @@ export class DriveHttp implements DriveApi {
     return this.multipart(meta, new Blob([text], { type: mimeOf(name) }));
   }
 
-  async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void): Promise<DriveFile> {
-    const meta = { name, parents: [parentId] };
+  async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
+    const meta = { name, parents: [parentId], ...(appProperties ? { appProperties } : {}) };
     if (body.size <= SMALL) {
       const f = await this.multipart(meta, body);
       onProgress?.(1);

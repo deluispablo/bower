@@ -1,4 +1,4 @@
-import type { Pile } from './types';
+import type { Pile, PileItem } from './types';
 
 /**
  * How a pile lives in the Bower folder (spec, "Who does what"): a pile with
@@ -29,4 +29,13 @@ export function pileFolderName(p: Pile): string {
 /** Whether a pile gets its own folder (a note, or more than one thing). */
 export function pileHasFolder(p: Pile): boolean {
   return !!p.text.trim() || p.items.length > 1;
+}
+
+/**
+ * The name a thing gets in the inbox: no slashes, no leading dots, and a
+ * pasted link becomes a `.url` file. Clashes are settled by the caller.
+ */
+export function safeInboxName(item: Pick<PileItem, 'name' | 'kind'>): string {
+  const safe = item.name.replace(/[/\\]+/g, ' - ').replace(/^[\s.-]+|[\s-]+$/g, '') || 'Untitled';
+  return item.kind === 'link' && !/\.[a-z]{2,5}$/i.test(safe) ? `${safe}.url` : safe;
 }

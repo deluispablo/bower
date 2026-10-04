@@ -7,13 +7,16 @@
  */
 import type { DriveApi, DriveFile } from '../drive/drive-api';
 import type { Unsubscribe, VaultSource } from '../sources';
-import { buildTree, displayName, freeName, join, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
+import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
+import { buildTree, displayName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
 import {
   BowerError,
   type ChangeEntry,
+  type FileKind,
   type NewPile,
   type Note,
   type Pile,
+  type PileItem,
   type Question,
   type Request,
   type Rule,
@@ -22,8 +25,9 @@ import {
   type TreeNode,
 } from '../types';
 import { Journal, type JournalRecord } from './journal';
-import { SYSTEM } from './layout';
+import { PROP, SYSTEM, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
+import { parseRules } from './rules-format';
 import { markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 
@@ -61,6 +65,10 @@ export class DriveVault implements VaultSource {
   private notes = new Map<string, { modified: string; note: ParsedNote }>();
   /** What went to the Bin from here, by the path it had, so Undo can bring it back. */
   private bin = new Map<string, { id: string; change: string | null }>();
+  private texts = new Map<string, { modified: string; text: string }>();
+  /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
+  private uploads = new Map<string, { lone: boolean; createdAt: number; parent: string; entries: Sending[] }>();
+  private sending = new Set<Promise<void>>();
 
   constructor(opts: DriveVaultOptions) {
     this.drive = opts.drive;
@@ -254,43 +262,175 @@ export class DriveVault implements VaultSource {
     return (await this.journal.list()).map(toChange);
   }
 
-  // ---------- the inbox and Bower (next)
+  // ---------- the inbox
 
-  piles(): Promise<Pile[]> {
-    return notYet();
+  async piles(): Promise<Pile[]> {
+    const ix = await this.index();
+    const out: Pile[] = [];
+    for (const f of ix.filesIn('Inbox')) {
+      const path = ix.pathOf(f.id);
+      if (!path) continue;
+      const id = f.appProperties?.[PROP.pile] ?? f.id;
+      const sending = (this.uploads.get(id)?.entries ?? []).map((e) => e.item);
+      if (!f.folder) {
+        out.push({ id, path, text: '', createdAt: Date.parse(f.createdTime), items: [itemOf(f)] });
+        continue;
+      }
+      const kids = ix.filesIn(path).filter((k) => !k.folder);
+      const note = kids.find((k) => k.name === PILE_NOTE);
+      const text = note ? (await this.parsed(note, `${path}/${PILE_NOTE}`)).body.trim() : '';
+      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items: [...kids.filter((k) => k !== note).map(itemOf), ...sending] });
+    }
+    // A lone thing still on its way has no file yet: show it from here.
+    for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
+    return out.sort((a, b) => b.createdAt - a.createdAt);
   }
-  addPile(_pile: NewPile): Promise<Pile> {
-    return notYet();
+
+  async addPile(input: NewPile): Promise<Pile> {
+    const text = input.text.trim();
+    if (!input.items.length && !text) throw new BowerError('conflict', 'Add a file, a link or a line first.');
+    const ix = await this.index();
+    const inbox = ix.idOf('Inbox') ?? (await this.systemFolder('Inbox'));
+    const createdAt = Date.now();
+    let id = `new-${createdAt.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    let parent = inbox;
+    let path: string | undefined;
+    const lone = !pileHasFolder({ id, text, createdAt, items: input.items.map((it, i) => ({ ...it, id: String(i) })) });
+    if (!lone) {
+      path = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ id, text, createdAt, items: [] })));
+      const folder = await this.drive.createFolder(inbox, nameOf(path));
+      ix.put(folder);
+      id = folder.id;
+      parent = folder.id;
+      if (text) ix.put(await this.drive.createText(folder.id, PILE_NOTE, text));
+    }
+    const entries: Sending[] = input.items.map((it, i) => ({
+      item: { id: `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
+      ...(it.body ? { body: it.body } : {}),
+      ...(it.url ? { url: it.url } : {}),
+    }));
+    if (entries.length) {
+      this.uploads.set(id, { lone, createdAt, parent, entries });
+      this.track(this.send(id));
+    }
+    this.emit();
+    return { id, text, createdAt, items: entries.map((e) => ({ ...e.item })), ...(path ? { path } : {}) };
   }
-  removePile(_id: string): Promise<void> {
-    return notYet();
+
+  async removePile(id: string): Promise<void> {
+    this.refuseWhileRunning();
+    const pile = await this.pile(id);
+    const ix = await this.index();
+    const f = pile.path ? ix.file(pile.path) : undefined;
+    this.uploads.delete(id);
+    if (f) {
+      await this.drive.trash(f.id);
+      ix.drop(f.id);
+    }
+    this.emit();
   }
-  updatePile(_id: string, _text: string): Promise<Pile> {
-    return notYet();
+
+  async updatePile(id: string, input: string): Promise<Pile> {
+    this.refuseWhileRunning();
+    const pile = await this.pile(id);
+    const text = input.trim();
+    if (!pile.items.length && !text) throw new BowerError('conflict', 'A pile with no files needs its note.');
+    const ix = await this.index();
+    const f = pile.path ? ix.file(pile.path) : undefined;
+    if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
+    let folderPath = pile.path;
+    if (!f.folder) {
+      // A lone thing that gets a note becomes a pile folder; the pile keeps its id.
+      if (!text) return pile;
+      folderPath = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
+      const folder = await this.drive.createFolder(f.parents[0] ?? (await this.rootId()), nameOf(folderPath), { [PROP.pile]: id });
+      ix.put(folder);
+      ix.put(await this.drive.update(f.id, { addParent: folder.id, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) }));
+    } else if (text) {
+      const name = freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text }), pile.path);
+      if (name !== nameOf(pile.path)) {
+        ix.put(await this.drive.update(f.id, { name }));
+        folderPath = join('Inbox', name);
+      }
+    }
+    const folderId = ix.idOf(folderPath);
+    const note = ix.file(join(folderPath, PILE_NOTE));
+    if (note && text) ix.put(await this.drive.writeText(note.id, text, note.modifiedTime));
+    else if (note) {
+      await this.drive.trash(note.id);
+      ix.drop(note.id);
+    } else if (text && folderId) ix.put(await this.drive.createText(folderId, PILE_NOTE, text));
+    this.emit();
+    return this.pile(id);
   }
-  questions(): Promise<Question[]> {
-    return notYet();
+
+  /** Waits until every thing being sent to the inbox has arrived or failed. */
+  async settled(): Promise<void> {
+    while (this.sending.size) await Promise.all([...this.sending]);
   }
-  answer(_id: string, _yes: boolean): Promise<void> {
-    return notYet();
+
+  // ---------- Bower: rules, requests, questions, suggestions
+
+  async rules(): Promise<Rule[]> {
+    const ix = await this.index();
+    const file = ix.file('Rules.md');
+    const worded = file ? parseRules(await this.text(file)) : [];
+    const pending = (await this.journal.list())
+      .filter((r) => r.kind === 'rule')
+      .reverse()
+      .map((r): Rule => ({ id: r.id, text: r.text ?? r.what, yourWords: r.text ?? r.what, since: r.at, pending: true }));
+    return [...pending, ...worded];
   }
-  rules(): Promise<Rule[]> {
-    return notYet();
+
+  async addRule(input: string): Promise<Rule> {
+    const text = input.trim();
+    if (!text) throw new BowerError('conflict', 'Write the rule first.');
+    const r = await this.journal.record('rule', `New rule: "${text}"`, { path: 'Rules.md', text });
+    this.emit();
+    return { id: r.id, text, yourWords: text, since: r.at, pending: true };
   }
-  requests(): Promise<Request[]> {
-    return notYet();
+
+  async requests(): Promise<Request[]> {
+    const waiting = (await this.journal.list())
+      .filter((r) => r.kind === 'request')
+      .reverse()
+      .map((r): Request => ({ id: r.id, text: r.text ?? r.what, at: r.at }));
+    const done = (await this.json<RequestsFile>(SYSTEM.requests))?.done ?? [];
+    return [...waiting, ...done];
   }
-  addRequest(_text: string): Promise<Request> {
-    return notYet();
+
+  async addRequest(input: string): Promise<Request> {
+    const text = input.trim();
+    if (!text) throw new BowerError('conflict', 'Write what you want first.');
+    const r = await this.journal.record('request', `Asked Bower: "${text}"`, { text });
+    this.emit();
+    return { id: r.id, text, at: r.at };
   }
-  addRule(_text: string): Promise<Rule> {
-    return notYet();
+
+  async questions(): Promise<Question[]> {
+    const all = (await this.json<QuestionsFile>(SYSTEM.questions))?.questions ?? [];
+    const answered = new Set((await this.journal.list()).filter((r) => r.kind === 'answer').map((r) => r.questionId));
+    return all.filter((q) => !answered.has(q.id));
   }
-  suggestions(): Promise<Suggestion[]> {
-    return notYet();
+
+  async answer(id: string, yes: boolean): Promise<void> {
+    const q = (await this.questions()).find((x) => x.id === id);
+    if (!q) return;
+    await this.journal.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`, { questionId: id, text: yes ? 'yes' : 'no' });
+    this.emit();
   }
-  dismissSuggestion(_id: string, _keep: boolean): Promise<void> {
-    return notYet();
+
+  async suggestions(): Promise<Suggestion[]> {
+    const all = (await this.json<SuggestionsFile>(SYSTEM.suggestions))?.suggestions ?? [];
+    const dropped = dismissed();
+    return all.filter((s) => !dropped.includes(s.id));
+  }
+
+  async dismissSuggestion(id: string, keep: boolean): Promise<void> {
+    const s = (await this.suggestions()).find((x) => x.id === id);
+    dismiss(id);
+    if (keep && s) await this.journal.record('rule', `Kept a suggestion as a rule: "${s.title}"`, { path: 'Rules.md', text: s.title });
+    this.emit();
   }
 
   // ---------- plumbing
@@ -313,6 +453,78 @@ export class DriveVault implements VaultSource {
     this.listeners.forEach((l) => l());
   }
 
+  /** The person's piles, as the inbox lists them. */
+  protected async pile(id: string): Promise<Pile> {
+    const p = (await this.piles()).find((x) => x.id === id);
+    if (!p) throw new BowerError('not-found', 'That pile is already filed.');
+    return p;
+  }
+
+  protected refuseWhileRunning(): void {
+    if (this.runningPiles().size) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+  }
+
+  /** One of Bower's JSON files, or null when it is not there or not readable. */
+  protected async json<T>(path: string): Promise<T | null> {
+    const id = (await this.index()).systemId(path);
+    if (!id) return null;
+    try {
+      const v: unknown = JSON.parse(await this.drive.readText(id));
+      return v && typeof v === 'object' && (v as { v?: unknown }).v === 1 ? (v as T) : null;
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        console.error(`${path} is not valid JSON`);
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  protected async text(f: DriveFile): Promise<string> {
+    const cached = this.texts.get(f.id);
+    if (cached && cached.modified === f.modifiedTime) return cached.text;
+    const text = await this.drive.readText(f.id);
+    this.texts.set(f.id, { modified: f.modifiedTime, text });
+    return text;
+  }
+
+  private track(p: Promise<void>): void {
+    this.sending.add(p);
+    void p.finally(() => this.sending.delete(p));
+  }
+
+  /** Sends a pile's things one by one; a failure marks that thing and goes on. */
+  private async send(pileId: string): Promise<void> {
+    const u = this.uploads.get(pileId);
+    if (!u) return;
+    for (const e of [...u.entries]) {
+      if (this.uploads.get(pileId) !== u) return;
+      try {
+        const ix = await this.index();
+        const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
+        const name = freeName(ix.entries(), parentPath, safeInboxName(e.item));
+        const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, ...(u.lone ? { [PROP.pile]: pileId } : {}) };
+        e.item.upload = 0;
+        const made = e.url
+          ? await this.drive.createText(u.parent, name, `[InternetShortcut]\nURL=${e.url}\n`, props)
+          : e.body
+            ? await this.drive.upload(u.parent, name, e.body, (p) => {
+                e.item.upload = Math.min(p, 0.99);
+                this.emit();
+              }, props)
+            : await this.drive.createText(u.parent, name, '', props);
+        ix.put(made);
+        u.entries = u.entries.filter((x) => x !== e);
+      } catch (err) {
+        console.error(err);
+        e.item.upload = -1;
+      }
+      this.emit();
+    }
+    if (!u.entries.length && this.uploads.get(pileId) === u) this.uploads.delete(pileId);
+    this.emit();
+  }
+
   protected mustFile(ix: VaultIndex, path: string): DriveFile {
     const f = ix.file(path);
     if (!f) throw new BowerError('not-found', 'That is no longer there.');
@@ -322,7 +534,7 @@ export class DriveVault implements VaultSource {
   protected async parsed(f: DriveFile, path: string): Promise<ParsedNote> {
     const cached = this.notes.get(f.id);
     if (cached && cached.modified === f.modifiedTime) return { ...cached.note, path, title: displayName(nameOf(path)) };
-    const note = parseNote(path, await this.drive.readText(f.id));
+    const note = parseNote(path, await this.text(f));
     this.notes.set(f.id, { modified: f.modifiedTime, note });
     return note;
   }
@@ -339,8 +551,41 @@ export class DriveVault implements VaultSource {
   }
 }
 
-function notYet(): Promise<never> {
-  return Promise.reject(new BowerError('unknown', 'Not ready yet.'));
+interface Sending {
+  item: PileItem;
+  body?: Blob;
+  url?: string;
+}
+
+function itemOf(f: DriveFile): PileItem {
+  const p = f.appProperties ?? {};
+  const kind = p[PROP.kind];
+  return {
+    id: f.id,
+    name: p[PROP.asAdded] ?? f.name,
+    kind: kind && (FILE_KINDS as readonly string[]).includes(kind) ? (kind as FileKind) : kindOf(f.name),
+    origin: p[PROP.origin] ?? 'Added in Drive',
+  };
+}
+
+const FILE_KINDS = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'] as const satisfies readonly FileKind[];
+const DISMISSED = 'bower:dismissed';
+
+function dismissed(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(DISMISSED) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function dismiss(id: string): void {
+  try {
+    localStorage.setItem(DISMISSED, JSON.stringify([...dismissed(), id].slice(-200)));
+  } catch {
+    // Without storage it comes back next time; nothing is lost.
+  }
 }
 
 function toChange(r: JournalRecord): ChangeEntry {

@@ -81,9 +81,9 @@ export class FakeDrive implements DriveApi {
     return typeof f.content === 'string' ? f.content : f.content.text();
   }
 
-  async createFolder(parentId: string, name: string): Promise<DriveFile> {
+  async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     this.gate();
-    return this.add(parentId, name, true, null);
+    return this.add(parentId, name, true, null, appProperties);
   }
 
   async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
@@ -91,9 +91,9 @@ export class FakeDrive implements DriveApi {
     return this.add(parentId, name, false, text, appProperties);
   }
 
-  async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void): Promise<DriveFile> {
+  async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
     this.gate();
-    const f = this.add(parentId, name, false, body);
+    const f = this.add(parentId, name, false, body, appProperties);
     onProgress?.(1);
     return f;
   }

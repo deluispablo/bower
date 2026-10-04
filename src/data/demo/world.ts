@@ -53,7 +53,7 @@ import {
   seedTime,
 } from './fixture';
 import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
-import { PILE_NOTE, pileFolderName, pileHasFolder, thingsIn } from '../piles';
+import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
 type Listener = () => void;
 
@@ -158,8 +158,7 @@ export class DemoWorld {
         }
       }
       for (const it of pile.items) {
-        const safe = it.name.replace(/[/\\]+/g, ' - ').replace(/^[\s.-]+|[\s-]+$/g, '') || 'Untitled';
-        const name = freeName(this.entries, folder, it.kind === 'link' && !/\.[a-z]{2,5}$/i.test(safe) ? `${safe}.url` : safe);
+        const name = freeName(this.entries, folder, safeInboxName(it));
         this.entries.set(join(folder, name), { path: join(folder, name), type: 'file', kind: it.kind, modified: at, created: at });
         if (folder === 'Inbox') this.pilePath.set(pile.id, join(folder, name));
       }

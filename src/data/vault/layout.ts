@@ -6,13 +6,13 @@
  * Owned by the runner (the app only reads them):
  * - `questions.json`   { v, questions: Question[] }
  * - `suggestions.json` { v, suggestions: Suggestion[] }
- * - `requests.json`    { v, done: { [journal id]: one line from Bower } }
+ * - `requests.json`    { v, done: Request[] }, the last requests a tidy-up did, with its line
  * - `last-run.json`    { v, run: RunState without `seen` }
  * - `hashes.json`      { v, hashes: { [sha-256 hex]: path } }
  * Owned by the app: `changes/`, one JSON file per change (the journal);
  * the runner moves them to `changes/archive/` after reading them.
  */
-import type { Question, RunState, Suggestion } from '../types';
+import type { Question, Request, RunState, Suggestion } from '../types';
 
 export const BOWER_FOLDER = 'Bower';
 
@@ -45,7 +45,7 @@ export interface SuggestionsFile {
 }
 export interface RequestsFile {
   v: 1;
-  done: Record<string, string>;
+  done: Request[];
 }
 export interface LastRunFile {
   v: 1;
@@ -62,4 +62,10 @@ export const PROP = {
   by: 'by',
   /** `1` on what the latest tidy-up filed or changed; "new" until this device opens it. */
   isNew: 'bowerNew',
+  /** On a thing in the inbox: its name as you added it, where it came from, its kind. */
+  asAdded: 'asAdded',
+  origin: 'origin',
+  kind: 'kind',
+  /** On a pile's folder: the pile's id, kept when a lone thing becomes a folder. */
+  pile: 'pile',
 } as const;

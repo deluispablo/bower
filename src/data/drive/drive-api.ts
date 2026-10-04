@@ -23,9 +23,9 @@ export interface DriveApi {
   listAll(rootId: string): Promise<DriveFile[]>;
   get(id: string): Promise<DriveFile>;
   readText(id: string): Promise<string>;
-  createFolder(parentId: string, name: string): Promise<DriveFile>;
+  createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void): Promise<DriveFile>;
+  upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile>;
   /** Writes only if the file still has `ifModified`; otherwise rejects `conflict`. */
   writeText(id: string, text: string, ifModified: string): Promise<DriveFile>;
   update(id: string, patch: { name?: string; addParent?: string; removeParent?: string }): Promise<DriveFile>;
