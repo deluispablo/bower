@@ -1766,8 +1766,8 @@
       "Open http://localhost:5190/?scenario=default&time=instant, Add, choose an empty file.",
       "The row says the file is empty and asks to add it anyway or drop it."
     ],
-    "verify": "pnpm vitest run src/features/add -t \"an empty file is pointed out\"",
-    "passes": false
+    "verify": "pnpm vitest run src/features/piles -t \"an empty file is pointed out\"",
+    "passes": true
   },
   {
     "id": "restore-rows-dropped",
@@ -1778,7 +1778,7 @@
       "Open http://localhost:5190/?scenario=default&time=instant, Add a file, reload, then put the pile in without choosing the file again.",
       "A toast or line says which files were left out."
     ],
-    "verify": "pnpm vitest run src/features/add -t \"files not added again are named\"",
+    "verify": "pnpm vitest run src/features/piles -t \"files not added again are named\"",
     "passes": false
   },
   {

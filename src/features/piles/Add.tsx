@@ -13,6 +13,7 @@ import { toast } from '@/ui/toast';
 import s from './piles.module.css';
 import { normaliseLink } from './link';
 import { forget, get, keep } from './draft-files';
+import { draftLine, leftOut } from './add-words';
 
 const DRAFT_KEY = 'bower:add-draft';
 const ITEMS_KEY = 'bower:add-items';
@@ -157,6 +158,8 @@ export function Add() {
       setText('');
       setItems([]);
       toast(ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
+      const dropped = leftOut(items.filter(missing).map((d) => d.name));
+      if (dropped) toast(dropped);
       nav('/');
     } catch (e) {
       report(e, 'That did not save. Try again.');
@@ -228,7 +231,7 @@ export function Add() {
               </span>
               <span className={s.itemMain}>
                 <span className="mono">{it.name}</span>
-                <span className={s.itemSub}>{missing(it) ? 'Add this file again' : it.dup ? `You already have this in ${folderWords(it.dup)}.` : it.origin}</span>
+                <span className={s.itemSub}>{draftLine({ origin: it.origin, missing: missing(it), empty: !it.url && get(it.key)?.size === 0, dup: it.dup }, it.dup ? `You already have this in ${folderWords(it.dup)}.` : undefined)}</span>
                 {it.dup && (
                   <span className={s.dupActions}>
                     <Button
