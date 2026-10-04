@@ -1976,7 +1976,7 @@
       "It stays while the keyboard is on it."
     ],
     "verify": "pnpm vitest run src/ui -t \"a toast held by the keyboard and the pointer\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "link-address-error",

@@ -13,7 +13,7 @@ interface Toasts {
   /** Drops toasts whose action no longer makes sense (e.g. "Tidy up now" once a run started). */
   dismissAction: (label: string) => void;
   /** The pointer or the keyboard is on a toast: it waits; when they leave, its time starts again. */
-  hold: (id: number, on: boolean) => void;
+  hold: (id: number, on: boolean, by: 'pointer' | 'keyboard') => void;
 }
 
 /** Long enough to read a sentence and reach its button (WCAG 2.2.1 asks for room to act). */
@@ -21,6 +21,7 @@ const ACTION_MS = 8000;
 const PLAIN_MS = 4000;
 let n = 0;
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
+const held = new Map<number, Set<string>>();
 export const useToasts = create<Toasts>((set, get) => {
   const later = (id: number, ms: number): void => {
     clearTimeout(timers.get(id));
@@ -36,15 +37,21 @@ export const useToasts = create<Toasts>((set, get) => {
       set({ list: [...get().list.slice(-2), action ? { id, text, action } : { id, text }] });
       later(id, action ? ACTION_MS : PLAIN_MS);
     },
-    hold: (id, on) => {
+    hold: (id, on, by) => {
       const t = get().list.find((x) => x.id === id);
       if (!t) return;
-      if (on) clearTimeout(timers.get(id));
+      const holders = held.get(id) ?? new Set<string>();
+      if (on) holders.add(by);
+      else holders.delete(by);
+      held.set(id, holders);
+      // It waits while the pointer or the keyboard is on it; its time starts again when both have left.
+      if (holders.size) clearTimeout(timers.get(id));
       else later(id, t.action ? ACTION_MS : PLAIN_MS);
     },
     dismiss: (id) => {
       clearTimeout(timers.get(id));
       timers.delete(id);
+      held.delete(id);
       set({ list: get().list.filter((t) => t.id !== id) });
     },
     dismissAction: (label) => set({ list: get().list.filter((t) => t.action?.label !== label) }),
@@ -62,10 +69,10 @@ export function Toasts() {
         <div
           key={t.id}
           className={s.toast}
-          onMouseEnter={() => hold(t.id, true)}
-          onMouseLeave={() => hold(t.id, false)}
-          onFocus={() => hold(t.id, true)}
-          onBlur={() => hold(t.id, false)}
+          onMouseEnter={() => hold(t.id, true, 'pointer')}
+          onMouseLeave={() => hold(t.id, false, 'pointer')}
+          onFocus={() => hold(t.id, true, 'keyboard')}
+          onBlur={() => hold(t.id, false, 'keyboard')}
         >
           <span>{t.text}</span>
           {t.action && (
