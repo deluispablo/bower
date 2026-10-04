@@ -172,3 +172,4 @@
 - 2026-10-05: screen-wiring-tests passes — test(e2e): the answer toast, Add's empty and left-out files, and a done request, on screen
 - 2026-10-05: demo-links-after-tidy passes — fix(demo): links follow a rename through a tidy-up, and linking notes follow a move
 - 2026-10-05: demo-pending-rule-remove passes — fix(demo): removing a waiting rule takes its line out, as on Drive
+- 2026-10-05: note-without-journal passes — fix(app): a note opens even when the journal cannot be read

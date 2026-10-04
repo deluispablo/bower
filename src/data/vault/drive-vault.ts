@@ -132,7 +132,14 @@ export class DriveVault implements VaultSource {
       if (!byName.has(key)) byName.set(key, p);
     }
     // A link to a name the note had before a rename since the last tidy-up still finds it.
-    const former = formerNames((await this.journal.list()).map(toChange));
+    const former = await this.journal.list().then(
+      (lines) => formerNames(lines.map(toChange)),
+      (e: unknown) => {
+        // The note opens anyway; only links to names it had before a rename wait for the journal.
+        console.error(e);
+        return new Map<string, string>();
+      },
+    );
     const links = parsed.links.map((l) => byName.get(l.toLowerCase()) ?? former.get(l.toLowerCase())).filter((p): p is string => !!p && p !== path);
     // Full text only finds the words; a backlink is a note whose own links name this one (or a name it had).
     const names = [parsed.title, ...[...former].filter(([, now]) => now === path).map(([was]) => was)];

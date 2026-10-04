@@ -378,6 +378,22 @@ describe('the outbox over the folder itself', () => {
   });
 });
 
+describe('a journal that cannot be read', () => {
+  it('a note opens when the journal cannot be read', async () => {
+    await vault.addRule('anything from the dentist goes in health');
+    const all = await drive.listAll(root);
+    const changes = all.find((f) => f.name === 'changes' && f.folder);
+    const line = all.find((f) => f.parents[0] === changes?.id && f.name.endsWith('.json'));
+    const real = drive.readText.bind(drive);
+    drive.readText = async (id) => {
+      if (id === line?.id) throw new TypeError('Failed to fetch');
+      return real(id);
+    };
+    const later = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    expect((await later.note(PASSPORT)).path).toBe(PASSPORT);
+  });
+});
+
 describe('saved links in search', () => {
   it('a saved link searches by its address, never by its file syntax', async () => {
     await vault.tree();

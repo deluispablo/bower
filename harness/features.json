@@ -1952,7 +1952,7 @@
       "pnpm vitest run src/data/vault -t \"a note opens when the journal cannot be read\"."
     ],
     "verify": "pnpm vitest run src/data/vault -t \"a note opens when the journal cannot be read\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "undo-focus-twice",
