@@ -126,3 +126,19 @@ describe('asking the Worker', () => {
     expect(phases).toContain('writing');
   });
 });
+
+describe('signing out', () => {
+  it("forgets this person's things on this device", async () => {
+    const s = await open();
+    localStorage.setItem('bower:seen', '["f1@x"]');
+    localStorage.setItem('bower:dismissed', '["s1"]');
+    localStorage.setItem('bower:run-seen', 'run-1');
+    localStorage.setItem('bower:bookmarks', '["Resources/Cooking/Lemon tart.md"]');
+    localStorage.setItem('bower:prefs', '{"theme":"dark"}');
+    sessionStorage.setItem('bower:add-items', '[{"name":"a.pdf"}]');
+    await s.session.signOut();
+    for (const k of ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks']) expect(localStorage.getItem(k), k).toBeNull();
+    expect(sessionStorage.getItem('bower:add-items')).toBeNull();
+    expect(localStorage.getItem('bower:prefs')).toBe('{"theme":"dark"}');
+  });
+});

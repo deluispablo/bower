@@ -606,7 +606,7 @@
     "what": "Device data (seen, dismissed, run seen, Add draft) stays after sign-out.",
     "steps": [],
     "verify": "pnpm vitest run src/data/live",
-    "passes": false
+    "passes": true
   },
   {
     "id": "journal-file-id",

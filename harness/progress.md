@@ -62,3 +62,4 @@
 - 2026-10-04: seen-read-once passes — perf(vault): a listing reads what this device has seen once
 - 2026-10-04: task-regex-shared passes — fix(tasks): the screen and the writer count tasks the same way, numbered lists included
 - 2026-10-04: frontmatter-obsidian passes — fix(notes): block-list tags and quoted values from Obsidian notes read right
+- 2026-10-04: signout-forgets passes — fix(session): signing out forgets this person's things on the device

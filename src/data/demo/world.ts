@@ -56,6 +56,7 @@ import {
 import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
+import { forgetThisPerson } from '../device';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
 type Listener = () => void;
@@ -481,6 +482,7 @@ export class DemoWorld {
       signOut: () =>
         this.wait(() => {
           this.user = null;
+          forgetThisPerson();
           this.sessionListeners.forEach((l) => l());
         }),
       folderState: () => this.wait(() => this.folder),
