@@ -179,15 +179,18 @@ export function TidyScene({
           ))}
         </div>
       )}
-      <div className={s.note} data-spot="note" data-dim={phase !== 'writing'}>
-        {Array.from({ length: 6 }, (_, i) => (
-          <i
-            key={i}
-            className={i < lines ? s.written : ''}
-            style={{ width: `${[86, 70, 92, 60, 80, 50][i]}%` }}
-          />
-        ))}
-      </div>
+      {/* Done: the note is written and put away, so it leaves the stage. */}
+      {!done && (
+        <div className={s.note} data-spot="note" data-dim={phase !== 'writing'}>
+          {Array.from({ length: 6 }, (_, i) => (
+            <i
+              key={i}
+              className={i < lines ? s.written : ''}
+              style={{ width: `${[86, 70, 92, 60, 80, 50][i]}%` }}
+            />
+          ))}
+        </div>
+      )}
       {!changes && (
         <div
           className={s.folder}

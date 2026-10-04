@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, type ReactNode, useEffect, useImperativeHandle, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { prefersReducedMotion, usePrefs } from '@/app/prefs';
 import { BirdEngine, type Point, type TargetFn } from './engine';
-import { useBirdTurn } from './presence';
+import { useBirdTurn, useOutranked } from './presence';
 import { Rig, type RigPart } from './Rig';
 import './poses.css';
 import './bower.css';
@@ -27,11 +27,14 @@ interface PoseProps {
 /** Bower in one place, looping a pose with CSS only. */
 export function PoseBower({ pose, size, priority = 0, className = '', style }: PoseProps) {
   const moves = useMoves(priority);
+  // One Bower on screen: under an overlay with its own Bower, the page's steps out of sight.
+  const outranked = useOutranked(priority);
   return (
     <div
       className={`bird posed ${pose} ${moves ? '' : 'still'} ${className}`}
-      style={{ width: size, height: size, ...style }}
+      style={{ width: size, height: size, ...style, ...(outranked ? { visibility: 'hidden' } : {}) }}
       data-pose={pose}
+      data-bird
     >
       <Rig carrying={pose === 'carry'} />
     </div>
@@ -93,6 +96,7 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
     homeRef.current = home;
   });
   const moves = useMoves(priority);
+  const outranked = useOutranked(priority);
 
   useEffect(() => {
     const p = parts.current;
@@ -201,7 +205,7 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
   }, [moves]);
 
   return (
-    <div ref={layer} className="bower-layer" aria-hidden="true">
+    <div ref={layer} className="bower-layer" aria-hidden="true" data-bird style={outranked ? { visibility: 'hidden' } : undefined}>
       <div ref={spark} className="bower-spark">
         <i />
         <i />

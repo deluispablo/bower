@@ -196,3 +196,17 @@ test('a file added again after a reload is not doubled', async ({ page }) => {
   await expect(page.getByRole('list', { name: 'In this pile' }).getByRole('listitem')).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
 });
+
+test("the run's end shows one bird and no stray card", async ({ page }) => {
+  await open(page, '/');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 5000 });
+  await expect(dialog.locator('[data-spot="note"]')).toHaveCount(0);
+  // Birds of the page under the sheet hide while the sheet's bird is on.
+  const pageBirds = await page.evaluate(() =>
+    [...(document.getElementById('main')?.querySelectorAll('[data-bird]') ?? [])].filter((b) => getComputedStyle(b).visibility !== 'hidden').length,
+  );
+  expect(pageBirds).toBe(0);
+});

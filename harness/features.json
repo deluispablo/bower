@@ -996,7 +996,7 @@
       "Done"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the run's end shows one bird and no stray card\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "one-date-format",

@@ -44,6 +44,21 @@ export function useBirdTurn(priority = 0): boolean {
   return active === id;
 }
 
+const topPriority = (): number => entries.reduce((m, e) => Math.max(m, e.priority), -Infinity);
+
+/** True while a bird of a higher priority (an overlay's) is on screen: this one steps out of sight. */
+export function useOutranked(priority = 0): boolean {
+  const top = useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    topPriority,
+    topPriority,
+  );
+  return top > priority;
+}
+
 /** For tests. */
 export function resetBirdPresence(): void {
   entries = [];
