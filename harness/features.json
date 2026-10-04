@@ -615,7 +615,7 @@
     "what": "Journal entries carry only a path; add the Drive file id while the format is v1.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "pwa-worker-routes",
