@@ -28,7 +28,7 @@ import { Journal, type JournalRecord } from './journal';
 import { formerNames } from '../links';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
-import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
+import { placeOf, plainSnippet, plainText, savedLinkAddress, searchLines } from '../search-text';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
@@ -291,9 +291,14 @@ export class DriveVault implements VaultSource {
     // Drive's full text has no "#": a tag is found by its word, then matched as #tag below.
     const candidates = (await this.drive.fullText(await this.rootId(), first.replace(/^#/, '')))
       .map((h) => ({ h, path: ix.pathOf(h.id) }))
-      .filter((c): c is { h: DriveFile; path: string } => !!c.path && !named.has(c.path) && !inInbox(c.path) && c.path.endsWith('.md') && entries.has(c.path))
+      .filter((c): c is { h: DriveFile; path: string } => !!c.path && !named.has(c.path) && !inInbox(c.path) && /\.(md|url)$/.test(c.path) && entries.has(c.path))
       .slice(0, MAX_READS);
     const found = await inBatches(candidates, async ({ h, path }) => {
+      // A saved link is found by its web address, never by its file's syntax.
+      if (path.endsWith('.url')) {
+        const address = savedLinkAddress(await this.drive.readText(h.id));
+        return address && words.every((w) => address.toLowerCase().includes(w)) ? { path, title: displayName(nameOf(path)), snippet: address, score: 1 } : null;
+      }
       const n = await this.parsed(h, path);
       const line = searchLines(n).map(plainText).find((l) => words.every((w) => l.toLowerCase().includes(w)));
       return line ? { path, title: n.title, snippet: plainSnippet(line), score: 1 } : null;

@@ -147,3 +147,4 @@
 - 2026-10-04: rename-keeps-links passes — fix(app): links follow a rename, in the reader now and in the notes at the next tidy-up
 - 2026-10-04: answer-toast-words passes — fix(app): answering a question is confirmed in the words of the choice
 - 2026-10-04: bin-count-hub passes — fix(app): the Bin question does not count a folder's own note
+- 2026-10-04: search-saved-links passes — fix(app): a saved link is found by its web address, never by its file syntax

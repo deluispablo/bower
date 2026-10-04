@@ -1632,7 +1632,7 @@
       "No saved link matches on its file syntax; a saved link matches on its web address and shows it."
     ],
     "verify": "pnpm vitest run src/data -t \"saved link searches by its address\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "rule-twice",

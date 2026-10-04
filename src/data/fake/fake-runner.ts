@@ -18,6 +18,7 @@ import type { FiledItem, Pile, Question, Request, Rule, RunPhase, RunReport } fr
 import { DriveVault } from '../vault/drive-vault';
 import type { JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
+import { savedLinkAddress } from '../search-text';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
@@ -160,6 +161,13 @@ class Writer {
             appProperties: { [PROP.isNew]: '1', ...(isNote ? { [PROP.by]: 'bower' } : {}), [PROP.asAdded]: null, [PROP.origin]: null, [PROP.kind]: null, [PROP.pile]: null },
           }),
         );
+        // A saved link filed as a note becomes a note about it, its address kept; never the link file's syntax.
+        if (isNote && item.kind === 'link') {
+          const address = savedLinkAddress(await this.drive.readText(file.id)) ?? item.name;
+          const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: address }], tags: [], currentState: [], body: `Saved from ${address}.`, timeline: [{ date: 'Today', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
+          const f = this.ix.file(join(plan.to, name));
+          if (f) this.ix.put(await this.drive.writeText(f.id, text, f.modifiedTime));
+        }
         const filed: FiledItem = { name: item.name, title: displayName(name), kind: item.kind, to: plan.to };
         if (plan.note && !this.ix.idOf(plan.note)) {
           const at = await this.folder(parentOf(plan.note));

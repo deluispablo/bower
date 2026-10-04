@@ -100,6 +100,13 @@ describe('the fake runner', () => {
     expect((await fresh().note(to)).backlinks).toContain('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md');
   });
 
+  it('a saved link searches by its address: filed as a note, it is a note with its address, not the link file', async () => {
+    await runFake(drive, root, opts({ scope: 'all' }));
+    for (const [path, text] of drive.dump(root)) if (path.endsWith('.md')) expect(String(text), path).not.toContain('[InternetShortcut]');
+    expect(await fresh().search('internetshortcut')).toEqual([]);
+    expect((await fresh().search('curry-clipping')).length).toBeGreaterThan(0);
+  });
+
   it('pending rules are worded with your words kept', async () => {
     await vault.addRule('anything from the dentist goes in health');
     await runFake(drive, root, opts({ scope: 'instructions' }));

@@ -356,6 +356,18 @@ describe('what the code review found', () => {
   });
 });
 
+describe('saved links in search', () => {
+  it('a saved link searches by its address, never by its file syntax', async () => {
+    await vault.tree();
+    const cooking = await idOf('Resources/Cooking');
+    await drive.createText(cooking, 'Soup recipe.url', '[InternetShortcut]\nURL=https://soup.example/lentil\n');
+    await vault.refresh();
+    const hit = (await vault.search('lentil')).find((h) => h.path === 'Resources/Cooking/Soup recipe.url');
+    expect(hit?.snippet).toBe('soup.example/lentil');
+    expect(await vault.search('internetshortcut')).toEqual([]);
+  });
+});
+
 describe('links', () => {
   it('links follow a rename, before the next tidy-up', async () => {
     const to = await vault.rename('Projects/Flat hunt/Flat 7, Cobble Row.md', 'Cobble Row flat');
