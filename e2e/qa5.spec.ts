@@ -109,3 +109,17 @@ test('while loading nothing claims to be empty', async ({ page, isMobile }) => {
   await expect(page.getByText(/^0 rules$/)).toHaveCount(0);
   await expect(page.locator('footer')).toContainText(/15 things waiting/, { timeout: 15_000 });
 });
+
+test('the boot screen follows the saved theme', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ theme: 'dark' })));
+  await page.goto('/?scenario=default&time=instant');
+  await expect.poll(() => page.evaluate(() => document.getElementById('boot') && getComputedStyle(document.getElementById('boot') as HTMLElement).backgroundColor)).toBe('rgb(11, 18, 32)');
+});
+
+test('the boot screen follows a saved light theme on a dark system', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.addInitScript(() => localStorage.setItem('bower:prefs', JSON.stringify({ theme: 'light' })));
+  await page.goto('/?scenario=default&time=instant');
+  await expect.poll(() => page.evaluate(() => document.getElementById('boot') && getComputedStyle(document.getElementById('boot') as HTMLElement).backgroundColor)).toBe('rgb(250, 249, 246)');
+});

@@ -11,6 +11,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono&display=swap" />
     <title>Bower</title>
+    <script>
+      // The saved theme, before the first paint, so the start-up screen does not flash the other one.
+      try {
+        var t = (JSON.parse(localStorage.getItem('bower:prefs') || '{}') || {}).theme;
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        /* No storage: follow the system. */
+      }
+    </script>
     <style>
       /* The start-up screen: static, so it shows from the first paint, before any script. */
       #boot { position: fixed; inset: 0; z-index: 100; will-change: opacity; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0b1220; color: #dfe5ee; font: 400 15px/1.45 'Source Sans 3', system-ui, sans-serif; transition: opacity .4s ease; }
@@ -23,7 +32,8 @@
       #boot button { margin-top: 16px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: #5fcfbc; color: #0b1220; font: 600 16px 'Source Sans 3', sans-serif; cursor: pointer; }
       #boot button:focus-visible { outline: 2px solid #f0b64f; outline-offset: 3px; }
       @keyframes bootWm { from { opacity: 0; transform: translateY(6px); } }
-      @media (prefers-color-scheme: light) { #boot { background: #faf9f6; color: #1c2333; } #boot .wm, #boot .line b { color: #1c2333; } #boot .line { color: #475569; } }
+      @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) #boot { background: #faf9f6; color: #1c2333; } :root:not([data-theme="dark"]) #boot .wm, :root:not([data-theme="dark"]) #boot .line b { color: #1c2333; } :root:not([data-theme="dark"]) #boot .line { color: #475569; } }
+      :root[data-theme="light"] #boot { background: #faf9f6; color: #1c2333; } :root[data-theme="light"] #boot .wm, :root[data-theme="light"] #boot .line b { color: #1c2333; } :root[data-theme="light"] #boot .line { color: #475569; }
       #boot .bird { position: relative; }
       #boot .bird svg g { transform-box: view-box; }
       #boot .b-rig { transform-origin: 50px 92px; } #boot .b-head { transform-origin: 60px 50px; } #boot .b-wing { transform-origin: 56px 55px; }

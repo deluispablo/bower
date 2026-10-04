@@ -252,8 +252,8 @@
       "Settings theme Dark",
       "Reload"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the boot screen follows the saved theme\"",
-    "passes": false
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the boot screen follows\"",
+    "passes": true
   },
   {
     "id": "inbox-count",
