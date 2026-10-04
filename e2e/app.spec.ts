@@ -67,7 +67,7 @@ test.describe('desktop explorer', () => {
     await page.getByRole('menuitem', { name: 'Move to…' }).click();
     await page.getByLabel('Find a folder').fill('Home');
     await page.getByRole('button', { name: /^Home/ }).first().click();
-    await expect(page.getByText(/Moved Lease draft\.pdf to Areas \/ Home/)).toBeVisible();
+    await expect(page.getByRole('status').getByText(/Moved Lease draft\.pdf to Areas \/ Home/)).toBeVisible();
     await page.getByRole('button', { name: 'Undo' }).click();
     await expect(tree.getByRole('treeitem', { name: /Lease draft/ })).toBeVisible();
   });
