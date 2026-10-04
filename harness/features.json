@@ -133,7 +133,7 @@
       "Settings"
     ],
     "verify": "pnpm vitest run src/app/prefs.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "running-live",

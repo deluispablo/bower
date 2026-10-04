@@ -18,3 +18,4 @@
 - 2026-10-04: phase 2 done: 14/14 features; pnpm check, e2e (58), e2e:fake (56, sample piles demo-only) and e2e:pwa (3) green.
 - 2026-10-04: harness method written (docs/harness/METHOD.md, AGENTS.md, briefs, architecture sensor); QA round 5 findings (20 bugs, 13 polish, 14 review) added to features.json; fixing them before phase 3.
 - 2026-10-04: tour-loop passes — fix(welcome): a toured tab with no folder makes it again instead of looping
+- 2026-10-04: web-off-default passes — fix(settings): Bower looks things up on the web only when you turn it on

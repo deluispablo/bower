@@ -32,7 +32,7 @@ function load(): Partial<Prefs> {
 export const usePrefs = create<Prefs>((set, get) => ({
   theme: 'system',
   birdMoves: true,
-  lookUpWeb: true,
+  lookUpWeb: false,
   notifyRuns: false,
   leftWidth: 300,
   rightWidth: 320,
