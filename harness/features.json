@@ -1707,7 +1707,7 @@
       "Empty main folders in the tree all look the same (closed, 0)."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"starting again in first sign-in\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "run-result-requests",

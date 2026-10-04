@@ -152,3 +152,4 @@
 - 2026-10-04: tree-delete-focus passes — fix(app): after Delete the tree keeps its place; Undo says the thing is back and gives its row the keyboard
 - 2026-10-04: dismiss-focus passes — fix(app): after Got it or Put it away the keyboard goes to the page, not nowhere
 - 2026-10-04: inbox-order-names passes — fix(app): the inbox reads the same in the tree and on Home
+- 2026-10-04: first-run-restart passes — fix(demo): Start this situation again restarts it as chosen, folders closed

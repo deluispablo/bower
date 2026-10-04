@@ -80,3 +80,13 @@ test('the inbox reads the same in the tree and on Home: same order, same names',
   // A lone file is named as the tree names it: no extension (its kind shows beside it).
   for (const t of await homePiles.allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,5}$/);
 });
+
+test('starting again in first sign-in shows the welcome again, with every main folder alike', async ({ page }) => {
+  await open(page, '/', 'first');
+  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Demo situations' }).click();
+  await page.getByRole('button', { name: 'Start this situation again' }).click();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('heading', { name: /Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
+});

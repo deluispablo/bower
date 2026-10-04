@@ -88,18 +88,17 @@ export function DemoPanel({
           </div>
         </fieldset>
       )}
-      {source === 'fake' && (
-        <button
-          type="button"
-          className={s.again}
-          onClick={() => {
-            forgetPretendDrive();
-            location.reload();
-          }}
-        >
-          Start the pretend Drive again
-        </button>
-      )}
+      <button
+        type="button"
+        className={s.again}
+        onClick={() => {
+          // As it starts when chosen: a new pretend Drive, signed in or not, toured or not.
+          forgetPretendDrive();
+          chooseScenario(scenario, scale);
+        }}
+      >
+        Start this situation again
+      </button>
       <fieldset>
         <legend>Situation</legend>
         {(Object.keys(SCENARIOS) as Scenario[]).map((k) => (
