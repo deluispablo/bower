@@ -41,7 +41,9 @@ describe('the harness', () => {
     const ok: Entry = { id: 'a', task: 'qa-7', verify: 'pnpm vitest run src/x -t "outbox: a line waits" && bash scripts/e2e-both.sh e2e/x.spec.ts -g "already have"', passes: false };
     expect(problems([ok], new Map(), tests)).toEqual([]);
     const gone: Entry = { ...ok, verify: 'pnpm vitest run src/x -t "a test that is gone"' };
-    expect(problems([gone], new Map(), tests)[0]).toMatch(/matches no test/);
+    // An open entry may name a test not written yet; a closed one may not.
+    expect(problems([gone], new Map(), tests)).toEqual([]);
+    expect(problems([{ ...gone, passes: true }], new Map(), tests).some((m) => /matches no test/.test(m))).toBe(true);
     const loose: Entry = { ...ok, verify: 'pnpm vitest run src/x -t ""' };
     expect(problems([loose], new Map(), tests)[0]).toMatch(/too short/);
     const pwa: Entry = { ...ok, verify: 'pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts' };
