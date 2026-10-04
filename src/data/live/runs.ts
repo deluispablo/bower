@@ -38,6 +38,8 @@ export class LiveRuns implements RunSource {
   constructor(
     private readonly worker: WorkerApi,
     private readonly vault: DriveVault,
+    /** How often to ask while a run is going; the pretend Worker answers at once, so it is asked more often. */
+    private readonly fastMs = FAST_MS,
   ) {
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this.onVisible);
   }
@@ -104,7 +106,7 @@ export class LiveRuns implements RunSource {
   private schedule(): void {
     if (!this.listeners.size) return;
     if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.poll(), this.last && !finished(this.last) ? FAST_MS : SLOW_MS);
+    this.timer = setTimeout(() => void this.poll(), this.last && !finished(this.last) ? this.fastMs : SLOW_MS);
   }
 
   /** Takes in the Worker's answer; when a run has just ended, reads its report and lists the folder again. */
@@ -121,6 +123,8 @@ export class LiveRuns implements RunSource {
     }
     if (changed) {
       if (!wire || finished(wire)) this.took = new Set();
+      // A run that starts or ends changes how often the Worker is asked.
+      if (finished(before) !== finished(wire) || !before !== !wire) this.schedule();
       this.emit();
     }
   }

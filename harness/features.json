@@ -144,7 +144,7 @@
       "?source=fake&scenario=running&time=demo"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the running situation shows its live phases\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "instant-fast",

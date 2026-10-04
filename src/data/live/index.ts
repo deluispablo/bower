@@ -15,6 +15,8 @@ export interface LiveOptions {
   drive: DriveApi;
   /** The piles a running tidy-up took, when the Worker can say (the fake can); otherwise this device's guess. */
   runningPiles?: () => ReadonlySet<string>;
+  /** How often to ask the Worker while a run is going (ms); 4 s by default. */
+  pollMs?: number;
 }
 
 export interface LiveSources extends Sources {
@@ -64,7 +66,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       return theirs?.size ? theirs : (runs?.runningPiles() ?? new Set());
     },
   });
-  runs = new LiveRuns(worker, vault);
+  runs = new LiveRuns(worker, vault, opts.pollMs);
   const v = vault;
   const r = runs;
   return {

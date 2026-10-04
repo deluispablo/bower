@@ -19,3 +19,4 @@
 - 2026-10-04: harness method written (docs/harness/METHOD.md, AGENTS.md, briefs, architecture sensor); QA round 5 findings (20 bugs, 13 polish, 14 review) added to features.json; fixing them before phase 3.
 - 2026-10-04: tour-loop passes — fix(welcome): a toured tab with no folder makes it again instead of looping
 - 2026-10-04: web-off-default passes — fix(settings): Bower looks things up on the web only when you turn it on
+- 2026-10-04: running-live passes — fix(runs): follow a run already going at the fast pace; the running situation starts mid-reading on the pretend Drive

@@ -30,6 +30,8 @@ export interface FakeRunOptions {
   onPhase: (phase: RunPhase, total?: number) => void | Promise<void>;
   /** Hears which piles the run took, as soon as it starts. */
   took?: (pileIds: ReadonlySet<string>) => void;
+  /** Starts part-way through reading, as a run that was already going (the running situation). */
+  readingFor?: number;
 }
 
 export type FakeRunResult = { phase: 'done'; report: RunReport } | { phase: 'failed'; failure: string };
@@ -60,10 +62,12 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
   const taken = new Set(piles.filter((p) => p.path).map((p) => p.id));
   opts.took?.(taken);
   const ms = PHASE_MS[opts.scale];
-  await opts.onPhase('queued');
-  await sleep(ms.queued);
+  if (opts.readingFor === undefined) {
+    await opts.onPhase('queued');
+    await sleep(ms.queued);
+  }
   await opts.onPhase('reading', piles.filter((p) => taken.has(p.id)).reduce((n, p) => n + thingsIn(p), 0));
-  await sleep(ms.reading);
+  await sleep(ms.reading - (opts.readingFor ?? 0));
   await opts.onPhase('writing');
   await sleep(ms.writing);
   if (opts.failOnce) return { phase: 'failed', failure: FAILURE };

@@ -108,7 +108,7 @@ export class FakeWorker implements WorkerApi {
     return this.run ? this.wire() : null;
   }
 
-  private start(root: string, scope: 'all' | 'instructions', at: number): RunWire {
+  private start(root: string, scope: 'all' | 'instructions', at: number, readingFor?: number): RunWire {
     const run: RunWire & { report?: RunReport } = { id: `run-${Date.now().toString(36)}-${++this.seq}`, scope, phase: 'queued', requestedAt: at, phaseAt: Date.now() };
     this.run = run;
     this.took = new Set();
@@ -119,6 +119,7 @@ export class FakeWorker implements WorkerApi {
       scale: this.scale,
       failOnce,
       took: (ids) => (this.took = new Set(ids)),
+      ...(readingFor !== undefined ? { readingFor } : {}),
       onPhase: (phase, total) => {
         run.phase = phase;
         run.phaseAt = Date.now();
@@ -170,7 +171,8 @@ export class FakeWorker implements WorkerApi {
         console.error(e);
       }
     }
-    if (scenario === 'running') this.start(root, 'all', Date.now() - 70_000);
+    // As on the demo: a run asked for 70 s ago, 20 s into reading.
+    if (scenario === 'running') this.start(root, 'all', Date.now() - 70_000, 20_000);
   }
 
   private online(): void {

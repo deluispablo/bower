@@ -110,3 +110,19 @@ describe('an ended session', () => {
     expect(told).toBeGreaterThan(0);
   });
 });
+
+describe('asking the Worker', () => {
+  it('a run already going when the app opens is followed at the fast pace', async () => {
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const rootId = await seedFakeDrive(drive, 'running', Date.now());
+    const worker = new FakeWorker({ drive, scenario: 'running', scale: 'demo', rootId });
+    const s = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 50 });
+    const phases: string[] = [];
+    s.runs.subscribe(() => void s.runs.current().then((r) => r && phases.push(r.phase)));
+    await s.runs.current();
+    await new Promise((r) => setTimeout(r, 400));
+    s.dispose();
+    expect(phases).toContain('writing');
+  });
+});

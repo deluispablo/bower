@@ -21,3 +21,15 @@ test('after the tour a reload opens the app', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
   void isFake;
 });
+
+test('the running situation shows its live phases', async ({ page }) => {
+  await open(page, '/', 'running', 'demo');
+  await expect(page.getByText(/Writing your notes|Reading \d+ things/).first()).toBeVisible({ timeout: 12_000 });
+});
+
+test('an instant tidy-up ends at once', async ({ page }) => {
+  await open(page, '/');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 2500 });
+});
