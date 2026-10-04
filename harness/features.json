@@ -229,7 +229,7 @@
       "Type a word from inside a note"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the palette finds words inside notes\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "loading-states",

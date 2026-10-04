@@ -89,3 +89,13 @@ test.describe('the explorer from the keyboard', () => {
 });
 
 const CSS_ESCAPE = (path: string): string => `row-${encodeURIComponent(path)}`.slice(4).replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+
+test('the palette finds words inside notes', async ({ page }) => {
+  await open(page, '/');
+  await page.getByRole('button', { name: /Search your notes/ }).first().click();
+  await page.getByRole('combobox').fill('Tally');
+  const hit = page.getByRole('option', { name: /CV insights/ });
+  await expect(hit).toBeVisible();
+  await hit.click();
+  await expect(page).toHaveURL(/\/note\/Projects\/Job%20hunt\/CV%20insights\.md/);
+});

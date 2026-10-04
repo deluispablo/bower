@@ -1,12 +1,12 @@
 import { Command } from 'cmdk';
 import { waitingIn } from '@/data/piles';
 import * as Dialog from '@radix-ui/react-dialog';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { usePiles, useRun, useTree } from '@/data/provider';
+import { usePiles, useRun, useSources, useTree } from '@/data/provider';
 import { isRunning } from '@/features/tidy/run-words';
-import { displayName, parentOf } from '@/data/tree';
-import type { TreeNode } from '@/data/types';
+import { displayName, nameOf, parentOf } from '@/data/tree';
+import type { SearchHit, TreeNode } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { usePrefs } from '@/app/prefs';
 import { crumbs, routeFor } from '@/app/paths';
@@ -32,12 +32,32 @@ export function Palette() {
     setQ('');
   });
   const waiting = waitingIn(piles);
+  // Words inside notes, from the same search as the Search panel, a moment after typing stops.
+  const { vault } = useSources();
+  const [inside, setInside] = useState<{ q: string; hits: SearchHit[] }>({ q: '', hits: [] });
+  useEffect(() => {
+    const t = q.trim();
+    if (t.length < 2) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      vault.search(t).then(
+        (hits) => live && setInside({ q: t, hits }),
+        (e: unknown) => console.error(e),
+      );
+    }, 200);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [q, vault]);
   const files = useMemo(() => {
     const out: TreeNode[] = [];
     const walk = (ns: TreeNode[]): void => ns.forEach((n) => (out.push(n), n.children && walk(n.children)));
     walk((tree ?? []).filter((n) => n.path !== 'Inbox'));
     return out;
   }, [tree]);
+  const named = new Set(files.map((f) => f.path));
+  const textHits = inside.q === q.trim() ? inside.hits.filter((h) => !named.has(h.path) || !displayName(nameOf(h.path)).toLowerCase().includes(inside.q.toLowerCase())) : [];
 
   const run = (fn: () => void) => () => {
     setPalette(false);
@@ -76,6 +96,7 @@ export function Palette() {
               const v = value.toLowerCase();
               if (!words.every((w) => v.includes(w))) return 0;
               const action = v.startsWith('action ');
+              if (v.startsWith('inside ')) return 0.3;
               const name = v.split(' :: ')[0] ?? v;
               return (action ? 2 : 1) * (words.every((w) => name.includes(w)) ? 1 : 0.5);
             }}
@@ -92,7 +113,7 @@ export function Palette() {
               )}
             </div>
             <Command.List className={s.list}>
-              <Command.Empty className={s.empty}>Nothing by that name.</Command.Empty>
+              <Command.Empty className={s.empty}>{q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : 'Nothing by that name or in your notes.'}</Command.Empty>
               <Command.Group heading="Actions" className={s.group}>
                 {actions.map((a) => (
                   <Command.Item key={a.id} value={`action ${a.label}`} onSelect={run(a.fn)} className={s.item}>
@@ -109,6 +130,17 @@ export function Palette() {
                       <Icon name={f.type === 'folder' ? 'folder' : f.kind === 'note' ? 'note' : 'file'} size={18} />
                       <span className={s.label}>{f.type === 'folder' ? f.name : displayName(f.name)}</span>
                       <span className={s.path}>{crumbs(parentOf(f.path))}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
+              {textHits.length > 0 && (
+                <Command.Group heading="Inside notes" className={s.group}>
+                  {textHits.slice(0, 20).map((h) => (
+                    <Command.Item key={`in:${h.path}`} value={`inside ${q} :: ${h.path}`} onSelect={run(() => nav(routeFor({ path: h.path, type: 'file' })))} className={s.item}>
+                      <Icon name="note" size={18} />
+                      <span className={s.label}>{h.title}</span>
+                      <span className={s.path}>{h.snippet}</span>
                     </Command.Item>
                   ))}
                 </Command.Group>
