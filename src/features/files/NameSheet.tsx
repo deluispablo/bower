@@ -6,6 +6,7 @@ import { useUi } from '@/app/ui-store';
 import { Button } from '@/ui/Button';
 import { afterOverlaysClosed } from '@/ui/back';
 import { report } from '@/ui/report';
+import { toast } from '@/ui/toast';
 import { Sheet } from '@/ui/Sheet';
 import { useFileActions } from './file-actions';
 import s from './files.module.css';
@@ -31,9 +32,11 @@ export function NameSheet() {
       return;
     }
     if (!making) return;
+    if (/[/\\]/.test(n)) toast('Names cannot have slashes; Bower used a dash.');
     const safe = n.replace(/[/\\]/g, '-');
     try {
-      const path = await vault.create(making.folder, making.type, making.type === 'note' ? `${safe}.md` : safe);
+      // A note's name is typed without .md; typed with it, it is not doubled.
+      const path = await vault.create(making.folder, making.type, making.type === 'note' ? `${safe.replace(/\.md$/i, '')}.md` : safe);
       act.open({ path, type: making.type === 'note' ? 'file' : 'folder' });
     } catch (e) {
       report(e, making.type === 'note' ? 'The note was not made. Try again.' : 'The folder was not made. Try again.');

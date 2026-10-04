@@ -79,3 +79,20 @@ test('Undo twice on the same thing gives its row the keyboard both times', async
     await expect(tree).toHaveAttribute('aria-activedescendant', 'row-Projects%2FFlat%20hunt%2FLease%20draft.pdf');
   }
 });
+
+test('the name sheet takes a name as typed: no doubled .md, and a slash is explained', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'the phone page menu');
+  await open(page, '/files/Areas/Car');
+  await page.getByRole('button', { name: 'More for Car' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New note' }).click();
+  await page.keyboard.type('Tyres.md');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/note\/Areas\/Car\/Tyres\.md$|\/note\/Areas\/Car\/Tyres\.md\?/);
+  await open(page, '/files/Areas/Car');
+  await page.getByRole('button', { name: 'More for Car' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'New note' }).click();
+  await page.keyboard.type('Spring/Summer');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status').getByText('Names cannot have slashes; Bower used a dash.')).toBeVisible();
+  await expect(page).toHaveURL(/\/note\/Areas\/Car\/Spring-Summer\.md/);
+});

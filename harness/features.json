@@ -2000,7 +2000,7 @@
       "Type a/b: a toast says Bower used a dash."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the name sheet takes a name as typed\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "move-no-match",

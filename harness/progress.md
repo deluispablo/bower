@@ -176,3 +176,4 @@
 - 2026-10-05: undo-focus-twice passes — fix(app): a second Undo of the same thing gives its row the keyboard too
 - 2026-10-05: toast-hold-both passes — fix(app): a toast waits until both the pointer and the keyboard have left it
 - 2026-10-05: link-address-error passes — fix(app): a saved link whose address cannot be read says so
+- 2026-10-05: namesheet-names passes — fix(app): the name sheet keeps .md single and explains a slash
