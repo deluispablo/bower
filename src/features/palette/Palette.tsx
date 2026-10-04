@@ -52,7 +52,9 @@ export function Palette() {
     { id: 'files', label: 'Open your folders', icon: 'folder', fn: () => nav('/files') },
     ...(desktop ? [{ id: 'collapse', label: 'Collapse all folders', icon: 'collapse' as IconName, fn: () => collapseAll() }] : []),
     ...(desktop ? [{ id: 'outline', label: 'Show the outline', icon: 'outline' as IconName, fn: () => (prefs.set({ rightOpen: true }), setRightTab('outline')) }] : []),
-    { id: 'theme', label: prefs.theme === 'light' ? 'Use the dark theme' : 'Use the light theme', icon: 'sun', fn: () => prefs.set({ theme: prefs.theme === 'light' ? 'dark' : 'light' }) },
+    ...(['dark', 'light', 'system'] as const)
+      .filter((t) => t !== prefs.theme)
+      .map((t) => ({ id: `theme-${t}`, label: t === 'system' ? 'Follow the system theme' : `Use the ${t} theme`, icon: 'sun' as IconName, fn: () => prefs.set({ theme: t }) })),
     { id: 'moves', label: prefs.birdMoves ? 'Keep Bower still' : 'Let Bower move', icon: 'sparkle', fn: () => prefs.set({ birdMoves: !prefs.birdMoves }) },
     { id: 'settings', label: 'Open settings', icon: 'gear', fn: () => nav('/settings') },
   ];

@@ -96,12 +96,16 @@ export function renameEntry(entries: Entries, path: string, newName: string, at:
   if (isRoot(path)) throw new BowerError('conflict', 'That keeps its name: Bower needs it.');
   let name = newName.trim().replace(/[/\\]/g, '-');
   if (!name || !displayName(name).replace(/\.[A-Za-z0-9]{1,5}$/, '').trim()) throw new BowerError('conflict', 'A name cannot be empty.');
+  if (name.startsWith('.')) throw new BowerError('conflict', 'A name cannot start with a dot.');
   // A rename never changes a file's type: "Plan v1.2" stays a note (Plan v1.2.md).
   const ext = extOf(nameOf(path));
   if (e.type === 'file' && ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
   const folder = parentOf(path);
   if (join(folder, name) === path) return path;
-  if (entries.has(join(folder, name))) throw new BowerError('conflict', `There is already a "${displayName(name)}" here.`);
+  // Drive tells names apart by case, Obsidian on a Mac does not: refuse both kinds of clash.
+  const lower = join(folder, name).toLowerCase();
+  const clash = [...entries.keys()].some((p) => p !== path && p.toLowerCase() === lower);
+  if (clash) throw new BowerError('conflict', `There is already a "${displayName(name)}" here.`);
   const to = join(folder, name);
   relocate(entries, path, to, at);
   return to;

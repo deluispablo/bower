@@ -72,7 +72,7 @@ export class DemoWorld {
   private questions: Question[] = [];
   private rules: Rule[] = [];
   private suggestions: Suggestion[] = [];
-  private trash = new Map<string, { entries: Entry[]; piles: Pile[] | null; change: string | null }>();
+  private trash = new Map<string, { entries: Entry[]; pile: { pile: Pile; at: number } | null; change: string | null }>();
   private requests: Request[] = [];
   /** Where each pile sits in the inbox (folder or lone file), set by syncInbox. */
   private pilePath = new Map<string, string>();
@@ -158,7 +158,8 @@ export class DemoWorld {
         }
       }
       for (const it of pile.items) {
-        const name = freeName(this.entries, folder, it.name);
+        const safe = it.name.replace(/[/\\]+/g, ' - ').replace(/^[\s.-]+|[\s-]+$/g, '') || 'Untitled';
+        const name = freeName(this.entries, folder, it.kind === 'link' && !/\.[a-z]{2,5}$/i.test(safe) ? `${safe}.url` : safe);
         this.entries.set(join(folder, name), { path: join(folder, name), type: 'file', kind: it.kind, modified: at, created: at });
         if (folder === 'Inbox') this.pilePath.set(pile.id, join(folder, name));
       }
@@ -548,11 +549,12 @@ export class DemoWorld {
               return pp && (path === pp || path.startsWith(`${pp}/`) || pp.startsWith(`${path}/`));
             });
             if (!pile) throw new BowerError('not-found', 'That is no longer in the inbox.');
-            const before = this.piles;
+            if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+            const at = this.piles.indexOf(pile);
             const entries = removeEntry(this.entries, this.pilePath.get(pile.id) ?? path);
             this.piles = this.piles.filter((p) => p.id !== pile.id);
             this.syncInbox();
-            this.trash.set(path, { entries, piles: before, change: null });
+            this.trash.set(path, { entries, pile: { pile, at }, change: null });
             return;
           }
           const entries = removeEntry(this.entries, path);
@@ -560,18 +562,23 @@ export class DemoWorld {
           const made = this.journal.find((c) => c.kind === 'create' && c.path === path);
           if (made) {
             this.unrecord(made.id);
-            this.trash.set(path, { entries, piles: null, change: null });
+            this.trash.set(path, { entries, pile: null, change: null });
             return;
           }
           const id = this.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, path);
-          this.trash.set(path, { entries, piles: null, change: id });
+          this.trash.set(path, { entries, pile: null, change: id });
         }),
       restore: (path) =>
         change(() => {
           const gone = this.trash.get(path);
           if (!gone) throw new BowerError('not-found', 'It is no longer in the Bin.');
-          if (gone.piles) {
-            this.piles = gone.piles;
+          if (gone.pile) {
+            const { pile, at } = gone.pile;
+            if (!this.piles.some((p) => p.id === pile.id)) {
+              const next = [...this.piles];
+              next.splice(Math.min(at, next.length), 0, pile);
+              this.piles = next;
+            }
             this.syncInbox();
           } else gone.entries.forEach((e) => this.entries.set(e.path, e));
           this.unrecord(gone.change);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
-import { useSources, useTree } from '@/data/provider';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
+import { usePiles, useSources, useTree } from '@/data/provider';
 import { countFiles, displayName, findNode, parentOf, sortNodes, type SortOrder } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
@@ -32,7 +32,16 @@ export function FolderScreen() {
       );
     return <RootOverview />;
   }
+  // The inbox is shown as piles (Home and the pile screens), not as folders.
+  if (path === 'Inbox' || path.startsWith('Inbox/')) return <InboxRedirect path={path} />;
   return <Folder path={path} />;
+}
+
+function InboxRedirect({ path }: { path: string }) {
+  const { data: piles } = usePiles();
+  if (!piles) return <div className={s.page} aria-busy="true" />;
+  const pile = piles.find((p) => p.path && (path === p.path || path.startsWith(`${p.path}/`)));
+  return <Navigate to={pile ? `/pile/${pile.id}` : '/'} replace />;
 }
 
 function RootOverview() {
@@ -83,6 +92,7 @@ function Folder({ path }: { path: string }) {
     }
   };
 
+  if (node?.type === 'file') return <Navigate to={routeFor(node)} replace />;
   if (!node && !loading)
     return (
       <div className={s.page}>

@@ -13,4 +13,4 @@
 
 :global(body:has(#boot)) .fab { z-index: 110; }
 
-@media (min-width: 900px) { .fab { left: 62px; bottom: 38px; } }
+@media (min-width: 900px) { .fab { left: 50%; transform: translateX(-50%); bottom: 2px; } }

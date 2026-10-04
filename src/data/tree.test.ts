@@ -85,3 +85,12 @@ describe('the folder tree', () => {
     expect(countFiles(t[1] as NonNullable<(typeof t)[1]>)).toBe(2);
   });
 });
+
+describe('names', () => {
+  it('refuses names starting with a dot and clashes that differ only in case', () => {
+    const m = make(['X/A.md', 'X/B.md']);
+    expect(() => renameEntry(m, 'X/A.md', '..', 1)).toThrow(/dot/);
+    expect(() => renameEntry(m, 'X/A.md', 'b', 1)).toThrow(/already/);
+    expect(renameEntry(m, 'X/A.md', 'a', 1)).toBe('X/a.md');
+  });
+});

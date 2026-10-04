@@ -55,7 +55,7 @@
 .tabs { display: flex; align-items: flex-end; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tabs > button { margin-bottom: 6px; }
-.tab { flex: 0 1 auto; display: flex; align-items: center; max-width: 220px; min-width: 72px; height: 34px; padding: 0 4px 0 12px; border-radius: 10px 10px 0 0; color: var(--text-muted); }
+.tab { flex: 0 0 auto; display: flex; align-items: center; max-width: 220px; min-width: 120px; height: 34px; padding: 0 4px 0 12px; border-radius: 10px 10px 0 0; color: var(--text-muted); }
 .tab:hover { background: var(--hover); }
 .tabOn { background: var(--bg); color: var(--heading); }
 .tabLabel { flex: 1; min-width: 0; border: 0; background: none; padding: 0; text-align: left; font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 100%; }

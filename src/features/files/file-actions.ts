@@ -33,6 +33,10 @@ export function useFileActions() {
       : null;
   /** Keeps the screen on a thing that moved, or leaves it when it is gone. */
   const follow = (from: string, to: string | null): void => {
+    if (to !== null) {
+      useTabs.getState().relocate(routeFor({ path: from, type: 'file' }), routeFor({ path: to, type: 'file' }));
+      useTabs.getState().relocate(routeFor({ path: from, type: 'folder' }), routeFor({ path: to, type: 'folder' }));
+    }
     if (!shown || !(shown === from || shown.startsWith(`${from}/`))) return;
     if (to === null) {
       nav(folderRoute(parentOf(from)), { replace: true });

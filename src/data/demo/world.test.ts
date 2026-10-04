@@ -200,3 +200,30 @@ describe('what the testers found', () => {
     await expect(vault.trash('Rules.md')).rejects.toThrow(/Bower needs it/);
   });
 });
+
+describe('round two', () => {
+  it('each undo brings back only its own pile', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const piles = await vault.piles();
+    const a = piles.find((p) => p.id === 'p1')?.path;
+    const b = piles.find((p) => p.id === 'p2')?.path;
+    if (!a || !b) throw new Error('no pile folders');
+    await vault.trash(b);
+    await vault.trash(a);
+    await vault.restore(b);
+    const ids = (await vault.piles()).map((p) => p.id);
+    expect(ids).toContain('p2');
+    expect(ids).not.toContain('p1');
+    await vault.restore(a);
+    expect((await vault.piles()).map((p) => p.id)).toEqual(expect.arrayContaining(['p1', 'p2']));
+  });
+
+  it('a pasted link with a path stays inside its pile folder', async () => {
+    const w = new DemoWorld({ scenario: 'empty', scale: 'instant' });
+    const { vault } = w.sources();
+    await vault.addPile({ text: 'Car insurance renewal', items: [{ name: 'insurer.example/renewal', kind: 'link', origin: 'x' }] });
+    const folder = findNode(await vault.tree(), 'Inbox')?.children?.find((n) => n.type === 'folder');
+    expect(folder?.children?.map((n) => n.name).sort()).toEqual(['Pile note.md', 'insurer.example - renewal.url']);
+  });
+});

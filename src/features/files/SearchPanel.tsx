@@ -10,14 +10,14 @@ export function SearchPanel() {
   const { vault } = useSources();
   const act = useFileActions();
   const [q, setQ] = useState('');
-  const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [result, setResult] = useState<{ q: string; hits: SearchHit[] } | null>(null);
   useEffect(() => {
     if (!q.trim()) return;
     let live = true;
     const t = setTimeout(() => {
       vault.search(q).then(
-        (h) => live && setHits(h),
-        () => live && setHits([]),
+        (h) => live && setResult({ q, hits: h }),
+        () => live && setResult({ q, hits: [] }),
       );
     }, 120);
     return () => {
@@ -25,7 +25,9 @@ export function SearchPanel() {
       clearTimeout(t);
     };
   }, [q, vault]);
-  const shown = q.trim() ? hits : null;
+  // Results only for the query on screen: older answers never show for a newer query.
+  const shown = q.trim() && result?.q === q ? result.hits : null;
+  const searching = !!q.trim() && result?.q !== q;
   return (
     <div className={s.panel}>
       <label className={s.search}>
@@ -33,7 +35,7 @@ export function SearchPanel() {
         <input type="search" autoFocus placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
       <p className={s.hint} role="status">
-        {shown === null ? 'Names, summaries and what notes say.' : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
+        {searching ? 'Searching…' : shown === null ? 'Names, summaries and what notes say.' : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
       </p>
       <ul className={s.results}>
         {(shown ?? []).map((h) => (

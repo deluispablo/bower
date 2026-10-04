@@ -166,14 +166,14 @@ export function Explorer({ variant }: Props) {
         }
         return;
       case 'F2':
-        if (row && !isRoot(row.node.path)) {
+        if (row && !isRoot(row.node.path) && !inInbox(row.node.path)) {
           e.preventDefault();
           ui.setRenaming(row.node.path);
         }
         return;
       case 'Delete':
       case 'Backspace':
-        if (row && !isRoot(row.node.path) && (e.metaKey || e.key === 'Delete')) {
+        if (row && !isRoot(row.node.path) && !inInbox(row.node.path) && (e.metaKey || e.key === 'Delete')) {
           e.preventDefault();
           void act.trash(row.node.path);
         }
@@ -319,14 +319,18 @@ export function Explorer({ variant }: Props) {
             onDone={async (name, typed) => {
               ui.setRenaming(null);
               const made = ui.justMade === node.path;
-              ui.setJustMade(null);
               if (name === null && made && typed === null) {
                 // Escape on a brand-new note or folder: it was never wanted.
+                ui.setJustMade(null);
                 await act.discard(node.path);
-              } else if (name !== null) {
+              } else if (name === null) {
+                ui.setJustMade(null);
+              } else {
                 const to = await act.rename(node.path, name);
-                if (to) setFocus(to);
-                else {
+                if (to) {
+                  setFocus(to);
+                  ui.setJustMade(null);
+                } else {
                   setDraft(name);
                   ui.setRenaming(node.path);
                 }
@@ -432,7 +436,7 @@ export function Explorer({ variant }: Props) {
     <div className={s.explorer}>
       {header}
       {desktop ? (
-        <ContextMenu.Root onOpenChange={(o) => !o && setMenuNode(null)}>
+        <ContextMenu.Root modal={false} onOpenChange={(o) => !o && setMenuNode(null)}>
           <ContextMenu.Trigger asChild>{treeEl}</ContextMenu.Trigger>
           <ContextMenu.Portal>
             <ContextMenu.Content className={menuCls.content} hidden={!menuNode}>

@@ -116,8 +116,26 @@ function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summa
   }, []);
 
   useEffect(() => {
+    // A modal: focus goes in and stays in (Tab cycles inside the replay).
+    const box = stage.current;
+    box?.querySelector<HTMLElement>('button')?.focus();
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
+      if (e.key !== 'Tab' || !box) return;
+      const els = [...box.querySelectorAll<HTMLElement>('button:not([disabled]):not([tabindex="-1"]), a[href]')];
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (!first || !last) return;
+      if (!box.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

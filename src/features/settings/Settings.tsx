@@ -3,7 +3,7 @@ import { useSources, useRules } from '@/data/provider';
 import { usePrefs, type Theme } from '@/app/prefs';
 import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import s from './settings.module.css';
 
 function Row({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
@@ -96,6 +96,13 @@ export function Settings() {
         <a className={s.linkBtn} href="/landing/index.html" target="_blank" rel="noopener">
           Open it
         </a>
+      </Row>
+
+      <Row title="Privacy and terms" sub="What Bower keeps and what it never does">
+        <span style={{ display: 'flex', gap: 14 }}>
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+        </span>
       </Row>
 
       <h2 className={s.h2}>Account</h2>

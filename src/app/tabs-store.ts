@@ -13,6 +13,8 @@ interface Tabs {
   open: (route: string) => Tab;
   close: (id: number) => Tab | null;
   activate: (id: number) => Tab | null;
+  /** A note or folder moved: tabs showing it (or something inside it) follow. */
+  relocate: (fromRoute: string, toRoute: string) => void;
 }
 let n = 1;
 export const useTabs = create<Tabs>((set, get) => ({
@@ -27,6 +29,12 @@ export const useTabs = create<Tabs>((set, get) => ({
     else set({ tabs: tabs.map((t) => (t.id === active ? { ...t, route } : t)) });
   },
   open: (route) => {
+    // A page already open in a tab: go to that tab instead of opening it twice.
+    const existing = get().tabs.find((x) => x.route === route);
+    if (existing) {
+      set({ active: existing.id });
+      return existing;
+    }
     const t = { id: ++n, route };
     set({ tabs: [...get().tabs, t], active: t.id });
     return t;
@@ -44,6 +52,10 @@ export const useTabs = create<Tabs>((set, get) => ({
     set({ tabs: next, active: newActive?.id ?? 1 });
     return active === id ? (newActive ?? null) : null;
   },
+  relocate: (fromRoute, toRoute) =>
+    set({
+      tabs: get().tabs.map((t) => (t.route === fromRoute || t.route.startsWith(`${fromRoute}/`) ? { ...t, route: toRoute + t.route.slice(fromRoute.length) } : t)),
+    }),
   activate: (id) => {
     const t = get().tabs.find((x) => x.id === id) ?? null;
     if (t) set({ active: id });

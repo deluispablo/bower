@@ -7,8 +7,15 @@ export const routeFor = (node: Pick<TreeNode, 'path' | 'type'>): string =>
   node.type === 'folder' ? `/files/${enc(node.path)}` : `/note/${enc(node.path)}`;
 export const noteRoute = (path: string): string => `/note/${enc(path)}`;
 export const folderRoute = (path: string): string => (path ? `/files/${enc(path)}` : '/files');
+const safeDecode = (part: string): string => {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+};
 export const decodeSplat = (splat: string | undefined): string =>
-  (splat ?? '').split('/').filter(Boolean).map(decodeURIComponent).join('/');
+  (splat ?? '').split('/').filter(Boolean).map(safeDecode).join('/');
 
 /** The colour of a main folder, used next to its name (never alone). */
 export function paraColor(path: string): string {
