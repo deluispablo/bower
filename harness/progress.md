@@ -109,3 +109,4 @@
 - 2026-10-04: fail-card-close passes — fix(tidy): a stopped tidy-up stays on Home until Got it, however its sheet is closed
 - 2026-10-04: failed-card-dismiss passes — fix(panel): a stopped tidy-up in the side panel can be put away
 - 2026-10-04: web-source-links passes — fix(note): a saved web address in the Timeline opens in a new tab
+- 2026-10-04: palette-search-error passes — fix(palette): when search fails, the palette says so

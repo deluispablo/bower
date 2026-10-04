@@ -34,7 +34,7 @@ export function Palette() {
   const waiting = waitingIn(piles);
   // Words inside notes, from the same search as the Search panel, a moment after typing stops.
   const { vault } = useSources();
-  const [inside, setInside] = useState<{ q: string; hits: SearchHit[] }>({ q: '', hits: [] });
+  const [inside, setInside] = useState<{ q: string; hits: SearchHit[]; failed?: boolean }>({ q: '', hits: [] });
   useEffect(() => {
     const t = q.trim();
     if (t.length < 2) return;
@@ -42,7 +42,10 @@ export function Palette() {
     const timer = setTimeout(() => {
       vault.search(t).then(
         (hits) => live && setInside({ q: t, hits }),
-        (e: unknown) => console.error(e),
+        (e: unknown) => {
+          console.error(e);
+          if (live) setInside({ q: t, hits: [], failed: true });
+        },
       );
     }, 200);
     return () => {
@@ -113,7 +116,7 @@ export function Palette() {
               )}
             </div>
             <Command.List className={s.list}>
-              <Command.Empty className={s.empty}>{q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : 'Nothing by that name or in your notes.'}</Command.Empty>
+              <Command.Empty className={s.empty}>{q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : inside.failed ? 'Search did not answer. Names still work; try the words again in a moment.' : 'Nothing by that name or in your notes.'}</Command.Empty>
               <Command.Group heading="Actions" className={s.group}>
                 {actions.map((a) => (
                   <Command.Item key={a.id} value={`action ${a.label}`} onSelect={run(a.fn)} className={s.item}>

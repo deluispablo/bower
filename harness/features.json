@@ -741,8 +741,8 @@
     "category": "polish",
     "what": "If search fails, the palette says \"Looking in your notes…\" forever.",
     "steps": [],
-    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the palette says when search fails\"",
-    "passes": false
+    "verify": "pnpm vitest run src/features/palette -t \"says when search fails\"",
+    "passes": true
   },
   {
     "id": "yaml-unindented-list",
