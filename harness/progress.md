@@ -110,3 +110,4 @@
 - 2026-10-04: failed-card-dismiss passes — fix(panel): a stopped tidy-up in the side panel can be put away
 - 2026-10-04: web-source-links passes — fix(note): a saved web address in the Timeline opens in a new tab
 - 2026-10-04: palette-search-error passes — fix(palette): when search fails, the palette says so
+- 2026-10-04: new-note-escape passes — test(explorer): Escape on a new note's name takes it back, pinned on both sources

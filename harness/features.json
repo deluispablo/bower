@@ -878,7 +878,7 @@
     "what": "Escape after typing a new note's name still opens the note.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new note's name takes it back\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "failed-card-dismiss",

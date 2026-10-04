@@ -163,3 +163,15 @@ test('a saved link in the timeline is a link', async ({ page }) => {
   await expect(link).toHaveAttribute('href', 'https://flat-listing.example');
   await expect(link).toHaveAttribute('target', '_blank');
 });
+
+test("Escape on a new note's name takes it back", async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /^Resources/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New note' }).click();
+  await page.keyboard.type('Soup ideas');
+  await page.keyboard.press('Escape');
+  await expect(page).not.toHaveURL(/\/note\//);
+  await expect(tree.getByRole('treeitem', { name: /^(Untitled|Soup ideas)/ })).toHaveCount(0);
+});
