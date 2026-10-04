@@ -579,7 +579,7 @@
     "what": "The screen counts ordered-list tasks, the file writer does not: a tick can hit the wrong task.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts src/features/note",
-    "passes": false
+    "passes": true
   },
   {
     "id": "frontmatter-obsidian",
