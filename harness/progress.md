@@ -85,3 +85,4 @@
 - 2026-10-04: demo-dates-relative passes — docs(demo): the fixture says ages are relative and timeline dates are fixed text
 - 2026-10-04: stale-comments passes — docs(test): the tour test says what the pretend Drive does now
 - 2026-10-04: result-questions-test passes — fix(tidy): both runners ask a new question when they file the Saltmere receipts, so the report can be told apart from the open ones
+- 2026-10-04: result-new-questions passes — test(tidy): the report lists only the new questions a tidy-up asked

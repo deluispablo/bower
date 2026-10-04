@@ -79,3 +79,4 @@ rename-length-create	36b09b0515c3e8ef	2026-10-04	green-before: landed in 97f66e1
 demo-dates-relative	35c0a4be21870f60	2026-10-04	green-before: landed in e1edd71; red seen before that commit
 stale-comments	61affe7d29688fe8	2026-10-04	green-before: the comment lives in e2e/ (left in place by the red step) and landed in 0749d31; red seen before it
 result-questions-test	f19f1c76fa1b03ec	2026-10-04	red
+result-new-questions	02a6b87ed822a44f	2026-10-04	green-before: proved by the renamed test that landed in 4f7606a, red before it

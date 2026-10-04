@@ -370,7 +370,7 @@
       "Tidy up"
     ],
     "verify": "pnpm vitest run src/data/contract -t \"lists only the new questions it asked\"",
-    "passes": false,
+    "passes": true,
     "note": "reopened: its test was renamed when the runners began asking a new question; closed again with the new name."
   },
   {
