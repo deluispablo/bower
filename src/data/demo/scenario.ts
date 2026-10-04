@@ -62,8 +62,9 @@ export function chooseScenario(s: Scenario, scale?: TimeScale): void {
     // A new situation starts as it says: signed in or not, toured or not.
     sessionStorage.removeItem(SIGNED_KEY);
     sessionStorage.removeItem('bower:toured');
-    // Folders open in one situation are not open in the next.
+    // Folders open in one situation are not open in the next, nor its tabs.
     localStorage.removeItem('bower:open');
+    sessionStorage.removeItem('bower:tabs');
     if (scale) sessionStorage.setItem(SCALE_KEY, scale);
   } catch {
     // expected: Without storage the URL carries it.

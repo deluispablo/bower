@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useIsDesktop } from '@/ui/media';
+import { useUser } from '@/data/provider';
+import { useTabs } from './tabs-store';
 import { Toasts } from '@/ui/toast';
 import { DesktopShell } from './DesktopShell';
 import { PhoneShell } from './PhoneShell';
@@ -18,6 +20,11 @@ export function Shell() {
   const desktop = useIsDesktop();
   const nav = useNavigate();
   useRunWatcher();
+  // Tabs kept in this browser tab belong to who is signed in.
+  const { data: user } = useUser();
+  useEffect(() => {
+    if (user?.email) useTabs.getState().forPerson(user.email);
+  }, [user?.email]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {

@@ -179,3 +179,4 @@
 - 2026-10-05: namesheet-names passes — fix(app): the name sheet keeps .md single and explains a slash
 - 2026-10-05: move-no-match passes — fix(app): Move to says when no folder matches
 - 2026-10-05: former-names-gaps passes — fix(app): former names follow folder renames and #heading links, and leave a name taken again alone
+- 2026-10-05: tabs-forget-person passes — fix(app): tabs belong to who is signed in, and a new situation starts without them

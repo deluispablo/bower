@@ -15,29 +15,40 @@ interface Tabs {
   activate: (id: number) => Tab | null;
   /** One tab on Home, as on a first visit (sign-out). */
   reset: () => void;
+  /** Whose tabs these are: someone else signed in on this browser tab starts with one tab. */
+  owner: string | null;
+  forPerson: (who: string) => void;
   /** A note or folder moved: tabs showing it (or something inside it) follow. */
   relocate: (fromRoute: string, toRoute: string) => void;
 }
 /** Kept for the browser tab, so a reload keeps them (forgotten at sign-out with the rest of the person's things). */
 const KEY = 'bower:tabs';
-function kept(): { tabs: Tab[]; active: number } {
+function kept(): { tabs: Tab[]; active: number; owner: string | null } {
   try {
     const v: unknown = JSON.parse(sessionStorage.getItem(KEY) ?? 'null');
     if (v && typeof v === 'object' && Array.isArray((v as { tabs?: unknown }).tabs)) {
       const tabs = (v as { tabs: unknown[] }).tabs.filter((t): t is Tab => !!t && typeof t === 'object' && typeof (t as Tab).id === 'number' && typeof (t as Tab).route === 'string');
       const active = (v as { active?: unknown }).active;
-      if (tabs.length) return { tabs, active: typeof active === 'number' && tabs.some((t) => t.id === active) ? active : (tabs[0]?.id ?? 1) };
+      const owner = (v as { owner?: unknown }).owner;
+      if (tabs.length) return { tabs, active: typeof active === 'number' && tabs.some((t) => t.id === active) ? active : (tabs[0]?.id ?? 1), owner: typeof owner === 'string' ? owner : null };
     }
   } catch {
     // expected: no storage or an old shape; one tab, as on a first visit.
   }
-  return { tabs: [{ id: 1, route: '/' }], active: 1 };
+  return { tabs: [{ id: 1, route: '/' }], active: 1, owner: null };
 }
 const start = kept();
 let n = Math.max(1, ...start.tabs.map((t) => t.id));
 export const useTabs = create<Tabs>((set, get) => ({
   tabs: start.tabs,
   active: start.active,
+  owner: start.owner,
+  forPerson: (who) => {
+    const { owner } = get();
+    if (owner === who) return;
+    // Tabs kept for an earlier person (or for no one known) are not theirs to see.
+    set(owner === null ? { owner: who } : { owner: who, tabs: [{ id: 1, route: '/' }], active: 1 });
+  },
   follow: (route) => {
     const { tabs, active } = get();
     if (tabs.find((t) => t.id === active)?.route === route) return;
@@ -82,9 +93,9 @@ export const useTabs = create<Tabs>((set, get) => ({
   },
 }));
 
-useTabs.subscribe(({ tabs, active }) => {
+useTabs.subscribe(({ tabs, active, owner }) => {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify({ tabs, active }));
+    sessionStorage.setItem(KEY, JSON.stringify({ tabs, active, owner }));
   } catch (e) {
     console.error(e);
   }

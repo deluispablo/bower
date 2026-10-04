@@ -2035,7 +2035,7 @@
       "Open http://localhost:5190/?scenario=default&time=instant on desktop, open a second tab, then let the session end (or Start this situation again).",
       "Signing in shows one tab on Home."
     ],
-    "verify": "pnpm vitest run src/data/live src/app -t \"tabs go with the person\"",
-    "passes": false
+    "verify": "pnpm vitest run src/app -t \"tabs go with the person\"",
+    "passes": true
   }
 ]
