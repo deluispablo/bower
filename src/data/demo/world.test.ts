@@ -50,3 +50,41 @@ describe('the demo world', () => {
     expect(r?.report?.filed.length).toBeGreaterThan(5);
   });
 });
+
+import { NOTES } from './notes';
+import { SEEDS } from './fixture';
+
+describe('the demo folder', () => {
+  it('every wikilink in a note points at a note that exists', () => {
+    const names = new Set(SEEDS.map((x) => x.path).filter((p) => p.endsWith('.md')).map((p) => p.slice(p.lastIndexOf('/') + 1, -3).toLowerCase()));
+    const texts = Object.values(NOTES).flatMap((n) => [n.body, n.summary, ...n.currentState, ...n.timeline.map((t) => t.text), n.bowerNote?.text ?? '']);
+    const broken = texts.flatMap((t) => [...t.matchAll(/\[\[([^\]|]+)/g)].map((m) => m[1] ?? '')).filter((l) => !names.has(l.toLowerCase()));
+    expect(broken).toEqual([]);
+  });
+
+  it('ticks a task in a note and writes it in the journal', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const path = 'Areas/Visa & Immigration/Visa checklist.md';
+    await vault.toggleTask(path, 4);
+    expect((await vault.note(path)).body).toContain('- [x] Police certificate');
+    const j = await vault.changes();
+    expect(j.at(-1)?.what).toBe('Ticked "Police certificate" in Visa checklist');
+  });
+
+  it('keeps a typed rule as pending until a run words it', async () => {
+    vi.useFakeTimers();
+    const w = new DemoWorld({ scenario: 'default', scale: 'demo', latency: 0 });
+    const { vault, runs } = w.sources();
+    await vault.addRule('anything from the dentist goes in health');
+    expect((await vault.rules())[0]?.pending).toBe(true);
+    expect((await vault.note('Rules.md')).body).toContain('Waiting for the next tidy-up');
+    await runs.start('instructions');
+    await vi.runAllTimersAsync();
+    const r = (await vault.rules())[0];
+    expect(r?.pending).toBe(false);
+    expect(r?.text).toMatch(/^Letters, reminders and invoices from the dentist/);
+    expect(r?.yourWords).toBe('anything from the dentist goes in health');
+    expect(await vault.changes()).toEqual([]);
+  });
+});

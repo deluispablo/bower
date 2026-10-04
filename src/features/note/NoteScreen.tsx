@@ -9,10 +9,12 @@ import { useIsDesktop } from '@/ui/media';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton, Button } from '@/ui/Button';
 import { PoseBower } from '@/bird/Bower';
-import { Markdown } from './markdown';
+import { Inline, Markdown } from './markdown';
 import { useResolver } from './resolve';
 import { useFileActions } from '@/features/files/file-actions';
 import { LinkedList } from './RightPanel';
+import { toast } from '@/ui/toast';
+import { BowerError } from '@/data/types';
 import s from './note.module.css';
 
 export function NoteScreen() {
@@ -88,20 +90,33 @@ function NoteView({ path }: { path: string }) {
         </p>
       )}
       <h1 className={s.title}>{note.title}</h1>
-      {note.summary && <p className={s.summary}>{note.summary}</p>}
+      {note.summary && (
+        <p className={s.summary}>
+          <Inline text={note.summary} link={link} />
+        </p>
+      )}
       <Properties note={note} />
       {note.currentState.length > 0 && (
         <section className={s.state} aria-labelledby="cs">
           <h2 id="cs">Current state</h2>
           <ul>
             {note.currentState.map((c) => (
-              <li key={c}>{c}</li>
+              <li key={c}>
+                <Inline text={c} link={link} />
+              </li>
             ))}
           </ul>
+          <p className={s.keeper}>Bower rewrites this in every tidy-up that touches the note.</p>
         </section>
       )}
       <div className={s.body}>
-        <Markdown text={note.body} link={link} />
+        <Markdown
+          text={note.body}
+          link={link}
+          onToggle={(i) =>
+            void vault.toggleTask(path, i).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'That did not save. Try again.'))
+          }
+        />
       </div>
       {note.bowerNote && (
         <aside className={s.bowerNote} aria-label="Bower's note">
@@ -109,7 +124,9 @@ function NoteView({ path }: { path: string }) {
             <PoseBower pose="idle" size={64} />
           </div>
           <h2>Bower&rsquo;s note</h2>
-          <p>{note.bowerNote.text}</p>
+          <p>
+            <Inline text={note.bowerNote.text} link={link} />
+          </p>
           <p className={s.source}>
             <span className={s.dot} style={{ background: note.bowerNote.source === 'notes' ? 'var(--brand)' : note.bowerNote.source === 'web' ? 'var(--para-resources)' : 'var(--para-archive)' }} />
             {note.bowerNote.source === 'notes' ? 'From your notes' : note.bowerNote.source === 'web' ? 'From the web' : 'From your notes and the web'}
@@ -124,7 +141,7 @@ function NoteView({ path }: { path: string }) {
               <li key={i}>
                 <span className={s.when}>{t.date}</span>
                 <span>
-                  {t.text}
+                  <Inline text={t.text} link={link} />
                   {t.source && <span className={s.from}> From {t.source}</span>}
                 </span>
               </li>

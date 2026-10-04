@@ -22,3 +22,9 @@
 .panelCard { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--surface); text-align: left; color: var(--heading); font: inherit; font-size: 15px; cursor: pointer; }
 .panelQ { font-size: 15px; color: var(--heading); margin-bottom: 8px; }
 .panelRules { margin: 0; padding-left: 18px; font-size: 15px; }
+
+.samples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.samples button { padding: 5px 11px; border: 0; border-radius: 999px; background: var(--surface-strong); color: var(--text); font: 14px var(--font-body); cursor: pointer; }
+.samples button:hover { color: var(--heading); }
+.pending { background: var(--fresh); border-radius: 10px; padding: 11px 12px !important; border-bottom: 0 !important; margin-bottom: 6px; }
+.pendingNote { font-size: 14px; color: var(--brand-line); }

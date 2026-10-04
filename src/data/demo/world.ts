@@ -23,6 +23,8 @@ import {
   BowerError,
   PARA_ROOTS,
   type FiledItem,
+  type ChangeEntry,
+  type ChangeKind,
   type FolderState,
   type Note,
   type ParaRoot,
@@ -37,6 +39,8 @@ import {
 import {
   ALEX,
   FILING,
+  wordRule,
+  type SamplePile,
   NOTES,
   RECEIPTS_TO,
   SEEDS,
@@ -66,6 +70,9 @@ export class DemoWorld {
   private rules: Rule[] = [];
   private suggestions: Suggestion[] = [];
   private trash = new Map<string, Entry[]>();
+  private journal: ChangeEntry[] = [];
+  /** Where each inbox thing goes in the next tidy-up (the demo's stand-in for Claude). */
+  private plans = new Map<string, { title: string; to: string; note?: string }>(Object.entries(FILING));
   private run: RunState | null = null;
   private user: User | null = ALEX;
   private folder: FolderState = 'ready';
@@ -113,6 +120,11 @@ export class DemoWorld {
         const name = freeName(this.entries, 'Inbox', it.name);
         this.entries.set(join('Inbox', name), { path: join('Inbox', name), type: 'file', kind: it.kind, modified: pile.createdAt || now, created: pile.createdAt || now });
       }
+  }
+
+  private touchRules(): void {
+    const e = this.entries.get('Rules.md');
+    if (e) this.entries.set('Rules.md', { ...e, modified: Date.now() });
   }
 
   dispose(): void {
@@ -179,9 +191,71 @@ export class DemoWorld {
     return this.piles.reduce((s, p) => s + p.items.length, 0);
   }
 
+  private record(kind: ChangeKind, what: string, path?: string): void {
+    this.journal.push({ id: `c${++this.seq}`, at: Date.now(), kind, what, ...(path ? { path } : {}) });
+  }
+
+  /** Where a thing from a pile you added goes: the demo guesses from the pile's words. */
+  private guess(text: string, kind: string): string {
+    const t = text.toLowerCase();
+    const map: Array<[RegExp, string]> = [
+      [/receipt|invoice|bill/, RECEIPTS_TO],
+      [/flat|rent|lease|viewing/, 'Projects/Flat hunt'],
+      [/job|offer|cv|interview/, 'Projects/Job hunt/Applications'],
+      [/recipe|cook|soup|cake/, 'Resources/Cooking'],
+      [/car|mot|insurance/, 'Areas/Car'],
+      [/doctor|gp|dentist|health|blood/, 'Areas/Health'],
+      [/visa|passport/, 'Areas/Visa & Immigration'],
+      [/lisbon|trip|flight|hotel/, 'Projects/Lisbon trip'],
+    ];
+    for (const [re, to] of map) if (re.test(t)) return to;
+    return kind === 'link' ? 'Resources/Reading' : 'Resources/Ideas';
+  }
+
+  /** A demo-only door: adds one of the sample piles, with where its things go. */
+  addSample(sample: SamplePile): void {
+    const at = Date.now();
+    const id = `s${++this.seq}`;
+    const items = sample.items.map((it, i) => {
+      const itemId = `${id}-${i}`;
+      this.plans.set(itemId, { title: it.title, to: it.to });
+      return { id: itemId, name: it.name, kind: it.kind, origin: it.origin };
+    });
+    this.piles = [{ id, text: sample.text, createdAt: at, items }, ...this.piles];
+    this.syncInbox();
+    this.emitVault();
+  }
+
+  /** Rules.md, written from the rules: Bower's wording, with your words under it. */
+  private rulesNote(): Note {
+    const e = this.entries.get('Rules.md');
+    const done = this.rules.filter((r) => !r.pending);
+    const pending = this.rules.filter((r) => r.pending);
+    const body = [
+      '## Rules',
+      '',
+      ...done.flatMap((r) => [`- ${r.text}`, ...(r.yourWords ? [`  *You wrote: "${r.yourWords}"*`] : [])]),
+      ...(pending.length ? ['', '## Waiting for the next tidy-up', '', ...pending.map((r) => `- "${r.text}"`)] : []),
+    ].join('\n');
+    return {
+      path: 'Rules.md',
+      title: 'Rules',
+      summary: `${done.length} rules Bower follows in every tidy-up.`,
+      properties: [{ key: 'kind', label: 'Kind', value: 'Rules' }],
+      tags: [],
+      currentState: [],
+      body,
+      timeline: [],
+      links: [],
+      backlinks: [],
+      byBower: !!e?.byBower,
+    };
+  }
+
   // ---------- notes
 
   private noteFor(path: string): Note {
+    if (path === 'Rules.md' && this.entries.has(path)) return this.rulesNote();
     const cached = this.notes.get(path);
     if (cached) return cached;
     const e = this.entries.get(path);
@@ -237,7 +311,11 @@ export class DemoWorld {
       r.phaseAt = now;
       if (to === 'reading') r.total = this.inboxCount();
       if (to === 'done') {
-        r.report = this.fileInbox(now);
+        const yourChanges = this.journal.length;
+        r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: this.questions };
+        r.report.yourChanges = yourChanges;
+        this.rules = this.rules.map((x) => (x.pending ? { ...x, text: wordRule(x.yourWords ?? x.text), pending: false } : x));
+        this.journal = [];
         r.finishedAt = now;
         this.emitVault();
       } else this.advance(to, PHASE_MS[this.scale][to]);
@@ -251,7 +329,7 @@ export class DemoWorld {
     const filed: FiledItem[] = [];
     for (const pile of this.piles) {
       for (const item of pile.items) {
-        const plan = FILING[item.id] ?? { title: item.name, to: RECEIPTS_TO };
+        const plan = this.plans.get(item.id) ?? { title: item.name, to: this.guess(`${pile.text} ${item.name}`, item.kind) };
         const folder = plan.to;
         ensureFolders(this.entries, join(folder, 'x'), at);
         if (!this.entries.has(folder)) this.entries.set(folder, { path: folder, type: 'folder', modified: at, created: at });
@@ -271,13 +349,17 @@ export class DemoWorld {
     const touch = (p: string): void => {
       const e = this.entries.get(p);
       if (e) this.entries.set(p, { ...e, modified: at, isNew: true });
-      this.notes.delete(p);
     };
     const updated = [
       { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },
       { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Fabrikam, scored 7 out of 10 against your CV.' },
     ];
-    updated.forEach((u) => touch(u.path));
+    updated.forEach((u) => {
+      touch(u.path);
+      if (!this.entries.has(u.path)) return;
+      const n = this.noteFor(u.path);
+      this.notes.set(u.path, { ...n, timeline: [...n.timeline, { date: 'Today', text: u.what }] });
+    });
     return {
       filed,
       created: filed.filter((f) => f.note).map((f) => ({ path: f.note ?? '', what: `A note for ${f.title}.` })),
@@ -340,7 +422,10 @@ export class DemoWorld {
       move: (path, to) =>
         change(() => {
           const out = moveEntry(this.entries, path, to, Date.now());
+          const n = this.notes.get(path);
           this.notes.delete(path);
+          if (n) this.notes.set(out, { ...n, path: out });
+          if (out !== path) this.record('move', `Moved ${displayName(nameOf(path))} to ${to.replaceAll('/', ' / ')}`, out);
           return out;
         }),
       rename: (path, name) =>
@@ -349,6 +434,7 @@ export class DemoWorld {
           const n = this.notes.get(path);
           this.notes.delete(path);
           if (n) this.notes.set(out, { ...n, path: out, title: displayName(nameOf(out)) });
+          if (out !== path) this.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, out);
           return out;
         }),
       create: (folder, type, name) =>
@@ -357,11 +443,13 @@ export class DemoWorld {
           const base = name ?? (type === 'folder' ? 'New folder' : 'Untitled.md');
           const path = join(folder, freeName(this.entries, folder, base));
           this.entries.set(path, type === 'folder' ? { path, type, modified: now, created: now } : { path, type: 'file', kind: 'note', modified: now, created: now });
+          this.record('create', `New ${type} ${displayName(nameOf(path))} in ${folder.replaceAll('/', ' / ') || 'your Bower folder'}`, path);
           return path;
         }),
       trash: (path) =>
         change(() => {
           this.trash.set(path, removeEntry(this.entries, path));
+          this.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, path);
         }),
       restore: (path) =>
         change(() => {
@@ -396,15 +484,21 @@ export class DemoWorld {
           this.syncInbox();
         }),
       questions: () => this.wait(() => [...this.questions]),
-      answer: (id) =>
+      answer: (id, yes) =>
         change(() => {
-          this.questions = this.questions.filter((q) => q.id !== id);
+          const q = this.questions.find((x) => x.id === id);
+          this.questions = this.questions.filter((x) => x.id !== id);
+          if (q) this.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`);
         }),
       rules: () => this.wait(() => [...this.rules]),
       addRule: (text) =>
         change(() => {
-          const r: Rule = { id: `u${Date.now()}`, text: text.trim(), since: Date.now() };
+          const t = text.trim();
+          if (!t) throw new BowerError('conflict', 'Write the rule first.');
+          const r: Rule = { id: `u${Date.now()}`, text: t, yourWords: t, since: Date.now(), pending: true };
           this.rules = [r, ...this.rules];
+          this.touchRules();
+          this.record('rule', `New rule: "${t}"`, 'Rules.md');
           return r;
         }),
       suggestions: () => this.wait(() => [...this.suggestions]),
@@ -412,8 +506,35 @@ export class DemoWorld {
         change(() => {
           const s = this.suggestions.find((x) => x.id === id);
           this.suggestions = this.suggestions.filter((x) => x.id !== id);
-          if (keep && s) this.rules = [{ id: `u${Date.now()}`, text: s.title, since: Date.now() }, ...this.rules];
+          if (keep && s) {
+            this.rules = [{ id: `u${Date.now()}`, text: s.title, yourWords: s.title, since: Date.now(), pending: true }, ...this.rules];
+            this.record('rule', `Kept a suggestion as a rule: "${s.title}"`, 'Rules.md');
+          }
         }),
+      toggleTask: (path, index) =>
+        change(() => {
+          const n = this.noteFor(path);
+          let i = -1;
+          let label = '';
+          const body = n.body
+            .split('\n')
+            .map((line) => {
+              const m = /^(\s*[-*]\s+\[)( |x)(\]\s+)(.*)$/.exec(line);
+              if (!m) return line;
+              i++;
+              if (i !== index) return line;
+              label = m[4] ?? '';
+              return `${m[1]}${m[2] === 'x' ? ' ' : 'x'}${m[3]}${m[4]}`;
+            })
+            .join('\n');
+          if (!label) throw new BowerError('not-found', 'That line is no longer in the note.');
+          this.notes.set(path, { ...n, body });
+          const e = this.entries.get(path);
+          if (e) this.entries.set(path, { ...e, modified: Date.now() });
+          const ticked = body.split('\n').filter((l) => /^\s*[-*]\s+\[x\]/.test(l)).some((l) => l.endsWith(label));
+          this.record('task', `${ticked ? 'Ticked' : 'Unticked'} "${label}" in ${n.title}`, path);
+        }),
+      changes: () => this.wait(() => [...this.journal]),
       subscribe: (cb) => this.on(this.vaultListeners, cb),
     };
   }
@@ -423,7 +544,8 @@ export class DemoWorld {
       start: (scope) =>
         this.wait(() => {
           if (this.run && !['done', 'failed'].includes(this.run.phase)) return this.run;
-          if (!this.inboxCount()) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
+          if (scope === 'all' && !this.inboxCount()) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
+          if (scope === 'instructions' && !this.journal.length) throw new BowerError('conflict', 'There is nothing new for Bower to read.');
           this.run = this.newRun(scope, Date.now());
           this.advance('queued', PHASE_MS[this.scale].queued);
           this.emitRun();

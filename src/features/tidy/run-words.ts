@@ -38,6 +38,7 @@ export function runTitle(r: RunState): string {
     case 'saving':
       return 'Putting them away';
     case 'done':
+      if (r.scope === 'instructions') return 'Done. Bower read your changes';
       return `Done. ${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
     case 'failed':
       return 'The tidy-up stopped';
@@ -61,6 +62,7 @@ export function runDetail(r: RunState): string {
       if (rep.updated.length) parts.push(`${plural(rep.updated.length, 'note')} brought up to date`);
       if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'question')} for you`);
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
+      if (rep.yourChanges) parts.push(`${plural(rep.yourChanges, 'change')} of yours read`);
       return parts.length ? `${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : 'Everything has its place.';
     }
     case 'failed':

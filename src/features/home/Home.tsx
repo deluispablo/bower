@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { usePiles, useQuestions, useRun, useSources, useSuggestions, useTree } from '@/data/provider';
+import { useChanges, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
 import { displayName, parentOf } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
@@ -38,6 +38,7 @@ export function Home() {
         </div>
         <div className={s.colSide}>
           <SearchField />
+          <YourChanges running={running} />
           <Questions />
           <Suggestions />
           <JustFiled run={run ?? null} />
@@ -141,6 +142,34 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
           <Icon name="add" size={18} /> Add a pile
         </Button>
       </div>
+    </section>
+  );
+}
+
+/** The change journal, shown so people know Bower will see what they did. */
+function YourChanges({ running }: { running: boolean }) {
+  const { data: list } = useChanges();
+  const { runs } = useSources();
+  if (!list?.length) return null;
+  return (
+    <section aria-labelledby="yours" className={s.yours}>
+      <h2 id="yours" className={s.h2}>
+        Since the last tidy-up
+      </h2>
+      <p className="muted" style={{ fontSize: 15 }}>
+        Bower reads {list.length === 1 ? 'this' : `these ${list.length}`} in the next tidy-up, so it knows what you changed and where to look.
+      </p>
+      <ul className={s.changes}>
+        {list.slice(-5).reverse().map((c) => (
+          <li key={c.id}>{c.what}</li>
+        ))}
+      </ul>
+      {list.length > 5 && <p className="muted" style={{ fontSize: 14 }}>and {plural(list.length - 5, 'more change')}</p>}
+      {!running && (
+        <Button size="sm" variant="ghost" onClick={() => void runs.start('instructions').then(() => useUi.getState().setTidy(true), () => toast('It did not start. Try again.'))}>
+          Let Bower read them now
+        </Button>
+      )}
     </section>
   );
 }

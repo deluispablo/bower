@@ -60,3 +60,9 @@
 .body :global(.flash) { animation: flash 1.2s ease; border-radius: 6px; }
 @keyframes flash { 0%, 40% { background: var(--fresh); box-shadow: 0 0 0 6px var(--fresh); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
 .body h2, .body h3 { scroll-margin-top: 16px; }
+
+.keeper { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+.body :global(.md-task) { list-style: none; margin-left: -22px; }
+.body :global(.md-task) label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.body :global(.md-task) input { flex: none; width: 18px; height: 18px; margin-top: 4px; accent-color: var(--brand); cursor: pointer; }
+.body :global(.md-done) span { color: var(--text-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-muted) 60%, transparent); }

@@ -100,8 +100,27 @@ export interface Question {
 
 export interface Rule {
   id: string;
+  /** Bower's wording, as written in Rules.md; your own words until a tidy-up words it. */
   text: string;
+  /** What you typed, kept next to Bower's wording. */
+  yourWords?: string;
   since: number;
+  /** Added in the app and not yet worded by a tidy-up. */
+  pending?: boolean;
+}
+
+/**
+ * The change journal: one entry for each thing you did in the app, so the
+ * next tidy-up knows what happened and where to look (spec, "Who does what").
+ */
+export type ChangeKind = 'rule' | 'move' | 'rename' | 'create' | 'trash' | 'task' | 'answer';
+export interface ChangeEntry {
+  id: string;
+  at: number;
+  kind: ChangeKind;
+  /** One line, as the app shows it: "Moved Lease draft.pdf to Areas / Home". */
+  what: string;
+  path?: string;
 }
 
 export interface Suggestion {
@@ -131,6 +150,8 @@ export interface RunReport {
   updated: Array<{ path: string; what: string }>;
   setAside: Array<{ name: string; why: string }>;
   questions: Question[];
+  /** How many of your changes (the journal) the run read. */
+  yourChanges?: number;
 }
 
 export interface RunState {

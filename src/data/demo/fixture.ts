@@ -3,7 +3,7 @@
  * person, address or document. Dates are relative to the moment the demo
  * starts, so "today" always means today.
  */
-import type { FileKind, Note, Pile, Question, Rule, Suggestion } from '../types';
+import type { FileKind, Pile, PileItem, Question, Rule, Suggestion } from '../types';
 
 export const ALEX = { name: 'Alex', email: 'you@example.com' };
 
@@ -78,122 +78,7 @@ export function seedTime(age: number, now: number): number {
   return now - age * DAY - 3_600_000 * ((age * 7) % 11);
 }
 
-// ---------- notes with real content; the rest get a short generated one
-
-type NoteSeed = Omit<Note, 'path' | 'backlinks' | 'byBower' | 'title'> & { title?: string };
-
-export const NOTES: Record<string, NoteSeed> = {
-  'Projects/Flat hunt/Flat 3, 12 Mill Lane.md': {
-    summary: 'Two-bed flat near the station, £1,450 a month, viewing done, waiting on the agent.',
-    properties: [
-      { key: 'kind', label: 'Kind', value: 'Flat' },
-      { key: 'rent', label: 'Rent', value: '£1,450 a month' },
-      { key: 'bedrooms', label: 'Bedrooms', value: '2' },
-      { key: 'commute', label: 'Commute', value: '24 min to the office' },
-      { key: 'agent', label: 'Agent', value: 'Harbour Lettings' },
-    ],
-    status: 'viewing done',
-    tags: ['flat', 'shortlist'],
-    currentState: [
-      'Viewed on Saturday. Bright, quiet street, small second bedroom.',
-      'The agent asked for references by Friday.',
-      'Cheapest of the three for its size; the lease draft has a 12-month break clause.',
-    ],
-    body: '## Notes from the viewing\n\n- Boiler replaced last year.\n- Washing machine stays.\n- Parking permit costs £90 a year.\n\nCompare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].',
-    timeline: [
-      { date: 'Today', text: 'Lease draft read: 12-month break clause, deposit of five weeks.', source: 'Lease draft.pdf' },
-      { date: '2 Oct', text: 'Viewing photos added.', source: 'IMG_2290.jpg' },
-      { date: '29 Sep', text: 'Listing saved; rent and agent filled in.', source: 'flat-camden.example' },
-    ],
-    bowerNote: {
-      text: 'The listing does not say whether bills are included. Similar flats on the same street ask £1,500 to £1,600, so the rent is fair.',
-      source: 'both',
-    },
-    links: ['Projects/Flat hunt/Flat 7, Rosebery Ave.md', 'Projects/Flat hunt/Flat 2, 40 Canal Street.md', 'Projects/Flat hunt/Flat hunt.md'],
-    original: 'Projects/Flat hunt/Lease draft.pdf',
-  },
-  'Projects/Flat hunt/Flat hunt.md': {
-    summary: 'Looking for a two-bed under £1,600 within 30 minutes of the office, by December.',
-    properties: [
-      { key: 'kind', label: 'Kind', value: 'Project' },
-      { key: 'deadline', label: 'Deadline', value: '1 Dec' },
-      { key: 'budget', label: 'Budget', value: 'Up to £1,600' },
-    ],
-    status: 'active',
-    tags: ['project'],
-    currentState: [
-      'Three flats on the list; Mill Lane is the favourite.',
-      'References due on Friday.',
-    ],
-    body: '## What matters\n\n- Two bedrooms, one usable as an office.\n- Under 30 minutes to work.\n- Allows a bike inside.\n\n## Flats\n\n- [[Flat 3, 12 Mill Lane]]\n- [[Flat 7, Rosebery Ave]]\n- [[Flat 2, 40 Canal Street]]',
-    timeline: [
-      { date: 'Today', text: 'Mill Lane moved to "viewing done".', source: 'Flat 3, 12 Mill Lane' },
-      { date: '28 Sep', text: 'Project started from a pile with three listings.' },
-    ],
-    links: ['Projects/Flat hunt/Flat 3, 12 Mill Lane.md', 'Projects/Flat hunt/Flat 7, Rosebery Ave.md', 'Projects/Flat hunt/Flat 2, 40 Canal Street.md'],
-  },
-  'Projects/Job hunt/Applications/Senior Consultant, Altis.md': {
-    summary: 'Senior consultant role at Altis, applied 1 Oct, first interview booked.',
-    properties: [
-      { key: 'kind', label: 'Kind', value: 'Job offer' },
-      { key: 'company', label: 'Company', value: 'Altis Consulting' },
-      { key: 'salary', label: 'Salary', value: '£68,000 to £75,000' },
-      { key: 'fit', label: 'Fit', value: '8 out of 10' },
-      { key: 'where', label: 'Where', value: 'Hybrid, 2 days in the office' },
-    ],
-    status: 'interview',
-    tags: ['job'],
-    currentState: [
-      'First interview on Thursday at 10:00, video call.',
-      'Strong match on data strategy and client work; less on the public-sector experience they ask for.',
-    ],
-    body: '## Why it fits\n\n- Leads client projects, as in the last two roles.\n- Asks for SQL and cloud data platforms.\n\n## To prepare\n\n- A short story about the migration project.\n- Questions about travel.',
-    timeline: [
-      { date: '3 Oct', text: 'Interview invitation filed; status set to "interview".', source: 'Interview invitation.pdf' },
-      { date: '1 Oct', text: 'Applied; fit scored against [[CV insights]].' },
-    ],
-    links: ['Projects/Job hunt/CV insights.md', 'Projects/Job hunt/Job hunt.md'],
-  },
-  'Areas/Money/Budget 2026.md': {
-    summary: 'Monthly budget for 2026: rent, bills, savings target of £600 a month.',
-    properties: [
-      { key: 'kind', label: 'Kind', value: 'Budget' },
-      { key: 'year', label: 'Year', value: '2026' },
-    ],
-    tags: ['money'],
-    currentState: ['September came in £120 under budget, mostly on groceries.'],
-    body: '## Each month\n\n| | Planned |\n| --- | --- |\n| Rent | £1,450 |\n| Bills | £180 |\n| Food | £400 |\n| Savings | £600 |',
-    timeline: [{ date: '4 Oct', text: 'September receipts counted.', source: 'Receipts/2026-09' }],
-    links: [],
-  },
-  'Resources/Cooking/Weeknight curry.md': {
-    summary: 'A 30-minute chickpea and spinach curry for four.',
-    properties: [
-      { key: 'kind', label: 'Kind', value: 'Recipe' },
-      { key: 'time', label: 'Time', value: '30 min' },
-      { key: 'serves', label: 'Serves', value: '4' },
-    ],
-    tags: ['recipe', 'vegetarian'],
-    currentState: [],
-    body: '## Ingredients\n\n- 2 tins of chickpeas\n- 200 g spinach\n- 1 tin of coconut milk\n- Curry paste, onion, garlic\n\n## Method\n\n1. Soften the onion and garlic.\n2. Fry the paste for a minute.\n3. Add chickpeas and coconut milk; simmer 15 minutes.\n4. Stir in the spinach.',
-    timeline: [{ date: 'Today', text: 'Saved from a clipping.', source: 'curry-clipping.example' }],
-    links: [],
-  },
-  'Areas/Home/Boiler service.md': {
-    summary: 'Yearly boiler service, last done 14 Sep by Northside Heating, next due September 2027.',
-    properties: [
-      { key: 'kind', label: 'Kind', value: 'Service' },
-      { key: 'next', label: 'Next due', value: 'Sep 2027' },
-      { key: 'cost', label: 'Cost', value: '£95' },
-    ],
-    tags: ['home'],
-    currentState: ['Serviced 14 Sep; no faults. Pressure topped up.'],
-    body: 'The engineer suggested bleeding the radiators before winter.',
-    timeline: [{ date: '14 Sep', text: 'Invoice filed and next date set.', source: 'Boiler invoice.pdf' }],
-    links: ['Areas/Home/Home.md'],
-    original: 'Areas/Home/Boiler invoice.pdf',
-  },
-};
+export { NOTES } from './notes';
 
 // ---------- the inbox: two piles and two loose things
 
@@ -270,11 +155,93 @@ export function seedQuestions(now: number): Question[] {
 
 export function seedRules(now: number): Rule[] {
   return [
-    { id: 'u1', text: 'Receipts go to Money, by month', since: now - 1 * DAY },
-    { id: 'u2', text: 'Score job offers against my CV', since: now - 5 * DAY },
-    { id: 'u3', text: 'Keep my visa papers together', since: now - 5 * DAY },
+    {
+      id: 'u1',
+      text: 'Receipts and invoices for purchases go to Areas / Money / Receipts, in a folder per month of their date (YYYY-MM).',
+      yourWords: 'receipts to money by month',
+      since: now - 1 * DAY,
+    },
+    {
+      id: 'u2',
+      text: 'Score every job offer from 1 to 10 against CV insights, list the skills it asks for that the CV lacks, and add a row to the Job hunt table.',
+      yourWords: 'score job offers against my cv and tell me what im missing',
+      since: now - 5 * DAY,
+    },
+    {
+      id: 'u3',
+      text: 'Visa and immigration papers go to Areas / Visa & Immigration and tick their line in Visa checklist. Never write document numbers.',
+      yourWords: 'keep my visa papers together',
+      since: now - 5 * DAY,
+    },
   ];
 }
+
+/** How a tidy-up words a rule you typed (the demo knows a few; others get a tidied copy). */
+export const RULE_WORDING: Record<string, string> = {
+  'anything from the dentist goes in health': 'Letters, reminders and invoices from the dentist go to Areas / Health; add the appointment date to Health.',
+  'keep car stuff together and remind me of renewals': 'Car documents go to Areas / Car; put every renewal or expiry date in the Car note under Current state.',
+  'recipes always in cooking, vegetarian tag if no meat': 'Recipes go to Resources / Cooking; tag them #vegetarian when they have no meat or fish.',
+  'never file anything from my bank, just tell me': 'Do not file bank statements; leave them in the inbox and ask about them in the report.',
+};
+
+/** Rules people often type, offered in the demo's Bower tab. */
+export const SAMPLE_RULES = Object.keys(RULE_WORDING);
+
+export function wordRule(raw: string): string {
+  const known = RULE_WORDING[raw.trim().toLowerCase()];
+  if (known) return known;
+  const t = raw.trim().replace(/\s+/g, ' ');
+  return `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? '' : '.'}`;
+}
+
+// ---------- sample piles for the demo panel, each with where its things go
+
+export interface SamplePile {
+  label: string;
+  text: string;
+  items: Array<Omit<PileItem, 'id'> & { title: string; to: string }>;
+}
+
+export const SAMPLE_PILES: SamplePile[] = [
+  {
+    label: 'Car insurance renewal',
+    text: 'Car insurance renewal, the new policy starts in July',
+    items: [
+      { name: 'Renewal_notice_2027.pdf', kind: 'pdf', origin: 'From Mail', title: 'Insurance renewal 2027.pdf', to: 'Areas/Car' },
+      { name: 'Policy schedule.pdf', kind: 'pdf', origin: 'From Mail', title: 'Policy schedule 2027.pdf', to: 'Areas/Car' },
+    ],
+  },
+  {
+    label: 'Letters from the GP',
+    text: 'Blood test results and the referral the GP sent',
+    items: [
+      { name: 'scan_0041.pdf', kind: 'pdf', origin: 'From your phone', title: 'Blood test, October.pdf', to: 'Areas/Health' },
+      { name: 'scan_0042.pdf', kind: 'pdf', origin: 'From your phone', title: 'Physio referral.pdf', to: 'Areas/Health' },
+    ],
+  },
+  {
+    label: 'Recipes from mum',
+    text: 'Recipes mum sent, the soup is vegetarian',
+    items: [
+      { name: 'IMG_4012.jpg', kind: 'image', origin: 'From your phone', title: 'Lentil soup.jpg', to: 'Resources/Cooking' },
+      { name: 'IMG_4013.jpg', kind: 'image', origin: 'From your phone', title: 'Apple cake.jpg', to: 'Resources/Cooking' },
+      { name: 'IMG_4014.jpg', kind: 'image', origin: 'From your phone', title: 'Roast potatoes.jpg', to: 'Resources/Cooking' },
+    ],
+  },
+  {
+    label: 'Two more flats',
+    text: 'Two more flats to compare with Mill Lane',
+    items: [
+      { name: 'listing-99102.example', kind: 'link', origin: 'From the browser', title: 'Flat 4, 9 Albion Road.md', to: 'Projects/Flat hunt' },
+      { name: 'listing-99377.example', kind: 'link', origin: 'From the browser', title: 'Flat 1, 22 Park Street.md', to: 'Projects/Flat hunt' },
+    ],
+  },
+  {
+    label: 'A job offer',
+    text: '',
+    items: [{ name: 'Offer - Analytics Lead.pdf', kind: 'pdf', origin: 'From Mail', title: 'Offer, Analytics Lead, Contoso.pdf', to: 'Projects/Job hunt/Applications' }],
+  },
+];
 
 export function seedSuggestions(): Suggestion[] {
   return [

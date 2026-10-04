@@ -6,6 +6,7 @@ import { Shell } from './Shell';
 import { useSources } from '@/data/provider';
 import { BowerError, type FolderState, type User } from '@/data/types';
 import type { Scenario, TimeScale } from '@/data/demo/scenario';
+import type { DemoWorld } from '@/data/demo/world';
 import { SignIn } from '@/features/auth/SignIn';
 import { Welcome } from '@/features/onboarding/Welcome';
 import { Home } from '@/features/home/Home';
@@ -24,11 +25,11 @@ interface Gate {
   folder: FolderState;
 }
 
-export function App({ demo }: { demo: { scenario: Scenario; scale: TimeScale } }) {
+export function App({ demo }: { demo: { scenario: Scenario; scale: TimeScale; world: DemoWorld } }) {
   return (
     <BrowserRouter>
       <Gatekeeper />
-      <DemoPanel scenario={demo.scenario} scale={demo.scale} />
+      <DemoPanel scenario={demo.scenario} scale={demo.scale} world={demo.world} />
     </BrowserRouter>
   );
 }

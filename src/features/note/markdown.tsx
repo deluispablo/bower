@@ -26,8 +26,21 @@ function inline(text: string, link: LinkFn, keyBase: string): ReactNode[] {
   return out;
 }
 
-export function Markdown({ text, link }: { text: string; link: LinkFn }) {
+/** One line of text with wikilinks, bold and code (for Current state, Timeline, Bower's note). */
+export function Inline({ text, link }: { text: string; link: LinkFn }) {
+  return <>{inline(text, link, 'i')}</>;
+}
+
+interface MarkdownProps {
+  text: string;
+  link: LinkFn;
+  /** Makes task boxes tickable; gets the task's position among the note's tasks. */
+  onToggle?: (index: number) => void;
+}
+
+export function Markdown({ text, link, onToggle }: MarkdownProps) {
   const lines = text.split('\n');
+  let task = -1;
   const blocks: ReactNode[] = [];
   let i = 0;
   let b = 0;
@@ -52,13 +65,16 @@ export function Markdown({ text, link }: { text: string; link: LinkFn }) {
       const items: ReactNode[] = [];
       while (i < lines.length && (ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/).test(lines[i] ?? '')) {
         const t = (lines[i] ?? '').replace(/^\s*([-*]|\d+\.)\s+/, '');
-        const task = /^\[( |x)\]\s+/.exec(t);
+        const box = /^\[( |x)\]\s+/.exec(t);
+        if (box) task++;
+        const n = task;
         items.push(
-          <li key={`${key}-${items.length}`}>
-            {task ? (
-              <>
-                <input type="checkbox" checked={task[1] === 'x'} readOnly aria-label={t.slice(4)} /> {inline(t.slice(4), link, `${key}-${items.length}`)}
-              </>
+          <li key={`${key}-${items.length}`} className={box ? 'md-task' : undefined}>
+            {box ? (
+              <label className={box[1] === 'x' ? 'md-done' : undefined}>
+                <input type="checkbox" checked={box[1] === 'x'} readOnly={!onToggle} disabled={!onToggle} onChange={() => onToggle?.(n)} />
+                <span>{inline(t.slice(box[0].length), link, `${key}-${items.length}`)}</span>
+              </label>
             ) : (
               inline(t, link, `${key}-${items.length}`)
             )}

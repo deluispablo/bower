@@ -74,3 +74,4 @@ export const useSuggestions = () => useLoad((s) => s.vault.suggestions(), (s, cb
 export const useRun = () => useLoad((s) => s.runs.current(), (s, cb) => s.runs.subscribe(cb));
 export const useNote = (path: string) =>
   useLoad((s) => s.vault.note(path), (s, cb) => s.vault.subscribe(cb), [path]);
+export const useChanges = () => useLoad((s) => s.vault.changes(), (s, cb) => s.vault.subscribe(cb));

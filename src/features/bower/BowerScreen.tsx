@@ -5,6 +5,7 @@ import { PoseBower, type Pose } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
+import { SAMPLE_RULES } from '@/data/demo/fixture';
 import { isRunning } from '@/features/tidy/run-words';
 import s from './bower.module.css';
 
@@ -78,6 +79,15 @@ export function BowerScreen() {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send();
           }}
         />
+        {kind === 'rule' && (
+          <div className={s.samples} aria-label="Try one">
+            {SAMPLE_RULES.map((r) => (
+              <button key={r} type="button" onClick={() => setText(r)}>
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
         <div className={s.composerFoot}>
           <Button variant="ghost" size="sm" type="button" onClick={() => toast('Dictation arrives in the next version.')}>
             <Icon name="mic" size={18} /> Speak
@@ -94,9 +104,10 @@ export function BowerScreen() {
             <div key={m.id} className={s.bubble}>
               <p>{m.text}</p>
               <p className={s.bubbleSub}>
-                {m.kind === 'rule' ? 'Kept as a rule. Bower follows it from the next tidy-up.' : 'In your inbox. Bower does it in the next tidy-up.'}
+                {m.kind === 'rule' ? 'Saved as you wrote it. In the next tidy-up Bower words it clearly in your rules, and keeps your words next to it.' : 'In your inbox. Bower does it in the next tidy-up.'}
               </p>
-              {m.kind === 'request' && (
+              {(
+
                 <Button
                   size="sm"
                   variant="ghost"
@@ -119,10 +130,18 @@ export function BowerScreen() {
         <h2 id="rules" className={s.h2}>
           Your rules
         </h2>
+        <p className="muted" style={{ fontSize: 15, marginBottom: 6 }}>
+          Bower follows these in every tidy-up. They live in Rules.md in your folder.
+        </p>
         <ul>
           {(rules ?? []).map((r) => (
-            <li key={r.id}>
-              <span className={s.ruleText}>{r.text}</span>
+            <li key={r.id} className={r.pending ? s.pending : undefined}>
+              <span className={s.ruleText}>{r.pending ? `"${r.text}"` : r.text}</span>
+              {r.pending ? (
+                <span className={s.pendingNote}>Waiting for the next tidy-up, where Bower words it clearly.</span>
+              ) : (
+                r.yourWords && <span className="muted">You wrote: "{r.yourWords}"</span>
+              )}
               <span className="muted">Added {new Date(r.since).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
             </li>
           ))}

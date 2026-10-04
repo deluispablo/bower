@@ -1,4 +1,5 @@
 import type {
+  ChangeEntry,
   FolderState,
   NewPile,
   Note,
@@ -47,6 +48,10 @@ export interface VaultSource {
   rules(): Promise<Rule[]>;
   addRule(text: string): Promise<Rule>;
   suggestions(): Promise<Suggestion[]>;
+  /** Ticks or unticks the n-th task (`- [ ]`) of a note's body. */
+  toggleTask(path: string, index: number): Promise<void>;
+  /** Your changes since the last tidy-up (the change journal). */
+  changes(): Promise<ChangeEntry[]>;
   dismissSuggestion(id: string, keep: boolean): Promise<void>;
   subscribe(cb: () => void): Unsubscribe;
 }

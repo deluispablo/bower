@@ -7,3 +7,6 @@
 .panel fieldset { border: 0; margin: 8px 0 0; padding: 0; }
 .panel legend { color: var(--text-muted); margin-bottom: 4px; }
 .panel label { display: flex; gap: 8px; align-items: center; padding: 4px 0; color: var(--text); cursor: pointer; }
+
+.samples { display: flex; flex-wrap: wrap; gap: 6px; }
+.samples button { padding: 5px 10px; border: 0; border-radius: 999px; background: var(--surface-strong); color: var(--heading); font: 13px var(--font-body); cursor: pointer; }

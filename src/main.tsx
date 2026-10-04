@@ -19,7 +19,7 @@ if (!root) throw new Error('No #root');
 createRoot(root).render(
   <StrictMode>
     <DataProvider sources={world.sources()}>
-      <App demo={{ scenario: world.scenario, scale: world.scale }} />
+      <App demo={{ scenario: world.scenario, scale: world.scale, world }} />
     </DataProvider>
   </StrictMode>,
 );
