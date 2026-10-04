@@ -29,3 +29,4 @@
 - 2026-10-04: inbox-order passes — fix(demo): the inbox lists newest first, as on Drive
 - 2026-10-04: rename-length passes — fix(rename): names stay under 120 characters
 - 2026-10-04: merge-answer passes — fix(tidy): yes to keeping one note makes the next tidy-up merge
+- 2026-10-04: result-new-questions passes — fix(tidy): a result counts only the questions it asked

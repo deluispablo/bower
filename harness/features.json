@@ -369,7 +369,7 @@
       "Tidy up"
     ],
     "verify": "pnpm vitest run src/features/tidy/run-words.test.ts src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "copy-sensor",
