@@ -6,7 +6,7 @@ import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import { useUi } from '@/app/ui-store';
-import { SAMPLE_RULES } from '@/data/demo/fixture';
+import { RULE_EXAMPLES } from '@/data/examples';
 import { canDictate, dictate } from './dictation';
 import { isRunning } from '@/features/tidy/run-words';
 import s from './bower.module.css';
@@ -81,7 +81,7 @@ export function BowerScreen() {
         />
         {kind === 'rule' && (
           <div className={s.samples} aria-label="Try one">
-            {SAMPLE_RULES.map((r) => (
+            {RULE_EXAMPLES.map((r) => (
               <button key={r} type="button" onClick={() => setText(r)}>
                 {r}
               </button>

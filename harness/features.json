@@ -4,97 +4,623 @@
     "task": 1,
     "what": "Notes are read from and written to Markdown files",
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "drive-fake",
     "task": 2,
     "what": "An in-memory Google Drive that behaves like the real one",
     "verify": "pnpm vitest run src/data/drive",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "drive-http",
     "task": 3,
     "what": "A Google Drive client over the REST API, with retries and token refresh",
     "verify": "pnpm vitest run src/data/drive/drive-http.test.ts",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "layout-seed",
     "task": 4,
     "what": "The Bower folder layout, and Alex's folder seeded into the fake Drive",
     "verify": "pnpm vitest run src/data/fake/seed.test.ts",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "vault-index",
     "task": 5,
     "what": "Paths mapped to Drive ids, same-name files kept apart",
     "verify": "pnpm vitest run src/data/vault/vault-index.test.ts",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "vault-files",
     "task": 6,
     "what": "Tree, notes, moves, renames, Bin, tasks, search and the journal on Drive",
     "verify": "pnpm vitest run src/data/vault src/data/contract",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "vault-inbox",
     "task": 7,
     "what": "Piles, rules, requests, questions and suggestions on Drive",
     "verify": "pnpm vitest run src/data/vault src/data/contract",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "add-files",
     "task": 8,
     "what": "Add sends the files themselves",
     "verify": "pnpm vitest run src/features/piles && pnpm e2e -g \"added again\"",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "worker",
     "task": 9,
     "what": "The Worker contract, its HTTP client, a fake Worker and a fake runner",
     "verify": "pnpm vitest run src/data/worker src/data/fake",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "live",
     "task": 10,
     "what": "Session and runs over the Worker; the whole vault contract on Drive",
     "verify": "pnpm vitest run src/data/live src/data/contract",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "source-switch",
     "task": 11,
     "what": "The app starts on the demo, the fake Drive or the real Worker",
     "verify": "pnpm vitest run src/data/choose.test.ts && pnpm check",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "e2e-fake",
     "task": 12,
     "what": "Every end-to-end test passes on the fake Drive too",
     "verify": "pnpm e2e && pnpm e2e:fake",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "duplicates",
     "task": 13,
     "what": "Add warns about things you already have; failed uploads can be retried",
     "verify": "pnpm vitest run src/data/vault && pnpm e2e:fake -g \"already have\"",
-    "passes": true
+    "passes": true,
+    "category": "feature"
   },
   {
     "id": "pwa",
     "task": 14,
     "what": "Installable app with an offline shell",
     "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
-    "passes": true
+    "passes": true,
+    "category": "feature"
+  },
+  {
+    "id": "tour-loop",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "After the tour on a first sign-in, a reload or going Home freezes the tab (Welcome and / redirect to each other).",
+    "steps": [
+      "?source=fake&scenario=first",
+      "Show me around, then Skip",
+      "Reload"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"after the tour a reload opens the app\"",
+    "passes": false
+  },
+  {
+    "id": "web-off-default",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "\"Look things up on the web\" is on by default; Privacy says Bower only does it if you turn it on.",
+    "steps": [
+      "Settings"
+    ],
+    "verify": "pnpm vitest run src/app/prefs.test.ts",
+    "passes": false
+  },
+  {
+    "id": "running-live",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "The running situation on the pretend Drive stays on Getting ready for ~55 s, then jumps to done; no live phases.",
+    "steps": [
+      "?source=fake&scenario=running&time=demo"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the running situation shows its live phases\"",
+    "passes": false
+  },
+  {
+    "id": "instant-fast",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "On the pretend Drive an instant tidy-up still shows ~4 s of Getting ready (the Worker is asked every 4 s).",
+    "steps": [
+      "?source=fake&time=instant",
+      "Tidy up"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"an instant tidy-up ends at once\"",
+    "passes": false
+  },
+  {
+    "id": "scene-matches-result",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "When the result says everything was filed, the run scene still shows a heap on the inbox and a folder count that does not match.",
+    "steps": [
+      "Tidy up",
+      "Wait for Done"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the run scene ends with an empty inbox\"",
+    "passes": false
+  },
+  {
+    "id": "tree-focus-after-move",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "After moving a note from the tree's menu, keyboard focus points at a row that no longer exists.",
+    "steps": [
+      "Desktop",
+      "Right-click a note, Move to\u2026, pick a folder",
+      "ArrowDown"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"after a move the tree keeps keyboard focus\"",
+    "passes": false
+  },
+  {
+    "id": "move-keyboard",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "Move to\u2026: Enter does not pick the only folder left and arrows do not walk the list.",
+    "steps": [
+      "Move to\u2026",
+      "Type a folder name",
+      "Enter"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"Move to works from the keyboard\"",
+    "passes": false
+  },
+  {
+    "id": "new-note-opens",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "New note makes a note that is not opened and shows nothing about how to write in it; nothing says where it was made.",
+    "steps": [
+      "Explorer New note",
+      "Name it"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a new note opens and says how to write in it\"",
+    "passes": false
+  },
+  {
+    "id": "search-everything",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "Search misses text in a note's Timeline and its tags; results show raw markdown (task boxes, table pipes); a root note's place reads in lowercase.",
+    "steps": [
+      "Search Tally, #career"
+    ],
+    "verify": "pnpm vitest run src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "palette-search-text",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "The \u2318K palette only matches names although the box says \"Search your notes and files\".",
+    "steps": [
+      "\u2318K",
+      "Type a word from inside a note"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the palette finds words inside notes\"",
+    "passes": false
+  },
+  {
+    "id": "loading-states",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "While things load (slow), the footer says Nothing waiting and the side panel 0 rules.",
+    "steps": [
+      "?scenario=slow"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"while loading nothing claims to be empty\"",
+    "passes": false
+  },
+  {
+    "id": "boot-dark",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "The boot screen is light even when the saved theme is dark: a light flash.",
+    "steps": [
+      "Settings theme Dark",
+      "Reload"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the boot screen follows the saved theme\"",
+    "passes": false
+  },
+  {
+    "id": "inbox-count",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "Your folders says Inbox 17 things while Home says 15 (pile notes counted).",
+    "steps": [
+      "/files"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the folders view counts the inbox as Home does\"",
+    "passes": false
+  },
+  {
+    "id": "fake-persists",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "A reload on the pretend Drive starts it again from scratch while device data stays (dismissed suggestions, bookmarks): a kept rule vanishes.",
+    "steps": [
+      "?source=fake",
+      "Keep a suggestion as a rule",
+      "Reload"
+    ],
+    "verify": "pnpm vitest run src/data/drive/fake-drive.test.ts && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a reload on the pretend Drive keeps what you did\"",
+    "passes": false
+  },
+  {
+    "id": "dead-bookmarks",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "A bookmark to something gone stays and leads to Not here any more.",
+    "steps": [
+      "Bookmark a note",
+      "Bin it",
+      "Bookmarks"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a bookmark to something gone is dropped\"",
+    "passes": false
+  },
+  {
+    "id": "merge-answer",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "Answering Yes, merge to the Larkspur/Wrenfield question still makes a separate Flat 9 note at the next tidy-up.",
+    "steps": [
+      "Yes, merge",
+      "Tidy up"
+    ],
+    "verify": "pnpm vitest run src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "instructions-run-copy",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "Let Bower read them now looks like a filing run (Inbox scene, Putting them away, Usually about 5) and leaves a Just filed list with nothing filed.",
+    "steps": [
+      "Add a rule",
+      "Let Bower read them now"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"reading your changes does not look like filing\"",
+    "passes": false
+  },
+  {
+    "id": "notify-feedback",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "Turning on tidy-up notifications when the browser says no leaves the switch off with no word why.",
+    "steps": [
+      "Settings",
+      "Tell me when a tidy-up ends"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"notifications say why they stay off\"",
+    "passes": false
+  },
+  {
+    "id": "landing-console",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "The landing page logs 11 errors (template placeholders in SVG paths before they are filled).",
+    "steps": [
+      "/landing/index.html"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the landing page opens without console errors\"",
+    "passes": false
+  },
+  {
+    "id": "github-links",
+    "task": "qa-5",
+    "category": "bug",
+    "what": "Run your own Bower goes to the owner's profile; the landing goes to the repo. Both should open the repo.",
+    "steps": [
+      "Sign in screen"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"run your own Bower opens the repo\"",
+    "passes": false
+  },
+  {
+    "id": "inbox-order",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "The demo and the pretend Drive list the inbox in different orders.",
+    "steps": [
+      "Home on demo and fake"
+    ],
+    "verify": "pnpm vitest run src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "result-new-questions",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "The result says \"and 2 questions for you\" counting questions that were already there.",
+    "steps": [
+      "Tidy up"
+    ],
+    "verify": "pnpm vitest run src/features/tidy/run-words.test.ts src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "copy-sensor",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this\u2026\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
+    "steps": [
+      "Pile screen, Bower tab, tour, Home"
+    ],
+    "verify": "pnpm vitest run src/copy.test.ts",
+    "passes": false
+  },
+  {
+    "id": "side-panel-state",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "The side panel shows no waiting mark on a new rule, no waiting requests, and forgets a failed tidy-up once closed.",
+    "steps": [
+      "Desktop",
+      "Add a rule and a request",
+      "fail-run"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the side panel shows what waits and what failed\"",
+    "passes": false
+  },
+  {
+    "id": "tidy-confirm-close",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "The tidy-up question has no visible Cancel and a doubled hidden heading.",
+    "steps": [
+      "Tidy up"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the tidy-up question can be cancelled\"",
+    "passes": false
+  },
+  {
+    "id": "add-dedupe",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "Add takes the same file twice; the drop zone has no accessible name.",
+    "steps": [
+      "Add the same file twice"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"Add keeps one copy of a file added twice\"",
+    "passes": false
+  },
+  {
+    "id": "rename-length",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "A 300-character name is accepted.",
+    "steps": [
+      "Rename"
+    ],
+    "verify": "pnpm vitest run src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "folder-count-status",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "A folder's count includes subfolders' things (6 things, 3 rows); an empty Status column shows.",
+    "steps": [
+      "/files/Projects/Flat hunt"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a folder counts what it shows\"",
+    "passes": false
+  },
+  {
+    "id": "note-outline-sources",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "The outline lacks Current state and Timeline; timeline sources are not links; a timeline date is in the future.",
+    "steps": [
+      "Open CV insights"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the outline lists Bower's sections and sources link\" && pnpm vitest run src/data/demo",
+    "passes": false
+  },
+  {
+    "id": "phone-one-bird",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "On the phone, a second bird shows above the dimmed page when a tidy-up ends.",
+    "steps": [
+      "Phone",
+      "Tidy up",
+      "Done"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"one bird on screen when a tidy-up ends\"",
+    "passes": false
+  },
+  {
+    "id": "demo-pill-overlap",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "The Demo pill covers Remove this pile on the phone.",
+    "steps": [
+      "Phone",
+      "Open a pile"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the Demo pill never covers a button\"",
+    "passes": false
+  },
+  {
+    "id": "bin-folder-confirm",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "Binning a folder with things in it asks nothing.",
+    "steps": [
+      "Delete on a folder"
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"binning a folder with things asks first\"",
+    "passes": false
+  },
+  {
+    "id": "small-upload-progress",
+    "task": "qa-5",
+    "category": "polish",
+    "what": "Small files jump from 0% to 99%; show Sending\u2026 without a percentage unless it is known.",
+    "steps": [
+      "Add a small file"
+    ],
+    "verify": "pnpm vitest run src/features/piles",
+    "passes": false
+  },
+  {
+    "id": "stale-rename-move",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Rename and move are last-writer-wins: no check that the file is still where the app saw it.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "own-write-seen",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Ticking a task in a new note makes it new again.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "upload-vs-remove",
+    "task": "qa-5",
+    "category": "review",
+    "what": "An upload in flight survives removing or binning its pile; a lone pile comes back.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "addpile-cleanup",
+    "task": "qa-5",
+    "category": "review",
+    "what": "A failed addPile can leave an empty pile folder.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "restore-subpath",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Restoring a path inside a binned pile would rename the pile folder.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "journal-retry",
+    "task": "qa-5",
+    "category": "review",
+    "what": "A Drive change whose journal line fails to write is lost to the runner.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "system-folder-race",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Two first writes can make two .bower/changes folders.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "seen-read-once",
+    "task": "qa-5",
+    "category": "review",
+    "what": "entries() parses the seen list once per new file.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/vault-index.test.ts",
+    "passes": false
+  },
+  {
+    "id": "task-regex-shared",
+    "task": "qa-5",
+    "category": "review",
+    "what": "The screen counts ordered-list tasks, the file writer does not: a tick can hit the wrong task.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/note-format.test.ts src/features/note",
+    "passes": false
+  },
+  {
+    "id": "frontmatter-obsidian",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Block-list tags and quoted values in frontmatter are misread.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/note-format.test.ts",
+    "passes": false
+  },
+  {
+    "id": "startup-and-bundle",
+    "task": "qa-5",
+    "category": "review",
+    "what": "A failed start leaves a blank screen; demo and fake code ship in the real bundle.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/choose.test.ts && pnpm build && node scripts/check-bundle.mjs",
+    "passes": false
+  },
+  {
+    "id": "signout-forgets",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Device data (seen, dismissed, run seen, Add draft) stays after sign-out.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/live",
+    "passes": false
+  },
+  {
+    "id": "journal-file-id",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Journal entries carry only a path; add the Drive file id while the format is v1.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "passes": false
+  },
+  {
+    "id": "pwa-worker-routes",
+    "task": "qa-5",
+    "category": "review",
+    "what": "The service worker's fallback would answer the Worker's paths on a shared origin.",
+    "steps": [],
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
+    "passes": false
   }
 ]

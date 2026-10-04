@@ -4,4 +4,5 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile
 pnpm check
+tail -n 5 harness/progress.md
 node scripts/harness-status.mjs

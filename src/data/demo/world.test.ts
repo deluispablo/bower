@@ -257,3 +257,12 @@ describe('round three', () => {
     await expect(vault.rename(f, '.git')).rejects.toThrow(/dot/);
   });
 });
+
+import { RULE_EXAMPLES } from '../examples';
+import { RULE_WORDING } from './fixture';
+
+describe('rule examples', () => {
+  it('the demo knows how to word every example the Bower tab offers', () => {
+    for (const r of RULE_EXAMPLES) expect(RULE_WORDING[r]).toBeDefined();
+  });
+});

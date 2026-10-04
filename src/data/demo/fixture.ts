@@ -3,6 +3,7 @@
  * person, address or document. Dates are relative to the moment the demo
  * starts, so "today" always means today.
  */
+import { RULE_EXAMPLES } from '../examples';
 import type { FileKind, Pile, PileItem, Question, Rule, Suggestion } from '../types';
 
 export const ALEX = { name: 'Alex', email: 'you@example.com' };
@@ -201,8 +202,8 @@ export const RULE_WORDING: Record<string, string> = {
   'never file anything from my bank, just tell me': 'Do not file bank statements; leave them in the inbox and ask about them in the report.',
 };
 
-/** Rules people often type, offered in the demo's Bower tab. */
-export const SAMPLE_RULES = Object.keys(RULE_WORDING);
+/** The examples the Bower tab offers (data/examples.ts), all known to the demo's wording. */
+export const SAMPLE_RULES: readonly string[] = RULE_EXAMPLES;
 
 export function wordRule(raw: string): string {
   const known = RULE_WORDING[raw.trim().toLowerCase()];

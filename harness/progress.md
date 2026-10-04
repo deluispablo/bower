@@ -16,3 +16,4 @@
 - 2026-10-04: duplicates passes: Add warns about a file you already have (by content on Drive, by name in the demo); things that did not arrive can be sent again, only those.
 - 2026-10-04: pwa passes: the built app has a manifest, PNG icons and a precache-only service worker; it opens with no network.
 - 2026-10-04: phase 2 done: 14/14 features; pnpm check, e2e (58), e2e:fake (56, sample piles demo-only) and e2e:pwa (3) green.
+- 2026-10-04: harness method written (docs/harness/METHOD.md, AGENTS.md, briefs, architecture sensor); QA round 5 findings (20 bugs, 13 polish, 14 review) added to features.json; fixing them before phase 3.
