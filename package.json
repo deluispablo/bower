@@ -12,7 +12,9 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "harness": "node scripts/harness-status.mjs",
+    "init": "bash harness/init.sh"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.3.7",

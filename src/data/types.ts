@@ -88,7 +88,8 @@ export interface Pile {
 
 export interface NewPile {
   text: string;
-  items: Array<Pick<PileItem, 'name' | 'kind' | 'origin'>>;
+  /** `body` is the file itself; `url` is a pasted link. The demo needs neither. */
+  items: Array<Pick<PileItem, 'name' | 'kind' | 'origin'> & { body?: Blob; url?: string }>;
 }
 
 export interface Question {

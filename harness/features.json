@@ -1,0 +1,100 @@
+[
+  {
+    "id": "note-format",
+    "task": 1,
+    "what": "Notes are read from and written to Markdown files",
+    "verify": "pnpm vitest run src/data/vault/note-format.test.ts",
+    "passes": false
+  },
+  {
+    "id": "drive-fake",
+    "task": 2,
+    "what": "An in-memory Google Drive that behaves like the real one",
+    "verify": "pnpm vitest run src/data/drive",
+    "passes": false
+  },
+  {
+    "id": "drive-http",
+    "task": 3,
+    "what": "A Google Drive client over the REST API, with retries and token refresh",
+    "verify": "pnpm vitest run src/data/drive/drive-http.test.ts",
+    "passes": false
+  },
+  {
+    "id": "layout-seed",
+    "task": 4,
+    "what": "The Bower folder layout, and Alex's folder seeded into the fake Drive",
+    "verify": "pnpm vitest run src/data/fake/seed.test.ts",
+    "passes": false
+  },
+  {
+    "id": "vault-index",
+    "task": 5,
+    "what": "Paths mapped to Drive ids, same-name files kept apart",
+    "verify": "pnpm vitest run src/data/vault/vault-index.test.ts",
+    "passes": false
+  },
+  {
+    "id": "vault-files",
+    "task": 6,
+    "what": "Tree, notes, moves, renames, Bin, tasks, search and the journal on Drive",
+    "verify": "pnpm vitest run src/data/vault src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "vault-inbox",
+    "task": 7,
+    "what": "Piles, rules, requests, questions and suggestions on Drive",
+    "verify": "pnpm vitest run src/data/vault src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "add-files",
+    "task": 8,
+    "what": "Add sends the files themselves",
+    "verify": "pnpm vitest run src/features/piles && pnpm e2e -g \"added again\"",
+    "passes": false
+  },
+  {
+    "id": "worker",
+    "task": 9,
+    "what": "The Worker contract, its HTTP client, a fake Worker and a fake runner",
+    "verify": "pnpm vitest run src/data/worker src/data/fake",
+    "passes": false
+  },
+  {
+    "id": "live",
+    "task": 10,
+    "what": "Session and runs over the Worker; the whole vault contract on Drive",
+    "verify": "pnpm vitest run src/data/live src/data/contract",
+    "passes": false
+  },
+  {
+    "id": "source-switch",
+    "task": 11,
+    "what": "The app starts on the demo, the fake Drive or the real Worker",
+    "verify": "pnpm vitest run src/data/choose.test.ts && pnpm check",
+    "passes": false
+  },
+  {
+    "id": "e2e-fake",
+    "task": 12,
+    "what": "Every end-to-end test passes on the fake Drive too",
+    "verify": "pnpm e2e && pnpm e2e:fake",
+    "passes": false
+  },
+  {
+    "id": "duplicates",
+    "task": 13,
+    "what": "Add warns about things you already have; failed uploads can be retried",
+    "verify": "pnpm vitest run src/data/vault && pnpm e2e:fake -g \"already have\"",
+    "passes": false
+  },
+  {
+    "id": "pwa",
+    "task": 14,
+    "what": "Installable app with an offline shell",
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
+    "passes": false
+  }
+]

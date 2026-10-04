@@ -10,3 +10,4 @@ Guide for AI sessions in the Bower app rebuild. Short on purpose.
 - TypeScript strict, no `any`. Pure logic gets Vitest tests; flows get Playwright tests.
 - `pnpm check` and `pnpm e2e` green before a commit. Local only: never push.
 - `public/landing/`: the landing (A7) as exported from the design canvas, with that canvas's runtime (`support.js`). A stopgap for the demo; the public website gets its own build later. Do not edit it by hand.
+- Harness (phase 2 on): read `harness/README.md` first. One feature at a time from `harness/features.json`; flip `passes` only after its `verify` runs green; log in `harness/progress.md`. Every `VaultSource` must pass `src/data/contract/vault-contract.ts`.
