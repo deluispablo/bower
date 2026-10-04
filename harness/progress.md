@@ -52,3 +52,4 @@
 - 2026-10-04: small-upload-progress passes — fix(piles): a small file says Sending… without a made-up percentage
 - 2026-10-04: no-swallowed-errors passes — fix: no error is swallowed silently; a test keeps it so
 - 2026-10-04: stale-rename-move passes — fix(vault): a rename or move of something changed elsewhere writes nothing and says so
+- 2026-10-04: own-write-seen passes — fix(vault): your own change keeps a seen thing seen
