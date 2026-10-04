@@ -270,3 +270,15 @@ test('a folder counts what it shows', async ({ page }) => {
   await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Status' })).toHaveCount(0);
 });
+
+test("the outline lists Bower's sections and sources link", async ({ page, isMobile }) => {
+  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
+  const timeline = page.locator('section[aria-labelledby="tl"]');
+  await timeline.getByRole('link', { name: 'Lease draft.pdf' }).click();
+  await expect(page).toHaveURL(/Lease%20draft\.pdf/);
+  if (isMobile) return;
+  await page.goBack();
+  await page.getByRole('tab', { name: 'Outline' }).click();
+  await expect(page.getByRole('button', { name: 'Current state' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Timeline' })).toBeVisible();
+});

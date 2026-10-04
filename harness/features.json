@@ -450,7 +450,7 @@
       "Open CV insights"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the outline lists Bower's sections and sources link\" && pnpm vitest run src/data/demo",
-    "passes": false
+    "passes": true
   },
   {
     "id": "phone-one-bird",

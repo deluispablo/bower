@@ -15,3 +15,18 @@ describe('the note reader', () => {
     expect(outlineOf('## A\n### B c')).toEqual([{ level: 2, text: 'A', id: 'h-a' }, { level: 3, text: 'B c', id: 'h-b-c' }]);
   });
 });
+
+import { noteOutline } from './markdown';
+
+describe('the note outline', () => {
+  it("lists Bower's sections where they are on the page", () => {
+    const o = noteOutline({ currentState: ['a'], body: '## What matters\n\ntext\n### Detail', bowerNote: { text: 'x', source: 'notes' }, timeline: [{ date: '1 Oct', text: 'y' }] });
+    expect(o.map((h) => [h.text, h.id])).toEqual([
+      ['Current state', 'cs'],
+      ['What matters', 'h-what-matters'],
+      ['Detail', 'h-detail'],
+      ["Bower's note", 'bn'],
+      ['Timeline', 'tl'],
+    ]);
+  });
+});

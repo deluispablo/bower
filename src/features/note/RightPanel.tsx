@@ -5,7 +5,7 @@ import type { Note } from '@/data/types';
 import { crumbs, decodeSplat, noteRoute } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
 import { Icon, BowerHead } from '@/ui/Icon';
-import { outlineOf } from './markdown';
+import { noteOutline } from './markdown';
 import { LocalGraph } from './LocalGraph';
 import { BowerPanel } from '@/features/bower/BowerPanel';
 import s from './panel.module.css';
@@ -50,7 +50,7 @@ function NotePanel({ path, tab }: { path: string; tab: 'links' | 'outline' }) {
   const { data: note } = useNote(path);
   if (!note) return null;
   if (tab === 'outline') {
-    const o = outlineOf(note.body);
+    const o = noteOutline(note);
     const go = (id: string | null): void => {
       const view = document.getElementById('main');
       const el = id ? document.getElementById(id) : null;

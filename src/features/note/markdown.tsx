@@ -1,3 +1,4 @@
+import type { Note } from '@/data/types';
 import type { ReactNode } from 'react';
 
 /**
@@ -136,4 +137,14 @@ export function outlineOf(text: string): Array<{ level: number; text: string; id
     .map((l) => /^(#{1,4})\s+(.*)$/.exec(l))
     .filter((m): m is RegExpExecArray => !!m)
     .map((m) => ({ level: m[1]?.length ?? 2, text: (m[2] ?? '').replace(/\[\[|\]\]/g, ''), id: headingId(m[2] ?? '') }));
+}
+
+/** The outline of a whole note page: Bower's sections where they sit, around the body's headings. */
+export function noteOutline(n: Pick<Note, 'currentState' | 'body' | 'bowerNote' | 'timeline'>): Array<{ level: number; text: string; id: string }> {
+  const out: Array<{ level: number; text: string; id: string }> = [];
+  if (n.currentState.length) out.push({ level: 2, text: 'Current state', id: 'cs' });
+  out.push(...outlineOf(n.body));
+  if (n.bowerNote) out.push({ level: 2, text: "Bower's note", id: 'bn' });
+  if (n.timeline.length) out.push({ level: 2, text: 'Timeline', id: 'tl' });
+  return out;
 }

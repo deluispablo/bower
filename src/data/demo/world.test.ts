@@ -266,3 +266,17 @@ describe('rule examples', () => {
     for (const r of RULE_EXAMPLES) expect(RULE_WORDING[r]).toBeDefined();
   });
 });
+
+describe('the demo notes', () => {
+  it('no timeline date is after the day the demo was written', () => {
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    for (const [path, n] of Object.entries(NOTES)) {
+      for (const t of n.timeline) {
+        const m = /^(\d{1,2}) ([A-Z][a-z]{2})$/.exec(t.date);
+        if (!m) continue;
+        const at = Date.UTC(2026, MONTHS.indexOf(m[2] ?? ''), Number(m[1]));
+        expect(at, `${path}: ${t.date}`).toBeLessThanOrEqual(Date.UTC(2026, 9, 4));
+      }
+    }
+  });
+});

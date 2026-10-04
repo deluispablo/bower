@@ -45,3 +45,4 @@
 - 2026-10-04: tidy-confirm-close passes — fix(tidy): the tidy-up question has Not now and one title for screen readers
 - 2026-10-04: add-dedupe passes — fix(add): a file or link already in the pile is not added twice
 - 2026-10-04: folder-count-status passes — fix(folder): the header counts what the list shows; no empty Status column
+- 2026-10-04: note-outline-sources passes — fix(note): the outline lists Bower's sections, timeline sources link to their files, no future dates in the demo

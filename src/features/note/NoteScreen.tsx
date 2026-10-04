@@ -134,7 +134,7 @@ function NoteView({ path }: { path: string }) {
           <div className={s.bowerPerch}>
             <PoseBower pose="idle" size={64} />
           </div>
-          <h2>Bower&rsquo;s note</h2>
+          <h2 id="bn">Bower&rsquo;s note</h2>
           <p>
             <Inline text={note.bowerNote.text} link={link} />
           </p>
@@ -153,7 +153,7 @@ function NoteView({ path }: { path: string }) {
                 <span className={s.when}>{t.date}</span>
                 <span>
                   <Inline text={t.text} link={link} />
-                  {t.source && <span className={s.from}> From {t.source}</span>}
+                  {t.source && <span className={s.from}> From {link(t.source, t.source, `src-${i}`)}</span>}
                 </span>
               </li>
             ))}
