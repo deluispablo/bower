@@ -9,3 +9,4 @@ test-results
 .playwright-mcp
 e2e/_explore-*
 .superpowers
+.claude/
