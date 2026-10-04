@@ -132,7 +132,7 @@
     "steps": [
       "Settings"
     ],
-    "verify": "pnpm vitest run src/app/prefs.test.ts",
+    "verify": "pnpm vitest run src/app/prefs.test.ts -t \"does not look things up\"",
     "passes": true
   },
   {
@@ -216,7 +216,7 @@
     "steps": [
       "Search Tally, #career"
     ],
-    "verify": "pnpm vitest run src/data/contract",
+    "verify": "pnpm vitest run src/data/contract -t \"Timeline and its tags|snippets are plain text\"",
     "passes": true
   },
   {
@@ -239,7 +239,7 @@
     "steps": [
       "?scenario=slow"
     ],
-    "verify": "pnpm vitest run src/features/tidy/run-words.test.ts src/app/words.test.ts && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"while loading nothing claims to be empty\"",
+    "verify": "pnpm vitest run src/features/tidy/run-words.test.ts src/app/words.test.ts -t \"the status line|counts\" && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"while loading nothing claims to be empty\"",
     "passes": true,
     "note": "verify tightened before closing: the e2e alone passed on the old code (a race), so the wording is pinned by unit tests."
   },
@@ -276,7 +276,7 @@
       "Keep a suggestion as a rule",
       "Reload"
     ],
-    "verify": "pnpm vitest run src/data/drive/fake-drive.test.ts && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a reload on the pretend Drive keeps what you did\"",
+    "verify": "pnpm vitest run src/data/drive/fake-drive.test.ts -t \"keeping the pretend Drive\" && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a reload on the pretend Drive keeps what you did\"",
     "passes": true
   },
   {
@@ -301,7 +301,7 @@
       "Yes, merge",
       "Tidy up"
     ],
-    "verify": "pnpm vitest run src/data/contract",
+    "verify": "pnpm vitest run src/data/contract -t \"answering yes to a merge\"",
     "passes": true
   },
   {
@@ -358,7 +358,7 @@
     "steps": [
       "Home on demo and fake"
     ],
-    "verify": "pnpm vitest run src/data/contract",
+    "verify": "pnpm vitest run src/data/contract -t \"piles are listed newest first\"",
     "passes": true
   },
   {
@@ -369,7 +369,7 @@
     "steps": [
       "Tidy up"
     ],
-    "verify": "pnpm vitest run src/features/tidy/run-words.test.ts src/data/contract",
+    "verify": "pnpm vitest run src/data/contract -t \"lists only the questions it asked\"",
     "passes": true
   },
   {
@@ -380,7 +380,7 @@
     "steps": [
       "Pile screen, Bower tab, tour, Home"
     ],
-    "verify": "pnpm vitest run src/copy.test.ts",
+    "verify": "pnpm vitest run src/copy.test.ts -t \"no file names\"",
     "passes": true
   },
   {
@@ -427,7 +427,7 @@
     "steps": [
       "Rename"
     ],
-    "verify": "pnpm vitest run src/data/contract",
+    "verify": "pnpm vitest run src/data/contract -t \"longer than 120 characters\"",
     "passes": true
   },
   {
@@ -449,7 +449,7 @@
     "steps": [
       "Open CV insights"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the outline lists Bower's sections and sources link\" && pnpm vitest run src/data/demo",
+    "verify": "pnpm vitest run src/features/note src/data/demo -t \"the note outline|timeline date\" && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the outline lists Bower's sections and sources link\"",
     "passes": true
   },
   {
@@ -497,7 +497,7 @@
     "steps": [
       "Add a small file"
     ],
-    "verify": "pnpm vitest run src/features/piles",
+    "verify": "pnpm vitest run src/features/piles -t \"what a thing in a pile says\"",
     "passes": true
   },
   {
@@ -506,7 +506,7 @@
     "category": "review",
     "what": "Rename and move are last-writer-wins: no check that the file is still where the app saw it.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"changed elsewhere|moved elsewhere\"",
     "passes": true
   },
   {
@@ -515,7 +515,7 @@
     "category": "review",
     "what": "Ticking a task in a new note makes it new again.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"keeps a seen thing seen\"",
     "passes": true
   },
   {
@@ -524,7 +524,7 @@
     "category": "review",
     "what": "An upload in flight survives removing or binning its pile; a lone pile comes back.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"removed while a thing is on its way\"",
     "passes": true
   },
   {
@@ -533,7 +533,7 @@
     "category": "review",
     "what": "A failed addPile can leave an empty pile folder.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"could not be made\"",
     "passes": true
   },
   {
@@ -542,7 +542,7 @@
     "category": "review",
     "what": "Restoring a path inside a binned pile would rename the pile folder.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"inside a binned pile\"",
     "passes": true
   },
   {
@@ -551,7 +551,7 @@
     "category": "review",
     "what": "A Drive change whose journal line fails to write is lost to the runner.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"fails to write once\"",
     "passes": true
   },
   {
@@ -560,7 +560,7 @@
     "category": "review",
     "what": "Two first writes can make two .bower/changes folders.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"two first changes\"",
     "passes": true
   },
   {
@@ -569,7 +569,7 @@
     "category": "review",
     "what": "entries() parses the seen list once per new file.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/vault-index.test.ts",
+    "verify": "pnpm vitest run src/data/vault/vault-index.test.ts -t \"reads the seen list once\"",
     "passes": true
   },
   {
@@ -578,7 +578,7 @@
     "category": "review",
     "what": "The screen counts ordered-list tasks, the file writer does not: a tick can hit the wrong task.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/note-format.test.ts src/features/note",
+    "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"numbered list\"",
     "passes": true
   },
   {
@@ -587,7 +587,7 @@
     "category": "review",
     "what": "Block-list tags and quoted values in frontmatter are misread.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/note-format.test.ts",
+    "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"block-list tags\"",
     "passes": true
   },
   {
@@ -596,7 +596,7 @@
     "category": "review",
     "what": "A failed start leaves a blank screen; demo and fake code ship in the real bundle.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/choose.test.ts && pnpm build && node scripts/check-bundle.mjs",
+    "verify": "pnpm vitest run src/data/choose.test.ts -t \"fake sources answer|the demo comes\" && pnpm build && node scripts/check-bundle.mjs",
     "passes": true
   },
   {
@@ -605,7 +605,7 @@
     "category": "review",
     "what": "Device data (seen, dismissed, run seen, Add draft) stays after sign-out.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/live",
+    "verify": "pnpm vitest run src/data/live -t \"forgets this person\"",
     "passes": true
   },
   {
@@ -614,7 +614,7 @@
     "category": "review",
     "what": "Journal entries carry only a path; add the Drive file id while the format is v1.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"names the Drive file\"",
     "passes": true
   },
   {
@@ -632,7 +632,268 @@
     "category": "review",
     "what": "Some calls swallow errors silently (.catch(() => undefined), a then with () => null); the rule is one sentence to the person or details to the console.",
     "steps": [],
-    "verify": "pnpm vitest run src/architecture.test.ts",
+    "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
     "passes": true
+  },
+  {
+    "id": "journal-outbox",
+    "task": "qa-6",
+    "category": "review",
+    "what": "A journal line that cannot be written (offline) is lost; a retry after a lost answer can write it twice and the change shows twice.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"outbox|twice\"",
+    "passes": false
+  },
+  {
+    "id": "web-pref-sent",
+    "task": "qa-6",
+    "category": "review",
+    "what": "Turning web lookups on or off reaches nothing: /process sends only the scope; the Worker contract expects allow_web.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/worker src/data/live -t \"allow web\"",
+    "passes": false
+  },
+  {
+    "id": "one-count-rule",
+    "task": "qa-6",
+    "category": "review",
+    "what": "Folder counts disagree between the card or row (everything inside) and the folder's own header (what is directly in it).",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"one counting rule for folders\"",
+    "passes": false
+  },
+  {
+    "id": "move-enter-empty",
+    "task": "qa-6",
+    "category": "review",
+    "what": "Move to: Enter with an empty search box moves the file to the first folder.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Enter in an empty Move to does nothing\"",
+    "passes": false
+  },
+  {
+    "id": "fake-run-persists",
+    "task": "qa-6",
+    "category": "review",
+    "what": "On the pretend Drive, a reload mid tidy-up leaves the inbox half filed with no run; the running situation starts a new run on every reload.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/fake -t \"reload\"",
+    "passes": false
+  },
+  {
+    "id": "swallow-sensor-strong",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The swallowed-errors check misses catch {} blocks, .catch(() => []|false) and toasts with no console.error.",
+    "steps": [],
+    "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
+    "passes": false
+  },
+  {
+    "id": "copy-sensor-ts",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The copy check reads only .tsx; words in .ts files (run words, BowerError messages, journal lines) go unchecked.",
+    "steps": [],
+    "verify": "pnpm vitest run src/copy.test.ts -t \"no file names\"",
+    "passes": false
+  },
+  {
+    "id": "loading-component-test",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The loading-states fix is pinned only by pure-function tests; reverting the components would stay green.",
+    "steps": [],
+    "verify": "pnpm vitest run src/features/tidy/StatusBar.test.tsx src/features/bower/BowerPanel.test.tsx -t \"loading\"",
+    "passes": false
+  },
+  {
+    "id": "verify-names-tests",
+    "task": "qa-6",
+    "category": "review",
+    "what": "About 20 verify commands name a directory or file, not the test; deleting the pinning test keeps them green. done.sh should fail when no test matches.",
+    "steps": [],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"must name its test\" && node scripts/check-harness.mjs",
+    "passes": false
+  },
+  {
+    "id": "harness-guards",
+    "task": "qa-6",
+    "category": "review",
+    "what": "Nothing stops a hand edit of passes or verify; done.sh does not show red before green.",
+    "steps": [],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"needs a proof|loses its proof\" && node scripts/check-harness.mjs",
+    "passes": true
+  },
+  {
+    "id": "confirmbin-grammar",
+    "task": "qa-6",
+    "category": "polish",
+    "what": "ConfirmBin says \"The 1 thing inside go with it … get them back\".",
+    "steps": [],
+    "verify": "pnpm vitest run src/app/words.test.ts -t \"agree\"",
+    "passes": false
+  },
+  {
+    "id": "palette-search-error",
+    "task": "qa-6",
+    "category": "polish",
+    "what": "If search fails, the palette says \"Looking in your notes…\" forever.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the palette says when search fails\"",
+    "passes": false
+  },
+  {
+    "id": "yaml-unindented-list",
+    "task": "qa-6",
+    "category": "review",
+    "what": "A YAML list that is not indented (tags:\\n- a) is misread.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"not indented\"",
+    "passes": false
+  },
+  {
+    "id": "dedupe-restored-drafts",
+    "task": "qa-6",
+    "category": "polish",
+    "what": "Add's duplicate check misses drafts restored after a reload.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a file added again after a reload is not doubled\"",
+    "passes": false
+  },
+  {
+    "id": "signout-memory",
+    "task": "qa-6",
+    "category": "review",
+    "what": "Sign-out keeps open folders, selection and the toured mark in memory; its failure toast logs nothing.",
+    "steps": [],
+    "verify": "pnpm vitest run src/app/ui-store.test.ts -t \"sign-out\"",
+    "passes": false
+  },
+  {
+    "id": "undo-late-pile",
+    "task": "qa-6",
+    "category": "review",
+    "what": "Undo of a pile removed mid-upload loses the late things; a failed bin of a late file brings a lone pile back.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"late\"",
+    "passes": false
+  },
+  {
+    "id": "stale-check-mtime",
+    "task": "qa-6",
+    "category": "review",
+    "what": "stillAsSeen checks name and parent but not modifiedTime; the metadata update ignores it.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"changed elsewhere\"",
+    "passes": false
+  },
+  {
+    "id": "demo-dates-relative",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The fixture says dates are relative to the demo's start, but timeline dates are fixed text checked against 2026-10-04.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/demo -t \"timeline date\"",
+    "passes": false
+  },
+  {
+    "id": "pwa-routes-real",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The PWA route test is a string match and skips /me, /vault, /runs, /push; it should navigate with the service worker active.",
+    "steps": [],
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
+    "passes": false
+  },
+  {
+    "id": "arch-test-imports",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The architecture test ignores import() and relative imports.",
+    "steps": [],
+    "verify": "pnpm vitest run src/architecture.test.ts -t \"screens never import\"",
+    "passes": false
+  },
+  {
+    "id": "stale-comments",
+    "task": "qa-6",
+    "category": "polish",
+    "what": "The tour test says the pretend Drive starts over on reload (no longer true).",
+    "steps": [],
+    "verify": "! grep -n \"starts the pretend Drive again, so the folder is missing again\" e2e/qa5.spec.ts",
+    "passes": false
+  },
+  {
+    "id": "landing-source-fix",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The landing fix is a hand edit of an exported file; the next export undoes it, and the rule against hand edits was dropped.",
+    "steps": [],
+    "verify": "node scripts/fix-landing.mjs --check",
+    "passes": false
+  },
+  {
+    "id": "agents-lost-rules",
+    "task": "qa-6",
+    "category": "review",
+    "what": "AGENTS.md lost two rules: brand-line tokens for text, never \"the bird\" in copy.",
+    "steps": [],
+    "verify": "grep -q \"brand-line\" AGENTS.md && grep -q \"the bird\" AGENTS.md",
+    "passes": false
+  },
+  {
+    "id": "one-entry-per-commit",
+    "task": "qa-6",
+    "category": "review",
+    "what": "done.sh commits everything with git add -A, so two entries can land in one commit.",
+    "steps": [],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"one entry per commit\"",
+    "passes": false
+  },
+  {
+    "id": "result-questions-test",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The pretend runner always reports no questions, so the test cannot tell \"only new questions\" from \"never asks\".",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/fake -t \"new questions\"",
+    "passes": false
+  },
+  {
+    "id": "settings-real-user",
+    "task": "qa-6",
+    "category": "bug",
+    "what": "Settings shows Alex and you@example.com for every user, the real app included.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"settings shows who is signed in\"",
+    "passes": false
+  },
+  {
+    "id": "new-note-escape",
+    "task": "qa-6",
+    "category": "polish",
+    "what": "Escape after typing a new note's name still opens the note.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Escape on a new note's name takes it back\"",
+    "passes": false
+  },
+  {
+    "id": "failed-card-dismiss",
+    "task": "qa-6",
+    "category": "polish",
+    "what": "The side panel's stopped tidy-up card stays until the next run, with no way to put it away.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a stopped tidy-up can be put away\"",
+    "passes": false
+  },
+  {
+    "id": "rename-length-create",
+    "task": "qa-6",
+    "category": "review",
+    "what": "The 120-character limit applies to rename only, not to New note or New folder names.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/contract -t \"longer than 120\"",
+    "passes": false
   }
 ]

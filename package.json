@@ -12,7 +12,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && node scripts/check-harness.mjs && node scripts/check-bundle.mjs && node scripts/fix-landing.mjs --check",
     "harness": "node scripts/harness-status.mjs",
     "init": "bash harness/init.sh",
     "e2e:fake": "E2E_SOURCE=fake playwright test",

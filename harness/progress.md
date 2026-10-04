@@ -66,3 +66,4 @@
 - 2026-10-04: pwa-worker-routes passes — fix(pwa): the app shell never answers the Worker's own paths
 - 2026-10-04: startup-and-bundle passes — fix(start): a failed start says so on the boot screen; demo and pretend-Drive code load only when asked for
 - 2026-10-04: the duplicate-warning e2e no longer adds one file twice to a pile (the new rule refuses it); it covers Leave it out and Add it anyway.
+- 2026-10-04: harness-guards passes — fix(harness): an entry passes only with a proof written by done.sh: red first, a test run, its verify unchanged

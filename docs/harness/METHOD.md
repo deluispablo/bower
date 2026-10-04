@@ -15,6 +15,7 @@ It follows two published methods:
 | Feature list | `harness/features.json` | Everything that must work or be fixed, each with how to check it and `passes`. The backlog of findings lives here too. |
 | Progress log | `harness/progress.md` | One dated line per session or feature: what changed, what is next. |
 | Init | `harness/init.sh` | Installs, runs every gate, prints the next feature. |
+| Proofs | `harness/proof.log` | One line per closed entry, written by `harness/done.sh`: the hash of the `verify` that passed, and whether it was red first. `pnpm check` refuses an entry that passes without one. |
 | Sensors | `pnpm check`, `pnpm e2e`, `pnpm e2e:fake`, `pnpm e2e:pwa`, `src/architecture.test.ts` | Machines that say when something is wrong, and how to fix it. |
 | Briefs | `harness/briefs/` | What to hand a subagent: implementer, evaluator (tester), reviewer. |
 
@@ -29,7 +30,7 @@ Each entry in `harness/features.json`:
 
 - `category`: `feature`, `bug`, `polish` (copy, layout, accessibility) or `review` (from a code review).
 - `steps`: how a person reaches it; an evaluator replays them.
-- `verify`: the command that proves it. It names the test that pins it. Never edit `verify` to make it pass; fix the code.
+- `verify`: the command that proves it. It names the test that pins it (`vitest -t "<name>"`, `playwright -g "<name>"`); `scripts/check-harness.mjs` refuses one that does not. Never edit `verify` to make it pass; fix the code. A `verify` changed after closing reopens the entry (its proof no longer matches).
 - An entry is never removed. A finding that turns out wrong gets `"passes": true` and a `note` saying why.
 
 ## A session, in order

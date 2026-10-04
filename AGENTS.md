@@ -20,9 +20,10 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 
 - No personal data: names, places, companies, emails, vault content are made up (`Alex`, `you@example.com`, `FOLDER_ID`). The one exception: the owner's GitHub links (`github.com/deluispablo`, its `bower` repo), which the landing needs as a portfolio.
 - Local only: never `git push`, never add a remote. No secrets in the repo.
-- English everywhere. UI copy: sentence case, plain words, never "vault", no file names or jargon in sentences. Bower is a bowerbird.
+- English everywhere. UI copy: sentence case, plain words, never "vault", no file names or jargon in sentences. Bower is a bowerbird, never "the bird" in copy.
 - TypeScript strict, no `any`. Errors are never swallowed: a `BowerError` with one short sentence for the person, details to `console.error`.
 - The app never hard-deletes (Drive Bin only), never writes `index.md`, `hot.md`, `log.md`, nor Bower's sections of a note; every write passes the modifiedTime it read.
 - Bower on screen: one animated bird per screen (`bird/presence.ts`); respect "Bower moves" and reduced motion.
-- Brand tokens: `src/styles/tokens.json`, then `pnpm tokens`. `public/landing/` is exported from the design canvas.
+- Brand tokens: `src/styles/tokens.json`, then `pnpm tokens`. Teal and amber are fills; text uses `--brand-line` / `--accent-line`.
+- `public/landing/` is exported from the design canvas: do not edit it by hand; mechanical fixes go in `scripts/fix-landing.mjs`, run after each export.
 - Gates before a commit: `pnpm check`; screens also `pnpm e2e` and `pnpm e2e:fake`.
