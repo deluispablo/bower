@@ -750,7 +750,7 @@
     "what": "A YAML list that is not indented (tags:\\n- a) is misread.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"not indented\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "dedupe-restored-drafts",

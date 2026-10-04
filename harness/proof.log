@@ -74,3 +74,4 @@ swallow-sensor-strong	2f50af52f3d841b2	2026-10-04	red
 copy-sensor-ts	6cbdd3b8bbfa372c	2026-10-04	green-before: a check widened over code already right; it found only test names, which are not copy
 loading-component-test	f1b8b3d9c20a763f	2026-10-04	green-before: the fix is 15f56d3; these tests were checked red by putting the old lines back
 confirmbin-grammar	c94dbbf7e56a1905	2026-10-04	red
+yaml-unindented-list	e5d67f5e42d49829	2026-10-04	green-before: landed in 97f66e1 with confirmbin-grammar; red seen before that commit
