@@ -79,3 +79,22 @@ test("Shift+F10 opens the row's menu", async ({ page, isMobile }) => {
   await page.keyboard.press('ContextMenu');
   await expect(page.getByRole('menuitem', { name: 'Move to…' })).toBeVisible();
 });
+
+test('signing out and in sticks', async ({ page }) => {
+  await open(page, '/settings');
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/sign-in/);
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  // Back into the app by its address: still signed out.
+  await page.goto('/settings');
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  // Signing in goes back where you were going: Settings.
+  await expect(page.getByText('you@example.com')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByText('you@example.com')).toBeVisible();
+});

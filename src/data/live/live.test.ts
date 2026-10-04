@@ -14,6 +14,7 @@ afterEach(() => {
 
 async function open(scenario: Scenario = 'default'): Promise<LiveSources> {
   localStorage.clear();
+  sessionStorage.clear();
   const drive = new FakeDrive();
   const rootId = await seedFakeDrive(drive, scenario, Date.now());
   const worker = new FakeWorker({ drive, scenario, scale: 'instant', rootId });

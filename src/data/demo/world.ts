@@ -55,7 +55,7 @@ import {
   seedSuggestions,
   seedTime,
 } from './fixture';
-import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
+import { keepSignedIn, keptSignedIn, PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
 import { forgetThisPerson } from '../device';
@@ -120,6 +120,8 @@ export class DemoWorld {
     }
     this.syncInbox();
     if (opts.scenario === 'signed-out') this.user = null;
+    const kept = keptSignedIn();
+    if (kept !== null) this.user = kept ? ALEX : null;
     if (opts.scenario === 'back') this.seedFinishedRun(now);
     if (opts.scenario === 'running') {
       this.run = this.newRun('all', now - 70_000);
@@ -481,12 +483,14 @@ export class DemoWorld {
       signIn: () =>
         this.wait(() => {
           this.user = ALEX;
+          keepSignedIn(true);
           this.sessionListeners.forEach((l) => l());
           return ALEX;
         }),
       signOut: () =>
         this.wait(() => {
           this.user = null;
+          keepSignedIn(false);
           forgetThisPerson();
           this.sessionListeners.forEach((l) => l());
         }),

@@ -947,7 +947,7 @@
       "Reload"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"signing out and in sticks\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "fake-quota",

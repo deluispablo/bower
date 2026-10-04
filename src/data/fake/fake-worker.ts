@@ -6,7 +6,7 @@
  */
 import type { FakeDrive } from '../drive/fake-drive';
 import { ALEX } from '../demo/fixture';
-import type { Scenario, TimeScale } from '../demo/scenario';
+import { keepSignedIn, keptSignedIn, type Scenario, type TimeScale } from '../demo/scenario';
 import { thingsIn } from '../piles';
 import { BowerError, PARA_ROOTS, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -43,7 +43,7 @@ export class FakeWorker implements WorkerApi {
     this.drive = opts.drive;
     this.scale = opts.scale;
     this.rootId = opts.rootId;
-    this.signedIn = opts.scenario !== 'signed-out';
+    this.signedIn = keptSignedIn() ?? opts.scenario !== 'signed-out';
     this.failOnce = opts.scenario === 'fail-run';
     this.offline = !!opts.offline;
     // Offline, the folder cannot be read now; every call says so on its own.
@@ -62,10 +62,12 @@ export class FakeWorker implements WorkerApi {
 
   async signIn(): Promise<void> {
     this.signedIn = true;
+    keepSignedIn(true);
   }
 
   async signOut(): Promise<void> {
     this.signedIn = false;
+    keepSignedIn(false);
   }
 
   async driveToken(): Promise<string> {

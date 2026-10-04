@@ -101,3 +101,4 @@
 - 2026-10-04: tree-dom-focus passes — fix(explorer): after Move to or the Bin question, the keyboard is back in the tree
 - 2026-10-04: keyboard-context-menu passes — fix(explorer): Shift+F10 and the menu key open a row's menu; closing it gives the keyboard back to the tree
 - 2026-10-04: settings-real-user passes — fix(settings): Account shows who is signed in
+- 2026-10-04: signout-sticks passes — fix(demo): signing out or in sticks across a reload; a new situation address starts it afresh

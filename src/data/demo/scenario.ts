@@ -29,6 +29,9 @@ export function readScenario(): Scenario {
   try {
     const q = new URLSearchParams(location.search).get('scenario');
     if (isScenario(q)) {
+      // An address opened with a situation starts it afresh; a reload or Back keeps what happened since.
+      const how = (performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined)?.type;
+      if (how === 'navigate' && sessionStorage.getItem(KEY) !== null) sessionStorage.removeItem('bower:demo:signed-in');
       sessionStorage.setItem(KEY, q);
       return q;
     }
@@ -56,6 +59,9 @@ export function readTimeScale(): TimeScale {
 export function chooseScenario(s: Scenario, scale?: TimeScale): void {
   try {
     sessionStorage.setItem(KEY, s);
+    // A new situation starts as it says: signed in or not, toured or not.
+    sessionStorage.removeItem(SIGNED_KEY);
+    sessionStorage.removeItem('bower:toured');
     if (scale) sessionStorage.setItem(SCALE_KEY, scale);
   } catch {
     // expected: Without storage the URL carries it.
@@ -72,3 +78,24 @@ export const PHASE_MS: Record<TimeScale, Record<'queued' | 'reading' | 'writing'
   real: { queued: 40_000, reading: 60_000, writing: 150_000, saving: 50_000 },
   instant: { queued: 0, reading: 0, writing: 0, saving: 0 },
 };
+
+const SIGNED_KEY = 'bower:demo:signed-in';
+
+/** Whether the person signed in or out in this tab, over the situation's start (null: as the situation says). */
+export function keptSignedIn(): boolean | null {
+  try {
+    const v = sessionStorage.getItem(SIGNED_KEY);
+    return v === '1' ? true : v === '0' ? false : null;
+  } catch {
+    // expected: no storage; the situation decides.
+    return null;
+  }
+}
+
+export function keepSignedIn(on: boolean): void {
+  try {
+    sessionStorage.setItem(SIGNED_KEY, on ? '1' : '0');
+  } catch (e) {
+    console.error(e);
+  }
+}
