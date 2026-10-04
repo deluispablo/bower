@@ -238,3 +238,13 @@ test.describe('the side panel', () => {
     await expect(panel.getByText(/^Resting/)).toHaveCount(0);
   });
 });
+
+test('the tidy-up question can be cancelled', async ({ page }) => {
+  await open(page, '/');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Tidy up 15 things?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('Tidy up', { exact: true })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Not now' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

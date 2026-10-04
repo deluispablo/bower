@@ -405,7 +405,7 @@
       "Tidy up"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the tidy-up question can be cancelled\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "add-dedupe",

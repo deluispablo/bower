@@ -21,14 +21,11 @@ export function Sheet({ open, onOpenChange, title, hideTitle, description, child
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className={s.scrim} />
-        <Dialog.Content className={`${s.sheet} ${className}`} aria-describedby={description ? undefined : undefined}>
+        {/* With no description, say so (aria-describedby undefined) rather than repeat the title. */}
+        <Dialog.Content className={`${s.sheet} ${className}`} {...(description ? {} : { 'aria-describedby': undefined })}>
           <div className={s.grab} aria-hidden="true" />
           <Dialog.Title className={hideTitle ? 'sr-only' : s.sheetTitle}>{title}</Dialog.Title>
-          {description ? (
-            <Dialog.Description className="muted">{description}</Dialog.Description>
-          ) : (
-            <Dialog.Description className="sr-only">{title}</Dialog.Description>
-          )}
+          {description && <Dialog.Description className="muted">{description}</Dialog.Description>}
           {children}
         </Dialog.Content>
       </Dialog.Portal>

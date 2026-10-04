@@ -21,13 +21,16 @@ export function TidySheet() {
   const running = isRunning(run);
   const showRun = !!run && (running || !run.seen);
   const { runs } = useSources();
+  const { data: piles } = usePiles();
+  const waiting = waitingIn(piles);
+  const ask = waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing to tidy';
   const onOpenChange = (open: boolean): void => {
     // Closing on a finished run with nothing to replay: it has been seen.
     if (!open && run && run.phase === 'done' && !run.seen && !hasReplay(run)) void runs.markSeen(run.id);
     setTidy(open);
   };
   return (
-    <Sheet open={tidyOpen} onOpenChange={onOpenChange} title={showRun && run ? runTitle(run) : 'Tidy up'} hideTitle className={s.sheet}>
+    <Sheet open={tidyOpen} onOpenChange={onOpenChange} title={showRun && run ? runTitle(run) : ask} hideTitle className={s.sheet}>
       {showRun && run ? <RunView run={run} /> : <Confirm />}
     </Sheet>
   );
@@ -57,7 +60,10 @@ function Confirm() {
       <div className={s.stage}>
         <PoseBower pose={count ? 'idle' : 'sleep'} size={110} priority={1} />
       </div>
-      <p className={s.title}>{count ? `Tidy up ${plural(count, 'thing')}?` : 'Nothing to tidy'}</p>
+      {/* The dialog's own title says this to screen readers. */}
+      <p className={s.title} aria-hidden="true">
+        {count ? `Tidy up ${plural(count, 'thing')}?` : 'Nothing to tidy'}
+      </p>
       <p className={s.detail}>
         {count
           ? 'Bower reads each one, names it, writes what matters into your notes and files it in your Drive. About 5 minutes; you can close the app.'
@@ -86,9 +92,14 @@ function Confirm() {
           </Button>
         )}
         {count > 0 && (
-          <Button block onClick={() => void start()} disabled={busy}>
-            {busy ? 'Starting…' : `Tidy up ${plural(count, 'thing')}`}
-          </Button>
+          <>
+            <Button variant="ghost" onClick={() => useUi.getState().setTidy(false)}>
+              Not now
+            </Button>
+            <Button block onClick={() => void start()} disabled={busy}>
+              {busy ? 'Starting…' : `Tidy up ${plural(count, 'thing')}`}
+            </Button>
+          </>
         )}
       </div>
     </div>
