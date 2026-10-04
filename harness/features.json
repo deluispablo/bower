@@ -11,7 +11,7 @@
     "task": 2,
     "what": "An in-memory Google Drive that behaves like the real one",
     "verify": "pnpm vitest run src/data/drive",
-    "passes": false
+    "passes": true
   },
   {
     "id": "drive-http",
