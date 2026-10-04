@@ -94,3 +94,4 @@ stale-check-mtime	90c07a711f2ab064	2026-10-04	green-before: deliberate: the beha
 move-enter-multi	2d9b763a08420dc0	2026-10-04	red
 tree-dom-focus	c3e0cf9033a957f3	2026-10-04	red
 keyboard-context-menu	24e6f288a5bacc0d	2026-10-04	red
+settings-real-user	19babed6e51c7fb0	2026-10-04	red

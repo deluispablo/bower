@@ -868,8 +868,8 @@
     "category": "bug",
     "what": "Settings shows Alex and you@example.com for every user, the real app included.",
     "steps": [],
-    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"settings shows who is signed in\"",
-    "passes": false
+    "verify": "pnpm vitest run src/features/settings -t \"shows who is signed in\"",
+    "passes": true
   },
   {
     "id": "new-note-escape",

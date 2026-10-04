@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useSources, useRules } from '@/data/provider';
+import { useSources, useRules, useUser } from '@/data/provider';
 import { usePrefs, type Theme } from '@/app/prefs';
 import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
@@ -54,6 +54,7 @@ async function setNotify(on: boolean, save: (on: boolean) => void): Promise<void
 }
 
 export function Settings() {
+  const { data: user } = useUser();
   const prefs = usePrefs();
   const { data: rules } = useRules();
   const { session } = useSources();
@@ -117,7 +118,7 @@ export function Settings() {
       </Row>
 
       <h2 className={s.h2}>Account</h2>
-      <Row title="Alex" sub="you@example.com">
+      <Row title={user?.name ?? 'Signed in'} sub={user?.email ?? ''}>
         <Button
           size="sm"
           variant="ghost"
