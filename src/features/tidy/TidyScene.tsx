@@ -5,28 +5,48 @@ import { Icon } from '@/ui/Icon';
 import { PHASE_POSE } from './run-words';
 import s from './scene.module.css';
 
-const CARDS = ['#f3f6fa', '#f0b64f', '#93c5fd', '#f3f6fa', '#5fcfbc', '#c4b5fd'];
+const SIZE = 72;
+/** How far ahead of its feet Bower's beak reaches when it pecks or writes. */
+const REACH = 38;
+const GROUND = 22;
+const START = 5;
+type Spot = 'inbox' | 'read' | 'note' | 'folder' | 'mid';
 
 /**
- * What Bower is doing while a tidy-up runs, acted out on a little stage: the
- * inbox pile, a note being written, the folder. The run only tells us its
- * phase, so the scene shows the kind of work, never invented progress:
- * reading pecks a card up and looks at it; writing scribbles on the note;
- * putting away carries cards from the pile to the folder.
+ * What Bower is doing while a tidy-up runs, acted out on the ground of a
+ * little stage. The run only reports its phase, so the scene shows the kind
+ * of work, never invented progress:
+ * - reading: takes a paper from the inbox pile, studies it, sets it on the
+ *   "read" pile;
+ * - writing: stands at a note and writes it with its beak, line by line;
+ * - putting away: carries papers from the read pile into the folder.
+ * Bower always stands on the ground and hops between places.
  */
 export function TidyScene({ phase }: { phase: RunPhase }) {
   const stage = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
-  const [pile, setPile] = useState(CARDS.length);
+  const [inbox, setInbox] = useState(START);
+  const [read, setRead] = useState(1);
+  const [lines, setLines] = useState(0);
   const [filed, setFiled] = useState(0);
-  const [lifted, setLifted] = useState(false);
-  const [lines, setLines] = useState(1);
   const [bump, setBump] = useState(0);
   const [moving, setMoving] = useState(true);
 
   useEffect(() => {
     let live = true;
-    const q = (sel: string): Element | null => stage.current?.querySelector(sel) ?? null;
+    /** A spot's left edge on the ground line, in stage pixels. */
+    const spot = (name: Spot): { x: number; y: number } => {
+      const st = stage.current;
+      const y = (st?.clientHeight ?? 150) - GROUND;
+      const el = st?.querySelector(`[data-spot="${name}"]`);
+      if (!st || !el) return { x: 120, y };
+      return { x: el.getBoundingClientRect().left - st.getBoundingClientRect().left, y };
+    };
+    /** Where Bower stands to reach a spot with its beak, facing right. */
+    const standAt = (name: Exclude<Spot, 'mid'>) => () => {
+      const p = spot(name);
+      return { x: p.x + (name === 'note' ? 0 : 12) - REACH, y: p.y };
+    };
     const run = async (): Promise<void> => {
       await new Promise((r) => setTimeout(r, 400));
       const b = bird.current;
@@ -36,32 +56,34 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
         return;
       }
       setMoving(true);
-      const at = (sel: string, along: number) => () => b.pointOn(q(sel), along);
       if (phase === 'done') {
-        b.flyTo(at('[data-spot="mid"]', 0.5)).showOff();
+        b.hopTo(() => spot('mid')).face(1).showOff();
         return;
       }
       while (live) {
-        if (phase === 'queued') b.wait(2);
+        if (phase === 'queued') b.hopTo(standAt('inbox')).face(1).wait(1.6);
         if (phase === 'reading')
-          b.flyTo(at('[data-spot="pile"]', 0.5))
-            .peck(() => setLifted(true))
+          b.hopTo(standAt('inbox'))
+            .face(1)
+            .peck(() => setInbox((n) => (n <= 1 ? START : n - 1)))
             .holding(true)
-            .wait(1.1)
-            .peck(() => setLifted(false))
-            .holding(false)
-            .wait(0.2);
+            .study(1.2)
+            .hopTo(standAt('read'))
+            .face(1)
+            .peck(() => setRead((n) => (n >= 6 ? 1 : n + 1)))
+            .holding(false);
         if (phase === 'writing')
-          b.hopTo(at('[data-spot="paper"]', 0.2))
-            .peck(() => setLines((n) => (n >= 5 ? 1 : n + 1)))
-            .wait(0.25)
-            .peck(() => setLines((n) => (n >= 5 ? 1 : n + 1)))
+          b.hopTo(standAt('note'))
+            .face(1)
+            .scribble(2.4, () => setLines((n) => (n >= 6 ? 1 : n + 1)), 0.4)
             .wait(0.5);
         if (phase === 'saving')
-          b.flyTo(at('[data-spot="pile"]', 0.5))
-            .peck(() => setPile((n) => (n <= 1 ? CARDS.length : n - 1)))
+          b.hopTo(standAt('read'))
+            .face(1)
+            .peck(() => setRead((n) => (n <= 1 ? 5 : n - 1)))
             .holding(true)
-            .flyTo(at('[data-spot="folder"]', 0.45))
+            .hopTo(standAt('folder'))
+            .face(1)
             .peck(() => {
               setFiled((n) => n + 1);
               setBump((n) => n + 1);
@@ -76,38 +98,44 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
     };
   }, [phase]);
 
-  const homeFor = (): { x: number; y: number } => {
-    const spot = phase === 'writing' ? 'paper' : phase === 'saving' ? 'folder' : phase === 'done' ? 'mid' : 'pile';
-    const el = stage.current?.querySelector(`[data-spot="${spot}"]`)?.getBoundingClientRect();
-    const r = stage.current?.getBoundingClientRect();
-    if (!el || !r) return { x: 140, y: 110 };
-    return { x: el.left - r.left + el.width * (spot === 'pile' ? 1.15 : 0.5), y: el.top - r.top + (spot === 'pile' ? el.height : 2) };
+  /** Bower's resting place: the ground by the inbox pile. Actions move it from there. */
+  const home = (): { x: number; y: number; perch?: boolean } => {
+    const st = stage.current;
+    const y = (st?.clientHeight ?? 150) - GROUND;
+    const el = st?.querySelector('[data-spot="inbox"]');
+    if (!st || !el) return { x: 80, y };
+    return { x: el.getBoundingClientRect().left - st.getBoundingClientRect().left + 12 - REACH, y, perch: true };
   };
-
 
   return (
     <div className={s.stage} ref={stage} aria-hidden="true">
       <div className={s.ground} />
-      <div className={s.pile} data-spot="pile" data-show={phase !== 'done'}>
-        {CARDS.slice(0, pile).map((c, i) => (
-          <span key={i} className={s.card} style={{ background: c, transform: `translateY(${-i * 5}px) rotate(${[-5, 4, -2, 6, -3, 2][i]}deg)`, opacity: lifted && i === pile - 1 ? 0 : 1 }} />
+      <div className={s.stack} data-spot="inbox" data-dim={phase === 'writing'}>
+        {Array.from({ length: inbox }, (_, i) => (
+          <span key={i} className={s.sheet} style={{ bottom: i * 5, transform: `translateX(${[0, 2, -2, 3, -1, 1][i] ?? 0}px)` }} />
+        ))}
+        <span className={s.tag}>Inbox</span>
+      </div>
+      <div className={s.stack} data-spot="read" data-dim={phase === 'writing'}>
+        {Array.from({ length: read }, (_, i) => (
+          <span key={i} className={`${s.sheet} ${s.readSheet}`} style={{ bottom: i * 5 }} />
         ))}
       </div>
-      <div className={s.paper} data-spot="paper" data-show={phase === 'writing'}>
-        {Array.from({ length: 5 }, (_, i) => (
-          <i key={i} style={{ transform: `scaleX(${i < lines ? 1 : 0})`, width: `${[100, 80, 92, 60, 75][i]}%` }} />
+      <div className={s.note} data-spot="note" data-dim={phase !== 'writing'}>
+        {Array.from({ length: 6 }, (_, i) => (
+          <i key={i} className={i < lines ? s.written : ''} style={{ width: `${[86, 70, 92, 60, 80, 50][i]}%` }} />
         ))}
       </div>
-      <div className={s.folder} data-spot="folder" data-show={phase === 'saving' || phase === 'done'} key={bump}>
-        <Icon name="folder" size={56} stroke={1.5} />
+      <div className={s.folder} data-spot="folder" data-dim={phase !== 'saving' && phase !== 'done'} key={bump}>
+        <Icon name="folder" size={52} stroke={1.5} />
         {filed > 0 && <span className={s.filed}>{filed}</span>}
       </div>
       <span className={s.mid} data-spot="mid" />
       {moving ? (
-        <BowerLayer ref={bird} size={84} priority={1} home={homeFor} carry={<span className={s.held} />} />
+        <BowerLayer ref={bird} size={SIZE} priority={1} home={home} carry={<span className={s.held} />} />
       ) : (
         <div className={s.still}>
-          <PoseBower pose={PHASE_POSE[phase]} size={100} priority={1} />
+          <PoseBower pose={PHASE_POSE[phase]} size={96} priority={1} />
         </div>
       )}
     </div>

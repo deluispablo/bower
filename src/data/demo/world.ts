@@ -92,6 +92,7 @@ export class DemoWorld {
       this.rules = seedRules(now);
       this.suggestions = seedSuggestions();
     }
+    this.syncInbox();
     if (opts.scenario === 'signed-out') this.user = null;
     if (opts.scenario === 'back') this.seedFinishedRun(now);
     if (opts.scenario === 'running') {
@@ -101,6 +102,17 @@ export class DemoWorld {
       this.run.total = this.inboxCount();
       this.advance('reading', PHASE_MS[this.scale].reading - 20_000);
     }
+  }
+
+  /** The inbox folder shows each pile's things as files, as in Drive. */
+  private syncInbox(): void {
+    for (const p of [...this.entries.keys()]) if (p.startsWith('Inbox/')) this.entries.delete(p);
+    const now = Date.now();
+    for (const pile of this.piles)
+      for (const it of pile.items) {
+        const name = freeName(this.entries, 'Inbox', it.name);
+        this.entries.set(join('Inbox', name), { path: join('Inbox', name), type: 'file', kind: it.kind, modified: pile.createdAt || now, created: pile.createdAt || now });
+      }
   }
 
   dispose(): void {
@@ -255,6 +267,7 @@ export class DemoWorld {
       }
     }
     this.piles = [];
+    this.syncInbox();
     const touch = (p: string): void => {
       const e = this.entries.get(p);
       if (e) this.entries.set(p, { ...e, modified: at, isNew: true });
@@ -373,12 +386,14 @@ export class DemoWorld {
             items: input.items.map((it, i) => ({ ...it, id: `n${Date.now()}-${i}` })),
           };
           this.piles = [pile, ...this.piles];
+          this.syncInbox();
           return pile;
         }),
       removePile: (id) =>
         change(() => {
           if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
           this.piles = this.piles.filter((p) => p.id !== id);
+          this.syncInbox();
         }),
       questions: () => this.wait(() => [...this.questions]),
       answer: (id) =>

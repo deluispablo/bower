@@ -359,6 +359,60 @@ export class BirdEngine {
     });
   }
 
+  /** Turns to face right (1) or left (-1) with a small hop, if it is not already. */
+  face(dir: 1 | -1): this {
+    return this.act({
+      update: () => {
+        if (this.B.face !== dir) this.turn();
+        return true;
+      },
+    });
+  }
+
+  /** Holds something up and studies it: the head snaps from angle to angle. */
+  study(seconds = 1.1): this {
+    const C = this.C;
+    const angles = [-18, 6, -10, 12];
+    return this.act({
+      update: (el) => {
+        const i = Math.min(angles.length - 1, Math.floor((el / seconds) * angles.length));
+        C.head.t = angles[i] ?? 0;
+        C.tuft.t = i % 2 ? 8 : 0;
+        return el >= seconds;
+      },
+      end: () => {
+        C.head.t = 0;
+        C.tuft.t = 0;
+      },
+    });
+  }
+
+  /**
+   * Writes with the beak: leans in, the head works in quick small strokes,
+   * and `onStroke` runs at the start of each stroke (the caller draws a line).
+   */
+  scribble(seconds: number, onStroke?: () => void, every = 0.45): this {
+    const C = this.C;
+    let next = 0;
+    return this.act({
+      update: (el) => {
+        C.pitch.t = 14;
+        C.head.t = 20 + 7 * Math.sin(el * 26);
+        C.jaw.t = 0;
+        if (el >= next) {
+          next += every;
+          C.squash.vel -= 0.6;
+          onStroke?.();
+        }
+        return el >= seconds;
+      },
+      end: () => {
+        C.pitch.t = 0;
+        C.head.t = 0;
+      },
+    });
+  }
+
   /** Shows the thing in the beak (`true`) or lets it go (`false`). */
   holding(on: boolean): this {
     return this.then(() => {

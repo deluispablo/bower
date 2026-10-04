@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useRules, useRun, useSources } from '@/data/provider';
 import { BowerError } from '@/data/types';
-import { ago } from '@/app/words';
 import { PoseBower, type Pose } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
@@ -124,7 +123,7 @@ export function BowerScreen() {
           {(rules ?? []).map((r) => (
             <li key={r.id}>
               <span className={s.ruleText}>{r.text}</span>
-              <span className="muted">Since {ago(r.since).toLowerCase()}</span>
+              <span className="muted">Added {new Date(r.since).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
             </li>
           ))}
         </ul>

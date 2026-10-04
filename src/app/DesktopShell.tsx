@@ -12,8 +12,7 @@ import { SearchPanel } from '@/features/files/SearchPanel';
 import { BookmarksPanel } from '@/features/files/BookmarksPanel';
 import { RightPanel } from '@/features/note/RightPanel';
 import { StatusBar } from '@/features/tidy/StatusBar';
-import { useRun } from '@/data/provider';
-import { isRunning } from '@/features/tidy/run-words';
+import { TidyButton } from '@/features/tidy/TidyButton';
 import s from './shell.module.css';
 
 export function tabTitle(route: string): string {
@@ -35,8 +34,6 @@ export function DesktopShell() {
   const loc = useLocation();
   const nav = useNavigate();
   const { tabs, active, follow, open, close, activate } = useTabs();
-  const run = useRun().data;
-  const running = isRunning(run);
 
   const route = loc.pathname + loc.search;
   useEffect(() => follow(route), [route, follow]);
@@ -73,9 +70,6 @@ export function DesktopShell() {
         <NavLink to="/bower" className={s.rb} aria-label="Talk to Bower" title="Talk to Bower">
           <BowerHead size={22} />
         </NavLink>
-        <button type="button" className={`${s.rb} ${running ? s.rbBusy : ''}`} aria-label={running ? 'Tidy-up running' : 'Tidy up'} title={running ? 'Tidy-up running' : 'Tidy up'} onClick={() => useUi.getState().setTidy(true)}>
-          <Icon name="sweep" />
-        </button>
         <button type="button" className={s.rb} aria-label="Command palette" title="Command palette (⌘K)" onClick={() => useUi.getState().setPalette(true)}>
           <Icon name="cmd" />
         </button>
@@ -111,7 +105,7 @@ export function DesktopShell() {
 
       <div className={s.center}>
         <div className={s.tabstrip}>
-          <IconButton small label={leftOpen ? 'Hide the side panel' : 'Show the side panel'} aria-pressed={leftOpen} onClick={() => set({ leftOpen: !leftOpen })}>
+          <IconButton small label={leftOpen ? 'Hide the side panel' : 'Show the side panel'} onClick={() => set({ leftOpen: !leftOpen })}>
             <Icon name="side" size={18} />
           </IconButton>
           <nav aria-label="Open tabs" className={s.tabs}>
@@ -159,7 +153,8 @@ export function DesktopShell() {
               <Icon name="add" size={16} />
             </IconButton>
           <span className={s.grow} />
-          <IconButton small label={rightOpen ? 'Hide the right panel' : 'Show the right panel'} aria-pressed={rightOpen} onClick={() => set({ rightOpen: !rightOpen })}>
+          <TidyButton />
+          <IconButton small label={rightOpen ? 'Hide the right panel' : 'Show the right panel'} onClick={() => set({ rightOpen: !rightOpen })}>
             <Icon name="sideRight" size={18} />
           </IconButton>
         </div>

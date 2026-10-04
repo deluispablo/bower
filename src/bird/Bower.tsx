@@ -44,6 +44,9 @@ export interface BowerController {
   peck(onBite?: () => void): BowerController;
   holding(on: boolean): BowerController;
   showOff(): BowerController;
+  face(dir: 1 | -1): BowerController;
+  study(seconds?: number): BowerController;
+  scribble(seconds: number, onStroke?: () => void, every?: number): BowerController;
   then(fn: () => void): BowerController;
   wait(seconds: number): BowerController;
   settled(): Promise<void>;
@@ -167,6 +170,13 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
       },
       holding: (on) => (still ? ctl : (engine.current?.holding(on), ctl)),
       showOff: () => (still ? ctl : (engine.current?.showOff(), ctl)),
+      face: (d) => (still ? ctl : (engine.current?.face(d), ctl)),
+      study: (sec) => (still ? ctl : (engine.current?.study(sec), ctl)),
+      scribble: (sec, onStroke, every) => {
+        if (still) onStroke?.();
+        else engine.current?.scribble(sec, onStroke, every);
+        return ctl;
+      },
       then: (fn) => {
         if (still) fn();
         else engine.current?.then(fn);

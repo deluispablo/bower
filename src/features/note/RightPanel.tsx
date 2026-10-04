@@ -16,6 +16,8 @@ export function RightPanel() {
   const loc = useLocation();
   const path = loc.pathname.startsWith('/note/') ? decodeSplat(loc.pathname.slice(6)) : null;
   const isNote = !!path && path.endsWith('.md');
+  // Without a note there are no links or headings: show Bower there instead.
+  const tab = isNote ? rightTab : 'bower';
   return (
     <>
       <div className={s.tabs} role="tablist" aria-label="Right panel">
@@ -26,18 +28,18 @@ export function RightPanel() {
             ['bower', 'bower', 'Bower'],
           ] as const
         ).map(([k, ic, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={rightTab === k} aria-label={label} title={label} className={s.tab} onClick={() => setRightTab(k)}>
+          <button key={k} type="button" role="tab" aria-selected={tab === k} aria-label={label} title={label} className={s.tab} onClick={() => setRightTab(k)}>
             {ic === 'bower' ? <BowerHead size={20} /> : <Icon name={ic} size={18} />}
           </button>
         ))}
       </div>
       <div className={s.body}>
-        {rightTab === 'bower' ? (
+        {tab === 'bower' ? (
           <BowerPanel />
         ) : !isNote || !path ? (
           <p className={s.hint}>Open a note to see {rightTab === 'links' ? 'what it links to and what links to it' : 'its headings'}.</p>
         ) : (
-          <NotePanel path={path} tab={rightTab} />
+          <NotePanel path={path} tab={tab === 'outline' ? 'outline' : 'links'} />
         )}
       </div>
     </>

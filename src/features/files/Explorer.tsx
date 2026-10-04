@@ -78,7 +78,8 @@ export function Explorer({ variant }: Props) {
   }, [routePath]);
 
   const roots = useMemo(() => tree ?? [], [tree]);
-  const rows = useMemo(() => visibleRows(roots, ui.open, ui.sort), [roots, ui.open, ui.sort]);
+  // A folder's own note (Flat hunt/Flat hunt.md) is the folder: it opens from the folder view.
+  const rows = useMemo(() => visibleRows(roots, ui.open, ui.sort).filter((r) => !r.node.hub), [roots, ui.open, ui.sort]);
   const current = focus ?? ui.selected ?? rows[0]?.node.path ?? null;
 
   useEffect(() => {
