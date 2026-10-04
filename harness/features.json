@@ -277,7 +277,7 @@
       "Reload"
     ],
     "verify": "pnpm vitest run src/data/drive/fake-drive.test.ts && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a reload on the pretend Drive keeps what you did\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "dead-bookmarks",

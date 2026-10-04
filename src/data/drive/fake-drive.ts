@@ -38,6 +38,35 @@ export class FakeDrive implements DriveApi {
     this.files.set('root', { meta: { id: 'root', name: 'My Drive', folder: true, parents: [], modifiedTime: at, createdTime: at }, trashed: false, content: null });
   }
 
+  /** Told after every change, so the fake source can keep the Drive across reloads. */
+  onChange: (() => void) | null = null;
+
+  /** Everything, as JSON: files, the Bin, contents (blobs as base64) and the counters. */
+  async snapshot(): Promise<string> {
+    const files = [];
+    for (const f of this.files.values()) {
+      const c = f.content;
+      const content = c === null ? null : typeof c === 'string' ? { text: c } : { b64: toBase64(new Uint8Array(await c.arrayBuffer())), type: c.type };
+      files.push({ meta: f.meta, trashed: f.trashed, content });
+    }
+    return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files });
+  }
+
+  /** A FakeDrive back from `snapshot()`. */
+  static restore(json: string, opts: FakeDriveOptions = {}): FakeDrive {
+    const d = new FakeDrive(opts);
+    const data = JSON.parse(json) as { seq: number; last: number; files: Array<{ meta: DriveFile; trashed: boolean; content: { text: string } | { b64: string; type: string } | null }> };
+    d.files.clear();
+    for (const f of data.files) {
+      const c = f.content;
+      const content = c === null ? null : 'text' in c ? c.text : new Blob([fromBase64(c.b64)], { type: c.type });
+      d.files.set(f.meta.id, { meta: f.meta, trashed: f.trashed, content });
+    }
+    d.seq = data.seq;
+    d.last = data.last;
+    return d;
+  }
+
   /** The next call rejects with this code. */
   failNext(code: ErrorCode): void {
     this.failing = code;
@@ -92,19 +121,19 @@ export class FakeDrive implements DriveApi {
 
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.add(parentId, name, true, null, appProperties);
+    return this.changed(this.add(parentId, name, true, null, appProperties));
   }
 
   async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.add(parentId, name, false, text, appProperties);
+    return this.changed(this.add(parentId, name, false, text, appProperties));
   }
 
   async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
     const f = this.add(parentId, name, false, body, appProperties);
     onProgress?.(1);
-    return f;
+    return this.changed(f);
   }
 
   async writeText(id: string, text: string, ifModified: string): Promise<DriveFile> {
@@ -113,7 +142,7 @@ export class FakeDrive implements DriveApi {
     if (f.meta.modifiedTime !== ifModified) throw driveError('conflict');
     f.content = text;
     f.meta = { ...f.meta, modifiedTime: this.stamp(), size: text.length };
-    return this.copy(f.meta);
+    return this.changed(this.copy(f.meta));
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
@@ -133,12 +162,13 @@ export class FakeDrive implements DriveApi {
     }
     const { appProperties: _old, ...rest } = f.meta;
     f.meta = { ...rest, parents, ...(patch.name ? { name: patch.name } : {}), ...(appProperties ? { appProperties } : {}), modifiedTime: this.stamp() };
-    return this.copy(f.meta);
+    return this.changed(this.copy(f.meta));
   }
 
   async trash(id: string): Promise<void> {
     await this.gate();
     this.find(id).trashed = true;
+    this.changed(null);
   }
 
   async untrash(id: string): Promise<DriveFile> {
@@ -146,7 +176,7 @@ export class FakeDrive implements DriveApi {
     const f = this.files.get(id);
     if (!f) throw driveError('not-found');
     f.trashed = false;
-    return this.copy(f.meta);
+    return this.changed(this.copy(f.meta));
   }
 
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
@@ -158,6 +188,11 @@ export class FakeDrive implements DriveApi {
       const text = typeof f.content === 'string' ? f.content : '';
       if (f.meta.name.toLowerCase().includes(q) || text.toLowerCase().includes(q)) out.push(this.copy(f.meta));
     }
+    return out;
+  }
+
+  private changed<T>(out: T): T {
+    this.onChange?.();
     return out;
   }
 
@@ -212,4 +247,17 @@ export class FakeDrive implements DriveApi {
   private copy(m: DriveFile): DriveFile {
     return { ...m, parents: [...m.parents], ...(m.appProperties ? { appProperties: { ...m.appProperties } } : {}) };
   }
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function fromBase64(b64: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(b64);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }

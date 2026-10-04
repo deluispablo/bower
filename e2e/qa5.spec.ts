@@ -129,3 +129,16 @@ test('the folders view counts the inbox as Home does', async ({ page, isMobile }
   await open(page, '/files');
   await expect(page.getByRole('link', { name: /^Inbox/ }).first()).toContainText('15 things');
 });
+
+test('a reload on the pretend Drive keeps what you did', async ({ page }) => {
+  test.skip(!isFake, 'the demo starts again on every reload, on purpose');
+  await open(page, '/bower');
+  await page.getByRole('radio', { name: 'A rule' }).click();
+  await page.getByRole('button', { name: 'anything from the dentist goes in health' }).click();
+  await page.getByRole('button', { name: 'Keep this rule' }).click();
+  await expect(page.getByText(/Waiting for the next tidy-up/).first()).toBeVisible();
+  await page.waitForTimeout(800);
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByText(/anything from the dentist goes in health/).first()).toBeVisible();
+});

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { chooseScenario, SCENARIOS, type Scenario, type TimeScale } from './scenario';
 import { SAMPLE_PILES } from './fixture';
 import type { DemoWorld } from './world';
-import { chooseSource, type SourceKind } from '../choose';
+import { chooseSource, forgetPretendDrive, type SourceKind } from '../choose';
 import { toast } from '@/ui/toast';
 import s from './demo.module.css';
 
@@ -87,6 +87,18 @@ export function DemoPanel({
           </div>
         </fieldset>
       )}
+      {source === 'fake' && (
+        <button
+          type="button"
+          className={s.again}
+          onClick={() => {
+            forgetPretendDrive();
+            location.reload();
+          }}
+        >
+          Start the pretend Drive again
+        </button>
+      )}
       <fieldset>
         <legend>Situation</legend>
         {(Object.keys(SCENARIOS) as Scenario[]).map((k) => (
@@ -95,7 +107,7 @@ export function DemoPanel({
               type="radio"
               name="scenario"
               checked={k === scenario}
-              onChange={() => chooseScenario(k, scale)}
+              onChange={() => (forgetPretendDrive(), chooseScenario(k, scale))}
             />
             {SCENARIOS[k]}
           </label>
@@ -115,7 +127,7 @@ export function DemoPanel({
               type="radio"
               name="scale"
               checked={k === scale}
-              onChange={() => chooseScenario(scenario, k)}
+              onChange={() => (forgetPretendDrive(), chooseScenario(scenario, k))}
             />
             {l}
           </label>
