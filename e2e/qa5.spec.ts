@@ -282,3 +282,20 @@ test("the outline lists Bower's sections and sources link", async ({ page, isMob
   await expect(page.getByRole('button', { name: 'Current state' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Timeline' })).toBeVisible();
 });
+
+test('one bird on screen when a tidy-up ends', async ({ page }) => {
+  await open(page, '/');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 5000 });
+  // Every bird of the page under the dialog stays under its dimmed backdrop.
+  const above = await page.evaluate(() => {
+    const main = document.getElementById('main');
+    return [...(main?.querySelectorAll('svg') ?? [])]
+      .map((b) => b.getBoundingClientRect())
+      .filter((r) => r.width > 30 && r.bottom > 0 && r.top < innerHeight)
+      .map((r) => document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2))
+      .filter((el) => el && main?.contains(el)).length;
+  });
+  expect(above).toBe(0);
+});

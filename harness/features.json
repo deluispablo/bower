@@ -463,7 +463,8 @@
       "Done"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"one bird on screen when a tidy-up ends\"",
-    "passes": false
+    "passes": true,
+    "note": "Checked on a Pixel 7 screenshot: the page's bird stays under the dimmed backdrop and still; only the sheet's bird moves (presence rule). The test pins that no page bird is ever above an overlay."
   },
   {
     "id": "demo-pill-overlap",
