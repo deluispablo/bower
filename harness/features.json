@@ -4,7 +4,7 @@
     "task": 1,
     "what": "Notes are read from and written to Markdown files",
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "drive-fake",
