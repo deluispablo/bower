@@ -705,7 +705,7 @@
     "what": "The loading-states fix is pinned only by pure-function tests; reverting the components would stay green.",
     "steps": [],
     "verify": "pnpm vitest run src/features/tidy/StatusBar.test.tsx src/features/bower/BowerPanel.test.tsx -t \"loading\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "verify-names-tests",

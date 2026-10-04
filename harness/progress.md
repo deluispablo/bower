@@ -78,3 +78,4 @@
 - 2026-10-04: fake-run-persists passes — fix(fake): a tidy-up cut by a reload shows as stopped, and the running situation starts only on a fresh pretend Drive
 - 2026-10-04: swallow-sensor-strong passes — fix: every catch logs, rethrows, or says why ignoring is right; one report() for the person and the console
 - 2026-10-04: copy-sensor-ts passes — fix(copy): the copy check reads the words in .ts files too, data included
+- 2026-10-04: loading-component-test passes — test: the footer and the side panel are pinned in their loading state
