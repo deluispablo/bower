@@ -813,8 +813,8 @@
     "category": "review",
     "what": "The architecture test ignores import() and relative imports.",
     "steps": [],
-    "verify": "pnpm vitest run src/architecture.test.ts -t \"screens never import\"",
-    "passes": false
+    "verify": "pnpm vitest run src/architecture.test.ts -t \"dynamic and relative|screens never import\"",
+    "passes": true
   },
   {
     "id": "stale-comments",

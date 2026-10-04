@@ -17,11 +17,19 @@ const files = (dir: string): string[] =>
   });
 
 /** Where the data comes from is picked once, in main.tsx; screens only see the doors. */
-const SOURCES = /from '@\/data\/(demo|drive|vault|live|worker|fake|choose|contract)[/']/;
+/** An import of a data source: static or dynamic, by alias or by a relative path. */
+const SOURCES = /(from |import\()'(@\/|(\.\.\/)+)data\/(demo|drive|vault|live|worker|fake|choose|contract)[/']/;
 /** The app shell may mount the demo panel (it shows only on demo and fake). */
-const ALLOWED: Record<string, RegExp> = { 'app/App.tsx': /from '@\/data\/(demo\/DemoPanel|demo\/scenario|demo\/world|choose)'/ };
+const ALLOWED: Record<string, RegExp> = { 'app/App.tsx': /(from |import\()'@\/data\/(demo\/DemoPanel|demo\/scenario|demo\/world|choose)'/ };
 
 describe('the shape of the code', () => {
+  it('the import rule sees dynamic and relative imports', () => {
+    expect(SOURCES.test("import { DemoWorld } from '@/data/demo/world';")).toBe(true);
+    expect(SOURCES.test("const m = await import('@/data/fake/pretend');")).toBe(true);
+    expect(SOURCES.test("import { FakeDrive } from '../../data/drive/fake-drive';")).toBe(true);
+    expect(SOURCES.test("import { useSources } from '@/data/provider';")).toBe(false);
+  });
+
   it('screens never import a data source directly', () => {
     const bad: string[] = [];
     for (const dir of ['features', 'app', 'ui', 'bird']) {
