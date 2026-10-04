@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 // Uses the Chrome already on the machine (no browser download).
 export default defineConfig({
   testDir: 'e2e',
-  testIgnore: /_explore-/,
+  // pwa.spec.ts needs a production build: pnpm e2e:pwa (e2e/pwa.config.ts).
+  testIgnore: [/_explore-/, /pwa\.spec\.ts/],
   timeout: 30_000,
   fullyParallel: true,
   reporter: 'list',

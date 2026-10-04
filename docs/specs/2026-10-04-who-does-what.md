@@ -51,6 +51,22 @@ A pile is what you add together, with one line about it. In Drive it is a subfol
 - In the app the inbox is handled as piles: a pile is opened or removed as a whole; its things are never dragged, renamed or moved one by one. The pile's note can be changed until a tidy-up starts.
 - Names in the inbox are made safe for Drive (no slashes); a pasted link becomes a `.url` file.
 
+## Files in `.bower/`
+
+Every JSON file carries `v: 1`. The shapes are in `src/data/vault/layout.ts`.
+
+| File | Written by | Holds |
+| --- | --- | --- |
+| `changes/<time>-<id>.json` | The app, one file per change | The journal entry: kind, one line, the path, your words (a rule, a request, an answer), the device |
+| `changes/archive/` | The runner, after reading | The journal files a tidy-up read |
+| `last-run.json` | The runner, before it reports `done` | The run and its report |
+| `questions.json` | The runner | The questions still open; the app leaves out the ones answered in the journal |
+| `suggestions.json` | The runner | Rules Bower suggests; each device hides the ones you dismissed |
+| `requests.json` | The runner | The last requests done, each with Bower's line |
+| `hashes.json` | The runner | SHA-256 of every file outside the inbox, so Add can say "You already have this" |
+
+Bower marks what it wrote with `appProperties.by = bower`, and what the latest tidy-up filed or changed with `bowerNew = 1`. A thing in the inbox keeps the name it was added under, its origin and its kind (`asAdded`, `origin`, `kind`); a pile keeps its id (`pile`). `Rules.md` keeps each rule's wording, your words under it and the day it was added (`src/data/vault/rules-format.ts`).
+
 ## Who owns what in a note
 
 - Bower's: *Current state*, *Timeline*, Bower's note, and the frontmatter fields Bower writes. The app shows them, read-only.
