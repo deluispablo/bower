@@ -50,6 +50,8 @@ export interface BowerController {
   then(fn: () => void): BowerController;
   wait(seconds: number): BowerController;
   settled(): Promise<void>;
+  /** Forgets the queued actions, e.g. when the run moves to another phase. */
+  interrupt(): void;
   /** Converts a page element to a landing point (top edge, toward its right). */
   pointOn(el: Element | null, along?: number): Point;
   readonly moving: boolean;
@@ -184,6 +186,7 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
       },
       wait: (s) => (still ? ctl : (engine.current?.wait(s), ctl)),
       settled: () => engine.current?.settled() ?? Promise.resolve(),
+      interrupt: () => engine.current?.interrupt(),
       pointOn: (el, along = 0.85) => {
         const r = layer.current?.getBoundingClientRect();
         const t = el?.getBoundingClientRect();

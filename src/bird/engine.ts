@@ -172,6 +172,12 @@ export class BirdEngine {
     this.S.queue.push(a);
     return this;
   }
+  /** Drops what is queued (the action under way finishes, so nothing jumps). */
+  interrupt(): void {
+    this.S.queue = [];
+    this.B.carrying = false;
+  }
+
   /** Runs a callback in the queue, between moves. */
   then(fn: () => void): this {
     return this.act({

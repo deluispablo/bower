@@ -48,7 +48,7 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
       return { x: p.x + (name === 'note' ? 0 : 12) - REACH, y: p.y };
     };
     const run = async (): Promise<void> => {
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 150));
       const b = bird.current;
       if (!b || !live) return;
       if (!b.moving) {
@@ -56,6 +56,8 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
         return;
       }
       setMoving(true);
+      // A new phase: drop the rest of the last phase's errand.
+      b.interrupt();
       if (phase === 'done') {
         b.hopTo(() => spot('mid')).face(1).showOff();
         return;
