@@ -8,7 +8,7 @@ import s from './bower.module.css';
 
 /** Bower in the desktop's right panel: what it is doing and what it asks. */
 export function BowerPanel() {
-  const { data: run } = useRun();
+  const { data: run, loading: runLoading } = useRun();
   const { data: qs } = useQuestions();
   const { data: rules } = useRules();
   const { data: requests } = useRequests();
@@ -29,6 +29,8 @@ export function BowerPanel() {
             <strong>The last tidy-up stopped</strong>
             <span className="muted">{run.failure ?? 'Nothing was moved.'} Tidy up again when you are ready.</span>
           </button>
+        ) : run === undefined && runLoading ? (
+          <p className="muted">Looking…</p>
         ) : (
           <p className="muted">Resting. Tidy up when the inbox has what you want filed.</p>
         )}

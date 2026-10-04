@@ -7,7 +7,7 @@ export function loadingSources(): Sources {
   return {
     session: { current: never, signIn: never, signOut: never, folderState: never, createFolder: never, subscribe: off },
     vault: new Proxy({}, { get: (_t, k) => (k === 'subscribe' ? off : never) }),
-    runs: { start: never, current: async () => null, markSeen: never, subscribe: off },
+    runs: { start: never, current: never, markSeen: never, subscribe: off },
   } as unknown as Sources;
 }
 

@@ -984,7 +984,7 @@
       "?scenario=slow"
     ],
     "verify": "pnpm vitest run src/features/tidy/StatusBar.test.tsx src/features/bower/BowerPanel.test.tsx -t \"loading\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "stray-card-two-birds",

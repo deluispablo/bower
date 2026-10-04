@@ -28,8 +28,14 @@ export function StatusBar() {
         {left}
       </button>
       <span className={s.statusRight}>
-        <span>{plural(total, 'thing')}</span>
-        <span>Synced with your Drive</span>
+        {tree === undefined ? (
+          <span>Opening your Bower folder…</span>
+        ) : (
+          <>
+            <span>{plural(total, 'thing')}</span>
+            <span>Synced with your Drive</span>
+          </>
+        )}
       </span>
     </footer>
   );

@@ -16,5 +16,6 @@ describe('the side panel while loading', () => {
     );
     expect(await screen.findByRole('heading', { name: 'Rules' })).toBeInTheDocument();
     expect(screen.queryByText(/^0 rules$/)).toBeNull();
+    expect(screen.queryByText(/^Resting/)).toBeNull();
   });
 });

@@ -16,5 +16,7 @@ describe('the footer while loading', () => {
     );
     expect(await screen.findByText(/Looking at the inbox/)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing waiting/)).toBeNull();
+    expect(screen.queryByText(/^0 things$/)).toBeNull();
+    expect(screen.queryByText(/Synced with your Drive/)).toBeNull();
   });
 });
