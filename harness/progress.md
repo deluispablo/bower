@@ -35,3 +35,4 @@
 - 2026-10-04: boot-dark passes — fix(boot): the start-up screen follows the saved theme from the first paint
 - 2026-10-04: inbox-count passes — fix(files): the folders view counts the inbox as Home does, pile notes left out
 - 2026-10-04: fake-persists passes — fix(fake): the pretend Drive survives a reload in its tab; the demo panel can start it again
+- 2026-10-04: dead-bookmarks passes — fix(bookmarks): a bookmark to something gone is dropped once the folder is listed

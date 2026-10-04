@@ -33,6 +33,8 @@ interface UiState {
   // bookmarks (device-only in phase 1)
   bookmarks: string[];
   toggleBookmark: (path: string) => void;
+  /** Keeps only the bookmarks for which `exists` says yes (things gone from the folder are dropped). */
+  pruneBookmarks: (exists: (path: string) => boolean) => void;
   /** A thing moved or was renamed: open folders, selection and bookmarks follow; gone: they drop it. */
   relocate: (from: string, to: string | null) => void;
   /** Where moved and renamed things went this visit (old path → new), for old addresses. */
@@ -109,6 +111,13 @@ export const useUi = create<UiState>((set, get) => ({
   toggleBookmark: (path) => {
     const b = get().bookmarks;
     const next = b.includes(path) ? b.filter((x) => x !== path) : [...b, path];
+    write(BM_KEY, next);
+    set({ bookmarks: next });
+  },
+  pruneBookmarks: (exists) => {
+    const b = get().bookmarks;
+    const next = b.filter(exists);
+    if (next.length === b.length) return;
     write(BM_KEY, next);
     set({ bookmarks: next });
   },

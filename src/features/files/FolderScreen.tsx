@@ -16,6 +16,7 @@ import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
+import { useBookmarks } from './bookmarks';
 
 /** `/files`: the tree on a phone; `/files/<folder>`: a folder as a list or a table. */
 export function FolderScreen() {
@@ -181,7 +182,7 @@ function Folder({ path }: { path: string }) {
 const plainLinks = (t: string): string => t.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, a: string, b?: string) => b ?? a);
 
 function PhoneBookmarks() {
-  const { bookmarks } = useUi();
+  const bookmarks = useBookmarks();
   const act = useFileActions();
   if (!bookmarks.length) return null;
   return (

@@ -3,10 +3,12 @@ import { displayName, nameOf } from '@/data/tree';
 import { crumbs } from '@/app/paths';
 import { Icon } from '@/ui/Icon';
 import { useFileActions } from './file-actions';
+import { useBookmarks } from './bookmarks';
 import s from './files.module.css';
 
 export function BookmarksPanel() {
-  const { bookmarks, toggleBookmark } = useUi();
+  const { toggleBookmark } = useUi();
+  const bookmarks = useBookmarks();
   const act = useFileActions();
   if (!bookmarks.length)
     return (

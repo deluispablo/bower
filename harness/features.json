@@ -290,7 +290,7 @@
       "Bookmarks"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a bookmark to something gone is dropped\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "merge-answer",

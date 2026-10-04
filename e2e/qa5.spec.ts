@@ -142,3 +142,17 @@ test('a reload on the pretend Drive keeps what you did', async ({ page }) => {
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByText(/anything from the dentist goes in health/).first()).toBeVisible();
 });
+
+test('a bookmark to something gone is dropped', async ({ page, isMobile }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('bm-set')) {
+      localStorage.setItem('bower:bookmarks', JSON.stringify(['Resources/Gone for good.md', 'Resources/Cooking/Lemon tart.md']));
+      sessionStorage.setItem('bm-set', '1');
+    }
+  });
+  await open(page, isMobile ? '/files' : '/');
+  if (!isMobile) await page.getByRole('tab', { name: 'Bookmarks' }).click();
+  await expect(page.getByText('Lemon tart').first()).toBeVisible();
+  await expect(page.getByText('Gone for good')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('bower:bookmarks'))).not.toContain('Gone for good');
+});
