@@ -831,7 +831,7 @@
     "what": "The landing fix is a hand edit of an exported file; the next export undoes it, and the rule against hand edits was dropped.",
     "steps": [],
     "verify": "pnpm vitest run src/docs.test.ts -t \"the landing has no placeholder\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "agents-lost-rules",
