@@ -116,3 +116,4 @@ proofs-only-done	083e1b75b980fa4b	2026-10-04	red (fixed in 195553a)
 green-before-checked	7037eae2db6f72e9	2026-10-04	red (fixed in 195553a)
 one-entry-per-commit	0f543b3e0f4ba6e3	2026-10-04	red
 pwa-worker-routes	87b3ece829cdb77d	2026-10-04	known-green: denylist predates the test; red checked by hand without it
+swallow-then-handlers	2f50af52f3d841b2	2026-10-04	red

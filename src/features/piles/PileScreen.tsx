@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { report } from '@/ui/report';
 import { Link, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
-import { BowerError, type Pile } from '@/data/types';
+import type { Pile } from '@/data/types';
 import { thingsIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
 import { ago, plural } from '@/app/words';
@@ -99,7 +99,7 @@ export function PileScreen() {
                       toast('Pile removed');
                       nav('/');
                     },
-                    (e: unknown) => toast(e instanceof BowerError ? e.message : 'That did not work. Try again.'),
+                    (e: unknown) => report(e, 'That did not work. Try again.'),
                   )
                 }
               >

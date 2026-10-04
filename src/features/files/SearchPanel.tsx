@@ -10,14 +10,17 @@ export function SearchPanel() {
   const { vault } = useSources();
   const act = useFileActions();
   const [q, setQ] = useState('');
-  const [result, setResult] = useState<{ q: string; hits: SearchHit[] } | null>(null);
+  const [result, setResult] = useState<{ q: string; hits: SearchHit[]; failed?: boolean } | null>(null);
   useEffect(() => {
     if (!q.trim()) return;
     let live = true;
     const t = setTimeout(() => {
       vault.search(q).then(
         (h) => live && setResult({ q, hits: h }),
-        () => live && setResult({ q, hits: [] }),
+        (e: unknown) => {
+          console.error(e);
+          if (live) setResult({ q, hits: [], failed: true });
+        },
       );
     }, 120);
     return () => {
@@ -35,7 +38,7 @@ export function SearchPanel() {
         <input type="search" autoFocus placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
       <p className={s.hint} role="status">
-        {searching ? 'Searching…' : shown === null ? 'Names, summaries and what notes say.' : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
+        {searching ? 'Searching…' : result?.q === q && result.failed ? 'Search did not work. Try again.' : shown === null ? 'Names, summaries and what notes say.' : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}
       </p>
       <ul className={s.results}>
         {(shown ?? []).map((h) => (

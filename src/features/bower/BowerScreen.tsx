@@ -3,7 +3,6 @@ import { shortDay } from '@/app/words';
 import { report } from '@/ui/report';
 import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
-import { BowerError } from '@/data/types';
 import { PoseBower, type Pose } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
@@ -142,7 +141,7 @@ export function BowerScreen() {
                   onClick={() =>
                     void startRun(runs, 'instructions').then(
                       () => useUi.getState().setTidy(true),
-                      (e: unknown) => toast(e instanceof BowerError ? e.message : 'It did not start. Try again in a minute.'),
+                      (e: unknown) => report(e, 'It did not start. Try again in a minute.'),
                     )
                   }
                 >

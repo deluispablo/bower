@@ -67,6 +67,17 @@ describe('the shape of the code', () => {
       }
       return text.slice(start);
     };
+    /** The second argument of a call's text "(a, b)", or null when there is one argument. */
+    const secondArg = (call: string): string | null => {
+      let depth = 0;
+      for (let i = 0; i < call.length; i++) {
+        const c = call[i];
+        if (c === '{' || c === '(' || c === '[') depth++;
+        else if (c === '}' || c === ')' || c === ']') depth--;
+        else if (c === ',' && depth === 1) return call.slice(i + 1, -1).trim() || null;
+      }
+      return null;
+    };
     const OK = /console\.error|report\(|throw\b|reject\(|expected:/;
     for (const f of walk(SRC)) {
       const text = readFileSync(f, 'utf8');
@@ -79,6 +90,11 @@ describe('the shape of the code', () => {
       for (const m of text.matchAll(/\.catch\(/g)) {
         const i = m.index ?? 0;
         if (!OK.test(body(text, i + 6)) && !/expected:/.test(prevLine(i))) bad.push(`${relative(SRC, f)}:${lineOf(i)}  .catch(…)`);
+      }
+      for (const m of text.matchAll(/\.then\(/g)) {
+        const i = m.index ?? 0;
+        const onError = secondArg(body(text, i + 5));
+        if (onError !== null && !OK.test(onError) && !/expected:/.test(prevLine(i))) bad.push(`${relative(SRC, f)}:${lineOf(i)}  .then(…, onError)`);
       }
     }
     expect(bad, 'Say what went wrong: console.error with the details (and a toast with one sentence for the person), or rethrow. If ignoring is really right, say why in a comment that starts "expected:".').toEqual([]);

@@ -1153,7 +1153,7 @@
     "what": "The swallowed-errors check misses .then(ok, onError); Home and the Bower tab swallow errors there.",
     "steps": [],
     "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "copy-two-words-tsx",

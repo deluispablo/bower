@@ -5,18 +5,10 @@ import { useSources } from '@/data/provider';
 import { crumbs, decodeSplat, folderRoute, routeFor } from '@/app/paths';
 import { ancestors, useUi } from '@/app/ui-store';
 import { useTabs } from '@/app/tabs-store';
-import { BowerError, type TreeNode } from '@/data/types';
+import type { TreeNode } from '@/data/types';
 import { displayName, nameOf, parentOf } from '@/data/tree';
 import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
-
-function fail(e: unknown): void {
-  console.error(e);
-  if (e instanceof BowerError) toast(e.message);
-  else {
-    toast('That did not work. Try again.');
-  }
-}
 
 /**
  * What a person can do to a thing in their folder, with the words they see
@@ -71,7 +63,7 @@ export function useFileActions() {
               void vault.move(moved, from, { undo: true }).then((back) => {
                 follow(moved, back);
                 useUi.getState().relocate(moved, back);
-              }, fail),
+              }, (e: unknown) => report(e, 'That did not work. Try again.')),
           });
           return moved;
         } catch (e) {
@@ -102,7 +94,7 @@ export function useFileActions() {
             run: () =>
               void vault.restore(path).then(() => {
                 marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
-              }, fail),
+              }, (e: unknown) => report(e, 'That did not work. Try again.')),
           });
         } catch (e) {
           report(e, 'That did not work. Try again.');
@@ -132,7 +124,7 @@ export function useFileActions() {
         const url = `${location.origin}${routeFor(node)}`;
         void navigator.clipboard?.writeText(url).then(
           () => toast('Link copied'),
-          () => toast('Could not copy the link.'),
+          (e: unknown) => report(e, 'Could not copy the link.'),
         );
       },
       openInDrive(path: string): void {

@@ -196,7 +196,7 @@ function YourChanges({ running }: { running: boolean }) {
       </ul>
       {list.length > 5 && <p className="muted" style={{ fontSize: 14 }}>and {plural(list.length - 5, 'more change')}</p>}
       {!running && (
-        <Button size="sm" variant="ghost" onClick={() => void startRun(runs, 'instructions').then(() => useUi.getState().setTidy(true), () => toast('It did not start. Try again.'))}>
+        <Button size="sm" variant="ghost" onClick={() => void startRun(runs, 'instructions').then(() => useUi.getState().setTidy(true), (e: unknown) => report(e, 'It did not start. Try again.'))}>
           {list.length === 1 ? 'Let Bower read it now' : 'Let Bower read them now'}
         </Button>
       )}
@@ -222,7 +222,7 @@ function Questions() {
   const answer = (id: string, yes: boolean, label: string): void => {
     vault.answer(id, yes).then(
       () => toast(yes ? `${label}. Bower does it in the next tidy-up.` : 'Got it. Bower leaves it as it is.'),
-      () => toast('That answer did not save. Try again.'),
+      (e: unknown) => report(e, 'That answer did not save. Try again.'),
     );
   };
   return (
