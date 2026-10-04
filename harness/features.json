@@ -1988,7 +1988,7 @@
       "pnpm vitest run src/features/note -t \"a link that cannot be read says so\"."
     ],
     "verify": "pnpm vitest run src/features/note -t \"a link that cannot be read says so\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "namesheet-names",

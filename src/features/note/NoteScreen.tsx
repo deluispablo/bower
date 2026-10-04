@@ -222,19 +222,23 @@ function FileView({ node }: { node: TreeNode }) {
   const act = useFileActions();
   const { vault } = useSources();
   const folder = parentOf(node.path);
-  const [web, setWeb] = useState<{ path: string; url: string | null } | null>(null);
+  const [web, setWeb] = useState<{ path: string; url: string | null; failed?: boolean } | null>(null);
   useEffect(() => {
     if (node.kind !== 'link') return;
     let live = true;
     vault.linkAddress(node.path).then(
       (url) => live && setWeb({ path: node.path, url }),
-      (e: unknown) => console.error(e),
+      (e: unknown) => {
+        console.error(e);
+        if (live) setWeb({ path: node.path, url: null, failed: true });
+      },
     );
     return () => {
       live = false;
     };
   }, [node.kind, node.path, vault]);
   const url = web?.path === node.path ? web.url : null;
+  const unread = web?.path === node.path && !!web.failed;
   return (
     <article className={s.page}>
       {!desktop && <PhoneBar folder={folder} path={node.path} />}
@@ -274,6 +278,11 @@ function FileView({ node }: { node: TreeNode }) {
           Copy link
         </Button>
       </div>
+      {unread && (
+        <p className="muted" role="status" style={{ marginTop: 12 }}>
+          Bower could not read this link's web address just now. Open it in Drive, or try again later.
+        </p>
+      )}
       {node.path.startsWith('Inbox/') && (
         <p className="muted" style={{ marginTop: 18, fontSize: 15, display: 'flex', gap: 8, alignItems: 'center' }}>
           <BowerHead size={18} /> Bower reads files like this one in a tidy-up and writes what matters into a note.
