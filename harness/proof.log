@@ -88,3 +88,4 @@ search-plain-match	7990f6cae7518060	2026-10-04	red
 new-note-one-line	747048568e795ff3	2026-10-04	red
 fake-quota	b98332e8cd8a2e5a	2026-10-04	red
 arch-test-imports	48639851e30f1d19	2026-10-04	green-before: rule and test share src/architecture.test.ts; the old rule missed both examples (checked: dynamic false, relative false)
+signout-memory	c770eb44393b555c	2026-10-04	red

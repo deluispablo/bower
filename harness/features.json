@@ -769,7 +769,7 @@
     "what": "Sign-out keeps open folders, selection and the toured mark in memory; its failure toast logs nothing.",
     "steps": [],
     "verify": "pnpm vitest run src/app/ui-store.test.ts -t \"sign-out\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "undo-late-pile",

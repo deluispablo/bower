@@ -94,3 +94,4 @@
 - 2026-10-04: new-note-one-line passes — fix(journal): a new thing named straight away is one change
 - 2026-10-04: fake-quota passes — fix(fake): big files keep their place and size on the pretend Drive across a reload, not their bytes
 - 2026-10-04: arch-test-imports passes — test(architecture): the import rule sees dynamic and relative imports
+- 2026-10-04: signout-memory passes — fix(session): sign-out also forgets what the screen holds about the person, and the tour mark

@@ -38,6 +38,8 @@ interface UiState {
   setConfirmBin: (v: { path: string; count: number } | null) => void;
   /** Keeps only the bookmarks for which `exists` says yes (things gone from the folder are dropped). */
   pruneBookmarks: (exists: (path: string) => boolean) => void;
+  /** Sign-out: what this screen holds about the person goes (the device's copy is cleared by data/device). */
+  forgetPerson: () => void;
   /** A thing moved or was renamed: open folders, selection and bookmarks follow; gone: they drop it. */
   relocate: (from: string, to: string | null) => void;
   /** Where moved and renamed things went this visit (old path → new), for old addresses. */
@@ -120,6 +122,11 @@ export const useUi = create<UiState>((set, get) => ({
   },
   confirmBin: null,
   setConfirmBin: (v) => set({ confirmBin: v }),
+  forgetPerson: () => {
+    write(OPEN_KEY, []);
+    write(BM_KEY, []);
+    set({ open: new Set(), selected: null, bookmarks: [], moved: {}, justMade: null, renaming: null, confirmBin: null });
+  },
   pruneBookmarks: (exists) => {
     const b = get().bookmarks;
     const next = b.filter(exists);

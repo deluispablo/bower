@@ -3,8 +3,8 @@ import { useSources, useRules } from '@/data/provider';
 import { usePrefs, type Theme } from '@/app/prefs';
 import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
+import { report } from '@/ui/report';
 import { useUi } from '@/app/ui-store';
-import { BowerError } from '@/data/types';
 import { Link, useNavigate } from 'react-router';
 import s from './settings.module.css';
 
@@ -124,8 +124,8 @@ export function Settings() {
           onClick={() =>
             void session.signOut().then(
               // What this screen holds in memory goes too, not only what the device kept.
-              () => useUi.getState().pruneBookmarks(() => false),
-              (e: unknown) => toast(e instanceof BowerError ? e.message : 'Signing out did not finish. Try again.'),
+              () => useUi.getState().forgetPerson(),
+              (e: unknown) => report(e, 'Signing out did not finish. Try again.'),
             )
           }
         >

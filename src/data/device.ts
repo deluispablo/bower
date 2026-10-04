@@ -5,7 +5,7 @@
  * belong to the device, not the person.
  */
 const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open'];
-const PERSON_SESSION = ['bower:add-draft', 'bower:add-items'];
+const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured'];
 
 export function forgetThisPerson(): void {
   try {
