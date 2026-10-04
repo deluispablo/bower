@@ -25,7 +25,7 @@
     "task": 4,
     "what": "The Bower folder layout, and Alex's folder seeded into the fake Drive",
     "verify": "pnpm vitest run src/data/fake/seed.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "vault-index",

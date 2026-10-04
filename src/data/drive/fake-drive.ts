@@ -40,6 +40,12 @@ export class FakeDrive implements DriveApi {
     if (f) f.meta = { ...f.meta, modifiedTime: this.stamp() };
   }
 
+  /** Sets a file's times, for seeding a folder with some history. */
+  setTimes(id: string, created: number, modified: number): void {
+    const f = this.files.get(id);
+    if (f) f.meta = { ...f.meta, createdTime: new Date(created).toISOString(), modifiedTime: new Date(modified).toISOString() };
+  }
+
   /** Every live file's path and text, for tests. */
   dump(rootId = 'root'): Map<string, string> {
     const out = new Map<string, string>();
