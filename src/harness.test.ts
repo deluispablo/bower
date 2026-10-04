@@ -2,7 +2,7 @@
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs } from '../scripts/harness-rules.mjs';
+import { doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -88,4 +88,13 @@ describe('the harness', () => {
     expect(nextProblems('# Progress\n\n## Next\n\n## Log\n')).toMatch(/Next/);
     expect(nextProblems('# Progress\n\n## Next\n\n- Fix the rest of qa-7.\n\n## Log\n')).toBeNull();
   });
+
+  it('a red is a failed assertion, not a test file that failed to load', () => {
+    expect(redKind(' Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 10 passed (12)\n')).toBe('assert');
+    expect(redKind(' Test Files  1 failed (1)\n      Tests  no tests\n')).toBe('load');
+    expect(redKind(' Test Files  1 failed | 3 passed (4)\n      Tests  10 passed (10)\n')).toBe('load');
+    expect(redKind('  1 failed\n    [desktop] › e2e/a.spec.ts:3:1 › x\n  2 passed (4s)\n')).toBe('assert');
+    expect(redKind('Error: Cannot find module\n')).toBe('none');
+  });
 });
+

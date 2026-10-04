@@ -11,8 +11,11 @@
 # usage: bash harness/done.sh <id> "<commit message>" [--fixed-in <sha> | --known-green "<why>"]
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# The rules as they are now, kept aside: the red step may set scripts/ aside too.
+export HARNESS_RULES="$(mktemp -d)/harness-rules.mjs"
+cp scripts/harness-rules.mjs "$HARNESS_RULES"
 args=$(node --input-type=module -e '
-  import { doneArgs } from "./scripts/harness-rules.mjs";
+  const { doneArgs } = await import(process.env.HARNESS_RULES);
   import { readFileSync } from "node:fs";
   const argv = process.argv.slice(1);
   const entry = JSON.parse(readFileSync("harness/features.json", "utf8")).find((x) => x.id === argv[0]);
@@ -25,12 +28,12 @@ log=$(mktemp)
 
 # 1. One entry per commit: only what is staged goes in, and no other entry flips.
 unstaged=$(node --input-type=module -e '
-  import { notStaged } from "./scripts/harness-rules.mjs";
+  const { notStaged } = await import(process.env.HARNESS_RULES);
   import { execSync } from "node:child_process";
   console.log(notStaged(execSync("git status --porcelain --untracked-files=all", { encoding: "utf8" })).join(" "));')
 [ -n "$unstaged" ] && { echo "Not staged: $unstaged. Stage this entry's change (git add), set the rest aside."; exit 1; }
 others=$(node --input-type=module -e '
-  import { othersFlipped } from "./scripts/harness-rules.mjs";
+  const { othersFlipped } = await import(process.env.HARNESS_RULES);
   import { readFileSync } from "node:fs";
   import { execSync } from "node:child_process";
   const now = JSON.parse(readFileSync("harness/features.json", "utf8"));
@@ -47,8 +50,9 @@ expect_red() {
   if bash -c "$verify" >"$log" 2>&1; then
     echo "The verify passes without the change: it does not pin it. Fix the test."; exit 1
   fi
-  if ! grep -qE "[1-9][0-9]* failed" "$log"; then
-    tail -15 "$log"; echo "Without the change the verify failed, but no test failed (did it run any?): that is not a red test."; exit 1
+  kind=$(node --input-type=module -e 'const { redKind } = await import(process.env.HARNESS_RULES); import { readFileSync } from "node:fs"; console.log(redKind(readFileSync(process.argv[1], "utf8")));' "$log")
+  if [ "$kind" != "assert" ]; then
+    tail -15 "$log"; echo "Without the change no assertion failed ($kind): a test that cannot load, or none that ran, is not a red that pins the behaviour."; exit 1
   fi
 }
 case "$mode" in

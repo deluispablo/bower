@@ -163,3 +163,4 @@
 - 2026-10-04: runner-names-things passes — fix(demo): the pretend tidy-up names receipts by what they are and their day
 - 2026-10-04: try-again-sheet passes — fix(app): Try again opens the tidy-up; the palette's box says what to type
 - 2026-10-04: palette-label-once passes — chore(harness): close palette-label-once
+- 2026-10-05: harness-red-assert passes — fix(harness): a red must be a failed assertion, not a file that fails to load

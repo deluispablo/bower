@@ -114,3 +114,15 @@ export function nextProblems(text) {
   if (!/^- \S/m.test(m[1] ?? '')) return 'harness/progress.md: "## Next" is empty: write the next step before stopping';
   return null;
 }
+
+/**
+ * What a red run showed: 'assert' when a test ran and failed (vitest's
+ * "Tests  N failed", Playwright's "N failed"); 'load' when only a test file
+ * failed (a missing import is not a red that pins behaviour); 'none' otherwise.
+ */
+export function redKind(output) {
+  if (/^\s*Tests\s+[1-9]\d* failed/m.test(output)) return 'assert';
+  if (/^\s+[1-9]\d* failed\s*$/m.test(output) && !/^\s*Test Files/m.test(output)) return 'assert';
+  if (/^\s*Test Files\s+[1-9]\d* failed/m.test(output)) return 'load';
+  return 'none';
+}

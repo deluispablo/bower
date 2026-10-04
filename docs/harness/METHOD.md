@@ -43,6 +43,7 @@ Each entry in `harness/features.json`:
 6. Stage the entry's change (`git add`), then `bash harness/done.sh <id> "<commit message>"`. Only staged changes and `harness/` are committed; anything unstaged is refused. With the uncommitted code set aside (tests kept) the `verify` must fail with a failed test; then it runs `pnpm check` and the `verify`, and only then flips `passes`, logs the proof and commits. One entry per commit.
    - The fix is committed already: `--fixed-in <sha>` puts that commit's code back as it was before it and expects the same red.
    - No red is possible (a decision kept, a finding not reproduced): `--known-green "<why>"`, only for an entry whose `note` says why.
+   - The red must be a failed assertion: a test file that fails to load (its new module set aside) does not count. For a new module, commit a stub of it first (exports that do nothing yet), then the failing test, then the fix.
    - Any other flag is refused. A verify must name its test (`-t "…"` / `-g "…"`) and, once closed, that name must match a real test.
 7. Before stopping: the tree is clean, every gate green, the next step written under `## Next` in `progress.md` (`pnpm check` refuses an empty one). Every finding entry carries `steps` an evaluator can replay.
 
