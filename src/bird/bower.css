@@ -2,7 +2,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 5;
+  z-index: 60;
   overflow: visible;
 }
 .bower-flyer {
@@ -60,3 +60,5 @@
   0% { opacity: 1; transform: translate(0, 0) scale(1); }
   100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
 }
+
+.bower-carry-thing { padding: 0; background: none; box-shadow: none; max-width: none; overflow: visible; color: inherit; }

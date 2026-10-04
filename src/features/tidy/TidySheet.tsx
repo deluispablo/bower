@@ -7,8 +7,9 @@ import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { PoseBower } from '@/bird/Bower';
-import { isRunning, PHASE_POSE, runClock, runDetail, runTitle, STEP_LABEL, stepState } from './run-words';
+import { isRunning, runClock, runDetail, runTitle, STEP_LABEL, stepState } from './run-words';
 import { useNow } from './useNow';
+import { TidyScene } from './TidyScene';
 import s from './tidy.module.css';
 
 /** The tidy-up: confirm, then the real phases, then the result. One sheet. */
@@ -85,27 +86,9 @@ function RunView({ run }: { run: RunState }) {
   const now = useNow(isRunning(run));
   const { setTidy, startReplay } = useUi();
   const { runs } = useSources();
-  const phaseIndex = run.phase === 'failed' ? 2 : RUN_STEPS.indexOf(run.phase as (typeof RUN_STEPS)[number]);
   return (
     <div>
-      <div className={s.stage}>
-        <div className={s.prop} data-show={phaseIndex <= 1 && run.phase !== 'done'} aria-hidden="true">
-          {['#f3f6fa', '#f0b64f', '#93c5fd', '#f3f6fa', '#5fcfbc'].map((c, i) => (
-            <span key={i} className={s.pc} style={{ background: c, transform: `rotate(${[-4, 3, -2, 5, -3][i]}deg)` }} />
-          ))}
-        </div>
-        <PoseBower pose={PHASE_POSE[run.phase]} size={116} priority={1} />
-        <div className={s.paper} data-show={run.phase === 'writing'} aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
-        </div>
-        <div className={s.folderProp} data-show={run.phase === 'saving' || run.phase === 'done'} aria-hidden="true">
-          <Icon name="folder" size={54} stroke={1.5} />
-        </div>
-        <div className={s.ground} />
-      </div>
+      <TidyScene phase={run.phase} />
       <div role="status" aria-live="polite">
         <p className={s.title}>{runTitle(run)}</p>
         <p className={s.detail}>{runDetail(run)}</p>

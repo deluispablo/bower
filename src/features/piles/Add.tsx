@@ -38,7 +38,12 @@ export function Add() {
   const add = (list: Array<Omit<Draft, 'key'>>): void => {
     if (!list.length) return;
     setItems((x) => [...x, ...list.map((d, i) => ({ ...d, key: `${Date.now()}-${i}-${d.name}` }))]);
-    bird.current?.peck();
+    // Bower goes to see what arrived, gives it a peck, and goes back to its edge.
+    setTimeout(() => {
+      const b = bird.current;
+      const row = document.querySelector('[data-pile-item]:last-of-type');
+      b?.flyTo(() => b.pointOn(row, 0.85)).peck().wait(0.3);
+    }, 60);
   };
   const fromFiles = (fl: FileList | null, origin: string): void => add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin })));
   const addLink = (): void => {
@@ -122,7 +127,7 @@ export function Add() {
       {items.length > 0 && (
         <ul className={s.items} aria-label="In this pile">
           {items.map((it) => (
-            <li key={it.key}>
+            <li key={it.key} data-pile-item>
               <span className={s.tile}>
                 <Icon name={it.kind === 'image' ? 'image' : it.kind === 'link' ? 'link' : 'file'} />
               </span>

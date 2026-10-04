@@ -49,11 +49,30 @@ function NotePanel({ path, tab }: { path: string; tab: 'links' | 'outline' }) {
   if (!note) return null;
   if (tab === 'outline') {
     const o = outlineOf(note.body);
+    const go = (id: string | null): void => {
+      const view = document.getElementById('main');
+      const el = id ? document.getElementById(id) : null;
+      if (!el) {
+        view?.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+    };
     return o.length ? (
       <ul className={s.outline}>
-        {[{ level: 1, text: note.title }, ...o].map((h, i) => (
+        <li>
+          <button type="button" onClick={() => go(null)} className={s.outlineTitle}>
+            {note.title}
+          </button>
+        </li>
+        {o.map((h, i) => (
           <li key={i} style={{ paddingLeft: (h.level - 1) * 14 }}>
-            {h.text}
+            <button type="button" onClick={() => go(h.id)}>
+              {h.text}
+            </button>
           </li>
         ))}
       </ul>

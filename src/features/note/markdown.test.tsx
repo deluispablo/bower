@@ -12,6 +12,6 @@ describe('the note reader', () => {
     const { container } = render(<Markdown text={'## A\n\n- one\n- two\n\n| x | y |\n| --- | --- |\n| 1 | 2 |'} link={(t) => t} />);
     expect(container.querySelectorAll('li')).toHaveLength(2);
     expect(container.querySelector('td')?.textContent).toBe('1');
-    expect(outlineOf('## A\n### B')).toEqual([{ level: 2, text: 'A' }, { level: 3, text: 'B' }]);
+    expect(outlineOf('## A\n### B c')).toEqual([{ level: 2, text: 'A', id: 'h-a' }, { level: 3, text: 'B c', id: 'h-b-c' }]);
   });
 });

@@ -625,7 +625,10 @@ export class BirdEngine {
       if (B.carrying) {
         const p = this.beak();
         P.carry.style.opacity = '1';
-        P.carry.style.transform = `translate(${(p.x - 13 + C.face.v * 6).toFixed(1)}px,${(p.y - 8).toFixed(1)}px) rotate(${(C.pitch.v * C.face.v * 0.5).toFixed(1)}deg)`;
+        // Hang the thing from the beak: its top edge a little above the tip.
+        const w = P.carry.offsetWidth || 26;
+        const h = P.carry.offsetHeight || 16;
+        P.carry.style.transform = `translate(${(p.x - w * 0.35 + C.face.v * w * 0.25).toFixed(1)}px,${(p.y - h * 0.3).toFixed(1)}px) rotate(${(C.pitch.v * C.face.v * 0.5).toFixed(1)}deg)`;
       } else P.carry.style.opacity = '0';
     }
   }

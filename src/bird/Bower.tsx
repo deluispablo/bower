@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, type CSSProperties } from 'react';
+import { forwardRef, useCallback, type ReactNode, useEffect, useImperativeHandle, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { prefersReducedMotion, usePrefs } from '@/app/prefs';
 import { BirdEngine, type Point, type TargetFn } from './engine';
 import { useBirdTurn } from './presence';
@@ -57,8 +57,10 @@ interface LayerProps {
   home: TargetFn;
   size?: number;
   priority?: number;
-  /** What the carried chip shows. */
+  /** What the carried chip shows (a short label)... */
   carryLabel?: string;
+  /** ...or the thing itself, drawn by the caller. */
+  carry?: ReactNode;
   /** Plays flights faster than life (a replay). */
   speed?: number;
 }
@@ -69,7 +71,7 @@ interface LayerProps {
  * When Bower may not move, it sits at home and actions finish at once.
  */
 export const BowerLayer = forwardRef<BowerController, LayerProps>(function BowerLayer(
-  { home, size = 72, priority = 0, carryLabel = '', speed = 1 },
+  { home, size = 72, priority = 0, carryLabel = '', carry: carryNode, speed = 1 },
   ref,
 ) {
   const layer = useRef<HTMLDivElement>(null);
@@ -194,9 +196,6 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
         <i />
         <i />
       </div>
-      <div ref={carry} className="bower-carry">
-        {carryLabel}
-      </div>
       <button
         ref={bird}
         type="button"
@@ -206,6 +205,10 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
       >
         <Rig onPart={onPart} />
       </button>
+      <div ref={carry} className={carryNode ? 'bower-carry bower-carry-thing' : 'bower-carry'}>
+        {carryNode ?? carryLabel}
+      </div>
+
     </div>
   );
 });

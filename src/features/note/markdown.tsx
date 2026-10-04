@@ -42,7 +42,8 @@ export function Markdown({ text, link }: { text: string; link: LinkFn }) {
     if (h) {
       const level = Math.min(4, (h[1]?.length ?? 2) + 0);
       const content = inline(h[2] ?? '', link, key);
-      blocks.push(level <= 2 ? <h2 key={key}>{content}</h2> : <h3 key={key}>{content}</h3>);
+      const id = headingId(h[2] ?? '');
+      blocks.push(level <= 2 ? <h2 key={key} id={id}>{content}</h2> : <h3 key={key} id={id}>{content}</h3>);
       i++;
       continue;
     }
@@ -107,11 +108,16 @@ export function Markdown({ text, link }: { text: string; link: LinkFn }) {
   return <>{blocks}</>;
 }
 
+/** A stable anchor for a heading, shared by the note and its outline. */
+export function headingId(text: string): string {
+  return `h-${text.replace(/\[\[|\]\]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+}
+
 /** The headings of a note, for the Outline panel. */
-export function outlineOf(text: string): Array<{ level: number; text: string }> {
+export function outlineOf(text: string): Array<{ level: number; text: string; id: string }> {
   return text
     .split('\n')
     .map((l) => /^(#{1,4})\s+(.*)$/.exec(l))
     .filter((m): m is RegExpExecArray => !!m)
-    .map((m) => ({ level: m[1]?.length ?? 2, text: (m[2] ?? '').replace(/\[\[|\]\]/g, '') }));
+    .map((m) => ({ level: m[1]?.length ?? 2, text: (m[2] ?? '').replace(/\[\[|\]\]/g, ''), id: headingId(m[2] ?? '') }));
 }

@@ -1,22 +1,43 @@
 .scrim { position: fixed; inset: 0; z-index: 70; background: var(--scrim); display: grid; place-items: center; padding: 16px; animation: fade 0.2s; }
 @keyframes fade { from { opacity: 0; } }
-.stage { position: relative; width: min(980px, 100%); max-height: calc(100dvh - 32px); overflow: auto; padding: 96px 26px 26px; border-radius: 24px; background: var(--bg-alt); box-shadow: var(--shadow-pop); }
-@media (max-width: 899px) { .stage { padding: 84px 16px 18px; } }
-.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.stage { position: relative; width: min(1000px, 100%); max-height: calc(100dvh - 32px); overflow: auto; padding: 26px 28px 28px; border-radius: 24px; background: var(--bg-alt); box-shadow: var(--shadow-pop); }
+@media (max-width: 899px) { .stage { padding: 18px 16px 18px; } }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .title { font-size: 26px; }
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 18px; }
-@media (max-width: 699px) { .cols { grid-template-columns: 1fr; gap: 16px; } }
-.colTitle { font-size: 16px; color: var(--text-muted); font-family: var(--font-body); letter-spacing: 0; margin-bottom: 6px; }
-.items, .folders { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.items li { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; background: var(--surface); color: var(--heading); transition: opacity 0.4s, background 0.4s; }
-.items li.gone { background: transparent; opacity: 0.55; box-shadow: inset 0 0 0 1px var(--line); }
-.went { font-size: 14px; color: var(--brand-line); }
-.more { background: none !important; color: var(--text-muted) !important; }
-.folders li { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 12px; border-radius: 12px; background: var(--surface); transition: background 0.4s; }
-.fresh { background: var(--fresh) !important; }
-.land { animation: land 0.9s var(--ease-out); background: var(--fresh) !important; }
-@keyframes land { 0% { transform: scale(1); } 30% { transform: scale(1.03); box-shadow: 0 0 0 3px var(--brand); } 100% { transform: scale(1); } }
-.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.fname { flex: 1; min-width: 0; display: flex; flex-direction: column; color: var(--heading); font-weight: 600; }
-.fpath { font-size: 13px; color: var(--text-muted); font-weight: 400; }
-.count { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border-radius: 999px; background: var(--brand); color: var(--on-brand); font-weight: 700; font-size: 14px; }
+.court { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 28px; margin-top: 64px; }
+@media (max-width: 699px) { .court { grid-template-columns: 1fr; gap: 18px; margin-top: 56px; } }
+.label { font: 600 15px var(--font-body); letter-spacing: 0; color: var(--text-muted); margin-bottom: 8px; }
+
+/* the heap: things as they arrived, in a jumble */
+.heapBox { min-width: 0; }
+.heap { position: relative; height: 320px; border-radius: 18px; background: radial-gradient(ellipse at 50% 75%, color-mix(in srgb, var(--twig) 22%, transparent), transparent 70%), var(--surface); }
+@media (max-width: 699px) { .heap { height: 190px; } }
+.heaped { position: absolute; }
+.emptyHeap { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted); font-size: 15px; }
+
+/* a thing: what Bower carries and sets down */
+.thing { display: inline-flex; align-items: center; gap: 6px; max-width: 170px; height: 34px; padding: 0 10px; border-radius: 9px; background: var(--raised); color: var(--heading); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), inset 0 0 0 1px var(--line); font: 600 13px var(--font-body); white-space: nowrap; }
+.thing svg { flex: none; color: var(--text-muted); }
+.thing[data-kind='pdf'] svg { color: var(--accent-line); }
+.thing[data-kind='image'] svg { color: var(--brand-line); }
+.thing[data-kind='link'] svg { color: var(--para-resources); }
+.thingName { overflow: hidden; text-overflow: ellipsis; }
+
+/* shelves: one per folder, things in a neat row on a twig */
+.shelves { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+@media (max-width: 699px) { .twig { left: 132px !important; } }
+.shelf { position: relative; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 4px 12px 8px; border-radius: 14px; background: var(--surface); transition: background 0.3s; }
+.land { animation: land 0.8s var(--ease-out); background: var(--fresh); }
+@keyframes land { 0% { transform: scale(1); } 30% { transform: scale(1.02); box-shadow: 0 0 0 2px var(--brand); } 100% { transform: scale(1); } }
+.shelfName { flex: none; width: 150px; display: flex; align-items: center; gap: 8px; color: var(--heading); font-weight: 600; font-size: 15px; }
+.shelfText { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+@media (max-width: 699px) { .shelfName { width: 112px; font-size: 14px; } }
+.shelfPath { color: var(--text-muted); font-weight: 400; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.count { flex: none; margin-left: auto; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--brand); color: var(--on-brand); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.row { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 6px; min-height: 36px; overflow: hidden; }
+.placed { flex: none; animation: set 0.45s var(--ease-out); }
+.placed .thing { max-width: 104px; height: 30px; font-size: 12px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 0 0 1px var(--line); }
+@keyframes set { 0% { transform: translateY(-14px) scale(1.05); opacity: 0.6; } 60% { transform: translateY(1px) scale(1.04, 0.94); opacity: 1; } 100% { transform: none; } }
+.slot { flex: none; width: 34px; height: 30px; border-radius: 8px; border: 1.5px dashed color-mix(in srgb, var(--text-muted) 40%, transparent); }
+.twig { position: absolute; left: 172px; right: 12px; bottom: 7px; height: 3px; border-radius: 2px; background: var(--twig); opacity: 0.55; }

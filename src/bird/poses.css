@@ -1,11 +1,11 @@
 /* Looping poses, CSS only. Used when Bower stays in one place. */
 
 .bird{position:relative;flex:none}
-.bird svg g{transform-box:view-box}
+.posed svg g{transform-box:view-box}
 .posed.still *{animation:none!important}
-.b-rig{transform-origin:50px 92px}.b-head{transform-origin:60px 50px}.b-wing{transform-origin:56px 55px}
-.b-tail{transform-origin:32px 70px}.b-legs{transform-origin:50px 82px}.b-jaw{transform-origin:78px 38px}
-.b-tuft{transform-origin:61px 23px}.b-eye{transform-origin:70px 34px}
+.posed .b-rig{transform-origin:50px 92px}.posed .b-head{transform-origin:60px 50px}.posed .b-wing{transform-origin:56px 55px}
+.posed .b-tail{transform-origin:32px 70px}.posed .b-legs{transform-origin:50px 82px}.posed .b-jaw{transform-origin:78px 38px}
+.posed .b-tuft{transform-origin:61px 23px}.posed .b-eye{transform-origin:70px 34px}
 .posed .b-eye{animation:blink 5.2s infinite}
 @keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
 /* idle: the head moves in snaps, the tail flicks now and then */

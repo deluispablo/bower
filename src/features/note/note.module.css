@@ -56,3 +56,7 @@
 
 .preview { display: grid; place-items: center; height: 260px; margin: 16px 0; border-radius: 16px; background: var(--surface); color: var(--text-muted); }
 .previewImage { background: linear-gradient(135deg, #2b3a55, #1d2a40 40%, #3a4b3f); }
+
+.body :global(.flash) { animation: flash 1.2s ease; border-radius: 6px; }
+@keyframes flash { 0%, 40% { background: var(--fresh); box-shadow: 0 0 0 6px var(--fresh); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.body h2, .body h3 { scroll-margin-top: 16px; }

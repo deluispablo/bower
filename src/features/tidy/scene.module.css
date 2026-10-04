@@ -1,0 +1,14 @@
+.stage { position: relative; height: 170px; margin: 4px -4px 0; }
+.ground { position: absolute; left: 6%; right: 6%; bottom: 18px; height: 2px; background: var(--line); }
+.pile, .paper, .folder { position: absolute; bottom: 20px; transition: opacity 0.4s, transform 0.4s var(--ease-out); }
+[data-show='false'] { opacity: 0.18; }
+.pile { left: 14%; width: 30px; height: 60px; }
+.card { position: absolute; left: 0; bottom: 0; width: 26px; height: 32px; border-radius: 4px; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3); transition: opacity 0.2s; }
+.paper { left: calc(50% - 4px); width: 50px; height: 62px; padding: 9px 8px; border-radius: 6px; background: #f3f6fa; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
+.paper i { display: block; height: 3px; border-radius: 2px; background: #93a3b8; transform-origin: left; transition: transform 0.3s var(--ease-out); }
+.folder { right: 12%; color: var(--brand); animation: bump 0.4s var(--ease-out); }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.12, 0.9); } 100% { transform: scale(1); } }
+.filed { position: absolute; top: 4px; right: -8px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--brand); color: var(--on-brand); font: 700 12px/22px var(--font-body); text-align: center; }
+.mid { position: absolute; left: 50%; bottom: 20px; width: 1px; height: 1px; }
+.held { display: block; width: 18px; height: 22px; border-radius: 3px; background: #f3f6fa; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+.still { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); }

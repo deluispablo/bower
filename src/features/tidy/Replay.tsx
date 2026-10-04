@@ -5,7 +5,7 @@ import type { FiledItem } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { crumbs, paraColor } from '@/app/paths';
 import { plural } from '@/app/words';
-import { nameOf } from '@/data/tree';
+import { nameOf, parentOf } from '@/data/tree';
 import { BowerLayer, type BowerController } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
@@ -15,8 +15,10 @@ import s from './replay.module.css';
 
 /**
  * The tidy-up already ran (about 5 minutes on GitHub). This replays it from
- * the run's report in a few seconds: Bower carries each thing to the folder
- * it really went to. Skippable; offered again with "Watch again".
+ * the run's report, the way the landing's court works: the inbox is a messy
+ * heap, each folder a shelf, and Bower picks things out of the heap one by
+ * one and sets them on their shelf in a neat row. The rest land together at
+ * the end. Skippable; "Watch again" from Home.
  */
 export function Replay() {
   const { replayRunId, startReplay } = useUi();
@@ -27,20 +29,40 @@ export function Replay() {
     void runs.markSeen(run.id);
     startReplay(null);
   };
-  return createPortal(<ReplayStage items={run.report.filed} summary={landedSummary(run)} updated={run.report.updated.length} onClose={close} />, document.body);
+  return createPortal(<Court items={run.report.filed} summary={landedSummary(run)} updated={run.report.updated.length} onClose={close} />, document.body);
 }
 
-function ReplayStage({ items, summary, updated, onClose }: { items: FiledItem[]; summary: string; updated: number; onClose: () => void }) {
+/** A small, stable pseudo-random number per index, so the heap looks the same every time. */
+const jitter = (i: number, k: number): number => {
+  const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+/** A month folder reads better with its parent: "Receipts 2026-10". */
+function shelfName(folder: string): string {
+  const name = nameOf(folder);
+  return /^\d{4}(-\d{2})?$/.test(name) ? `${nameOf(parentOf(folder))} ${name}` : name;
+}
+
+function Thing({ item }: { item: FiledItem }) {
+  return (
+    <span className={s.thing} data-kind={item.kind}>
+      <Icon name={item.kind === 'image' ? 'image' : item.kind === 'link' ? 'link' : item.kind === 'note' ? 'note' : 'file'} size={14} />
+      <span className={s.thingName}>{item.title}</span>
+    </span>
+  );
+}
+
+function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summary: string; updated: number; onClose: () => void }) {
   const desktop = useIsDesktop();
   const bird = useRef<BowerController>(null);
   const stage = useRef<HTMLDivElement>(null);
-  const shown = items.slice(0, desktop ? 4 : 3);
-  const rest = items.length - shown.length;
+  const carried = items.slice(0, desktop ? 6 : 4);
   const folders = useMemo(() => [...new Set(items.map((i) => i.to))], [items]);
-  const [taken, setTaken] = useState<Set<number>>(new Set());
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [inHeap, setInHeap] = useState<Set<number>>(() => new Set(items.map((_, i) => i)));
+  const [onShelf, setOnShelf] = useState<number[]>([]);
+  const [holding, setHolding] = useState<number | null>(null);
   const [landing, setLanding] = useState<string | null>(null);
-  const [carry, setCarry] = useState('');
   const [finished, setFinished] = useState(false);
 
   useEffect(() => {
@@ -49,29 +71,35 @@ function ReplayStage({ items, summary, updated, onClose }: { items: FiledItem[];
       // Read the controller now: Bower gets its turn on screen a moment after mounting.
       const b = bird.current;
       if (!b) return;
-      shown.forEach((it, i) => {
-        b.then(() => setCarry(it.title))
-          .flyTo(() => b.pointOn(q(`[data-item="${i}"]`), 0.9))
-          .peck(() => setTaken((x) => new Set(x).add(i)))
+      carried.forEach((it, i) => {
+        b.then(() => {
+          setHolding(i);
+          q(`[data-heap="${i}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        })
+          .flyTo(() => b.pointOn(q(`[data-heap="${i}"]`), 0.5))
+          .peck(() =>
+            setInHeap((h) => {
+              const n = new Set(h);
+              n.delete(i);
+              return n;
+            }),
+          )
           .holding(true)
-          .flyTo(() => b.pointOn(q(`[data-folder="${CSS.escape(it.to)}"]`), 0.8))
+          // On a phone the shelf may be below the fold: bring it into view first.
+          .then(() => q(`[data-next="${CSS.escape(it.to)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+          .flyTo(() => b.pointOn(q(`[data-next="${CSS.escape(it.to)}"]`), 0.3))
           .peck(() => {
             setLanding(it.to);
-            setCounts((c) => ({ ...c, [it.to]: (c[it.to] ?? 0) + 1 }));
+            setOnShelf((x) => [...x, i]);
           })
           .holding(false);
       });
       b.then(() => {
-        // The ones not carried one by one land together.
-        setCounts(() => {
-          const c: Record<string, number> = {};
-          items.forEach((it) => (c[it.to] = (c[it.to] ?? 0) + 1));
-          return c;
-        });
-        setTaken(new Set(shown.map((_, i) => i)));
+        setInHeap(new Set());
+        setOnShelf(items.map((_, i) => i));
         setLanding(null);
       })
-        .flyTo(() => b.pointOn(q('[data-home]'), 0.85))
+        .flyTo(() => b.pointOn(q('[data-perch]'), 0.5))
         .showOff()
         .then(() => setFinished(true));
       if (!b.moving) setFinished(true);
@@ -89,11 +117,12 @@ function ReplayStage({ items, summary, updated, onClose }: { items: FiledItem[];
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const heapLeft = items.length - onShelf.length;
   return (
     <div className={s.scrim} role="dialog" aria-modal="true" aria-label="What Bower did in the tidy-up">
       <div className={s.stage} ref={stage}>
-        <header className={s.head} data-home>
-          <div>
+        <header className={s.head}>
+          <div aria-live="polite">
             <h2 className={s.title}>{finished ? `${plural(items.length, 'thing')} filed` : 'What Bower did'}</h2>
             <p className="muted">{finished ? `${summary} ${updated ? `${plural(updated, 'note')} brought up to date.` : ''}` : 'The tidy-up already ran. This is where everything went.'}</p>
           </div>
@@ -101,45 +130,75 @@ function ReplayStage({ items, summary, updated, onClose }: { items: FiledItem[];
             {finished ? 'Done' : 'Skip'}
           </Button>
         </header>
-        <div className={s.cols}>
-          <section aria-label="Your inbox">
-            <h3 className={s.colTitle}>Inbox</h3>
-            <ul className={s.items}>
-              {shown.map((it, i) => (
-                <li key={i} data-item={i} className={taken.has(i) ? s.gone : ''}>
-                  <span className="mono">{it.name}</span>
-                  {taken.has(i) && <span className={s.went}>Filed as {it.title}</span>}
-                </li>
-              ))}
-              {rest > 0 && <li className={s.more}>and {plural(rest, 'more thing')}</li>}
-            </ul>
-          </section>
-          <section aria-label="Your folders">
-            <h3 className={s.colTitle}>Your folders</h3>
-            <ul className={s.folders}>
-              {folders.map((f) => (
-                <li key={f} data-folder={f} className={landing === f ? s.land : counts[f] ? s.fresh : ''}>
-                  <span className={s.dot} style={{ background: paraColor(f) }} />
-                  <span className={s.fname}>
-                    {nameOf(f)}
-                    <span className={s.fpath}>{crumbs(f.slice(0, Math.max(0, f.lastIndexOf('/'))))}</span>
+
+        <div className={s.court}>
+          <section className={s.heapBox} aria-label="Your inbox">
+            <h3 className={s.label}>Inbox{heapLeft ? `, ${heapLeft} left` : ''}</h3>
+            <div className={s.heap} data-perch>
+              {items.map((it, i) =>
+                inHeap.has(i) ? (
+                  <span
+                    key={i}
+                    data-heap={i}
+                    className={s.heaped}
+                    style={{
+                      left: `${3 + jitter(i, 1) * 60}%`,
+                      top: `${6 + jitter(i, 2) * 78}%`,
+                      transform: `rotate(${(jitter(i, 3) - 0.5) * 34}deg)`,
+                      zIndex: 10 + (items.length - i),
+                    }}
+                  >
+                    <Thing item={it} />
                   </span>
-                  {counts[f] ? (
-                    <span className={s.count}>
-                      <Icon name="add" size={12} stroke={2.6} />
-                      {counts[f]}
+                ) : null,
+              )}
+              {heapLeft === 0 && <p className={s.emptyHeap}>Empty. Everything has its place.</p>}
+            </div>
+          </section>
+
+          <section className={s.shelves} aria-label="Your folders">
+            {folders.map((f) => {
+              const here = onShelf.filter((i) => items[i]?.to === f);
+              return (
+                <div key={f} className={`${s.shelf} ${landing === f ? s.land : ''}`}>
+                  <p className={s.shelfName}>
+                    <span className={s.dot} style={{ background: paraColor(f) }} />
+                    <span className={s.shelfText}>
+                      {shelfName(f)}
+                      <span className={s.shelfPath}>{crumbs(parentOf(f))}</span>
                     </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+                  </p>
+                  <div className={s.row}>
+                    {here.slice(-4).map((i) => {
+                      const it = items[i];
+                      return it ? (
+                        <span key={i} className={s.placed}>
+                          <Thing item={it} />
+                        </span>
+                      ) : null;
+                    })}
+                    <span className={s.slot} data-next={f} aria-hidden="true" />
+                  </div>
+                  {here.length > 0 && <span className={s.count}>{here.length}</span>}
+                  <span className={s.twig} aria-hidden="true" />
+                </div>
+              );
+            })}
           </section>
         </div>
-        <BowerLayer ref={bird} size={desktop ? 84 : 64} priority={2} speed={1.9} carryLabel={carry} home={() => {
-          const h = stage.current?.querySelector('[data-home]')?.getBoundingClientRect();
-          const r = stage.current?.getBoundingClientRect();
-          return h && r ? { x: h.right - r.left - (desktop ? 150 : 110), y: h.top - r.top + 4 } : { x: 100, y: 40 };
-        }} />
+
+        <BowerLayer
+          ref={bird}
+          size={desktop ? 80 : 62}
+          priority={2}
+          speed={1.7}
+          carry={holding !== null && carried[holding] ? <Thing item={carried[holding]} /> : null}
+          home={() => {
+            const h = stage.current?.querySelector('[data-perch]')?.getBoundingClientRect();
+            const r = stage.current?.getBoundingClientRect();
+            return h && r ? { x: h.left - r.left + h.width * 0.5, y: h.top - r.top + 2 } : { x: 100, y: 40 };
+          }}
+        />
       </div>
     </div>
   );

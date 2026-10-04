@@ -24,34 +24,20 @@
       #boot button:focus-visible { outline: 2px solid #f0b64f; outline-offset: 3px; }
       @keyframes bootWm { from { opacity: 0; transform: translateY(6px); } }
       @media (prefers-color-scheme: light) { #boot { background: #faf9f6; color: #1c2333; } #boot .wm, #boot .line b { color: #1c2333; } #boot .line { color: #475569; } }
-      .bird { position: relative; }
-/* Looping poses, CSS only. Used when Bower stays in one place. */
-
-.bird{position:relative;flex:none}
-.bird svg g{transform-box:view-box}
-.b-rig{transform-origin:50px 92px}
-.posed .b-eye{animation:blink 5.2s infinite}
-@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
-/* read: pecks at the pile, then looks up */
-.posed.read .b-rig{animation:peck 2.2s infinite cubic-bezier(.5,0,.3,1)}
-/* carry: hops with something in the beak, wings beat in the air */
-.posed
-.posed.carry .b-rig{animation:hop 1.3s infinite}
-.posed.sleep .b-rig{animation:breathe 3.6s infinite ease-in-out}
-/* proud: tail fans, chest out (done) */
-.posed.proud .b-rig{animation:proud 3s infinite}
-/* land: flies in, squashes on the twig, flicks, then idles (6 s cycle on the canvas) */
-.posed.land .b-rig{animation:landin 6s infinite}
-.posed.land .b-wing{animation:landwing 6s infinite}
-.posed.land .b-legs{animation:landlegs 6s infinite}
-.posed.land .b-tail{animation:landtail 6s infinite}
-.posed.land .b-head{animation:landhead 6s infinite}
-@keyframes landin{0%{transform:translate(-120px,-150px) rotate(-18deg);opacity:0}4%{opacity:1}22%{transform:translate(0,-6px) rotate(-6deg)}26%{transform:translate(0,0) scale(1.12,.86)}31%{transform:scale(.97,1.04)}35%,100%{transform:scale(1)}}
-@keyframes landwing{0%,2%,6%,10%,14%,18%{transform:rotate(-46deg) scaleY(.6)}4%,8%,12%,16%,20%{transform:rotate(22deg)}24%,100%{transform:rotate(0)}}
-@keyframes landlegs{0%,19%{transform:scaleY(.5)}24%,100%{transform:scaleY(1)}}
-@keyframes landtail{0%,30%,40%,100%{transform:rotate(0)}33%{transform:rotate(-18deg)}36%{transform:rotate(5deg)}}
-@keyframes landhead{0%,44%{transform:rotate(0)}45%,62%{transform:rotate(-12deg)}63%,80%{transform:rotate(8deg)}81%,100%{transform:rotate(0)}}
-      #boot .land .b-rig, #boot .land .b-wing, #boot .land .b-legs, #boot .land .b-tail, #boot .land .b-head { animation-iteration-count: 1; animation-fill-mode: both; animation-duration: 2.4s; }
+      #boot .bird { position: relative; }
+      #boot .bird svg g { transform-box: view-box; }
+      #boot .b-rig { transform-origin: 50px 92px; } #boot .b-head { transform-origin: 60px 50px; } #boot .b-wing { transform-origin: 56px 55px; }
+      #boot .b-tail { transform-origin: 32px 70px; } #boot .b-legs { transform-origin: 50px 82px; } #boot .b-eye { transform-origin: 70px 34px; }
+      #boot .b-eye { animation: blink 5.2s infinite; }
+      #boot .land .b-rig { animation-name: landin; } #boot .land .b-wing { animation-name: landwing; } #boot .land .b-legs { animation-name: landlegs; }
+      #boot .land .b-tail { animation-name: landtail; } #boot .land .b-head { animation-name: landhead; }
+      @keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
+      @keyframes landin{0%{transform:translate(-120px,-150px) rotate(-18deg);opacity:0}4%{opacity:1}22%{transform:translate(0,-6px) rotate(-6deg)}26%{transform:translate(0,0) scale(1.12,.86)}31%{transform:scale(.97,1.04)}35%,100%{transform:scale(1)}}
+      @keyframes landwing{0%,2%,6%,10%,14%,18%{transform:rotate(-46deg) scaleY(.6)}4%,8%,12%,16%,20%{transform:rotate(22deg)}24%,100%{transform:rotate(0)}}
+      @keyframes landlegs{0%,19%{transform:scaleY(.5)}24%,100%{transform:scaleY(1)}}
+      @keyframes landtail{0%,30%,40%,100%{transform:rotate(0)}33%{transform:rotate(-18deg)}36%{transform:rotate(5deg)}}
+      @keyframes landhead{0%,44%{transform:rotate(0)}45%,62%{transform:rotate(-12deg)}63%,80%{transform:rotate(8deg)}81%,100%{transform:rotate(0)}}
+      #boot .land .b-rig, #boot .land .b-wing, #boot .land .b-legs, #boot .land .b-tail, #boot .land .b-head { animation-iteration-count: 1; animation-fill-mode: both; animation-duration: 2.4s; animation-timing-function: ease; }
       @media (prefers-reduced-motion: reduce) { #boot * { animation: none !important; } }
     </style>
   </head>

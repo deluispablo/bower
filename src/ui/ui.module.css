@@ -133,3 +133,4 @@
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .skeleton { border-radius: 8px; background: linear-gradient(90deg, var(--surface) 0%, var(--surface-strong) 50%, var(--surface) 100%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
+.sheet:focus, .sheet:focus-visible { outline: none; }

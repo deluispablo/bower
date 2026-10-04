@@ -94,11 +94,22 @@ export function Explorer({ variant }: Props) {
     return n.type === 'folder' ? n.path : parentOf(n.path) || 'Inbox';
   };
 
+  /**
+   * Desktop: a folder opens in the main view (list or table) and expands; a
+   * second click on the open folder folds it. Phone: a tap only folds or
+   * unfolds, since the tree is the screen; "Open as a list" is in its menu.
+   */
   const activate = (node: TreeNode, newTab = false): void => {
     if (node.type === 'folder') {
-      ui.toggle(node.path);
+      const isOpen = ui.open.has(node.path);
+      if (desktop) {
+        if (isOpen && ui.selected === node.path && !newTab) ui.toggle(node.path, false);
+        else {
+          ui.toggle(node.path, true);
+          act.open(node, newTab);
+        }
+      } else ui.toggle(node.path);
       ui.select(node.path);
-      if (variant !== 'panel' || newTab) act.open(node, newTab);
     } else act.open(node, newTab);
     setFocus(node.path);
   };
@@ -268,7 +279,18 @@ export function Explorer({ variant }: Props) {
         onPointerCancel={pressEnd}
       >
         {guides}
-        <span className={s.lead} style={root ? { color: paraColor(node.path) } : undefined}>
+        <span
+          className={s.lead}
+          style={root ? { color: paraColor(node.path) } : undefined}
+          onClick={
+            folder
+              ? (e) => {
+                  e.stopPropagation();
+                  ui.toggle(node.path);
+                }
+              : undefined
+          }
+        >
           {folder ? (
             <Icon name="chev" size={14} stroke={2.2} className={isOpen ? s.chevOpen : s.chev} />
           ) : node.hub ? (
@@ -444,6 +466,7 @@ export function useNodeMenu(node: TreeNode) {
   const marked = ui.bookmarks.includes(node.path);
   const items: Array<{ key: string; label: string; icon: Parameters<typeof Icon>[0]['name']; run: () => void; danger?: boolean } | 'sep'> = [];
   if (folder) {
+    items.push({ key: 'view', label: 'Open as a list or table', icon: 'table', run: () => act.open(node) });
     items.push({ key: 'note', label: 'New note', icon: 'newNote', run: () => void act.create(node.path, 'note') });
     items.push({ key: 'folder', label: 'New folder', icon: 'newFolder', run: () => void act.create(node.path, 'folder') });
     items.push('sep');
