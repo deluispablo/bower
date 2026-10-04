@@ -33,7 +33,16 @@ async function setNotify(on: boolean, save: (on: boolean) => void): Promise<void
     toast('This browser cannot show notifications.');
     return save(false);
   }
+  if (Notification.permission === 'denied') {
+    toast('Notifications are blocked for Bower in this browser. Allow them in its settings.');
+    return save(false);
+  }
+  if (Notification.permission !== 'granted') toast('Answer your browser to let Bower tell you when a tidy-up ends.');
   const answer = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (answer === 'default') {
+    toast('Nothing changed. Turn it on again to be asked once more.');
+    return save(false);
+  }
   if (answer !== 'granted') {
     toast('Notifications are blocked for Bower in this browser. Allow them in its settings.');
     return save(false);

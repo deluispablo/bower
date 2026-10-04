@@ -325,8 +325,8 @@
       "Settings",
       "Tell me when a tidy-up ends"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"notifications say why they stay off\"",
-    "passes": false
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"notifications say why|closing the browser question\"",
+    "passes": true
   },
   {
     "id": "landing-console",

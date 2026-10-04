@@ -174,3 +174,25 @@ test('reading your changes does not look like filing', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Just filed' })).toHaveCount(0);
 });
+
+test('notifications say why they stay off', async ({ page }) => {
+  await page.addInitScript(() => {
+    const fake = { permission: 'default', requestPermission: (): Promise<string> => new Promise(() => undefined) };
+    Object.defineProperty(window, 'Notification', { value: fake });
+  });
+  await open(page, '/settings');
+  await page.getByRole('switch', { name: 'Tell me when a tidy-up ends' }).click();
+  await expect(page.getByRole('status').getByText(/Answer your browser/)).toBeVisible();
+});
+
+test('closing the browser question says how to ask again', async ({ page }) => {
+  await page.addInitScript(() => {
+    const fake = { permission: 'default', requestPermission: (): Promise<string> => Promise.resolve('default') };
+    Object.defineProperty(window, 'Notification', { value: fake });
+  });
+  await open(page, '/settings');
+  const sw = page.getByRole('switch', { name: 'Tell me when a tidy-up ends' });
+  await sw.click();
+  await expect(page.getByRole('status').getByText(/Turn it on again/)).toBeVisible();
+  await expect(sw).toHaveAttribute('aria-checked', 'false');
+});
