@@ -53,7 +53,7 @@
     "task": 8,
     "what": "Add sends the files themselves",
     "verify": "pnpm vitest run src/features/piles && pnpm e2e -g \"added again\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "worker",

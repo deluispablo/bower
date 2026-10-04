@@ -151,3 +151,13 @@ test('clicking away from a refused name cancels without a second toast', async (
   await expect(page.getByRole('status').getByText(/There is already/)).toHaveCount(1);
   await expect(tree.getByRole('treeitem', { name: /Flat 3, 12 Larkspur/ })).toBeVisible();
 });
+
+test('after a reload an added file asks to be added again', async ({ page }) => {
+  await open(page, '/add', 'empty', 'instant');
+  await page.locator('input[type=file][multiple]').setInputFiles({ name: 'Boiler service.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF made up') });
+  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 5000 });
+  await expect(page.getByText('Add this file again')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Put the note in the inbox' })).toBeDisabled();
+});

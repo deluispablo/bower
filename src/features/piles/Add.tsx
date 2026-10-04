@@ -11,6 +11,7 @@ import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import s from './piles.module.css';
 import { normaliseLink } from './link';
+import { forget, get, keep } from './draft-files';
 
 const DRAFT_KEY = 'bower:add-draft';
 const ITEMS_KEY = 'bower:add-items';
@@ -20,11 +21,16 @@ interface Draft {
   name: string;
   kind: FileKind;
   origin: string;
+  /** A pasted link; a file's bytes are kept in draft-files instead. */
+  url?: string;
 }
+
+/** A draft file whose bytes are gone (the page was reloaded) cannot be sent. */
+const missing = (d: Draft): boolean => d.kind !== 'link' && !get(d.key);
 
 /**
  * Add makes a pile: things that belong together and one line about them.
- * The line is what helps Bower most ("Receipts from the Lisbon trip").
+ * The line is what helps Bower most ("Receipts from the Saltmere weekend").
  */
 export function Add() {
   const { vault } = useSources();
@@ -75,9 +81,14 @@ export function Add() {
   const zone = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
 
-  const add = (list: Array<Omit<Draft, 'key'>>): void => {
+  const add = (list: Array<Omit<Draft, 'key'> & { file?: Blob }>): void => {
     if (!list.length) return;
-    setItems((x) => [...x, ...list.map((d, i) => ({ ...d, key: `${Date.now()}-${i}-${d.name}` }))]);
+    const drafts = list.map(({ file, ...d }, i) => {
+      const key = `${Date.now()}-${i}-${d.name}`;
+      if (file) keep(key, file);
+      return { ...d, key };
+    });
+    setItems((x) => [...x, ...drafts]);
     // Bower goes to see what arrived, gives it a peck, and goes back to its edge.
     setTimeout(() => {
       const b = bird.current;
@@ -85,14 +96,14 @@ export function Add() {
       b?.flyTo(() => b.pointOn(row, 0.85)).peck().wait(0.3);
     }, 60);
   };
-  const fromFiles = (fl: FileList | null, origin: string): void => add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin })));
+  const fromFiles = (fl: FileList | null, origin: string): void => add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin, file: f })));
   const addLink = (): void => {
     const v = normaliseLink(link);
     if (!v) {
       toast('That does not look like a link.');
       return;
     }
-    add([{ name: v.replace(/^https?:\/\//, '').replace(/\/$/, ''), kind: 'link', origin: 'A link you pasted' }]);
+    add([{ name: v.replace(/^https?:\/\//, '').replace(/\/$/, ''), kind: 'link', origin: 'A link you pasted', url: v }]);
     setLink('');
   };
   const onDrop = (e: DragEvent): void => {
@@ -100,13 +111,21 @@ export function Add() {
     setOver(false);
     fromFiles(e.dataTransfer.files, 'Dropped here');
   };
+  const ready = items.filter((d) => !missing(d));
   const save = async (): Promise<void> => {
     setBusy(true);
     try {
-      await vault.addPile({ text, items: items.map(({ name, kind, origin }) => ({ name, kind, origin })) });
+      await vault.addPile({
+        text,
+        items: ready.map(({ key, name, kind, origin, url }) => {
+          const body = get(key);
+          return { name, kind, origin, ...(body ? { body } : {}), ...(url ? { url } : {}) };
+        }),
+      });
+      items.forEach((d) => forget(d.key));
       setText('');
       setItems([]);
-      toast(items.length ? `${plural(items.length, 'thing')} in the inbox` : 'Your note is in the inbox', { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
+      toast(ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
       nav('/');
     } catch (e) {
       toast(e instanceof BowerError ? e.message : 'That did not save. Try again.');
@@ -122,7 +141,7 @@ export function Add() {
 
       <label className={s.what}>
         <span>What is this?</span>
-        <textarea rows={2} placeholder="Receipts from the Lisbon trip" value={text} onChange={(e) => setText(e.target.value)} />
+        <textarea rows={2} placeholder="Receipts from the Saltmere weekend" value={text} onChange={(e) => setText(e.target.value)} />
       </label>
 
       <div
@@ -178,9 +197,17 @@ export function Add() {
               </span>
               <span className={s.itemMain}>
                 <span className="mono">{it.name}</span>
-                <span className={s.itemSub}>{it.origin}</span>
+                <span className={s.itemSub}>{missing(it) ? 'Add this file again' : it.origin}</span>
               </span>
-              <button type="button" className={s.remove} aria-label={`Take ${it.name} out`} onClick={() => setItems((x) => x.filter((y) => y.key !== it.key))}>
+              <button
+                type="button"
+                className={s.remove}
+                aria-label={`Take ${it.name} out`}
+                onClick={() => {
+                  forget(it.key);
+                  setItems((x) => x.filter((y) => y.key !== it.key));
+                }}
+              >
                 <Icon name="x" size={16} />
               </button>
             </li>
@@ -189,8 +216,8 @@ export function Add() {
       )}
 
       <div className={s.footer}>
-        <Button block disabled={busy || (!items.length && !text.trim())} onClick={() => void save()}>
-          {busy ? 'Saving…' : items.length ? `Put ${plural(items.length, 'thing')} in the inbox` : 'Put the note in the inbox'}
+        <Button block disabled={busy || (!ready.length && !text.trim())} onClick={() => void save()}>
+          {busy ? 'Saving…' : ready.length ? `Put ${plural(ready.length, 'thing')} in the inbox` : 'Put the note in the inbox'}
         </Button>
       </div>
     </div>

@@ -8,3 +8,4 @@
 - 2026-10-04: vault-index passes: paths over Drive ids, same-name and case-only siblings kept apart, new-until-opened per device.
 - 2026-10-04: vault-files passes: the file groups of the vault contract (move, rename, Bin, restore, tasks, journal, search) pass on Drive; inbox, bower and tidy groups still skipped.
 - 2026-10-04: vault-inbox passes: piles (folder, lone, note-only, links, uploads with failures), rules, requests, questions and suggestions on Drive; the whole contract but the tidy-up group passes on the fake Drive.
+- 2026-10-04: add-files passes: Add sends files and links themselves; after a reload a file asks to be added again.
