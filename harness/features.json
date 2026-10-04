@@ -426,7 +426,7 @@
       "Rename"
     ],
     "verify": "pnpm vitest run src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "folder-count-status",
