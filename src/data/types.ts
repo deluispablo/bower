@@ -173,6 +173,10 @@ export interface RunReport {
   questions: Question[];
   /** How many of your changes (the journal) the run read. */
   yourChanges?: number;
+  /** What you asked Bower that this run did, in your words. */
+  requests?: string[];
+  /** How many rules you added that this run worded. */
+  rulesWorded?: number;
 }
 
 export interface RunState {

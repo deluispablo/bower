@@ -115,6 +115,14 @@ describe('the fake runner', () => {
     expect((await fresh().rules()).some((x) => x.text === r.text)).toBe(false);
   });
 
+  it('the report says what it did with your words', async () => {
+    await vault.addRequest('Put my visa papers together');
+    await vault.addRule('anything from the dentist goes in health');
+    const out = await runFake(drive, root, opts({ scope: 'instructions' }));
+    expect(out.phase === 'done' && out.report.requests).toEqual(['Put my visa papers together']);
+    expect(out.phase === 'done' && out.report.rulesWorded).toBe(1);
+  });
+
   it('pending rules are worded with your words kept', async () => {
     await vault.addRule('anything from the dentist goes in health');
     await runFake(drive, root, opts({ scope: 'instructions' }));

@@ -1719,7 +1719,7 @@
       "The result names the request done and the rules worded."
     ],
     "verify": "pnpm vitest run src/data src/features/tidy -t \"the report says what it did with your words\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "delete-words-return",

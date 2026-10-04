@@ -93,6 +93,10 @@ export function runDetail(r: RunState): string {
       if (rep.updated.length) parts.push(`${plural(rep.updated.length, 'note')} brought up to date`);
       if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'question')} for you`);
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
+      const asked = rep.requests ?? [];
+      if (asked.length === 1) parts.push(`"${asked[0] ?? ''}" done`);
+      else if (asked.length) parts.push(`${plural(asked.length, 'thing')} you asked done`);
+      if (rep.rulesWorded) parts.push(`${plural(rep.rulesWorded, 'rule')} worded`);
       if (rep.yourChanges) parts.push(`${plural(rep.yourChanges, 'change')} of yours read`);
       return parts.length ? `${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : 'Everything has its place.';
     }

@@ -378,6 +378,10 @@ export class DemoWorld {
         const yourChanges = this.journal.length;
         r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: [] };
         r.report.yourChanges = yourChanges;
+        const asked = this.requests.filter((q) => !q.done).map((q) => q.text);
+        const worded = this.rules.filter((x) => x.pending).length;
+        if (asked.length) r.report.requests = asked;
+        if (worded) r.report.rulesWorded = worded;
         this.rules = this.rules.map((x) => (x.pending ? { ...x, text: wordRule(x.yourWords ?? x.text), pending: false } : x));
         this.requests = this.requests.map((q) => (q.done ? q : { ...q, done: 'Done. See what changed in your folders.' }));
         this.journal = [];

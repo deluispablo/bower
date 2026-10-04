@@ -56,4 +56,12 @@ describe('how long a run takes', () => {
     const r = { id: 'r', scope: 'all' as const, phase: 'writing' as const, requestedAt: 0, phaseAt: 0, seen: false };
     expect(runClock(r, 30_000)).toMatch(/Usually about 5 minutes\.$/);
   });
+  it('the report says what it did with your words: requests done, rules worded', () => {
+    const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+    const one = runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['Put my visa papers together'], rulesWorded: 1, yourChanges: 2 } });
+    expect(one).toContain('"Put my visa papers together" done');
+    expect(one).toContain('1 rule worded');
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['a', 'b'] } })).toContain('2 things you asked done');
+  });
 });
+

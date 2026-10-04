@@ -153,3 +153,4 @@
 - 2026-10-04: dismiss-focus passes — fix(app): after Got it or Put it away the keyboard goes to the page, not nowhere
 - 2026-10-04: inbox-order-names passes — fix(app): the inbox reads the same in the tree and on Home
 - 2026-10-04: first-run-restart passes — fix(demo): Start this situation again restarts it as chosen, folders closed
+- 2026-10-04: run-result-requests passes — fix(app): a tidy-up's result says what it did with what you asked and the rules it worded
