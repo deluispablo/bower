@@ -1076,7 +1076,7 @@
     "what": "Search matches markdown itself: \"[ ]\" finds task boxes; a table snippet starts with an empty cell.",
     "steps": [],
     "verify": "pnpm vitest run src/data/contract -t \"search reads text, not markdown\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "web-source-links",

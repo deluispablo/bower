@@ -288,6 +288,14 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect((await vault.search('#career')).map((h) => h.title)).toContain('CV insights');
       });
 
+      it('search reads text, not markdown', async () => {
+        const { vault } = await open();
+        expect(await vault.search('[ ]')).toEqual([]);
+        const hits = await vault.search('Planned');
+        expect(hits.length).toBeGreaterThan(0);
+        for (const h of hits) expect(h.snippet).not.toMatch(/^[\s,|]/);
+      });
+
       it('search snippets are plain text', async () => {
         const { vault } = await open();
         const hits = [...(await vault.search('£1,450')), ...(await vault.search('reference letter'))];

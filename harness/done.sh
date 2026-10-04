@@ -32,7 +32,7 @@ if [ -n "$green_before" ]; then
   how="green-before: $green_before"
 else
   # Changed or new code (tests and the harness's own records stay): the change being proved.
-  code=$(git status --porcelain --untracked-files=all -- src public index.html vite.config.ts scripts package.json | sed 's/^...//' | grep -vE '\.test\.tsx?$|^e2e/' || true)
+  code=$(git status --porcelain --untracked-files=all -- src public index.html vite.config.ts scripts package.json | sed 's/^...//' | grep -vE '\.test\.tsx?$|^e2e/|^src/data/contract/|^src/testing/' || true)
   if [ -z "$code" ]; then
     echo "No code change to set aside: the fix is committed already. Pass --green-before \"<why>\"."; exit 1
   fi
@@ -41,6 +41,9 @@ else
   trap 'git stash pop --quiet' EXIT
   if bash -c "$verify" >"$log" 2>&1; then
     echo "The verify passes without the change: it does not pin it. Fix the test, or pass --green-before \"<why>\"."; exit 1
+  fi
+  if ! grep -qE "[1-9][0-9]* failed" "$log"; then
+    tail -15 "$log"; echo "Without the change the verify failed, but no test failed (did it run any?): that is not a red test."; exit 1
   fi
   git stash pop --quiet; trap - EXIT
 fi

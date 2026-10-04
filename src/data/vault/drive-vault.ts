@@ -27,7 +27,7 @@ import {
 import { Journal, type JournalRecord } from './journal';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
-import { placeOf, plainSnippet, searchLines } from '../search-text';
+import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
@@ -272,7 +272,7 @@ export class DriveVault implements VaultSource {
       .slice(0, MAX_READS);
     const found = await inBatches(candidates, async ({ h, path }) => {
       const n = await this.parsed(h, path);
-      const line = searchLines(n).find((l) => words.every((w) => l.toLowerCase().includes(w)));
+      const line = searchLines(n).map(plainText).find((l) => words.every((w) => l.toLowerCase().includes(w)));
       return line ? { path, title: n.title, snippet: plainSnippet(line), score: 1 } : null;
     });
     for (const f of found) if (f) hits.push(f);

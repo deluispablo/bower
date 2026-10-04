@@ -16,8 +16,10 @@ export function searchLines(n: Pick<Note, 'summary' | 'currentState' | 'body' | 
   ].filter((l) => l.trim());
 }
 
-/** A line of markdown as a person reads it: no links' brackets, task boxes, table pipes or list marks. */
-export function plainSnippet(line: string): string {
+/** A line of markdown as a person reads it: no links' brackets, task boxes, table pipes or list marks. Search matches this, not the markdown. */
+export function plainText(line: string): string {
+  const cells = /^\s*\|/.test(line) ? line.split('|').map((c) => c.trim()).filter(Boolean) : null;
+  if (cells) line = cells.join(', ');
   return line
     .replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g, (_m, target: string, _a, alias: string | undefined) => alias ?? target)
     .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')
@@ -25,8 +27,12 @@ export function plainSnippet(line: string): string {
     .replace(/^\s*\|\s*|\s*\|\s*$/g, '')
     .replace(/\s*\|\s*/g, ', ')
     .replace(/\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g, (_m, b?: string, i?: string, c?: string) => b ?? i ?? c ?? '')
-    .trim()
-    .slice(0, 120);
+    .trim();
+}
+
+/** A matching line, short enough to show under a result. */
+export function plainSnippet(line: string): string {
+  return plainText(line).slice(0, 120);
 }
 
 /** Where a hit lives, as the result shows it. */

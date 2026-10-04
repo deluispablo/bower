@@ -56,7 +56,7 @@ import {
   seedTime,
 } from './fixture';
 import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
-import { placeOf, plainSnippet, searchLines } from '../search-text';
+import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
 import { forgetThisPerson } from '../device';
 import { shortDay } from '../dates';
@@ -696,7 +696,7 @@ export class DemoWorld {
             let snippet = placeOf(e.path.slice(0, Math.max(0, e.path.lastIndexOf('/'))));
             if (words.every((w) => t.includes(w))) score = 3;
             else if (e.kind === 'note') {
-              const line = searchLines(this.noteFor(e.path)).find((l) => words.every((w) => l.toLowerCase().includes(w)));
+              const line = searchLines(this.noteFor(e.path)).map(plainText).find((l) => words.every((w) => l.toLowerCase().includes(w)));
               if (line) {
                 score = 1;
                 snippet = plainSnippet(line);
