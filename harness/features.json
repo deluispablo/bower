@@ -264,7 +264,7 @@
       "/files"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the folders view counts the inbox as Home does\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "fake-persists",

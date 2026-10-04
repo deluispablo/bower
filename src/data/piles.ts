@@ -1,4 +1,4 @@
-import type { Pile, PileItem } from './types';
+import type { Pile, PileItem, TreeNode } from './types';
 
 /**
  * How a pile lives in the Bower folder (spec, "Who does what"): a pile with
@@ -38,4 +38,10 @@ export function pileHasFolder(p: Pile): boolean {
 export function safeInboxName(item: Pick<PileItem, 'name' | 'kind'>): string {
   const safe = item.name.replace(/[/\\]+/g, ' - ').replace(/^[\s.-]+|[\s-]+$/g, '') || 'Untitled';
   return item.kind === 'link' && !/\.[a-z]{2,5}$/i.test(safe) ? `${safe}.url` : safe;
+}
+
+/** Things in a folder for a count: every file, except the pile notes (they belong to their piles). */
+export function countThings(n: TreeNode): number {
+  if (n.type === 'file') return n.name === PILE_NOTE ? 0 : 1;
+  return (n.children ?? []).reduce((t, c) => t + countThings(c), 0);
 }

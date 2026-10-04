@@ -123,3 +123,9 @@ test('the boot screen follows a saved light theme on a dark system', async ({ pa
   await page.goto('/?scenario=default&time=instant');
   await expect.poll(() => page.evaluate(() => document.getElementById('boot') && getComputedStyle(document.getElementById('boot') as HTMLElement).backgroundColor)).toBe('rgb(250, 249, 246)');
 });
+
+test('the folders view counts the inbox as Home does', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the phone shows the tree here, which already counts this way');
+  await open(page, '/files');
+  await expect(page.getByRole('link', { name: /^Inbox/ }).first()).toContainText('15 things');
+});

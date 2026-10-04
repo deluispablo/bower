@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { usePiles, useTree } from '@/data/provider';
 import { displayName, findNode, isRoot, parentOf, visibleRows, type SortOrder } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
-import { PILE_NOTE } from '@/data/piles';
+import { countThings } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
 import { crumbs, decodeSplat, paraColor, routeFor } from '@/app/paths';
 import { IconButton } from '@/ui/Button';
@@ -28,10 +28,6 @@ const SORTS: Array<[SortOrder, string] | null> = [
 ];
 
 /** Things in a folder, not counting the notes that describe piles. */
-function countThings(n: TreeNode): number {
-  if (n.type === 'file') return n.name === PILE_NOTE ? 0 : 1;
-  return (n.children ?? []).reduce((t, c) => t + countThings(c), 0);
-}
 
 const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
 
