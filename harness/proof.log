@@ -119,3 +119,4 @@ pwa-worker-routes	87b3ece829cdb77d	2026-10-04	known-green: denylist predates the
 swallow-then-handlers	2f50af52f3d841b2	2026-10-04	red
 swallow-sensor-strong	2f50af52f3d841b2	2026-10-04	red (fixed in 6068455)
 copy-two-words-tsx	1eb1f8dbfb2223e5	2026-10-04	red
+bye-only-when-gone	02d41cc632ecdf71	2026-10-04	red

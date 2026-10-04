@@ -125,3 +125,4 @@
 - 2026-10-04: swallow-then-handlers passes — fix(app): rejection handlers in .then() log and say what failed
 - 2026-10-04: swallow-sensor-strong passes — chore(harness): close swallow-sensor-strong
 - 2026-10-04: copy-two-words-tsx passes — test(copy): two words in a screen are copy too
+- 2026-10-04: bye-only-when-gone passes — fix(app): say the account is gone only after the delete went through

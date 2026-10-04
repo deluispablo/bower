@@ -16,6 +16,16 @@ function stub(handler: (url: URL, init: RequestInit) => Response): { fetch: type
 const BASE = 'https://api.example';
 
 describe('WorkerHttp', () => {
+  it('delete sends DELETE /me with the cookie, and a refusal rejects', async () => {
+    const s = stub(() => new Response(null, { status: 204 }));
+    await new WorkerHttp(BASE, s.fetch).deleteAccount();
+    expect(s.calls[0]?.init.method).toBe('DELETE');
+    expect(s.calls[0]?.url.pathname).toBe('/me');
+    expect(s.calls[0]?.init.credentials).toBe('include');
+    const bad = stub(() => json({ error: { code: 'server', message: 'Try again later.' } }, 500));
+    await expect(new WorkerHttp(BASE, bad.fetch).deleteAccount()).rejects.toThrow('Try again later.');
+  });
+
   it('401 on /me gives null', async () => {
     const s = stub(() => json({ error: { code: 'auth', message: 'Sign in.' } }, 401));
     expect(await new WorkerHttp(BASE, s.fetch).me()).toBeNull();

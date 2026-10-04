@@ -58,7 +58,7 @@ import {
 import { keepSignedIn, keptSignedIn, PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
-import { forgetThisPerson } from '../device';
+import { forgetThisPerson, sayGoodbye } from '../device';
 import { shortDay } from '../dates';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
@@ -493,6 +493,7 @@ export class DemoWorld {
           this.user = null;
           keepSignedIn(false);
           forgetThisPerson();
+          sayGoodbye();
           this.sessionListeners.forEach((l) => l());
         }),
       signOut: () =>

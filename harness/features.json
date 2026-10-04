@@ -1170,8 +1170,8 @@
     "category": "bug",
     "what": "\"Your account is gone\" can show after an ordinary sign-out when a delete failed; DELETE /me has no unit test.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/worker/worker-http.test.ts src/features/settings -t \"delete\"",
-    "passes": false
+    "verify": "pnpm vitest run src/data/worker src/data/live -t \"delete\"",
+    "passes": true
   },
   {
     "id": "outbox-flush-dedupe",

@@ -7,7 +7,7 @@ import type { DriveApi } from '../drive/drive-api';
 import type { Session, Unsubscribe } from '../sources';
 import { BowerError, PARA_ROOTS, type FolderState, type ParaRoot, type User } from '../types';
 import type { Me, WorkerApi } from '../worker/worker-api';
-import { forgetThisPerson } from '../device';
+import { forgetThisPerson, sayGoodbye } from '../device';
 
 const POLL_MS = 500;
 const GIVE_UP_MS = 20_000;
@@ -58,6 +58,7 @@ export class LiveSession implements Session {
   async deleteAccount(): Promise<void> {
     await this.worker.deleteAccount();
     forgetThisPerson();
+    sayGoodbye();
     this.me = null;
     this.emit();
   }

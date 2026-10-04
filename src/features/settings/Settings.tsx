@@ -205,11 +205,6 @@ export function Settings() {
           <Button
             variant="danger"
             onClick={() => {
-              try {
-                sessionStorage.setItem('bower:bye', '1');
-              } catch (e) {
-                console.error(e);
-              }
               // The sheet closes first (its history entry with it), then the account goes.
               setAskDelete(false);
               void new Promise((r) => setTimeout(r, 0))

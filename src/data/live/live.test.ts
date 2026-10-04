@@ -144,6 +144,22 @@ describe('signing out', () => {
   });
 });
 
+describe('deleting the account', () => {
+  it('says goodbye only when the delete went through', async () => {
+    const s = await open();
+    const worker = s.worker as FakeWorker;
+    const real = worker.deleteAccount.bind(worker);
+    worker.deleteAccount = (): Promise<void> => Promise.reject(new Error('no answer'));
+    await expect(s.session.deleteAccount()).rejects.toThrow();
+    expect(sessionStorage.getItem('bower:bye')).toBeNull();
+    await s.session.signOut();
+    expect(sessionStorage.getItem('bower:bye')).toBeNull();
+    worker.deleteAccount = real;
+    await s.session.deleteAccount();
+    expect(sessionStorage.getItem('bower:bye')).toBe('1');
+  });
+});
+
 describe('the web', () => {
   it('a tidy-up tells the Worker whether Bower may look things up on the web (allow web)', async () => {
     const s = await open();
