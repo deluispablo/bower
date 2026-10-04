@@ -580,7 +580,18 @@ export class DemoWorld {
               this.piles = next;
             }
             this.syncInbox();
-          } else gone.entries.forEach((e) => this.entries.set(e.path, e));
+          } else {
+            // The name may have been taken since: come back under a free one, never over it.
+            const folder = parentOf(path);
+            const back = join(folder, freeName(this.entries, folder, nameOf(path)));
+            if (folder && !this.entries.has(folder)) ensureFolders(this.entries, join(folder, 'x'), Date.now());
+            gone.entries.forEach((e) => {
+              const p = back + e.path.slice(path.length);
+              this.entries.set(p, { ...e, path: p });
+              const n = this.notes.get(e.path);
+              if (n && p !== e.path) this.notes.set(p, { ...n, path: p });
+            });
+          }
           this.unrecord(gone.change);
           this.trash.delete(path);
         }),

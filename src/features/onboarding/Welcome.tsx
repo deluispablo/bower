@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { useSources } from '@/data/provider';
 import { PARA_ROOTS, type ParaRoot } from '@/data/types';
 import { paraColor } from '@/app/paths';
@@ -22,8 +22,29 @@ const STEPS = [
   { title: 'Find it later', text: 'Everything lives in your own Drive, in folders you can open anywhere, Obsidian included.' },
 ];
 
+const TOURED = 'bower:toured';
+function markToured(): void {
+  try {
+    sessionStorage.setItem(TOURED, '1');
+  } catch {
+    // Without storage, Back may show the tour once more.
+  }
+}
+function toured(): boolean {
+  try {
+    return sessionStorage.getItem(TOURED) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** First sign-in: Bower makes the folder, then shows the three ideas. */
 export function Welcome() {
+  if (toured()) return <Navigate to="/" replace />;
+  return <WelcomeSteps />;
+}
+
+function WelcomeSteps() {
   const { session } = useSources();
   const nav = useNavigate();
   const [made, setMade] = useState<ParaRoot[]>([]);
@@ -32,7 +53,7 @@ export function Welcome() {
   const [params, setParams] = useSearchParams();
   const step = Math.min(STEPS.length - 1, Math.max(-1, Number(params.get('step') ?? -1)));
   // Steps replace each other, so finishing the tour leaves no way back into it.
-  const setStep = (n: number): void => setParams({ step: String(n) }, { replace: step >= 0 });
+  const setStep = (n: number): void => setParams({ step: String(n) }, { replace: true });
   const started = useRef(false);
 
   useEffect(() => {
@@ -61,10 +82,10 @@ export function Welcome() {
         <h1 className={s.title}>{st?.title}</h1>
         <p className={s.text}>{st?.text}</p>
         <div className={s.foot}>
-          <Button block onClick={() => (step + 1 < STEPS.length ? setStep(step + 1) : nav('/add', { replace: true }))}>
+          <Button block onClick={() => (step + 1 < STEPS.length ? setStep(step + 1) : (markToured(), nav('/add', { replace: true })))}>
             {step + 1 < STEPS.length ? 'Next' : 'Add your first pile'}
           </Button>
-          <Button variant="ghost" block onClick={() => nav('/', { replace: true })}>
+          <Button variant="ghost" block onClick={() => (markToured(), nav('/', { replace: true }))}>
             {step + 1 < STEPS.length ? 'Skip' : 'Look around first'}
           </Button>
         </div>

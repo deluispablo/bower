@@ -196,7 +196,8 @@ describe('what the testers found', () => {
   it('refuses a name that is only an extension, and keeps Rules where it is', async () => {
     const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
     const { vault } = w.sources();
-    await expect(vault.rename('Resources/Cooking/Lemon tart.md', '.md')).rejects.toThrow(/empty/);
+    await expect(vault.rename('Resources/Cooking/Lemon tart.md', '.md')).rejects.toThrow(/dot/);
+    await expect(vault.rename('Resources/Cooking/Lemon tart.md', '  ')).rejects.toThrow(/empty/);
     await expect(vault.trash('Rules.md')).rejects.toThrow(/Bower needs it/);
   });
 });
@@ -225,5 +226,34 @@ describe('round two', () => {
     await vault.addPile({ text: 'Car insurance renewal', items: [{ name: 'insurer.example/renewal', kind: 'link', origin: 'x' }] });
     const folder = findNode(await vault.tree(), 'Inbox')?.children?.find((n) => n.type === 'folder');
     expect(folder?.children?.map((n) => n.name).sort()).toEqual(['Pile note.md', 'insurer.example - renewal.url']);
+  });
+});
+
+describe('round three', () => {
+  it('an Undo never overwrites a note that took the name meanwhile', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const seven = 'Projects/Flat hunt/Flat 7, Cobble Row.md';
+    await vault.trash(seven);
+    await vault.rename('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', 'Flat 7, Cobble Row');
+    await vault.restore(seven);
+    const names = (findNode(await vault.tree(), 'Projects/Flat hunt')?.children ?? []).map((n) => n.name);
+    expect(names).toContain('Flat 7, Cobble Row.md');
+    expect(names).toContain('Flat 7, Cobble Row (2).md');
+    expect((await vault.note(seven)).summary).toMatch(/Two-bed flat near the station/);
+  });
+
+  it('a move never makes names that differ only by case', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const p = await vault.rename('Resources/Ideas/Weekend projects.md', 'flat 7, cobble row');
+    expect(await vault.move(p, 'Projects/Flat hunt')).toBe('Projects/Flat hunt/flat 7, cobble row (2).md');
+  });
+
+  it('says a dot is the problem for ".git"', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const f = await vault.create('Resources', 'folder');
+    await expect(vault.rename(f, '.git')).rejects.toThrow(/dot/);
   });
 });

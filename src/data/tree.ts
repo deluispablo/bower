@@ -59,8 +59,9 @@ function within(path: string, folder: string): boolean {
 export function freeName(entries: Entries, folder: string, name: string, except?: string): string {
   const ext = extOf(name);
   const base = ext ? name.slice(0, -ext.length) : name;
+  const taken = new Set([...entries.keys()].filter((p) => p !== except).map((p) => p.toLowerCase()));
   let candidate = name;
-  for (let n = 2; entries.has(join(folder, candidate)) && join(folder, candidate) !== except; n++) {
+  for (let n = 2; taken.has(join(folder, candidate).toLowerCase()); n++) {
     candidate = `${base} (${n})${ext}`;
   }
   return candidate;
@@ -95,8 +96,8 @@ export function renameEntry(entries: Entries, path: string, newName: string, at:
   if (!e) throw new BowerError('not-found', 'That is no longer there.');
   if (isRoot(path)) throw new BowerError('conflict', 'That keeps its name: Bower needs it.');
   let name = newName.trim().replace(/[/\\]/g, '-');
-  if (!name || !displayName(name).replace(/\.[A-Za-z0-9]{1,5}$/, '').trim()) throw new BowerError('conflict', 'A name cannot be empty.');
   if (name.startsWith('.')) throw new BowerError('conflict', 'A name cannot start with a dot.');
+  if (!name || !displayName(name).replace(/\.[A-Za-z0-9]{1,5}$/, '').trim()) throw new BowerError('conflict', 'A name cannot be empty.');
   // A rename never changes a file's type: "Plan v1.2" stays a note (Plan v1.2.md).
   const ext = extOf(nameOf(path));
   if (e.type === 'file' && ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;

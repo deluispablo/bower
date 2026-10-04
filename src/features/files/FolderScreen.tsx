@@ -93,6 +93,8 @@ function Folder({ path }: { path: string }) {
   };
 
   if (node?.type === 'file') return <Navigate to={routeFor(node)} replace />;
+  const now = !node && !loading && tree ? useUi.getState().whereNow(path) : null;
+  if (now && tree && findNode(tree, now)) return <Navigate to={folderRoute(now)} replace />;
   if (!node && !loading)
     return (
       <div className={s.page}>

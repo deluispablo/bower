@@ -116,7 +116,8 @@ function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summa
   }, []);
 
   useEffect(() => {
-    // A modal: focus goes in and stays in (Tab cycles inside the replay).
+    // A modal: focus goes in and stays in (Tab cycles inside the replay), and back where it was after.
+    const opener = document.activeElement as HTMLElement | null;
     const box = stage.current;
     box?.querySelector<HTMLElement>('button')?.focus();
     const onKey = (e: KeyboardEvent): void => {
@@ -138,7 +139,10 @@ function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summa
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (opener && document.contains(opener)) opener.focus();
+    };
   }, [onClose]);
 
   const heapLeft = items.length - onShelf.length;

@@ -169,9 +169,9 @@ export function DesktopShell() {
             <Icon name="sideRight" size={18} />
           </IconButton>
         </div>
-        <div className={s.view} id="main" tabIndex={-1}>
+        <main className={s.view} id="main" tabIndex={-1}>
           <Outlet />
-        </div>
+        </main>
       </div>
 
       {rightOpen && (

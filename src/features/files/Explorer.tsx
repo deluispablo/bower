@@ -316,7 +316,7 @@ export function Explorer({ variant }: Props) {
           <RenameInput
             node={node}
             draft={draft}
-            onDone={async (name, typed) => {
+            onDone={async (name, typed, how) => {
               ui.setRenaming(null);
               const made = ui.justMade === node.path;
               if (name === null && made && typed === null) {
@@ -330,10 +330,11 @@ export function Explorer({ variant }: Props) {
                 if (to) {
                   setFocus(to);
                   ui.setJustMade(null);
-                } else {
+                } else if (how === 'enter') {
+                  // Refused on Enter: back in the box with what you typed.
                   setDraft(name);
                   ui.setRenaming(node.path);
-                }
+                } else ui.setJustMade(null);
               }
               treeRef.current?.focus();
             }}
@@ -454,15 +455,15 @@ export function Explorer({ variant }: Props) {
   );
 }
 
-function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, typed: string | null) => void }) {
+function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, typed: string | null, how: 'enter' | 'blur' | 'escape') => void }) {
   const initial = node.type === 'folder' ? node.name : displayName(node.name).replace(/\.[A-Za-z0-9]{1,5}$/, '');
   const [v, setV] = useState(draft ?? initial);
   const done = useRef(false);
   /** `typed` is null when the person pressed Escape. */
-  const finish = (name: string | null, escaped = false): void => {
+  const finish = (name: string | null, how: 'enter' | 'blur' | 'escape'): void => {
     if (done.current) return;
     done.current = true;
-    onDone(name === initial ? null : name, escaped ? null : v);
+    onDone(name === initial ? null : name, how === 'escape' ? null : v, how);
   };
   return (
     <input
@@ -475,10 +476,10 @@ function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | 
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === 'Enter') finish(v.trim() || null);
-        if (e.key === 'Escape') finish(null, true);
+        if (e.key === 'Enter') finish(v.trim() || null, 'enter');
+        if (e.key === 'Escape') finish(null, 'escape');
       }}
-      onBlur={() => finish(v.trim() || null)}
+      onBlur={() => finish(v.trim() || null, 'blur')}
     />
   );
 }

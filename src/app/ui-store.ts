@@ -35,6 +35,10 @@ interface UiState {
   toggleBookmark: (path: string) => void;
   /** A thing moved or was renamed: open folders, selection and bookmarks follow; gone: they drop it. */
   relocate: (from: string, to: string | null) => void;
+  /** Where moved and renamed things went this visit (old path → new), for old addresses. */
+  moved: Record<string, string>;
+  /** The current path of something that was at `path`, if it moved this visit. */
+  whereNow: (path: string) => string | null;
   /** The note just made with New note, so Escape on its name takes it back. */
   justMade: string | null;
   setJustMade: (path: string | null) => void;
@@ -116,7 +120,19 @@ export const useUi = create<UiState>((set, get) => ({
     const sel = get().selected;
     write(OPEN_KEY, [...open]);
     write(BM_KEY, bookmarks);
-    set({ open, bookmarks, selected: sel ? map(sel) : sel });
+    const moved = { ...get().moved };
+    if (to !== null) {
+      for (const [k, v] of Object.entries(moved)) if (v === from || v.startsWith(`${from}/`)) moved[k] = to + v.slice(from.length);
+      moved[from] = to;
+    }
+    set({ open, bookmarks, selected: sel ? map(sel) : sel, moved });
+  },
+  moved: {},
+  whereNow: (path) => {
+    const m = get().moved;
+    let best = '';
+    for (const k of Object.keys(m)) if ((path === k || path.startsWith(`${k}/`)) && k.length > best.length) best = k;
+    return best ? (m[best] ?? '') + path.slice(best.length) : null;
   },
   justMade: null,
   setJustMade: (justMade) => set({ justMade }),

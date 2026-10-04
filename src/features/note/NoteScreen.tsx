@@ -6,6 +6,7 @@ import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
 import { ago } from '@/app/words';
 import { useIsDesktop } from '@/ui/media';
+import { useUi } from '@/app/ui-store';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton, Button } from '@/ui/Button';
 import { PoseBower } from '@/bird/Bower';
@@ -23,7 +24,12 @@ export function NoteScreen() {
   const path = decodeSplat(loc.pathname.slice('/note/'.length));
   const { data: tree } = useTree();
   const node = tree ? findNode(tree, path) : null;
-  if (tree && !node) return <Gone />;
+  if (tree && !node) {
+    // An old address (Back after a rename or move): go to where it is now.
+    const now = useUi.getState().whereNow(path);
+    if (now && findNode(tree, now)) return <Navigate to={noteRoute(now)} replace />;
+    return <Gone />;
+  }
   if (node?.type === 'folder') return <Navigate to={folderRoute(node.path)} replace />;
   if (node && node.kind !== 'note') return <FileView node={node} />;
   return <NoteView path={path} />;

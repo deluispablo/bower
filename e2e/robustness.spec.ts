@@ -114,3 +114,12 @@ test('Undo after moving the open note brings the page back with it', async ({ pa
   await expect(page).toHaveURL(/Cooking\/Lemon%20tart\.md/);
   await expect(page.getByRole('heading', { name: 'Lemon tart', level: 1 })).toBeVisible();
 });
+
+test('a tab or newline in the sign-in address still lands on Home', async ({ page }) => {
+  for (const from of ['%2F%09%2Fexample.com', '%2F%0A%2Fexample.com']) {
+    await page.goto(`/sign-in?from=${from}&scenario=signed-out&time=instant`);
+    await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+    await page.getByRole('button', { name: 'Continue with Google' }).click();
+    await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+  }
+});
