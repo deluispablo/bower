@@ -133,6 +133,23 @@ export const FILING: Record<string, { title: string; to: string; note?: string }
 /** The Saltmere receipts go by month, as the person's rule says. */
 export const RECEIPTS_TO = 'Areas/Money/Receipts/2026-10';
 
+/** Where a thing goes when nothing above names it: a guess from the pile's words (the stand-in for Claude). */
+export function guessFolder(text: string, kind: string): string {
+  const t = text.toLowerCase();
+  const map: Array<[RegExp, string]> = [
+    [/receipt|invoice|bill/, RECEIPTS_TO],
+    [/flat|rent|lease|viewing/, 'Projects/Flat hunt'],
+    [/job|offer|cv|interview/, 'Projects/Job hunt/Applications'],
+    [/recipe|cook|soup|cake/, 'Resources/Cooking'],
+    [/car|mot|insurance/, 'Areas/Car'],
+    [/doctor|gp|dentist|health|blood/, 'Areas/Health'],
+    [/passport|id card|certificate/, 'Areas/Documents'],
+    [/saltmere|trip|flight|hotel/, 'Projects/Saltmere weekend'],
+  ];
+  for (const [re, to] of map) if (re.test(t)) return to;
+  return kind === 'link' ? 'Resources/Reading' : 'Resources/Ideas';
+}
+
 export function seedQuestions(now: number): Question[] {
   return [
     {

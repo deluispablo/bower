@@ -60,7 +60,7 @@
     "task": 9,
     "what": "The Worker contract, its HTTP client, a fake Worker and a fake runner",
     "verify": "pnpm vitest run src/data/worker src/data/fake",
-    "passes": false
+    "passes": true
   },
   {
     "id": "live",

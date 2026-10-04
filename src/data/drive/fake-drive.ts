@@ -4,7 +4,7 @@
  * (`?source=fake`), where it holds Alex's folder in the browser.
  */
 import type { ErrorCode } from '../types';
-import { driveError, type DriveApi, type DriveFile } from './drive-api';
+import { driveError, type DriveApi, type DriveFile, type DrivePatch } from './drive-api';
 
 interface Stored {
   meta: DriveFile;
@@ -107,7 +107,7 @@ export class FakeDrive implements DriveApi {
     return this.copy(f.meta);
   }
 
-  async update(id: string, patch: { name?: string; addParent?: string; removeParent?: string }): Promise<DriveFile> {
+  async update(id: string, patch: DrivePatch): Promise<DriveFile> {
     this.gate();
     const f = this.find(id);
     let parents = f.meta.parents;
@@ -116,7 +116,14 @@ export class FakeDrive implements DriveApi {
       this.find(patch.addParent);
       parents = [...parents, patch.addParent];
     }
-    f.meta = { ...f.meta, parents, ...(patch.name ? { name: patch.name } : {}), modifiedTime: this.stamp() };
+    let appProperties = f.meta.appProperties;
+    if (patch.appProperties) {
+      const merged: Record<string, string | null> = { ...appProperties, ...patch.appProperties };
+      const next = Object.fromEntries(Object.entries(merged).filter((e): e is [string, string] => e[1] !== null));
+      appProperties = Object.keys(next).length ? next : undefined;
+    }
+    const { appProperties: _old, ...rest } = f.meta;
+    f.meta = { ...rest, parents, ...(patch.name ? { name: patch.name } : {}), ...(appProperties ? { appProperties } : {}), modifiedTime: this.stamp() };
     return this.copy(f.meta);
   }
 

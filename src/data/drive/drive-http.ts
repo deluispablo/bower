@@ -5,7 +5,7 @@
  * else becomes one of `DRIVE_MESSAGES`.
  */
 import { BowerError } from '../types';
-import { driveError, type DriveApi, type DriveFile } from './drive-api';
+import { driveError, type DriveApi, type DriveFile, type DrivePatch } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -142,11 +142,11 @@ export class DriveHttp implements DriveApi {
     return toFile((await res.json()) as WireFile);
   }
 
-  async update(id: string, patch: { name?: string; addParent?: string; removeParent?: string }): Promise<DriveFile> {
+  async update(id: string, patch: DrivePatch): Promise<DriveFile> {
     const q = new URLSearchParams({ fields: FIELDS });
     if (patch.addParent) q.set('addParents', patch.addParent);
     if (patch.removeParent) q.set('removeParents', patch.removeParent);
-    return this.json(`${API}/files/${id}?${q}`, 'PATCH', patch.name ? { name: patch.name } : {});
+    return this.json(`${API}/files/${id}?${q}`, 'PATCH', { ...(patch.name ? { name: patch.name } : {}), ...(patch.appProperties ? { appProperties: patch.appProperties } : {}) });
   }
 
   async trash(id: string): Promise<void> {

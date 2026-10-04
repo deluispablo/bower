@@ -18,6 +18,13 @@ export interface DriveFile {
   appProperties?: Record<string, string>;
 }
 
+export interface DrivePatch {
+  name?: string;
+  addParent?: string;
+  removeParent?: string;
+  appProperties?: Record<string, string | null>;
+}
+
 export interface DriveApi {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
   listAll(rootId: string): Promise<DriveFile[]>;
@@ -28,7 +35,8 @@ export interface DriveApi {
   upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile>;
   /** Writes only if the file still has `ifModified`; otherwise rejects `conflict`. */
   writeText(id: string, text: string, ifModified: string): Promise<DriveFile>;
-  update(id: string, patch: { name?: string; addParent?: string; removeParent?: string }): Promise<DriveFile>;
+  /** Renames, moves, or sets appProperties (a null value removes one). */
+  update(id: string, patch: DrivePatch): Promise<DriveFile>;
   /** To Drive's Bin; the app never deletes for good. */
   trash(id: string): Promise<void>;
   untrash(id: string): Promise<DriveFile>;

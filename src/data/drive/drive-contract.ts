@@ -54,6 +54,13 @@ export function describeDriveContract(name: string, make: () => Promise<DriveUnd
       expect((await drive.get(n.id)).parents).toEqual([b.id]);
     });
 
+    it('update sets and removes appProperties', async () => {
+      const { drive, root } = await make();
+      const n = await drive.createText(root, 'x.md', 'x', { by: 'bower', bowerNew: '1' });
+      const after = await drive.update(n.id, { appProperties: { bowerNew: null, kind: 'note' } });
+      expect(after.appProperties).toEqual({ by: 'bower', kind: 'note' });
+    });
+
     it('trash hides from listAll and untrash brings back', async () => {
       const { drive, root } = await make();
       const f = await drive.createFolder(root, 'Old');

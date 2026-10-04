@@ -41,10 +41,10 @@ import {
 import {
   ALEX,
   FILING,
+  guessFolder,
   wordRule,
   type SamplePile,
   NOTES,
-  RECEIPTS_TO,
   SEEDS,
   seedPiles,
   seedQuestions,
@@ -259,19 +259,7 @@ export class DemoWorld {
 
   /** Where a thing from a pile you added goes: the demo guesses from the pile's words. */
   private guess(text: string, kind: string): string {
-    const t = text.toLowerCase();
-    const map: Array<[RegExp, string]> = [
-      [/receipt|invoice|bill/, RECEIPTS_TO],
-      [/flat|rent|lease|viewing/, 'Projects/Flat hunt'],
-      [/job|offer|cv|interview/, 'Projects/Job hunt/Applications'],
-      [/recipe|cook|soup|cake/, 'Resources/Cooking'],
-      [/car|mot|insurance/, 'Areas/Car'],
-      [/doctor|gp|dentist|health|blood/, 'Areas/Health'],
-      [/passport|id card|certificate/, 'Areas/Documents'],
-      [/saltmere|trip|flight|hotel/, 'Projects/Saltmere weekend'],
-    ];
-    for (const [re, to] of map) if (re.test(t)) return to;
-    return kind === 'link' ? 'Resources/Reading' : 'Resources/Ideas';
+    return guessFolder(text, kind);
   }
 
   /** A demo-only door: adds one of the sample piles, with where its things go. */
