@@ -1915,7 +1915,8 @@
       "Tidy up after a request: the result names it."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"on screen:\"",
-    "passes": false
+    "passes": false,
+    "note": "Tests only, so done.sh has nothing to set aside. Red checked by hand on 2026-10-05 by breaking each screen's wiring: Home's answer toast, Add's empty-file line, Add's left-out toast, the demo report's requests: each test failed."
   },
   {
     "id": "demo-links-after-tidy",
