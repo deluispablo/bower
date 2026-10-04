@@ -188,9 +188,9 @@ export function seedQuestions(now: number): Question[] {
     },
     {
       id: 'q2',
-      text: 'Receipts have gone to Money, by month, three times. Keep that as a rule?',
-      yes: 'Keep as a rule',
-      no: 'No thanks',
+      text: 'Two receipts from Kittiwake Lettings look like the same holding deposit, paid twice. Keep both?',
+      yes: 'Keep both',
+      no: 'Keep one',
       askedAt: now - 2 * DAY,
     },
   ];

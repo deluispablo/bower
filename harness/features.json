@@ -1067,7 +1067,7 @@
     "what": "The demo asks to keep a receipts rule that already exists.",
     "steps": [],
     "verify": "pnpm vitest run src/data/demo -t \"no question asks for a rule that exists\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "search-plain-match",

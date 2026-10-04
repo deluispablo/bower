@@ -280,3 +280,15 @@ describe('the demo notes', () => {
     }
   });
 });
+
+import { seedQuestions, seedRules } from './fixture';
+
+describe('the demo questions', () => {
+  it('no question asks for a rule that exists', () => {
+    const rules = seedRules(0).map((r) => r.text.toLowerCase());
+    for (const q of seedQuestions(0).filter((x) => /rule/i.test(x.yes) || /as a rule/i.test(x.text))) {
+      const topic = (q.text.split(' ')[0] ?? '').toLowerCase();
+      expect(rules.some((r) => r.includes(topic)), q.text).toBe(false);
+    }
+  });
+});

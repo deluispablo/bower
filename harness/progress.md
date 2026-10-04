@@ -89,3 +89,4 @@
 - 2026-10-04: one-date-format passes — fix(dates): one way to write a day everywhere: 28 Sep
 - 2026-10-04: run-unit passes — fix(copy): a run says Usually about 5 minutes
 - 2026-10-04: tree-sort-names passes — fix(tree): names sort as people read them, without the extension
+- 2026-10-04: demo-question-rule passes — fix(demo): no question asks for a rule that already exists
