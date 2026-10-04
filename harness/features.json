@@ -1791,7 +1791,7 @@
       "The Undo toast stays at least 8 seconds, and while hovered or focused."
     ],
     "verify": "pnpm vitest run src/ui -t \"an Undo toast stays long enough\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "runner-names-things",

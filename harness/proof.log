@@ -147,3 +147,4 @@ saved-link-page	d9e55ae86892b285	2026-10-04	red
 tabs-survive-reload	3c7bbf2c777a85ca	2026-10-04	red
 empty-file-warning	ae4af1c0a9d0db35	2026-10-04	red
 restore-rows-dropped	3552111a88fe1948	2026-10-04	red (fixed in db81dc9)
+undo-toast-time	68570c5aeb493075	2026-10-04	red
