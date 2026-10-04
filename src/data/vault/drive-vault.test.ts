@@ -161,3 +161,25 @@ describe('DriveVault inbox and Bower', () => {
     expect(await vault.rules()).toHaveLength(rules);
   });
 });
+
+describe('sending things again', () => {
+  it('retry uploads only the missing items', async () => {
+    const real = drive.upload.bind(drive);
+    let fail = true;
+    drive.upload = async (parent, name, body, onProgress, props) => {
+      if (name === 'b.jpg' && fail) throw new Error('network down');
+      return real(parent, name, body, onProgress, props);
+    };
+    const p = await vault.addPile({ text: 'Two photos', items: [{ name: 'a.jpg', kind: 'image', origin: 'x', body: new Blob(['a']) }, { name: 'b.jpg', kind: 'image', origin: 'x', body: new Blob(['b']) }] });
+    await vault.settled();
+    fail = false;
+    await vault.retryPile(p.id);
+    await vault.settled();
+    const pile = (await vault.piles()).find((x) => x.id === p.id);
+    expect(pile?.items.map((i) => [i.name, i.upload])).toEqual([
+      ['a.jpg', undefined],
+      ['b.jpg', undefined],
+    ]);
+    expect((await drive.listAll(root)).filter((f) => f.name === 'a.jpg')).toHaveLength(1);
+  });
+});

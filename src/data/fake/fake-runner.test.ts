@@ -114,4 +114,11 @@ describe('the fake runner', () => {
     expect(note?.note).toMatch(/\.md$/);
     expect((await fresh().note(note?.note ?? '')).body).toContain('Bins go out on Tuesday nights');
   });
+
+  it('knows what it filed by content, so Add can warn about it next time', async () => {
+    await vault.addPile({ text: '', items: [{ name: 'scan.pdf', kind: 'pdf', origin: 'x', body: new Blob(['%PDF a made-up scan']) }] });
+    await vault.settled();
+    await runFake(drive, root, opts());
+    expect(await fresh().duplicates([{ name: 'again.pdf', body: new Blob(['%PDF a made-up scan']) }])).toEqual([expect.stringMatching(/scan\.pdf$/) as unknown]);
+  });
 });

@@ -163,3 +163,15 @@ test('after a reload an added file asks to be added again', async ({ page }) => 
   await expect(page.getByText('Add this file again')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Put the note in the inbox' })).toBeDisabled();
 });
+
+test('Add warns about a file you already have', async ({ page }) => {
+  await open(page, '/add', 'default', 'instant');
+  await page.locator('input[type=file][multiple]').setInputFiles({ name: 'Lease draft.pdf', mimeType: 'application/pdf', buffer: Buffer.from('A made-up pdf for the demo: Lease draft.pdf.\n') });
+  await expect(page.getByText('You already have this in Projects / Flat hunt.')).toBeVisible();
+  await page.getByRole('button', { name: 'Add it anyway' }).click();
+  await expect(page.getByText('You already have this in Projects / Flat hunt.')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await page.locator('input[type=file][multiple]').setInputFiles({ name: 'Lease draft.pdf', mimeType: 'application/pdf', buffer: Buffer.from('A made-up pdf for the demo: Lease draft.pdf.\n') });
+  await page.getByRole('button', { name: 'Leave it out' }).click();
+  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+});

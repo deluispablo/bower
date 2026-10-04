@@ -13,3 +13,4 @@
 - 2026-10-04: live passes: session and runs over the Worker; the whole vault contract, tidy-up included, passes on the fake Drive (27/27).
 - 2026-10-04: source-switch passes: ?source=fake runs the real logic on a seeded fake Drive in the browser; VITE_API_URL makes the app real; the demo panel switches between demo and fake.
 - 2026-10-04: e2e-fake passes: the whole e2e suite runs on the demo (56 passed) and on the fake Drive (54 passed; the sample-pile test is demo-only on both devices).
+- 2026-10-04: duplicates passes: Add warns about a file you already have (by content on Drive, by name in the demo); things that did not arrive can be sent again, only those.

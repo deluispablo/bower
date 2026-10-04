@@ -25,7 +25,8 @@ import {
   type TreeNode,
 } from '../types';
 import { Journal, type JournalRecord } from './journal';
-import { PROP, SYSTEM, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
+import { PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
+import { sha256 } from './hashes';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { markSeen } from './seen';
@@ -362,6 +363,26 @@ export class DriveVault implements VaultSource {
     } else if (text && folderId) ix.put(await this.drive.createText(folderId, PILE_NOTE, text));
     this.emit();
     return this.pile(id);
+  }
+
+  async retryPile(id: string): Promise<void> {
+    const u = this.uploads.get(id);
+    if (!u || this.sending.size) return;
+    for (const e of u.entries) e.item.upload = 0;
+    this.emit();
+    this.track(this.send(id));
+  }
+
+  async duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>> {
+    const known = (await this.json<HashesFile>(SYSTEM.hashes))?.hashes ?? {};
+    const ix = await this.index();
+    return Promise.all(
+      files.map(async (f) => {
+        if (!f.body) return null;
+        const path = known[await sha256(f.body)];
+        return path && ix.entries().has(path) ? path : null;
+      }),
+    );
   }
 
   /** The last tidy-up's own report, as the runner wrote it. */

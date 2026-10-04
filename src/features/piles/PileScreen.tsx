@@ -63,11 +63,19 @@ export function PileScreen() {
               </span>
               <span className={s.itemMain}>
                 <span className="mono">{it.name}</span>
-                <span className={s.itemSub}>{it.origin}</span>
+                <span className={s.itemSub}>{it.upload === -1 ? "Didn't arrive" : it.upload !== undefined ? `Sending… ${Math.round(it.upload * 100)}%` : it.origin}</span>
               </span>
             </li>
           ))}
         </ul>
+      )}
+      {pile.items.some((it) => it.upload === -1) && (
+        <p className={s.retry} role="alert">
+          Some things did not reach your Bower folder.{' '}
+          <Button size="sm" variant="ghost" onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'That did not work. Try again.'))}>
+            Try again
+          </Button>
+        </p>
       )}
       <div className={s.footer}>
         <Button block disabled={running} onClick={() => useUi.getState().setTidy(true)}>

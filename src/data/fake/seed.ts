@@ -11,7 +11,13 @@ import { PILE_NOTE, safeInboxName } from '../piles';
 import type { TreeNode } from '../types';
 import { serializeNote } from '../vault/note-format';
 import { serializeRules } from '../vault/rules-format';
-import { BOWER_FOLDER, PROP, SYSTEM, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from '../vault/layout';
+import { BOWER_FOLDER, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from '../vault/layout';
+import { sha256 } from '../vault/hashes';
+
+/** The made-up content of a file that is not a note: one line, different for each file. */
+export function madeUp(name: string, kind: string | undefined): string {
+  return `A made-up ${kind ?? 'file'} for the demo: ${name}.\n`;
+}
 
 /** Scenarios that differ only in how the app is reached seed like the default. */
 const SAME_AS_DEFAULT: Scenario[] = ['signed-out', 'fail-run', 'slow', 'offline', 'running'];
@@ -54,6 +60,7 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
       if (!lone) pileFolders.set(p.path, p.id);
     }
     const rulesText = serializeRules(await vault.rules());
+    const hashes: Record<string, string> = {};
 
     const write = async (n: TreeNode): Promise<void> => {
       const cut = n.path.lastIndexOf('/');
@@ -65,8 +72,9 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
         const props: Record<string, string> = { ...inboxProps.get(n.path) };
         if (n.byBower) props[PROP.by] = 'bower';
         if (n.isNew) props[PROP.isNew] = '1';
-        const text = n.path === 'Rules.md' ? rulesText : pileNotes.get(n.path) ?? (n.kind === 'note' ? serializeNote({ ...(await vault.note(n.path)), byBower: !!n.byBower }) : n.kind === 'link' ? `[InternetShortcut]\nURL=https://${n.name.replace(/\.url$/, '')}\n` : `A made-up ${n.kind ?? 'file'} for the demo.\n`);
+        const text = n.path === 'Rules.md' ? rulesText : pileNotes.get(n.path) ?? (n.kind === 'note' ? serializeNote({ ...(await vault.note(n.path)), byBower: !!n.byBower }) : n.kind === 'link' ? `[InternetShortcut]\nURL=https://${n.name.replace(/\.url$/, '')}\n` : madeUp(n.name, n.kind));
         id = (await drive.createText(await folderId(parentPath), n.name, text, Object.keys(props).length ? props : undefined)).id;
+        if (n.kind !== 'note' && !n.path.startsWith('Inbox/')) hashes[await sha256(new Blob([text]))] = n.path;
       }
       drive.setTimes(id, n.created, n.modified);
       for (const c of n.children ?? []) await write(c);
@@ -79,7 +87,7 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
     await json('questions.json', { v: 1, questions: await vault.questions() } satisfies QuestionsFile);
     await json('suggestions.json', { v: 1, suggestions: await vault.suggestions() } satisfies SuggestionsFile);
     await json('requests.json', { v: 1, done: [] } satisfies RequestsFile);
-    await json('hashes.json', { v: 1, hashes: {} });
+    await json('hashes.json', { v: 1, hashes } satisfies HashesFile);
     const run = await runs.current();
     if (run) {
       const { seen: _seen, ...rest } = run;

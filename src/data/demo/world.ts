@@ -624,6 +624,17 @@ export class DemoWorld {
           this.piles = this.piles.filter((p) => p.id !== id);
           this.syncInbox();
         }),
+      // The demo sends nothing anywhere, so nothing fails to arrive.
+      retryPile: () => this.wait(() => undefined),
+      // The demo knows files by name only: the same name outside the inbox is "already there".
+      duplicates: (files) =>
+        this.wait(() =>
+          files.map((f) => {
+            const name = f.name.toLowerCase();
+            const hit = [...this.entries.values()].find((e) => e.type === 'file' && !e.path.startsWith('Inbox/') && nameOf(e.path).toLowerCase() === name);
+            return hit?.path ?? null;
+          }),
+        ),
       questions: () => this.wait(() => [...this.questions]),
       answer: (id, yes) =>
         change(() => {

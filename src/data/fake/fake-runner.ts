@@ -16,7 +16,8 @@ import { displayName, freeName, join, kindOf, nameOf, parentOf } from '../tree';
 import type { FiledItem, Pile, Question, Request, Rule, RunPhase, RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import type { JournalRecord } from '../vault/journal';
-import { PROP, SYSTEM, type QuestionsFile, type RequestsFile } from '../vault/layout';
+import { PROP, SYSTEM, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
+import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -81,6 +82,7 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
   await w.doRequests(journal.filter((r) => r.kind === 'request'));
   report.questions = await w.dropAnswered(new Set(journal.filter((r) => r.kind === 'answer').map((r) => r.questionId ?? '')));
   await w.archive(journal);
+  if (opts.scope === 'all') await w.hashes();
   return { phase: 'done', report };
 }
 
@@ -193,6 +195,17 @@ class Writer {
       const f = this.byId(r.fileId);
       if (f) this.ix.put(await this.drive.update(f.id, { addParent: archive, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) }));
     }
+  }
+
+  /** `.bower/hashes.json`: every file outside the inbox, by its content. */
+  async hashes(): Promise<void> {
+    const out: Record<string, string> = {};
+    for (const [path, e] of this.ix.entries()) {
+      const id = this.ix.idOf(path);
+      if (e.type !== 'file' || e.kind === 'note' || path.startsWith('Inbox/') || !id) continue;
+      out[await sha256(new Blob([await this.drive.readText(id)]))] = path;
+    }
+    await this.writeJson(SYSTEM.hashes, { v: 1, hashes: out } satisfies HashesFile);
   }
 
   private byId(id: string): DriveFile | undefined {

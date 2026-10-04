@@ -23,7 +23,11 @@ interface Draft {
   origin: string;
   /** A pasted link; a file's bytes are kept in draft-files instead. */
   url?: string;
+  /** Where you already have this file, until you choose to add it anyway. */
+  dup?: string;
 }
+
+const folderWords = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/'))).replaceAll('/', ' / ') || 'your Bower folder';
 
 /** A draft file whose bytes are gone (the page was reloaded) cannot be sent. */
 const missing = (d: Draft): boolean => d.kind !== 'link' && !get(d.key);
@@ -89,6 +93,16 @@ export function Add() {
       return { ...d, key };
     });
     setItems((x) => [...x, ...drafts]);
+    // Before anything is sent: does the folder already have any of these?
+    const sent = list.flatMap(({ name, file }, i) => (file ? [{ key: drafts[i]?.key ?? '', name, body: file }] : []));
+    if (sent.length)
+      void vault.duplicates(sent.map(({ name, body }) => ({ name, body }))).then(
+        (found) => {
+          const dup = new Map(sent.flatMap((d, i) => (found[i] ? [[d.key, found[i]] as const] : [])));
+          if (dup.size) setItems((x) => x.map((d) => (dup.has(d.key) ? { ...d, dup: dup.get(d.key) ?? '' } : d)));
+        },
+        (e: unknown) => console.error(e),
+      );
     // Bower goes to see what arrived, gives it a peck, and goes back to its edge.
     setTimeout(() => {
       const b = bird.current;
@@ -197,7 +211,24 @@ export function Add() {
               </span>
               <span className={s.itemMain}>
                 <span className="mono">{it.name}</span>
-                <span className={s.itemSub}>{missing(it) ? 'Add this file again' : it.origin}</span>
+                <span className={s.itemSub}>{missing(it) ? 'Add this file again' : it.dup ? `You already have this in ${folderWords(it.dup)}.` : it.origin}</span>
+                {it.dup && (
+                  <span className={s.dupActions}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        forget(it.key);
+                        setItems((x) => x.filter((y) => y.key !== it.key));
+                      }}
+                    >
+                      Leave it out
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setItems((x) => x.map((y) => (y.key === it.key ? { key: y.key, name: y.name, kind: y.kind, origin: y.origin, ...(y.url ? { url: y.url } : {}) } : y)))}>
+                      Add it anyway
+                    </Button>
+                  </span>
+                )}
               </span>
               <button
                 type="button"

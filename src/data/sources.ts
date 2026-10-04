@@ -48,6 +48,10 @@ export interface VaultSource {
   removePile(id: string): Promise<void>;
   /** Changes a pile's note before a tidy-up reads it. */
   updatePile(id: string, text: string): Promise<Pile>;
+  /** Sends again the things of a pile that did not arrive. */
+  retryPile(id: string): Promise<void>;
+  /** For each file, where you already have it (its path), or null. */
+  duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>>;
   questions(): Promise<Question[]>;
   answer(id: string, yes: boolean): Promise<void>;
   rules(): Promise<Rule[]>;
