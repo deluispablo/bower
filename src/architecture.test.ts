@@ -36,4 +36,21 @@ describe('the shape of the code', () => {
     }
     expect(bad, 'Screens talk to data only through src/data/sources.ts (useSources, useLoad hooks in provider.tsx) and types.ts. Move what the screen needs behind a VaultSource/RunSource method, or into a pure module outside demo/drive/vault/live/worker/fake.').toEqual([]);
   });
+
+  it('errors are never swallowed', () => {
+    const bad: string[] = [];
+    const swallow = /\.catch\(\(\) => (undefined|null|\{\})\)|, \(\) => (undefined|null)\)/;
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => {
+        const p = join(dir, n);
+        return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : [];
+      });
+    for (const f of walk(SRC)) {
+      const lines = readFileSync(f, 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        if (swallow.test(line) && !/expected:/.test(`${lines[i - 1] ?? ''}${line}`)) bad.push(`${relative(SRC, f)}:${i + 1}  ${line.trim()}`);
+      });
+    }
+    expect(bad, 'Say what went wrong: a BowerError message to the person (toast) or console.error with the details. If ignoring is really right, say why in a comment that starts "expected:".').toEqual([]);
+  });
 });

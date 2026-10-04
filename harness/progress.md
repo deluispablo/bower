@@ -50,3 +50,4 @@
 - 2026-10-04: demo-pill-overlap passes — fix(demo): on the phone the Demo pill is a slim tab on the left edge, clear of every button
 - 2026-10-04: bin-folder-confirm passes — fix(explorer): a folder with things in it goes to the Bin only after a yes
 - 2026-10-04: small-upload-progress passes — fix(piles): a small file says Sending… without a made-up percentage
+- 2026-10-04: no-swallowed-errors passes — fix: no error is swallowed silently; a test keeps it so

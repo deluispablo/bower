@@ -79,6 +79,7 @@ export class WorkerHttp implements WorkerApi {
       throw new BowerError('unknown', SENTENCE.unknown);
     }
     if (res.status === 204) return undefined as T;
+    // expected: an error page from a proxy may not be JSON; the status code still says what happened.
     const parsed: unknown = await res.json().catch(() => null);
     if (!res.ok) {
       const code = codeFor(res.status);

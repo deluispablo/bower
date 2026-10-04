@@ -70,7 +70,7 @@ function NoteView({ path }: { path: string }) {
   const { vault } = useSources();
   const folder = parentOf(path);
   useEffect(() => {
-    void vault.markSeen(path).catch(() => undefined);
+    void vault.markSeen(path).catch((e: unknown) => console.error(e));
   }, [path, vault]);
 
   if (error && !note) return <div className={s.page}><p>{error.message}</p></div>;

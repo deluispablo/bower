@@ -247,7 +247,7 @@ function HubSummary({ hub }: { hub: TreeNode }) {
   const [note, setNote] = useState<Note | null>(null);
   useEffect(() => {
     let live = true;
-    vault.note(hub.path).then((n) => live && setNote(n), () => undefined);
+    vault.note(hub.path).then((n) => live && setNote(n), (e: unknown) => console.error(e));
     return () => {
       live = false;
     };
@@ -272,7 +272,7 @@ function FolderTable({ items }: { items: TreeNode[] }) {
   useEffect(() => {
     let live = true;
     const md = items.filter((i) => i.kind === 'note');
-    void Promise.all(md.map((i) => vault.note(i.path).then((n) => [i.path, n] as const, () => null))).then((pairs) => {
+    void Promise.all(md.map((i) => vault.note(i.path).then((n) => [i.path, n] as const, (e: unknown) => (console.error(e), null)))).then((pairs) => {
       if (!live) return;
       const m: Record<string, Note> = {};
       pairs.forEach((p) => p && (m[p[0]] = p[1]));

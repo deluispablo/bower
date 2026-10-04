@@ -625,5 +625,14 @@
     "steps": [],
     "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
     "passes": false
+  },
+  {
+    "id": "no-swallowed-errors",
+    "task": "qa-5",
+    "category": "review",
+    "what": "Some calls swallow errors silently (.catch(() => undefined), a then with () => null); the rule is one sentence to the person or details to the console.",
+    "steps": [],
+    "verify": "pnpm vitest run src/architecture.test.ts",
+    "passes": true
   }
 ]
