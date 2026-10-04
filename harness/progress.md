@@ -169,3 +169,4 @@
 - 2026-10-05: harness-fixed-in-precise passes — fix(harness): --fixed-in takes back only that commit's change; renames are read by their new name
 - 2026-10-05: link-files-url passes — fix(app): a saved link is always a .url file, whatever its address ends with
 - 2026-10-05: outbox-dedupe-real passes — fix(app): the outbox asks the folder itself before sending, one tab at a time; records are unique by id
+- 2026-10-05: screen-wiring-tests passes — test(e2e): the answer toast, Add's empty and left-out files, and a done request, on screen
