@@ -87,3 +87,4 @@
 - 2026-10-04: result-questions-test passes — fix(tidy): both runners ask a new question when they file the Saltmere receipts, so the report can be told apart from the open ones
 - 2026-10-04: result-new-questions passes — test(tidy): the report lists only the new questions a tidy-up asked
 - 2026-10-04: one-date-format passes — fix(dates): one way to write a day everywhere: 28 Sep
+- 2026-10-04: run-unit passes — fix(copy): a run says Usually about 5 minutes

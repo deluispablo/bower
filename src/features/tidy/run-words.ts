@@ -101,14 +101,14 @@ export function runDetail(r: RunState): string {
   }
 }
 
-/** "Started 15:00. 3 min so far. Usually about 5." */
+/** "Started 15:00. 3 min so far. Usually about 5 minutes." */
 export function runClock(r: RunState, now: number): string {
   if (r.phase === 'done' || r.phase === 'failed') {
     const end = r.finishedAt ?? r.phaseAt;
     return `${r.phase === 'done' ? 'Finished' : 'Stopped'} ${clock(end)}, after ${elapsed(end - r.requestedAt)}.`;
   }
   const so = elapsed(now - r.requestedAt);
-  const tail = r.phase === 'saving' ? 'Almost there.' : r.scope === 'instructions' ? 'Usually under a minute.' : 'Usually about 5.';
+  const tail = r.phase === 'saving' ? 'Almost there.' : r.scope === 'instructions' ? 'Usually under a minute.' : 'Usually about 5 minutes.';
   return `Started ${clock(r.requestedAt)}. ${so === 'less than a minute' ? 'Less than a minute' : so} so far. ${tail}`;
 }
 

@@ -10,7 +10,7 @@ describe('what a run says', () => {
     expect(runTitle(base)).toBe('Writing your notes');
   });
   it('counts time honestly', () => {
-    expect(runClock(base, base.requestedAt + 3 * 60_000 + 5_000)).toMatch(/3 min so far\. Usually about 5\.$/);
+    expect(runClock(base, base.requestedAt + 3 * 60_000 + 5_000)).toMatch(/3 min so far\. Usually about 5 minutes\.$/);
     expect(runClock({ ...base, phase: 'queued' }, base.requestedAt + 10_000)).toMatch(/Less than a minute so far/);
   });
   it('marks the steps before, at and after the phase', () => {
@@ -47,5 +47,13 @@ describe('the status line', () => {
     expect(statusLine(null, undefined)).toBe('Looking at the inbox…');
     expect(statusLine(null, 0)).toBe('Nothing waiting');
     expect(statusLine(null, 3)).toBe('3 things waiting');
+  });
+});
+
+
+describe('how long a run takes', () => {
+  it('says minutes', () => {
+    const r = { id: 'r', scope: 'all' as const, phase: 'writing' as const, requestedAt: 0, phaseAt: 0, seen: false };
+    expect(runClock(r, 30_000)).toMatch(/Usually about 5 minutes\.$/);
   });
 });

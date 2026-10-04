@@ -1013,7 +1013,7 @@
     "what": "The run sheet says \"Usually about 5.\" with no unit.",
     "steps": [],
     "verify": "pnpm vitest run src/features/tidy/run-words.test.ts -t \"minutes\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "bookmark-toast",
