@@ -2,11 +2,22 @@ import { useEffect, useState } from 'react';
 import { chooseScenario, SCENARIOS, type Scenario, type TimeScale } from './scenario';
 import { SAMPLE_PILES } from './fixture';
 import type { DemoWorld } from './world';
+import { chooseSource, type SourceKind } from '../choose';
 import { toast } from '@/ui/toast';
 import s from './demo.module.css';
 
-/** Demo only (⌘⇧D): pick a situation and how fast a tidy-up goes. */
-export function DemoPanel({ scenario, scale, world }: { scenario: Scenario; scale: TimeScale; world: DemoWorld }) {
+/** Demo only (⌘⇧D): pick a situation, how fast a tidy-up goes, and the demo or the fake Drive. */
+export function DemoPanel({
+  scenario,
+  scale,
+  source,
+  world,
+}: {
+  scenario: Scenario;
+  scale: TimeScale;
+  source: SourceKind;
+  world?: DemoWorld;
+}) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -20,7 +31,12 @@ export function DemoPanel({ scenario, scale, world }: { scenario: Scenario; scal
   }, []);
   if (!open)
     return (
-      <button type="button" className={s.fab} onClick={() => setOpen(true)} aria-label="Demo situations">
+      <button
+        type="button"
+        className={s.fab}
+        onClick={() => setOpen(true)}
+        aria-label="Demo situations"
+      >
         Demo
       </button>
     );
@@ -34,27 +50,53 @@ export function DemoPanel({ scenario, scale, world }: { scenario: Scenario; scal
       </div>
       <p className={s.note}>Alex&rsquo;s made-up folder. Nothing here is real.</p>
       <fieldset>
-        <legend>Add a sample pile to the inbox</legend>
-        <div className={s.samples}>
-          {SAMPLE_PILES.map((p) => (
-            <button
-              key={p.label}
-              type="button"
-              onClick={() => {
-                world.addSample(p);
-                toast(`"${p.label}" is in the inbox`);
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <legend>Behind the screens</legend>
+        {(
+          [
+            ['demo', 'The demo, in memory'],
+            ['fake', 'The real logic on a pretend Google Drive'],
+          ] as Array<[SourceKind, string]>
+        ).map(([k, l]) => (
+          <label key={k}>
+            <input
+              type="radio"
+              name="source"
+              checked={k === source}
+              onChange={() => chooseSource(k)}
+            />
+            {l}
+          </label>
+        ))}
       </fieldset>
+      {world && (
+        <fieldset>
+          <legend>Add a sample pile to the inbox</legend>
+          <div className={s.samples}>
+            {SAMPLE_PILES.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => {
+                  world.addSample(p);
+                  toast(`"${p.label}" is in the inbox`);
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <fieldset>
         <legend>Situation</legend>
         {(Object.keys(SCENARIOS) as Scenario[]).map((k) => (
           <label key={k}>
-            <input type="radio" name="scenario" checked={k === scenario} onChange={() => chooseScenario(k, scale)} />
+            <input
+              type="radio"
+              name="scenario"
+              checked={k === scenario}
+              onChange={() => chooseScenario(k, scale)}
+            />
             {SCENARIOS[k]}
           </label>
         ))}
@@ -69,7 +111,12 @@ export function DemoPanel({ scenario, scale, world }: { scenario: Scenario; scal
           ] as Array<[TimeScale, string]>
         ).map(([k, l]) => (
           <label key={k}>
-            <input type="radio" name="scale" checked={k === scale} onChange={() => chooseScenario(scenario, k)} />
+            <input
+              type="radio"
+              name="scale"
+              checked={k === scale}
+              onChange={() => chooseScenario(scenario, k)}
+            />
             {l}
           </label>
         ))}

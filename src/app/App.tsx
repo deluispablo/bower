@@ -7,6 +7,7 @@ import { useSources } from '@/data/provider';
 import { BowerError, type FolderState, type User } from '@/data/types';
 import type { Scenario, TimeScale } from '@/data/demo/scenario';
 import type { DemoWorld } from '@/data/demo/world';
+import type { SourceKind } from '@/data/choose';
 import { SignIn } from '@/features/auth/SignIn';
 import { Welcome } from '@/features/onboarding/Welcome';
 import { Home } from '@/features/home/Home';
@@ -26,11 +27,27 @@ interface Gate {
   folder: FolderState;
 }
 
-export function App({ demo }: { demo: { scenario: Scenario; scale: TimeScale; world: DemoWorld } }) {
+/** The demo and fake sources come with their panel (⌘⇧D); the real app has none. */
+export interface DemoInfo {
+  scenario: Scenario;
+  scale: TimeScale;
+  source: SourceKind;
+  /** The demo's world, for its sample piles; absent on the fake Drive. */
+  world?: DemoWorld;
+}
+
+export function App({ demo }: { demo?: DemoInfo }) {
   return (
     <BrowserRouter>
       <Gatekeeper />
-      <DemoPanel scenario={demo.scenario} scale={demo.scale} world={demo.world} />
+      {demo && (
+        <DemoPanel
+          scenario={demo.scenario}
+          scale={demo.scale}
+          source={demo.source}
+          {...(demo.world ? { world: demo.world } : {})}
+        />
+      )}
     </BrowserRouter>
   );
 }
@@ -53,7 +70,9 @@ function Gatekeeper() {
       } catch (e) {
         if (!live) return;
         console.error(e);
-        bootFail(e instanceof BowerError && e.code === 'offline' ? 'offline' : 'error', () => setAttempt((a) => a + 1));
+        bootFail(e instanceof BowerError && e.code === 'offline' ? 'offline' : 'error', () =>
+          setAttempt((a) => a + 1),
+        );
       }
     };
     void check();
@@ -126,7 +145,9 @@ function BackFromSignIn() {
   const loc = useLocation();
   const from = new URLSearchParams(loc.search).get('from');
   // Only a path of this app: one slash, then no second slash or backslash.
-  const printable = !!from && [...from].every((c) => c.charCodeAt(0) > 0x20 && c.charCodeAt(0) !== 0x7f && c !== '\\');
+  const printable =
+    !!from &&
+    [...from].every((c) => c.charCodeAt(0) > 0x20 && c.charCodeAt(0) !== 0x7f && c !== '\\');
   const safe = printable && !!from && from.startsWith('/') && !from.startsWith('//');
   return <Navigate to={safe && from ? from : '/'} replace />;
 }

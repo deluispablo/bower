@@ -21,6 +21,8 @@ export interface FakeWorkerOptions {
   scenario: Scenario;
   scale: TimeScale;
   rootId: string | null;
+  /** Every call fails as with no network (the offline scenario). */
+  offline?: boolean;
 }
 
 export class FakeWorker implements WorkerApi {
@@ -33,6 +35,7 @@ export class FakeWorker implements WorkerApi {
   private loaded: Promise<void>;
   private took = new Set<string>();
   private seq = 0;
+  private readonly offline: boolean;
 
   constructor(opts: FakeWorkerOptions) {
     this.drive = opts.drive;
@@ -40,7 +43,9 @@ export class FakeWorker implements WorkerApi {
     this.rootId = opts.rootId;
     this.signedIn = opts.scenario !== 'signed-out';
     this.failOnce = opts.scenario === 'fail-run';
-    this.loaded = this.load(opts.scenario);
+    this.offline = !!opts.offline;
+    // Offline, the folder cannot be read now; every call says so on its own.
+    this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario).catch((e: unknown) => console.error(e));
   }
 
   /** The piles the tidy-up going now took; empty when none is going. */
@@ -49,6 +54,7 @@ export class FakeWorker implements WorkerApi {
   }
 
   async me(): Promise<Me | null> {
+    this.online();
     return this.signedIn ? { user: ALEX, folderId: this.rootId } : null;
   }
 
@@ -85,6 +91,7 @@ export class FakeWorker implements WorkerApi {
   }
 
   async process(scope: 'all' | 'instructions'): Promise<RunWire> {
+    this.online();
     await this.loaded;
     if (this.run && !['done', 'failed'].includes(this.run.phase)) return this.wire();
     const root = this.rootId;
@@ -96,6 +103,7 @@ export class FakeWorker implements WorkerApi {
   }
 
   async status(): Promise<RunWire | null> {
+    this.online();
     await this.loaded;
     return this.run ? this.wire() : null;
   }
@@ -163,6 +171,10 @@ export class FakeWorker implements WorkerApi {
       }
     }
     if (scenario === 'running') this.start(root, 'all', Date.now() - 70_000);
+  }
+
+  private online(): void {
+    if (this.offline) throw new BowerError('offline', "You're offline.");
   }
 
   private wire(): RunWire {

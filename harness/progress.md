@@ -11,3 +11,4 @@
 - 2026-10-04: add-files passes: Add sends files and links themselves; after a reload a file asks to be added again.
 - 2026-10-04: worker passes: the Worker contract is written; WorkerHttp, FakeWorker and the fake runner (filing, rules, requests, answers, journal archive, new marks) are tested.
 - 2026-10-04: live passes: session and runs over the Worker; the whole vault contract, tidy-up included, passes on the fake Drive (27/27).
+- 2026-10-04: source-switch passes: ?source=fake runs the real logic on a seeded fake Drive in the browser; VITE_API_URL makes the app real; the demo panel switches between demo and fake.

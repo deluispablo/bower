@@ -74,7 +74,7 @@
     "task": 11,
     "what": "The app starts on the demo, the fake Drive or the real Worker",
     "verify": "pnpm vitest run src/data/choose.test.ts && pnpm check",
-    "passes": false
+    "passes": true
   },
   {
     "id": "e2e-fake",

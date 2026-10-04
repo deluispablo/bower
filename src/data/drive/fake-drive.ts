@@ -14,6 +14,10 @@ interface Stored {
 
 export interface FakeDriveOptions {
   clock?: () => number;
+  /** A wait on every call, in ms, so screens show their loading states. */
+  latency?: number;
+  /** Every call fails as with no network. */
+  offline?: boolean;
 }
 
 export class FakeDrive implements DriveApi {
@@ -22,9 +26,14 @@ export class FakeDrive implements DriveApi {
   private last = 0;
   private failing: ErrorCode | null = null;
   private readonly clock: () => number;
+  /** Can change after seeding, so a folder fills at once and then answers slowly or not at all. */
+  latency: number;
+  offline: boolean;
 
   constructor(opts: FakeDriveOptions = {}) {
     this.clock = opts.clock ?? Date.now;
+    this.latency = opts.latency ?? 0;
+    this.offline = opts.offline ?? false;
     const at = this.stamp();
     this.files.set('root', { meta: { id: 'root', name: 'My Drive', folder: true, parents: [], modifiedTime: at, createdTime: at }, trashed: false, content: null });
   }
@@ -65,41 +74,41 @@ export class FakeDrive implements DriveApi {
   }
 
   async listAll(rootId: string): Promise<DriveFile[]> {
-    this.gate();
+    await this.gate();
     return this.live(rootId).map((f) => this.copy(f.meta));
   }
 
   async get(id: string): Promise<DriveFile> {
-    this.gate();
+    await this.gate();
     return this.copy(this.find(id).meta);
   }
 
   async readText(id: string): Promise<string> {
-    this.gate();
+    await this.gate();
     const f = this.find(id);
     if (f.content === null) return '';
     return typeof f.content === 'string' ? f.content : f.content.text();
   }
 
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    this.gate();
+    await this.gate();
     return this.add(parentId, name, true, null, appProperties);
   }
 
   async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    this.gate();
+    await this.gate();
     return this.add(parentId, name, false, text, appProperties);
   }
 
   async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
-    this.gate();
+    await this.gate();
     const f = this.add(parentId, name, false, body, appProperties);
     onProgress?.(1);
     return f;
   }
 
   async writeText(id: string, text: string, ifModified: string): Promise<DriveFile> {
-    this.gate();
+    await this.gate();
     const f = this.find(id);
     if (f.meta.modifiedTime !== ifModified) throw driveError('conflict');
     f.content = text;
@@ -108,7 +117,7 @@ export class FakeDrive implements DriveApi {
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
-    this.gate();
+    await this.gate();
     const f = this.find(id);
     let parents = f.meta.parents;
     if (patch.removeParent) parents = parents.filter((p) => p !== patch.removeParent);
@@ -128,12 +137,12 @@ export class FakeDrive implements DriveApi {
   }
 
   async trash(id: string): Promise<void> {
-    this.gate();
+    await this.gate();
     this.find(id).trashed = true;
   }
 
   async untrash(id: string): Promise<DriveFile> {
-    this.gate();
+    await this.gate();
     const f = this.files.get(id);
     if (!f) throw driveError('not-found');
     f.trashed = false;
@@ -141,7 +150,7 @@ export class FakeDrive implements DriveApi {
   }
 
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
-    this.gate();
+    await this.gate();
     const q = query.toLowerCase();
     const out: DriveFile[] = [];
     for (const f of this.live(rootId)) {
@@ -152,7 +161,9 @@ export class FakeDrive implements DriveApi {
     return out;
   }
 
-  private gate(): void {
+  private async gate(): Promise<void> {
+    if (this.latency) await new Promise((r) => setTimeout(r, this.latency * (0.6 + Math.random() * 0.8)));
+    if (this.offline) throw driveError('offline');
     const code = this.failing;
     if (!code) return;
     this.failing = null;
