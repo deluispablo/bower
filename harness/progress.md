@@ -59,3 +59,4 @@
 - 2026-10-04: journal-retry passes — fix(journal): a journal line is tried twice before the change is reported as failed
 - 2026-10-04: system-folder-race passes — fix(vault): two first changes share one journal folder
 - 2026-10-04: journal-file-id passes — feat(journal): each line names the Drive file it is about
+- 2026-10-04: seen-read-once passes — perf(vault): a listing reads what this device has seen once

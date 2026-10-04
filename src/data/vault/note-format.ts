@@ -20,6 +20,7 @@
  * A file without frontmatter is a plain note of yours: all of it is body.
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry } from '../types';
+import { TASK_LINE } from '../tasks';
 
 /** Frontmatter keys that are not properties. */
 export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source'] as const;
@@ -28,7 +29,6 @@ const LABELS: Record<string, string> = { next: 'Next due' };
 const CURRENT = '## Current state';
 const TIMELINE = '## Timeline';
 const BOWER_NOTE = "## Bower's note";
-const TASK = /^(\s*[-*]\s+\[)( |x)(\]\s+)(.*)$/;
 
 export type ParsedNote = Omit<Note, 'backlinks'>;
 export type NoteFile = Omit<Note, 'backlinks' | 'path' | 'title' | 'links'>;
@@ -60,9 +60,22 @@ function split(raw: string): Parts {
   const lineEnd = text.indexOf('\n', close + 1);
   const fmEnd = lineEnd < 0 ? text.length : lineEnd + 1;
   const front = new Map<string, string>();
+  let listKey: string | null = null;
+  const unquote = (v: string): string => (/^(["']).*\1$/.test(v) ? v.slice(1, -1) : v);
   for (const line of text.slice(4, close).split('\n')) {
+    // A YAML block list, as Obsidian writes tags: "tags:" then "  - a" lines.
+    const item = /^\s+-\s+(.*)$/.exec(line);
+    if (item && listKey) {
+      const prev = front.get(listKey) ?? '';
+      front.set(listKey, prev ? `${prev}, ${unquote((item[1] ?? '').trim())}` : unquote((item[1] ?? '').trim()));
+      continue;
+    }
     const i = line.indexOf(':');
-    if (i > 0) front.set(line.slice(0, i).trim(), line.slice(i + 1).trim());
+    if (i <= 0) continue;
+    const key = line.slice(0, i).trim();
+    const value = line.slice(i + 1).trim();
+    listKey = value ? null : key;
+    front.set(key, unquote(value));
   }
   let at = fmEnd;
   while (text[at] === '\n') at++;
@@ -179,7 +192,7 @@ export function toggleTaskInText(raw: string, index: number): { text: string; la
     .slice(p.bodyStart, p.bodyEnd)
     .split('\n')
     .map((line) => {
-      const m = TASK.exec(line);
+      const m = TASK_LINE.exec(line);
       if (!m) return line;
       i++;
       if (i !== index) return line;

@@ -72,3 +72,18 @@ describe('ticking a task', () => {
     expect(() => toggleTaskInText(text, 9)).toThrow(/no longer/);
   });
 });
+
+describe('notes written elsewhere (Obsidian)', () => {
+  it('reads block-list tags and quoted values', () => {
+    const n = parseNote('x.md', '---\nsummary: "A note: with a colon"\ntags:\n  - flat\n  - shortlist\nagent: \'Kittiwake Lettings\'\n---\nbody');
+    expect(n.summary).toBe('A note: with a colon');
+    expect(n.tags).toEqual(['flat', 'shortlist']);
+    expect(n.properties).toEqual([{ key: 'agent', label: 'Agent', value: 'Kittiwake Lettings' }]);
+  });
+
+  it('ticks a task in a numbered list, as the screen counts it', () => {
+    const out = toggleTaskInText('---\nsummary: s\n---\n\n1. [ ] first\n2. [ ] second', 1);
+    expect(out).toMatchObject({ label: 'second', done: true });
+    expect(out.text).toContain('2. [x] second');
+  });
+});

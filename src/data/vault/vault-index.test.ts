@@ -71,3 +71,16 @@ describe('VaultIndex', () => {
     expect(VaultIndex.build('R', [n]).entries().get('a.md')?.modified).toBe(Date.parse(n.modifiedTime));
   });
 });
+
+import { vi } from 'vitest';
+
+describe('reading what this device has seen', () => {
+  it('entries reads the seen list once, however many things are new', () => {
+    const files = Array.from({ length: 50 }, (_, i) => f(`n${i}`, `Thing ${i}.pdf`, 'R', { appProperties: { bowerNew: '1' } }));
+    const ix = VaultIndex.build('R', files);
+    const spy = vi.spyOn(Storage.prototype, 'getItem');
+    ix.entries();
+    expect(spy.mock.calls.filter((c) => c[0] === 'bower:seen').length).toBeLessThanOrEqual(1);
+    spy.mockRestore();
+  });
+});

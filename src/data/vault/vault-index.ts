@@ -7,7 +7,7 @@
 import type { DriveFile } from '../drive/drive-api';
 import { extOf, kindOf, type Entries, type Entry } from '../tree';
 import { isHidden, PROP } from './layout';
-import { isSeen } from './seen';
+import { seenNow } from './seen';
 
 export class VaultIndex {
   private files = new Map<string, DriveFile>();
@@ -51,6 +51,7 @@ export class VaultIndex {
   /** Everything the explorer shows. */
   entries(): Entries {
     const out: Entries = new Map();
+    const seen = seenNow();
     for (const [id, path] of this.paths) {
       if (isHidden(path)) continue;
       const f = this.files.get(id);
@@ -59,7 +60,7 @@ export class VaultIndex {
       if (!f.folder) {
         e.kind = kindOf(f.name);
         if (f.appProperties?.[PROP.by] === 'bower') e.byBower = true;
-        if (f.appProperties?.[PROP.isNew] === '1' && !isSeen(f.id, f.modifiedTime)) e.isNew = true;
+        if (f.appProperties?.[PROP.isNew] === '1' && !seen(f.id, f.modifiedTime)) e.isNew = true;
         const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
         if (parent && f.name === `${parent.slice(parent.lastIndexOf('/') + 1)}.md`) e.hub = true;
       }

@@ -30,3 +30,9 @@ export function markSeen(id: string, modified: string): void {
 export function isSeen(id: string, modified: string): boolean {
   return read().includes(`${id}@${modified}`);
 }
+
+/** Everything seen, read once, for a whole listing: `has(id, modified)`. */
+export function seenNow(): (id: string, modified: string) => boolean {
+  const all = new Set(read());
+  return (id, modified) => all.has(`${id}@${modified}`);
+}

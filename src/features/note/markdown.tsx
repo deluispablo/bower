@@ -1,4 +1,5 @@
 import type { Note } from '@/data/types';
+import { LIST_MARK, TASK_BOX } from '@/data/tasks';
 import type { ReactNode } from 'react';
 
 /**
@@ -65,8 +66,8 @@ export function Markdown({ text, link, onToggle }: MarkdownProps) {
       const ordered = /^\s*\d+\./.test(line);
       const items: ReactNode[] = [];
       while (i < lines.length && (ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/).test(lines[i] ?? '')) {
-        const t = (lines[i] ?? '').replace(/^\s*([-*]|\d+\.)\s+/, '');
-        const box = /^\[( |x)\]\s+/.exec(t);
+        const t = (lines[i] ?? '').replace(LIST_MARK, '');
+        const box = TASK_BOX.exec(t);
         if (box) task++;
         const n = task;
         items.push(

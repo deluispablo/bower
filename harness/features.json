@@ -570,7 +570,7 @@
     "what": "entries() parses the seen list once per new file.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/vault-index.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "task-regex-shared",

@@ -55,6 +55,7 @@ import {
 } from './fixture';
 import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, searchLines } from '../search-text';
+import { TASK_LINE } from '../tasks';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
 type Listener = () => void;
@@ -725,7 +726,7 @@ export class DemoWorld {
           const body = n.body
             .split('\n')
             .map((line) => {
-              const m = /^(\s*[-*]\s+\[)( |x)(\]\s+)(.*)$/.exec(line);
+              const m = TASK_LINE.exec(line);
               if (!m) return line;
               i++;
               if (i !== index) return line;
