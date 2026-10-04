@@ -95,6 +95,6 @@
     "task": 14,
     "what": "Installable app with an offline shell",
     "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
-    "passes": false
+    "passes": true
   }
 ]
