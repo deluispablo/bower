@@ -1216,7 +1216,7 @@
     "what": "A timeline source given as a full https:// address is not a link; a .url name turns into a wrong address.",
     "steps": [],
     "verify": "pnpm vitest run src/features/note -t \"web address\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "reload-filing-truth",

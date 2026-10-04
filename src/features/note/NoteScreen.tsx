@@ -14,13 +14,11 @@ import { IconButton, Button } from '@/ui/Button';
 import { PoseBower } from '@/bird/Bower';
 import { Inline, Markdown } from './markdown';
 import { useResolver } from './resolve';
+import { webSource } from './web-source';
 import { useFileActions } from '@/features/files/file-actions';
 import { LinkedList } from './RightPanel';
 import { inAppHistory } from '@/app/paths';
 import s from './note.module.css';
-
-/** A source that is a web address someone saved ("flat-listing.example"), not a file in the folder. */
-const isWebAddress = (s: string): boolean => /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(s) && !/\.(pdf|jpe?g|png|heic|webp|gif|docx?|xlsx?|csv|md|txt)$/i.test(s);
 
 export function NoteScreen() {
   const loc = useLocation();
@@ -163,11 +161,11 @@ function NoteView({ path }: { path: string }) {
                     <span className={s.from}>
                       {' '}
                       From{' '}
-                      {resolve(t.source) || !isWebAddress(t.source) ? (
+                      {resolve(t.source) || !webSource(t.source) ? (
                         link(t.source, t.source, `src-${i}`)
                       ) : (
-                        <a href={`https://${t.source}`} target="_blank" rel="noreferrer noopener">
-                          {t.source}
+                        <a href={webSource(t.source)?.href} target="_blank" rel="noreferrer noopener">
+                          {webSource(t.source)?.label}
                         </a>
                       )}
                     </span>
