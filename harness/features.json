@@ -805,8 +805,8 @@
     "category": "review",
     "what": "The PWA route test is a string match and skips /me, /vault, /runs, /push; it should navigate with the service worker active.",
     "steps": [],
-    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
-    "passes": false
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"never answers the Worker\"",
+    "passes": true
   },
   {
     "id": "arch-test-imports",

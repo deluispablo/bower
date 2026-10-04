@@ -27,7 +27,13 @@ test('with no network the app still opens', async ({ page, context }) => {
   await context.setOffline(false);
 });
 
-test("the app shell never answers the Worker's own paths", async ({ request }) => {
-  const sw = await (await request.get('/sw.js')).text();
-  for (const p of ['auth', 'drive', 'process', 'status']) expect(sw).toMatch(new RegExp(p));
+test("the app shell never answers the Worker's own paths", async ({ page }) => {
+  await page.goto('/?scenario=default&time=instant');
+  await expect.poll(() => page.evaluate(async () => (await navigator.serviceWorker.ready).active?.state)).toBe('activated');
+  await page.reload();
+  // An app page comes from the service worker; a Worker path goes to the network.
+  expect((await page.goto('/files'))?.fromServiceWorker()).toBe(true);
+  for (const p of ['/auth/login', '/me', '/drive/token', '/vault', '/process', '/status', '/runs', '/push/subscribe']) {
+    expect((await page.goto(p))?.fromServiceWorker(), p).toBe(false);
+  }
 });

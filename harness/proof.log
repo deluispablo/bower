@@ -107,3 +107,4 @@ palette-search-error	d0c781bd42c97214	2026-10-04	red
 new-note-escape	bc1ee97e4878c622	2026-10-04	green-before: not reproducible: Escape after typing already discards the note; the test pins it
 notify-row-state	a6da6373e120bd87	2026-10-04	red
 dedupe-restored-drafts	787569fc44bc29ac	2026-10-04	red
+pwa-routes-real	87b3ece829cdb77d	2026-10-04	green-before: the denylist landed in b1d40cc; checked red by removing it and rebuilding

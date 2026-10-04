@@ -113,3 +113,4 @@
 - 2026-10-04: new-note-escape passes — test(explorer): Escape on a new note's name takes it back, pinned on both sources
 - 2026-10-04: notify-row-state passes — fix(settings): the notifications row says when the browser blocks them
 - 2026-10-04: dedupe-restored-drafts passes — fix(add): a file added again after a reload fills its waiting draft instead of a second row
+- 2026-10-04: pwa-routes-real passes — test(pwa): with the service worker on, the Worker's paths go to the network
