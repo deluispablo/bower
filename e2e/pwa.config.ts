@@ -7,5 +7,5 @@ export default defineConfig({
   timeout: 30_000,
   reporter: 'list',
   use: { baseURL: 'http://localhost:5192', channel: 'chrome' },
-  webServer: { command: 'pnpm exec vite preview --port 5192 --strictPort', cwd: '..', port: 5192, reuseExistingServer: false },
+  webServer: { command: 'pnpm exec vite preview --port 5192 --strictPort', cwd: '..', port: 5192, reuseExistingServer: true },
 });
