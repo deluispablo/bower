@@ -1161,8 +1161,8 @@
     "category": "review",
     "what": "The copy check skips two-word strings in .tsx (aria-label=\"Your vault\" would pass).",
     "steps": [],
-    "verify": "pnpm vitest run src/copy.test.ts -t \"two words\"",
-    "passes": false
+    "verify": "pnpm vitest run src/copy.test.ts -t \"two words are copy\"",
+    "passes": true
   },
   {
     "id": "bye-only-when-gone",
