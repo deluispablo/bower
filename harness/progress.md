@@ -2,7 +2,7 @@
 
 ## Next
 
-- Fix the qa-9 entries (the reviewer round after qa-8): the harness ones first (harness-red-assert, harness-each-pattern, harness-note-committed, harness-fixed-in-precise), then link-files-url, outbox-dedupe-real, screen-wiring-tests, demo-links-after-tidy, then the polish. The evaluator round is still out: add its findings as qa-9 too.
+- qa-9 (reviewer) is closed. Fix the 18 qa-10 entries (the evaluator round after qa-8, all polish). Then a fresh reviewer and evaluator round; phase 3 waits until both come back clean.
 
 ## Log
 
