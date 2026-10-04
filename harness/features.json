@@ -714,7 +714,7 @@
     "what": "About 20 verify commands name a directory or file, not the test; deleting the pinning test keeps them green. done.sh should fail when no test matches.",
     "steps": [],
     "verify": "pnpm vitest run src/harness.test.ts -t \"must name its test\" && node scripts/check-harness.mjs",
-    "passes": false
+    "passes": true
   },
   {
     "id": "harness-guards",
