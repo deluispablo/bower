@@ -63,7 +63,7 @@ export function MovePicker() {
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
             // Enter takes the first folder that matches; arrows go into the list.
-            if (e.key === 'Enter' && list[0]) {
+            if (e.key === 'Enter' && q.trim() && list[0]) {
               e.preventDefault();
               pick(list[0]);
             } else walk(e, -1);

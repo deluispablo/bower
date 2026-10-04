@@ -24,3 +24,14 @@ test('one counting rule for folders', async ({ page, isMobile }) => {
   await row.click();
   await expect(page.locator('main header p').first()).toHaveText(rowCount);
 });
+
+test('Enter in an empty Move to does nothing', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('status').getByText(/Moved Lease draft/)).toHaveCount(0);
+});

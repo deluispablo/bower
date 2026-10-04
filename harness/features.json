@@ -669,7 +669,7 @@
     "what": "Move to: Enter with an empty search box moves the file to the first folder.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Enter in an empty Move to does nothing\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "fake-run-persists",
