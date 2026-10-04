@@ -106,3 +106,4 @@ web-source-links	efda7dab831acb3e	2026-10-04	red
 palette-search-error	d0c781bd42c97214	2026-10-04	red
 new-note-escape	bc1ee97e4878c622	2026-10-04	green-before: not reproducible: Escape after typing already discards the note; the test pins it
 notify-row-state	a6da6373e120bd87	2026-10-04	red
+dedupe-restored-drafts	787569fc44bc29ac	2026-10-04	red

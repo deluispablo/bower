@@ -760,7 +760,7 @@
     "what": "Add's duplicate check misses drafts restored after a reload.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a file added again after a reload is not doubled\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "signout-memory",

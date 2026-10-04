@@ -183,3 +183,16 @@ test('the notifications row says when they are blocked', async ({ page }) => {
   await open(page, '/settings');
   await expect(page.getByText('Blocked in this browser. Allow them in its settings to turn this on.')).toBeVisible();
 });
+
+test('a file added again after a reload is not doubled', async ({ page }) => {
+  await open(page, '/add', 'empty', 'instant');
+  const file = { name: 'Boiler service.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF made up') };
+  await page.locator('input[type=file][multiple]').setInputFiles(file);
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByText('Add this file again')).toBeVisible();
+  await page.locator('input[type=file][multiple]').setInputFiles(file);
+  await expect(page.getByText('Add this file again')).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'In this pile' }).getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+});

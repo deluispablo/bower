@@ -95,7 +95,16 @@ export function Add() {
     const twice = all.find((x) => !list.includes(x));
     if (twice) toast(`${twice.name} is already in this pile.`);
     if (!list.length) return;
-    const drafts = list.map(({ file, ...d }, i) => {
+    // A file whose draft lost its bytes in a reload ("Add this file again") fills that draft, not a new row.
+    const refill = list.filter((x) => x.file && items.some((d) => missing(d) && d.name === x.name));
+    if (refill.length) {
+      for (const x of refill) {
+        const d = items.find((y) => missing(y) && y.name === x.name);
+        if (d && x.file) keep(d.key, x.file);
+      }
+      setItems((cur) => [...cur]);
+    }
+    const drafts = list.filter((x) => !refill.includes(x)).map(({ file, ...d }, i) => {
       const key = `${Date.now()}-${i}-${d.name}`;
       if (file) keep(key, file);
       return { ...d, key };

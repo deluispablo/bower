@@ -112,3 +112,4 @@
 - 2026-10-04: palette-search-error passes — fix(palette): when search fails, the palette says so
 - 2026-10-04: new-note-escape passes — test(explorer): Escape on a new note's name takes it back, pinned on both sources
 - 2026-10-04: notify-row-state passes — fix(settings): the notifications row says when the browser blocks them
+- 2026-10-04: dedupe-restored-drafts passes — fix(add): a file added again after a reload fills its waiting draft instead of a second row
