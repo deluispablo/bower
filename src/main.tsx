@@ -6,6 +6,7 @@ import { bootStart } from '@/app/boot';
 import { DataProvider } from '@/data/provider';
 import { readScenario, readTimeScale } from '@/data/demo/scenario';
 import { buildSources, readSource } from '@/data/choose';
+import { bootFail } from '@/app/boot';
 import '@/styles/base.css';
 
 bootStart();
@@ -18,16 +19,21 @@ const scale = readTimeScale();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('No #root');
-void buildSources(source, scenario, scale).then(({ sources, world }) =>
-  createRoot(root).render(
-    <StrictMode>
-      <DataProvider sources={sources}>
-        <App
-          demo={
-            source === 'real' ? undefined : { scenario, scale, source, ...(world ? { world } : {}) }
-          }
-        />
-      </DataProvider>
-    </StrictMode>,
-  ),
-);
+// Starting can fail (no network for the pretend Drive's code, a broken page): say so on the boot screen.
+const start = (): void => {
+  buildSources(source, scenario, scale).then(
+    ({ sources, world }) =>
+      createRoot(root).render(
+        <StrictMode>
+          <DataProvider sources={sources}>
+            <App demo={source === 'real' ? undefined : { scenario, scale, source, ...(world ? { world } : {}) }} />
+          </DataProvider>
+        </StrictMode>,
+      ),
+    (e: unknown) => {
+      console.error(e);
+      bootFail(navigator.onLine ? 'error' : 'offline', () => location.reload());
+    },
+  );
+};
+start();

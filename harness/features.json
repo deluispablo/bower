@@ -597,7 +597,7 @@
     "what": "A failed start leaves a blank screen; demo and fake code ship in the real bundle.",
     "steps": [],
     "verify": "pnpm vitest run src/data/choose.test.ts && pnpm build && node scripts/check-bundle.mjs",
-    "passes": false
+    "passes": true
   },
   {
     "id": "signout-forgets",

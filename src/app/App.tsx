@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { bootDone, bootFail } from './boot';
 import { applyTheme, usePrefs } from './prefs';
 import { Shell } from './Shell';
+
+/** The demo panel loads only with the demo or the pretend Drive. */
+const DemoPanel = lazy(() => import('@/data/demo/DemoPanel').then((m) => ({ default: m.DemoPanel })));
 import { useSources } from '@/data/provider';
 import { BowerError, type FolderState, type User } from '@/data/types';
 import type { Scenario, TimeScale } from '@/data/demo/scenario';
@@ -19,7 +22,7 @@ import { BowerScreen } from '@/features/bower/BowerScreen';
 import { Settings } from '@/features/settings/Settings';
 import { BirdLab } from '@/bird/BirdLab';
 import { NotFound } from './NotFound';
-import { DemoPanel } from '@/data/demo/DemoPanel';
+
 import { Privacy, Terms } from '@/features/legal/Legal';
 
 interface Gate {
@@ -41,12 +44,9 @@ export function App({ demo }: { demo?: DemoInfo }) {
     <BrowserRouter>
       <Gatekeeper />
       {demo && (
-        <DemoPanel
-          scenario={demo.scenario}
-          scale={demo.scale}
-          source={demo.source}
-          {...(demo.world ? { world: demo.world } : {})}
-        />
+        <Suspense fallback={null}>
+          <DemoPanel scenario={demo.scenario} scale={demo.scale} source={demo.source} {...(demo.world ? { world: demo.world } : {})} />
+        </Suspense>
       )}
     </BrowserRouter>
   );

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { chooseScenario, SCENARIOS, type Scenario, type TimeScale } from './scenario';
 import { SAMPLE_PILES } from './fixture';
 import type { DemoWorld } from './world';
-import { chooseSource, forgetPretendDrive, type SourceKind } from '../choose';
+import { chooseSource, type SourceKind } from '../choose';
+import { forgetPretendDrive } from '../fake/pretend';
 import { toast } from '@/ui/toast';
 import s from './demo.module.css';
 

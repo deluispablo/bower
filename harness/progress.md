@@ -64,3 +64,4 @@
 - 2026-10-04: frontmatter-obsidian passes — fix(notes): block-list tags and quoted values from Obsidian notes read right
 - 2026-10-04: signout-forgets passes — fix(session): signing out forgets this person's things on the device
 - 2026-10-04: pwa-worker-routes passes — fix(pwa): the app shell never answers the Worker's own paths
+- 2026-10-04: startup-and-bundle passes — fix(start): a failed start says so on the boot screen; demo and pretend-Drive code load only when asked for
