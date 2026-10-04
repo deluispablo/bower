@@ -494,8 +494,9 @@ export class DemoWorld {
         }),
       deleteAccount: () =>
         this.wait(() => {
-          // The demo forgets Alex as the Worker would; the made-up folder stays, as a Drive folder would.
+          // The demo forgets Alex as the Worker would, and which folder was theirs; the made-up folder stays, as a Drive folder would.
           this.user = null;
+          this.folder = 'missing';
           keepSignedIn(false);
           forgetThisPerson();
           sayGoodbye();

@@ -188,7 +188,7 @@ export function Settings() {
           Sign out
         </Button>
       </Row>
-      <Row title="Delete the app" sub="Bower forgets you. Your folder stays in your Drive.">
+      <Row title="Delete your Bower account" sub="Bower forgets you. Your folder stays in your Drive.">
         <Button size="sm" variant="danger" onClick={() => setAskDelete(true)}>
           Delete
         </Button>

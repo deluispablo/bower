@@ -90,3 +90,14 @@ test('starting again in first sign-in shows the welcome again, with every main f
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('heading', { name: /Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
 });
+
+test('deleting the account and coming back: one name for it, and a fresh start', async ({ page }) => {
+  await open(page, '/settings');
+  await expect(page.getByText('Delete your Bower account', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete your Bower account?' }).getByRole('button', { name: 'Delete my account' }).click();
+  await expect(page.getByRole('status').getByText(/Your account is gone/)).toBeVisible();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect(page).toHaveURL(/\/welcome/, { timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: /Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
+});

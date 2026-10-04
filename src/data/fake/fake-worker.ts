@@ -57,7 +57,7 @@ export class FakeWorker implements WorkerApi {
 
   async me(): Promise<Me | null> {
     this.online();
-    return this.signedIn ? { user: ALEX, folderId: this.rootId } : null;
+    return this.signedIn ? { user: ALEX, folderId: forgotten() ? null : this.rootId } : null;
   }
 
   async signIn(): Promise<void> {
@@ -75,6 +75,8 @@ export class FakeWorker implements WorkerApi {
     this.online();
     this.signedIn = false;
     keepSignedIn(false);
+    // It forgets which folder was yours too: coming back starts at the folder step, which finds it again.
+    forget(true);
   }
 
   async driveToken(): Promise<string> {
@@ -84,6 +86,7 @@ export class FakeWorker implements WorkerApi {
 
   /** The template: the five main folders, Rules.md, About me.md and Bower's own folder. */
   async createFolder(): Promise<string> {
+    forget(false);
     if (this.rootId) return this.rootId;
     const d = this.drive;
     const root = (await d.createFolder('root', BOWER_FOLDER)).id;
@@ -210,5 +213,24 @@ export class FakeWorker implements WorkerApi {
   private wire(): RunWire {
     const { report: _report, ...wire } = this.run ?? { id: '', scope: 'all', phase: 'done', requestedAt: 0, phaseAt: 0 };
     return { ...wire };
+  }
+}
+
+/** Kept with the pretend Drive (a new one forgets it): the pretend Worker deleted the account. */
+const FORGOT = 'bower:fake:forgot-folder';
+function forgotten(): boolean {
+  try {
+    return sessionStorage.getItem(FORGOT) === '1';
+  } catch {
+    // expected: no storage; the account was never deleted in this tab.
+    return false;
+  }
+}
+function forget(yes: boolean): void {
+  try {
+    if (yes) sessionStorage.setItem(FORGOT, '1');
+    else sessionStorage.removeItem(FORGOT);
+  } catch (e) {
+    console.error(e);
   }
 }

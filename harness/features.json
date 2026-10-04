@@ -1731,7 +1731,7 @@
       "Delete, then Continue with Google: Home (or the folder step), never Settings, and the first sign-in welcome."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"deleting the account and coming back\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "saved-link-page",
