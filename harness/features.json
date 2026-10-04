@@ -625,8 +625,8 @@
     "what": "The service worker's fallback would answer the Worker's paths on a shared origin.",
     "steps": [],
     "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"never answers the Worker\"",
-    "passes": false,
-    "note": "Reopened: its verify named no test; closed again with the test named."
+    "passes": true,
+    "note": "The denylist shipped with the first PWA commit (2885a08), so --fixed-in would undo the whole PWA. Red checked by hand on 2026-10-04: without the Worker's paths in navigateFallbackDenylist the test fails."
   },
   {
     "id": "no-swallowed-errors",
