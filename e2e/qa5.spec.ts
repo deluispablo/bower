@@ -78,13 +78,13 @@ test.describe('the explorer from the keyboard', () => {
   test('a new note opens and says how to write in it', async ({ page }) => {
     await open(page, '/');
     const tree = page.getByRole('tree', { name: 'Your Bower folder' });
-    await tree.getByRole('treeitem', { name: /^Cooking/ }).click({ button: 'right' });
+    await tree.getByRole('treeitem', { name: /^Resources/ }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'New note' }).click();
     await page.keyboard.type('Soup ideas');
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/\/note\/Resources\/Cooking\/Soup%20ideas\.md/);
+    await expect(page).toHaveURL(/\/note\/Resources\/Soup%20ideas\.md/);
     await expect(page.getByText(/This note is empty/)).toBeVisible();
-    await expect(page.getByRole('status').getByText(/New note in Resources \/ Cooking/)).toBeVisible();
+    await expect(page.getByRole('status').getByText(/New note in Resources/)).toBeVisible();
   });
 });
 

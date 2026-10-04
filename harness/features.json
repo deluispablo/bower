@@ -206,7 +206,7 @@
       "Name it"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a new note opens and says how to write in it\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "search-everything",

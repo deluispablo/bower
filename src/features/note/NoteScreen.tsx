@@ -117,6 +117,9 @@ function NoteView({ path }: { path: string }) {
           <p className={s.keeper}>Bower rewrites this in every tidy-up that touches the note.</p>
         </section>
       )}
+      {!note.body.trim() && !note.summary && !note.currentState.length && !note.timeline.length && (
+        <p className={s.empty}>This note is empty. Write in it from Google Drive or any notes app on your computer; writing here comes in a later version.</p>
+      )}
       <div className={s.body}>
         <Markdown
           text={note.body}

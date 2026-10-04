@@ -7,7 +7,7 @@ import { displayName, findNode, isRoot, parentOf, visibleRows, type SortOrder } 
 import type { TreeNode } from '@/data/types';
 import { PILE_NOTE } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
-import { decodeSplat, paraColor } from '@/app/paths';
+import { crumbs, decodeSplat, paraColor, routeFor } from '@/app/paths';
 import { IconButton } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { menuCls } from '@/ui/menu';
@@ -69,6 +69,13 @@ export function Explorer({ variant }: Props) {
   const ui = useUi();
   const act = useFileActions();
   const routePath = useRoutePath();
+  const goTo = useNavigate();
+  /** A brand-new note, once named, opens; both say where they were made. */
+  const welcomeNew = (path: string, type: TreeNode['type']): void => {
+    const folder = parentOf(path);
+    toast(`${type === 'folder' ? 'New folder' : 'New note'} in ${folder ? crumbs(folder) : 'your Bower folder'}`);
+    if (type === 'file') goTo(routeFor({ path, type }));
+  };
   const [focus, setFocus] = useState<string | null>(null);
   const [kb, setKb] = useState(false);
   const [menuNode, setMenuNode] = useState<TreeNode | null>(null);
@@ -338,12 +345,14 @@ export function Explorer({ variant }: Props) {
                 // Escape, or clicking away from a name already refused: cancel, quietly.
                 ui.setJustMade(null);
                 setDraft(null);
+                if (made && typed !== null) welcomeNew(node.path, node.type);
               } else {
                 const to = await act.rename(node.path, name);
                 if (to) {
                   setFocus(to);
                   ui.setJustMade(null);
                   setDraft(null);
+                  if (made) welcomeNew(to, node.type);
                 } else if (how === 'enter') {
                   // Refused on Enter: back in the box with what you typed.
                   setDraft(name);
