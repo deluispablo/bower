@@ -561,7 +561,7 @@
     "what": "Two first writes can make two .bower/changes folders.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "seen-read-once",
