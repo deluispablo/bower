@@ -214,7 +214,8 @@ export class DemoWorld {
 
   /** A tidy-up writes the names notes have now into the [[links]] that named them before. */
   private followRenames(): void {
-    const former = formerNames(this.journal);
+    const taken = new Set([...this.entries.values()].filter((e) => e.type === 'file' && e.kind === 'note').map((e) => displayName(nameOf(e.path)).toLowerCase()));
+    const former = formerNames(this.journal, taken);
     if (!former.size) return;
     for (const e of [...this.entries.values()]) {
       if (e.type !== 'file' || e.kind !== 'note' || e.path === 'Rules.md') continue;

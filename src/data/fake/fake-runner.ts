@@ -193,7 +193,8 @@ class Writer {
 
   /** After renames, every [[link]] to an old name is written with the new one (a label after | stays). */
   async followRenames(journal: JournalRecord[]): Promise<void> {
-    const former = formerNames(journal.map((r) => ({ id: r.id, at: r.at, kind: r.kind, what: r.what, ...(r.path ? { path: r.path } : {}), ...(r.from ? { from: r.from } : {}) })));
+    const taken = new Set([...this.ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
+    const former = formerNames(journal.map((r) => ({ id: r.id, at: r.at, kind: r.kind, what: r.what, ...(r.path ? { path: r.path } : {}), ...(r.from ? { from: r.from } : {}) })), taken);
     if (!former.size) return;
     for (const [path] of this.ix.entries()) {
       const f = this.ix.file(path);

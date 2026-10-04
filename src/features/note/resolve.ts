@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useChanges, useTree } from '@/data/provider';
-import { formerNames } from '@/data/links';
+import { formerNames, linkTarget } from '@/data/links';
 import { displayName } from '@/data/tree';
 import type { ChangeEntry, TreeNode } from '@/data/types';
 
@@ -15,7 +15,7 @@ export function resolverFor(tree: readonly TreeNode[], changes: readonly ChangeE
   walk(tree);
   const former = formerNames(changes);
   return (name: string) => {
-    const key = name.trim().toLowerCase();
+    const key = linkTarget(name);
     return byName.get(key) ?? former.get(key) ?? null;
   };
 }

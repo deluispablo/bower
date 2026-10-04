@@ -25,7 +25,7 @@ import {
   type TreeNode,
 } from '../types';
 import { Journal, type JournalRecord } from './journal';
-import { formerNames } from '../links';
+import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
@@ -140,7 +140,7 @@ export class DriveVault implements VaultSource {
         return new Map<string, string>();
       },
     );
-    const links = parsed.links.map((l) => byName.get(l.toLowerCase()) ?? former.get(l.toLowerCase())).filter((p): p is string => !!p && p !== path);
+    const links = parsed.links.map((l) => byName.get(linkTarget(l)) ?? former.get(linkTarget(l))).filter((p): p is string => !!p && p !== path);
     // Full text only finds the words; a backlink is a note whose own links name this one (or a name it had).
     const names = [parsed.title, ...[...former].filter(([, now]) => now === path).map(([was]) => was)];
     const hits = (await Promise.all(names.map(async (n) => this.drive.fullText(await this.rootId(), `[[${n}`)))).flat();
@@ -148,7 +148,7 @@ export class DriveVault implements VaultSource {
     const candidates = [...new Set(hits.map((h) => ix.pathOf(h.id)).filter((p): p is string => !!p && p !== path && p.endsWith('.md')))].slice(0, MAX_READS);
     const linking = await inBatches(candidates, async (p) => {
       const f = ix.file(p);
-      return f && (await this.parsed(f, p)).links.some((l) => wanted.has(l.toLowerCase())) ? p : null;
+      return f && (await this.parsed(f, p)).links.some((l) => wanted.has(linkTarget(l))) ? p : null;
     });
     const backlinks = linking.filter((p): p is string => !!p);
     return { ...parsed, path, links: [...new Set(links)], backlinks };
