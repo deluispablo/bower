@@ -14,10 +14,10 @@ export function withSource(url: string): string {
 }
 
 export const test = base.extend({
-  page: async ({ page }, use) => {
+  page: async ({ page }, provide) => {
     const goto = page.goto.bind(page);
     page.goto = (url, opts) => goto(withSource(url), opts);
-    await use(page);
+    await provide(page);
   },
 });
 
