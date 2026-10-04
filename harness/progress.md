@@ -158,3 +158,4 @@
 - 2026-10-04: saved-link-page passes — fix(app): a saved link's page opens its web page, names it without .url, and promises a reading only in the inbox
 - 2026-10-04: tabs-survive-reload passes — fix(app): desktop tabs come back after a reload, and go at sign-out
 - 2026-10-04: empty-file-warning passes — fix(app): Add points out an empty file, and names the files left out after a reload
+- 2026-10-04: restore-rows-dropped passes — chore(harness): close restore-rows-dropped

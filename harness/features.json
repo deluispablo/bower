@@ -1779,7 +1779,7 @@
       "A toast or line says which files were left out."
     ],
     "verify": "pnpm vitest run src/features/piles -t \"files not added again are named\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "undo-toast-time",
