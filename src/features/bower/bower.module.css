@@ -17,6 +17,7 @@
 .rules ul { list-style: none; margin: 0; padding: 0; }
 .rules li { display: flex; flex-direction: column; padding: 11px 0; border-bottom: 1px solid var(--line); }
 .ruleText { color: var(--heading); font-weight: 600; }
+.ruleFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel { display: flex; flex-direction: column; gap: 18px; }
 .ph { font-family: var(--font-body); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text-muted); margin-bottom: 6px; }
 .panelCard { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--surface); text-align: left; color: var(--heading); font: inherit; font-size: 15px; cursor: pointer; }

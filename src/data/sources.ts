@@ -61,7 +61,10 @@ export interface VaultSource {
   addRequest(text: string): Promise<Request>;
   /** Names, summaries and note text. */
   search(query: string): Promise<SearchHit[]>;
+  /** Refuses words that repeat a rule you have. */
   addRule(text: string): Promise<Rule>;
+  /** Takes a rule out (a tidy-up removes its line); gives back its Undo. */
+  removeRule(id: string): Promise<() => Promise<void>>;
   suggestions(): Promise<Suggestion[]>;
   /** Ticks or unticks the n-th task (`- [ ]`) of a note's body. */
   toggleTask(path: string, index: number): Promise<void>;

@@ -212,10 +212,12 @@ class Writer {
     return true;
   }
 
-  async wordRules(typed: JournalRecord[]): Promise<void> {
-    if (!typed.length) return;
+  async wordRules(lines: JournalRecord[]): Promise<void> {
+    if (!lines.length) return;
+    const typed = lines.filter((r) => !r.removes);
+    const removed = new Set(lines.map((r) => r.removes).filter(Boolean));
     const f = this.ix.file('Rules.md');
-    const worded = f ? parseRules(await this.drive.readText(f.id)) : [];
+    const worded = (f ? parseRules(await this.drive.readText(f.id)) : []).filter((r) => !removed.has(r.text));
     const added: Rule[] = [...typed].reverse().map((r) => ({ id: r.id, text: wordRule(r.text ?? r.what), yourWords: r.text ?? r.what, since: r.at }));
     const text = serializeRules([...added, ...worded]);
     if (f) this.ix.put(await this.drive.writeText(f.id, text, f.modifiedTime));

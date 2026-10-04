@@ -274,6 +274,34 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect((await vault.changes()).at(-1)?.kind).toBe('rule');
       });
 
+      it('a rule is kept once: the same words again, or its suggestion, add no second rule', async () => {
+        const { vault } = await open();
+        const sug = (await vault.suggestions())[0];
+        if (!sug) throw new Error('no suggestion in the fixture');
+        await vault.addRule(sug.title);
+        await expect(vault.addRule(`  ${sug.title.toLowerCase()}. `)).rejects.toThrow(/already/);
+        expect((await vault.suggestions()).some((x) => x.id === sug.id)).toBe(false);
+        const n = (await vault.rules()).length;
+        await vault.dismissSuggestion(sug.id, true);
+        expect(await vault.rules()).toHaveLength(n);
+      });
+
+      it('a rule can be removed, worded or waiting, and Undo brings it back', async () => {
+        const { vault } = await open();
+        const worded = (await vault.rules()).find((r) => !r.pending);
+        if (!worded) throw new Error('no worded rule in the fixture');
+        const undo = await vault.removeRule(worded.id);
+        expect((await vault.rules()).some((r) => r.text === worded.text)).toBe(false);
+        expect((await vault.changes()).at(-1)?.kind).toBe('rule');
+        await undo();
+        expect((await vault.rules()).some((r) => r.text === worded.text)).toBe(true);
+        const waiting = await vault.addRule('anything from the dentist goes in health');
+        const undo2 = await vault.removeRule(waiting.id);
+        expect((await vault.rules()).some((r) => r.yourWords === 'anything from the dentist goes in health')).toBe(false);
+        await undo2();
+        expect((await vault.rules()).some((r) => r.yourWords === 'anything from the dentist goes in health')).toBe(true);
+      });
+
       it('addRequest keeps what you asked, not yet done', async () => {
         const { vault } = await open();
         await vault.addRequest('Put my id papers together');

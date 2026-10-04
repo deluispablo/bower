@@ -59,6 +59,7 @@ import { keepSignedIn, keptSignedIn, PHASE_MS, type Scenario, type TimeScale } f
 import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
 import { forgetThisPerson, sayGoodbye } from '../device';
+import { ruleLike } from '../rules';
 import { shortDay } from '../dates';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
@@ -731,18 +732,34 @@ export class DemoWorld {
         change(() => {
           const t = text.trim();
           if (!t) throw new BowerError('conflict', 'Write the rule first.');
+          if (ruleLike(this.rules, t)) throw new BowerError('conflict', 'You have that rule already.');
           const r: Rule = { id: `u${Date.now()}`, text: t, yourWords: t, since: Date.now(), pending: true };
           this.rules = [r, ...this.rules];
           this.touchRules();
           this.record('rule', `New rule: "${t}"`, 'Rules.md');
           return r;
         }),
-      suggestions: () => this.wait(() => [...this.suggestions]),
+      removeRule: (id) =>
+        change(() => {
+          const r = this.rules.find((x) => x.id === id);
+          if (!r) throw new BowerError('not-found', 'That rule is no longer there.');
+          const at = this.rules.indexOf(r);
+          this.rules = this.rules.filter((x) => x !== r);
+          this.touchRules();
+          const line = this.record('rule', `Removed the rule "${r.text}"`, 'Rules.md');
+          return () =>
+            change(() => {
+              this.rules = [...this.rules.slice(0, at), r, ...this.rules.slice(at)];
+              this.touchRules();
+              this.unrecord(line);
+            });
+        }),
+      suggestions: () => this.wait(() => this.suggestions.filter((s) => !ruleLike(this.rules, s.title))),
       dismissSuggestion: (id, keep) =>
         change(() => {
           const s = this.suggestions.find((x) => x.id === id);
           this.suggestions = this.suggestions.filter((x) => x.id !== id);
-          if (keep && s) {
+          if (keep && s && !ruleLike(this.rules, s.title)) {
             this.rules = [{ id: `u${Date.now()}`, text: s.title, yourWords: s.title, since: Date.now(), pending: true }, ...this.rules];
             this.record('rule', `Kept a suggestion as a rule: "${s.title}"`, 'Rules.md');
           }

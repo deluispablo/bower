@@ -148,3 +148,4 @@
 - 2026-10-04: answer-toast-words passes — fix(app): answering a question is confirmed in the words of the choice
 - 2026-10-04: bin-count-hub passes — fix(app): the Bin question does not count a folder's own note
 - 2026-10-04: search-saved-links passes — fix(app): a saved link is found by its web address, never by its file syntax
+- 2026-10-04: rule-twice passes — feat(app): a rule is kept once, and a rule can be removed (with Undo)

@@ -107,6 +107,14 @@ describe('the fake runner', () => {
     expect((await fresh().search('curry-clipping')).length).toBeGreaterThan(0);
   });
 
+  it('a rule can be removed: the tidy-up takes it out of your rules', async () => {
+    const r = (await vault.rules())[0];
+    if (!r) throw new Error('no rule in the seed');
+    await vault.removeRule(r.id);
+    await runFake(drive, root, opts({ scope: 'instructions' }));
+    expect((await fresh().rules()).some((x) => x.text === r.text)).toBe(false);
+  });
+
   it('pending rules are worded with your words kept', async () => {
     await vault.addRule('anything from the dentist goes in health');
     await runFake(drive, root, opts({ scope: 'instructions' }));

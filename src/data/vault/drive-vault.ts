@@ -26,6 +26,7 @@ import {
 } from '../types';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames } from '../links';
+import { ruleLike } from '../rules';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, searchLines } from '../search-text';
@@ -463,19 +464,41 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const file = ix.file('Rules.md');
     const worded = file ? parseRules(await this.text(file)) : [];
-    const pending = (await this.journal.list())
-      .filter((r) => r.kind === 'rule')
+    const lines = await this.journal.list();
+    const removed = new Set(lines.filter((r) => r.kind === 'rule' && r.removes).map((r) => r.removes));
+    const pending = lines
+      .filter((r) => r.kind === 'rule' && !r.removes)
       .reverse()
       .map((r): Rule => ({ id: r.id, text: r.text ?? r.what, yourWords: r.text ?? r.what, since: r.at, pending: true }));
-    return [...pending, ...worded];
+    return [...pending, ...worded.filter((r) => !removed.has(r.text))];
   }
 
   async addRule(input: string): Promise<Rule> {
     const text = input.trim();
     if (!text) throw new BowerError('conflict', 'Write the rule first.');
+    if (ruleLike(await this.rules(), text)) throw new BowerError('conflict', 'You have that rule already.');
     const r = await this.journal.record('rule', `New rule: "${text}"`, { path: 'Rules.md', text });
     this.emit();
     return { id: r.id, text, yourWords: text, since: r.at, pending: true };
+  }
+
+  async removeRule(id: string): Promise<() => Promise<void>> {
+    const r = (await this.rules()).find((x) => x.id === id);
+    if (!r) throw new BowerError('not-found', 'That rule is no longer there.');
+    if (r.pending) {
+      // Not worded yet: its line goes, and Undo writes it again.
+      await this.journal.remove(r.id);
+      this.emit();
+      return async () => {
+        await this.addRule(r.yourWords ?? r.text);
+      };
+    }
+    const line = await this.journal.record('rule', `Removed the rule "${r.text}"`, { path: 'Rules.md', removes: r.text });
+    this.emit();
+    return async () => {
+      await this.journal.remove(line.id);
+      this.emit();
+    };
   }
 
   async requests(): Promise<Request[]> {
@@ -511,13 +534,16 @@ export class DriveVault implements VaultSource {
   async suggestions(): Promise<Suggestion[]> {
     const all = (await this.json<SuggestionsFile>(SYSTEM.suggestions))?.suggestions ?? [];
     const dropped = dismissed();
-    return all.filter((s) => !dropped.includes(s.id));
+    const rules = await this.rules();
+    // A suggestion you already have as a rule is not offered again.
+    return all.filter((s) => !dropped.includes(s.id) && !ruleLike(rules, s.title));
   }
 
   async dismissSuggestion(id: string, keep: boolean): Promise<void> {
-    const s = (await this.suggestions()).find((x) => x.id === id);
+    const all = (await this.json<SuggestionsFile>(SYSTEM.suggestions))?.suggestions ?? [];
+    const s = all.find((x) => x.id === id);
     dismiss(id);
-    if (keep && s) await this.journal.record('rule', `Kept a suggestion as a rule: "${s.title}"`, { path: 'Rules.md', text: s.title });
+    if (keep && s && !ruleLike(await this.rules(), s.title)) await this.journal.record('rule', `Kept a suggestion as a rule: "${s.title}"`, { path: 'Rules.md', text: s.title });
     this.emit();
   }
 

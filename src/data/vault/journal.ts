@@ -17,6 +17,8 @@ export interface JournalExtra {
   questionId?: string;
   /** The Drive file the change is about, so the runner finds it whatever its path became. */
   fileId?: string;
+  /** A rule taken out: its wording, as Rules.md has it. */
+  removes?: string;
 }
 
 export type JournalRecord = ChangeEntry & JournalExtra & { v: 1; device: string };

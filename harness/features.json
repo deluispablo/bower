@@ -1645,7 +1645,7 @@
       "On the Bower tab a rule has Remove; after Remove it is gone, and Undo brings it back."
     ],
     "verify": "pnpm vitest run src/data -t \"a rule is kept once|a rule can be removed\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "tree-delete-focus",

@@ -45,6 +45,15 @@ export function BowerScreen() {
     }
   };
 
+  const removeRule = async (id: string): Promise<void> => {
+    try {
+      const undo = await vault.removeRule(id);
+      toast('Rule removed. Bower stops following it from the next tidy-up.', { label: 'Undo', run: () => void undo().catch((e: unknown) => report(e, 'That did not work. Try again.')) });
+    } catch (e) {
+      report(e, 'That did not work. Try again.');
+    }
+  };
+
   return (
     <div className={s.page}>
       <div className={s.hero}>
@@ -169,7 +178,12 @@ export function BowerScreen() {
               ) : (
                 r.yourWords && <span className="muted">You wrote: "{r.yourWords}"</span>
               )}
-              <span className="muted">Added {shortDay(r.since)}</span>
+              <span className={s.ruleFoot}>
+                <span className="muted">Added {shortDay(r.since)}</span>
+                <Button size="sm" variant="ghost" aria-label={`Remove the rule: ${r.text}`} onClick={() => void removeRule(r.id)}>
+                  Remove
+                </Button>
+              </span>
             </li>
           ))}
         </ul>
