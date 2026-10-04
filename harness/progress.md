@@ -82,3 +82,4 @@
 - 2026-10-04: confirmbin-grammar passes — fix(copy): the Bin question agrees with how many things go
 - 2026-10-04: yaml-unindented-list passes — fix(notes): a YAML list that is not indented reads right
 - 2026-10-04: rename-length-create passes — fix(names): the 120-character limit holds for new notes and folders too
+- 2026-10-04: demo-dates-relative passes — docs(demo): the fixture says ages are relative and timeline dates are fixed text

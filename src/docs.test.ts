@@ -21,4 +21,12 @@ describe('what the repository promises', () => {
     expect(html.match(/\s(d|fill|stroke|opacity|marker-end|points|transform|viewBox)="[^"]*\{\{/g) ?? []).toEqual([]);
     expect(read('scripts/fix-landing.mjs')).toMatch(/sc-camel-/);
   });
+
+  it('no stale comment says the pretend Drive starts over on reload', () => {
+    expect(read('e2e/qa5.spec.ts')).not.toMatch(/starts the pretend Drive again, so the folder is missing again/);
+  });
+
+  it("the fixture says how its timeline dates work", () => {
+    expect(read('src/data/demo/fixture.ts')).toMatch(/Timeline dates are fixed text/);
+  });
 });

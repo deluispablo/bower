@@ -794,8 +794,8 @@
     "category": "review",
     "what": "The fixture says dates are relative to the demo's start, but timeline dates are fixed text checked against 2026-10-04.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/demo -t \"timeline date\"",
-    "passes": false
+    "verify": "pnpm vitest run src/docs.test.ts src/data/demo -t \"timeline dates work|timeline date is after\"",
+    "passes": true
   },
   {
     "id": "pwa-routes-real",
@@ -821,7 +821,7 @@
     "category": "polish",
     "what": "The tour test says the pretend Drive starts over on reload (no longer true).",
     "steps": [],
-    "verify": "! grep -n \"starts the pretend Drive again, so the folder is missing again\" e2e/qa5.spec.ts",
+    "verify": "pnpm vitest run src/docs.test.ts -t \"stale comment\"",
     "passes": false
   },
   {

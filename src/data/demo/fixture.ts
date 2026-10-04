@@ -1,7 +1,9 @@
 /**
  * Alex's Bower folder: made-up data for the demo and the tests. No real
- * person, address or document. Dates are relative to the moment the demo
- * starts, so "today" always means today.
+ * person, address or document. Files' ages are relative to the moment the
+ * demo starts, so "today" always means today. Timeline dates are fixed text
+ * ("28 Sep", or "Today"), written around 4 October 2026; a test keeps them
+ * from being later than that.
  */
 import { RULE_EXAMPLES } from '../examples';
 import type { FileKind, Pile, PileItem, Question, Rule, Suggestion } from '../types';

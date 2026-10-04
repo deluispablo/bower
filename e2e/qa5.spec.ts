@@ -17,8 +17,8 @@ test('after the tour a reload opens the app', async ({ page }) => {
   await page.getByRole('button', { name: 'Skip' }).click();
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-  // On fake a reload starts the pretend Drive again, so the folder is missing again:
-  // the welcome shows, it does not loop.
+  // With the folder there (kept by the pretend Drive) Home opens; with no folder the
+  // welcome makes it again. Either way a heading shows: no loop.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
   void isFake;
 });

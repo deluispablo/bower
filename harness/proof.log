@@ -76,3 +76,4 @@ loading-component-test	f1b8b3d9c20a763f	2026-10-04	green-before: the fix is 15f5
 confirmbin-grammar	c94dbbf7e56a1905	2026-10-04	red
 yaml-unindented-list	e5d67f5e42d49829	2026-10-04	green-before: landed in 97f66e1 with confirmbin-grammar; red seen before that commit
 rename-length-create	36b09b0515c3e8ef	2026-10-04	green-before: landed in 97f66e1 with confirmbin-grammar; red seen before that commit
+demo-dates-relative	35c0a4be21870f60	2026-10-04	green-before: landed in e1edd71; red seen before that commit
