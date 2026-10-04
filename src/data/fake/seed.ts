@@ -23,12 +23,15 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
     const { vault, runs } = world.sources();
     const root = (await drive.createFolder('root', BOWER_FOLDER)).id;
     const ids = new Map<string, string>([['', root]]);
+    // Piles keep the demo's ids (p1, p2…), so an address like /pile/p1 opens the same pile.
+    const pileFolders = new Map<string, string>();
     const folderId = async (path: string): Promise<string> => {
       const known = ids.get(path);
       if (known) return known;
       const cut = path.lastIndexOf('/');
       const parent = await folderId(cut < 0 ? '' : path.slice(0, cut));
-      const id = (await drive.createFolder(parent, path.slice(cut + 1))).id;
+      const pile = pileFolders.get(path);
+      const id = (await drive.createFolder(parent, path.slice(cut + 1), pile ? { [PROP.pile]: pile } : undefined)).id;
       ids.set(path, id);
       return id;
     };
@@ -46,8 +49,9 @@ export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: n
         let name = base;
         for (let n = 2; taken.has(name.toLowerCase()); n++) name = dot > 0 ? `${base.slice(0, dot)} (${n})${base.slice(dot)}` : `${base} (${n})`;
         taken.add(name.toLowerCase());
-        inboxProps.set(lone ? p.path : `${p.path}/${name}`, { [PROP.asAdded]: it.name, [PROP.origin]: it.origin, [PROP.kind]: it.kind });
+        inboxProps.set(lone ? p.path : `${p.path}/${name}`, { [PROP.asAdded]: it.name, [PROP.origin]: it.origin, [PROP.kind]: it.kind, ...(lone ? { [PROP.pile]: p.id } : {}) });
       }
+      if (!lone) pileFolders.set(p.path, p.id);
     }
     const rulesText = serializeRules(await vault.rules());
 

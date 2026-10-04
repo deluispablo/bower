@@ -1,4 +1,5 @@
-import { test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { test } from './fixtures';
 
 // Screenshots of every screen for the design canvas. Runs only with SHOTS=<dir>.
 const DIR = process.env.SHOTS;

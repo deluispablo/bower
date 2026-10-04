@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, isFake, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'demo') => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -32,6 +33,7 @@ test('the demo panel is reachable offline and leads back', async ({ page }) => {
 });
 
 test('a sample pile and a note-only pile go to the inbox and get filed', async ({ page }) => {
+  test.skip(isFake, 'demo-only control: the sample piles live in the demo panel');
   test.setTimeout(60_000);
   await open(page, '/', 'empty', 'instant');
   await page.getByRole('button', { name: 'Demo situations' }).click();

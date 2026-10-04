@@ -12,3 +12,4 @@
 - 2026-10-04: worker passes: the Worker contract is written; WorkerHttp, FakeWorker and the fake runner (filing, rules, requests, answers, journal archive, new marks) are tested.
 - 2026-10-04: live passes: session and runs over the Worker; the whole vault contract, tidy-up included, passes on the fake Drive (27/27).
 - 2026-10-04: source-switch passes: ?source=fake runs the real logic on a seeded fake Drive in the browser; VITE_API_URL makes the app real; the demo panel switches between demo and fake.
+- 2026-10-04: e2e-fake passes: the whole e2e suite runs on the demo (56 passed) and on the fake Drive (54 passed; the sample-pile test is demo-only on both devices).

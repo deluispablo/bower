@@ -81,7 +81,7 @@
     "task": 12,
     "what": "Every end-to-end test passes on the fake Drive too",
     "verify": "pnpm e2e && pnpm e2e:fake",
-    "passes": false
+    "passes": true
   },
   {
     "id": "duplicates",

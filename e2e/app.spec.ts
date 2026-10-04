@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, isFake, test } from './fixtures';
 import AxeBuilder from '@axe-core/playwright';
 
 const open = async (page: import('@playwright/test').Page, path: string, scenario = 'default', time = 'instant') => {
@@ -102,3 +102,8 @@ for (const path of ['/', '/files', '/add', '/bower', '/settings', '/note/Project
     expect(serious.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
   });
 }
+
+test('runs on the source it was asked for', async ({ page }) => {
+  await open(page, '/');
+  expect(await page.evaluate(() => sessionStorage.getItem('bower:demo:source'))).toBe(isFake ? 'fake' : null);
+});

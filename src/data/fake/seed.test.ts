@@ -78,3 +78,13 @@ describe('what is hidden', () => {
     expect(isHidden('Rules.md')).toBe(false);
   });
 });
+
+describe('pile ids', () => {
+  it("seeded piles keep the demo's ids", async () => {
+    const { drive, root } = await seeded('default');
+    if (!root) throw new Error('no root');
+    const all = await drive.listAll(root);
+    const ids = all.filter((f) => f.appProperties?.pile).map((f) => f.appProperties?.pile).sort();
+    expect(ids).toEqual(['p1', 'p2', 'p3', 'p4']);
+  });
+});

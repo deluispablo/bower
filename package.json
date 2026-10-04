@@ -14,7 +14,8 @@
     "e2e": "playwright test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "harness": "node scripts/harness-status.mjs",
-    "init": "bash harness/init.sh"
+    "init": "bash harness/init.sh",
+    "e2e:fake": "E2E_SOURCE=fake playwright test"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.3.7",
