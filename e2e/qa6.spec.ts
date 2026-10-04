@@ -66,3 +66,16 @@ test('after a move or a Bin the tree keeps the keyboard', async ({ page, isMobil
   await page.getByRole('dialog').getByRole('button', { name: 'Put it in the Bin' }).click();
   await expect(tree).toBeFocused();
 });
+
+test("Shift+F10 opens the row's menu", async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click();
+  await page.keyboard.press('Shift+F10');
+  await expect(page.getByRole('menuitem', { name: 'Move to…' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tree).toBeFocused();
+  await page.keyboard.press('ContextMenu');
+  await expect(page.getByRole('menuitem', { name: 'Move to…' })).toBeVisible();
+});

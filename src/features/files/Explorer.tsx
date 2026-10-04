@@ -174,6 +174,14 @@ export function Explorer({ variant }: Props) {
       setKb(true);
       setFocus(p);
     };
+    // The menu key, or Shift+F10: the row's menu, as a right-click opens it.
+    if (row && desktop && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
+      e.preventDefault();
+      const el = treeRef.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(row.node.path)}"]`);
+      const r = el?.getBoundingClientRect();
+      el?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: (r?.left ?? 0) + 24, clientY: (r?.bottom ?? 0) - 4 }));
+      return;
+    }
     switch (e.key) {
       case 'ArrowDown':
         return go(rows[Math.min(rows.length - 1, i + 1)]?.node.path);
@@ -479,7 +487,19 @@ export function Explorer({ variant }: Props) {
     <div className={s.explorer}>
       {header}
       {desktop ? (
-        <ContextMenu.Root modal={false} onOpenChange={(o) => !o && setMenuNode(null)}>
+        <ContextMenu.Root
+          modal={false}
+          onOpenChange={(o) => {
+            if (o) return;
+            setMenuNode(null);
+            // A name box or a dialog opened by the menu keeps the keyboard; otherwise it goes back to the tree.
+            setTimeout(() => {
+              const st = useUi.getState();
+              const lost = !document.activeElement || document.activeElement === document.body;
+              if (lost && !st.renaming && !st.moveFor && !st.confirmBin) treeRef.current?.focus();
+            }, 30);
+          }}
+        >
           <ContextMenu.Trigger asChild>{treeEl}</ContextMenu.Trigger>
           <ContextMenu.Portal>
             <ContextMenu.Content className={menuCls.content} hidden={!menuNode} onCloseAutoFocus={(e) => e.preventDefault()}>

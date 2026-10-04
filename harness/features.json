@@ -934,8 +934,8 @@
       "Focus the tree",
       "Shift+F10"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Shift+F10 opens the row's menu\"",
-    "passes": false
+    "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"opens the row.s menu\"",
+    "passes": true
   },
   {
     "id": "signout-sticks",

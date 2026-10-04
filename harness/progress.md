@@ -99,3 +99,4 @@
 - 2026-10-04: stale-check-mtime passes — test(vault): a text change elsewhere does not block a rename; a change of name or place does
 - 2026-10-04: move-enter-multi passes — fix(move): Enter moves only when one folder matches, and says so when several do
 - 2026-10-04: tree-dom-focus passes — fix(explorer): after Move to or the Bin question, the keyboard is back in the tree
+- 2026-10-04: keyboard-context-menu passes — fix(explorer): Shift+F10 and the menu key open a row's menu; closing it gives the keyboard back to the tree

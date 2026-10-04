@@ -93,3 +93,4 @@ undo-late-pile	8ffa80bc589677d9	2026-10-04	red
 stale-check-mtime	90c07a711f2ab064	2026-10-04	green-before: deliberate: the behaviour was already right; the test pins the decision (see the entry's note)
 move-enter-multi	2d9b763a08420dc0	2026-10-04	red
 tree-dom-focus	c3e0cf9033a957f3	2026-10-04	red
+keyboard-context-menu	24e6f288a5bacc0d	2026-10-04	red
