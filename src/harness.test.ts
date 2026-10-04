@@ -43,7 +43,7 @@ describe('the harness', () => {
     const gone: Entry = { ...ok, verify: 'pnpm vitest run src/x -t "a test that is gone"' };
     // An open entry may name a test not written yet; a closed one may not.
     expect(problems([gone], new Map(), tests)).toEqual([]);
-    expect(problems([{ ...gone, passes: true }], new Map(), tests).some((m) => /matches no test/.test(m))).toBe(true);
+    expect(problems([{ ...gone, passes: true }], new Map(), tests).some((m: string) => /matches no test/.test(m))).toBe(true);
     const loose: Entry = { ...ok, verify: 'pnpm vitest run src/x -t ""' };
     expect(problems([loose], new Map(), tests)[0]).toMatch(/too short/);
     const pwa: Entry = { ...ok, verify: 'pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts' };
