@@ -125,3 +125,25 @@ test('tabs come back after a reload', async ({ page, isMobile }) => {
   await expect(page.locator('[data-tab]')).toHaveCount(2);
   await expect(page.locator('[data-tab]').last()).toContainText(/Lease draft/);
 });
+
+test('Try again opens the tidy-up', async ({ page }) => {
+  await open(page, '/', 'fail-run');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('alert').getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
+test('the palette is named once', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the keyboard palette');
+  await open(page, '/');
+  await page.keyboard.press('ControlOrMeta+k');
+  const dialog = page.getByRole('dialog', { name: 'Command palette' });
+  await expect(dialog).toBeVisible();
+  // The box inside says what to type, not the dialog's name again.
+  await expect(dialog.getByRole('combobox', { name: 'Command palette' })).toHaveCount(0);
+  await expect(dialog.getByRole('combobox', { name: 'Search your notes, or type a command' })).toBeVisible();
+});

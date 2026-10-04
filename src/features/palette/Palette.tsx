@@ -91,7 +91,7 @@ export function Palette() {
         <Dialog.Content className={s.box} aria-describedby={undefined} onCloseAutoFocus={(e) => e.preventDefault()}>
           <Dialog.Title className="sr-only">{desktop ? 'Command palette' : 'Search'}</Dialog.Title>
           <Command
-            label={desktop ? 'Command palette' : 'Search'}
+            label={desktop ? 'Search your notes, or type a command' : 'Search your notes'}
             loop
             filter={(value, search) => {
               // Every word must match; actions come before notes and folders.

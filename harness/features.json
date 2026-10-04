@@ -1815,7 +1815,7 @@
       "Try again on Home: the tidy-up sheet opens with the run."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"Try again opens the tidy-up\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "palette-label-once",

@@ -97,7 +97,7 @@ function StoppedCard({ run }: { run: RunState }) {
         </div>
       </div>
       <div className={s.row2}>
-        <Button size="sm" onClick={() => void startRun(runs, run.scope).catch((e: unknown) => report(e, 'It did not start. Try again in a minute.'))}>
+        <Button size="sm" onClick={() => void startRun(runs, run.scope).then(() => useUi.getState().setTidy(true), (e: unknown) => report(e, 'It did not start. Try again in a minute.'))}>
           Try again
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
