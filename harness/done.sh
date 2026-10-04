@@ -40,7 +40,7 @@ others=$(node --input-type=module -e '
 
 # 2. Red before green.
 excl='\.test\.tsx?$|^e2e/|^src/data/contract/|^src/testing/'
-paths="src public index.html vite.config.ts scripts package.json"
+paths="src public index.html vite.config.ts scripts package.json AGENTS.md docs"
 # Changed or new code (tests and the harness's own records stay): the change being proved.
 code=$(git status --porcelain --untracked-files=all -- $paths | sed 's/^...//' | grep -vE "$excl" || true)
 expect_red() {

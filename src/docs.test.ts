@@ -29,4 +29,14 @@ describe('what the repository promises', () => {
   it("the fixture says how its timeline dates work", () => {
     expect(read('src/data/demo/fixture.ts')).toMatch(/Timeline dates are fixed text/);
   });
+
+  it('the docs say which writes check what (a content write passes its modifiedTime; a move or rename checks name and place)', () => {
+    for (const doc of ['AGENTS.md', 'docs/superpowers/plans/2026-10-04-phase-2-app-logic.md']) {
+      const text = read(doc);
+      expect(text, doc).not.toMatch(/every write passes the modifiedTime/);
+      expect(text, doc).toMatch(/content write passes the modifiedTime it read/);
+      expect(text, doc).toMatch(/move or rename checks the name and place it read/);
+    }
+    expect(read('docs/superpowers/plans/2026-10-04-phase-2-ledger.md')).toMatch(/Ruling: a move or rename is not a content conflict/);
+  });
 });

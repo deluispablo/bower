@@ -22,7 +22,7 @@
 - **UI copy:** English, no jargon. Say "your notes" or "your Bower folder", never "vault", "Drive id" or "journal".
 - **No hard deletes from the app:** only Drive's Bin (`trashed: true`). The app never writes `index.md`, `hot.md` or `log.md`.
 - **Ownership:** the app never writes a note's *Current state*, *Timeline* or *Bower's note* sections, or the frontmatter keys Bower owns. Only the body is yours: tasks, rename, move.
-- **Concurrency:** every write to an existing text file passes the `modifiedTime` it read. On a mismatch it writes nothing and rejects with `BowerError('conflict', 'This note changed somewhere else. Open it again to see the new version.')`.
+- **Concurrency:** every content write passes the modifiedTime it read (a write to an existing text file); a move or rename checks the name and place it read, since a text change elsewhere does not clash with it. On a mismatch either writes nothing and rejects with `BowerError('conflict', 'This note changed somewhere else. Open it again to see the new version.')`.
 - **Tests:** hermetic, with no network, no real Google and no real Claude. `fetch` is stubbed, and Drive is `FakeDrive`.
 - **Gates:** `pnpm check` (lint, typecheck, unit tests, build) green after every task. `pnpm e2e` green on the demo after every task that touches screens.
 - **Dependencies:** a new runtime dependency needs a one-line reason in the commit body.

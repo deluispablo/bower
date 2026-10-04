@@ -107,3 +107,4 @@ The record of how phase 2 was built: each task's completion, every ruling (a dec
 - Final: minor (deferred): journal records carry a path, not a Drive file id.
 - Final: minor (deferred): PWA navigateFallback would catch same-origin Worker routes (now noted in the contract).
 - Final: minor (deferred): small uploads jump from 0 to 99%.
+- Final: Ruling: a move or rename is not a content conflict — it checks the name and place it read (stillAsSeen), not modifiedTime, so a tick on another device does not block a move — cost if wrong: a move after a remote rename-and-edit loses nothing, the text travels with the file.

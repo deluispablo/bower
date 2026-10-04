@@ -1189,7 +1189,7 @@
     "what": "The plan and AGENTS.md still say every write passes its modifiedTime, against the stale-check decision.",
     "steps": [],
     "verify": "pnpm vitest run src/docs.test.ts -t \"content write\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "bin-count-words",
