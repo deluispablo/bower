@@ -316,3 +316,19 @@ test('the Demo pill never covers a button', async ({ page, isMobile }) => {
     expect(clash, path).toBeNull();
   }
 });
+
+test('binning a folder with things asks first', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/files/Resources/Cooking');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /^Cooking/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to Bin' }).click();
+  const ask = page.getByRole('dialog', { name: 'Put Cooking in the Bin?' });
+  await expect(ask).toContainText(/things inside go with it/);
+  await ask.getByRole('button', { name: 'Keep it' }).click();
+  await expect(tree.getByRole('treeitem', { name: /^Cooking/ })).toBeVisible();
+  await tree.getByRole('treeitem', { name: /^Cooking/ }).click();
+  await page.keyboard.press('Delete');
+  await page.getByRole('dialog', { name: 'Put Cooking in the Bin?' }).getByRole('button', { name: 'Put it in the Bin' }).click();
+  await expect(page.getByRole('status').getByText(/Cooking is in the Bin/)).toBeVisible();
+});

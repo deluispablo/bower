@@ -29,6 +29,16 @@ const SORTS: Array<[SortOrder, string] | null> = [
 
 /** Things in a folder, not counting the notes that describe piles. */
 
+/** A folder with things in it asks first (ConfirmBin); anything else goes to the Bin at once, with Undo. */
+function useBinOrAsk(): (node: TreeNode) => void {
+  const act = useFileActions();
+  return (node) => {
+    const count = node.type === 'folder' ? countThings(node) : 0;
+    if (count > 0) useUi.getState().setConfirmBin({ path: node.path, count });
+    else void act.trash(node.path);
+  };
+}
+
 const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
 
 const KIND_BADGE: Record<string, string> = { pdf: 'pdf', image: 'jpg', link: 'link', doc: 'doc', sheet: 'sheet', audio: 'audio' };
@@ -64,6 +74,7 @@ export function Explorer({ variant }: Props) {
   const { data: tree, loading } = useTree();
   const ui = useUi();
   const act = useFileActions();
+  const binOrAsk = useBinOrAsk();
   const routePath = useRoutePath();
   const goTo = useNavigate();
   /** A brand-new note, once named, opens; both say where they were made. */
@@ -189,7 +200,7 @@ export function Explorer({ variant }: Props) {
       case 'Backspace':
         if (row && !isRoot(row.node.path) && !inInbox(row.node.path) && (e.metaKey || e.key === 'Delete')) {
           e.preventDefault();
-          void act.trash(row.node.path);
+          binOrAsk(row.node);
         }
         return;
     }
@@ -509,6 +520,7 @@ type SepComp = typeof ContextMenu.Separator;
 /** The menu of a row; the same items on right-click and in the phone sheet. */
 export function useNodeMenu(node: TreeNode) {
   const act = useFileActions();
+  const binOrAsk = useBinOrAsk();
   const ui = useUi();
   const folder = node.type === 'folder';
   const root = isRoot(node.path);
@@ -552,7 +564,7 @@ export function useNodeMenu(node: TreeNode) {
   items.push({ key: 'drive', label: 'Open in Drive', icon: 'drive', run: () => act.openInDrive(node.path) });
   if (!root) {
     items.push('sep');
-    items.push({ key: 'bin', label: 'Move to Bin', icon: 'trash', danger: true, run: () => void act.trash(node.path) });
+    items.push({ key: 'bin', label: 'Move to Bin', icon: 'trash', danger: true, run: () => binOrAsk(node) });
   }
   return items;
 }

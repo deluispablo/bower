@@ -16,3 +16,5 @@
 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .pickName { font-weight: 600; white-space: nowrap; }
 .pickPath { margin-left: auto; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.confirmRow { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

@@ -33,6 +33,9 @@ interface UiState {
   // bookmarks (device-only in phase 1)
   bookmarks: string[];
   toggleBookmark: (path: string) => void;
+  /** A folder with things in it, waiting for a yes before it goes to the Bin. */
+  confirmBin: { path: string; count: number } | null;
+  setConfirmBin: (v: { path: string; count: number } | null) => void;
   /** Keeps only the bookmarks for which `exists` says yes (things gone from the folder are dropped). */
   pruneBookmarks: (exists: (path: string) => boolean) => void;
   /** A thing moved or was renamed: open folders, selection and bookmarks follow; gone: they drop it. */
@@ -114,6 +117,8 @@ export const useUi = create<UiState>((set, get) => ({
     write(BM_KEY, next);
     set({ bookmarks: next });
   },
+  confirmBin: null,
+  setConfirmBin: (v) => set({ confirmBin: v }),
   pruneBookmarks: (exists) => {
     const b = get().bookmarks;
     const next = b.filter(exists);

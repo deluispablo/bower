@@ -48,3 +48,4 @@
 - 2026-10-04: note-outline-sources passes — fix(note): the outline lists Bower's sections, timeline sources link to their files, no future dates in the demo
 - 2026-10-04: phone-one-bird passes — test(tidy): no bird of the page shows above an open sheet
 - 2026-10-04: demo-pill-overlap passes — fix(demo): on the phone the Demo pill is a slim tab on the left edge, clear of every button
+- 2026-10-04: bin-folder-confirm passes — fix(explorer): a folder with things in it goes to the Bin only after a yes
