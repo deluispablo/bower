@@ -18,7 +18,7 @@
     "task": 3,
     "what": "A Google Drive client over the REST API, with retries and token refresh",
     "verify": "pnpm vitest run src/data/drive/drive-http.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "layout-seed",
