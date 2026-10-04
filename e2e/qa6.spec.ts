@@ -98,3 +98,16 @@ test('signing out and in sticks', async ({ page }) => {
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByText('you@example.com')).toBeVisible();
 });
+
+test('first sign-in can be chosen again', async ({ page }) => {
+  await open(page, '/', 'first');
+  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: 'Demo situations' }).click();
+  await page.getByLabel('Alex, with piles waiting').click();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await page.getByRole('button', { name: 'Demo situations' }).click();
+  await page.getByLabel('First sign-in: no Bower folder yet').click();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('heading', { name: 'Your folder is ready' })).toBeVisible({ timeout: 10_000 });
+});

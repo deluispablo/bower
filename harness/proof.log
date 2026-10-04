@@ -96,3 +96,4 @@ tree-dom-focus	c3e0cf9033a957f3	2026-10-04	red
 keyboard-context-menu	24e6f288a5bacc0d	2026-10-04	red
 settings-real-user	19babed6e51c7fb0	2026-10-04	red
 signout-sticks	e8484bcbd921940c	2026-10-04	red
+first-run-repeatable	1f45a4ef20c73f8d	2026-10-04	green-before: the fix landed in e6e5ce7; checked red by taking out its one line

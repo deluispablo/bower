@@ -1104,7 +1104,7 @@
     "what": "After a tour in a tab, choosing First sign-in again opens Home, not the welcome.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"first sign-in can be chosen again\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "notify-row-state",
