@@ -260,3 +260,13 @@ test('Add keeps one copy of a file added twice', async ({ page }) => {
   const axe = await new AxeBuilder({ page }).include('main').analyze();
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
 });
+
+test('a folder counts what it shows', async ({ page }) => {
+  await open(page, '/files/Projects/Flat%20hunt');
+  const rows = await page.locator('main ul li a[href]').filter({ has: page.locator('svg') }).count();
+  await expect(page.locator('main header p').first()).toHaveText(`${rows} ${rows === 1 ? 'thing' : 'things'}`);
+  await open(page, '/files/Resources/Cooking');
+  await page.getByRole('radio', { name: 'Table' }).click();
+  await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Status' })).toHaveCount(0);
+});

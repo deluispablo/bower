@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { usePiles, useSources, useTree } from '@/data/provider';
 import { countThings } from '@/data/piles';
-import { countFiles, displayName, findNode, parentOf, sortNodes, type SortOrder } from '@/data/tree';
+import { displayName, findNode, parentOf, sortNodes, type SortOrder } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
@@ -138,7 +138,8 @@ function Folder({ path }: { path: string }) {
             <span className={s.dotBig} style={{ background: paraColor(path) }} />
             {node.name}
           </h1>
-          <p className="muted">{plural(countFiles(node), 'thing')}</p>
+          {/* What is directly here, as the list shows it: a subfolder counts once, the folder's own note not at all. */}
+          <p className="muted">{plural(children.filter((c) => !c.hub).length, 'thing')}</p>
         </div>
         <div className={s.views} role="radiogroup" aria-label="View">
           <button type="button" role="radio" aria-checked={view === 'list'} onClick={() => changeView('list')}>
@@ -298,7 +299,9 @@ function FolderTable({ items }: { items: TreeNode[] }) {
       bv = value(b, k);
     return (k === 'modified' ? Number(av) - Number(bv) : av.localeCompare(bv, undefined, { numeric: true })) * sortBy.dir;
   });
-  const cols: Array<[string, string]> = [['name', 'Name'], ['status', 'Status'], ...propKeys, ['modified', 'Changed']];
+  // A Status column only when something here has a status.
+  const hasStatus = items.some((i) => !!notes[i.path]?.status);
+  const cols: Array<[string, string]> = [['name', 'Name'], ...(hasStatus ? [['status', 'Status'] as [string, string]] : []), ...propKeys, ['modified', 'Changed']];
   const head = (k: string, label: string) => (
     <th key={k} aria-sort={sortBy.key === k ? (sortBy.dir === 1 ? 'ascending' : 'descending') : 'none'}>
       <button type="button" onClick={() => setSortBy({ key: k, dir: sortBy.key === k ? (sortBy.dir === 1 ? -1 : 1) : 1 })}>
@@ -322,7 +325,7 @@ function FolderTable({ items }: { items: TreeNode[] }) {
                   {value(i, 'name')}
                 </Link>
               </td>
-              <td>{value(i, 'status') && <span className={s.status}>{value(i, 'status')}</span>}</td>
+              {hasStatus && <td>{value(i, 'status') && <span className={s.status}>{value(i, 'status')}</span>}</td>}
               {propKeys.map(([k]) => (
                 <td key={k}>{value(i, k)}</td>
               ))}

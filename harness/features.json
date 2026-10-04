@@ -439,7 +439,7 @@
       "/files/Projects/Flat hunt"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"a folder counts what it shows\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "note-outline-sources",
