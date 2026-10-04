@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import { thingsIn, waitingIn } from '@/data/piles';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { plural } from '@/app/words';
 import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
+import { toast } from '@/ui/toast';
 import { Icon } from '@/ui/Icon';
 import { PoseBower } from '@/bird/Bower';
-import { isRunning, runClock, runDetail, runTitle, STEP_LABEL, stepState } from './run-words';
+import { hasReplay, isRunning, runClock, runDetail, runTitle, STEP_LABEL, stepState } from './run-words';
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import s from './tidy.module.css';
@@ -18,8 +20,14 @@ export function TidySheet() {
   const { data: run } = useRun();
   const running = isRunning(run);
   const showRun = !!run && (running || !run.seen);
+  const { runs } = useSources();
+  const onOpenChange = (open: boolean): void => {
+    // Closing on a finished run with nothing to replay: it has been seen.
+    if (!open && run && run.phase === 'done' && !run.seen && !hasReplay(run)) void runs.markSeen(run.id);
+    setTidy(open);
+  };
   return (
-    <Sheet open={tidyOpen} onOpenChange={setTidy} title={showRun && run ? runTitle(run) : 'Tidy up'} hideTitle className={s.sheet}>
+    <Sheet open={tidyOpen} onOpenChange={onOpenChange} title={showRun && run ? runTitle(run) : 'Tidy up'} hideTitle className={s.sheet}>
       {showRun && run ? <RunView run={run} /> : <Confirm />}
     </Sheet>
   );
@@ -30,7 +38,7 @@ function Confirm() {
   const { runs } = useSources();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const count = (piles ?? []).reduce((n, p) => n + p.items.length, 0);
+  const count = waitingIn(piles);
   const start = async (): Promise<void> => {
     setBusy(true);
     setError(null);
@@ -59,9 +67,9 @@ function Confirm() {
         <ul className={s.piles}>
           {piles.map((p) => (
             <li key={p.id}>
-              <Icon name={p.text ? 'pile' : p.items[0]?.kind === 'link' ? 'link' : 'file'} size={18} />
+              <Icon name={!p.items.length ? 'note' : p.text ? 'pile' : p.items[0]?.kind === 'link' ? 'link' : 'file'} size={18} />
               <span>{p.text || p.items[0]?.name}</span>
-              <span className="muted">{p.items.length}</span>
+              <span className="muted">{thingsIn(p)}</span>
             </li>
           ))}
         </ul>
@@ -108,7 +116,17 @@ function RunView({ run }: { run: RunState }) {
       )}
       <p className={s.clock}>{runClock(run, now)}</p>
       <div className={s.actions}>
-        {run.phase === 'done' ? (
+        {run.phase === 'done' && !hasReplay(run) ? (
+          <Button
+            block
+            onClick={() => {
+              void runs.markSeen(run.id);
+              setTidy(false);
+            }}
+          >
+            Done
+          </Button>
+        ) : run.phase === 'done' ? (
           <>
             <Button
               onClick={() => {
@@ -130,7 +148,7 @@ function RunView({ run }: { run: RunState }) {
           </>
         ) : run.phase === 'failed' ? (
           <>
-            <Button onClick={() => void runs.start('all').catch(() => undefined)}>Try again</Button>
+            <Button onClick={() => void runs.start(run.scope).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again in a minute.'))}>Try again</Button>
             <Button
               variant="ghost"
               onClick={() => {

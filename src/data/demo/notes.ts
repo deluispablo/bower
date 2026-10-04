@@ -22,7 +22,7 @@ export const NOTES: Record<string, NoteSeed> = {
     ],
     status: 'active',
     tags: ['project'],
-    currentState: ['Three flats on the shortlist; [[Flat 3, 12 Mill Lane]] is the favourite.', 'References are due on Friday.', 'Notice on the current flat must be given by 31 October.'],
+    currentState: ['Three flats on the shortlist; [[Flat 3, 12 Larkspur Lane]] is the favourite.', 'References are due on Friday.', 'Notice on the current flat must be given by 31 October.'],
     body: `## What matters
 
 - Two bedrooms, one usable as an office
@@ -33,31 +33,31 @@ export const NOTES: Record<string, NoteSeed> = {
 
 | Flat | Rent | Commute | Status |
 | --- | --- | --- | --- |
-| [[Flat 3, 12 Mill Lane]] | £1,450 | 24 min | viewing done |
-| [[Flat 7, Rosebery Ave]] | £1,580 | 18 min | viewing booked |
-| [[Flat 2, 40 Canal Street]] | £1,390 | 35 min | maybe |
+| [[Flat 3, 12 Larkspur Lane]] | £1,450 | 24 min | viewing done |
+| [[Flat 7, Cobble Row]] | £1,580 | 18 min | viewing booked |
+| [[Flat 2, 40 Tanners Walk]] | £1,390 | 35 min | maybe |
 
 ## Next steps
 
 - [x] Ask the bank for a reference letter
-- [ ] Send references to Harbour Lettings by Friday
+- [ ] Send references to Kittiwake Lettings by Friday
 - [ ] Give notice on the current flat by 31 October
 - [ ] Book a van for the last weekend of November`,
     timeline: [
       { date: '28 Sep', text: 'Project started from a pile with three listings.' },
-      { date: '2 Oct', text: 'Viewing photos of Mill Lane filed.', source: 'IMG_2290.jpg' },
-      { date: 'Today', text: 'Mill Lane moved to "viewing done"; references due Friday.', source: 'Lease draft.pdf' },
+      { date: '2 Oct', text: 'Viewing photos of Larkspur Lane filed.', source: 'IMG_2290.jpg' },
+      { date: 'Today', text: 'Larkspur Lane moved to "viewing done"; references due Friday.', source: 'Lease draft.pdf' },
     ],
-    links: [`${P}/Flat hunt/Flat 3, 12 Mill Lane.md`, `${P}/Flat hunt/Flat 7, Rosebery Ave.md`, `${P}/Flat hunt/Flat 2, 40 Canal Street.md`],
+    links: [`${P}/Flat hunt/Flat 3, 12 Larkspur Lane.md`, `${P}/Flat hunt/Flat 7, Cobble Row.md`, `${P}/Flat hunt/Flat 2, 40 Tanners Walk.md`],
   },
-  [`${P}/Flat hunt/Flat 3, 12 Mill Lane.md`]: {
+  [`${P}/Flat hunt/Flat 3, 12 Larkspur Lane.md`]: {
     summary: 'Two-bed flat near the station, £1,450 a month, viewing done, waiting on the agent.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Flat' },
       { key: 'rent', label: 'Rent', value: '£1,450 a month' },
       { key: 'bedrooms', label: 'Bedrooms', value: '2' },
       { key: 'commute', label: 'Commute', value: '24 min' },
-      { key: 'agent', label: 'Agent', value: 'Harbour Lettings' },
+      { key: 'agent', label: 'Agent', value: 'Kittiwake Lettings' },
     ],
     status: 'viewing done',
     tags: ['flat', 'shortlist'],
@@ -74,24 +74,24 @@ export const NOTES: Record<string, NoteSeed> = {
 - [ ] Can we paint the second bedroom?
 - [ ] Is there storage for two bikes?
 
-Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
+Compare with [[Flat 7, Cobble Row]] and [[Flat 2, 40 Tanners Walk]].`,
     timeline: [
-      { date: '29 Sep', text: 'Listing saved; rent and agent filled in.', source: 'flat-camden.example' },
+      { date: '29 Sep', text: 'Listing saved; rent and agent filled in.', source: 'flat-listing.example' },
       { date: '2 Oct', text: 'Viewing photos added.', source: 'IMG_2290.jpg' },
       { date: 'Today', text: 'Lease draft read: 12-month break clause, deposit of five weeks.', source: 'Lease draft.pdf' },
     ],
     bowerNote: { text: 'The listing does not say whether bills are included. Similar flats on the same street ask £1,500 to £1,600, so the rent is fair.', source: 'both' },
-    links: [`${P}/Flat hunt/Flat 7, Rosebery Ave.md`, `${P}/Flat hunt/Flat 2, 40 Canal Street.md`, `${P}/Flat hunt/Flat hunt.md`],
+    links: [`${P}/Flat hunt/Flat 7, Cobble Row.md`, `${P}/Flat hunt/Flat 2, 40 Tanners Walk.md`, `${P}/Flat hunt/Flat hunt.md`],
     original: `${P}/Flat hunt/Lease draft.pdf`,
   },
-  [`${P}/Flat hunt/Flat 7, Rosebery Ave.md`]: {
+  [`${P}/Flat hunt/Flat 7, Cobble Row.md`]: {
     summary: 'Top-floor two-bed with a balcony, £1,580 a month, 18 minutes to work; viewing on Thursday.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Flat' },
       { key: 'rent', label: 'Rent', value: '£1,580 a month' },
       { key: 'bedrooms', label: 'Bedrooms', value: '2' },
       { key: 'commute', label: 'Commute', value: '18 min' },
-      { key: 'agent', label: 'Agent', value: 'Northgate Homes' },
+      { key: 'agent', label: 'Agent', value: 'Hollin & Rowe' },
     ],
     status: 'viewing booked',
     tags: ['flat', 'shortlist'],
@@ -101,10 +101,10 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
 - [ ] Check the water pressure upstairs
 - [ ] Ask about the service charge
 - [ ] Measure the second bedroom for a desk`,
-    timeline: [{ date: '1 Oct', text: 'Listing saved; viewing booked for Thursday.', source: 'rosebery-listing.example' }],
-    links: [`${P}/Flat hunt/Flat hunt.md`, `${P}/Flat hunt/Flat 3, 12 Mill Lane.md`],
+    timeline: [{ date: '1 Oct', text: 'Listing saved; viewing booked for Thursday.', source: 'cobble-row-listing.example' }],
+    links: [`${P}/Flat hunt/Flat hunt.md`, `${P}/Flat hunt/Flat 3, 12 Larkspur Lane.md`],
   },
-  [`${P}/Flat hunt/Flat 2, 40 Canal Street.md`]: {
+  [`${P}/Flat hunt/Flat 2, 40 Tanners Walk.md`]: {
     summary: 'Cheapest option at £1,390 a month, but 35 minutes to work; kept as a fallback.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Flat' },
@@ -123,55 +123,55 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
 
   // ---------- Projects / Job hunt
   [`${P}/Job hunt/Job hunt.md`]: {
-    summary: 'Looking for a senior data role in London, hybrid, from £65,000; three applications open.',
+    summary: 'Looking for a senior design role in Wrenmouth, hybrid, from £55,000; three applications open.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Project' },
       { key: 'due', label: 'Due', value: '31 Dec' },
     ],
     status: 'active',
     tags: ['project', 'career'],
-    currentState: ['First interview with Altis on Thursday.', 'Northwind has not answered in 11 days.', 'Skills asked for most often: dbt, Snowflake, stakeholder management.'],
+    currentState: ['First interview with Lumenfold on Thursday.', 'Quillstone has not answered in 11 days.', 'Skills asked for most often: design for manufacture, sustainable materials, client presentations.'],
     body: `## Applications
 
 | Role | Fit | Status |
 | --- | --- | --- |
-| [[Senior Consultant, Altis]] | 8 | interview |
-| [[Product Lead, Northwind]] | 6 | applied |
-| [[Data Engineer, Fabrikam]] | 7 | new |
+| [[Senior Product Designer, Lumenfold]] | 8 | interview |
+| [[Design Lead, Quillstone]] | 6 | applied |
+| [[Industrial Designer, Ferrowick]] | 7 | new |
 
 ## This week
 
 - [x] Update the CV with the migration project
-- [ ] Prepare the Altis interview story
-- [ ] Chase Northwind`,
+- [ ] Prepare the Lumenfold interview story
+- [ ] Chase Quillstone`,
     timeline: [
       { date: '15 Sep', text: 'Project started.' },
-      { date: '1 Oct', text: 'Applied to Altis; fit scored against [[CV insights]].' },
-      { date: '3 Oct', text: 'Interview invitation from Altis.', source: 'Interview invitation.pdf' },
+      { date: '1 Oct', text: 'Applied to Lumenfold; fit scored against [[CV insights]].' },
+      { date: '3 Oct', text: 'Interview invitation from Lumenfold.', source: 'Interview invitation.pdf' },
     ],
-    links: [`${P}/Job hunt/Applications/Senior Consultant, Altis.md`, `${P}/Job hunt/Applications/Product Lead, Northwind.md`, `${P}/Job hunt/Applications/Data Engineer, Fabrikam.md`, `${P}/Job hunt/CV insights.md`],
+    links: [`${P}/Job hunt/Applications/Senior Product Designer, Lumenfold.md`, `${P}/Job hunt/Applications/Design Lead, Quillstone.md`, `${P}/Job hunt/Applications/Industrial Designer, Ferrowick.md`, `${P}/Job hunt/CV insights.md`],
   },
-  [`${P}/Job hunt/Applications/Senior Consultant, Altis.md`]: {
-    summary: 'Senior consultant role at Altis, applied 1 Oct, first interview on Thursday.',
+  [`${P}/Job hunt/Applications/Senior Product Designer, Lumenfold.md`]: {
+    summary: 'Senior product designer role at Lumenfold, applied 1 Oct, first interview on Thursday.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Job offer' },
-      { key: 'company', label: 'Company', value: 'Altis Consulting' },
+      { key: 'company', label: 'Company', value: 'Lumenfold Studio' },
       { key: 'salary', label: 'Salary', value: '£68,000 to £75,000' },
       { key: 'fit', label: 'Fit', value: '8 out of 10' },
       { key: 'where', label: 'Where', value: 'Hybrid, 2 days in the office' },
     ],
     status: 'interview',
     tags: ['job'],
-    currentState: ['First interview on Thursday at 10:00, video call.', 'Strong match on data strategy and client work; weaker on the public-sector experience they ask for.'],
+    currentState: ['First interview on Thursday at 10:00, video call.', 'Strong match on lighting and furniture work; weaker on the medical devices experience they ask for.'],
     body: `## Why it fits
 
 - Leads client projects, as in the last two roles
-- Asks for SQL and cloud data platforms
+- Asks for 3D modelling and rapid prototyping
 
 ## To prepare
 
 - [x] Read their last two case studies
-- [ ] A short story about the migration project
+- [ ] A short story about the desk lamp redesign
 - [ ] Questions about travel`,
     timeline: [
       { date: '1 Oct', text: 'Applied; fit scored against [[CV insights]].' },
@@ -179,33 +179,33 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
     ],
     links: [`${P}/Job hunt/CV insights.md`, `${P}/Job hunt/Job hunt.md`],
   },
-  [`${P}/Job hunt/Applications/Product Lead, Northwind.md`]: {
-    summary: 'Product lead for a data platform at Northwind; applied 23 Sep, no answer yet.',
+  [`${P}/Job hunt/Applications/Design Lead, Quillstone.md`]: {
+    summary: 'Design lead for a kitchenware range at Quillstone; applied 23 Sep, no answer yet.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Job offer' },
-      { key: 'company', label: 'Company', value: 'Northwind' },
+      { key: 'company', label: 'Company', value: 'Quillstone' },
       { key: 'salary', label: 'Salary', value: '£70,000' },
       { key: 'fit', label: 'Fit', value: '6 out of 10' },
     ],
     status: 'applied',
     tags: ['job'],
-    currentState: ['Applied on 23 September; no answer in 11 days.', 'More product than data work; missing roadmap ownership.'],
+    currentState: ['Applied on 23 September; no answer in 11 days.', 'More management than hands-on design; missing team-lead experience.'],
     body: 'Found through a recruiter. The role reports to the head of product.',
     timeline: [{ date: '23 Sep', text: 'Applied; fit scored against [[CV insights]].' }],
     links: [`${P}/Job hunt/CV insights.md`],
   },
-  [`${P}/Job hunt/Applications/Data Engineer, Fabrikam.md`]: {
-    summary: 'Data engineer offer from Fabrikam, £66,000, fully remote; new, not yet answered.',
+  [`${P}/Job hunt/Applications/Industrial Designer, Ferrowick.md`]: {
+    summary: 'Industrial designer offer from Ferrowick, £54,000, fully remote; new, not yet answered.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Job offer' },
-      { key: 'company', label: 'Company', value: 'Fabrikam' },
+      { key: 'company', label: 'Company', value: 'Ferrowick' },
       { key: 'salary', label: 'Salary', value: '£66,000' },
       { key: 'fit', label: 'Fit', value: '7 out of 10' },
       { key: 'where', label: 'Where', value: 'Remote' },
     ],
     status: 'new',
     tags: ['job'],
-    currentState: ['Offer letter received; answer expected within two weeks.', 'Good match on pipelines and dbt; less client work than Alex wants.'],
+    currentState: ['Offer letter received; answer expected within two weeks.', 'Good match on prototyping and materials; less client work than Alex wants.'],
     body: '',
     timeline: [{ date: '15 Sep', text: 'Job advert saved and scored against [[CV insights]].' }],
     links: [`${P}/Job hunt/CV insights.md`, `${P}/Job hunt/Job hunt.md`],
@@ -214,23 +214,23 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
     summary: 'What the CV shows and what job offers keep asking for: the base for every fit score.',
     properties: [{ key: 'kind', label: 'Kind', value: 'Profile' }],
     tags: ['career'],
-    currentState: ['Strong: client delivery, SQL, data migration, mentoring.', 'Gaps asked for in 3 of the last 5 offers: dbt, Snowflake.'],
+    currentState: ['Strong: client projects, 3D modelling, prototyping, mentoring.', 'Gaps asked for in 3 of the last 5 offers: design for manufacture, sustainable materials.'],
     body: `## Skills asked for most
 
 | Skill | Offers asking | On the CV |
 | --- | --- | --- |
-| SQL | 5 | yes |
-| dbt | 3 | no |
-| Snowflake | 3 | no |
-| Stakeholder management | 4 | yes |`,
-    timeline: [{ date: '7 Oct', text: 'Tally updated with the Altis offer.' }],
+| 3D modelling | 5 | yes |
+| Design for manufacture | 3 | no |
+| Sustainable materials | 3 | no |
+| Client presentations | 4 | yes |`,
+    timeline: [{ date: '7 Oct', text: 'Tally updated with the Lumenfold offer.' }],
     links: [],
     original: `${P}/Job hunt/CV 2026.pdf`,
   },
 
-  // ---------- Projects / Lisbon trip
-  [`${P}/Lisbon trip/Lisbon trip.md`]: {
-    summary: 'Long weekend in Lisbon, 7 to 10 November: flights and hotel booked.',
+  // ---------- Projects / Saltmere weekend
+  [`${P}/Saltmere weekend/Saltmere weekend.md`]: {
+    summary: 'Long weekend in Saltmere, 7 to 10 November: flights and hotel booked.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Trip' },
       { key: 'dates', label: 'Dates', value: '7 to 10 Nov' },
@@ -247,8 +247,8 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
 
 ## Ideas
 
-- Tram 28 early in the morning
-- Dinner in Alfama`,
+- The cliff railway early in the morning
+- Dinner by the harbour`,
     timeline: [
       { date: '13 Sep', text: 'Flights booked.', source: 'Flights.pdf' },
       { date: '13 Sep', text: 'Hotel booked, 3 nights.', source: 'Hotel booking.pdf' },
@@ -271,7 +271,7 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
     links: [`${A}/Home/Boiler service.md`],
   },
   [`${A}/Home/Boiler service.md`]: {
-    summary: 'Yearly boiler service, last done 14 Sep by Northside Heating, next due September 2027.',
+    summary: 'Yearly boiler service, last done 14 Sep by Fenwright Heating, next due September 2027.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Service' },
       { key: 'next', label: 'Next due', value: 'Sep 2027' },
@@ -340,27 +340,27 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
     timeline: [],
     links: [`${A}/Health/Health.md`],
   },
-  [`${A}/Visa & Immigration/Visa checklist.md`]: {
-    summary: 'Documents for the visa renewal due in March: 4 of 7 ready.',
+  [`${A}/Documents/Passport renewal.md`]: {
+    summary: 'Documents for the passport renewal due in March: 4 of 7 ready.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Checklist' },
       { key: 'due', label: 'Due', value: '1 Mar' },
     ],
     status: 'in progress',
-    tags: ['visa'],
-    currentState: ['4 of 7 documents ready.', 'The police certificate takes about 6 weeks: ask for it before mid-January.'],
-    body: `## Documents
+    tags: ['documents'],
+    currentState: ['4 of 7 things ready.', 'The witness for the photo form must have known Alex for two years.'],
+    body: `## To send
 
-- [x] Passport copy
+- [x] Old passport
+- [x] Two new photos
 - [x] Proof of address
-- [x] Payslips, last 6 months
-- [x] Employer letter
-- [ ] Police certificate
-- [ ] Bank statements, last 3 months
-- [ ] Two passport photos`,
+- [x] Application form, filled in
+- [ ] Photo form signed by a witness
+- [ ] Fee paid
+- [ ] Appointment booked`,
     timeline: [
       { date: '5 Aug', text: 'Passport copy filed; numbers left out.', source: 'Passport copy.pdf' },
-      { date: '4 Oct', text: 'September payslip added.', source: 'Payslip September.pdf' },
+      { date: '4 Oct', text: 'Application form filled in.' },
     ],
     links: [],
   },
@@ -426,19 +426,19 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
     timeline: [],
     links: [],
   },
-  [`${R}/Reading/How to take smart notes.md`]: {
+  [`${R}/Reading/Notes that grow.md`]: {
     summary: 'Notes on the book: write in your own words and link each note to others.',
     properties: [
       { key: 'kind', label: 'Kind', value: 'Book' },
-      { key: 'author', label: 'Author', value: 'Sönke Ahrens' },
+      { key: 'author', label: 'Author', value: 'Ida Marrow' },
     ],
     tags: ['reading'],
     currentState: [],
-    body: '- One idea per note\n- Link before you file\n- See also [[Clipping, Building a second brain]]',
+    body: '- One idea per note\n- Link before you file\n- See also [[Clipping, Four folders for everything]]',
     timeline: [],
-    links: [`${R}/Reading/Clipping, Building a second brain.md`],
+    links: [`${R}/Reading/Clipping, Four folders for everything.md`],
   },
-  [`${R}/Reading/Clipping, Building a second brain.md`]: {
+  [`${R}/Reading/Clipping, Four folders for everything.md`]: {
     summary: 'A clipped article on PARA: projects, areas, resources and archive.',
     properties: [{ key: 'kind', label: 'Kind', value: 'Clipping' }],
     tags: ['reading'],
@@ -453,7 +453,7 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
     tags: [],
     currentState: [],
     body: `- [ ] Fix the bike's back brake
-- [x] Print the Lisbon photos
+- [x] Print the Saltmere photos
 - [ ] Shelf for the hallway
 - [ ] Try the sourdough recipe`,
     timeline: [],
@@ -461,17 +461,17 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
   },
 
   // ---------- Archive
-  [`Archive/Trips/Porto 2025.md`]: {
+  [`Archive/Trips/Brackwater 2025.md`]: {
     summary: 'Four days in Porto in May 2025: what we spent and what we liked.',
     properties: [{ key: 'kind', label: 'Kind', value: 'Trip' }],
     status: 'done',
     tags: ['travel'],
     currentState: ['Spent £740 in total.'],
-    body: 'The port cellars in Gaia were the highlight; the river cruise was skippable.',
-    timeline: [{ date: '30 May 2025', text: 'Receipts filed.', source: 'Porto 2025 receipts.pdf' }],
+    body: 'The old salt works were the highlight; the boat trip was skippable.',
+    timeline: [{ date: '30 May 2025', text: 'Receipts filed.', source: 'Brackwater 2025 receipts.pdf' }],
     links: [],
   },
-  [`Archive/Old flat/Inventory, Mill Road.md`]: {
+  [`Archive/Old flat/Inventory, Hatchmere Road.md`]: {
     summary: 'Check-out inventory of the previous flat; deposit returned in full.',
     properties: [{ key: 'kind', label: 'Kind', value: 'Inventory' }],
     status: 'done',
@@ -488,20 +488,20 @@ Compare with [[Flat 7, Rosebery Ave]] and [[Flat 2, 40 Canal Street]].`,
     properties: [{ key: 'kind', label: 'Kind', value: 'Profile' }],
     tags: [],
     currentState: [],
-    body: `Alex works in data consulting in London and lives with a partner and a cat.
+    body: `Alex is an industrial designer in Wrenmouth and lives with a partner and a cat.
 
 ## Right now
 
 - Looking for a new flat by December ([[Flat hunt]])
-- Looking for a senior data role ([[Job hunt]])
-- Renewing the visa in March ([[Visa checklist]])
+- Looking for a senior design role ([[Job hunt]])
+- Renewing the passport in March ([[Passport renewal]])
 
 ## How Bower should write
 
 - Short notes, facts first, dates as "3 Oct"
 - Money in pounds
-- Never write passport, visa or account numbers`,
+- Never write passport or account numbers`,
     timeline: [],
-    links: [`${P}/Flat hunt/Flat hunt.md`, `${P}/Job hunt/Job hunt.md`, `${A}/Visa & Immigration/Visa checklist.md`],
+    links: [`${P}/Flat hunt/Flat hunt.md`, `${P}/Job hunt/Job hunt.md`, `${A}/Documents/Passport renewal.md`],
   },
 };

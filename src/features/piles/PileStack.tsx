@@ -6,6 +6,14 @@ const COLOR: Record<string, string> = { pdf: 'var(--accent)', image: 'var(--bran
 
 /** A pile drawn as a pile: up to three cards, the count on top. */
 export function PileStack({ items }: { items: PileItem[] }) {
+  if (!items.length)
+    return (
+      <span className={s.stack} aria-hidden="true">
+        <span className={s.card} style={{ transform: 'rotate(-4deg)', color: 'var(--para-archive)' }}>
+          <Icon name="note" size={15} />
+        </span>
+      </span>
+    );
   const top = items.slice(0, 3);
   return (
     <span className={s.stack} aria-hidden="true">

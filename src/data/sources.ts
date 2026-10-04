@@ -43,6 +43,8 @@ export interface VaultSource {
   piles(): Promise<Pile[]>;
   addPile(pile: NewPile): Promise<Pile>;
   removePile(id: string): Promise<void>;
+  /** Changes a pile's note before a tidy-up reads it. */
+  updatePile(id: string, text: string): Promise<Pile>;
   questions(): Promise<Question[]>;
   answer(id: string, yes: boolean): Promise<void>;
   rules(): Promise<Rule[]>;

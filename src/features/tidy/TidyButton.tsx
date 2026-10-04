@@ -1,6 +1,7 @@
 import { usePiles, useRun } from '@/data/provider';
+import { waitingIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
-import { isRunning, runShort } from './run-words';
+import { replayWaiting, isRunning, runShort, stoppedUnseen } from './run-words';
 import s from './tidy.module.css';
 
 /**
@@ -12,7 +13,7 @@ export function TidyButton() {
   const { data: run } = useRun();
   const { data: piles } = usePiles();
   const { setTidy, startReplay } = useUi();
-  const waiting = (piles ?? []).reduce((n, p) => n + p.items.length, 0);
+  const waiting = waitingIn(piles);
   if (run && isRunning(run))
     return (
       <button type="button" className={`${s.tidyBtn} ${s.tidyBusy}`} onClick={() => setTidy(true)}>
@@ -20,7 +21,13 @@ export function TidyButton() {
         {runShort(run)}
       </button>
     );
-  if (run?.phase === 'done' && !run.seen)
+  if (run && stoppedUnseen(run))
+    return (
+      <button type="button" className={`${s.tidyBtn} ${s.tidyStopped}`} onClick={() => setTidy(true)}>
+        Tidy-up stopped. See why
+      </button>
+    );
+  if (run && replayWaiting(run))
     return (
       <button type="button" className={s.tidyBtn} onClick={() => startReplay(run.id)}>
         {runShort(run)}. Watch

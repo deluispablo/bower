@@ -10,7 +10,7 @@ export const SCENARIOS = {
   back: 'Back after a tidy-up that ended while away',
   running: 'A tidy-up is running',
   empty: 'Nothing waiting in the inbox',
-  'fail-run': 'The next tidy-up fails',
+  'fail-run': 'The next tidy-up fails (trying again works)',
   slow: 'Everything answers slowly',
   offline: 'Offline',
 } as const;

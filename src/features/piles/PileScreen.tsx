@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
+import { BowerError, type Pile } from '@/data/types';
+import { PILE_NOTE, thingsIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
 import { ago, plural } from '@/app/words';
 import { Button, IconButton } from '@/ui/Button';
@@ -30,10 +32,11 @@ export function PileScreen() {
     );
   if (!pile) return <div className={s.page} aria-busy="true" />;
   const running = isRunning(run);
+  const onlyNote = !pile.items.length;
   return (
     <div className={s.page}>
       <div className={s.bar}>
-        <IconButton label="Back" onClick={() => nav(-1)}>
+        <IconButton label="Back" onClick={() => (history.length > 1 ? nav(-1) : nav('/'))}>
           <Icon name="back" />
         </IconButton>
         <span className="muted">Inbox</span>
@@ -41,25 +44,30 @@ export function PileScreen() {
       <div className={s.pileHead}>
         <PileStack items={pile.items} />
         <div>
-          <h1 className={s.title}>{pile.text || pile.items[0]?.name}</h1>
+          <h1 className={s.title}>{onlyNote ? 'A note' : pile.text || pile.items[0]?.name}</h1>
           <p className="muted">
-            {plural(pile.items.length, 'thing')}, added {ago(pile.createdAt).toLowerCase()}
+            {onlyNote ? 'Bower files it as a note where it belongs' : plural(thingsIn(pile), 'thing')}, added {ago(pile.createdAt).toLowerCase()}
           </p>
         </div>
       </div>
-      <ul className={s.items}>
-        {pile.items.map((it) => (
-          <li key={it.id}>
-            <span className={s.tile}>
-              <Icon name={it.kind === 'image' ? 'image' : it.kind === 'link' ? 'link' : 'file'} />
-            </span>
-            <span className={s.itemMain}>
-              <span className="mono">{it.name}</span>
-              <span className={s.itemSub}>{it.origin}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
+
+      <PileNote key={`${pile.id}:${pile.text}`} pile={pile} locked={running} />
+
+      {!onlyNote && (
+        <ul className={s.items} aria-label="In this pile">
+          {pile.items.map((it) => (
+            <li key={it.id}>
+              <span className={s.tile}>
+                <Icon name={it.kind === 'image' ? 'image' : it.kind === 'link' ? 'link' : 'file'} />
+              </span>
+              <span className={s.itemMain}>
+                <span className="mono">{it.name}</span>
+                <span className={s.itemSub}>{it.origin}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className={s.footer}>
         <Button block disabled={running} onClick={() => useUi.getState().setTidy(true)}>
           {running ? 'A tidy-up is running' : 'Tidy up'}
@@ -70,7 +78,7 @@ export function PileScreen() {
           </Button>
         ) : (
           <div className={s.confirm} role="alert">
-            <p>Its files go to the Bin of your Drive, where you can get them back.</p>
+            <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
                 variant="danger"
@@ -80,7 +88,7 @@ export function PileScreen() {
                       toast('Pile removed');
                       nav('/');
                     },
-                    () => toast('Wait for the tidy-up to end.'),
+                    (e: unknown) => toast(e instanceof BowerError ? e.message : 'That did not work. Try again.'),
                   )
                 }
               >
@@ -94,5 +102,51 @@ export function PileScreen() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The pile's note: what you wrote about it. Saved as `Pile note.md` in the
+ * pile's folder; Bower reads it with every thing in the pile. Editable until
+ * a tidy-up starts.
+ */
+function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
+  const { vault } = useSources();
+  const [text, setText] = useState(pile.text);
+  const [busy, setBusy] = useState(false);
+  const changed = text.trim() !== pile.text;
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      await vault.updatePile(pile.id, text);
+      toast('Note saved. Bower reads it in the next tidy-up.');
+    } catch (e) {
+      toast(e instanceof BowerError ? e.message : 'The note did not save. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className={s.noteBox} aria-labelledby="pile-note">
+      <label htmlFor="pile-note-text" id="pile-note">
+        {pile.items.length ? 'What is this?' : 'Your note'}
+      </label>
+      <textarea
+        id="pile-note-text"
+        rows={3}
+        value={text}
+        disabled={locked}
+        placeholder="One line about these things helps Bower most"
+        onChange={(e) => setText(e.target.value)}
+      />
+      <div className={s.noteFoot}>
+        <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? `Saved as ${PILE_NOTE} with the pile.` : 'No note yet.'}</span>
+        {changed && !locked && (
+          <Button size="sm" disabled={busy} onClick={() => void save()}>
+            {busy ? 'Saving…' : 'Save the note'}
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }

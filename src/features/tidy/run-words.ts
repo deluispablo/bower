@@ -27,6 +27,21 @@ export function isRunning(r: RunState | null | undefined): boolean {
   return !!r && r.phase !== 'done' && r.phase !== 'failed';
 }
 
+/** A finished run with things to replay (a tidy-up that filed something). */
+export function hasReplay(r: RunState | null | undefined): boolean {
+  return !!r && r.phase === 'done' && r.scope === 'all' && (r.report?.filed.length ?? 0) > 0;
+}
+
+/** A finished tidy-up whose replay has not been watched. */
+export function replayWaiting(r: RunState | null | undefined): boolean {
+  return hasReplay(r) && !r?.seen;
+}
+
+/** A run that stopped and the person has not looked at it yet. */
+export function stoppedUnseen(r: RunState | null | undefined): boolean {
+  return !!r && r.phase === 'failed' && !r.seen;
+}
+
 export function runTitle(r: RunState): string {
   switch (r.phase) {
     case 'queued':
@@ -83,7 +98,7 @@ export function runClock(r: RunState, now: number): string {
 
 /** The short line of the chip and the status bar. */
 export function runShort(r: RunState): string {
-  if (r.phase === 'done') return `${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
+  if (r.phase === 'done') return r.scope === 'instructions' ? 'Bower read your changes' : `${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
   if (r.phase === 'failed') return 'Tidy-up stopped';
   return `${STEP_LABEL[r.phase]}…`;
 }

@@ -1,12 +1,14 @@
 /**
  * The start-up screen lives in index.html, so it shows before any script.
- * This hands over to the app: gone at once when the app is quick (people who
- * come back every day should not watch a splash), kept a moment when it was
- * already showing, with a line after a while and the offline and error states.
+ * It covers the setup the app does on opening (the session, the folder
+ * check), and always lets Bower finish its landing on the twig: the land
+ * pose takes about 2 s (arrive, squash, tail flick, a look round). Then it
+ * fades into the app. A line appears if it takes long; offline and error
+ * states replace the line.
  */
 
-const INSTANT_MS = 600;
-const MIN_SHOWN_MS = 1100;
+/** Long enough for Bower to land and look round (the boot's land pose, 2.4 s). */
+const MIN_SHOWN_MS = 2000;
 const SLOW_MS = 8000;
 
 const t0 = performance.now();
@@ -21,7 +23,7 @@ function line(): HTMLElement | null {
 }
 
 export function bootStart(): void {
-  lineTimer = setTimeout(() => line()?.classList.add('show'), 1800);
+  lineTimer = setTimeout(() => line()?.classList.add('show'), 3000);
   slowTimer = setTimeout(() => {
     const l = line();
     if (!l) return;
@@ -36,14 +38,10 @@ export function bootDone(): void {
   const b = el();
   if (!b) return;
   const shown = performance.now() - t0;
-  if (shown < INSTANT_MS) {
-    b.remove();
-    return;
-  }
   setTimeout(
     () => {
       b.classList.add('leaving');
-      setTimeout(() => b.remove(), 260);
+      setTimeout(() => b.remove(), 420);
     },
     Math.max(0, MIN_SHOWN_MS - shown),
   );

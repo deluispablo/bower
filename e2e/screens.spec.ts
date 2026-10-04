@@ -36,7 +36,7 @@ test('screens', async ({ page }, info) => {
   await shot(page, '04-home-back', p);
 
   await go(page, '/add');
-  await page.getByLabel('What is this?').fill('Receipts from the Lisbon trip');
+  await page.getByLabel('What is this?').fill('Receipts from the Saltmere weekend');
   await page.getByLabel('Paste a link').fill('https://hotel.example/invoice');
   await page.getByRole('button', { name: 'Add link' }).click();
   await page.waitForTimeout(1500);
@@ -48,7 +48,7 @@ test('screens', async ({ page }, info) => {
   await go(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Mill%20Lane.md');
   await shot(page, '07-note', p);
 
-  await go(page, '/note/Areas/Visa%20%26%20Immigration/Visa%20checklist.md');
+  await go(page, '/note/Areas/Documents/Passport%20renewal.md');
   await page.locator('.md-task input').nth(4).click();
   await page.waitForTimeout(400);
   await shot(page, '08-checklist', p);

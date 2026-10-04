@@ -41,11 +41,11 @@ test('a failed run says why and moves nothing', async ({ page }) => {
 
 test('a note shows its properties, current state and timeline', async ({ page }) => {
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Mill%20Lane.md');
-  await expect(page.getByRole('heading', { name: 'Flat 3, 12 Mill Lane', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Flat 3, 12 Larkspur Lane', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Current state' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Timeline' })).toBeVisible();
-  await page.getByRole('link', { name: 'Flat 7, Rosebery Ave' }).first().click();
-  await expect(page.getByRole('heading', { name: 'Flat 7, Rosebery Ave', level: 1 })).toBeVisible();
+  await page.getByRole('link', { name: 'Flat 7, Cobble Row' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Flat 7, Cobble Row', level: 1 })).toBeVisible();
 });
 
 test('a pile can be added', async ({ page }) => {
@@ -78,9 +78,9 @@ test.describe('desktop explorer', () => {
     await tree.focus();
     await page.keyboard.press('F2');
     const input = page.getByLabel(/New name for Flat 7/);
-    await input.fill('Flat 7, Rosebery Avenue');
+    await input.fill('Flat 7, Cobble Rownue');
     await input.press('Enter');
-    await expect(tree.getByRole('treeitem', { name: /Flat 7, Rosebery Avenue/ })).toBeVisible();
+    await expect(tree.getByRole('treeitem', { name: /Flat 7, Cobble Rownue/ })).toBeVisible();
     await page.keyboard.press('ArrowDown');
     await expect(tree).toHaveAttribute('aria-activedescendant', /^row-/);
   });

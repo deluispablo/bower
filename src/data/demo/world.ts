@@ -51,6 +51,7 @@ import {
   seedTime,
 } from './fixture';
 import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
+import { PILE_NOTE, pileFolderName, pileHasFolder, thingsIn } from '../piles';
 
 type Listener = () => void;
 
@@ -81,6 +82,8 @@ export class DemoWorld {
   private sessionListeners = new Set<Listener>();
   private timers: ReturnType<typeof setTimeout>[] = [];
   private seq = 0;
+  /** The fail-run scenario fails one tidy-up; trying again works. */
+  private failedOnce = false;
   readonly scenario: Scenario;
   readonly scale: TimeScale;
   private latency: number;
@@ -111,16 +114,48 @@ export class DemoWorld {
     }
   }
 
-  /** The inbox folder shows each pile's things as files, as in Drive. */
+  /**
+   * The inbox as it is in Drive: a pile with a note, or more than one thing,
+   * is a subfolder with its things and `Pile note.md`; a lone thing sits at
+   * the root (see data/piles.ts).
+   */
   private syncInbox(): void {
-    for (const p of [...this.entries.keys()]) if (p.startsWith('Inbox/')) this.entries.delete(p);
+    for (const p of [...this.entries.keys()]) if (p.startsWith('Inbox/')) {
+      this.entries.delete(p);
+      this.notes.delete(p);
+    }
     const now = Date.now();
-    for (const pile of this.piles)
-      for (const it of pile.items) {
-        const name = freeName(this.entries, 'Inbox', it.name);
-        this.entries.set(join('Inbox', name), { path: join('Inbox', name), type: 'file', kind: it.kind, modified: pile.createdAt || now, created: pile.createdAt || now });
+    for (const pile of this.piles) {
+      const at = pile.createdAt || now;
+      let folder = 'Inbox';
+      if (pileHasFolder(pile)) {
+        folder = join('Inbox', freeName(this.entries, 'Inbox', pileFolderName(pile)));
+        this.entries.set(folder, { path: folder, type: 'folder', modified: at, created: at });
+        if (pile.text.trim()) {
+          const notePath = join(folder, PILE_NOTE);
+          this.entries.set(notePath, { path: notePath, type: 'file', kind: 'note', modified: at, created: at });
+          this.notes.set(notePath, {
+            path: notePath,
+            title: 'Pile note',
+            summary: 'What you wrote about this pile. Bower reads it with every thing in the pile.',
+            properties: [{ key: 'kind', label: 'Kind', value: 'Pile note' }],
+            tags: [],
+            currentState: [],
+            body: pile.text,
+            timeline: [],
+            links: [],
+            backlinks: [],
+            byBower: false,
+          });
+        }
       }
+      for (const it of pile.items) {
+        const name = freeName(this.entries, folder, it.name);
+        this.entries.set(join(folder, name), { path: join(folder, name), type: 'file', kind: it.kind, modified: at, created: at });
+      }
+    }
   }
+
 
   private touchRules(): void {
     const e = this.entries.get('Rules.md');
@@ -188,7 +223,7 @@ export class DemoWorld {
     return () => set.delete(cb);
   }
   private inboxCount(): number {
-    return this.piles.reduce((s, p) => s + p.items.length, 0);
+    return this.piles.reduce((s, p) => s + thingsIn(p), 0);
   }
 
   private record(kind: ChangeKind, what: string, path?: string): void {
@@ -205,8 +240,8 @@ export class DemoWorld {
       [/recipe|cook|soup|cake/, 'Resources/Cooking'],
       [/car|mot|insurance/, 'Areas/Car'],
       [/doctor|gp|dentist|health|blood/, 'Areas/Health'],
-      [/visa|passport/, 'Areas/Visa & Immigration'],
-      [/lisbon|trip|flight|hotel/, 'Projects/Lisbon trip'],
+      [/passport|id card|certificate/, 'Areas/Documents'],
+      [/saltmere|trip|flight|hotel/, 'Projects/Saltmere weekend'],
     ];
     for (const [re, to] of map) if (re.test(t)) return to;
     return kind === 'link' ? 'Resources/Reading' : 'Resources/Ideas';
@@ -221,6 +256,7 @@ export class DemoWorld {
       this.plans.set(itemId, { title: it.title, to: it.to });
       return { id: itemId, name: it.name, kind: it.kind, origin: it.origin };
     });
+    if (sample.note) this.plans.set(`${id}-note`, sample.note);
     this.piles = [{ id, text: sample.text, createdAt: at, items }, ...this.piles];
     this.syncInbox();
     this.emitVault();
@@ -299,7 +335,8 @@ export class DemoWorld {
       if (!r || r.phase !== phase) return;
       const to = next[phase];
       const now = Date.now();
-      if (this.scenario === 'fail-run' && to === 'saving') {
+      if (this.scenario === 'fail-run' && to === 'saving' && !this.failedOnce) {
+        this.failedOnce = true;
         r.phase = 'failed';
         r.phaseAt = now;
         r.finishedAt = now;
@@ -328,6 +365,28 @@ export class DemoWorld {
   private fileInbox(at: number): RunReport {
     const filed: FiledItem[] = [];
     for (const pile of this.piles) {
+      if (!pile.items.length && pile.text.trim()) {
+        const plan = this.plans.get(`${pile.id}-note`) ?? { title: `${pile.text.trim().slice(0, 48).replace(/[/\\:*?"<>|]+/g, ' ')}.md`, to: this.guess(pile.text, 'note') };
+        ensureFolders(this.entries, join(plan.to, 'x'), at);
+        const name = freeName(this.entries, plan.to, plan.title);
+        const path = join(plan.to, name);
+        this.entries.set(path, { path, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
+        this.notes.set(path, {
+          path,
+          title: displayName(name),
+          summary: pile.text.trim(),
+          properties: [{ key: 'kind', label: 'Kind', value: 'Note' }],
+          tags: [],
+          currentState: [],
+          body: pile.text.trim(),
+          timeline: [{ date: 'Today', text: 'Written from a note you added.' }],
+          links: [],
+          backlinks: [],
+          byBower: true,
+        });
+        filed.push({ name: 'Your note', title: displayName(name), kind: 'note', to: plan.to, note: path });
+        continue;
+      }
       for (const item of pile.items) {
         const plan = this.plans.get(item.id) ?? { title: item.name, to: this.guess(`${pile.text} ${item.name}`, item.kind) };
         const folder = plan.to;
@@ -352,7 +411,7 @@ export class DemoWorld {
     };
     const updated = [
       { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },
-      { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Fabrikam, scored 7 out of 10 against your CV.' },
+      { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.' },
     ];
     updated.forEach((u) => {
       touch(u.path);
@@ -476,6 +535,17 @@ export class DemoWorld {
           this.piles = [pile, ...this.piles];
           this.syncInbox();
           return pile;
+        }),
+      updatePile: (id, text) =>
+        change(() => {
+          if (this.run && !['done', 'failed'].includes(this.run.phase)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+          const p = this.piles.find((x) => x.id === id);
+          if (!p) throw new BowerError('not-found', 'That pile is already filed.');
+          if (!p.items.length && !text.trim()) throw new BowerError('conflict', 'A pile with no files needs its note.');
+          const next = { ...p, text: text.trim() };
+          this.piles = this.piles.map((x) => (x.id === id ? next : x));
+          this.syncInbox();
+          return { ...next, items: [...next.items] };
         }),
       removePile: (id) =>
         change(() => {

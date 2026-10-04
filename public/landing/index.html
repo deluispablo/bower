@@ -361,9 +361,9 @@ details[open] .pl{transform:rotate(45deg)}
               </sc-for>
             </div>
             <div style="flex:1;padding:18px;font-size:14px;line-height:1.6">
-              <div style="font-size:20px;font-weight:700;color:#fff">Flat 3, 12 Mill Lane</div>
-              <div style="color:#a88bfa;margin:4px 0 10px">#flat-hunt #camden</div>
-              <div>68 m², two bedrooms.</div><div>6 minutes to the Tube.</div><div style="color:#a88bfa">[[Lease 2026, signed]]</div>
+              <div style="font-size:20px;font-weight:700;color:#fff">Flat 3, 12 Larkspur Lane</div>
+              <div style="color:#a88bfa;margin:4px 0 10px">#flat-hunt #wrenmouth</div>
+              <div>68 m², two bedrooms.</div><div>6 minutes to the tram.</div><div style="color:#a88bfa">[[Lease 2026, signed]]</div>
             </div>
           </div>
         </sc-if>
@@ -509,14 +509,14 @@ class Component extends DCLogic {
     this.S = { t: 0, queue: [], action: null, ptr: null, ptrT: -10, lastSnap: 0, nextIdle: 1.2, nextBlink: 2, blinkT: -1, blink: 0, blinkDouble: false, chirpT: 0, behindT: 0, size: 112, mode: 'hero', cand: 'hero', candT: 0, W: 1280, H: 7000, shown: false, hidden: false, override: null, wantShow: false };
     this.rows = [[], [], []];
     this.pool = [
-      { kind: 'link', before: 'https://…/listing/88213', from: 'Shared from the browser', after: 'Flat 3, 12 Mill Lane', f: 'P', where: 'Projects / Flat hunt', note: '68 m², two bedrooms, 6 minutes to the Tube, 10 % under the average for the area.' },
-      { kind: 'pdf', before: 'Offer_letter_final(2).pdf', from: 'Shared from Mail', after: 'Offer, Data Engineer', f: 'P', where: 'Projects / Job hunt', note: 'Salary, start date and notice period, with the commute from the flat you shortlisted.' },
+      { kind: 'link', before: 'https://…/listing/88213', from: 'Shared from the browser', after: 'Flat 3, 12 Larkspur Lane', f: 'P', where: 'Projects / Flat hunt', note: '68 m², two bedrooms, 6 minutes to the tram, 10 % under the average for the area.' },
+      { kind: 'pdf', before: 'Offer_letter_final(2).pdf', from: 'Shared from Mail', after: 'Offer, Product Designer', f: 'P', where: 'Projects / Job hunt', note: 'Salary, start date and notice period, with the commute from the flat you shortlisted.' },
       { kind: 'voice', before: '"book the boat for mum\'s 70th"', from: 'Dictated on your phone', after: 'Mum\'s 70th, boat trip', f: 'P', where: 'Projects / Mum\'s 70th', note: 'Added to the plan, next to the guest list you saved last week.' },
       { kind: 'pdf', before: 'scan_0012.pdf', from: 'Uploaded from your computer', after: 'Lease 2026, signed', f: 'A', where: 'Areas / Home', note: 'Rent due on the 1st, two months of notice, ends 30 April 2027.' },
       { kind: 'photo', before: 'IMG_2290.jpg', from: 'Photo from your phone', after: 'Boiler service, 12 Sep', f: 'A', where: 'Areas / Money', note: '120.00, paid by card. Filed by month, as your rule says.' },
       { kind: 'pdf', before: 'Scan 14 Oct.pdf', from: 'Shared from Files', after: 'Blood test, October', f: 'A', where: 'Areas / Health', note: 'Added to your yearly table: what changed since March.' },
       { kind: 'link', before: 'https://…/blog?p=88', from: 'Shared from the browser', after: 'Sourdough, the short version', f: 'R', where: 'Resources / Baking', note: 'The method in six steps, with a link back to where it came from.' },
-      { kind: 'pdf', before: 'Lisbon.pdf', from: 'Shared from Mail', after: 'Lisbon, May 2026, bookings', f: 'X', where: 'Archive / Trips', note: 'The trip is over, so it goes to the archive. Nothing is deleted.' }
+      { kind: 'pdf', before: 'Saltmere.pdf', from: 'Shared from Mail', after: 'Saltmere, May 2026, bookings', f: 'X', where: 'Archive / Trips', note: 'The trip is over, so it goes to the archive. Nothing is deleted.' }
     ];
     [['cap', 14], ['paper', 30], ['ycap', 20], ['photo', 34], ['feather', 26], ['cap', 24], ['cap', 12], ['link', 15]].forEach(function (d) { self.addItem(d[0], d[1], 'ground'); });
     this.state = {
@@ -1072,30 +1072,30 @@ class Component extends DCLogic {
     const self = this, st = this.state;
     const ICON = {"phone": "M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2", "cloudflare": "M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727", "github": "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12", "drive": "M12.01 1.485c-2.082 0-3.754.02-3.743.047.01.02 1.708 3.001 3.774 6.62l3.76 6.574h3.76c2.081 0 3.753-.02 3.742-.047-.005-.02-1.708-3.001-3.775-6.62l-3.76-6.574zm-4.76 1.73a789.828 789.861 0 0 0-3.63 6.319L0 15.868l1.89 3.298 1.885 3.297 3.62-6.335 3.618-6.33-1.88-3.287C8.1 4.704 7.255 3.22 7.25 3.214zm2.259 12.653-.203.348c-.114.198-.96 1.672-1.88 3.287a423.93 423.948 0 0 1-1.698 2.97c-.01.026 3.24.042 7.222.042h7.244l1.796-3.157c.992-1.734 1.85-3.23 1.906-3.323l.104-.167h-7.249z", "obsidian": "M19.355 18.538a68.967 68.959 0 0 0 1.858-2.954.81.81 0 0 0-.062-.9c-.516-.685-1.504-2.075-2.042-3.362-.553-1.321-.636-3.375-.64-4.377a1.707 1.707 0 0 0-.358-1.05l-3.198-4.064a3.744 3.744 0 0 1-.076.543c-.106.503-.307 1.004-.536 1.5-.134.29-.29.6-.446.914l-.31.626c-.516 1.068-.997 2.227-1.132 3.59-.124 1.26.046 2.73.815 4.481.128.011.257.025.386.044a6.363 6.363 0 0 1 3.326 1.505c.916.79 1.744 1.922 2.415 3.5zM8.199 22.569c.073.012.146.02.22.02.78.024 2.095.092 3.16.29.87.16 2.593.64 4.01 1.055 1.083.316 2.198-.548 2.355-1.664.114-.814.33-1.735.725-2.58l-.01.005c-.67-1.87-1.522-3.078-2.416-3.849a5.295 5.295 0 0 0-2.778-1.257c-1.54-.216-2.952.19-3.84.45.532 2.218.368 4.829-1.425 7.531zM5.533 9.938c-.023.1-.056.197-.098.29L2.82 16.059a1.602 1.602 0 0 0 .313 1.772l4.116 4.24c2.103-3.101 1.796-6.02.836-8.3-.728-1.73-1.832-3.081-2.55-3.831zM9.32 14.01c.615-.183 1.606-.465 2.745-.534-.683-1.725-.848-3.233-.716-4.577.154-1.552.7-2.847 1.235-3.95.113-.235.223-.454.328-.664.149-.297.288-.577.419-.86.217-.47.379-.885.46-1.27.08-.38.08-.72-.014-1.043-.095-.325-.297-.675-.68-1.06a1.6 1.6 0 0 0-1.475.36l-4.95 4.452a1.602 1.602 0 0 0-.513.952l-.427 2.83c.672.59 2.328 2.316 3.335 4.711.09.21.175.43.253.653z", "bower": "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"};
     const caseData = [
-      { before: 'https://…/listing/88213', after: 'Flat 3, 12 Mill Lane', folder: 'Flat hunt', color: '#5fcfbc', kind: 'A flat to rent', note: '68 m², two bedrooms, 6 minutes to the Tube, 10 % under the average for the area.' },
-      { before: 'Offer_letter_final(2).pdf', after: 'Offer, Data Engineer', folder: 'Job hunt', color: '#5fcfbc', kind: 'A job offer', note: 'Salary, start date and notice period, with the commute from the flat you shortlisted.' },
+      { before: 'https://…/listing/88213', after: 'Flat 3, 12 Larkspur Lane', folder: 'Flat hunt', color: '#5fcfbc', kind: 'A flat to rent', note: '68 m², two bedrooms, 6 minutes to the tram, 10 % under the average for the area.' },
+      { before: 'Offer_letter_final(2).pdf', after: 'Offer, Product Designer', folder: 'Job hunt', color: '#5fcfbc', kind: 'A job offer', note: 'Salary, start date and notice period, with the commute from the flat you shortlisted.' },
       { before: '"book the boat for mum\'s 70th"', after: 'Mum\'s 70th, boat trip', folder: 'Mum\'s 70th', color: '#5fcfbc', kind: 'A to-do for a plan', note: 'Added to the plan, next to the guest list you saved last week.' },
       { before: 'scan_0012.pdf', after: 'Lease 2026, signed', folder: 'Home', color: '#f0b64f', kind: 'A tenancy agreement', note: 'Rent due on the 1st, two months of notice, ends 30 April 2027.' },
       { before: 'IMG_2290.jpg', after: 'Boiler service, 12 Sep', folder: 'Money', color: '#f0b64f', kind: 'A receipt', note: '120.00, paid by card. Filed by month, as your rule says.' },
       { before: 'Scan 14 Oct.pdf', after: 'Blood test, October', folder: 'Health', color: '#f0b64f', kind: 'Blood test results', note: 'Added to your yearly table: what changed since March.' },
       { before: 'https://…/blog?p=88', after: 'Sourdough, the short version', folder: 'Baking', color: '#3b82f6', kind: 'An article to keep', note: 'The method in six steps, with a link back to where it came from.' },
-      { before: 'Lisbon.pdf', after: 'Lisbon, May 2026, bookings', folder: 'Trips', color: '#c4b5fd', kind: 'Travel bookings, trip done', note: 'The trip is over, so it goes to the archive. Nothing is deleted.' }
+      { before: 'Saltmere.pdf', after: 'Saltmere, May 2026, bookings', folder: 'Trips', color: '#c4b5fd', kind: 'Travel bookings, trip done', note: 'The trip is over, so it goes to the archive. Nothing is deleted.' }
     ];
     const N = {
-      cv: { name: 'CV insights', color: '#5fcfbc', x: 16, y: 15 }, flat: { name: 'Flat 3, Mill Lane', color: '#5fcfbc', x: 13, y: 52 },
+      cv: { name: 'CV insights', color: '#5fcfbc', x: 16, y: 15 }, flat: { name: 'Flat 3, Larkspur Lane', color: '#5fcfbc', x: 13, y: 52 },
       budget: { name: 'Budget 2026', color: '#f0b64f', x: 22, y: 86 }, lease: { name: 'Lease 2026', color: '#f0b64f', x: 50, y: 88 },
       blood: { name: 'Blood test, March', color: '#f0b64f', x: 79, y: 84 }, gp: { name: 'GP letter', color: '#f0b64f', x: 85, y: 55 },
       run: { name: '10K training plan', color: '#3b82f6', x: 48, y: 13 }, rules: { name: 'Your rules', color: '#c4b5fd', x: 75, y: 28 }
     };
     const D = [
-      { label: 'A job offer', newName: 'Offer, Data Engineer', links: ['cv', 'flat', 'budget'], web: true,
-        lines: [['Pays 12 % more than your current role.', 'n', 'CV insights'], ['14 minutes by bike from Flat 3 on Mill Lane, the flat you shortlisted.', 'b', 'Flat 3, Mill Lane and a route'], ['Rent would be 31 % of the new take-home pay, under the 35 % you set.', 'n', 'Budget 2026'], ['The company moved to a four-day week this year.', 'w', 'company news']],
+      { label: 'A job offer', newName: 'Offer, Product Designer', links: ['cv', 'flat', 'budget'], web: true,
+        lines: [['Pays 12 % more than your current role.', 'n', 'CV insights'], ['14 minutes by bike from Flat 3 on Larkspur Lane, the flat you shortlisted.', 'b', 'Flat 3, Larkspur Lane and a route'], ['Rent would be 31 % of the new take-home pay, under the 35 % you set.', 'n', 'Budget 2026'], ['The company moved to a four-day week this year.', 'w', 'company news']],
         mem: 'you cycle to work, rent under 35 % of pay' },
       { label: 'Test results', newName: 'Blood test, October', links: ['blood', 'gp', 'run'], web: true,
         lines: [['Vitamin D is up from 18 to 41 since March.', 'n', 'Blood test, March'], ['Your GP asked for a recheck in six months. This is it; the letter is linked.', 'n', 'GP letter'], ['Iron is at the low end of normal. Worth raising before your 10K in November.', 'n', '10K training plan'], ['What each range means, with the sources linked.', 'w', 'reference ranges']],
         mem: 'recheck due in October, training for a 10K' },
-      { label: 'A flat listing', newName: 'Flat 7, Rosebery Ave', links: ['flat', 'budget', 'lease'], web: true,
-        lines: [['40 a month cheaper than Flat 3, but 9 minutes further from the Tube.', 'b', 'Flat 3, Mill Lane and a map'], ['Your lease needs two months of notice: the earliest move is 1 January.', 'n', 'Lease 2026'], ['The two-bedroom average for the area is 1,610. This one is 6 % under.', 'w', 'local listings'], ['Added to your comparison of flats, ranked second.', 'n', 'Flat hunt']],
+      { label: 'A flat listing', newName: 'Flat 7, Cobble Row', links: ['flat', 'budget', 'lease'], web: true,
+        lines: [['40 a month cheaper than Flat 3, but 9 minutes further from the tram.', 'b', 'Flat 3, Larkspur Lane and a map'], ['Your lease needs two months of notice: the earliest move is 1 January.', 'n', 'Lease 2026'], ['The two-bedroom average for the area is 1,610. This one is 6 % under.', 'w', 'local listings'], ['Added to your comparison of flats, ranked second.', 'n', 'Flat hunt']],
         mem: 'two bedrooms, under 1,600 a month' },
       { label: 'A rule you give it', newName: 'Receipts go to Money, by month', links: ['rules', 'budget', 'lease'], web: false,
         lines: [['Kept as a rule, dated, in your rules file. You can read it and change it.', 'n', 'Your rules'], ['Applied to the 14 receipts already filed: one folder per month.', 'n', 'Money'], ['Boiler and rent receipts now add up in Budget 2026.', 'n', 'Budget 2026'], ['Next time, a receipt goes straight to its month.', 'n', 'Your rules']],
@@ -1109,10 +1109,10 @@ class Component extends DCLogic {
     };
     const srcC = { n: '#5fcfbc', w: '#93c5fd', b: '#c4b5fd' }, srcT = { n: 'From your notes: ', w: 'From the web: ', b: 'From your notes and the web: ' };
     const files = [
-      { name: 'Flat 3, 12 Mill Lane.md', path: 'Projects / Flat hunt', folder: 'Flat hunt', top: 'Projects', color: '#5fcfbc' },
+      { name: 'Flat 3, 12 Larkspur Lane.md', path: 'Projects / Flat hunt', folder: 'Flat hunt', top: 'Projects', color: '#5fcfbc' },
       { name: 'Lease 2026, signed.pdf', path: 'Areas / Home', folder: 'Home', top: 'Areas', color: '#f0b64f' },
       { name: 'Sourdough, the short version.md', path: 'Resources / Baking', folder: 'Baking', top: 'Resources', color: '#3b82f6' },
-      { name: 'Lisbon, May 2026.pdf', path: 'Archive / Trips', folder: 'Trips', top: 'Archive', color: '#c4b5fd' }
+      { name: 'Saltmere, May 2026.pdf', path: 'Archive / Trips', folder: 'Trips', top: 'Archive', color: '#c4b5fd' }
     ];
     const views = [['bower', 'Bower'], ['drive', 'Google Drive'], ['obsidian', 'Obsidian']];
     const arch = [
@@ -1181,7 +1181,7 @@ class Component extends DCLogic {
         { q: 'Does it do things on its own?', a: 'No. Nothing is filed until you tap Tidy up. The only thing that runs by itself is a weekly health check of the folder.' },
         { q: 'Can I keep using Obsidian?', a: 'Yes. Point Obsidian at the same folder. Bower hides Obsidian\'s own files, never touches them, and picks up your edits at the next tidy-up.' },
         { q: 'What can I add?', a: 'Photos, PDFs, links, Word, OpenDocument, HTML, EPUB and RTF documents, and anything you type or dictate.' },
-        { q: 'What is PARA?', a: 'A way to organise by how soon you need things, made popular by Tiago Forte: Projects have an end, Areas go on, Resources are for later, the Archive is done.' },
+        { q: 'What is PARA?', a: 'A way to organise by how soon you need things, made popular by its author: Projects have an end, Areas go on, Resources are for later, the Archive is done.' },
         { q: 'What does it run on?', a: 'A web app on Cloudflare Pages, with a small Cloudflare Worker for sign-in. Tidy-ups run Claude Code on GitHub Actions. Your notes are plain Markdown files in Google Drive.' },
         { q: 'Are the examples on this page real?', a: 'No. The names, figures and documents here are made up to show what Bower does. Looking things up on the web is an option you turn on in Settings, if whoever runs your Bower allows it.' }
       ]

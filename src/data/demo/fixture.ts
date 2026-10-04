@@ -22,22 +22,22 @@ export interface Seed {
 export const SEEDS: Seed[] = [
   { path: 'Inbox/', age: 0 },
   { path: 'Projects/Flat hunt/Flat hunt.md', age: 1, byBower: true, hub: true },
-  { path: 'Projects/Flat hunt/Flat 3, 12 Mill Lane.md', age: 1, byBower: true },
-  { path: 'Projects/Flat hunt/Flat 7, Rosebery Ave.md', age: 1, byBower: true },
-  { path: 'Projects/Flat hunt/Flat 2, 40 Canal Street.md', age: 6, byBower: true },
+  { path: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', age: 1, byBower: true },
+  { path: 'Projects/Flat hunt/Flat 7, Cobble Row.md', age: 1, byBower: true },
+  { path: 'Projects/Flat hunt/Flat 2, 40 Tanners Walk.md', age: 6, byBower: true },
   { path: 'Projects/Flat hunt/Lease draft.pdf', kind: 'pdf', age: 9 },
   { path: 'Projects/Flat hunt/Viewing photos/IMG_2290.jpg', kind: 'image', age: 12 },
   { path: 'Projects/Flat hunt/Viewing photos/IMG_2291.jpg', kind: 'image', age: 12 },
   { path: 'Projects/Flat hunt/Viewing photos/IMG_2292.jpg', kind: 'image', age: 12 },
   { path: 'Projects/Job hunt/Job hunt.md', age: 3, byBower: true, hub: true },
-  { path: 'Projects/Job hunt/Applications/Senior Consultant, Altis.md', age: 3, byBower: true },
-  { path: 'Projects/Job hunt/Applications/Product Lead, Northwind.md', age: 11, byBower: true },
-  { path: 'Projects/Job hunt/Applications/Data Engineer, Fabrikam.md', age: 15, byBower: true },
+  { path: 'Projects/Job hunt/Applications/Senior Product Designer, Lumenfold.md', age: 3, byBower: true },
+  { path: 'Projects/Job hunt/Applications/Design Lead, Quillstone.md', age: 11, byBower: true },
+  { path: 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md', age: 15, byBower: true },
   { path: 'Projects/Job hunt/CV insights.md', age: 7, byBower: true },
   { path: 'Projects/Job hunt/CV 2026.pdf', kind: 'pdf', age: 40 },
-  { path: 'Projects/Lisbon trip/Lisbon trip.md', age: 20, byBower: true, hub: true },
-  { path: 'Projects/Lisbon trip/Flights.pdf', kind: 'pdf', age: 21 },
-  { path: 'Projects/Lisbon trip/Hotel booking.pdf', kind: 'pdf', age: 21 },
+  { path: 'Projects/Saltmere weekend/Saltmere weekend.md', age: 20, byBower: true, hub: true },
+  { path: 'Projects/Saltmere weekend/Flights.pdf', kind: 'pdf', age: 21 },
+  { path: 'Projects/Saltmere weekend/Hotel booking.pdf', kind: 'pdf', age: 21 },
   { path: 'Areas/Home/Home.md', age: 20, byBower: true, hub: true },
   { path: 'Areas/Home/Boiler service.md', age: 20, byBower: true },
   { path: 'Areas/Home/Boiler invoice.pdf', kind: 'pdf', age: 20 },
@@ -53,8 +53,8 @@ export const SEEDS: Seed[] = [
   { path: 'Areas/Health/Health.md', age: 30, byBower: true, hub: true },
   { path: 'Areas/Health/Blood test, May.pdf', kind: 'pdf', age: 130 },
   { path: 'Areas/Health/Physio exercises.md', age: 45 },
-  { path: 'Areas/Visa & Immigration/Visa checklist.md', age: 15, byBower: true },
-  { path: 'Areas/Visa & Immigration/Passport copy.pdf', kind: 'pdf', age: 60 },
+  { path: 'Areas/Documents/Passport renewal.md', age: 15, byBower: true },
+  { path: 'Areas/Documents/Passport copy.pdf', kind: 'pdf', age: 60 },
   { path: 'Areas/Car/Car.md', age: 50, byBower: true, hub: true },
   { path: 'Areas/Car/Insurance 2026.pdf', kind: 'pdf', age: 50 },
   { path: 'Areas/Car/MOT certificate.pdf', kind: 'pdf', age: 95 },
@@ -63,12 +63,12 @@ export const SEEDS: Seed[] = [
   { path: 'Resources/Cooking/Lemon tart.md', age: 33 },
   { path: 'Resources/Manuals/Dishwasher manual.pdf', kind: 'pdf', age: 90 },
   { path: 'Resources/Manuals/Router setup.pdf', kind: 'pdf', age: 120 },
-  { path: 'Resources/Reading/How to take smart notes.md', age: 60 },
-  { path: 'Resources/Reading/Clipping, Building a second brain.md', kind: 'note', age: 75 },
+  { path: 'Resources/Reading/Notes that grow.md', age: 60 },
+  { path: 'Resources/Reading/Clipping, Four folders for everything.md', kind: 'note', age: 75 },
   { path: 'Resources/Ideas/Weekend projects.md', age: 10 },
-  { path: 'Archive/Trips/Porto 2025.md', age: 300, byBower: true },
-  { path: 'Archive/Trips/Porto 2025 receipts.pdf', kind: 'pdf', age: 300 },
-  { path: 'Archive/Old flat/Inventory, Mill Road.md', age: 400 },
+  { path: 'Archive/Trips/Brackwater 2025.md', age: 300, byBower: true },
+  { path: 'Archive/Trips/Brackwater 2025 receipts.pdf', kind: 'pdf', age: 300 },
+  { path: 'Archive/Old flat/Inventory, Hatchmere Road.md', age: 400 },
   { path: 'Archive/Old flat/Deposit return.pdf', kind: 'pdf', age: 380 },
   { path: 'About me.md', age: 30 },
   { path: 'Rules.md', age: 2 },
@@ -97,7 +97,7 @@ export function seedPiles(now: number): Pile[] {
     },
     {
       id: 'p2',
-      text: 'Receipts from the Lisbon trip',
+      text: 'Receipts from the Saltmere weekend',
       createdAt: now - 26 * 3_600_000,
       items: Array.from({ length: 9 }, (_, i) => ({
         id: `r${i}`,
@@ -123,24 +123,24 @@ export function seedPiles(now: number): Pile[] {
 
 /** Where the simulated run sends each inbox thing, and what it calls it. */
 export const FILING: Record<string, { title: string; to: string; note?: string }> = {
-  i1: { title: 'Offer, Data Engineer, Fabrikam.pdf', to: 'Projects/Job hunt/Applications', note: 'Projects/Job hunt/Applications/Data Engineer, Fabrikam.md' },
-  i2: { title: 'Flat 9, Station Road.md', to: 'Projects/Flat hunt' },
-  i3: { title: 'Station Road, kitchen.jpg', to: 'Projects/Flat hunt/Viewing photos' },
+  i1: { title: 'Offer, Industrial Designer, Ferrowick.pdf', to: 'Projects/Job hunt/Applications', note: 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md' },
+  i2: { title: 'Flat 9, Wrenfield Road.md', to: 'Projects/Flat hunt' },
+  i3: { title: 'Wrenfield Road, kitchen.jpg', to: 'Projects/Flat hunt/Viewing photos' },
   i4: { title: 'Payslip August (2).pdf', to: 'Areas/Money/Payslips' },
   l1: { title: 'Weeknight curry, clipping.md', to: 'Resources/Cooking' },
   l2: { title: 'Dentist, 14 Oct.pdf', to: 'Areas/Health' },
 };
-/** The Lisbon receipts go by month, as the person's rule says. */
+/** The Saltmere receipts go by month, as the person's rule says. */
 export const RECEIPTS_TO = 'Areas/Money/Receipts/2026-10';
 
 export function seedQuestions(now: number): Question[] {
   return [
     {
       id: 'q1',
-      text: 'Flat 3, 12 Mill Lane and the new Station Road listing look like the same building. Keep one note for both?',
+      text: 'Flat 3, 12 Larkspur Lane and the new Wrenfield Road listing look like the same building. Keep one note for both?',
       yes: 'Yes, merge',
       no: 'No, keep both',
-      about: 'Projects/Flat hunt/Flat 3, 12 Mill Lane.md',
+      about: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md',
       askedAt: now - 2 * DAY,
     },
     {
@@ -169,8 +169,8 @@ export function seedRules(now: number): Rule[] {
     },
     {
       id: 'u3',
-      text: 'Visa and immigration papers go to Areas / Visa & Immigration and tick their line in Visa checklist. Never write document numbers.',
-      yourWords: 'keep my visa papers together',
+      text: 'Passports, ID cards and certificates go to Areas / Documents; tick their line in Passport renewal. Never write document numbers.',
+      yourWords: 'keep my id papers together',
       since: now - 5 * DAY,
     },
   ];
@@ -200,9 +200,17 @@ export interface SamplePile {
   label: string;
   text: string;
   items: Array<Omit<PileItem, 'id'> & { title: string; to: string }>;
+  /** For a pile that is only a note: the note Bower writes and where. */
+  note?: { title: string; to: string };
 }
 
 export const SAMPLE_PILES: SamplePile[] = [
+  {
+    label: 'Just a note',
+    text: 'The bins go out on Tuesday nights from November, and the recycling every other week.',
+    items: [],
+    note: { title: 'Bins and recycling.md', to: 'Areas/Home' },
+  },
   {
     label: 'Car insurance renewal',
     text: 'Car insurance renewal, the new policy starts in July',
@@ -230,16 +238,16 @@ export const SAMPLE_PILES: SamplePile[] = [
   },
   {
     label: 'Two more flats',
-    text: 'Two more flats to compare with Mill Lane',
+    text: 'Two more flats to compare with Larkspur Lane',
     items: [
-      { name: 'listing-99102.example', kind: 'link', origin: 'From the browser', title: 'Flat 4, 9 Albion Road.md', to: 'Projects/Flat hunt' },
-      { name: 'listing-99377.example', kind: 'link', origin: 'From the browser', title: 'Flat 1, 22 Park Street.md', to: 'Projects/Flat hunt' },
+      { name: 'listing-99102.example', kind: 'link', origin: 'From the browser', title: 'Flat 4, 9 Osier Close.md', to: 'Projects/Flat hunt' },
+      { name: 'listing-99377.example', kind: 'link', origin: 'From the browser', title: 'Flat 1, 22 Pellow Street.md', to: 'Projects/Flat hunt' },
     ],
   },
   {
     label: 'A job offer',
     text: '',
-    items: [{ name: 'Offer - Analytics Lead.pdf', kind: 'pdf', origin: 'From Mail', title: 'Offer, Analytics Lead, Contoso.pdf', to: 'Projects/Job hunt/Applications' }],
+    items: [{ name: 'Offer - Studio Lead.pdf', kind: 'pdf', origin: 'From Mail', title: 'Offer, Studio Lead, Brackenridge.pdf', to: 'Projects/Job hunt/Applications' }],
   },
 ];
 

@@ -1,4 +1,5 @@
 import { Command } from 'cmdk';
+import { waitingIn } from '@/data/piles';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -20,7 +21,7 @@ export function Palette() {
   const { data: piles } = usePiles();
   const nav = useNavigate();
   const [q, setQ] = useState('');
-  const waiting = (piles ?? []).reduce((n, p) => n + p.items.length, 0);
+  const waiting = waitingIn(piles);
   const files = useMemo(() => {
     const out: TreeNode[] = [];
     const walk = (ns: TreeNode[]): void => ns.forEach((n) => (out.push(n), n.children && walk(n.children)));

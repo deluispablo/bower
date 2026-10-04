@@ -49,8 +49,10 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
     };
     const run = async (): Promise<void> => {
       await new Promise((r) => setTimeout(r, 150));
+      // A stopped run has nothing to act out: Bower stands still, startled (rendered below).
+      if (phase === 'failed' || !live) return;
       const b = bird.current;
-      if (!b || !live) return;
+      if (!b) return;
       if (!b.moving) {
         setMoving(false);
         return;
@@ -91,7 +93,8 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
               setBump((n) => n + 1);
             })
             .holding(false);
-        await b.settled();
+        // Never spin: even if nothing was queued, wait a beat before the next errand.
+        await Promise.all([b.settled(), new Promise((r) => setTimeout(r, 120))]);
       }
     };
     void run();
@@ -133,7 +136,7 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
         {filed > 0 && <span className={s.filed}>{filed}</span>}
       </div>
       <span className={s.mid} data-spot="mid" />
-      {moving ? (
+      {moving && phase !== 'failed' ? (
         <BowerLayer ref={bird} size={SIZE} priority={1} home={home} carry={<span className={s.held} />} />
       ) : (
         <div className={s.still}>

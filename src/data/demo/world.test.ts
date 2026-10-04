@@ -65,11 +65,11 @@ describe('the demo folder', () => {
   it('ticks a task in a note and writes it in the journal', async () => {
     const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
     const { vault } = w.sources();
-    const path = 'Areas/Visa & Immigration/Visa checklist.md';
+    const path = 'Areas/Documents/Passport renewal.md';
     await vault.toggleTask(path, 4);
-    expect((await vault.note(path)).body).toContain('- [x] Police certificate');
+    expect((await vault.note(path)).body).toContain('- [x] Photo form signed by a witness');
     const j = await vault.changes();
-    expect(j.at(-1)?.what).toBe('Ticked "Police certificate" in Visa checklist');
+    expect(j.at(-1)?.what).toBe('Ticked "Photo form signed by a witness" in Passport renewal');
   });
 
   it('keeps a typed rule as pending until a run words it', async () => {
@@ -86,5 +86,60 @@ describe('the demo folder', () => {
     expect(r?.text).toMatch(/^Letters, reminders and invoices from the dentist/);
     expect(r?.yourWords).toBe('anything from the dentist goes in health');
     expect(await vault.changes()).toEqual([]);
+  });
+});
+
+import { SAMPLE_PILES } from './fixture';
+
+describe('piles and failures', () => {
+  it('fails one tidy-up in the fail-run scenario, then the next one works', async () => {
+    vi.useFakeTimers();
+    const w = new DemoWorld({ scenario: 'fail-run', scale: 'demo', latency: 0 });
+    const { runs, vault } = w.sources();
+    await runs.start('all');
+    await vi.runAllTimersAsync();
+    expect((await runs.current())?.phase).toBe('failed');
+    await runs.start('all');
+    await vi.runAllTimersAsync();
+    expect((await runs.current())?.phase).toBe('done');
+    expect(await vault.piles()).toEqual([]);
+  });
+
+  it('keeps a pile with a note as an inbox folder with its pile note', async () => {
+    const w = new DemoWorld({ scenario: 'empty', scale: 'instant' });
+    const { vault } = w.sources();
+    await vault.addPile({ text: 'Receipts from the weekend', items: [{ name: 'a.pdf', kind: 'pdf', origin: 'x' }, { name: 'b.jpg', kind: 'image', origin: 'x' }] });
+    await vault.addPile({ text: '', items: [{ name: 'lonely.pdf', kind: 'pdf', origin: 'x' }] });
+    const inbox = findNode(await vault.tree(), 'Inbox');
+    const names = (inbox?.children ?? []).map((n) => n.name).sort();
+    expect(names).toHaveLength(2);
+    expect(names).toContain('lonely.pdf');
+    const folder = inbox?.children?.find((n) => n.type === 'folder');
+    expect(folder?.name).toMatch(/^\d{4}-\d{2}-\d{2} Receipts from the weekend$/);
+    expect(folder?.children?.map((n) => n.name).sort()).toEqual(['Pile note.md', 'a.pdf', 'b.jpg']);
+    expect((await vault.note(`${folder?.path}/Pile note.md`)).body).toBe('Receipts from the weekend');
+  });
+
+  it('edits a pile note before the tidy-up and refuses to empty a note-only pile', async () => {
+    const w = new DemoWorld({ scenario: 'empty', scale: 'instant' });
+    const { vault } = w.sources();
+    const p = await vault.addPile({ text: 'Bins on Tuesday', items: [] });
+    await vault.updatePile(p.id, 'Bins on Tuesday nights');
+    expect((await vault.piles())[0]?.text).toBe('Bins on Tuesday nights');
+    await expect(vault.updatePile(p.id, '  ')).rejects.toThrow(/needs its note/);
+  });
+
+  it('files a note-only sample pile as a note where it belongs', async () => {
+    vi.useFakeTimers();
+    const w = new DemoWorld({ scenario: 'empty', scale: 'demo', latency: 0 });
+    const { vault, runs } = w.sources();
+    const sample = SAMPLE_PILES.find((x) => !x.items.length);
+    if (!sample) throw new Error('no note-only sample');
+    w.addSample(sample);
+    await runs.start('all');
+    await vi.runAllTimersAsync();
+    const r = await runs.current();
+    expect(r?.report?.filed[0]?.to).toBe('Areas/Home');
+    expect(findNode(await vault.tree(), 'Areas/Home/Bins and recycling.md')).not.toBeNull();
   });
 });

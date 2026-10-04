@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
 import { useChanges, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
@@ -10,18 +11,19 @@ import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { isRunning, landedSummary, PHASE_POSE, runDetail, runTitle } from '@/features/tidy/run-words';
+import { replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
 import { PileStack } from '@/features/piles/PileStack';
 import s from './home.module.css';
 
 export function Home() {
   const { data: run } = useRun();
   const { data: piles } = usePiles();
-  const waiting = (piles ?? []).reduce((n, p) => n + p.items.length, 0);
-  const away = !!run && run.phase === 'done' && !run.seen;
+  const waiting = waitingIn(piles);
+  const away = replayWaiting(run);
+  const stopped = stoppedUnseen(run);
   const running = isRunning(run);
   // One Bower per screen: it sits on whichever card matters most now.
-  const birdOn: 'away' | 'run' | 'inbox' = away ? 'away' : running ? 'run' : 'inbox';
+  const birdOn: 'away' | 'stopped' | 'run' | 'inbox' = away ? 'away' : stopped ? 'stopped' : running ? 'run' : 'inbox';
   return (
     <div className={s.page}>
       <header className={s.top}>
@@ -33,6 +35,7 @@ export function Home() {
       <div className={s.grid}>
         <div className={s.colMain}>
           {away && run && <AwayCard run={run} bird={birdOn === 'away'} />}
+          {stopped && run && <StoppedCard run={run} />}
           {running && run && <RunningCard run={run} />}
           <Inbox piles={piles} waiting={waiting} bird={birdOn === 'inbox'} running={running} />
         </div>
@@ -67,6 +70,31 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
       <div className={s.row2}>
         <Button size="sm" onClick={() => startReplay(run.id)}>
           <Icon name="play" size={15} /> Watch what Bower did
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id)}>
+          Got it
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function StoppedCard({ run }: { run: RunState }) {
+  const { runs } = useSources();
+  return (
+    <section className={`${s.card} ${s.stopped}`} aria-labelledby="stopped" role="alert">
+      <div className={s.stoppedHead}>
+        <PoseBower pose="alarm" size={72} />
+        <div>
+          <h2 id="stopped" className={s.cardTitle}>
+            The tidy-up stopped
+          </h2>
+          <p className="muted">{runDetail(run)}</p>
+        </div>
+      </div>
+      <div className={s.row2}>
+        <Button size="sm" onClick={() => void runs.start(run.scope).catch(() => toast('It did not start. Try again in a minute.'))}>
+          Try again
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id)}>
           Got it
@@ -121,7 +149,7 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
                 <span className={s.pileMain}>
                   <span className={p.text ? s.pileText : `${s.pileText} mono`}>{p.text || p.items[0]?.name}</span>
                   <span className={s.pileSub}>
-                    {p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
+                    {!p.items.length ? 'A note' : p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
                     <span aria-hidden="true" className={s.sep} />
                     {ago(p.createdAt)}
                   </span>
