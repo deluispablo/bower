@@ -30,7 +30,7 @@ import { sha256 } from './hashes';
 import { placeOf, plainSnippet, searchLines } from '../search-text';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
-import { markSeen } from './seen';
+import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 
 export interface DriveVaultOptions {
@@ -66,11 +66,12 @@ export class DriveVault implements VaultSource {
   private listeners = new Set<() => void>();
   private notes = new Map<string, { modified: string; note: ParsedNote }>();
   /** What went to the Bin from here, by the path it had, so Undo can bring it back. */
-  private bin = new Map<string, { id: string; change: string | null }>();
+  private bin = new Map<string, { id: string; change: string | null; top?: string }>();
   private texts = new Map<string, { modified: string; text: string }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
   private uploads = new Map<string, Upload>();
   private sendingPiles = new Set<string>();
+  private making = new Map<string, Promise<string>>();
   private sending = new Set<Promise<void>>();
 
   constructor(opts: DriveVaultOptions) {
@@ -142,11 +143,12 @@ export class DriveVault implements VaultSource {
     refuseReserved(out);
     const to = ix.idOf(toFolder);
     if (!to) throw new BowerError('not-found', 'That folder is no longer there.');
+    await this.stillAsSeen(f);
     const name = nameOf(out);
-    ix.put(await this.drive.update(f.id, { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) }));
+    ix.put(this.keepSeen(f, await this.drive.update(f.id, { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) })));
     const last = opts?.undo ? [...(await this.journal.list())].reverse().find((c) => c.kind === 'move' && c.path === path) : undefined;
     if (last) await this.journal.remove(last.id);
-    else await this.journal.record('move', `Moved ${displayName(nameOf(path))} to ${where(toFolder)}`, { path: out, from: path });
+    else await this.journal.record('move', `Moved ${displayName(nameOf(path))} to ${where(toFolder)}`, { path: out, from: path, fileId: f.id });
     this.emit();
     return out;
   }
@@ -157,8 +159,9 @@ export class DriveVault implements VaultSource {
     const out = renameEntry(ix.entries(), path, name, Date.now());
     if (out === path) return path;
     refuseReserved(out);
-    ix.put(await this.drive.update(f.id, { name: nameOf(out) }));
-    await this.journal.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, { path: out, from: path });
+    await this.stillAsSeen(f);
+    ix.put(this.keepSeen(f, await this.drive.update(f.id, { name: nameOf(out) })));
+    await this.journal.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, { path: out, from: path, fileId: f.id });
     this.emit();
     return out;
   }
@@ -171,7 +174,7 @@ export class DriveVault implements VaultSource {
     refuseReserved(path);
     const made = type === 'folder' ? await this.drive.createFolder(parent, nameOf(path)) : await this.drive.createText(parent, nameOf(path), '');
     ix.put(made);
-    await this.journal.record('create', `New ${type} "${displayName(nameOf(path))}" in ${where(folder)}`, { path });
+    await this.journal.record('create', `New ${type} "${displayName(nameOf(path))}" in ${where(folder)}`, { path, fileId: made.id });
     this.emit();
     return path;
   }
@@ -184,9 +187,10 @@ export class DriveVault implements VaultSource {
       const f = ix.file(top);
       if (!f || top === 'Inbox') throw new BowerError('not-found', 'That is no longer in the inbox.');
       if (this.runningPiles().size) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+      this.uploads.delete(f.appProperties?.[PROP.pile] ?? f.id);
       await this.drive.trash(f.id);
       ix.drop(f.id);
-      this.bin.set(path, { id: f.id, change: null });
+      this.bin.set(path, { id: f.id, change: null, top });
       this.emit();
       return;
     }
@@ -198,7 +202,7 @@ export class DriveVault implements VaultSource {
     const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
     let change: string | null = null;
     if (made) await this.journal.remove(made.id);
-    else change = (await this.journal.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, { path })).id;
+    else change = (await this.journal.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, { path, fileId: f.id })).id;
     this.bin.set(path, { id: f.id, change });
     this.emit();
   }
@@ -208,9 +212,11 @@ export class DriveVault implements VaultSource {
     if (!gone) throw new BowerError('not-found', 'It is no longer in the Bin.');
     const ix = await this.index();
     // The name may have been taken since: come back under a free one, never over it.
-    const want = freeName(ix.entries(), parentOf(path), nameOf(path));
+    // A pile goes back whole, under its own folder's name.
+    const at = gone.top ?? path;
+    const want = freeName(ix.entries(), parentOf(at), nameOf(at));
     const back = await this.drive.untrash(gone.id);
-    if (want !== nameOf(path) || back.name !== want) await this.drive.update(gone.id, { name: want });
+    if (want !== nameOf(at) || back.name !== want) await this.drive.update(gone.id, { name: want });
     if (gone.change) await this.journal.remove(gone.change);
     this.bin.delete(path);
     await this.refresh();
@@ -235,9 +241,9 @@ export class DriveVault implements VaultSource {
       if (e instanceof BowerError && e.code === 'conflict') void this.refresh();
       throw e;
     }
-    ix.put(written);
+    ix.put(this.keepSeen(f, written));
     this.notes.set(f.id, { modified: written.modifiedTime, note: parseNote(path, out.text) });
-    await this.journal.record('task', `${out.done ? 'Ticked' : 'Unticked'} "${out.label}" in ${displayName(nameOf(path))}`, { path });
+    await this.journal.record('task', `${out.done ? 'Ticked' : 'Unticked'} "${out.label}" in ${displayName(nameOf(path))}`, { path, fileId: f.id });
     this.emit();
   }
 
@@ -317,7 +323,16 @@ export class DriveVault implements VaultSource {
       ix.put(folder);
       id = folder.id;
       parent = folder.id;
-      if (text) ix.put(await this.drive.createText(folder.id, PILE_NOTE, text));
+      if (text) {
+        try {
+          ix.put(await this.drive.createText(folder.id, PILE_NOTE, text));
+        } catch (e) {
+          // Half a pile helps nobody: its empty folder goes to the Bin, and you can save again.
+          await this.drive.trash(folder.id).catch((err: unknown) => console.error(err));
+          ix.drop(folder.id);
+          throw e;
+        }
+      }
     }
     const entries: Sending[] = input.items.map((it, i) => ({
       key: `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
@@ -575,6 +590,11 @@ export class DriveVault implements VaultSource {
                 this.emit();
               }, props)
             : await this.drive.createText(u.parent, name, '', props);
+        if (this.uploads.get(pileId) !== u) {
+          // The pile was removed while this was on its way: it follows the pile to the Bin.
+          await this.drive.trash(made.id);
+          return;
+        }
         ix.put(made);
         u.entries = u.entries.filter((x) => x !== e);
       } catch (err) {
@@ -585,6 +605,21 @@ export class DriveVault implements VaultSource {
     }
     if (!u.entries.length && this.uploads.get(pileId) === u) this.uploads.delete(pileId);
     this.emit();
+  }
+
+  /** Refuses to change a file that changed name or place elsewhere since the folder was listed. */
+  protected async stillAsSeen(f: DriveFile): Promise<void> {
+    const now = await this.drive.get(f.id);
+    if (now.name !== f.name || now.parents[0] !== f.parents[0]) {
+      void this.refresh();
+      throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
+    }
+  }
+
+  /** Your own write changes the file's time; if you had seen it, it stays seen. */
+  protected keepSeen(before: DriveFile, after: DriveFile): DriveFile {
+    if (isSeen(before.id, before.modifiedTime)) markSeen(after.id, after.modifiedTime);
+    return after;
   }
 
   protected mustFile(ix: VaultIndex, path: string): DriveFile {
@@ -602,7 +637,16 @@ export class DriveVault implements VaultSource {
   }
 
   /** The id of one of Bower's own folders (`.bower/changes`), made if missing. */
-  protected async systemFolder(path: string): Promise<string> {
+  protected systemFolder(path: string): Promise<string> {
+    // Two first writes at once share one folder, never make two.
+    const going = this.making.get(path);
+    if (going) return going;
+    const p = this.makeSystemFolder(path).finally(() => this.making.delete(path));
+    this.making.set(path, p);
+    return p;
+  }
+
+  private async makeSystemFolder(path: string): Promise<string> {
     const ix = await this.index();
     const known = ix.idOf(path);
     if (known) return known;

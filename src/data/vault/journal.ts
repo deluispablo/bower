@@ -15,6 +15,8 @@ export interface JournalExtra {
   /** Your words: a rule, a request, an answer. */
   text?: string;
   questionId?: string;
+  /** The Drive file the change is about, so the runner finds it whatever its path became. */
+  fileId?: string;
 }
 
 export type JournalRecord = ChangeEntry & JournalExtra & { v: 1; device: string };
@@ -54,7 +56,12 @@ export class Journal {
     const at = (this.lastAt = Math.max(Date.now(), this.lastAt + 1));
     const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
-    const f = await this.drive.createText(await this.place.folder(), `${id}.json`, `${JSON.stringify(rec)}\n`);
+    const write = async (): Promise<DriveFile> => this.drive.createText(await this.place.folder(), `${id}.json`, `${JSON.stringify(rec)}\n`);
+    // The change itself is done in Drive: try its line twice before saying it failed.
+    const f = await write().catch((e: unknown) => {
+      console.error(e);
+      return write();
+    });
     this.read.set(f.id, rec);
     this.fileOf.set(id, f.id);
     this.place.wrote?.(f);

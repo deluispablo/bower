@@ -507,7 +507,7 @@
     "what": "Rename and move are last-writer-wins: no check that the file is still where the app saw it.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "own-write-seen",

@@ -257,3 +257,101 @@ describe('what the review found', () => {
     expect(reads).toBeLessThanOrEqual(60);
   });
 });
+
+describe('what the code review found', () => {
+  it('a rename or move of something changed elsewhere writes nothing', async () => {
+    await vault.tree();
+    const id = await idOf('Resources/Cooking/Lemon tart.md');
+    await drive.update(id, { name: 'Lemon pie.md' });
+    await expect(vault.rename('Resources/Cooking/Lemon tart.md', 'Tart')).rejects.toMatchObject({ code: 'conflict' });
+    expect((await drive.get(id)).name).toBe('Lemon pie.md');
+  });
+
+  it('a move of something moved elsewhere writes nothing', async () => {
+    await vault.tree();
+    const id = await idOf('Resources/Cooking/Lemon tart.md');
+    const areas = await idOf('Areas');
+    const cooking = await idOf('Resources/Cooking');
+    await drive.update(id, { addParent: areas, removeParent: cooking });
+    await expect(vault.move('Resources/Cooking/Lemon tart.md', 'Projects')).rejects.toMatchObject({ code: 'conflict' });
+    expect((await drive.get(id)).parents).toEqual([areas]);
+  });
+
+  it("your own change keeps a seen thing seen", async () => {
+    const id = await idOf('Resources/Cooking/Lemon tart.md');
+    await drive.update(id, { appProperties: { bowerNew: '1' } });
+    await vault.refresh();
+    await vault.markSeen('Resources/Cooking/Lemon tart.md');
+    const to = await vault.rename('Resources/Cooking/Lemon tart.md', 'Lemon tart, best');
+    expect(findNode(await vault.tree(), to)?.isNew).toBeFalsy();
+  });
+
+  it('a pile removed while a thing is on its way does not come back', async () => {
+    const real = drive.upload.bind(drive);
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    drive.upload = async (parent, name, body, onProgress, props) => {
+      await slow;
+      return real(parent, name, body, onProgress, props);
+    };
+    const p = await vault.addPile({ text: '', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    await vault.removePile(p.id);
+    release();
+    await vault.settled();
+    await vault.refresh();
+    expect((await vault.piles()).some((x) => x.items.some((i) => i.name === 'late.pdf'))).toBe(false);
+  });
+
+  it('a pile that could not be made leaves no empty folder', async () => {
+    const real = drive.createText.bind(drive);
+    drive.createText = async (parent, name, text, props) => {
+      if (name === 'Pile note.md') throw new Error('network down');
+      return real(parent, name, text, props);
+    };
+    await expect(vault.addPile({ text: 'Half made', items: [] })).rejects.toBeDefined();
+    await vault.refresh();
+    expect((await vault.tree()).find((n) => n.path === 'Inbox')?.children?.some((n) => n.name.endsWith('Half made'))).toBe(false);
+  });
+
+  it('restoring a path inside a binned pile brings the pile back as it was', async () => {
+    const pile = (await vault.piles()).find((p) => p.path && p.items.length > 1);
+    if (!pile?.path) throw new Error('no pile folder');
+    const inside = `${pile.path}/${pile.items[0]?.name ?? ''}`;
+    await vault.trash(inside);
+    await vault.restore(inside);
+    expect((await vault.piles()).find((p) => p.id === pile.id)?.path).toBe(pile.path);
+  });
+
+  it('a journal line that fails to write once is tried again', async () => {
+    const real = drive.createText.bind(drive);
+    let failed = false;
+    drive.createText = async (parent, name, text, props) => {
+      if (name.endsWith('.json') && !failed) {
+        failed = true;
+        throw new Error('network blip');
+      }
+      return real(parent, name, text, props);
+    };
+    await vault.move('Resources/Cooking/Lemon tart.md', 'Areas');
+    expect((await vault.changes()).at(-1)?.kind).toBe('move');
+  });
+
+  it('two first changes make one journal folder', async () => {
+    const fresh = new FakeDrive();
+    const r = (await fresh.createFolder('root', 'Bower')).id;
+    for (const n of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await fresh.createFolder(r, n);
+    const v = new DriveVault({ drive: fresh, rootId: async () => r, runningPiles: () => new Set() });
+    await Promise.all([v.addRule('one'), v.addRule('two'), v.addRequest('three')]);
+    const all = await fresh.listAll(r);
+    expect(all.filter((f) => f.name === '.bower')).toHaveLength(1);
+    expect(all.filter((f) => f.name === 'changes')).toHaveLength(1);
+    expect(await v.changes()).toHaveLength(3);
+  });
+
+  it('a journal line names the Drive file it is about', async () => {
+    const id = await idOf('Resources/Cooking/Lemon tart.md');
+    await vault.move('Resources/Cooking/Lemon tart.md', 'Areas');
+    const file = (await drive.listAll(root)).filter((f) => f.name.endsWith('.json') && drive.pathOf(f.id, root).startsWith('.bower/changes/')).at(-1);
+    expect(JSON.parse(await drive.readText(file?.id ?? ''))).toMatchObject({ kind: 'move', fileId: id });
+  });
+});
