@@ -54,3 +54,4 @@
 - 2026-10-04: stale-rename-move passes — fix(vault): a rename or move of something changed elsewhere writes nothing and says so
 - 2026-10-04: own-write-seen passes — fix(vault): your own change keeps a seen thing seen
 - 2026-10-04: upload-vs-remove passes — fix(vault): a thing still on its way follows its removed pile to the Bin
+- 2026-10-04: addpile-cleanup passes — fix(vault): a pile that could not be made leaves no empty folder
