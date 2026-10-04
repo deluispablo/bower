@@ -1940,7 +1940,7 @@
       "Your changes list neither line."
     ],
     "verify": "pnpm vitest run src/data/contract -t \"removing a waiting rule leaves no line\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "note-without-journal",

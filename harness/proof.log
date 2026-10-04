@@ -159,3 +159,4 @@ link-files-url	27a40d0de05f49bc	2026-10-05	red
 outbox-dedupe-real	01609359c6a6a0de	2026-10-05	red
 screen-wiring-tests	c875d461fe59af03	2026-10-05	known-green: tests only; each checked red by hand
 demo-links-after-tidy	385f28df4f3b42ad	2026-10-05	red
+demo-pending-rule-remove	c1926005376cdb38	2026-10-05	red

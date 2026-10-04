@@ -786,10 +786,10 @@ export class DemoWorld {
           const t = text.trim();
           if (!t) throw new BowerError('conflict', 'Write the rule first.');
           if (ruleLike(this.rules, t)) throw new BowerError('conflict', 'You have that rule already.');
-          const r: Rule = { id: `u${Date.now()}`, text: t, yourWords: t, since: Date.now(), pending: true };
+          // A waiting rule is its line in your changes, as on Drive: one id for both.
+          const r: Rule = { id: this.record('rule', `New rule: "${t}"`, 'Rules.md'), text: t, yourWords: t, since: Date.now(), pending: true };
           this.rules = [r, ...this.rules];
           this.touchRules();
-          this.record('rule', `New rule: "${t}"`, 'Rules.md');
           return r;
         }),
       removeRule: (id) =>
@@ -799,12 +799,16 @@ export class DemoWorld {
           const at = this.rules.indexOf(r);
           this.rules = this.rules.filter((x) => x !== r);
           this.touchRules();
-          const line = this.record('rule', `Removed the rule "${r.text}"`, 'Rules.md');
+          // Not worded yet: its own line goes, and nothing else is written.
+          const was = r.pending ? this.journal.find((c) => c.id === r.id) : undefined;
+          if (was) this.unrecord(r.id);
+          const line = was ? null : this.record('rule', `Removed the rule "${r.text}"`, 'Rules.md');
           return () =>
             change(() => {
               this.rules = [...this.rules.slice(0, at), r, ...this.rules.slice(at)];
               this.touchRules();
-              this.unrecord(line);
+              if (was) this.journal = [...this.journal, was].sort((a, b) => a.at - b.at);
+              else this.unrecord(line);
             });
         }),
       suggestions: () => this.wait(() => this.suggestions.filter((s) => !ruleLike(this.rules, s.title))),
@@ -813,8 +817,8 @@ export class DemoWorld {
           const s = this.suggestions.find((x) => x.id === id);
           this.suggestions = this.suggestions.filter((x) => x.id !== id);
           if (keep && s && !ruleLike(this.rules, s.title)) {
-            this.rules = [{ id: `u${Date.now()}`, text: s.title, yourWords: s.title, since: Date.now(), pending: true }, ...this.rules];
-            this.record('rule', `Kept a suggestion as a rule: "${s.title}"`, 'Rules.md');
+            const id = this.record('rule', `Kept a suggestion as a rule: "${s.title}"`, 'Rules.md');
+            this.rules = [{ id, text: s.title, yourWords: s.title, since: Date.now(), pending: true }, ...this.rules];
           }
         }),
       toggleTask: (path, index) =>

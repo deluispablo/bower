@@ -302,6 +302,15 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect((await vault.rules()).some((r) => r.yourWords === 'anything from the dentist goes in health')).toBe(true);
       });
 
+      it('removing a waiting rule leaves no line in your changes', async () => {
+        const { vault } = await open();
+        const n = (await vault.changes()).length;
+        const r = await vault.addRule('anything from the dentist goes in health');
+        expect(await vault.changes()).toHaveLength(n + 1);
+        await vault.removeRule(r.id);
+        expect(await vault.changes()).toHaveLength(n);
+      });
+
       it('addRequest keeps what you asked, not yet done', async () => {
         const { vault } = await open();
         await vault.addRequest('Put my id papers together');
