@@ -98,7 +98,7 @@ export class Journal {
     const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
     return this.serial(async () => {
-      await this.sendWaiting();
+      await this.acrossTabs(() => this.sendWaiting());
       const key = outboxKey(await this.place.owner());
       if (!(await this.send(rec))) writeOutbox(key, [...readOutbox(key), rec]);
       return rec;
@@ -107,17 +107,25 @@ export class Journal {
 
   /** Sends what waits in the outbox (before a tidy-up, back online, at start); what still cannot go stays. */
   flush(): Promise<void> {
-    return this.serial(() => this.sendWaiting());
+    return this.serial(() => this.acrossTabs(() => this.sendWaiting()));
+  }
+
+  /** Two tabs of this browser share one outbox: one sends it at a time (Web Locks, where the browser has them). */
+  private async acrossTabs<T>(work: () => Promise<T>): Promise<T> {
+    const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+    if (!locks) return work();
+    return locks.request(outboxKey(await this.place.owner()), work);
   }
 
   private async sendWaiting(): Promise<void> {
     const key = outboxKey(await this.place.owner());
     const waiting = readOutbox(key);
     if (!waiting.length) return;
-    // A line whose answer was lost may be in Drive already: never write it twice.
+    // A line whose answer was lost may be in Drive already: never write it twice. The folder
+    // itself is asked (a cached listing never saw a file whose answer was lost).
     let there: Set<string>;
     try {
-      there = new Set((await this.place.files()).map((f) => f.name));
+      there = new Set((await this.drive.listAll(await this.place.folder())).map((f) => f.name));
     } catch (e) {
       console.error(e);
       return;

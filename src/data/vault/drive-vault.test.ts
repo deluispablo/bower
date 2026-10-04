@@ -356,6 +356,28 @@ describe('what the code review found', () => {
   });
 });
 
+describe('the outbox over the folder itself', () => {
+  it('outbox over the folder itself: a line whose answer was lost is not written twice', async () => {
+    await vault.tree();
+    const real = drive.createText.bind(drive);
+    let lose = true;
+    drive.createText = async (parent, name, text, props) => {
+      const f = await real(parent, name, text, props);
+      if (lose && name.endsWith('.json') && text.includes('"kind":"rule"')) {
+        lose = false;
+        throw new TypeError('Failed to fetch');
+      }
+      return f;
+    };
+    await vault.addRule('anything from the dentist goes in health');
+    await vault.addRequest('Put my id papers together');
+    const all = await drive.listAll(root);
+    const changes = all.find((f) => f.name === 'changes' && f.folder);
+    const lines = all.filter((f) => f.parents[0] === changes?.id && f.name.endsWith('.json'));
+    expect(lines).toHaveLength(2);
+  });
+});
+
 describe('saved links in search', () => {
   it('a saved link searches by its address, never by its file syntax', async () => {
     await vault.tree();

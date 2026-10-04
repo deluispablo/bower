@@ -1902,7 +1902,7 @@
       "docs/specs/2026-10-04-worker-contract.md says a runner keeps one record per id and archives every copy."
     ],
     "verify": "pnpm vitest run src/data/vault src/docs.test.ts -t \"outbox over the folder itself|records are unique by id\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "screen-wiring-tests",

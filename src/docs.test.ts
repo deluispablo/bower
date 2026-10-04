@@ -44,4 +44,9 @@ describe('what the repository promises', () => {
     expect(read('src/data/device.ts')).toMatch(/The journal outbox \(`bower:outbox:<folder>`\) stays at sign-out/);
     expect(read('AGENTS.md')).toMatch(/outbox stays at sign-out/);
   });
+
+  it('the contract says journal records are unique by id', () => {
+    expect(read('docs/specs/2026-10-04-worker-contract.md')).toMatch(/Journal records are unique by `id`: a runner keeps one per id and archives every copy/);
+  });
 });
+

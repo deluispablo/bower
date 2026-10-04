@@ -54,7 +54,7 @@ The app counts a run from `requestedAt` on every device. It asks `/status` every
 - `.bower/questions.json`, `.bower/suggestions.json`, `.bower/requests.json`, `.bower/hashes.json` (shapes in `src/data/vault/layout.ts`).
 - `Rules.md` with the rules typed in the app worded (`src/data/vault/rules-format.ts`), and the rules a `rule` line `removes` (by their wording) taken out.
 - After a `rename` or `move` line (`from` → `path`), every `[[link]]` to the old name written with the new one, in every note (a label after `|` stays). Until then the app finds a note by the names it had (`src/data/links.ts`).
-- The journal files it read moved to `.bower/changes/archive/`.
+- The journal files it read moved to `.bower/changes/archive/`. Journal records are unique by `id`: a runner keeps one per id and archives every copy (a device whose answer was lost may have written one twice).
 - `appProperties.bowerNew = "1"` on what it filed or changed, cleared from the previous run's things first.
 
 A run takes the piles in the inbox when it starts. Piles added during the run wait for the next one.
