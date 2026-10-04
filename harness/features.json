@@ -1682,7 +1682,7 @@
       "The toast says what Bower will do: keep one, in the next tidy-up."
     ],
     "verify": "pnpm vitest run src/features/home -t \"an answer is confirmed in its own words\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "inbox-order-names",

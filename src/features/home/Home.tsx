@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { report } from '@/ui/report';
+import { answered } from './answer-words';
 import { startRun } from '@/features/tidy/start-run';
 import { waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
@@ -221,7 +222,7 @@ function Questions() {
   if (!qs?.length) return null;
   const answer = (id: string, yes: boolean, label: string): void => {
     vault.answer(id, yes).then(
-      () => toast(yes ? `${label}. Bower does it in the next tidy-up.` : 'Got it. Bower leaves it as it is.'),
+      () => toast(answered(label)),
       (e: unknown) => report(e, 'That answer did not save. Try again.'),
     );
   };
