@@ -156,7 +156,7 @@
       "Tidy up"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"an instant tidy-up ends at once\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "scene-matches-result",
