@@ -177,7 +177,7 @@
     "what": "After moving a note from the tree's menu, keyboard focus points at a row that no longer exists.",
     "steps": [
       "Desktop",
-      "Right-click a note, Move to…, pick a folder",
+      "Right-click a note, Move to\u2026, pick a folder",
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"after a move the tree keeps keyboard focus\"",
@@ -187,9 +187,9 @@
     "id": "move-keyboard",
     "task": "qa-5",
     "category": "bug",
-    "what": "Move to…: Enter does not pick the only folder left and arrows do not walk the list.",
+    "what": "Move to\u2026: Enter does not pick the only folder left and arrows do not walk the list.",
     "steps": [
-      "Move to…",
+      "Move to\u2026",
       "Type a folder name",
       "Enter"
     ],
@@ -223,9 +223,9 @@
     "id": "palette-search-text",
     "task": "qa-5",
     "category": "bug",
-    "what": "The ⌘K palette only matches names although the box says \"Search your notes and files\".",
+    "what": "The \u2318K palette only matches names although the box says \"Search your notes and files\".",
     "steps": [
-      "⌘K",
+      "\u2318K",
       "Type a word from inside a note"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the palette finds words inside notes\"",
@@ -377,7 +377,7 @@
     "id": "copy-sensor",
     "task": "qa-5",
     "category": "polish",
-    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this…\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
+    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this\u2026\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
     "steps": [
       "Pile screen, Bower tab, tour, Home"
     ],
@@ -494,7 +494,7 @@
     "id": "small-upload-progress",
     "task": "qa-5",
     "category": "polish",
-    "what": "Small files jump from 0% to 99%; show Sending… without a percentage unless it is known.",
+    "what": "Small files jump from 0% to 99%; show Sending\u2026 without a percentage unless it is known.",
     "steps": [
       "Add a small file"
     ],
@@ -743,7 +743,7 @@
     "what": "Move to: Enter with an empty search box moves the file to the first folder.",
     "steps": [
       "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
-      "In the folder tree, right-click Lease draft and choose \"Move to…\"",
+      "In the folder tree, right-click Lease draft and choose \"Move to\u2026\"",
       "Press Enter without typing anything",
       "The Move to dialog stays open and nothing is moved (no \"Moved Lease draft\" message)"
     ],
@@ -798,7 +798,7 @@
     "what": "The loading-states fix is pinned only by pure-function tests; reverting the components would stay green.",
     "steps": [
       "Open http://localhost:5190/?scenario=slow&time=instant&source=fake",
-      "While it loads, the bottom bar says \"Looking at the inbox…\", never \"Nothing waiting\" or \"0 things\"",
+      "While it loads, the bottom bar says \"Looking at the inbox\u2026\", never \"Nothing waiting\" or \"0 things\"",
       "From a terminal: pnpm vitest run src/features/tidy/StatusBar.test.tsx src/features/bower/BowerPanel.test.tsx -t \"loading\"",
       "Green now: the screens themselves are tested, so undoing the component fix turns them red"
     ],
@@ -835,11 +835,11 @@
     "id": "confirmbin-grammar",
     "task": "qa-6",
     "category": "polish",
-    "what": "ConfirmBin says \"The 1 thing inside go with it … get them back\".",
+    "what": "ConfirmBin says \"The 1 thing inside go with it \u2026 get them back\".",
     "steps": [
       "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
       "In the folder tree, right-click a folder with one thing in it and choose \"Move to Bin\"",
-      "The question now reads \"The thing inside goes with it. You can get it back…\"; with 3 things it reads \"The 3 things inside go with it. You can get them back…\""
+      "The question now reads \"The thing inside goes with it. You can get it back\u2026\"; with 3 things it reads \"The 3 things inside go with it. You can get them back\u2026\""
     ],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"agree\"",
     "passes": true
@@ -848,11 +848,11 @@
     "id": "palette-search-error",
     "task": "qa-6",
     "category": "polish",
-    "what": "If search fails, the palette says \"Looking in your notes…\" forever.",
+    "what": "If search fails, the palette says \"Looking in your notes\u2026\" forever.",
     "steps": [
       "In a terminal at the repo root, run: pnpm vitest run src/features/palette -t \"says when search fails\"",
       "The test opens search, makes it fail, and types \"Tally\"",
-      "Green now: the search says \"Search did not answer…\" instead of \"Looking in your notes…\" forever"
+      "Green now: the search says \"Search did not answer\u2026\" instead of \"Looking in your notes\u2026\" forever"
     ],
     "verify": "pnpm vitest run src/features/palette -t \"says when search fails\"",
     "passes": true
@@ -1092,7 +1092,7 @@
     "what": "After a move or a Bin from the tree, keyboard focus is lost (body), so the arrows do nothing.",
     "steps": [
       "Desktop",
-      "Click a note, Move to…, type a folder, Enter",
+      "Click a note, Move to\u2026, type a folder, Enter",
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"after a move or a Bin the tree keeps the keyboard\"",
@@ -1155,7 +1155,7 @@
     "category": "bug",
     "what": "Move to: Enter with several matches moves to the first, with nothing showing which.",
     "steps": [
-      "Move to…",
+      "Move to\u2026",
       "Type re",
       "Enter"
     ],
@@ -1193,7 +1193,7 @@
     "steps": [
       "In a terminal at the repo root, run: pnpm vitest run src/app/words.test.ts -t \"one way to write a day\"",
       "In the app (http://localhost:5190/?scenario=default&time=instant), look at dates in Activity and note timelines",
-      "Every day reads one way, like \"28 Sep\"; today reads \"today, …\""
+      "Every day reads one way, like \"28 Sep\"; today reads \"today, \u2026\""
     ],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"one way to write a day\"",
     "passes": true
@@ -1228,7 +1228,7 @@
     "id": "pile-folder-names",
     "task": "qa-6",
     "category": "polish",
-    "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts…), Home by their notes.",
+    "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts\u2026), Home by their notes.",
     "steps": [
       "Open http://localhost:5190/?scenario=default&time=instant (on a phone width, http://localhost:5190/files?scenario=default&time=instant)",
       "In the folder tree, open Inbox",
@@ -1524,7 +1524,7 @@
     "what": "Move to: with several matches, an exact folder name cannot be picked with Enter; Enter in an empty box says nothing.",
     "steps": [
       "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
-      "In the folder tree, right-click Lease draft and choose \"Move to…\"",
+      "In the folder tree, right-click Lease draft and choose \"Move to\u2026\"",
       "Press Enter in the empty box: it says \"Type a folder name, or pick one with the arrows.\"",
       "Type \"areas\" and press Enter: \"Moved Lease draft.pdf to Areas\", though other folders match too"
     ],
@@ -1588,11 +1588,11 @@
     "id": "phone-page-menus",
     "task": "qa-8",
     "category": "bug",
-    "what": "On the phone, the ⋯ menu on note and folder pages: Rename does nothing, New note makes an unnamed Untitled and stays on the folder.",
+    "what": "On the phone, the \u22ef menu on note and folder pages: Rename does nothing, New note makes an unnamed Untitled and stays on the folder.",
     "steps": [
       "Open http://localhost:5190/?scenario=default&time=instant at phone width, open the note Flat 3, 12 Larkspur Lane.",
-      "Tap ⋯ (More for …) and Rename: a name field appears; type a new name and confirm; the title changes.",
-      "On a folder page (Areas / Car), tap ⋯ then New note: a name is asked, then the new note opens."
+      "Tap \u22ef (More for \u2026) and Rename: a name field appears; type a new name and confirm; the title changes.",
+      "On a folder page (Areas / Car), tap \u22ef then New note: a name is asked, then the new note opens."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"page menu on the phone\"",
     "passes": true
@@ -1828,5 +1828,213 @@
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"the palette is named once\"",
     "passes": true
+  },
+  {
+    "id": "harness-red-assert",
+    "task": "qa-9",
+    "category": "review",
+    "what": "done.sh counts a test file that fails to load as red; a red must be a failed assertion.",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "Make an entry whose fix only adds a new module its test imports; run done.sh: it refuses, saying no assertion failed.",
+      "node -e on scripts/harness-rules.mjs redKind() on vitest output with only a load error gives 'load'."
+    ],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"a red is a failed assertion\"",
+    "passes": false
+  },
+  {
+    "id": "harness-each-pattern",
+    "task": "qa-9",
+    "category": "review",
+    "what": "A verify with several test names (a|b|c) passes the name check when any one matches; each must match a test.",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "In harness/features.json give a closed entry -t \"real name|no such test\".",
+      "node scripts/check-harness.mjs names the part that matches no test."
+    ],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"every name in a verify matches a test\"",
+    "passes": false
+  },
+  {
+    "id": "harness-note-committed",
+    "task": "qa-9",
+    "category": "review",
+    "what": "--known-green reads the entry's note from the working copy, so the note can be written in the same change that closes it.",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "Add a note to an open entry without committing, run done.sh <id> m --known-green why: it refuses until the note is committed."
+    ],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"known-green needs a note already committed\"",
+    "passes": false
+  },
+  {
+    "id": "harness-fixed-in-precise",
+    "task": "qa-9",
+    "category": "review",
+    "what": "--fixed-in puts back whole files as before the commit, so later unrelated edits make the red; renames in git status are misread.",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "Close an entry --fixed-in <sha> after later commits touched the same file: only that commit's change is undone (git apply -R), and the red is about it."
+    ],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"fixed-in undoes only that commit\"",
+    "passes": false
+  },
+  {
+    "id": "link-files-url",
+    "task": "qa-9",
+    "category": "bug",
+    "what": "A pasted link whose name ends like .com, .org or .html is stored without .url, so it gets no Open the web page, no search by address, and shows as 'example'.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant, Add, paste https://example.com, put it in the inbox.",
+      "The inbox shows example.com; its page has Open the web page; search 'example' finds it by its address."
+    ],
+    "verify": "pnpm vitest run src/data -t \"a link file always ends in .url\"",
+    "passes": false
+  },
+  {
+    "id": "outbox-dedupe-real",
+    "task": "qa-9",
+    "category": "bug",
+    "what": "Over Drive the outbox checks a cached listing, so a line whose answer was lost is written twice; two tabs back online send the same outbox; the contract does not say records are unique by id.",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "pnpm vitest run src/data/vault -t \"outbox over the folder itself\": a lost answer leaves one file, two tabs send once.",
+      "docs/specs/2026-10-04-worker-contract.md says a runner keeps one record per id and archives every copy."
+    ],
+    "verify": "pnpm vitest run src/data/vault src/docs.test.ts -t \"outbox over the folder itself|records are unique by id\"",
+    "passes": false
+  },
+  {
+    "id": "screen-wiring-tests",
+    "task": "qa-9",
+    "category": "review",
+    "what": "answer-toast-words, empty-file-warning, restore-rows-dropped and run-result-requests are pinned by helper tests only; the screens are not.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant, answer Keep one on Home: the toast says You chose \"Keep one\".",
+      "Add an empty file: the row says it is empty. Reload with a file waiting, put the pile in: a toast names the file left out.",
+      "Tidy up after a request: the result names it."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"on screen:\"",
+    "passes": false
+  },
+  {
+    "id": "demo-links-after-tidy",
+    "task": "qa-9",
+    "category": "bug",
+    "what": "In the demo, links break again after a tidy-up (no rewrite of [[old]]), and a renamed note's backlinks keep the old path.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant, rename Flat 7, Cobble Row to Cobble Row flat, tidy up.",
+      "Open Flat 3, 12 Larkspur Lane: the link opens Cobble Row flat, and its Linked notes list Flat 3."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"a link follows a rename through a tidy-up\"",
+    "passes": false
+  },
+  {
+    "id": "demo-pending-rule-remove",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "Removing a rule not yet worded leaves two lines in the demo's Activity (New rule and Removed); Drive drops the line.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant, add a rule on the Bower tab, then Remove it.",
+      "Your changes list neither line."
+    ],
+    "verify": "pnpm vitest run src/data/contract -t \"removing a waiting rule leaves no line\"",
+    "passes": false
+  },
+  {
+    "id": "note-without-journal",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "A journal file that cannot be read stops every note from opening (note() reads the journal for former names).",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "pnpm vitest run src/data/vault -t \"a note opens when the journal cannot be read\"."
+    ],
+    "verify": "pnpm vitest run src/data/vault -t \"a note opens when the journal cannot be read\"",
+    "passes": false
+  },
+  {
+    "id": "undo-focus-twice",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "Undo of the same path a second time does not give its row the keyboard.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant on desktop, Delete Lease draft, Undo, Delete again, Undo again.",
+      "The row has the keyboard both times."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"Undo twice\"",
+    "passes": false
+  },
+  {
+    "id": "toast-hold-both",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "Moving the pointer off a toast restarts its timer while the keyboard is still on it.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant, bin a note, Tab to Undo, move the pointer over and off the toast.",
+      "It stays while the keyboard is on it."
+    ],
+    "verify": "pnpm vitest run src/ui -t \"a toast held by the keyboard and the pointer\"",
+    "passes": false
+  },
+  {
+    "id": "link-address-error",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "When a saved link's address cannot be read, the page says nothing.",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "pnpm vitest run src/features/note -t \"a link that cannot be read says so\"."
+    ],
+    "verify": "pnpm vitest run src/features/note -t \"a link that cannot be read says so\"",
+    "passes": false
+  },
+  {
+    "id": "namesheet-names",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "The name sheet makes 'Tyres.md.md' from 'Tyres.md' and changes slashes without a word.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant at phone width, a folder page, \u22ef New note, type Tyres.md: the note is Tyres.",
+      "Type a/b: a toast says Bower used a dash."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the name sheet takes a name as typed\"",
+    "passes": false
+  },
+  {
+    "id": "move-no-match",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "Move to: Enter with text that matches no folder says nothing.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant on desktop, Move to\u2026 on Lease draft, type zzz, Enter.",
+      "A line says no folder has that name."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"Enter with no folder that matches\"",
+    "passes": false
+  },
+  {
+    "id": "former-names-gaps",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "Former names miss notes inside a renamed folder, [[Name#heading]] links, and rewrite [[Old]] even when a new note took the old name.",
+    "steps": [
+      "Run in a terminal in the repo:",
+      "pnpm vitest run src/data -t \"former names:\"."
+    ],
+    "verify": "pnpm vitest run src/data -t \"former names:\"",
+    "passes": false
+  },
+  {
+    "id": "tabs-forget-person",
+    "task": "qa-9",
+    "category": "polish",
+    "what": "Tabs kept for the browser tab survive Start this situation again and a session that ends without Sign out.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant on desktop, open a second tab, then let the session end (or Start this situation again).",
+      "Signing in shows one tab on Home."
+    ],
+    "verify": "pnpm vitest run src/data/live src/app -t \"tabs go with the person\"",
+    "passes": false
   }
 ]

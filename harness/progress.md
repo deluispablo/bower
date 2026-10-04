@@ -2,7 +2,7 @@
 
 ## Next
 
-- qa-8 is closed (149/149; e2e 151 passed on demo and on fake; PWA 4 passed). A reviewer (range 57ab04d^..HEAD) and an evaluator round are running: turn their findings into qa-9 entries and fix them. Phase 3 waits until a round comes back clean.
+- Fix the qa-9 entries (the reviewer round after qa-8): the harness ones first (harness-red-assert, harness-each-pattern, harness-note-committed, harness-fixed-in-precise), then link-files-url, outbox-dedupe-real, screen-wiring-tests, demo-links-after-tidy, then the polish. The evaluator round is still out: add its findings as qa-9 too.
 
 ## Log
 
