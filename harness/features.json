@@ -32,7 +32,7 @@
     "task": 5,
     "what": "Paths mapped to Drive ids, same-name files kept apart",
     "verify": "pnpm vitest run src/data/vault/vault-index.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "vault-files",
