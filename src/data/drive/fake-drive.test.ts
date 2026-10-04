@@ -36,4 +36,15 @@ describe('keeping the pretend Drive across reloads', () => {
     await d.listAll('root');
     expect(n).toBe(1);
   });
+
+  it('big files keep their place across a reload, not their bytes', async () => {
+    const d = new FakeDrive();
+    const root = await d.createFolder('root', 'Bower');
+    await d.upload(root.id, 'photo.jpg', new Blob([new Uint8Array(3 * 1024 * 1024)], { type: 'image/jpeg' }));
+    const json = await d.snapshot();
+    expect(json.length).toBeLessThan(100_000);
+    const back = FakeDrive.restore(json);
+    const photo = (await back.listAll(root.id)).find((f) => f.name === 'photo.jpg');
+    expect(photo?.size).toBe(3 * 1024 * 1024);
+  });
 });

@@ -959,7 +959,7 @@
       "Reload"
     ],
     "verify": "pnpm vitest run src/data/drive/fake-drive.test.ts -t \"big files\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "move-enter-multi",

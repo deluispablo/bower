@@ -92,3 +92,4 @@
 - 2026-10-04: demo-question-rule passes — fix(demo): no question asks for a rule that already exists
 - 2026-10-04: search-plain-match passes — fix(search): search matches the text people read, not its markdown; tables lose their empty cells
 - 2026-10-04: new-note-one-line passes — fix(journal): a new thing named straight away is one change
+- 2026-10-04: fake-quota passes — fix(fake): big files keep their place and size on the pretend Drive across a reload, not their bytes

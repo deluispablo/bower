@@ -46,7 +46,8 @@ export class FakeDrive implements DriveApi {
     const files = [];
     for (const f of this.files.values()) {
       const c = f.content;
-      const content = c === null ? null : typeof c === 'string' ? { text: c } : { b64: toBase64(new Uint8Array(await c.arrayBuffer())), type: c.type };
+      // A tab keeps a few MB: a big file keeps its place and size, not its bytes.
+      const content = c === null ? null : typeof c === 'string' ? { text: c } : c.size > KEEP_BYTES ? { big: true, type: c.type } : { b64: toBase64(new Uint8Array(await c.arrayBuffer())), type: c.type };
       files.push({ meta: f.meta, trashed: f.trashed, content });
     }
     return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files });
@@ -55,11 +56,11 @@ export class FakeDrive implements DriveApi {
   /** A FakeDrive back from `snapshot()`. */
   static restore(json: string, opts: FakeDriveOptions = {}): FakeDrive {
     const d = new FakeDrive(opts);
-    const data = JSON.parse(json) as { seq: number; last: number; files: Array<{ meta: DriveFile; trashed: boolean; content: { text: string } | { b64: string; type: string } | null }> };
+    const data = JSON.parse(json) as { seq: number; last: number; files: Array<{ meta: DriveFile; trashed: boolean; content: { text: string } | { b64: string; type: string } | { big: true; type: string } | null }> };
     d.files.clear();
     for (const f of data.files) {
       const c = f.content;
-      const content = c === null ? null : 'text' in c ? c.text : new Blob([fromBase64(c.b64)], { type: c.type });
+      const content = c === null ? null : 'text' in c ? c.text : 'big' in c ? new Blob([`A big file, kept by name only on the pretend Drive.`], { type: c.type }) : new Blob([fromBase64(c.b64)], { type: c.type });
       d.files.set(f.meta.id, { meta: f.meta, trashed: f.trashed, content });
     }
     d.seq = data.seq;
@@ -248,6 +249,9 @@ export class FakeDrive implements DriveApi {
     return { ...m, parents: [...m.parents], ...(m.appProperties ? { appProperties: { ...m.appProperties } } : {}) };
   }
 }
+
+/** Files bigger than this keep only their name and size across a reload. */
+const KEEP_BYTES = 256 * 1024;
 
 function toBase64(bytes: Uint8Array): string {
   let bin = '';
