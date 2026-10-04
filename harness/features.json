@@ -822,7 +822,7 @@
     "what": "The tour test says the pretend Drive starts over on reload (no longer true).",
     "steps": [],
     "verify": "pnpm vitest run src/docs.test.ts -t \"stale comment\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "landing-source-fix",
