@@ -59,6 +59,8 @@ export interface VaultSource {
   rules(): Promise<Rule[]>;
   requests(): Promise<Request[]>;
   addRequest(text: string): Promise<Request>;
+  /** The web address a saved link (a `.url` file) opens, or null. */
+  linkAddress(path: string): Promise<string | null>;
   /** Names, summaries and note text. */
   search(query: string): Promise<SearchHit[]>;
   /** Refuses words that repeat a rule you have. */

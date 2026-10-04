@@ -10,7 +10,7 @@ import { ago } from '@/app/words';
 import { useIsDesktop } from '@/ui/media';
 import { useUi } from '@/app/ui-store';
 import { Icon, BowerHead } from '@/ui/Icon';
-import { IconButton, Button } from '@/ui/Button';
+import { IconButton, Button, buttonLinkClass } from '@/ui/Button';
 import { PoseBower } from '@/bird/Bower';
 import { Inline, Markdown } from './markdown';
 import { useResolver } from './resolve';
@@ -220,7 +220,21 @@ const KIND_WORD: Record<string, string> = { pdf: 'PDF', image: 'Photo', link: 'L
 function FileView({ node }: { node: TreeNode }) {
   const desktop = useIsDesktop();
   const act = useFileActions();
+  const { vault } = useSources();
   const folder = parentOf(node.path);
+  const [web, setWeb] = useState<{ path: string; url: string | null } | null>(null);
+  useEffect(() => {
+    if (node.kind !== 'link') return;
+    let live = true;
+    vault.linkAddress(node.path).then(
+      (url) => live && setWeb({ path: node.path, url }),
+      (e: unknown) => console.error(e),
+    );
+    return () => {
+      live = false;
+    };
+  }, [node.kind, node.path, vault]);
+  const url = web?.path === node.path ? web.url : null;
   return (
     <article className={s.page}>
       {!desktop && <PhoneBar folder={folder} path={node.path} />}
@@ -229,7 +243,7 @@ function FileView({ node }: { node: TreeNode }) {
           <Link to={folderRoute(folder)}>{crumbs(folder)}</Link>
         </p>
       )}
-      <h1 className={`${s.title} ${s.fileTitle}`}>{node.name}</h1>
+      <h1 className={`${s.title} ${s.fileTitle}`}>{node.kind === 'link' ? node.name.replace(/\.url$/, '') : node.name}</h1>
       <div className={`${s.preview} ${node.kind === 'image' ? s.previewImage : ''}`} aria-hidden="true">
         <Icon name={node.kind === 'image' ? 'image' : node.kind === 'link' ? 'link' : 'pdf'} size={44} stroke={1.4} />
       </div>
@@ -248,16 +262,23 @@ function FileView({ node }: { node: TreeNode }) {
         </div>
       </dl>
       <div style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
-        <Button onClick={() => act.openInDrive(node.path)}>
+        {url && (
+          <a className={buttonLinkClass} href={url} target="_blank" rel="noreferrer noopener">
+            <Icon name="link" size={18} /> Open the web page
+          </a>
+        )}
+        <Button variant={url ? 'ghost' : undefined} onClick={() => act.openInDrive(node.path)}>
           <Icon name="drive" size={18} /> Open in Drive
         </Button>
         <Button variant="ghost" onClick={() => act.copyLink(node)}>
           Copy link
         </Button>
       </div>
-      <p className="muted" style={{ marginTop: 18, fontSize: 15, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <BowerHead size={18} /> Bower reads files like this one in a tidy-up and writes what matters into a note.
-      </p>
+      {node.path.startsWith('Inbox/') && (
+        <p className="muted" style={{ marginTop: 18, fontSize: 15, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <BowerHead size={18} /> Bower reads files like this one in a tidy-up and writes what matters into a note.
+        </p>
+      )}
     </article>
   );
 }

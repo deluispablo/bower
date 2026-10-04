@@ -76,6 +76,8 @@ export interface WorldOptions {
 export class DemoWorld {
   private entries: Entries = new Map();
   private notes = new Map<string, Note>();
+  /** Where each saved link the demo filed points. */
+  private links = new Map<string, string>();
   private piles: Pile[] = [];
   private questions: Question[] = [];
   private rules: Rule[] = [];
@@ -427,6 +429,7 @@ export class DemoWorld {
           const folder = parentOf(merge.into);
           const name = freeName(this.entries, folder, merge.title);
           this.entries.set(join(folder, name), { path: join(folder, name), type: 'file', kind: item.kind, modified: at, created: at, isNew: true });
+          if (item.kind === 'link') this.links.set(join(folder, name), `https://${item.name}`);
           const n = this.noteFor(merge.into);
           this.notes.set(merge.into, { ...n, timeline: [...n.timeline, { date: 'Today', text: merge.line }] });
           filed.push({ name: item.name, title: displayName(nameOf(merge.into)), kind: item.kind, to: folder, note: merge.into });
@@ -439,6 +442,7 @@ export class DemoWorld {
         const name = freeName(this.entries, folder, plan.title);
         const path = join(folder, name);
         this.entries.set(path, { path, type: 'file', kind: kindOf(name), modified: at, created: at, isNew: true, byBower: kindOf(name) === 'note' });
+        if (item.kind === 'link') this.links.set(path, `https://${item.name}`);
         const f: FiledItem = { name: item.name, title: displayName(name), kind: item.kind, to: folder };
         if (plan.note) {
           this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
@@ -709,6 +713,13 @@ export class DemoWorld {
           this.requests = [r, ...this.requests];
           this.record('request', `Asked Bower: "${t}"`);
           return r;
+        }),
+      linkAddress: (path) =>
+        this.wait(() => {
+          if (!path.endsWith('.url') || !this.entries.has(path)) return null;
+          // A saved link in the inbox is named by its address, as it arrived.
+          const bare = nameOf(path).replace(/\.url$/, '');
+          return this.links.get(path) ?? (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(bare) ? `https://${bare}` : null);
         }),
       search: (query) =>
         this.wait(() => {

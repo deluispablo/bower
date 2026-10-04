@@ -1743,7 +1743,7 @@
       "Title without .url; an Open the web page button; no 'reads in a tidy-up' line for a filed file."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"a saved link opens its web page\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "tabs-survive-reload",

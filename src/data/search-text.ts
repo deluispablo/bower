@@ -40,8 +40,13 @@ export function placeOf(folder: string): string {
   return folder.replaceAll('/', ' / ') || 'Your Bower folder';
 }
 
-/** The web address in a saved link file (`[InternetShortcut]` then `URL=…`), as a person reads it: no scheme. */
-export function savedLinkAddress(text: string): string | null {
+/** The web address in a saved link file (`[InternetShortcut]` then `URL=…`), whole; only http and https. */
+export function savedLinkUrl(text: string): string | null {
   const url = /^URL=(\S+)/m.exec(text)?.[1];
-  return url ? url.replace(/^https?:\/\//i, '').replace(/\/$/, '') : null;
+  return url && /^https?:\/\//i.test(url) ? url : null;
+}
+
+/** The same address as a person reads it: no scheme. */
+export function savedLinkAddress(text: string): string | null {
+  return savedLinkUrl(text)?.replace(/^https?:\/\//i, '').replace(/\/$/, '') ?? null;
 }

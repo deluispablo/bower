@@ -29,7 +29,7 @@ import { formerNames } from '../links';
 import { ruleLike } from '../rules';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
-import { placeOf, plainSnippet, plainText, savedLinkAddress, searchLines } from '../search-text';
+import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
@@ -272,6 +272,12 @@ export class DriveVault implements VaultSource {
     this.notes.set(f.id, { modified: written.modifiedTime, note: parseNote(path, out.text) });
     await this.journal.record('task', `${out.done ? 'Ticked' : 'Unticked'} "${out.label}" in ${displayName(nameOf(path))}`, { path, fileId: f.id });
     this.emit();
+  }
+
+  async linkAddress(path: string): Promise<string | null> {
+    const f = (await this.index()).file(path);
+    if (!f || f.folder || !path.endsWith('.url')) return null;
+    return savedLinkUrl(await this.drive.readText(f.id));
   }
 
   async search(query: string): Promise<SearchHit[]> {

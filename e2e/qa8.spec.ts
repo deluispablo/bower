@@ -101,3 +101,15 @@ test('deleting the account and coming back: one name for it, and a fresh start',
   await expect(page).toHaveURL(/\/welcome/, { timeout: 10_000 });
   await expect(page.getByRole('heading', { name: /Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
 });
+
+test('a saved link opens its web page, and a filed file is not promised a reading', async ({ page }) => {
+  await open(page, '/note/Inbox/curry-clipping.example.url');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('curry-clipping.example');
+  const web = page.getByRole('link', { name: 'Open the web page' });
+  await expect(web).toHaveAttribute('href', 'https://curry-clipping.example');
+  await expect(web).toHaveAttribute('target', '_blank');
+  await expect(page.getByText(/reads files like this one in a tidy-up/)).toBeVisible();
+  await open(page, '/note/Projects/Flat%20hunt/Lease%20draft.pdf');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Lease draft/);
+  await expect(page.getByText(/reads files like this one in a tidy-up/)).toHaveCount(0);
+});

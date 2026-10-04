@@ -31,3 +31,6 @@ export function IconButton({ label, small, className = '', children, type = 'but
     </button>
   );
 }
+
+/** A link that looks like the main button (opening a web page is a link, not an action). */
+export const buttonLinkClass: string = [s.btn, s.primary].join(' ');
