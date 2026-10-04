@@ -217,7 +217,7 @@
       "Search Tally, #career"
     ],
     "verify": "pnpm vitest run src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "palette-search-text",

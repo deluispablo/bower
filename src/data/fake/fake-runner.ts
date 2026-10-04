@@ -9,7 +9,7 @@
  */
 import type { DriveFile } from '../drive/drive-api';
 import type { FakeDrive } from '../drive/fake-drive';
-import { FILING, guessFolder, seedPiles, wordRule } from '../demo/fixture';
+import { FILING, MERGES, guessFolder, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { thingsIn } from '../piles';
 import { displayName, freeName, join, kindOf, nameOf, parentOf } from '../tree';
@@ -78,13 +78,15 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
   const journal = await w.journal();
   await w.clearNew();
   const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [], yourChanges: journal.length };
+  const saidYes = new Set(journal.filter((r) => r.kind === 'answer' && r.text === 'yes').map((r) => r.questionId ?? ''));
   if (opts.scope === 'all') {
-    for (const pile of piles.filter((p) => taken.has(p.id))) await w.filePile(pile, report);
+    for (const pile of piles.filter((p) => taken.has(p.id))) await w.filePile(pile, report, saidYes);
     for (const u of UPDATES) if (await w.addTimeline(u.path, u.what)) report.updated.push(u);
   }
   await w.wordRules(journal.filter((r) => r.kind === 'rule'));
   await w.doRequests(journal.filter((r) => r.kind === 'request'));
-  report.questions = await w.dropAnswered(new Set(journal.filter((r) => r.kind === 'answer').map((r) => r.questionId ?? '')));
+  // The report lists only the questions this run asked (none, for the pretend runner); open ones stay in questions.json.
+  await w.dropAnswered(new Set(journal.filter((r) => r.kind === 'answer').map((r) => r.questionId ?? '')));
   await w.archive(journal);
   if (opts.scope === 'all') await w.hashes();
   return { phase: 'done', report };
@@ -116,7 +118,7 @@ class Writer {
     for (const f of await this.drive.listAll(this.rootId)) if (f.appProperties?.[PROP.isNew]) this.ix.put(await this.drive.update(f.id, { appProperties: { [PROP.isNew]: null } }));
   }
 
-  async filePile(pile: Pile, report: RunReport): Promise<void> {
+  async filePile(pile: Pile, report: RunReport, saidYes: ReadonlySet<string>): Promise<void> {
     if (!pile.items.length) {
       const to = guessFolder(pile.text, 'note');
       const folder = await this.folder(to);
@@ -128,6 +130,16 @@ class Writer {
       for (const item of pile.items) {
         const file = this.byId(item.id);
         if (!file) continue;
+        const merge = MERGES.find((m) => m.item === item.name && saidYes.has(m.question));
+        if (merge) {
+          // You said yes to keeping one note: the thing joins that note instead of making its own.
+          const to = parentOf(merge.into);
+          const name = freeName(this.ix.entries(), to, merge.title);
+          this.ix.put(await this.drive.update(file.id, { name, addParent: await this.folder(to), ...(file.parents[0] ? { removeParent: file.parents[0] } : {}), appProperties: { [PROP.isNew]: '1', [PROP.asAdded]: null, [PROP.origin]: null, [PROP.kind]: null, [PROP.pile]: null } }));
+          await this.addTimeline(merge.into, merge.line);
+          report.filed.push({ name: item.name, title: displayName(nameOf(merge.into)), kind: item.kind, to, note: merge.into });
+          continue;
+        }
         const plan = PLAN_BY_NAME.get(item.name) ?? { title: file.name, to: guessFolder(`${pile.text} ${item.name}`, item.kind) };
         const folder = await this.folder(plan.to);
         const name = freeName(this.ix.entries(), plan.to, plan.title);

@@ -131,6 +131,17 @@ export const FILING: Record<string, { title: string; to: string; note?: string }
   l1: { title: 'Weeknight curry, clipping.md', to: 'Resources/Cooking' },
   l2: { title: 'Dentist, 14 Oct.pdf', to: 'Areas/Health' },
 };
+/** What a tidy-up does when you said yes to keeping one note: the thing joins it. */
+export const MERGES: Array<{ question: string; item: string; into: string; title: string; line: string }> = [
+  {
+    question: 'q1',
+    item: 'listing-88213.example',
+    into: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md',
+    title: 'Wrenfield Road listing.url',
+    line: 'The Wrenfield Road listing is the same building; kept here, as you asked.',
+  },
+];
+
 /** The Saltmere receipts go by month, as the person's rule says. */
 export const RECEIPTS_TO = 'Areas/Money/Receipts/2026-10';
 

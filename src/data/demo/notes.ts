@@ -223,7 +223,7 @@ Compare with [[Flat 7, Cobble Row]] and [[Flat 2, 40 Tanners Walk]].`,
 | Design for manufacture | 3 | no |
 | Sustainable materials | 3 | no |
 | Client presentations | 4 | yes |`,
-    timeline: [{ date: '7 Oct', text: 'Tally updated with the Lumenfold offer.' }],
+    timeline: [{ date: '1 Oct', text: 'Tally updated with the Lumenfold offer.' }],
     links: [],
     original: `${P}/Job hunt/CV 2026.pdf`,
   },

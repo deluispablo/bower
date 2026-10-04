@@ -27,6 +27,7 @@ import {
 import { Journal, type JournalRecord } from './journal';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
+import { placeOf, plainSnippet, searchLines } from '../search-text';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { markSeen } from './seen';
@@ -252,20 +253,18 @@ export class DriveVault implements VaultSource {
       const title = displayName(nameOf(e.path));
       if (!words.every((w) => title.toLowerCase().includes(w))) continue;
       named.add(e.path);
-      hits.push({ path: e.path, title, snippet: where(parentOf(e.path)), score: 3 });
+      hits.push({ path: e.path, title, snippet: placeOf(parentOf(e.path)), score: 3 });
     }
     const entries = ix.entries();
-    const candidates = (await this.drive.fullText(await this.rootId(), first))
+    // Drive's full text has no "#": a tag is found by its word, then matched as #tag below.
+    const candidates = (await this.drive.fullText(await this.rootId(), first.replace(/^#/, '')))
       .map((h) => ({ h, path: ix.pathOf(h.id) }))
       .filter((c): c is { h: DriveFile; path: string } => !!c.path && !named.has(c.path) && !inInbox(c.path) && c.path.endsWith('.md') && entries.has(c.path))
       .slice(0, MAX_READS);
     const found = await inBatches(candidates, async ({ h, path }) => {
       const n = await this.parsed(h, path);
-      const lines = [n.summary, ...n.currentState, ...n.body.split('\n'), ...n.properties.map((p) => `${p.label}: ${p.value}`)];
-      const line = lines.find((l) => words.every((w) => l.toLowerCase().includes(w)));
-      if (!line) return null;
-      const snippet = line.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, '$1').replace(/^[-*#\s|]+/, '').slice(0, 120);
-      return { path, title: n.title, snippet, score: 1 };
+      const line = searchLines(n).find((l) => words.every((w) => l.toLowerCase().includes(w)));
+      return line ? { path, title: n.title, snippet: plainSnippet(line), score: 1 } : null;
     });
     for (const f of found) if (f) hits.push(f);
     return hits

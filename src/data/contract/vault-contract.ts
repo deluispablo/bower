@@ -64,6 +64,12 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         await expect(vault.rename(LARKSPUR, 'flat 7, cobble row')).rejects.toMatchObject({ code: 'conflict' });
       });
 
+      it('rename refuses a name longer than 120 characters', async () => {
+        const { vault } = await open();
+        await expect(vault.rename(TART, 'a'.repeat(121))).rejects.toThrow(/too long/);
+        expect(await vault.rename(TART, 'a'.repeat(120))).toBe(`Resources/Cooking/${'a'.repeat(120)}.md`);
+      });
+
       it('rename refuses a leading dot', async () => {
         const { vault } = await open();
         await expect(vault.rename(TART, '.md')).rejects.toThrow(/dot/);
@@ -117,6 +123,12 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
     });
 
     group('inbox')('piles', () => {
+      it('piles are listed newest first', async () => {
+        const { vault } = await open();
+        const at = (await vault.piles()).map((p) => p.createdAt);
+        expect(at).toEqual([...at].sort((x, y) => y - x));
+      });
+
       it('addPile with a line makes Inbox/<day> <line>/ with Pile note.md', async () => {
         const { vault } = await open();
         await vault.addPile({ text: 'Receipts from the weekend', items: [{ name: 'a.pdf', kind: 'pdf', origin: 'x' }, { name: 'b.jpg', kind: 'image', origin: 'x' }] });
@@ -264,6 +276,19 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
     });
 
     describe('search', () => {
+      it("search finds words in a note's Timeline and its tags", async () => {
+        const { vault } = await open();
+        expect((await vault.search('Tally')).map((h) => h.title)).toContain('CV insights');
+        expect((await vault.search('#career')).map((h) => h.title)).toContain('CV insights');
+      });
+
+      it('search snippets are plain text', async () => {
+        const { vault } = await open();
+        const hits = [...(await vault.search('£1,450')), ...(await vault.search('reference letter'))];
+        expect(hits.length).toBeGreaterThan(1);
+        for (const h of hits) expect(h.snippet).not.toMatch(/\[[ x]\]|\||\[\[/);
+      });
+
       it('search finds note text and skips the inbox', async () => {
         const { vault } = await open();
         const hits = await vault.search('£1,450');
@@ -284,6 +309,22 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect(await vault.changes()).toEqual([]);
         const r = (await vault.rules()).find((x) => x.yourWords === 'anything from the dentist goes in health');
         expect(r?.pending).toBeFalsy();
+      });
+
+      it('answering yes to a merge makes the next tidy-up keep one note', async () => {
+        const { vault } = await open();
+        await vault.answer('q1', true);
+        const run = await world?.tidyUp();
+        expect(run?.phase).toBe('done');
+        expect(names(await vault.tree(), 'Projects/Flat hunt')).not.toContain('Flat 9, Wrenfield Road.md');
+        expect((await vault.note(LARKSPUR)).timeline.map((t) => t.text).join(' ')).toMatch(/Wrenfield Road/);
+      });
+
+      it("a tidy-up's report lists only the questions it asked", async () => {
+        const { vault } = await open();
+        const run = await world?.tidyUp();
+        expect(run?.report?.questions).toEqual([]);
+        expect((await vault.questions()).length).toBeGreaterThan(0);
       });
 
       it('a pile added during a run waits for the next one', async () => {

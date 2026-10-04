@@ -55,6 +55,9 @@ function within(path: string, folder: string): boolean {
   return path === folder || path.startsWith(`${folder}/`);
 }
 
+/** Longest name a person can give (Drive takes more, but a copy on a computer would not). */
+export const MAX_NAME = 120;
+
 /** A free name in `folder`: `Name`, then `Name (2)`, `Name (3)`. */
 export function freeName(entries: Entries, folder: string, name: string, except?: string): string {
   const ext = extOf(name);
@@ -98,6 +101,7 @@ export function renameEntry(entries: Entries, path: string, newName: string, at:
   let name = newName.trim().replace(/[/\\]/g, '-');
   if (name.startsWith('.')) throw new BowerError('conflict', 'A name cannot start with a dot.');
   if (!name || !displayName(name).replace(/\.[A-Za-z0-9]{1,5}$/, '').trim()) throw new BowerError('conflict', 'A name cannot be empty.');
+  if (displayName(name).length > MAX_NAME) throw new BowerError('conflict', `That name is too long. Keep it under ${MAX_NAME} characters.`);
   // A rename never changes a file's type: "Plan v1.2" stays a note (Plan v1.2.md).
   const ext = extOf(nameOf(path));
   if (e.type === 'file' && ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;

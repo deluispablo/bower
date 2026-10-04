@@ -41,6 +41,7 @@ import {
 import {
   ALEX,
   FILING,
+  MERGES,
   guessFolder,
   wordRule,
   type SamplePile,
@@ -53,6 +54,7 @@ import {
   seedTime,
 } from './fixture';
 import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
+import { placeOf, plainSnippet, searchLines } from '../search-text';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
 type Listener = () => void;
@@ -77,6 +79,8 @@ export class DemoWorld {
   /** Where each pile sits in the inbox (folder or lone file), set by syncInbox. */
   private pilePath = new Map<string, string>();
   private journal: ChangeEntry[] = [];
+  /** Your answers to Bower's questions, read by the next tidy-up. */
+  private answers = new Map<string, boolean>();
   /** Where each inbox thing goes in the next tidy-up (the demo's stand-in for Claude). */
   private plans = new Map<string, { title: string; to: string; note?: string }>(Object.entries(FILING));
   private run: RunState | null = null;
@@ -364,7 +368,7 @@ export class DemoWorld {
       if (to === 'reading') r.total = this.piles.filter((p) => this.runPiles.has(p.id)).reduce((n, p) => n + thingsIn(p), 0);
       if (to === 'done') {
         const yourChanges = this.journal.length;
-        r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: this.questions };
+        r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: [] };
         r.report.yourChanges = yourChanges;
         this.rules = this.rules.map((x) => (x.pending ? { ...x, text: wordRule(x.yourWords ?? x.text), pending: false } : x));
         this.requests = this.requests.map((q) => (q.done ? q : { ...q, done: 'Done. See what changed in your folders.' }));
@@ -405,6 +409,17 @@ export class DemoWorld {
         continue;
       }
       for (const item of pile.items) {
+        const merge = MERGES.find((m) => m.item === item.name && this.answers.get(m.question) === true);
+        if (merge) {
+          // You said yes to keeping one note: the thing joins that note instead of making its own.
+          const folder = parentOf(merge.into);
+          const name = freeName(this.entries, folder, merge.title);
+          this.entries.set(join(folder, name), { path: join(folder, name), type: 'file', kind: item.kind, modified: at, created: at, isNew: true });
+          const n = this.noteFor(merge.into);
+          this.notes.set(merge.into, { ...n, timeline: [...n.timeline, { date: 'Today', text: merge.line }] });
+          filed.push({ name: item.name, title: displayName(nameOf(merge.into)), kind: item.kind, to: folder, note: merge.into });
+          continue;
+        }
         const plan = this.plans.get(item.id) ?? { title: item.name, to: this.guess(`${pile.text} ${item.name}`, item.kind) };
         const folder = plan.to;
         ensureFolders(this.entries, join(folder, 'x'), at);
@@ -442,7 +457,8 @@ export class DemoWorld {
       created: filed.filter((f) => f.note).map((f) => ({ path: f.note ?? '', what: `A note for ${f.title}.` })),
       updated,
       setAside: [],
-      questions: this.questions,
+      // Only the questions this tidy-up asked; the open ones stay on Home.
+      questions: [],
     };
   }
 
@@ -589,10 +605,12 @@ export class DemoWorld {
         }),
       piles: () =>
         this.wait(() =>
-          this.piles.map((p) => {
-            const path = this.pilePath.get(p.id);
-            return { ...p, items: [...p.items], ...(path ? { path } : {}) };
-          }),
+          this.piles
+            .map((p) => {
+              const path = this.pilePath.get(p.id);
+              return { ...p, items: [...p.items], ...(path ? { path } : {}) };
+            })
+            .sort((a, b) => b.createdAt - a.createdAt),
         ),
       addPile: (input) =>
         change(() => {
@@ -640,7 +658,10 @@ export class DemoWorld {
         change(() => {
           const q = this.questions.find((x) => x.id === id);
           this.questions = this.questions.filter((x) => x.id !== id);
-          if (q) this.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`);
+          if (q) {
+            this.answers.set(id, yes);
+            this.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`);
+          }
         }),
       rules: () => this.wait(() => [...this.rules]),
       requests: () => this.wait(() => [...this.requests]),
@@ -663,15 +684,13 @@ export class DemoWorld {
             const title = displayName(nameOf(e.path));
             const t = title.toLowerCase();
             let score = 0;
-            let snippet = e.path.slice(0, Math.max(0, e.path.lastIndexOf('/'))).replaceAll('/', ' / ');
+            let snippet = placeOf(e.path.slice(0, Math.max(0, e.path.lastIndexOf('/'))));
             if (words.every((w) => t.includes(w))) score = 3;
             else if (e.kind === 'note') {
-              const n = this.noteFor(e.path);
-              const lines = [n.summary, ...n.currentState, ...n.body.split('\n'), ...n.properties.map((p) => `${p.label}: ${p.value}`)];
-              const line = lines.find((l) => words.every((w) => l.toLowerCase().includes(w)));
+              const line = searchLines(this.noteFor(e.path)).find((l) => words.every((w) => l.toLowerCase().includes(w)));
               if (line) {
                 score = 1;
-                snippet = line.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, '$1').replace(/^[-*#\s|]+/, '').slice(0, 120);
+                snippet = plainSnippet(line);
               }
             }
             if (score) hits.push({ path: e.path, title, snippet, score });
