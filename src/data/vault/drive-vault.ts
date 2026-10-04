@@ -67,7 +67,7 @@ export class DriveVault implements VaultSource {
   private listeners = new Set<() => void>();
   private notes = new Map<string, { modified: string; note: ParsedNote }>();
   /** What went to the Bin from here, by the path it had, so Undo can bring it back. */
-  private bin = new Map<string, { id: string; change: string | null; top?: string }>();
+  private bin = new Map<string, { id: string; change: string | null; top?: string; late?: string[]; pending?: Upload; pileKey?: string }>();
   private texts = new Map<string, { modified: string; text: string }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
   private uploads = new Map<string, Upload>();
@@ -195,10 +195,13 @@ export class DriveVault implements VaultSource {
       const f = ix.file(top);
       if (!f || top === 'Inbox') throw new BowerError('not-found', 'That is no longer in the inbox.');
       if (this.runningPiles().size) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
-      this.uploads.delete(f.appProperties?.[PROP.pile] ?? f.id);
+      // Things still on their way wait with the pile, and go on if Undo brings it back.
+      const pileKey = f.appProperties?.[PROP.pile] ?? f.id;
+      const pending = this.uploads.get(pileKey);
+      this.uploads.delete(pileKey);
       await this.drive.trash(f.id);
       ix.drop(f.id);
-      this.bin.set(path, { id: f.id, change: null, top });
+      this.bin.set(path, { id: f.id, change: null, top, ...(pending ? { pending, pileKey } : {}) });
       this.emit();
       return;
     }
@@ -224,10 +227,16 @@ export class DriveVault implements VaultSource {
     const at = gone.top ?? path;
     const want = freeName(ix.entries(), parentOf(at), nameOf(at));
     const back = await this.drive.untrash(gone.id);
+    for (const id of gone.late ?? []) await this.drive.untrash(id);
     if (want !== nameOf(at) || back.name !== want) await this.drive.update(gone.id, { name: want });
     if (gone.change) await this.journal.remove(gone.change);
     this.bin.delete(path);
     await this.refresh();
+    if (gone.pending && gone.pileKey) {
+      for (const e of gone.pending.entries) e.item.upload = 0;
+      this.uploads.set(gone.pileKey, gone.pending);
+      this.track(this.send(gone.pileKey));
+    }
   }
 
   async markSeen(path: string): Promise<void> {
@@ -600,8 +609,13 @@ export class DriveVault implements VaultSource {
               }, props)
             : await this.drive.createText(u.parent, name, '', props);
         if (this.uploads.get(pileId) !== u) {
-          // The pile was removed while this was on its way: it follows the pile to the Bin.
-          await this.drive.trash(made.id);
+          // The pile was removed while this was on its way: it follows the pile to the Bin,
+          // and comes back with it on Undo.
+          await this.drive.trash(made.id).catch(async (err: unknown) => {
+            console.error(err);
+            await this.drive.trash(made.id);
+          });
+          for (const g of this.bin.values()) if (g.id === u.parent || g.id === pileId) g.late = [...(g.late ?? []), made.id];
           return;
         }
         ix.put(made);

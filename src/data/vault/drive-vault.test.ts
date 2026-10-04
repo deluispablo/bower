@@ -355,3 +355,23 @@ describe('what the code review found', () => {
     expect(JSON.parse(await drive.readText(file?.id ?? ''))).toMatchObject({ kind: 'move', fileId: id });
   });
 });
+
+describe('things that arrive late', () => {
+  it('a late thing comes back with its pile on Undo', async () => {
+    const real = drive.upload.bind(drive);
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    drive.upload = async (parent, name, body, onProgress, props) => {
+      await slow;
+      return real(parent, name, body, onProgress, props);
+    };
+    const p = await vault.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    await vault.trash(p.path ?? '');
+    release();
+    await vault.settled();
+    await vault.restore(p.path ?? '');
+    await vault.settled();
+    expect((await vault.piles()).find((x) => x.id === p.id)?.items.map((i) => [i.name, i.upload])).toEqual([['late.pdf', undefined]]);
+    expect((await drive.listAll(root)).filter((f) => f.name === 'late.pdf')).toHaveLength(1);
+  });
+});

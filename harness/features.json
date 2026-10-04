@@ -778,7 +778,7 @@
     "what": "Undo of a pile removed mid-upload loses the late things; a failed bin of a late file brings a lone pile back.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"late\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "stale-check-mtime",
