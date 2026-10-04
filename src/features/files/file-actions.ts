@@ -7,6 +7,7 @@ import { useTabs } from '@/app/tabs-store';
 import { BowerError, type TreeNode } from '@/data/types';
 import { displayName, nameOf, parentOf } from '@/data/tree';
 import { toast } from '@/ui/toast';
+import { afterOverlaysClosed } from '@/ui/back';
 
 function fail(e: unknown): void {
   if (e instanceof BowerError) toast(e.message);
@@ -25,14 +26,15 @@ export function useFileActions() {
   const { vault } = useSources();
   const nav = useNavigate();
   const loc = useLocation();
-  /** The path the screen shows now, if it is a note, a file or a folder. */
-  const shown = loc.pathname.startsWith('/note/')
-    ? decodeSplat(loc.pathname.slice(6))
-    : loc.pathname.startsWith('/files/')
-      ? decodeSplat(loc.pathname.slice(7))
-      : null;
-  /** Keeps the screen on a thing that moved, or leaves it when it is gone. */
+  /** Keeps the screen on a thing that moved, or leaves it when it is gone. Reads the screen at call time (an Undo comes later). */
   const follow = (from: string, to: string | null): void => {
+    // A sheet that just closed may still be stepping back over its history entry.
+    void afterOverlaysClosed().then(() => followNow(from, to));
+  };
+  const followNow = (from: string, to: string | null): void => {
+    const here = window.location.pathname;
+    const onNote = here.startsWith('/note/');
+    const shown = onNote ? decodeSplat(here.slice(6)) : here.startsWith('/files/') ? decodeSplat(here.slice(7)) : null;
     if (to !== null) {
       useTabs.getState().relocate(routeFor({ path: from, type: 'file' }), routeFor({ path: to, type: 'file' }));
       useTabs.getState().relocate(routeFor({ path: from, type: 'folder' }), routeFor({ path: to, type: 'folder' }));
@@ -43,7 +45,7 @@ export function useFileActions() {
       return;
     }
     const now = to + shown.slice(from.length);
-    nav(loc.pathname.startsWith('/note/') ? routeFor({ path: now, type: 'file' }) : routeFor({ path: now, type: 'folder' }), { replace: true });
+    nav(onNote ? routeFor({ path: now, type: 'file' }) : routeFor({ path: now, type: 'folder' }), { replace: true });
   };
   return useMemo(
     () => ({
@@ -94,7 +96,7 @@ export function useFileActions() {
           follow(path, null);
           const marks = useUi.getState().bookmarks;
           useUi.getState().relocate(path, null);
-          toast(`${displayName(nameOf(path))} is in the Bin of your Drive`, {
+          toast(path.startsWith('Inbox/') ? 'The pile is in the Bin of your Drive' : `${displayName(nameOf(path))} is in the Bin of your Drive`, {
             label: 'Undo',
             run: () =>
               void vault.restore(path).then(() => {

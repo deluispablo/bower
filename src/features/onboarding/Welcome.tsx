@@ -31,7 +31,8 @@ export function Welcome() {
   // Each step is a history entry, so the phone's back button goes back a step.
   const [params, setParams] = useSearchParams();
   const step = Math.min(STEPS.length - 1, Math.max(-1, Number(params.get('step') ?? -1)));
-  const setStep = (n: number): void => setParams({ step: String(n) });
+  // Steps replace each other, so finishing the tour leaves no way back into it.
+  const setStep = (n: number): void => setParams({ step: String(n) }, { replace: step >= 0 });
   const started = useRef(false);
 
   useEffect(() => {
@@ -60,10 +61,10 @@ export function Welcome() {
         <h1 className={s.title}>{st?.title}</h1>
         <p className={s.text}>{st?.text}</p>
         <div className={s.foot}>
-          <Button block onClick={() => (step + 1 < STEPS.length ? setStep(step + 1) : nav('/add'))}>
+          <Button block onClick={() => (step + 1 < STEPS.length ? setStep(step + 1) : nav('/add', { replace: true }))}>
             {step + 1 < STEPS.length ? 'Next' : 'Add your first pile'}
           </Button>
-          <Button variant="ghost" block onClick={() => nav('/')}>
+          <Button variant="ghost" block onClick={() => nav('/', { replace: true })}>
             {step + 1 < STEPS.length ? 'Skip' : 'Look around first'}
           </Button>
         </div>

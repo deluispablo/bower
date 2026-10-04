@@ -37,3 +37,9 @@ export function paraColor(path: string): string {
 
 /** "Projects / Flat hunt" */
 export const crumbs = (folder: string): string => folder.split('/').filter(Boolean).join(' / ');
+
+/** Whether going back stays in this app (React Router counts its own entries). */
+export function inAppHistory(): boolean {
+  const st = window.history.state as { idx?: number } | null;
+  return (st?.idx ?? 0) > 0;
+}

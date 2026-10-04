@@ -28,6 +28,11 @@ if (typeof window !== 'undefined') {
   });
 }
 
+/** Resolves once the app's own backs (from closing overlays) have landed; navigate after it. */
+export function afterOverlaysClosed(): Promise<void> {
+  return selfBacks > 0 ? landed : Promise.resolve();
+}
+
 function goBackOver(): void {
   if (selfBacks === 0) landed = new Promise((r) => (settle = r));
   selfBacks++;

@@ -14,6 +14,7 @@ import { useResolver } from './resolve';
 import { useFileActions } from '@/features/files/file-actions';
 import { LinkedList } from './RightPanel';
 import { toast } from '@/ui/toast';
+import { inAppHistory } from '@/app/paths';
 import { BowerError } from '@/data/types';
 import s from './note.module.css';
 
@@ -45,7 +46,7 @@ function PhoneBar({ folder }: { folder: string }) {
   const nav = useNavigate();
   return (
     <div className={s.phoneBar}>
-      <IconButton label="Back" onClick={() => (history.length > 1 ? nav(-1) : nav(folderRoute(folder)))}>
+      <IconButton label="Back" onClick={() => (inAppHistory() ? nav(-1) : nav(folderRoute(folder)))}>
         <Icon name="back" />
       </IconButton>
       <Link to={folderRoute(folder)} className={s.phoneCrumb}>

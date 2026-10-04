@@ -125,5 +125,7 @@ function ToSignIn() {
 function BackFromSignIn() {
   const loc = useLocation();
   const from = new URLSearchParams(loc.search).get('from');
-  return <Navigate to={from && from.startsWith('/') && !from.startsWith('//') ? from : '/'} replace />;
+  // Only a path of this app: one slash, then no second slash or backslash.
+  const safe = !!from && /^\/(?![/\\])[^\\]*$/.test(from);
+  return <Navigate to={safe && from ? from : '/'} replace />;
 }

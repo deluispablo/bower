@@ -84,3 +84,33 @@ test('back closes an open sheet and leaves the page where it was', async ({ page
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL(/\/(\?|$)/);
 });
+
+test('a crafted address after sign-in lands on Home, never off the app', async ({ page }) => {
+  await page.goto('/sign-in?from=%2F%5Cexample.com&scenario=signed-out&time=instant');
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+});
+
+test('Add keeps its links when you leave and come back', async ({ page, isMobile }) => {
+  await open(page, '/add', 'empty', 'instant');
+  await page.getByRole('textbox', { name: 'Paste a link' }).fill('bbc.example/news');
+  await page.getByRole('button', { name: 'Add link' }).click();
+  await page.getByRole('link', { name: /^Home/ }).first().click();
+  if (isMobile) await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Add' }).click();
+  else await page.getByRole('link', { name: 'Add a pile' }).first().click();
+  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+});
+
+test('Undo after moving the open note brings the page back with it', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'desktop tree');
+  await open(page, '/note/Resources/Cooking/Lemon%20tart.md', 'default', 'instant');
+  await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /Lemon tart/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.getByLabel('Find a folder').fill('Ideas');
+  await page.getByRole('button', { name: /^Ideas/ }).click();
+  await expect(page).toHaveURL(/Ideas\/Lemon%20tart\.md/);
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+  await expect(page).toHaveURL(/Cooking\/Lemon%20tart\.md/);
+  await expect(page.getByRole('heading', { name: 'Lemon tart', level: 1 })).toBeVisible();
+});

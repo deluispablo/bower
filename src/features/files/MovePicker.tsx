@@ -29,7 +29,7 @@ export function MovePicker() {
   }, [tree]);
   const from = moveFor ? parentOf(moveFor) : '';
   const list = folders
-    .filter((f) => moveFor && f !== from && f !== moveFor && !f.startsWith(`${moveFor}/`) && !f.startsWith('Inbox/'))
+    .filter((f) => moveFor && f !== from && f !== moveFor && !f.startsWith(`${moveFor}/`) && f !== 'Inbox' && !f.startsWith('Inbox/'))
     .filter((f) => f.toLowerCase().includes(q.trim().toLowerCase()));
   const close = (): void => {
     setMoveFor(null);

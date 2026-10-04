@@ -13,6 +13,7 @@ import s from './piles.module.css';
 import { normaliseLink } from './link';
 
 const DRAFT_KEY = 'bower:add-draft';
+const ITEMS_KEY = 'bower:add-items';
 
 interface Draft {
   key: string;
@@ -44,7 +45,28 @@ export function Add() {
       // Without storage the draft lasts while the screen is open.
     }
   };
-  const [items, setItems] = useState<Draft[]>([]);
+  // The things in the draft are kept for the visit too (in the real app, files are already
+  // in the upload queue, so only their list needs keeping).
+  const [items, setItemsState] = useState<Draft[]>(() => {
+    try {
+      const raw = sessionStorage.getItem(ITEMS_KEY);
+      return raw ? (JSON.parse(raw) as Draft[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const setItems = (next: Draft[] | ((x: Draft[]) => Draft[])): void => {
+    setItemsState((cur) => {
+      const v = typeof next === 'function' ? next(cur) : next;
+      try {
+        if (v.length) sessionStorage.setItem(ITEMS_KEY, JSON.stringify(v));
+        else sessionStorage.removeItem(ITEMS_KEY);
+      } catch {
+        // Without storage the list lasts while the screen is open.
+      }
+      return v;
+    });
+  };
   const [link, setLink] = useState('');
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -83,6 +105,7 @@ export function Add() {
     try {
       await vault.addPile({ text, items: items.map(({ name, kind, origin }) => ({ name, kind, origin })) });
       setText('');
+      setItems([]);
       toast(items.length ? `${plural(items.length, 'thing')} in the inbox` : 'Your note is in the inbox', { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
       nav('/');
     } catch (e) {

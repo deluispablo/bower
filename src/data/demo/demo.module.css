@@ -14,3 +14,5 @@
 :global(body:has(#boot)) .fab { z-index: 110; }
 
 @media (min-width: 900px) { .fab { left: 50%; transform: translateX(-50%); bottom: 2px; } }
+
+@media (max-width: 899px) { :global(body:not(:has(nav[aria-label='Main']))) .fab { bottom: auto; top: 8px; left: auto; right: 8px; } }

@@ -12,6 +12,7 @@
   --shadow-pop: 0 18px 40px rgba(0, 0, 0, 0.5);
   --inbox: #f4a28c;
   --tab-h: 72px;
+  --toast-bottom: calc(var(--tab-h) + 70px);
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @media (prefers-color-scheme: light) {
@@ -108,5 +109,11 @@ button {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (min-width: 900px) {
+  :root {
+    --toast-bottom: 44px;
   }
 }

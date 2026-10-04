@@ -8,6 +8,7 @@ import { ago, plural } from '@/app/words';
 import { Button, IconButton } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
+import { inAppHistory } from '@/app/paths';
 import { isRunning } from '@/features/tidy/run-words';
 import { PileStack } from './PileStack';
 import s from './piles.module.css';
@@ -36,7 +37,7 @@ export function PileScreen() {
   return (
     <div className={s.page}>
       <div className={s.bar}>
-        <IconButton label="Back" onClick={() => (history.length > 1 ? nav(-1) : nav('/'))}>
+        <IconButton label="Back" onClick={() => (inAppHistory() ? nav(-1) : nav('/'))}>
           <Icon name="back" />
         </IconButton>
         <span className="muted">Inbox</span>
