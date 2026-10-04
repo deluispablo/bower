@@ -909,7 +909,7 @@
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"after a move or a Bin the tree keeps the keyboard\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "phone-row-menu",

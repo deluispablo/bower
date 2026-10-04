@@ -50,3 +50,19 @@ test('Enter moves only when one folder matches', async ({ page, isMobile }) => {
   await page.keyboard.press('Enter');
   await expect(page.getByRole('status').getByText(/Moved Lease draft\.pdf to Areas \/ Documents/)).toBeVisible();
 });
+
+test('after a move or a Bin the tree keeps the keyboard', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click();
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.getByLabel('Find a folder').fill('Documents');
+  await page.keyboard.press('Enter');
+  await expect(tree).toBeFocused();
+  await tree.getByRole('treeitem', { name: /^Car/ }).click();
+  await page.keyboard.press('Delete');
+  await page.getByRole('dialog').getByRole('button', { name: 'Put it in the Bin' }).click();
+  await expect(tree).toBeFocused();
+});

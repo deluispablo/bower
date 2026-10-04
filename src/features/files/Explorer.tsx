@@ -109,6 +109,18 @@ export function Explorer({ variant }: Props) {
   // Keyboard focus follows a row that moved or was renamed; a row that is gone gives way to the selection.
   const current = (visible(focus) ? focus : null) ?? (focus && visible(ui.whereNow(focus)) ? ui.whereNow(focus) : null) ?? (visible(ui.selected) ? ui.selected : null) ?? rows[0]?.node.path ?? null;
 
+  // A dialog opened from the tree (Move to…, the Bin question) gives the keyboard back to the tree.
+  const dialogOpen = !!ui.moveFor || !!ui.confirmBin;
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !dialogOpen && desktop) {
+      setTimeout(() => {
+        if (!document.activeElement || document.activeElement === document.body) treeRef.current?.focus();
+      }, 0);
+    }
+    wasOpen.current = dialogOpen;
+  }, [dialogOpen, desktop]);
+
   // A row moved into a closed folder: open the way to it, so focus can stay on it.
   useEffect(() => {
     if (!focus || visible(focus)) return;
