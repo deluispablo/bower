@@ -2,16 +2,23 @@
 # Closes one entry of harness/features.json, only if it is really done:
 #  1. no other entry's `passes` changed (one entry per commit);
 #  2. red before green: with this change's code set aside (tests kept), the
-#     entry's verify must FAIL; when the fix is already committed, or the test
-#     was green before on purpose, say why with --green-before "<reason>";
+#     entry's verify must FAIL; when the fix is committed already, --fixed-in
+#     <sha> puts that commit's code back as it was and expects the same red;
+#     --known-green "<why>" (only for an entry with a note) skips the red;
 #  3. `pnpm check` passes, and the verify passes and runs at least one test;
 #  4. then `passes` flips, a proof line is written (harness/proof.log, checked
 #     by scripts/check-harness.mjs), progress.md gets a line, and it commits.
-# usage: bash harness/done.sh <id> "<commit message>" [--green-before "<reason>"]
+# usage: bash harness/done.sh <id> "<commit message>" [--fixed-in <sha> | --known-green "<why>"]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-id="$1"; msg="$2"; green_before="${4:-}"
-[ "${3:-}" = "--green-before" ] && [ -z "$green_before" ] && { echo "--green-before needs a reason"; exit 2; }
+args=$(node --input-type=module -e '
+  import { doneArgs } from "./scripts/harness-rules.mjs";
+  import { readFileSync } from "node:fs";
+  const argv = process.argv.slice(1);
+  const entry = JSON.parse(readFileSync("harness/features.json", "utf8")).find((x) => x.id === argv[0]);
+  try { const a = doneArgs(argv, entry); console.log(JSON.stringify(a)); } catch (e) { console.error(e.message); process.exit(2); }' "$@") || exit 2
+get() { node -e 'process.stdout.write(String(JSON.parse(process.argv[1])[process.argv[2]] ?? ""))' "$args" "$1"; }
+id=$(get id); msg=$(get msg); mode=$(get mode); sha=$(get sha); reason=$(get reason)
 
 verify=$(node -e 'const f=require("./harness/features.json").find(x=>x.id===process.argv[1]); if(!f){console.error("no entry "+process.argv[1]);process.exit(2)} process.stdout.write(f.verify)' "$id")
 log=$(mktemp)
@@ -27,26 +34,47 @@ others=$(node --input-type=module -e '
 [ -n "$others" ] && { echo "Other entries changed passes in this change: $others. One entry per commit."; exit 1; }
 
 # 2. Red before green.
-how="red"
-if [ -n "$green_before" ]; then
-  how="green-before: $green_before"
-else
-  # Changed or new code (tests and the harness's own records stay): the change being proved.
-  code=$(git status --porcelain --untracked-files=all -- src public index.html vite.config.ts scripts package.json | sed 's/^...//' | grep -vE '\.test\.tsx?$|^e2e/|^src/data/contract/|^src/testing/' || true)
-  if [ -z "$code" ]; then
-    echo "No code change to set aside: the fix is committed already. Pass --green-before \"<why>\"."; exit 1
-  fi
-  echo "red: setting aside $(echo "$code" | wc -l | tr -d ' ') changed file(s) and running the verify…"
-  git stash push --quiet --include-untracked -- $code
-  trap 'git stash pop --quiet' EXIT
+excl='\.test\.tsx?$|^e2e/|^src/data/contract/|^src/testing/'
+paths="src public index.html vite.config.ts scripts package.json"
+# Changed or new code (tests and the harness's own records stay): the change being proved.
+code=$(git status --porcelain --untracked-files=all -- $paths | sed 's/^...//' | grep -vE "$excl" || true)
+expect_red() {
   if bash -c "$verify" >"$log" 2>&1; then
-    echo "The verify passes without the change: it does not pin it. Fix the test, or pass --green-before \"<why>\"."; exit 1
+    echo "The verify passes without the change: it does not pin it. Fix the test."; exit 1
   fi
   if ! grep -qE "[1-9][0-9]* failed" "$log"; then
     tail -15 "$log"; echo "Without the change the verify failed, but no test failed (did it run any?): that is not a red test."; exit 1
   fi
-  git stash pop --quiet; trap - EXIT
-fi
+}
+case "$mode" in
+  red)
+    how="red"
+    [ -z "$code" ] && { echo "No code change to set aside: the fix is committed already. Pass --fixed-in <sha>, or --known-green \"<why>\" for an entry with a note."; exit 1; }
+    echo "red: setting aside $(echo "$code" | wc -l | tr -d ' ') changed file(s) and running the verify…"
+    git stash push --quiet --include-untracked -- $code
+    trap 'git stash pop --quiet' EXIT
+    expect_red
+    git stash pop --quiet; trap - EXIT
+    ;;
+  fixed-in)
+    how="red (fixed in $sha)"
+    [ -n "$code" ] && { echo "Uncommitted code: commit it, or close without --fixed-in."; exit 1; }
+    fix=$(git diff --name-only "$sha^" "$sha" -- $paths | grep -vE "$excl" || true)
+    [ -z "$fix" ] && { echo "$sha changes no code."; exit 1; }
+    echo "red: putting back $(echo "$fix" | wc -l | tr -d ' ') file(s) as they were before $sha and running the verify…"
+    trap 'git checkout --quiet HEAD -- $fix 2>/dev/null; git clean -fq -- $fix' EXIT
+    for f in $fix; do
+      if git cat-file -e "$sha^:$f" 2>/dev/null; then git show "$sha^:$f" > "$f"; else rm -f "$f"; fi
+    done
+    expect_red
+    git checkout --quiet HEAD -- $fix 2>/dev/null || true; trap - EXIT
+    [ -n "$(git status --porcelain -- $fix)" ] && { echo "Could not restore the fix's files."; exit 1; }
+    ;;
+  known-green)
+    how="known-green: $reason"
+    [ -n "$code" ] && { echo "Uncommitted code: a known-green close changes no code."; exit 1; }
+    ;;
+esac
 
 # 3. Gates.
 echo "check…"; pnpm check >"$log" 2>&1 || { tail -40 "$log"; echo "pnpm check failed: $id stays open"; exit 1; }

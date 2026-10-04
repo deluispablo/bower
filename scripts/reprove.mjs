@@ -9,7 +9,10 @@ const p = new URL('../harness/features.json', import.meta.url);
 const features = JSON.parse(readFileSync(p, 'utf8'));
 const lines = [];
 const failed = [];
-for (const f of features.filter((x) => x.passes)) {
+// Only the entries proved before the proof rule (harness/proof-legacy.txt); every other line is kept as it is.
+const legacy = new Set(readFileSync(new URL('../harness/proof-legacy.txt', import.meta.url), 'utf8').split('\n').filter(Boolean));
+const kept = readFileSync(new URL('../harness/proof.log', import.meta.url), 'utf8').split('\n').filter((l) => l && !legacy.has(l.split('\t')[0]));
+for (const f of features.filter((x) => x.passes && legacy.has(x.id))) {
   process.stdout.write(`${f.id}… `);
   let out = '';
   try {
@@ -30,6 +33,6 @@ for (const f of features.filter((x) => x.passes)) {
   lines.push(`${f.id}\t${hash}\t${new Date().toISOString().slice(0, 10)}\treproved`);
   console.log('ok');
 }
-writeFileSync(new URL('../harness/proof.log', import.meta.url), lines.join('\n') + '\n');
+writeFileSync(new URL('../harness/proof.log', import.meta.url), [...kept, ...lines].join('\n') + '\n');
 writeFileSync(p, JSON.stringify(features, null, 2) + '\n');
 console.log(`\n${lines.length} proved, ${failed.length} reopened: ${failed.join(', ')}`);

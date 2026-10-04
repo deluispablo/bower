@@ -624,8 +624,9 @@
     "category": "review",
     "what": "The service worker's fallback would answer the Worker's paths on a shared origin.",
     "steps": [],
-    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
-    "passes": true
+    "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts -g \"never answers the Worker\"",
+    "passes": false,
+    "note": "Reopened: its verify named no test; closed again with the test named."
   },
   {
     "id": "no-swallowed-errors",
@@ -1142,7 +1143,7 @@
     "category": "review",
     "what": "--green-before is a free-text escape; done.sh commits everything; a mistyped flag skips the red step.",
     "steps": [],
-    "verify": "pnpm vitest run src/harness.test.ts -t \"fixed-in\"",
+    "verify": "pnpm vitest run src/harness.test.ts -t \"done.sh takes fixed-in\"",
     "passes": false
   },
   {
