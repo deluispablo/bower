@@ -3,11 +3,13 @@
  * them (docs/harness/METHOD.md, "Rules machines check"). Each failure says
  * what to do instead.
  */
+/// <reference types="node" />
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const SRC = join(__dirname);
+const SRC = dirname(fileURLToPath(import.meta.url));
 const files = (dir: string): string[] =>
   readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
