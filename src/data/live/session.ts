@@ -55,6 +55,13 @@ export class LiveSession implements Session {
     this.emit();
   }
 
+  async deleteAccount(): Promise<void> {
+    await this.worker.deleteAccount();
+    forgetThisPerson();
+    this.me = null;
+    this.emit();
+  }
+
   async folderState(): Promise<FolderState> {
     return (await this.whoami())?.folderId ? 'ready' : 'missing';
   }

@@ -28,6 +28,8 @@ export interface WorkerApi {
   /** Goes to Google (the real Worker never comes back here); the fake signs in at once. */
   signIn(): Promise<void>;
   signOut(): Promise<void>;
+  /** DELETE /me: the Worker forgets the person; their Drive folder is never touched. */
+  deleteAccount(): Promise<void>;
   /** A Drive access token; `fresh` after Drive refused the last one. */
   driveToken(fresh: boolean): Promise<string>;
   /** Makes the Bower folder from the template (or finds it); answers its id. */

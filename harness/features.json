@@ -1096,7 +1096,7 @@
     "what": "On the pretend Drive, Delete account only says nothing is deleted; the real flow is never exercised.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"deleting the account signs out and forgets\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "first-run-repeatable",

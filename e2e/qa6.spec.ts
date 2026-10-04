@@ -210,3 +210,16 @@ test("the run's end shows one bird and no stray card", async ({ page }) => {
   );
   expect(pageBirds).toBe(0);
 });
+
+test('deleting the account signs out and forgets', async ({ page }) => {
+  await open(page, '/settings');
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  const ask = page.getByRole('dialog', { name: 'Delete your Bower account?' });
+  await expect(ask).toContainText('Your Bower folder and everything in it stay in your Drive.');
+  await ask.getByRole('button', { name: 'Delete my account' }).click();
+  await expect(page).toHaveURL(/\/sign-in/);
+  await expect(page.getByRole('status').getByText(/Your account is gone/)).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+});

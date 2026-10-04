@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useSources } from '@/data/provider';
 import { PoseBower } from '@/bird/Bower';
@@ -21,6 +21,22 @@ export function SignIn() {
   const { session } = useSources();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Arriving from "Delete my account": said once.
+  const [bye] = useState(() => {
+    try {
+      return sessionStorage.getItem('bower:bye') === '1';
+    } catch {
+      // expected: no storage; nothing to say.
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('bower:bye');
+    } catch {
+      // expected: no storage; nothing was kept.
+    }
+  }, []);
   return (
     <div className={s.wrap}>
       <div className={s.art}>
@@ -34,6 +50,11 @@ export function SignIn() {
         </div>
       </div>
       <main className={s.panel}>
+        {bye && (
+          <p className={s.bye} role="status">
+            Your account is gone. Your notes stay in your Drive.
+          </p>
+        )}
         <h1 className={s.hero}>Your Drive, tidied by a bowerbird.</h1>
         <p className={s.lead}>Throw in photos, PDFs, links and notes. Bower names each one and files it in a folder of your own Drive.</p>
         <button

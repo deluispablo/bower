@@ -70,6 +70,13 @@ export class FakeWorker implements WorkerApi {
     keepSignedIn(false);
   }
 
+  /** The pretend Worker forgets the person; the pretend Drive keeps the folder, as Google would. */
+  async deleteAccount(): Promise<void> {
+    this.online();
+    this.signedIn = false;
+    keepSignedIn(false);
+  }
+
   async driveToken(): Promise<string> {
     if (!this.signedIn) throw new BowerError('auth', 'Sign in again to keep going.');
     return 'fake-token';

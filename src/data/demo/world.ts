@@ -487,6 +487,14 @@ export class DemoWorld {
           this.sessionListeners.forEach((l) => l());
           return ALEX;
         }),
+      deleteAccount: () =>
+        this.wait(() => {
+          // The demo forgets Alex as the Worker would; the made-up folder stays, as a Drive folder would.
+          this.user = null;
+          keepSignedIn(false);
+          forgetThisPerson();
+          this.sessionListeners.forEach((l) => l());
+        }),
       signOut: () =>
         this.wait(() => {
           this.user = null;

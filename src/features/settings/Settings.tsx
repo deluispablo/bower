@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSources, useRules, useUser } from '@/data/provider';
 import { usePrefs, type Theme } from '@/app/prefs';
 import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
+import { afterOverlaysClosed } from '@/ui/back';
+import { Sheet } from '@/ui/Sheet';
 import { report } from '@/ui/report';
 import { useUi } from '@/app/ui-store';
 import { Link, useNavigate } from 'react-router';
@@ -20,9 +23,24 @@ function Row({ title, sub, children }: { title: string; sub?: string; children: 
   );
 }
 
-function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange: (v: boolean) => void }) {
+function Toggle({
+  on,
+  label,
+  onChange,
+}: {
+  on: boolean;
+  label: string;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} className={s.toggle} onClick={() => onChange(!on)}>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      className={s.toggle}
+      onClick={() => onChange(!on)}
+    >
       <span />
     </button>
   );
@@ -39,8 +57,10 @@ async function setNotify(on: boolean, save: (on: boolean) => void): Promise<void
     toast('Notifications are blocked for Bower in this browser. Allow them in its settings.');
     return save(false);
   }
-  if (Notification.permission !== 'granted') toast('Answer your browser to let Bower tell you when a tidy-up ends.');
-  const answer = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (Notification.permission !== 'granted')
+    toast('Answer your browser to let Bower tell you when a tidy-up ends.');
+  const answer =
+    Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (answer === 'default') {
     toast('Nothing changed. Turn it on again to be asked once more.');
     return save(false);
@@ -54,6 +74,7 @@ async function setNotify(on: boolean, save: (on: boolean) => void): Promise<void
 }
 
 export function Settings() {
+  const [askDelete, setAskDelete] = useState(false);
   // Read each time Settings shows: the person may have allowed them in the browser meanwhile.
   const blocked = typeof Notification !== 'undefined' && Notification.permission === 'denied';
   const { data: user } = useUser();
@@ -67,7 +88,11 @@ export function Settings() {
 
       <h2 className={s.h2}>Your Bower folder</h2>
       <Row title="Bower" sub="In My Drive">
-        <Button size="sm" variant="ghost" onClick={() => toast('Your Bower folder opens in Google Drive.')}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => toast('Your Bower folder opens in Google Drive.')}
+        >
           Open in Drive
         </Button>
       </Row>
@@ -79,10 +104,25 @@ export function Settings() {
 
       <h2 className={s.h2}>Tidying up</h2>
       <Row title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
-        <Toggle on={prefs.lookUpWeb} label="Look things up on the web" onChange={(v) => prefs.set({ lookUpWeb: v })} />
+        <Toggle
+          on={prefs.lookUpWeb}
+          label="Look things up on the web"
+          onChange={(v) => prefs.set({ lookUpWeb: v })}
+        />
       </Row>
-      <Row title="Tell me when a tidy-up ends" sub={blocked ? 'Blocked in this browser. Allow them in its settings to turn this on.' : 'A notification on this device'}>
-        <Toggle on={prefs.notifyRuns} label="Tell me when a tidy-up ends" onChange={(v) => void setNotify(v, (on) => prefs.set({ notifyRuns: on }))} />
+      <Row
+        title="Tell me when a tidy-up ends"
+        sub={
+          blocked
+            ? 'Blocked in this browser. Allow them in its settings to turn this on.'
+            : 'A notification on this device'
+        }
+      >
+        <Toggle
+          on={prefs.notifyRuns}
+          label="Tell me when a tidy-up ends"
+          onChange={(v) => void setNotify(v, (on) => prefs.set({ notifyRuns: on }))}
+        />
       </Row>
 
       <h2 className={s.h2}>This device</h2>
@@ -95,14 +135,27 @@ export function Settings() {
               ['light', 'Light'],
             ] as Array<[Theme, string]>
           ).map(([v, l]) => (
-            <button key={v} type="button" role="radio" aria-checked={prefs.theme === v} onClick={() => prefs.set({ theme: v })}>
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={prefs.theme === v}
+              onClick={() => prefs.set({ theme: v })}
+            >
               {l}
             </button>
           ))}
         </div>
       </Row>
-      <Row title="Bower moves" sub="Hops, flies and carries things around the app. Off keeps Bower still.">
-        <Toggle on={prefs.birdMoves} label="Bower moves" onChange={(v) => prefs.set({ birdMoves: v })} />
+      <Row
+        title="Bower moves"
+        sub="Hops, flies and carries things around the app. Off keeps Bower still."
+      >
+        <Toggle
+          on={prefs.birdMoves}
+          label="Bower moves"
+          onChange={(v) => prefs.set({ birdMoves: v })}
+        />
       </Row>
 
       <h2 className={s.h2}>About Bower</h2>
@@ -136,10 +189,42 @@ export function Settings() {
         </Button>
       </Row>
       <Row title="Delete the app" sub="Bower forgets you. Your folder stays in your Drive.">
-        <Button size="sm" variant="danger" onClick={() => toast('In the demo nothing is deleted.')}>
+        <Button size="sm" variant="danger" onClick={() => setAskDelete(true)}>
           Delete
         </Button>
       </Row>
+      <Sheet open={askDelete} onOpenChange={setAskDelete} title="Delete your Bower account?">
+        <p className="muted">
+          Bower forgets you: your sign-in, settings and tidy-ups. Your Bower folder and everything
+          in it stay in your Drive.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <Button variant="ghost" onClick={() => setAskDelete(false)}>
+            Keep my account
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              try {
+                sessionStorage.setItem('bower:bye', '1');
+              } catch (e) {
+                console.error(e);
+              }
+              // The sheet closes first (its history entry with it), then the account goes.
+              setAskDelete(false);
+              void new Promise((r) => setTimeout(r, 0))
+                .then(() => afterOverlaysClosed())
+                .then(() => session.deleteAccount())
+                .then(
+                  () => useUi.getState().forgetPerson(),
+                  (e: unknown) => report(e, 'Deleting did not finish. Try again.'),
+                );
+            }}
+          >
+            Delete my account
+          </Button>
+        </div>
+      </Sheet>
     </div>
   );
 }

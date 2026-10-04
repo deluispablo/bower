@@ -46,6 +46,11 @@ export class WorkerHttp implements WorkerApi {
     await this.call('POST', '/auth/logout');
   }
 
+  async deleteAccount(): Promise<void> {
+    this.token = null;
+    await this.call('DELETE', '/me');
+  }
+
   async driveToken(fresh: boolean): Promise<string> {
     if (!fresh && this.token && this.token.until > Date.now() + 60_000) return this.token.value;
     const t = await this.call<{ accessToken: string; expiresAt: number }>('GET', fresh ? '/drive/token?fresh=1' : '/drive/token');

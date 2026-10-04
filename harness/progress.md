@@ -115,3 +115,4 @@
 - 2026-10-04: dedupe-restored-drafts passes — fix(add): a file added again after a reload fills its waiting draft instead of a second row
 - 2026-10-04: pwa-routes-real passes — test(pwa): with the service worker on, the Worker's paths go to the network
 - 2026-10-04: stray-card-two-birds passes — fix(birds): under a sheet with its own Bower the page's steps out of sight; the run's end leaves no stray card
+- 2026-10-04: delete-flow-fake passes — feat(account): Delete my account goes through the session and the Worker (DELETE /me) on every source; the folder stays in Drive

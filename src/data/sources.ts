@@ -27,6 +27,8 @@ export interface Session {
   current(): Promise<User | null>;
   signIn(): Promise<User>;
   signOut(): Promise<void>;
+  /** Bower forgets the person (the Worker keeps nothing of them); their folder stays in their Drive. */
+  deleteAccount(): Promise<void>;
   folderState(): Promise<FolderState>;
   /** Makes the Bower folder; `onStep` hears each top folder as it appears. */
   createFolder(onStep: (root: ParaRoot) => void): Promise<void>;
