@@ -2,7 +2,7 @@
 
 ## Next
 
-- Fix the qa-8 entries (the evaluator round after qa-6), Important bugs first: phone-page-menus, rename-keeps-links, answer-toast-words. Then a fresh evaluator and reviewer round; phase 3 waits until both come back clean.
+- qa-8 is closed (149/149; e2e 151 passed on demo and on fake; PWA 4 passed). A reviewer (range 57ab04d^..HEAD) and an evaluator round are running: turn their findings into qa-9 entries and fix them. Phase 3 waits until a round comes back clean.
 
 ## Log
 
