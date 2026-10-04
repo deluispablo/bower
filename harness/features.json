@@ -830,7 +830,7 @@
     "category": "review",
     "what": "The landing fix is a hand edit of an exported file; the next export undoes it, and the rule against hand edits was dropped.",
     "steps": [],
-    "verify": "node scripts/fix-landing.mjs --check",
+    "verify": "pnpm vitest run src/docs.test.ts -t \"the landing has no placeholder\"",
     "passes": false
   },
   {
@@ -839,8 +839,8 @@
     "category": "review",
     "what": "AGENTS.md lost two rules: brand-line tokens for text, never \"the bird\" in copy.",
     "steps": [],
-    "verify": "grep -q \"brand-line\" AGENTS.md && grep -q \"the bird\" AGENTS.md",
-    "passes": false
+    "verify": "pnpm vitest run src/docs.test.ts -t \"AGENTS.md keeps\"",
+    "passes": true
   },
   {
     "id": "one-entry-per-commit",

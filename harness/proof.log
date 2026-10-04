@@ -63,3 +63,4 @@ no-swallowed-errors	2f50af52f3d841b2	2026-10-04	reproved
 harness-guards	8596fcd52abce6f1	2026-10-04	red
 verify-names-tests	4b1da5b7701ee544	2026-10-04	green-before: built in the same change as harness-guards (b4c3f73); the rule and its tests are there
 one-entry-per-commit	0f543b3e0f4ba6e3	2026-10-04	green-before: built in the same change as harness-guards (b4c3f73)
+agents-lost-rules	81c149a0094486c0	2026-10-04	green-before: the doc edit landed in b4c3f73, before this test existed

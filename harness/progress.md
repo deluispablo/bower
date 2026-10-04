@@ -69,3 +69,4 @@
 - 2026-10-04: harness-guards passes — fix(harness): an entry passes only with a proof written by done.sh: red first, a test run, its verify unchanged
 - 2026-10-04: verify-names-tests passes — fix(harness): every verify names its test; done.sh refuses a verify that runs none
 - 2026-10-04: one-entry-per-commit passes — fix(harness): done.sh refuses a change that flips more than one entry
+- 2026-10-04: agents-lost-rules passes — docs: AGENTS.md keeps the brand and copy rules it had lost
