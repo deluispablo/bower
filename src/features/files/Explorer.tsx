@@ -111,7 +111,19 @@ export function Explorer({ variant }: Props) {
   const rows = useMemo(() => visibleRows(roots, ui.open, ui.sort).filter((r) => !r.node.hub), [roots, ui.open, ui.sort]);
   const visible = (p: string | null): p is string => !!p && rows.some((r) => r.node.path === p);
   // Keyboard focus follows a row that moved or was renamed; a row that is gone gives way to the selection.
-  const current = (visible(focus) ? focus : null) ?? (focus && visible(ui.whereNow(focus)) ? ui.whereNow(focus) : null) ?? (visible(ui.selected) ? ui.selected : null) ?? rows[0]?.node.path ?? null;
+  // A row put in the Bin from the keyboard gives way to the row next to it, not the top of the tree.
+  const [goneTo, setGoneTo] = useState<{ from: string; to: string | null } | null>(null);
+  const current =
+    (visible(focus) ? focus : null) ??
+    (focus && visible(ui.whereNow(focus)) ? ui.whereNow(focus) : null) ??
+    (focus && goneTo?.from === focus && visible(goneTo.to) ? goneTo.to : null) ??
+    (visible(ui.selected) ? ui.selected : null) ??
+    rows[0]?.node.path ??
+    null;
+  // Undo brought a row back: its row has the keyboard again (focus still names it).
+  useEffect(() => {
+    if (ui.restored && desktop && (!document.activeElement || document.activeElement === document.body)) treeRef.current?.focus();
+  }, [ui.restored, desktop]);
 
   // A dialog opened from the tree (Move to…, the Bin question) gives the keyboard back to the tree.
   const dialogOpen = !!ui.moveFor || !!ui.confirmBin;
@@ -224,6 +236,10 @@ export function Explorer({ variant }: Props) {
       case 'Backspace':
         if (row && !isRoot(row.node.path) && !inInbox(row.node.path) && (e.metaKey || e.key === 'Delete')) {
           e.preventDefault();
+          // The next thing in the same folder, else the one before it (its sibling or its folder).
+          const after = rows.slice(i + 1).find((r) => parentOf(r.node.path) === parentOf(row.node.path)) ?? rows[i - 1];
+          setFocus(row.node.path);
+          setGoneTo({ from: row.node.path, to: after?.node.path ?? null });
           binOrAsk(row.node);
         }
         return;

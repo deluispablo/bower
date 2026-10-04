@@ -32,3 +32,19 @@ test('the page menu on the phone makes a named note in a folder', async ({ page,
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/note\/Areas\/Car\/Tyres\.md/);
 });
+
+test('after Delete the tree keeps its place, and Undo brings the row back to the keyboard', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.keyboard.press('Escape');
+  await expect(tree).toBeFocused();
+  await page.keyboard.press('Delete');
+  await expect(page.getByRole('status').getByText(/Lease draft(\.pdf)? is in the Bin/)).toBeVisible();
+  await expect(tree).toHaveAttribute('aria-activedescendant', /^row-Projects%2FFlat%20hunt%2F/);
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('status').getByText(/Lease draft(\.pdf)? is back/)).toBeVisible();
+  await expect(tree).toHaveAttribute('aria-activedescendant', 'row-Projects%2FFlat%20hunt%2FLease%20draft.pdf');
+  await expect(tree).toBeFocused();
+});

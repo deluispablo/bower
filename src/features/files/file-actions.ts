@@ -93,6 +93,8 @@ export function useFileActions() {
             label: 'Undo',
             run: () =>
               void vault.restore(path).then(() => {
+                useUi.getState().setRestored(path);
+                toast(path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${displayName(nameOf(path))} is back`);
                 marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
               }, (e: unknown) => report(e, 'That did not work. Try again.')),
           });

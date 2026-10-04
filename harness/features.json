@@ -1658,7 +1658,7 @@
       "Undo in the toast: the row comes back, is active, and a toast says it is back."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"after Delete the tree keeps its place\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "dismiss-focus",
