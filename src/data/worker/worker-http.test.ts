@@ -31,7 +31,7 @@ describe('WorkerHttp', () => {
     const s = stub(() => json({ error: { code: 'nothing', message: 'Nothing is waiting in the inbox.' } }, 409));
     await expect(new WorkerHttp(BASE, s.fetch).process('all')).rejects.toMatchObject({ code: 'conflict', message: 'Nothing is waiting in the inbox.' });
     expect(s.calls[0]?.init.method).toBe('POST');
-    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ scope: 'all' });
+    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ scope: 'all', allowWeb: false });
   });
 
   it('an error without JSON still says one sentence', async () => {
@@ -66,5 +66,13 @@ describe('WorkerHttp', () => {
     const run = { id: 'r1', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 2, total: 3 };
     expect(await new WorkerHttp(BASE, stub(() => json({ run })).fetch).status()).toEqual(run);
     expect(await new WorkerHttp(BASE, stub(() => json({ run: null })).fetch).status()).toBeNull();
+  });
+
+  it('process sends whether Bower may look things up on the web (allow web)', async () => {
+    const s = stub(() => json({ run: { id: 'r', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 } }));
+    await new WorkerHttp(BASE, s.fetch).process('all', { allowWeb: true });
+    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ scope: 'all', allowWeb: true });
+    await new WorkerHttp(BASE, s.fetch).process('instructions');
+    expect(JSON.parse(String(s.calls[1]?.init.body))).toEqual({ scope: 'instructions', allowWeb: false });
   });
 });

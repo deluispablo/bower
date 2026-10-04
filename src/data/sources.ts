@@ -70,7 +70,8 @@ export interface VaultSource {
 }
 
 export interface RunSource {
-  start(scope: 'all' | 'instructions'): Promise<RunState>;
+  /** `allowWeb`: the person lets Bower look things up on the web in this tidy-up (Settings). */
+  start(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunState>;
   /** The run going now, or the last one. */
   current(): Promise<RunState | null>;
   markSeen(id: string): Promise<void>;

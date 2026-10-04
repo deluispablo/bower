@@ -90,8 +90,12 @@ export class FakeWorker implements WorkerApi {
     return root;
   }
 
-  async process(scope: 'all' | 'instructions'): Promise<RunWire> {
+  /** What the last tidy-up was told about the web, for tests (the pretend runner never goes online). */
+  lastAllowWeb = false;
+
+  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunWire> {
     this.online();
+    this.lastAllowWeb = !!opts.allowWeb;
     await this.loaded;
     if (this.run && !['done', 'failed'].includes(this.run.phase)) return this.wire();
     const root = this.rootId;

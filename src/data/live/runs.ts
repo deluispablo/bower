@@ -57,9 +57,9 @@ export class LiveRuns implements RunSource {
     return this.took.size ? this.took : new Set(['*']);
   }
 
-  async start(scope: 'all' | 'instructions'): Promise<RunState> {
+  async start(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunState> {
     const piles = scope === 'all' ? (await this.vault.piles()).map((p) => p.id) : [];
-    const wire = await this.worker.process(scope);
+    const wire = await this.worker.process(scope, opts);
     if (wire.id !== this.last?.id) this.took = new Set(piles);
     await this.take(wire);
     this.schedule();

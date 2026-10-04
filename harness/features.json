@@ -651,7 +651,7 @@
     "what": "Turning web lookups on or off reaches nothing: /process sends only the scope; the Worker contract expects allow_web.",
     "steps": [],
     "verify": "pnpm vitest run src/data/worker src/data/live -t \"allow web\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "one-count-rule",

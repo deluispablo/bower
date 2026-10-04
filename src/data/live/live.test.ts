@@ -142,3 +142,11 @@ describe('signing out', () => {
     expect(localStorage.getItem('bower:prefs')).toBe('{"theme":"dark"}');
   });
 });
+
+describe('the web', () => {
+  it('a tidy-up tells the Worker whether Bower may look things up on the web (allow web)', async () => {
+    const s = await open();
+    await s.runs.start('all', { allowWeb: true });
+    expect((s.worker as FakeWorker).lastAllowWeb).toBe(true);
+  });
+});

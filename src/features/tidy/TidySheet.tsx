@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { startRun } from './start-run';
 import { thingsIn, waitingIn } from '@/data/piles';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
@@ -46,7 +47,7 @@ function Confirm() {
     setBusy(true);
     setError(null);
     try {
-      await runs.start('all');
+      await startRun(runs, 'all');
     } catch (e) {
       setError(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again.');
       if (!(e instanceof BowerError)) console.error(e);
@@ -164,7 +165,7 @@ function RunView({ run }: { run: RunState }) {
           </>
         ) : run.phase === 'failed' ? (
           <>
-            <Button onClick={() => void runs.start(run.scope).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again in a minute.'))}>Try again</Button>
+            <Button onClick={() => void startRun(runs, run.scope).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again in a minute.'))}>Try again</Button>
             <Button
               variant="ghost"
               onClick={() => {

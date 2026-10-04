@@ -32,7 +32,7 @@ export interface WorkerApi {
   driveToken(fresh: boolean): Promise<string>;
   /** Makes the Bower folder from the template (or finds it); answers its id. */
   createFolder(): Promise<string>;
-  process(scope: 'all' | 'instructions'): Promise<RunWire>;
+  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunWire>;
   /** The run going now, or the last one. */
   status(): Promise<RunWire | null>;
 }

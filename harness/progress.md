@@ -72,3 +72,4 @@
 - 2026-10-04: agents-lost-rules passes — docs: AGENTS.md keeps the brand and copy rules it had lost
 - 2026-10-04: landing-source-fix passes — fix(landing): the fix lives in a script run after each export, and a test checks it
 - 2026-10-04: journal-outbox passes — fix(journal): a line Drive cannot take waits in this device's outbox, per folder, and each change shows once
+- 2026-10-04: web-pref-sent passes — fix(runs): the web choice in Settings travels with every tidy-up (allowWeb), as the Worker contract now says

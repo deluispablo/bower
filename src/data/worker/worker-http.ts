@@ -57,8 +57,8 @@ export class WorkerHttp implements WorkerApi {
     return (await this.call<{ folderId: string }>('POST', '/vault', {})).folderId;
   }
 
-  async process(scope: 'all' | 'instructions'): Promise<RunWire> {
-    return (await this.call<{ run: RunWire }>('POST', '/process', { scope })).run;
+  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunWire> {
+    return (await this.call<{ run: RunWire }>('POST', '/process', { scope, allowWeb: !!opts.allowWeb })).run;
   }
 
   async status(): Promise<RunWire | null> {

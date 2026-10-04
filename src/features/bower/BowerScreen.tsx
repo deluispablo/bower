@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { BowerError } from '@/data/types';
 import { PoseBower, type Pose } from '@/bird/Bower';
@@ -137,7 +138,7 @@ export function BowerScreen() {
                   size="sm"
                   variant="ghost"
                   onClick={() =>
-                    void runs.start('instructions').then(
+                    void startRun(runs, 'instructions').then(
                       () => useUi.getState().setTidy(true),
                       (e: unknown) => toast(e instanceof BowerError ? e.message : 'It did not start. Try again in a minute.'),
                     )

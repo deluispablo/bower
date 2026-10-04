@@ -66,3 +66,4 @@ one-entry-per-commit	0f543b3e0f4ba6e3	2026-10-04	green-before: built in the same
 agents-lost-rules	81c149a0094486c0	2026-10-04	green-before: the doc edit landed in b4c3f73, before this test existed
 landing-source-fix	0d0bfc4c07ec014e	2026-10-04	green-before: the script landed in b4c3f73; the landing was already fixed by hand in 6d6f999
 journal-outbox	648ceaaca7ea3ffd	2026-10-04	red
+web-pref-sent	0249dec26c6ebaa3	2026-10-04	red
