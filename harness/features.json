@@ -1853,7 +1853,7 @@
       "node scripts/check-harness.mjs names the part that matches no test."
     ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"every name in a verify matches a test\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "harness-note-committed",

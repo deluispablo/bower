@@ -21,6 +21,25 @@ function patterns(part) {
   return m ? { kind: m[1] === 't' ? 'unit' : 'e2e', pattern: m[2] } : null;
 }
 
+/** "a|b(c|d)" → ["a", "b(c|d)"]: the alternatives at the top level of a pattern. */
+function topLevelParts(pattern) {
+  const out = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '\\') i++;
+    else if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    else if (c === '|' && depth === 0) {
+      out.push(pattern.slice(from, i));
+      from = i + 1;
+    }
+  }
+  out.push(pattern.slice(from));
+  return out.filter((p) => p.trim());
+}
+
 /**
  * Everything that makes the feature list dishonest, one sentence each.
  * `tests` (the names of the unit and e2e tests that exist) lets it check that
@@ -50,14 +69,17 @@ export function problems(features, proofs, tests, legacy = new Set()) {
         continue;
       }
       if (tests && f.passes) {
-        let re;
-        try {
-          re = new RegExp(pat.pattern);
-        } catch {
-          bad.push(`${f.id}: pattern "${pat.pattern}" is not a valid pattern`);
-          continue;
+        // Each name the pattern lists (a|b|c at the top level) must match a test of its own.
+        for (const part of topLevelParts(pat.pattern)) {
+          let re;
+          try {
+            re = new RegExp(part);
+          } catch {
+            bad.push(`${f.id}: pattern "${part}" is not a valid pattern`);
+            continue;
+          }
+          if (!tests[pat.kind].some((name) => re.test(name))) bad.push(`${f.id}: "${part}" matches no test (${pat.kind})`);
         }
-        if (!tests[pat.kind].some((name) => re.test(name))) bad.push(`${f.id}: pattern "${pat.pattern}" matches no test (${pat.kind})`);
       }
     }
   }

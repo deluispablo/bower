@@ -96,5 +96,16 @@ describe('the harness', () => {
     expect(redKind('  1 failed\n    [desktop] › e2e/a.spec.ts:3:1 › x\n  2 passed (4s)\n')).toBe('assert');
     expect(redKind('Error: Cannot find module\n')).toBe('none');
   });
+
+  it('every name in a verify matches a test, not just one of them', () => {
+    const tests = { unit: ['ConfirmBin asks first', 'the tour goes at sign-out'], e2e: [] };
+    const both: Entry = { id: 'a', task: 'qa-9', steps: S, verify: 'pnpm vitest run src -t "ConfirmBin|tour goes"', passes: true };
+    expect(problems([both], proofOf(both), tests)).toEqual([]);
+    const half: Entry = { ...both, verify: 'pnpm vitest run src -t "ConfirmBin|a test that is gone"' };
+    expect(problems([half], proofOf(half), tests).some((m: string) => /"a test that is gone" matches no test/.test(m))).toBe(true);
+    // A group keeps its own alternatives: "row.s menu (opens|shows)" is one name.
+    const grouped: Entry = { ...both, verify: 'pnpm vitest run src -t "the (tour|walk) goes"' };
+    expect(problems([grouped], proofOf(grouped), tests)).toEqual([]);
+  });
 });
 
