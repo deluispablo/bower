@@ -98,7 +98,8 @@ export class Journal {
     const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
     return this.serial(async () => {
-      await this.acrossTabs(() => this.sendWaiting());
+      // Nothing waiting (the usual case): no lock to take, so the change answers at once.
+      if (readOutbox(outboxKey(await this.place.owner())).length) await this.acrossTabs(() => this.sendWaiting());
       const key = outboxKey(await this.place.owner());
       if (!(await this.send(rec))) writeOutbox(key, [...readOutbox(key), rec]);
       return rec;

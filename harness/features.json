@@ -2037,5 +2037,18 @@
     ],
     "verify": "pnpm vitest run src/app -t \"tabs go with the person\"",
     "passes": true
+  },
+  {
+    "id": "create-name-speed",
+    "task": "qa-9",
+    "category": "bug",
+    "what": "On the pretend Drive, New note and New folder from the tree showed their name box late (every change waited for a cross-tab lock), so the first letters typed were lost.",
+    "steps": [
+      "Open http://localhost:5190/?scenario=default&time=instant&source=fake on desktop.",
+      "Right-click Resources, New note, type Soup ideas at once, Enter.",
+      "The note is Soup ideas, not a name missing its first letters."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts e2e/qa7.spec.ts -g \"a new note opens and says how|New note in an empty folder\"",
+    "passes": true
   }
 ]
