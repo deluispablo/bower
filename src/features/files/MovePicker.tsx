@@ -75,6 +75,7 @@ export function MovePicker() {
               if (!want) setHint('Type a folder name, or pick one with the arrows.');
               else if (one) pick(one);
               else if (list.length > 1) setHint('Several folders match. Pick one with the arrows, or type more.');
+              else setHint('No folder has that name. Type another, or clear the box to see them all.');
             } else walk(e, -1);
           }}
         />

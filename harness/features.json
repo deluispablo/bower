@@ -2012,7 +2012,7 @@
       "A line says no folder has that name."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"Enter with no folder that matches\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "former-names-gaps",

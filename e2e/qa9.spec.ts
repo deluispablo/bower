@@ -96,3 +96,13 @@ test('the name sheet takes a name as typed: no doubled .md, and a slash is expla
   await expect(page.getByRole('status').getByText('Names cannot have slashes; Bower used a dash.')).toBeVisible();
   await expect(page).toHaveURL(/\/note\/Areas\/Car\/Spring-Summer\.md/);
 });
+
+test('Move to: Enter with no folder that matches says so', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.getByLabel('Find a folder').fill('zzz');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog').getByRole('status')).toHaveText('No folder has that name. Type another, or clear the box to see them all.');
+});
