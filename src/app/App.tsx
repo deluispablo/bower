@@ -101,7 +101,7 @@ function Gatekeeper() {
   if (gate.folder === 'missing') {
     return (
       <Routes>
-        <Route path="/welcome" element={<Welcome />} />
+        <Route path="/welcome" element={<Welcome missing />} />
         <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
     );

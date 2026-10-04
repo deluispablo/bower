@@ -39,7 +39,7 @@ Each entry in `harness/features.json`:
 3. Take the first entry with `"passes": false` (or the one the human named).
 4. Write the test that shows it (it fails), make it pass, run the whole of `pnpm check`. For anything a person sees, run its e2e on `demo` and on `fake`.
 5. Check it as a person would, in a browser, at phone and desktop size, when it touches a screen.
-6. Flip `passes`, add one line to `progress.md`, commit (`fix:`/`feat:`/`test:`/`docs:`). One feature per commit.
+6. `bash harness/done.sh <id> "<commit message>"`: it runs `pnpm check` and the entry's `verify`, and only then flips `passes`, logs the line and commits. One entry per commit.
 7. Before stopping: the tree is clean, every gate green, the next step written in `progress.md`.
 
 ## Roles

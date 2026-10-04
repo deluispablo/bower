@@ -38,9 +38,13 @@ function toured(): boolean {
   }
 }
 
-/** First sign-in: Bower makes the folder, then shows the three ideas. */
-export function Welcome() {
-  if (toured()) return <Navigate to="/" replace />;
+/**
+ * First sign-in: Bower makes the folder, then shows the three ideas. Once
+ * toured, Welcome goes Home, but only while the folder exists: with no
+ * folder, Home would send back here (a loop), so the folder is made again.
+ */
+export function Welcome({ missing = false }: { missing?: boolean }) {
+  if (toured() && !missing) return <Navigate to="/" replace />;
   return <WelcomeSteps />;
 }
 
