@@ -1135,7 +1135,7 @@
     "what": "reprove.mjs can sign any entry without a red step and erases the history; a proof line can be appended by hand.",
     "steps": [],
     "verify": "pnpm vitest run src/harness.test.ts -t \"reproved only for the entries before the rule\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "green-before-checked",

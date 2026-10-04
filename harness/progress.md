@@ -118,3 +118,4 @@
 - 2026-10-04: delete-flow-fake passes — feat(account): Delete my account goes through the session and the Worker (DELETE /me) on every source; the folder stays in Drive
 - 2026-10-04: phone-row-menu passes — feat(phone): the note and folder pages have a ⋯ menu with Rename, Move to, Bookmark and the Bin; the tree keeps its long press
 - 2026-10-04: verify-matches-tests passes — chore(harness): close verify-matches-tests
+- 2026-10-04: proofs-only-done passes — chore(harness): close proofs-only-done
