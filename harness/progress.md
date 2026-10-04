@@ -91,3 +91,4 @@
 - 2026-10-04: tree-sort-names passes — fix(tree): names sort as people read them, without the extension
 - 2026-10-04: demo-question-rule passes — fix(demo): no question asks for a rule that already exists
 - 2026-10-04: search-plain-match passes — fix(search): search matches the text people read, not its markdown; tables lose their empty cells
+- 2026-10-04: new-note-one-line passes — fix(journal): a new thing named straight away is one change

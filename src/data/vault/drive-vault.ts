@@ -163,7 +163,12 @@ export class DriveVault implements VaultSource {
     refuseReserved(out);
     await this.stillAsSeen(f);
     ix.put(this.keepSeen(f, await this.drive.update(f.id, { name: nameOf(out) })));
-    await this.journal.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, { path: out, from: path, fileId: f.id });
+    // A thing made since the last tidy-up and named now is one change: its making, under its name.
+    const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
+    if (made) {
+      await this.journal.remove(made.id);
+      await this.journal.record('create', `New ${f.folder ? 'folder' : 'note'} "${displayName(nameOf(out))}" in ${where(parentOf(out))}`, { path: out, fileId: f.id });
+    } else await this.journal.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, { path: out, from: path, fileId: f.id });
     this.emit();
     return out;
   }

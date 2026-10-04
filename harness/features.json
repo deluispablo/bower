@@ -1049,7 +1049,7 @@
     "what": "A new note named straight away leaves two journal lines (New note, then Renamed).",
     "steps": [],
     "verify": "pnpm vitest run src/data/contract -t \"one line for a new thing\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "fail-card-close",

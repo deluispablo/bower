@@ -244,6 +244,17 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect(await vault.changes()).toHaveLength(n);
       });
 
+      it('one line for a new thing named straight away', async () => {
+        const { vault } = await open();
+        const n = (await vault.changes()).length;
+        const p = await vault.create('Resources', 'note');
+        const named = await vault.rename(p, 'Soup ideas');
+        const after = await vault.changes();
+        expect(after).toHaveLength(n + 1);
+        expect(after.at(-1)).toMatchObject({ kind: 'create', path: named });
+        expect(after.at(-1)?.what).toMatch(/Soup ideas/);
+      });
+
       it('made and binned straight away leaves no trace', async () => {
         const { vault } = await open();
         const n = (await vault.changes()).length;

@@ -539,7 +539,15 @@ export class DemoWorld {
           const out = renameEntry(next, path, name, Date.now());
           this.carryNotes(path, out);
           this.entries = next;
-          if (out !== path) this.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, out);
+          if (out !== path) {
+            // A thing made since the last tidy-up and named now is one change: its making, under its name.
+            const made = this.journal.find((c) => c.kind === 'create' && c.path === path);
+            if (made) {
+              this.unrecord(made.id);
+              const type = this.entries.get(out)?.type === 'folder' ? 'folder' : 'note';
+              this.record('create', `New ${type} "${displayName(nameOf(out))}" in ${parentOf(out).replaceAll('/', ' / ') || 'your Bower folder'}`, out);
+            } else this.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, out);
+          }
           return out;
         }),
       create: (folder, type, name) =>
