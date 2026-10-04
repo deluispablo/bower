@@ -588,7 +588,7 @@
     "what": "Block-list tags and quoted values in frontmatter are misread.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "startup-and-bundle",
