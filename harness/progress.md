@@ -126,3 +126,4 @@
 - 2026-10-04: swallow-sensor-strong passes — chore(harness): close swallow-sensor-strong
 - 2026-10-04: copy-two-words-tsx passes — test(copy): two words in a screen are copy too
 - 2026-10-04: bye-only-when-gone passes — fix(app): say the account is gone only after the delete went through
+- 2026-10-04: outbox-flush-dedupe passes — fix(app): the journal outbox goes before a tidy-up and when back online, never twice, never lost

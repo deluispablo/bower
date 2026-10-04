@@ -96,6 +96,11 @@ export class DriveVault implements VaultSource {
     this.listeners.clear();
   }
 
+  /** Sends this device's waiting journal lines (before a tidy-up, back online, at start). */
+  flushJournal(): Promise<void> {
+    return this.journal.flush();
+  }
+
   /** Lists the folder again (after a tidy-up, or when another device may have changed it). */
   async refresh(): Promise<void> {
     this.ix = null;

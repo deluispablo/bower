@@ -101,18 +101,22 @@ class Writer {
     private readonly ix: VaultIndex,
   ) {}
 
-  async journal(): Promise<Array<JournalRecord & { fileId: string }>> {
-    const out: Array<JournalRecord & { fileId: string }> = [];
+  /** Each change once, by its id (a line written twice is one change), with all its files. */
+  async journal(): Promise<Array<JournalRecord & { fileIds: string[] }>> {
+    const byId = new Map<string, JournalRecord & { fileIds: string[] }>();
     for (const f of this.ix.filesIn(SYSTEM.changes)) {
       if (f.folder || !f.name.endsWith('.json')) continue;
       try {
-        out.push({ ...(JSON.parse(await this.drive.readText(f.id)) as JournalRecord), fileId: f.id });
+        const rec = JSON.parse(await this.drive.readText(f.id)) as JournalRecord;
+        const had = byId.get(rec.id);
+        if (had) had.fileIds.push(f.id);
+        else byId.set(rec.id, { ...rec, fileIds: [f.id] });
       } catch (e) {
         // A file that is not a journal record is left where it is; a Drive failure stops the run.
         if (!(e instanceof SyntaxError)) throw e;
       }
     }
-    return out.sort((a, b) => a.at - b.at);
+    return [...byId.values()].sort((a, b) => a.at - b.at);
   }
 
   /** Last run's "new" marks go; this run's come next. */
@@ -208,11 +212,11 @@ class Writer {
     return fresh;
   }
 
-  async archive(records: Array<{ fileId: string }>): Promise<void> {
+  async archive(records: Array<{ fileIds: string[] }>): Promise<void> {
     if (!records.length) return;
     const archive = await this.folder(SYSTEM.archive);
-    for (const r of records) {
-      const f = this.byId(r.fileId);
+    for (const id of records.flatMap((r) => r.fileIds)) {
+      const f = this.byId(id);
       if (f) this.ix.put(await this.drive.update(f.id, { addParent: archive, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) }));
     }
   }

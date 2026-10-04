@@ -78,6 +78,19 @@ describe('the fake runner', () => {
     expect(await after.changes()).toHaveLength(1);
   });
 
+  it('outbox: a line written twice is counted once, and both files are archived', async () => {
+    await vault.addRule('anything from the dentist goes in health');
+    const changes = [...drive.dump(root).entries()].filter(([p]) => p.startsWith('.bower/changes/') && p.endsWith('.json'));
+    const [path, text] = changes[0] ?? ['', ''];
+    // Its answer was lost, so the device wrote it again.
+    const parent = (await drive.listAll(root)).find((f) => f.name === '.bower');
+    const changesDir = (await drive.listAll(parent?.id ?? '')).find((f) => f.name === 'changes');
+    await drive.createText(changesDir?.id ?? '', path.split('/').pop() ?? '', String(text));
+    const out = await runFake(drive, root, opts({ scope: 'instructions' }));
+    expect(out.phase === 'done' && out.report.yourChanges).toBe(1);
+    expect([...drive.dump(root).keys()].filter((p) => /^\.bower\/changes\/[^/]+\.json$/.test(p))).toEqual([]);
+  });
+
   it('pending rules are worded with your words kept', async () => {
     await vault.addRule('anything from the dentist goes in health');
     await runFake(drive, root, opts({ scope: 'instructions' }));

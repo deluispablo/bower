@@ -69,6 +69,16 @@ export class Journal {
   private filesOf = new Map<string, string[]>();
   /** Two changes in one millisecond still keep their order. */
   private lastAt = 0;
+  /** Writes go one at a time, so a line is never sent twice nor dropped from the outbox by another write. */
+  private queue: Promise<unknown> = Promise.resolve();
+
+  private serial<T>(work: () => Promise<T>): Promise<T> {
+    // expected: an earlier write's failure went to its own caller; this one runs anyway.
+    const next = this.queue.then(work, work);
+    // expected: the caller gets this failure through `next`; the queue only keeps the order.
+    this.queue = next.catch(() => undefined);
+    return next;
+  }
 
   constructor(
     private readonly drive: DriveApi,
@@ -85,20 +95,35 @@ export class Journal {
     const at = (this.lastAt = Math.max(Date.now(), this.lastAt + 1));
     const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
-    await this.flush();
-    const key = outboxKey(await this.place.owner());
-    if (!(await this.send(rec))) writeOutbox(key, [...readOutbox(key), rec]);
-    return rec;
+    return this.serial(async () => {
+      await this.sendWaiting();
+      const key = outboxKey(await this.place.owner());
+      if (!(await this.send(rec))) writeOutbox(key, [...readOutbox(key), rec]);
+      return rec;
+    });
   }
 
-  /** Sends what waits in the outbox; what still cannot go stays. */
-  async flush(): Promise<void> {
+  /** Sends what waits in the outbox (before a tidy-up, back online, at start); what still cannot go stays. */
+  flush(): Promise<void> {
+    return this.serial(() => this.sendWaiting());
+  }
+
+  private async sendWaiting(): Promise<void> {
     const key = outboxKey(await this.place.owner());
     const waiting = readOutbox(key);
     if (!waiting.length) return;
-    const left: JournalRecord[] = [];
-    for (const r of waiting) if (!(await this.send(r))) left.push(r);
-    writeOutbox(key, left);
+    // A line whose answer was lost may be in Drive already: never write it twice.
+    let there: Set<string>;
+    try {
+      there = new Set((await this.place.files()).map((f) => f.name));
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+    const sent = new Set<string>();
+    for (const r of waiting) if (there.has(`${r.id}.json`) || (await this.send(r))) sent.add(r.id);
+    // Only what was sent leaves; anything added meanwhile stays.
+    writeOutbox(key, readOutbox(key).filter((r) => !sent.has(r.id)));
   }
 
   private async send(rec: JournalRecord): Promise<boolean> {
@@ -142,7 +167,11 @@ export class Journal {
   }
 
   /** Takes a change back (an Undo): its file goes to the Bin, or it leaves the outbox. */
-  async remove(id: string): Promise<void> {
+  remove(id: string): Promise<void> {
+    return this.serial(() => this.removeNow(id));
+  }
+
+  private async removeNow(id: string): Promise<void> {
     const key = outboxKey(await this.place.owner());
     const waiting = readOutbox(key);
     if (waiting.some((r) => r.id === id)) writeOutbox(key, waiting.filter((r) => r.id !== id));

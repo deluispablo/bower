@@ -1179,8 +1179,8 @@
     "category": "review",
     "what": "The journal outbox is sent only with the next change (a tidy-up can miss it); a lost answer leaves two files; flushing can lose a line; the runner counts duplicates.",
     "steps": [],
-    "verify": "pnpm vitest run src/data/vault/journal.test.ts src/data/fake -t \"outbox\"",
-    "passes": false
+    "verify": "pnpm vitest run src/data/vault/journal.test.ts src/data/fake src/data/live -t \"outbox\"",
+    "passes": true
   },
   {
     "id": "docs-stale-decision",

@@ -69,6 +69,14 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   runs = new LiveRuns(worker, vault, opts.pollMs);
   const v = vault;
   const r = runs;
+  // The outbox goes when the device is back online, and once at start.
+  const flush = (): void =>
+    void v.flushJournal().catch((e: unknown) => {
+      // expected: signed out or no folder yet; the lines wait for the next change.
+      if (!(e instanceof BowerError && (e.code === 'auth' || e.code === 'not-found'))) console.error(e);
+    });
+  window.addEventListener('online', flush);
+  flush();
   return {
     session,
     vault: v,
@@ -76,6 +84,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     worker: opts.worker,
     drive: opts.drive,
     dispose: () => {
+      window.removeEventListener('online', flush);
       r.dispose();
       v.dispose();
     },

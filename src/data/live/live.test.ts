@@ -144,6 +144,30 @@ describe('signing out', () => {
   });
 });
 
+describe('the outbox', () => {
+  it('outbox: a waiting line goes before a tidy-up starts', async () => {
+    const s = await open();
+    const real = s.drive.createText.bind(s.drive);
+    s.drive.createText = (): Promise<never> => Promise.reject(new TypeError('Failed to fetch'));
+    await s.vault.addRule('anything from the dentist goes in health');
+    s.drive.createText = real;
+    await s.runs.start('instructions');
+    const r = await until(s, (x) => x?.phase === 'done' || x?.phase === 'failed');
+    expect(r?.report?.yourChanges).toBe(1);
+  });
+
+  it('outbox: a waiting line goes when the device is back online', async () => {
+    const s = await open();
+    const real = s.drive.createText.bind(s.drive);
+    s.drive.createText = (): Promise<never> => Promise.reject(new TypeError('Failed to fetch'));
+    await s.vault.addRule('anything from the dentist goes in health');
+    s.drive.createText = real;
+    window.dispatchEvent(new Event('online'));
+    for (let i = 0; i < 100 && Object.keys(localStorage).some((k) => k.startsWith('bower:outbox:')); i++) await new Promise((res) => setTimeout(res, 2));
+    expect(Object.keys(localStorage).filter((k) => k.startsWith('bower:outbox:'))).toEqual([]);
+  });
+});
+
 describe('deleting the account', () => {
   it('says goodbye only when the delete went through', async () => {
     const s = await open();

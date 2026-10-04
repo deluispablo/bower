@@ -59,6 +59,8 @@ export class LiveRuns implements RunSource {
   }
 
   async start(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunState> {
+    // What you did while Drive was out of reach goes first, so this tidy-up knows it.
+    await this.vault.flushJournal();
     const piles = scope === 'all' ? (await this.vault.piles()).map((p) => p.id) : [];
     const wire = await this.worker.process(scope, opts);
     if (wire.id !== this.last?.id) this.took = new Set(piles);

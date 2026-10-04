@@ -5,6 +5,7 @@ import { Journal } from './journal';
 let drive: FakeDrive;
 let root: string;
 let journal: Journal;
+let changes: string;
 
 beforeEach(async () => {
   localStorage.clear();
@@ -12,7 +13,7 @@ beforeEach(async () => {
   drive = new FakeDrive({ clock: () => (now += 1000) });
   root = (await drive.createFolder('root', 'Bower')).id;
   const bower = (await drive.createFolder(root, '.bower')).id;
-  const changes = (await drive.createFolder(bower, 'changes')).id;
+  changes = (await drive.createFolder(bower, 'changes')).id;
   journal = new Journal(drive, { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
 });
 
@@ -80,5 +81,47 @@ describe('when Drive does not answer', () => {
     };
     await journal.record('move', 'one');
     expect((await journal.list()).map((r) => r.what)).toEqual(['one']);
+  });
+
+  it('outbox: a line whose answer was lost is not sent twice', async () => {
+    const real = drive.createText.bind(drive);
+    let lose = true;
+    drive.createText = async (parent, name, text, props) => {
+      const f = await real(parent, name, text, props);
+      if (lose) {
+        lose = false;
+        throw new TypeError('Failed to fetch');
+      }
+      return f;
+    };
+    await journal.record('move', 'one');
+    await journal.record('move', 'two');
+    expect((await drive.listAll(changes)).filter((f) => !f.folder)).toHaveLength(2);
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+  });
+
+  it('outbox: a line kept while another is being sent is not lost, nor sent twice', async () => {
+    const real = drive.createText.bind(drive);
+    let failOne = true;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    drive.createText = async (parent, name, text, props) => {
+      if (text.includes('"one"')) {
+        if (failOne) throw new TypeError('Failed to fetch');
+        await gate;
+      }
+      if (text.includes('"two"')) throw new TypeError('Failed to fetch');
+      return real(parent, name, text, props);
+    };
+    await journal.record('move', 'one');
+    failOne = false;
+    const flushing = journal.flush();
+    await new Promise((r) => setTimeout(r, 0));
+    const recording = journal.record('move', 'two');
+    release();
+    await flushing;
+    await recording;
+    expect((await journal.list()).map((r) => r.what)).toEqual(['one', 'two']);
+    expect((await drive.listAll(changes)).filter((f) => !f.folder)).toHaveLength(1);
   });
 });
