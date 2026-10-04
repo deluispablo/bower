@@ -41,6 +41,13 @@ export class VaultIndex {
     return isHidden(path) ? this.ids.get(path) : undefined;
   }
 
+  /** The files and folders directly in a folder, hidden ones included. */
+  filesIn(path: string): DriveFile[] {
+    const id = this.idOf(path);
+    if (!id) return [];
+    return [...this.files.values()].filter((f) => f.parents[0] === id);
+  }
+
   /** Everything the explorer shows. */
   entries(): Entries {
     const out: Entries = new Map();

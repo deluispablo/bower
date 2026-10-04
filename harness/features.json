@@ -39,7 +39,7 @@
     "task": 6,
     "what": "Tree, notes, moves, renames, Bin, tasks, search and the journal on Drive",
     "verify": "pnpm vitest run src/data/vault src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "vault-inbox",

@@ -24,7 +24,11 @@ const COBBLE = 'Projects/Flat hunt/Flat 7, Cobble Row.md';
 
 const names = (tree: TreeNode[], folder: string): string[] => (findNode(tree, folder)?.children ?? []).map((n) => n.name);
 
-export function describeVaultContract(name: string, make: () => Promise<ContractWorld>): void {
+/** Groups a source can leave out while it is being built (the harness removes the skips). */
+export type ContractGroup = 'inbox' | 'bower' | 'tidy';
+
+export function describeVaultContract(name: string, make: () => Promise<ContractWorld>, opts: { skip?: ContractGroup[] } = {}): void {
+  const group = (g: ContractGroup): typeof describe | typeof describe.skip => (opts.skip?.includes(g) ? describe.skip : describe);
   describe(`vault contract: ${name}`, () => {
     let world: ContractWorld | null = null;
     const open = async (): Promise<Sources> => {
@@ -110,7 +114,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       });
     });
 
-    describe('piles', () => {
+    group('inbox')('piles', () => {
       it('addPile with a line makes Inbox/<day> <line>/ with Pile note.md', async () => {
         const { vault } = await open();
         await vault.addPile({ text: 'Receipts from the weekend', items: [{ name: 'a.pdf', kind: 'pdf', origin: 'x' }, { name: 'b.jpg', kind: 'image', origin: 'x' }] });
@@ -223,7 +227,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       });
     });
 
-    describe('rules, requests, questions and search', () => {
+    group('bower')('rules, requests and questions', () => {
       it('addRule shows as pending with your words', async () => {
         const { vault } = await open();
         await vault.addRule('anything from the dentist goes in health');
@@ -249,6 +253,9 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect((await vault.changes()).at(-1)?.kind).toBe('answer');
       });
 
+    });
+
+    describe('search', () => {
       it('search finds note text and skips the inbox', async () => {
         const { vault } = await open();
         const hits = await vault.search('£1,450');
@@ -258,7 +265,7 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
       });
     });
 
-    describe('a tidy-up', () => {
+    group('tidy')('a tidy-up', () => {
       it('after tidyUp the journal is empty and the piles taken are gone', async () => {
         const { vault } = await open();
         await vault.move(LEASE, 'Areas');
