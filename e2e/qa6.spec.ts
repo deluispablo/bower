@@ -127,3 +127,32 @@ test('the tree names piles as Home does', async ({ page, isMobile }) => {
   await expect(tree.getByRole('treeitem', { name: /^Receipts from the Saltmere weekend/ })).toBeVisible();
   await expect(tree.getByRole('treeitem', { name: /^\d{4}-\d{2}-\d{2} / })).toHaveCount(0);
 });
+
+for (const how of ['Escape', 'Close'] as const) {
+  test(`closing a stopped tidy-up is the same however you close it (${how})`, async ({ page }) => {
+    await open(page, '/', 'fail-run');
+    await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+    await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
+    if (how === 'Escape') await page.keyboard.press('Escape');
+    else await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // However it was closed, Home keeps the card with Try again until "Got it".
+    await expect(page.getByRole('alert').getByRole('heading', { name: 'The tidy-up stopped' }), how).toBeVisible();
+  });
+}
+
+test('a stopped tidy-up can be put away', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop side panel');
+  await open(page, '/', 'fail-run');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
+  await page.keyboard.press('Escape');
+  const panel = page.getByRole('complementary').filter({ hasText: 'Tell Bower something' });
+  await panel.getByRole('button', { name: 'Put it away' }).click();
+  await expect(panel.getByText(/tidy-up stopped/)).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(panel.getByText(/tidy-up stopped/)).toHaveCount(0);
+});

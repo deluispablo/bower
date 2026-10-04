@@ -1059,7 +1059,8 @@
     "what": "Closing the failure sheet with Close removes the Home card, with Esc it stays.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"closing a stopped tidy-up is the same however you close it\"",
-    "passes": false
+    "passes": true,
+    "note": "Unified on keeping the Home card (with Try again) until \"Got it\", however the sheet is closed; the older robustness test pins the same."
   },
   {
     "id": "demo-question-rule",

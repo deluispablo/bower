@@ -27,6 +27,8 @@ export function TidySheet() {
   const ask = waiting ? `Tidy up ${plural(waiting, 'thing')}?` : 'Nothing to tidy';
   const onOpenChange = (open: boolean): void => {
     // Closing on a finished run with nothing to replay: it has been seen.
+    // Closing a finished run with nothing to replay: it has been seen. A stopped one stays on Home
+    // (with Try again) until "Got it", however the sheet was closed.
     if (!open && run && run.phase === 'done' && !run.seen && !hasReplay(run)) void runs.markSeen(run.id);
     setTidy(open);
   };
@@ -166,13 +168,7 @@ function RunView({ run }: { run: RunState }) {
         ) : run.phase === 'failed' ? (
           <>
             <Button onClick={() => void startRun(runs, run.scope).catch((e: unknown) => report(e, 'The tidy-up did not start. Try again in a minute.'))}>Try again</Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void runs.markSeen(run.id);
-                setTidy(false);
-              }}
-            >
+            <Button variant="ghost" onClick={() => setTidy(false)}>
               Close
             </Button>
           </>

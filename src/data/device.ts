@@ -4,7 +4,7 @@
  * an unsent Add draft (names and links). Settings like the theme stay: they
  * belong to the device, not the person.
  */
-const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open'];
+const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away'];
 const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured'];
 
 export function forgetThisPerson(): void {

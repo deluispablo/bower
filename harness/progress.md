@@ -106,3 +106,4 @@
 - 2026-10-04: loading-claims-more passes — fix: while loading, the footer and side panel claim no count, sync or rest
 - 2026-10-04: bookmark-toast passes — fix(copy): the bookmark toast says where bookmarks are on this device
 - 2026-10-04: pile-folder-names passes — fix(tree): piles in the inbox read as on Home, without the day of their folder
+- 2026-10-04: fail-card-close passes — fix(tidy): a stopped tidy-up stays on Home until Got it, however its sheet is closed
