@@ -624,6 +624,22 @@ function NodeMenuItems({ node, Item, Separator }: { node: TreeNode; Item: ItemCo
   );
 }
 
+/** A thing's menu as a sheet, for the phone's note and folder pages (the tree opens it on a long press). */
+export function NodeMenuButton({ node }: { node: TreeNode }) {
+  const [open, setOpen] = useState(false);
+  const name = node.type === 'folder' ? node.name : displayName(node.name);
+  return (
+    <>
+      <IconButton label={`More for ${name}`} onClick={() => setOpen(true)}>
+        <Icon name="more" />
+      </IconButton>
+      <Sheet open={open} onOpenChange={setOpen} title={name} description={parentOf(node.path).split('/').join(' / ') || 'Your Bower folder'}>
+        {open && <NodeSheetActions node={node} done={() => setOpen(false)} />}
+      </Sheet>
+    </>
+  );
+}
+
 function NodeSheetActions({ node, done }: { node: TreeNode; done: () => void }) {
   const items = useNodeMenu(node).filter((x) => x === 'sep' || x.key !== 'tab');
   return (

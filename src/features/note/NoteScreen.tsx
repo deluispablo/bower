@@ -5,6 +5,7 @@ import { useNote, useSources, useTree } from '@/data/provider';
 import { displayName, findNode, nameOf, parentOf } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
+import { NodeMenuButton } from '@/features/files/Explorer';
 import { ago } from '@/app/words';
 import { useIsDesktop } from '@/ui/media';
 import { useUi } from '@/app/ui-store';
@@ -50,8 +51,10 @@ function Gone() {
   );
 }
 
-function PhoneBar({ folder }: { folder: string }) {
+function PhoneBar({ folder, path }: { folder: string; path: string }) {
   const nav = useNavigate();
+  const { data: tree } = useTree();
+  const node = tree ? findNode(tree, path) : null;
   return (
     <div className={s.phoneBar}>
       <IconButton label="Back" onClick={() => (inAppHistory() ? nav(-1) : nav(folderRoute(folder)))}>
@@ -61,6 +64,7 @@ function PhoneBar({ folder }: { folder: string }) {
         <span className={s.dot} style={{ background: paraColor(folder) }} />
         {crumbs(folder)}
       </Link>
+      {node && <NodeMenuButton node={node} />}
     </div>
   );
 }
@@ -93,7 +97,7 @@ function NoteView({ path }: { path: string }) {
 
   return (
     <article className={s.page}>
-      {!desktop && <PhoneBar folder={folder} />}
+      {!desktop && <PhoneBar folder={folder} path={path} />}
       {desktop && (
         <p className={s.crumbs}>
           <Link to={folderRoute(folder)}>{crumbs(folder) || 'Your Bower folder'}</Link>
@@ -221,7 +225,7 @@ function FileView({ node }: { node: TreeNode }) {
   const folder = parentOf(node.path);
   return (
     <article className={s.page}>
-      {!desktop && <PhoneBar folder={folder} />}
+      {!desktop && <PhoneBar folder={folder} path={node.path} />}
       {desktop && (
         <p className={s.crumbs}>
           <Link to={folderRoute(folder)}>{crumbs(folder)}</Link>

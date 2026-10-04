@@ -223,3 +223,15 @@ test('deleting the account signs out and forgets', async ({ page }) => {
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
 });
+
+test('on the phone a note has its menu', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'the phone');
+  await open(page, '/note/Resources/Cooking/Lemon%20tart.md');
+  await page.getByRole('button', { name: 'More for Lemon tart' }).click();
+  const sheet = page.getByRole('dialog');
+  for (const item of ['Rename', 'Move to…', 'Bookmark', 'Move to Bin']) await expect(sheet.getByRole('button', { name: item })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await open(page, '/files/Resources/Cooking');
+  await page.getByRole('button', { name: 'More for Cooking' }).click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Move to…' })).toBeVisible();
+});

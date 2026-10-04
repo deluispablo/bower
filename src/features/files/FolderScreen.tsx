@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { NodeMenuButton } from './Explorer';
 import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
-import { displayName, findNode, parentOf, sortNodes, type SortOrder } from '@/data/tree';
+import { isRoot, displayName, findNode, parentOf, sortNodes, type SortOrder } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
@@ -138,6 +139,7 @@ function Folder({ path }: { path: string }) {
           <h1 className={s.title}>
             <span className={s.dotBig} style={{ background: paraColor(path) }} />
             {node.name}
+            {!desktop && !isRoot(node.path) && node.path !== 'Inbox' && !node.path.startsWith('Inbox/') && <NodeMenuButton node={node} />}
           </h1>
           {/* What is directly here, as the list shows it: a subfolder counts once, the folder's own note not at all. */}
           <p className="muted">{plural(folderCount(node), 'thing')}</p>

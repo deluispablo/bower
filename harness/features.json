@@ -922,7 +922,7 @@
       "A note"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"on the phone a note has its menu\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "keyboard-context-menu",
