@@ -119,3 +119,11 @@ test('the bookmark toast says where bookmarks are', async ({ page, isMobile }) =
   await page.getByRole('menuitem', { name: 'Bookmark' }).click();
   await expect(page.getByRole('status').getByText('Bookmarked. Find it in the Bookmarks tab.')).toBeVisible();
 });
+
+test('the tree names piles as Home does', async ({ page, isMobile }) => {
+  await open(page, isMobile ? '/files' : '/');
+  const tree = page.getByRole('tree').first();
+  await tree.getByRole('treeitem', { name: /^Inbox/ }).click();
+  await expect(tree.getByRole('treeitem', { name: /^Receipts from the Saltmere weekend/ })).toBeVisible();
+  await expect(tree.getByRole('treeitem', { name: /^\d{4}-\d{2}-\d{2} / })).toHaveCount(0);
+});

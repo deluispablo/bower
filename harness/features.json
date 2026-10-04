@@ -1032,7 +1032,7 @@
     "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts…), Home by their notes.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the tree names piles as Home does\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "tree-sort-names",

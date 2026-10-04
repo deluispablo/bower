@@ -40,6 +40,9 @@ function useBinOrAsk(): (node: TreeNode) => void {
   };
 }
 
+/** A pile's folder in the inbox reads as its note does on Home, without the day it carries in Drive. */
+const shownFolderName = (path: string, name: string): string => (path === `Inbox/${name}` ? name.replace(/^\d{4}-\d{2}-\d{2} /, '') : name);
+
 const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
 
 const KIND_BADGE: Record<string, string> = { pdf: 'pdf', image: 'jpg', link: 'link', doc: 'doc', sheet: 'sheet', audio: 'audio' };
@@ -391,7 +394,7 @@ export function Explorer({ variant }: Props) {
             }}
           />
         ) : (
-          <span className={s.name}>{folder ? node.name : badge ? node.name.replace(/\.[A-Za-z0-9]{1,5}$/, '') : displayName(node.name)}</span>
+          <span className={s.name}>{folder ? shownFolderName(node.path, node.name) : badge ? node.name.replace(/\.[A-Za-z0-9]{1,5}$/, '') : displayName(node.name)}</span>
         )}
         {badge && !renaming && <span className={s.badge}>{badge}</span>}
         {node.isNew && <span className={s.newDot} title="New since you last looked" aria-label="New" />}

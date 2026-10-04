@@ -99,3 +99,4 @@ signout-sticks	e8484bcbd921940c	2026-10-04	red
 first-run-repeatable	1f45a4ef20c73f8d	2026-10-04	green-before: the fix landed in e6e5ce7; checked red by taking out its one line
 loading-claims-more	f1b8b3d9c20a763f	2026-10-04	red
 bookmark-toast	6db8b7b2b6c2bce5	2026-10-04	red
+pile-folder-names	c0726a59142bee45	2026-10-04	red
