@@ -177,7 +177,7 @@
     "what": "After moving a note from the tree's menu, keyboard focus points at a row that no longer exists.",
     "steps": [
       "Desktop",
-      "Right-click a note, Move to…, pick a folder",
+      "Right-click a note, Move to\u2026, pick a folder",
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"after a move the tree keeps keyboard focus\"",
@@ -187,9 +187,9 @@
     "id": "move-keyboard",
     "task": "qa-5",
     "category": "bug",
-    "what": "Move to…: Enter does not pick the only folder left and arrows do not walk the list.",
+    "what": "Move to\u2026: Enter does not pick the only folder left and arrows do not walk the list.",
     "steps": [
-      "Move to…",
+      "Move to\u2026",
       "Type a folder name",
       "Enter"
     ],
@@ -223,9 +223,9 @@
     "id": "palette-search-text",
     "task": "qa-5",
     "category": "bug",
-    "what": "The ⌘K palette only matches names although the box says \"Search your notes and files\".",
+    "what": "The \u2318K palette only matches names although the box says \"Search your notes and files\".",
     "steps": [
-      "⌘K",
+      "\u2318K",
       "Type a word from inside a note"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the palette finds words inside notes\"",
@@ -377,7 +377,7 @@
     "id": "copy-sensor",
     "task": "qa-5",
     "category": "polish",
-    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this…\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
+    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this\u2026\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
     "steps": [
       "Pile screen, Bower tab, tour, Home"
     ],
@@ -494,7 +494,7 @@
     "id": "small-upload-progress",
     "task": "qa-5",
     "category": "polish",
-    "what": "Small files jump from 0% to 99%; show Sending… without a percentage unless it is known.",
+    "what": "Small files jump from 0% to 99%; show Sending\u2026 without a percentage unless it is known.",
     "steps": [
       "Add a small file"
     ],
@@ -688,7 +688,8 @@
     "what": "The swallowed-errors check misses catch {} blocks, .catch(() => []|false) and toasts with no console.error.",
     "steps": [],
     "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
-    "passes": true
+    "passes": false,
+    "note": "Reopened by the qa-6 review: only half done (see qa-7 entries)."
   },
   {
     "id": "copy-sensor-ts",
@@ -730,7 +731,7 @@
     "id": "confirmbin-grammar",
     "task": "qa-6",
     "category": "polish",
-    "what": "ConfirmBin says \"The 1 thing inside go with it … get them back\".",
+    "what": "ConfirmBin says \"The 1 thing inside go with it \u2026 get them back\".",
     "steps": [],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"agree\"",
     "passes": true
@@ -739,7 +740,7 @@
     "id": "palette-search-error",
     "task": "qa-6",
     "category": "polish",
-    "what": "If search fails, the palette says \"Looking in your notes…\" forever.",
+    "what": "If search fails, the palette says \"Looking in your notes\u2026\" forever.",
     "steps": [],
     "verify": "pnpm vitest run src/features/palette -t \"says when search fails\"",
     "passes": true
@@ -851,7 +852,8 @@
     "what": "done.sh commits everything with git add -A, so two entries can land in one commit.",
     "steps": [],
     "verify": "pnpm vitest run src/harness.test.ts -t \"one entry per commit\"",
-    "passes": true
+    "passes": false,
+    "note": "Reopened by the qa-6 review: only half done (see qa-7 entries)."
   },
   {
     "id": "result-questions-test",
@@ -905,7 +907,7 @@
     "what": "After a move or a Bin from the tree, keyboard focus is lost (body), so the arrows do nothing.",
     "steps": [
       "Desktop",
-      "Click a note, Move to…, type a folder, Enter",
+      "Click a note, Move to\u2026, type a folder, Enter",
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"after a move or a Bin the tree keeps the keyboard\"",
@@ -968,7 +970,7 @@
     "category": "bug",
     "what": "Move to: Enter with several matches moves to the first, with nothing showing which.",
     "steps": [
-      "Move to…",
+      "Move to\u2026",
       "Type re",
       "Enter"
     ],
@@ -1029,7 +1031,7 @@
     "id": "pile-folder-names",
     "task": "qa-6",
     "category": "polish",
-    "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts…), Home by their notes.",
+    "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts\u2026), Home by their notes.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the tree names piles as Home does\"",
     "passes": true
@@ -1115,5 +1117,158 @@
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the notifications row says when they are blocked\"",
     "passes": true
+  },
+  {
+    "id": "verify-matches-tests",
+    "task": "qa-7",
+    "category": "review",
+    "what": "A verify can name a test that no longer exists, or a pattern too loose or empty; nothing re-checks it after closing.",
+    "steps": [],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"a pattern must match a test\"",
+    "passes": false
+  },
+  {
+    "id": "proofs-only-done",
+    "task": "qa-7",
+    "category": "review",
+    "what": "reprove.mjs can sign any entry without a red step and erases the history; a proof line can be appended by hand.",
+    "steps": [],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"reproved only for the entries before the rule\"",
+    "passes": false
+  },
+  {
+    "id": "green-before-checked",
+    "task": "qa-7",
+    "category": "review",
+    "what": "--green-before is a free-text escape; done.sh commits everything; a mistyped flag skips the red step.",
+    "steps": [],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"fixed-in\"",
+    "passes": false
+  },
+  {
+    "id": "swallow-then-handlers",
+    "task": "qa-7",
+    "category": "review",
+    "what": "The swallowed-errors check misses .then(ok, onError); Home and the Bower tab swallow errors there.",
+    "steps": [],
+    "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
+    "passes": false
+  },
+  {
+    "id": "copy-two-words-tsx",
+    "task": "qa-7",
+    "category": "review",
+    "what": "The copy check skips two-word strings in .tsx (aria-label=\"Your vault\" would pass).",
+    "steps": [],
+    "verify": "pnpm vitest run src/copy.test.ts -t \"two words\"",
+    "passes": false
+  },
+  {
+    "id": "bye-only-when-gone",
+    "task": "qa-7",
+    "category": "bug",
+    "what": "\"Your account is gone\" can show after an ordinary sign-out when a delete failed; DELETE /me has no unit test.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/worker/worker-http.test.ts src/features/settings -t \"delete\"",
+    "passes": false
+  },
+  {
+    "id": "outbox-flush-dedupe",
+    "task": "qa-7",
+    "category": "review",
+    "what": "The journal outbox is sent only with the next change (a tidy-up can miss it); a lost answer leaves two files; flushing can lose a line; the runner counts duplicates.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/vault/journal.test.ts src/data/fake -t \"outbox\"",
+    "passes": false
+  },
+  {
+    "id": "docs-stale-decision",
+    "task": "qa-7",
+    "category": "review",
+    "what": "The plan and AGENTS.md still say every write passes its modifiedTime, against the stale-check decision.",
+    "steps": [],
+    "verify": "pnpm vitest run src/docs.test.ts -t \"content write\"",
+    "passes": false
+  },
+  {
+    "id": "bin-count-words",
+    "task": "qa-7",
+    "category": "polish",
+    "what": "The Bin question counts everything inside while the row counts what is directly in it, without saying so.",
+    "steps": [],
+    "verify": "pnpm vitest run src/app/words.test.ts -t \"everything inside\"",
+    "passes": false
+  },
+  {
+    "id": "panel-putaway-seen",
+    "task": "qa-7",
+    "category": "polish",
+    "what": "The panel's Put it away and Home's Got it dismiss one stopped run two ways.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"put away is Got it\"",
+    "passes": false
+  },
+  {
+    "id": "web-source-shapes",
+    "task": "qa-7",
+    "category": "polish",
+    "what": "A timeline source given as a full https:// address is not a link; a .url name turns into a wrong address.",
+    "steps": [],
+    "verify": "pnpm vitest run src/features/note -t \"web address\"",
+    "passes": false
+  },
+  {
+    "id": "reload-filing-truth",
+    "task": "qa-7",
+    "category": "polish",
+    "what": "A run cut by a reload during filing says Nothing was moved, which can be false.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/fake -t \"reload during filing\"",
+    "passes": false
+  },
+  {
+    "id": "move-exact-match",
+    "task": "qa-7",
+    "category": "polish",
+    "what": "Move to: with several matches, an exact folder name cannot be picked with Enter; Enter in an empty box says nothing.",
+    "steps": [],
+    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"an exact folder name\"",
+    "passes": false
+  },
+  {
+    "id": "folder-length-dots",
+    "task": "qa-7",
+    "category": "polish",
+    "what": "The name-length check strips a dot-suffix from folder names too.",
+    "steps": [],
+    "verify": "pnpm vitest run src/data/tree.test.ts -t \"folder names keep their dots\"",
+    "passes": false
+  },
+  {
+    "id": "outbox-kept-signout",
+    "task": "qa-7",
+    "category": "review",
+    "what": "The outbox keeps unsent lines (with note names) after sign-out without saying why.",
+    "steps": [],
+    "verify": "pnpm vitest run src/docs.test.ts -t \"outbox at sign-out\"",
+    "passes": false
+  },
+  {
+    "id": "steps-for-findings",
+    "task": "qa-7",
+    "category": "review",
+    "what": "Most findings have no steps for the evaluator to replay; the progress log has no next step.",
+    "steps": [],
+    "verify": "node scripts/check-harness.mjs",
+    "passes": false
+  },
+  {
+    "id": "weak-tests",
+    "task": "qa-7",
+    "category": "review",
+    "what": "Some tests are vacuous or pin helpers, not screens: the demo question test, goWithIt, signout toured, late-bin retry, new-note on the phone.",
+    "steps": [],
+    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file|Bin fails\"",
+    "passes": false
   }
 ]
