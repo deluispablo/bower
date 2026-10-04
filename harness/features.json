@@ -1803,7 +1803,7 @@
       "Filed receipts have names that say what they are and their date."
     ],
     "verify": "pnpm vitest run src/data/fake -t \"files things under names that say what they are\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "try-again-sheet",

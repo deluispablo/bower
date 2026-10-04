@@ -40,9 +40,20 @@ describe('the fake runner', () => {
     expect(await after.piles()).toEqual([]);
     expect(await after.changes()).toEqual([]);
     const paths = (await drive.listAll(root)).map((f) => drive.pathOf(f.id, root));
-    expect(paths).toContain('Areas/Money/Receipts/2026-10/Taxi.pdf');
+    expect(paths).toContain('Areas/Money/Receipts/2026-09/Saltmere weekend, taxi, 13 Sep.pdf');
     expect(paths).toContain('Projects/Job hunt/Applications/Offer, Industrial Designer, Ferrowick.pdf');
     expect(paths.some((p) => p.startsWith('.bower/changes/archive/'))).toBe(true);
+  });
+
+  it('files things under names that say what they are and their date', async () => {
+    const out = await runFake(drive, root, opts());
+    if (out.phase !== 'done') throw new Error('failed');
+    const receipts = out.report.filed.filter((f) => f.to.startsWith('Areas/Money/Receipts'));
+    expect(receipts.length).toBeGreaterThan(0);
+    for (const f of receipts) {
+      expect(f.title, f.name).not.toMatch(/^(IMG_\d+|Taxi|Hotel invoice)/);
+      expect(f.title, f.name).toMatch(/\d{1,2} [A-Z][a-z]{2}/);
+    }
   });
 
   it('marks what it filed as new, and only that', async () => {
@@ -50,7 +61,7 @@ describe('the fake runner', () => {
     if (out.phase !== 'done') throw new Error('failed');
     const all = await drive.listAll(root);
     const flagged = all.filter((f) => f.appProperties?.bowerNew === '1').map((f) => drive.pathOf(f.id, root));
-    expect(flagged).toContain('Areas/Money/Receipts/2026-10/Taxi.pdf');
+    expect(flagged).toContain('Areas/Money/Receipts/2026-09/Saltmere weekend, taxi, 13 Sep.pdf');
     expect(flagged.every((p) => out.report.filed.some((x) => p.startsWith(x.to)) || out.report.updated.some((u) => u.path === p) || out.report.created.some((c) => c.path === p))).toBe(true);
   });
 

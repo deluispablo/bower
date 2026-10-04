@@ -132,6 +132,16 @@ export const FILING: Record<string, { title: string; to: string; note?: string }
   i4: { title: 'Payslip August (2).pdf', to: 'Areas/Money/Payslips' },
   l1: { title: 'Weeknight curry, clipping.md', to: 'Resources/Cooking' },
   l2: { title: 'Dentist, 14 Oct.pdf', to: 'Areas/Health' },
+  // The Saltmere receipts: named by what they are and their day, in the month of their date (the receipts rule).
+  r0: { title: 'Saltmere weekend, fuel, 12 Sep.jpg', to: 'Areas/Money/Receipts/2026-09' },
+  r1: { title: 'Saltmere weekend, lunch, 12 Sep.jpg', to: 'Areas/Money/Receipts/2026-09' },
+  r2: { title: 'Saltmere weekend, parking, 12 Sep.jpg', to: 'Areas/Money/Receipts/2026-09' },
+  r3: { title: 'Saltmere weekend, groceries, 13 Sep.jpg', to: 'Areas/Money/Receipts/2026-09' },
+  r4: { title: 'Saltmere weekend, dinner, 13 Sep.jpg', to: 'Areas/Money/Receipts/2026-09' },
+  r5: { title: 'Saltmere weekend, taxi, 13 Sep.pdf', to: 'Areas/Money/Receipts/2026-09' },
+  r6: { title: 'Saltmere weekend, hotel invoice, 14 Sep.pdf', to: 'Areas/Money/Receipts/2026-09' },
+  r7: { title: 'Saltmere weekend, museum, 14 Sep.jpg', to: 'Areas/Money/Receipts/2026-09' },
+  r8: { title: 'Saltmere weekend, train, 14 Sep.jpg', to: 'Areas/Money/Receipts/2026-09' },
 };
 /** What a tidy-up does when you said yes to keeping one note: the thing joins it. */
 export const MERGES: Array<{ question: string; item: string; into: string; title: string; line: string }> = [

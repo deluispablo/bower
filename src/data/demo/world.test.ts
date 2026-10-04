@@ -22,7 +22,7 @@ describe('the demo world', () => {
     expect(await vault.piles()).toEqual([]);
     expect(seen).toContain('writing');
     const tree = await vault.tree();
-    expect(findNode(tree, 'Areas/Money/Receipts/2026-10/Taxi.pdf')).not.toBeNull();
+    expect(findNode(tree, 'Areas/Money/Receipts/2026-09/Saltmere weekend, taxi, 13 Sep.pdf')).not.toBeNull();
     w.dispose();
   });
 

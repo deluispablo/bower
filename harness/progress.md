@@ -160,3 +160,4 @@
 - 2026-10-04: empty-file-warning passes — fix(app): Add points out an empty file, and names the files left out after a reload
 - 2026-10-04: restore-rows-dropped passes — chore(harness): close restore-rows-dropped
 - 2026-10-04: undo-toast-time passes — fix(app): a toast with a button stays 8 seconds, and while the pointer or keyboard is on it
+- 2026-10-04: runner-names-things passes — fix(demo): the pretend tidy-up names receipts by what they are and their day
