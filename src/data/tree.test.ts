@@ -10,7 +10,7 @@ import {
   type Entries,
   type Entry,
 } from './tree';
-import { BowerError } from './types';
+import { BowerError, type TreeNode } from './types';
 
 function make(paths: string[]): Entries {
   const m: Entries = new Map();
@@ -92,5 +92,15 @@ describe('names', () => {
     expect(() => renameEntry(m, 'X/A.md', '..', 1)).toThrow(/dot/);
     expect(() => renameEntry(m, 'X/A.md', 'b', 1)).toThrow(/already/);
     expect(renameEntry(m, 'X/A.md', 'a', 1)).toBe('X/a.md');
+  });
+});
+
+import { sortNodes as sortForPeople } from './tree';
+
+describe('sorting', () => {
+  it('sorts names as people read them, without the extension', () => {
+    const n = (name: string): TreeNode => ({ path: name, name, type: 'file', modified: 0, created: 0 });
+    const names = sortForPeople([n('Untitled (3).md'), n('Untitled.md'), n('Untitled (2).md'), n('Brackwater 2025 receipts.pdf'), n('Brackwater 2025.md')], 'name-az').map((x) => x.name);
+    expect(names).toEqual(['Brackwater 2025.md', 'Brackwater 2025 receipts.pdf', 'Untitled.md', 'Untitled (2).md', 'Untitled (3).md']);
   });
 });

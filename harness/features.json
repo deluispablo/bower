@@ -1040,7 +1040,7 @@
     "what": "Tree sort uses the extension: Untitled (2) before Untitled, Brackwater 2025 receipts.pdf before Brackwater 2025.",
     "steps": [],
     "verify": "pnpm vitest run src/data/tree.test.ts -t \"sorts names as people read them\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "new-note-one-line",

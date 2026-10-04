@@ -168,8 +168,10 @@ export type SortOrder = 'name-az' | 'name-za' | 'modified-new' | 'modified-old' 
 
 /** Folders first, then files, each in the chosen order (as Obsidian does). */
 export function sortNodes(nodes: TreeNode[], order: SortOrder): TreeNode[] {
+  // As people read them: without the extension, numbers in order ("Untitled" before "Untitled (2)").
+  const bare = (n: TreeNode): string => (n.type === 'file' ? n.name.replace(/\.[A-Za-z0-9]{1,5}$/, '') : n.name);
   const byName = (a: TreeNode, b: TreeNode): number =>
-    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    bare(a).localeCompare(bare(b), undefined, { numeric: true, sensitivity: 'base' }) || a.name.localeCompare(b.name);
   const cmp: Record<SortOrder, (a: TreeNode, b: TreeNode) => number> = {
     'name-az': byName,
     'name-za': (a, b) => byName(b, a),

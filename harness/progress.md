@@ -88,3 +88,4 @@
 - 2026-10-04: result-new-questions passes — test(tidy): the report lists only the new questions a tidy-up asked
 - 2026-10-04: one-date-format passes — fix(dates): one way to write a day everywhere: 28 Sep
 - 2026-10-04: run-unit passes — fix(copy): a run says Usually about 5 minutes
+- 2026-10-04: tree-sort-names passes — fix(tree): names sort as people read them, without the extension
