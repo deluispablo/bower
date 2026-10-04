@@ -552,7 +552,7 @@
     "what": "A Drive change whose journal line fails to write is lost to the runner.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "system-folder-race",

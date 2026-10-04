@@ -56,3 +56,4 @@
 - 2026-10-04: upload-vs-remove passes — fix(vault): a thing still on its way follows its removed pile to the Bin
 - 2026-10-04: addpile-cleanup passes — fix(vault): a pile that could not be made leaves no empty folder
 - 2026-10-04: restore-subpath passes — fix(vault): restoring from inside a binned pile brings the pile back whole
+- 2026-10-04: journal-retry passes — fix(journal): a journal line is tried twice before the change is reported as failed
