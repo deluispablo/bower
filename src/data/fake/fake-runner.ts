@@ -11,7 +11,7 @@ import type { DriveFile } from '../drive/drive-api';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
-import { formerNames } from '../links';
+import { formerNames, rewriteLinks } from '../links';
 import { thingsIn } from '../piles';
 import { displayName, freeName, join, kindOf, nameOf, parentOf } from '../tree';
 import type { FiledItem, Pile, Question, Request, Rule, RunPhase, RunReport } from '../types';
@@ -199,10 +199,7 @@ class Writer {
       const f = this.ix.file(path);
       if (!f || f.folder || !path.endsWith('.md') || path.startsWith(`${SYSTEM.dir}/`)) continue;
       const text = await this.drive.readText(f.id);
-      const next = text.replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, (all, name: string, label: string | undefined) => {
-        const now = former.get(name.trim().toLowerCase());
-        return now ? `[[${displayName(nameOf(now))}${label ?? ''}]]` : all;
-      });
+      const next = rewriteLinks(text, former);
       if (next !== text) this.ix.put(await this.drive.writeText(f.id, next, f.modifiedTime));
     }
   }

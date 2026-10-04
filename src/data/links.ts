@@ -16,3 +16,12 @@ export function formerNames(changes: readonly ChangeEntry[]): Map<string, string
   }
   return out;
 }
+
+/** Every [[link]] to a former name written with the note's name now (a label after | stays). */
+export function rewriteLinks(text: string, former: ReadonlyMap<string, string>): string {
+  if (!former.size) return text;
+  return text.replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, (all, name: string, label: string | undefined) => {
+    const now = former.get(name.trim().toLowerCase());
+    return now ? `[[${displayName(nameOf(now))}${label ?? ''}]]` : all;
+  });
+}

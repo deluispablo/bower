@@ -170,3 +170,4 @@
 - 2026-10-05: link-files-url passes — fix(app): a saved link is always a .url file, whatever its address ends with
 - 2026-10-05: outbox-dedupe-real passes — fix(app): the outbox asks the folder itself before sending, one tab at a time; records are unique by id
 - 2026-10-05: screen-wiring-tests passes — test(e2e): the answer toast, Add's empty and left-out files, and a done request, on screen
+- 2026-10-05: demo-links-after-tidy passes — fix(demo): links follow a rename through a tidy-up, and linking notes follow a move

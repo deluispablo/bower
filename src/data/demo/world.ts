@@ -60,6 +60,7 @@ import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
 import { forgetThisPerson, sayGoodbye } from '../device';
 import { ruleLike } from '../rules';
+import { formerNames, rewriteLinks } from '../links';
 import { shortDay } from '../dates';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
@@ -190,6 +191,41 @@ export class DemoWorld {
       this.notes.delete(p);
       const np = to + p.slice(from.length);
       this.notes.set(np, { ...n, path: np, title: p === from ? displayName(nameOf(np)) : n.title });
+    }
+    // Notes that link to what moved keep pointing at it.
+    const moved = (l: string): string => (under(l) ? to + l.slice(from.length) : l);
+    for (const e of this.entries.values()) {
+      if (e.type !== 'file' || e.kind !== 'note' || under(e.path)) continue;
+      const n = this.notes.get(e.path) ?? (NOTES[e.path] ? this.noteFor(e.path) : null);
+      if (n?.links.some(under)) this.notes.set(e.path, { ...n, links: n.links.map(moved) });
+    }
+  }
+
+  /** The notes whose links name `path` now (renames and moves included). */
+  private backlinksOf(path: string): string[] {
+    const out: string[] = [];
+    for (const e of this.entries.values()) {
+      if (e.type !== 'file' || e.kind !== 'note' || e.path === path) continue;
+      const links = this.notes.get(e.path)?.links ?? NOTES[e.path]?.links ?? [];
+      if (links.includes(path)) out.push(e.path);
+    }
+    return out;
+  }
+
+  /** A tidy-up writes the names notes have now into the [[links]] that named them before. */
+  private followRenames(): void {
+    const former = formerNames(this.journal);
+    if (!former.size) return;
+    for (const e of [...this.entries.values()]) {
+      if (e.type !== 'file' || e.kind !== 'note' || e.path === 'Rules.md') continue;
+      const n = this.noteFor(e.path);
+      const next = {
+        ...n,
+        body: rewriteLinks(n.body, former),
+        currentState: n.currentState.map((l) => rewriteLinks(l, former)),
+        timeline: n.timeline.map((t) => ({ ...t, text: rewriteLinks(t.text, former) })),
+      };
+      if (JSON.stringify(next) !== JSON.stringify(n)) this.notes.set(e.path, next);
     }
   }
 
@@ -377,6 +413,7 @@ export class DemoWorld {
       r.phaseAt = now;
       if (to === 'reading') r.total = this.piles.filter((p) => this.runPiles.has(p.id)).reduce((n, p) => n + thingsIn(p), 0);
       if (to === 'done') {
+        this.followRenames();
         const yourChanges = this.journal.length;
         r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: [] };
         r.report.yourChanges = yourChanges;
@@ -542,7 +579,7 @@ export class DemoWorld {
       });
     return {
       tree: () => this.wait(() => buildTree(this.entries)),
-      note: (path) => this.wait(() => this.noteFor(path)),
+      note: (path) => this.wait(() => ({ ...this.noteFor(path), backlinks: this.backlinksOf(path) })),
       move: (path, to, opts) =>
         change(() => {
           const before = new Map(this.entries);

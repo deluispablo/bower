@@ -44,3 +44,23 @@ test('on screen: the result of a tidy-up names the request it did', async ({ pag
   await page.getByRole('button', { name: /Let Bower do it now/ }).first().click();
   await expect(page.getByRole('dialog')).toContainText('"Put my visa papers together" done', { timeout: 10_000 });
 });
+
+test('a link follows a rename through a tidy-up', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/note/Projects/Flat%20hunt/Flat%207%2C%20Cobble%20Row.md');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.focus();
+  await page.keyboard.press('F2');
+  const input = page.getByLabel(/New name for Flat 7/);
+  await input.fill('Cobble Row flat');
+  await input.press('Enter');
+  await expect(tree.getByRole('treeitem', { name: /Cobble Row flat/ })).toBeVisible();
+  await page.locator('footer').getByRole('button').first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  await expect(page.getByRole('dialog').getByText(/15 things filed/).last()).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('Escape');
+  await tree.getByRole('treeitem', { name: /Flat 3, 12 Larkspur Lane/ }).click();
+  await page.getByRole('main').getByRole('link', { name: 'Cobble Row flat' }).first().click();
+  await expect(page).toHaveURL(/\/note\/Projects\/Flat%20hunt\/Cobble%20Row%20flat\.md/);
+  await expect(page.getByText('Flat 3, 12 Larkspur Lane').first()).toBeVisible();
+});

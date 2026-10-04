@@ -1928,7 +1928,7 @@
       "Open Flat 3, 12 Larkspur Lane: the link opens Cobble Row flat, and its Linked notes list Flat 3."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"a link follows a rename through a tidy-up\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "demo-pending-rule-remove",
