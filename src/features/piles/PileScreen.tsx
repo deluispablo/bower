@@ -11,6 +11,7 @@ import { toast } from '@/ui/toast';
 import { inAppHistory } from '@/app/paths';
 import { isRunning } from '@/features/tidy/run-words';
 import { PileStack } from './PileStack';
+import { itemLine } from './item-words';
 import s from './piles.module.css';
 
 export function PileScreen() {
@@ -63,7 +64,7 @@ export function PileScreen() {
               </span>
               <span className={s.itemMain}>
                 <span className="mono">{it.name}</span>
-                <span className={s.itemSub}>{it.upload === -1 ? "Didn't arrive" : it.upload !== undefined ? `Sending… ${Math.round(it.upload * 100)}%` : it.origin}</span>
+                <span className={s.itemSub}>{itemLine(it)}</span>
               </span>
             </li>
           ))}

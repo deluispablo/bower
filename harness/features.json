@@ -498,7 +498,7 @@
       "Add a small file"
     ],
     "verify": "pnpm vitest run src/features/piles",
-    "passes": false
+    "passes": true
   },
   {
     "id": "stale-rename-move",
