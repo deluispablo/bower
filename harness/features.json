@@ -853,7 +853,7 @@
     "what": "done.sh commits everything with git add -A, so two entries can land in one commit.",
     "steps": [],
     "verify": "pnpm vitest run src/harness.test.ts -t \"one entry per commit\"",
-    "passes": false,
+    "passes": true,
     "note": "Reopened by the qa-6 review: only half done (see qa-7 entries)."
   },
   {

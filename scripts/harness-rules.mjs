@@ -91,3 +91,17 @@ export function doneArgs(argv, entry) {
   }
   throw new Error(`unknown flag ${flag}`);
 }
+
+/**
+ * Paths from `git status --porcelain` with changes not staged (the harness's own
+ * records aside). done.sh commits only what is staged, so it refuses these: one
+ * entry's commit never carries another change by accident.
+ */
+export function notStaged(status) {
+  return status
+    .split('\n')
+    .filter(Boolean)
+    .filter((l) => l.startsWith('??') || l[1] !== ' ')
+    .map((l) => l.slice(3))
+    .filter((p) => !p.startsWith('harness/'));
+}

@@ -2,7 +2,7 @@
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { doneArgs, hashOf, othersFlipped, problems, readProofs } from '../scripts/harness-rules.mjs';
+import { doneArgs, hashOf, notStaged, othersFlipped, problems, readProofs } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; verify: string; passes: boolean };
 const V = 'pnpm vitest run src/x.test.ts -t "it works"';
@@ -34,6 +34,13 @@ describe('the harness', () => {
     const before = [{ id: 'a', passes: false }, { id: 'b', passes: false }];
     expect(othersFlipped(before, [{ id: 'a', passes: true }, { id: 'b', passes: false }], 'a')).toEqual([]);
     expect(othersFlipped(before, [{ id: 'a', passes: true }, { id: 'b', passes: true }], 'a')).toEqual(['b']);
+  });
+
+  it('one entry per commit: only what is staged goes in', () => {
+    // git status --porcelain: column 1 is the index, column 2 the working tree.
+    const status = ['M  src/a.ts', 'MM src/b.ts', ' M src/c.ts', '?? src/d.ts', 'A  src/e.ts', ' M harness/features.json', '?? harness/proof.log'].join('\n');
+    expect(notStaged(status)).toEqual(['src/b.ts', 'src/c.ts', 'src/d.ts']);
+    expect(notStaged('M  src/a.ts\n')).toEqual([]);
   });
 
   it('a pattern must match a test, and be a real name', () => {

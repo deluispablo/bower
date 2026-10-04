@@ -6,7 +6,7 @@
 #     <sha> puts that commit's code back as it was and expects the same red;
 #     --known-green "<why>" (only for an entry with a note) skips the red;
 #  3. `pnpm check` passes, and the verify passes and runs at least one test;
-#  4. then `passes` flips, a proof line is written (harness/proof.log, checked
+#  4. then `passes` flips (only staged changes and harness/ are committed), a proof line is written (harness/proof.log, checked
 #     by scripts/check-harness.mjs), progress.md gets a line, and it commits.
 # usage: bash harness/done.sh <id> "<commit message>" [--fixed-in <sha> | --known-green "<why>"]
 set -euo pipefail
@@ -23,7 +23,12 @@ id=$(get id); msg=$(get msg); mode=$(get mode); sha=$(get sha); reason=$(get rea
 verify=$(node -e 'const f=require("./harness/features.json").find(x=>x.id===process.argv[1]); if(!f){console.error("no entry "+process.argv[1]);process.exit(2)} process.stdout.write(f.verify)' "$id")
 log=$(mktemp)
 
-# 1. One entry per commit.
+# 1. One entry per commit: only what is staged goes in, and no other entry flips.
+unstaged=$(node --input-type=module -e '
+  import { notStaged } from "./scripts/harness-rules.mjs";
+  import { execSync } from "node:child_process";
+  console.log(notStaged(execSync("git status --porcelain --untracked-files=all", { encoding: "utf8" })).join(" "));')
+[ -n "$unstaged" ] && { echo "Not staged: $unstaged. Stage this entry's change (git add), set the rest aside."; exit 1; }
 others=$(node --input-type=module -e '
   import { othersFlipped } from "./scripts/harness-rules.mjs";
   import { readFileSync } from "node:fs";
@@ -51,10 +56,13 @@ case "$mode" in
     how="red"
     [ -z "$code" ] && { echo "No code change to set aside: the fix is committed already. Pass --fixed-in <sha>, or --known-green \"<why>\" for an entry with a note."; exit 1; }
     echo "red: setting aside $(echo "$code" | wc -l | tr -d ' ') changed file(s) and running the verify…"
-    git stash push --quiet --include-untracked -- $code
-    trap 'git stash pop --quiet' EXIT
+    # Everything is staged, so the index keeps the change while the working tree goes back to HEAD.
+    trap 'git checkout --quiet -- $code' EXIT
+    for f in $code; do
+      if git cat-file -e "HEAD:$f" 2>/dev/null; then git show "HEAD:$f" > "$f"; else rm -f "$f"; fi
+    done
     expect_red
-    git stash pop --quiet; trap - EXIT
+    git checkout --quiet -- $code; trap - EXIT
     ;;
   fixed-in)
     how="red (fixed in $sha)"
@@ -88,5 +96,5 @@ node -e 'const fs=require("fs");const p="harness/features.json";const f=JSON.par
 hash=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("hex").slice(0,16))' "$verify")
 printf '%s\t%s\t%s\t%s\n' "$id" "$hash" "$(date +%F)" "$how" >> harness/proof.log
 echo "- $(date +%F): $id passes — ${msg}" >> harness/progress.md
-git add -A && git commit -qm "$msg" && git log --oneline -1
+git add harness/ && git commit -qm "$msg" && git log --oneline -1
 node scripts/harness-status.mjs | head -1

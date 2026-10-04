@@ -114,3 +114,4 @@ phone-row-menu	d0471096b83d6cac	2026-10-04	red
 verify-matches-tests	afcba30b683b86e2	2026-10-04	red (fixed in 195553a)
 proofs-only-done	083e1b75b980fa4b	2026-10-04	red (fixed in 195553a)
 green-before-checked	7037eae2db6f72e9	2026-10-04	red (fixed in 195553a)
+one-entry-per-commit	0f543b3e0f4ba6e3	2026-10-04	red

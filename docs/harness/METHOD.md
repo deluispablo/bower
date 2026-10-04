@@ -40,7 +40,7 @@ Each entry in `harness/features.json`:
 3. Take the first entry with `"passes": false` (or the one the human named).
 4. Write the test that shows it (it fails), make it pass, run the whole of `pnpm check`. For anything a person sees, run its e2e on `demo` and on `fake`.
 5. Check it as a person would, in a browser, at phone and desktop size, when it touches a screen.
-6. `bash harness/done.sh <id> "<commit message>"`: with the uncommitted code set aside (tests kept) the `verify` must fail with a failed test; then it runs `pnpm check` and the `verify`, and only then flips `passes`, logs the proof and commits. One entry per commit.
+6. Stage the entry's change (`git add`), then `bash harness/done.sh <id> "<commit message>"`. Only staged changes and `harness/` are committed; anything unstaged is refused. With the uncommitted code set aside (tests kept) the `verify` must fail with a failed test; then it runs `pnpm check` and the `verify`, and only then flips `passes`, logs the proof and commits. One entry per commit.
    - The fix is committed already: `--fixed-in <sha>` puts that commit's code back as it was before it and expects the same red.
    - No red is possible (a decision kept, a finding not reproduced): `--known-green "<why>"`, only for an entry whose `note` says why.
    - Any other flag is refused. A verify must name its test (`-t "…"` / `-g "…"`) and, once closed, that name must match a real test.

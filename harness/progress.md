@@ -120,3 +120,4 @@
 - 2026-10-04: verify-matches-tests passes — chore(harness): close verify-matches-tests
 - 2026-10-04: proofs-only-done passes — chore(harness): close proofs-only-done
 - 2026-10-04: green-before-checked passes — chore(harness): close green-before-checked
+- 2026-10-04: one-entry-per-commit passes — fix(harness): done.sh commits only what is staged
