@@ -71,3 +71,4 @@ one-count-rule	20ca35d8810f29ae	2026-10-04	red
 move-enter-empty	55bf973c4c4b8a58	2026-10-04	red
 fake-run-persists	a85f2d2293fdb6f1	2026-10-04	red
 swallow-sensor-strong	2f50af52f3d841b2	2026-10-04	red
+copy-sensor-ts	6cbdd3b8bbfa372c	2026-10-04	green-before: a check widened over code already right; it found only test names, which are not copy

@@ -696,7 +696,7 @@
     "what": "The copy check reads only .tsx; words in .ts files (run words, BowerError messages, journal lines) go unchecked.",
     "steps": [],
     "verify": "pnpm vitest run src/copy.test.ts -t \"no file names\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "loading-component-test",

@@ -13,7 +13,7 @@ const SRC = dirname(fileURLToPath(import.meta.url));
 const files = (dir: string): string[] =>
   readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
-    return statSync(p).isDirectory() ? files(p) : /\.tsx$/.test(n) && !/\.test\.tsx$/.test(n) ? [p] : [];
+    return statSync(p).isDirectory() ? files(p) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : [];
   });
 
 /** Pieces of copy: JSX text, and string or template literals that read like words (two or more). */
@@ -25,7 +25,8 @@ function copyIn(text: string): Array<{ line: number; words: string }> {
   for (const m of text.matchAll(/>([^<>{}]*[A-Za-z][^<>{}]*)</g)) out.push({ line: lineOf(m.index ?? 0), words: m[1] ?? '' });
   for (const m of text.matchAll(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)) {
     const w = m[2] ?? '';
-    if (/[A-Za-z]{2,}\s+[A-Za-z]/.test(w)) out.push({ line: lineOf(m.index ?? 0), words: w });
+    // A sentence: three words or more (a name like "Pile note.md" is code, not copy).
+    if (/[A-Za-z]{2,}\s+[A-Za-z]+\s+[A-Za-z]/.test(w)) out.push({ line: lineOf(m.index ?? 0), words: w });
   }
   return out;
 }
@@ -40,8 +41,10 @@ const RULES: Array<{ bad: RegExp; say: string }> = [
 describe('the words people read', () => {
   it('no file names, no jargon, one way to say a duration', () => {
     const bad: string[] = [];
-    for (const dir of ['features', 'app', 'ui']) {
-      for (const f of files(join(SRC, dir))) {
+    // Fixture data (made-up notes) and the code's own comments are not copy.
+    const skip = /data\/demo\/(fixture|notes)\.ts$|data\/fake\/|data\/contract\/|\.d\.ts$/;
+    for (const dir of ['features', 'app', 'ui', 'data']) {
+      for (const f of files(join(SRC, dir)).filter((x) => !skip.test(x))) {
         for (const c of copyIn(readFileSync(f, 'utf8'))) {
           if (/^\s*(import|export)\b/.test(c.words) || /className|aria-hidden|\$\{s\./.test(c.words)) continue;
           for (const r of RULES) if (r.bad.test(c.words)) bad.push(`${relative(SRC, f)}:${c.line}  "${c.words.trim().slice(0, 70)}" → ${r.say}`);
