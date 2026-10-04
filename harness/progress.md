@@ -53,3 +53,4 @@
 - 2026-10-04: no-swallowed-errors passes — fix: no error is swallowed silently; a test keeps it so
 - 2026-10-04: stale-rename-move passes — fix(vault): a rename or move of something changed elsewhere writes nothing and says so
 - 2026-10-04: own-write-seen passes — fix(vault): your own change keeps a seen thing seen
+- 2026-10-04: upload-vs-remove passes — fix(vault): a thing still on its way follows its removed pile to the Bin

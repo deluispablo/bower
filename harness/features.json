@@ -525,7 +525,7 @@
     "what": "An upload in flight survives removing or binning its pile; a lone pile comes back.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "addpile-cleanup",
