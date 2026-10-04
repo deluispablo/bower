@@ -168,7 +168,7 @@
       "Wait for Done"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the run scene ends with an empty inbox\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "tree-focus-after-move",

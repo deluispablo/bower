@@ -22,7 +22,7 @@ type Spot = 'inbox' | 'read' | 'note' | 'folder' | 'mid';
  * - putting away: carries papers from the read pile into the folder.
  * Bower always stands on the ground and hops between places.
  */
-export function TidyScene({ phase }: { phase: RunPhase }) {
+export function TidyScene({ phase, filed: total }: { phase: RunPhase; /** How many things the run filed, once it is done. */ filed?: number }) {
   const stage = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
   const [inbox, setInbox] = useState(START);
@@ -112,17 +112,24 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
     return { x: el.getBoundingClientRect().left - st.getBoundingClientRect().left + 12 - REACH, y, perch: true };
   };
 
+  // Done: the scene agrees with the result, whatever the errands had reached
+  // (an interrupted errand may still finish a peck after this).
+  const done = phase === 'done';
+  const inboxShown = done ? 0 : inbox;
+  const readShown = done ? 0 : read;
+  const filedShown = done && total !== undefined ? total : filed;
+
   return (
     <div className={s.stage} ref={stage} aria-hidden="true">
       <div className={s.ground} />
-      <div className={s.stack} data-spot="inbox" data-dim={phase === 'writing'}>
-        {Array.from({ length: inbox }, (_, i) => (
+      <div className={s.stack} data-spot="inbox" data-sheets={inboxShown} data-dim={phase === 'writing'}>
+        {Array.from({ length: inboxShown }, (_, i) => (
           <span key={i} className={s.sheet} style={{ bottom: i * 5, transform: `translateX(${[0, 2, -2, 3, -1, 1][i] ?? 0}px)` }} />
         ))}
         <span className={s.tag}>Inbox</span>
       </div>
-      <div className={s.stack} data-spot="read" data-dim={phase === 'writing'}>
-        {Array.from({ length: read }, (_, i) => (
+      <div className={s.stack} data-spot="read" data-sheets={readShown} data-dim={phase === 'writing'}>
+        {Array.from({ length: readShown }, (_, i) => (
           <span key={i} className={`${s.sheet} ${s.readSheet}`} style={{ bottom: i * 5 }} />
         ))}
       </div>
@@ -131,9 +138,9 @@ export function TidyScene({ phase }: { phase: RunPhase }) {
           <i key={i} className={i < lines ? s.written : ''} style={{ width: `${[86, 70, 92, 60, 80, 50][i]}%` }} />
         ))}
       </div>
-      <div className={s.folder} data-spot="folder" data-dim={phase !== 'saving' && phase !== 'done'} key={bump}>
+      <div className={s.folder} data-spot="folder" data-filed={filedShown} data-dim={phase !== 'saving' && phase !== 'done'} key={bump}>
         <Icon name="folder" size={52} stroke={1.5} />
-        {filed > 0 && <span className={s.filed}>{filed}</span>}
+        {filedShown > 0 && <span className={s.filed}>{filedShown}</span>}
       </div>
       <span className={s.mid} data-spot="mid" />
       {moving && phase !== 'failed' ? (

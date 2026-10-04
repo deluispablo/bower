@@ -101,7 +101,7 @@ function RunView({ run }: { run: RunState }) {
   const { runs } = useSources();
   return (
     <div>
-      <TidyScene phase={run.phase} />
+      <TidyScene phase={run.phase} {...(run.report ? { filed: run.report.filed.length } : {})} />
       <div role="status" aria-live="polite">
         <p className={s.title}>{runTitle(run)}</p>
         <p className={s.detail}>{runDetail(run)}</p>

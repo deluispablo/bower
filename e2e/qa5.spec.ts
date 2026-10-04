@@ -33,3 +33,15 @@ test('an instant tidy-up ends at once', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
   await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 2500 });
 });
+
+test('the run scene ends with an empty inbox', async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page, '/', 'default', 'demo');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(/Done\. 15 things filed/).last()).toBeVisible({ timeout: 40_000 });
+  await expect(dialog.locator('[data-spot="inbox"]')).toHaveAttribute('data-sheets', '0');
+  await expect(dialog.locator('[data-spot="read"]')).toHaveAttribute('data-sheets', '0');
+  await expect(dialog.locator('[data-spot="folder"]')).toHaveAttribute('data-filed', '15');
+});
