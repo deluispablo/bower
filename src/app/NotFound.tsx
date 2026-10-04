@@ -3,7 +3,7 @@ import { PoseBower } from '@/bird/Bower';
 
 export function NotFound() {
   return (
-    <main style={{ display: 'grid', placeItems: 'center', minHeight: '60vh', textAlign: 'center', padding: 24 }}>
+    <div style={{ display: 'grid', placeItems: 'center', minHeight: '60vh', textAlign: 'center', padding: 24 }}>
       <div>
         <PoseBower pose="wait" size={120} />
         <h1 style={{ fontSize: 28, marginTop: 8 }}>Nothing here</h1>
@@ -12,6 +12,6 @@ export function NotFound() {
         </p>
         <Link to="/">Go to Home</Link>
       </div>
-    </main>
+    </div>
   );
 }

@@ -40,13 +40,13 @@
 .iconBtn.sm { width: 32px; height: 30px; border-radius: 7px; }
 
 /* sheets and dialogs */
-.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 40; animation: fade 0.2s ease; }
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 50; animation: fade 0.2s ease; }
 .sheet {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 41;
+  z-index: 51;
   max-height: 92dvh;
   overflow: auto;
   background: var(--bg-alt);
@@ -77,7 +77,7 @@
 
 /* menus (Radix dropdown and context menus) */
 .menu {
-  z-index: 50;
+  z-index: 55;
   min-width: 220px;
   padding: 6px;
   border-radius: 12px;

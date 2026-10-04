@@ -1,0 +1,7 @@
+.page { max-width: 680px; margin: 0 auto; padding: 24px 22px 60px; font-size: 18px; }
+.page h1 { font-size: 36px; margin: 26px 0 10px; }
+.page h2 { font-size: 20px; margin: 26px 0 6px; }
+.page ul { padding-left: 22px; }
+.page li { margin: 6px 0; }
+.top { margin: 0; }
+.brand { display: inline-flex; align-items: center; gap: 8px; color: var(--heading); text-decoration: none; font: 700 20px var(--font-display); }

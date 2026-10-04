@@ -12,15 +12,22 @@ import { crumbs, routeFor } from '@/app/paths';
 import { plural } from '@/app/words';
 import { Icon, type IconName } from '@/ui/Icon';
 import s from './palette.module.css';
+import { useBackCloses } from '@/ui/back';
+import { useIsDesktop } from '@/ui/media';
 
 /** ⌘K: every action and every note, by typing. */
 export function Palette() {
   const { paletteOpen, setPalette, setTidy, collapseAll, setRightTab } = useUi();
   const prefs = usePrefs();
+  const desktop = useIsDesktop();
   const { data: tree } = useTree();
   const { data: piles } = usePiles();
   const nav = useNavigate();
   const [q, setQ] = useState('');
+  useBackCloses(paletteOpen, () => {
+    setPalette(false);
+    setQ('');
+  });
   const waiting = waitingIn(piles);
   const files = useMemo(() => {
     const out: TreeNode[] = [];
@@ -40,8 +47,8 @@ export function Palette() {
     { id: 'bower', label: 'Tell Bower something', icon: 'send', fn: () => nav('/bower') },
     { id: 'home', label: 'Go to Home', icon: 'home', fn: () => nav('/') },
     { id: 'files', label: 'Open your folders', icon: 'folder', fn: () => nav('/files') },
-    { id: 'collapse', label: 'Collapse all folders', icon: 'collapse', fn: () => collapseAll() },
-    { id: 'outline', label: 'Show the outline', icon: 'outline', fn: () => (prefs.set({ rightOpen: true }), setRightTab('outline')) },
+    ...(desktop ? [{ id: 'collapse', label: 'Collapse all folders', icon: 'collapse' as IconName, fn: () => collapseAll() }] : []),
+    ...(desktop ? [{ id: 'outline', label: 'Show the outline', icon: 'outline' as IconName, fn: () => (prefs.set({ rightOpen: true }), setRightTab('outline')) }] : []),
     { id: 'theme', label: prefs.theme === 'light' ? 'Use the dark theme' : 'Use the light theme', icon: 'sun', fn: () => prefs.set({ theme: prefs.theme === 'light' ? 'dark' : 'light' }) },
     { id: 'moves', label: prefs.birdMoves ? 'Keep Bower still' : 'Let Bower move', icon: 'sparkle', fn: () => prefs.set({ birdMoves: !prefs.birdMoves }) },
     { id: 'settings', label: 'Open settings', icon: 'gear', fn: () => nav('/settings') },
@@ -52,12 +59,18 @@ export function Palette() {
       <Dialog.Portal>
         <Dialog.Overlay className={s.scrim} />
         <Dialog.Content className={s.box} aria-describedby={undefined}>
-          <Dialog.Title className="sr-only">Command palette</Dialog.Title>
-          <Command label="Command palette" loop>
+          <Dialog.Title className="sr-only">{desktop ? 'Command palette' : 'Search'}</Dialog.Title>
+          <Command label={desktop ? 'Command palette' : 'Search'} loop>
             <div className={s.inputRow}>
               <Icon name="search" size={18} />
-              <Command.Input autoFocus value={q} onValueChange={setQ} placeholder="Type a command or a note" className={s.input} />
-              <kbd className={s.kbd}>Esc</kbd>
+              <Command.Input autoFocus value={q} onValueChange={setQ} placeholder={desktop ? 'Type a command or a note' : 'Search notes, folders and actions'} className={s.input} />
+              {desktop ? (
+                <kbd className={s.kbd}>Esc</kbd>
+              ) : (
+                <button type="button" className={s.close} onClick={() => setPalette(false)}>
+                  Cancel
+                </button>
+              )}
             </div>
             <Command.List className={s.list}>
               <Command.Empty className={s.empty}>Nothing by that name.</Command.Empty>
@@ -66,7 +79,7 @@ export function Palette() {
                   <Command.Item key={a.id} value={a.label} onSelect={run(a.fn)} className={s.item}>
                     <Icon name={a.icon} size={18} />
                     <span className={s.label}>{a.label}</span>
-                    {a.hint && <kbd className={s.kbd}>{a.hint}</kbd>}
+                    {a.hint && desktop && <kbd className={s.kbd}>{a.hint}</kbd>}
                   </Command.Item>
                 ))}
               </Command.Group>

@@ -219,7 +219,7 @@ function Questions() {
   if (!qs?.length) return null;
   const answer = (id: string, yes: boolean, label: string): void => {
     vault.answer(id, yes).then(
-      () => toast(`${label}. Bower does it in the next tidy-up.`),
+      () => toast(yes ? `${label}. Bower does it in the next tidy-up.` : 'Got it. Bower leaves it as it is.'),
       () => toast('That answer did not save. Try again.'),
     );
   };
@@ -281,7 +281,8 @@ function JustFiled({ run }: { run: RunState | null }) {
   const recent = useMemo(() => {
     const out: TreeNode[] = [];
     const walk = (ns: TreeNode[]): void => ns.forEach((n) => (n.type === 'file' ? out.push(n) : walk(n.children ?? [])));
-    walk(tree ?? []);
+    // The inbox has its own card; Recent is what lives in your folders.
+    walk((tree ?? []).filter((n) => n.path !== 'Inbox'));
     return out.sort((a, b) => b.modified - a.modified).slice(0, 6);
   }, [tree]);
   if (!recent.length) return null;

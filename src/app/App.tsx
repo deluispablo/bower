@@ -19,6 +19,7 @@ import { Settings } from '@/features/settings/Settings';
 import { BirdLab } from '@/bird/BirdLab';
 import { NotFound } from './NotFound';
 import { DemoPanel } from '@/data/demo/DemoPanel';
+import { Privacy, Terms } from '@/features/legal/Legal';
 
 interface Gate {
   user: User | null;
@@ -72,7 +73,9 @@ function Gatekeeper() {
     return (
       <Routes>
         <Route path="/sign-in" element={<SignIn />} />
-        <Route path="*" element={<Navigate to="/sign-in" replace />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="*" element={<ToSignIn />} />
       </Routes>
     );
   }
@@ -92,7 +95,9 @@ function Signed() {
   return (
     <Routes location={loc}>
       <Route path="/welcome" element={<Welcome />} />
-      <Route path="/sign-in" element={<Navigate to="/" replace />} />
+      <Route path="/sign-in" element={<BackFromSignIn />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route element={<Shell />}>
         <Route index element={<Home />} />
         <Route path="add" element={<Add />} />
@@ -107,4 +112,18 @@ function Signed() {
       </Route>
     </Routes>
   );
+}
+
+/** Signed out on a deep link: remember it, so signing in lands there. */
+function ToSignIn() {
+  const loc = useLocation();
+  const from = loc.pathname === '/' ? '' : `?from=${encodeURIComponent(loc.pathname + loc.search)}`;
+  return <Navigate to={`/sign-in${from}`} replace />;
+}
+
+/** Just signed in: back to where the person was going, if it is a page of this app. */
+function BackFromSignIn() {
+  const loc = useLocation();
+  const from = new URLSearchParams(loc.search).get('from');
+  return <Navigate to={from && from.startsWith('/') && !from.startsWith('//') ? from : '/'} replace />;
 }

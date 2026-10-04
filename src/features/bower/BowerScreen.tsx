@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRules, useRun, useSources } from '@/data/provider';
 import { BowerError } from '@/data/types';
 import { PoseBower, type Pose } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
+import { useUi } from '@/app/ui-store';
 import { SAMPLE_RULES } from '@/data/demo/fixture';
+import { canDictate, dictate } from './dictation';
 import { isRunning } from '@/features/tidy/run-words';
 import s from './bower.module.css';
 
@@ -29,7 +31,9 @@ export function BowerScreen() {
   const [kind, setKind] = useState<'request' | 'rule'>('request');
   const [sent, setSent] = useState<Sent[]>([]);
   const [typing, setTyping] = useState(false);
-  const pose: Pose = typing ? 'wait' : isRunning(run) ? 'write' : 'idle';
+  const [listening, setListening] = useState(false);
+  const stopRef = useRef<(() => void) | null>(null);
+  const pose: Pose = listening ? 'wait' : typing ? 'wait' : isRunning(run) ? 'write' : 'idle';
 
   const send = async (): Promise<void> => {
     const t = text.trim();
@@ -89,9 +93,34 @@ export function BowerScreen() {
           </div>
         )}
         <div className={s.composerFoot}>
-          <Button variant="ghost" size="sm" type="button" onClick={() => toast('Dictation arrives in the next version.')}>
-            <Icon name="mic" size={18} /> Speak
-          </Button>
+          {canDictate() ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              aria-pressed={listening}
+              onClick={() => {
+                if (listening) {
+                  stopRef.current?.();
+                  return;
+                }
+                const before = text ? `${text.trim()} ` : '';
+                setListening(true);
+                stopRef.current = dictate(
+                  (t) => setText(before + t),
+                  (err) => {
+                    setListening(false);
+                    if (err === 'not-allowed') toast('Bower cannot use the microphone. Allow it in the browser.');
+                    else if (err && err !== 'no-speech' && err !== 'aborted') toast('Dictation stopped. Try again.');
+                  },
+                );
+              }}
+            >
+              <Icon name="mic" size={18} /> {listening ? 'Listening… tap to stop' : 'Speak'}
+            </Button>
+          ) : (
+            <span />
+          )}
           <Button size="sm" type="submit" disabled={!text.trim()}>
             <Icon name="send" size={16} /> {kind === 'rule' ? 'Keep this rule' : 'Send'}
           </Button>
@@ -100,25 +129,24 @@ export function BowerScreen() {
 
       {sent.length > 0 && (
         <section className={s.sent} aria-label="Sent">
-          {sent.map((m) => (
+          {sent.map((m, i) => (
             <div key={m.id} className={s.bubble}>
               <p>{m.text}</p>
               <p className={s.bubbleSub}>
                 {m.kind === 'rule' ? 'Saved as you wrote it. In the next tidy-up Bower words it clearly in your rules, and keeps your words next to it.' : 'In your inbox. Bower does it in the next tidy-up.'}
               </p>
-              {(
-
+              {i === 0 && !isRunning(run) && (
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() =>
                     void runs.start('instructions').then(
-                      () => toast('Bower is on it'),
-                      (e: unknown) => toast(e instanceof BowerError ? e.message : 'It did not start.'),
+                      () => useUi.getState().setTidy(true),
+                      (e: unknown) => toast(e instanceof BowerError ? e.message : 'It did not start. Try again in a minute.'),
                     )
                   }
                 >
-                  Do it now
+                  Let Bower read it now
                 </Button>
               )}
             </div>

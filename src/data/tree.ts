@@ -96,7 +96,9 @@ export function renameEntry(entries: Entries, path: string, newName: string, at:
   if (isRoot(path)) throw new BowerError('conflict', 'The main folders keep their names.');
   let name = newName.trim().replace(/[/\\]/g, '-');
   if (!name) throw new BowerError('conflict', 'A name cannot be empty.');
-  if (e.type === 'file' && !extOf(name)) name += extOf(nameOf(path));
+  // A rename never changes a file's type: "Plan v1.2" stays a note (Plan v1.2.md).
+  const ext = extOf(nameOf(path));
+  if (e.type === 'file' && ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
   const folder = parentOf(path);
   if (join(folder, name) === path) return path;
   if (entries.has(join(folder, name))) throw new BowerError('conflict', `There is already a "${displayName(name)}" here.`);

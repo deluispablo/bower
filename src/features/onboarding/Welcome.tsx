@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useSources } from '@/data/provider';
 import { PARA_ROOTS, type ParaRoot } from '@/data/types';
 import { paraColor } from '@/app/paths';
@@ -28,7 +28,10 @@ export function Welcome() {
   const nav = useNavigate();
   const [made, setMade] = useState<ParaRoot[]>([]);
   const [ready, setReady] = useState(false);
-  const [step, setStep] = useState(-1);
+  // Each step is a history entry, so the phone's back button goes back a step.
+  const [params, setParams] = useSearchParams();
+  const step = Math.min(STEPS.length - 1, Math.max(-1, Number(params.get('step') ?? -1)));
+  const setStep = (n: number): void => setParams({ step: String(n) });
   const started = useRef(false);
 
   useEffect(() => {

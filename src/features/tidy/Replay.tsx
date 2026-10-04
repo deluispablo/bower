@@ -11,6 +11,7 @@ import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { useIsDesktop } from '@/ui/media';
 import { landedSummary } from './run-words';
+import { useBackCloses } from '@/ui/back';
 import s from './replay.module.css';
 
 /**
@@ -24,6 +25,11 @@ export function Replay() {
   const { replayRunId, startReplay } = useUi();
   const { data: run } = useRun();
   const { runs } = useSources();
+  const showing = !!replayRunId && !!run && run.id === replayRunId && !!run.report;
+  useBackCloses(showing, () => {
+    if (run) void runs.markSeen(run.id);
+    startReplay(null);
+  });
   if (!replayRunId || !run || run.id !== replayRunId || !run.report) return null;
   const close = (): void => {
     void runs.markSeen(run.id);

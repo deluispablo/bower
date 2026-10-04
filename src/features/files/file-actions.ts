@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useSources } from '@/data/provider';
-import { crumbs, routeFor } from '@/app/paths';
+import { crumbs, decodeSplat, folderRoute, routeFor } from '@/app/paths';
 import { ancestors, useUi } from '@/app/ui-store';
 import { useTabs } from '@/app/tabs-store';
 import { BowerError, type TreeNode } from '@/data/types';
@@ -24,6 +24,23 @@ function fail(e: unknown): void {
 export function useFileActions() {
   const { vault } = useSources();
   const nav = useNavigate();
+  const loc = useLocation();
+  /** The path the screen shows now, if it is a note, a file or a folder. */
+  const shown = loc.pathname.startsWith('/note/')
+    ? decodeSplat(loc.pathname.slice(6))
+    : loc.pathname.startsWith('/files/')
+      ? decodeSplat(loc.pathname.slice(7))
+      : null;
+  /** Keeps the screen on a thing that moved, or leaves it when it is gone. */
+  const follow = (from: string, to: string | null): void => {
+    if (!shown || !(shown === from || shown.startsWith(`${from}/`))) return;
+    if (to === null) {
+      nav(folderRoute(parentOf(from)), { replace: true });
+      return;
+    }
+    const now = to + shown.slice(from.length);
+    nav(loc.pathname.startsWith('/note/') ? routeFor({ path: now, type: 'file' }) : routeFor({ path: now, type: 'folder' }), { replace: true });
+  };
   return useMemo(
     () => ({
       open(node: Pick<TreeNode, 'path' | 'type'>, newTab = false): void {
@@ -38,11 +55,13 @@ export function useFileActions() {
         try {
           const moved = await vault.move(path, to);
           if (moved === path) return path;
+          follow(path, moved);
           useUi.getState().openAll(ancestors(moved));
           if (useUi.getState().selected === path) useUi.getState().select(moved);
           toast(`Moved ${displayName(nameOf(path))} to ${crumbs(to)}`, {
             label: 'Undo',
-            run: () => void vault.move(moved, from).catch(fail),
+            run: () =>
+              void vault.move(moved, from).then((back) => follow(moved, back), fail),
           });
           return moved;
         } catch (e) {
@@ -54,6 +73,7 @@ export function useFileActions() {
         try {
           const to = await vault.rename(path, name);
           if (useUi.getState().selected === path) useUi.getState().select(to);
+          follow(path, to);
           return to;
         } catch (e) {
           fail(e);
@@ -63,6 +83,7 @@ export function useFileActions() {
       async trash(path: string): Promise<void> {
         try {
           await vault.trash(path);
+          follow(path, null);
           toast(`${displayName(nameOf(path))} is in the Bin of your Drive`, {
             label: 'Undo',
             run: () => void vault.restore(path).catch(fail),
@@ -92,6 +113,8 @@ export function useFileActions() {
         toast(`In your Drive, ${displayName(nameOf(path))} opens in a new tab.`);
       },
     }),
-    [vault, nav],
+    // follow reads the current location on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [vault, nav, loc.pathname],
   );
 }

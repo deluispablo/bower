@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 import s from './ui.module.css';
+import { useBackCloses } from './back';
 
 interface Props {
   open: boolean;
@@ -15,6 +16,7 @@ interface Props {
 
 /** A bottom sheet on a phone, a centred dialog on a desktop. */
 export function Sheet({ open, onOpenChange, title, hideTitle, description, children, className = '' }: Props) {
+  useBackCloses(open, () => onOpenChange(false));
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>

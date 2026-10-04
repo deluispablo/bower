@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useSources } from '@/data/provider';
 import { PoseBower } from '@/bird/Bower';
 import { BowerMark } from '@/ui/Icon';
@@ -58,8 +59,8 @@ export function SignIn() {
         )}
         <p className={s.small}>Bower makes one folder in your Drive and works only there. Only people invited to this Bower can sign in.</p>
         <nav aria-label="About" className={s.links}>
-          <a href="#privacy">Privacy</a>
-          <a href="#terms">Terms</a>
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
           <a href="https://github.com/deluispablo" rel="noreferrer">
             Run your own Bower
           </a>

@@ -36,6 +36,6 @@ describe('what a run says', () => {
     };
     expect(runTitle(done)).toBe('Done. 3 things filed');
     expect(runDetail(done)).toBe('1 note brought up to date and 1 question for you.');
-    expect(landedSummary(done)).toBe('Flat hunt got 2, Money got 1.');
+    expect(landedSummary(done)).toBe('Flat hunt got 2 and Money got 1.');
   });
 });

@@ -5,11 +5,13 @@ import { IconButton } from '@/ui/Button';
 import { useUi } from './ui-store';
 import { Explorer } from '@/features/files/Explorer';
 import { RunChip } from '@/features/tidy/RunChip';
+import { useBackCloses } from '@/ui/back';
 import s from './shell.module.css';
 
 /** The phone frame: a tab bar, the tree as a drawer from the left edge, the run chip. */
 export function PhoneShell() {
   const { drawerOpen, setDrawer } = useUi();
+  useBackCloses(drawerOpen, () => setDrawer(false));
   const loc = useLocation();
   useEffect(() => setDrawer(false), [loc.pathname, setDrawer]);
 

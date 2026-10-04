@@ -23,8 +23,8 @@ export function PileScreen() {
   if (piles && !pile)
     return (
       <div className={s.page}>
-        <h1 className={s.title}>This pile is filed</h1>
-        <p className="muted">A tidy-up already put it away.</p>
+        <h1 className={s.title}>This pile is not in the inbox</h1>
+        <p className="muted">A tidy-up filed it, or it was removed.</p>
         <p style={{ marginTop: 12 }}>
           <Link to="/">Back to Home</Link>
         </p>
@@ -44,9 +44,9 @@ export function PileScreen() {
       <div className={s.pileHead}>
         <PileStack items={pile.items} />
         <div>
-          <h1 className={s.title}>{onlyNote ? 'A note' : pile.text || pile.items[0]?.name}</h1>
+          <h1 className={s.title}>{onlyNote ? 'Your note' : pile.text || pile.items[0]?.name}</h1>
           <p className="muted">
-            {onlyNote ? 'Bower files it as a note where it belongs' : plural(thingsIn(pile), 'thing')}, added {ago(pile.createdAt).toLowerCase()}
+            {onlyNote ? 'A note' : plural(thingsIn(pile), 'thing')}, added {ago(pile.createdAt).toLowerCase()}. {onlyNote ? 'Bower files it as a note where it belongs.' : ''}
           </p>
         </div>
       </div>
@@ -70,7 +70,7 @@ export function PileScreen() {
       )}
       <div className={s.footer}>
         <Button block disabled={running} onClick={() => useUi.getState().setTidy(true)}>
-          {running ? 'A tidy-up is running' : 'Tidy up'}
+          {running ? 'A tidy-up is running' : 'Tidy up the inbox'}
         </Button>
         {!confirm ? (
           <Button variant="ghost" block disabled={running} onClick={() => setConfirm(true)}>
@@ -138,6 +138,9 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         disabled={locked}
         placeholder="One line about these things helps Bower most"
         onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          if (changed && !locked && (text.trim() || pile.items.length)) void save();
+        }}
       />
       <div className={s.noteFoot}>
         <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? `Saved as ${PILE_NOTE} with the pile.` : 'No note yet.'}</span>

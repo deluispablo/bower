@@ -120,6 +120,10 @@ export function landedSummary(r: RunState): string {
     const name = /^\d{4}(-\d{2})?$/.test(last) && parts.length > 1 ? `${parts[parts.length - 2]} ${last}` : last;
     per.set(name, (per.get(name) ?? 0) + 1);
   }
-  const parts = [...per.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${k} got ${n}`);
-  return parts.length ? `${parts.join(', ')}.` : '';
+  const all = [...per.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const parts = all.slice(0, 2).map(([k, n]) => `${k} got ${n}`);
+  const rest = all.slice(2);
+  if (rest.length === 1) parts.push(`${rest[0]?.[0]} got ${rest[0]?.[1]}`);
+  else if (rest.length > 1) parts.push(`${rest.length} other folders got the rest`);
+  return parts.length ? `${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : '';
 }

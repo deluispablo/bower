@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useNote, useSources, useTree } from '@/data/provider';
 import { displayName, findNode, nameOf, parentOf } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
@@ -23,6 +23,7 @@ export function NoteScreen() {
   const { data: tree } = useTree();
   const node = tree ? findNode(tree, path) : null;
   if (tree && !node) return <Gone />;
+  if (node?.type === 'folder') return <Navigate to={folderRoute(node.path)} replace />;
   if (node && node.kind !== 'note') return <FileView node={node} />;
   return <NoteView path={path} />;
 }

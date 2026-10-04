@@ -62,7 +62,13 @@ export function bootFail(kind: 'offline' | 'error', retry: () => void): void {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.textContent = 'Try again';
-  btn.addEventListener('click', retry);
+  btn.style.display = 'block';
+  btn.style.margin = '18px auto 0';
+  btn.addEventListener('click', () => {
+    btn.textContent = 'Trying…';
+    btn.disabled = true;
+    setTimeout(retry, 300);
+  });
   l.appendChild(btn);
   l.classList.add('show');
   btn.focus();

@@ -84,6 +84,8 @@ export class DemoWorld {
   private seq = 0;
   /** The fail-run scenario fails one tidy-up; trying again works. */
   private failedOnce = false;
+  /** The piles a run took when it started; piles added later wait for the next one. */
+  private runPiles = new Set<string>();
   readonly scenario: Scenario;
   readonly scale: TimeScale;
   private latency: number;
@@ -156,6 +158,18 @@ export class DemoWorld {
     }
   }
 
+
+  /** Keeps every note's content when it or its folder moves (cached or not). */
+  private carryNotes(from: string, to: string): void {
+    const under = (p: string): boolean => p === from || p.startsWith(`${from}/`);
+    const affected = [...this.entries.values()].filter((e) => e.type === 'file' && e.kind === 'note' && under(e.path)).map((e) => e.path);
+    const contents = affected.map((p) => [p, this.noteFor(p)] as const);
+    for (const [p, n] of contents) {
+      this.notes.delete(p);
+      const np = to + p.slice(from.length);
+      this.notes.set(np, { ...n, path: np, title: p === from ? displayName(nameOf(np)) : n.title });
+    }
+  }
 
   private touchRules(): void {
     const e = this.entries.get('Rules.md');
@@ -346,7 +360,7 @@ export class DemoWorld {
       }
       r.phase = to;
       r.phaseAt = now;
-      if (to === 'reading') r.total = this.inboxCount();
+      if (to === 'reading') r.total = this.piles.filter((p) => this.runPiles.has(p.id)).reduce((n, p) => n + thingsIn(p), 0);
       if (to === 'done') {
         const yourChanges = this.journal.length;
         r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: this.questions };
@@ -364,7 +378,8 @@ export class DemoWorld {
   /** Files every inbox thing as the run would, and returns the report. */
   private fileInbox(at: number): RunReport {
     const filed: FiledItem[] = [];
-    for (const pile of this.piles) {
+    const taken = this.piles.filter((p) => !this.runPiles.size || this.runPiles.has(p.id));
+    for (const pile of taken) {
       if (!pile.items.length && pile.text.trim()) {
         const plan = this.plans.get(`${pile.id}-note`) ?? { title: `${pile.text.trim().slice(0, 48).replace(/[/\\:*?"<>|]+/g, ' ')}.md`, to: this.guess(pile.text, 'note') };
         ensureFolders(this.entries, join(plan.to, 'x'), at);
@@ -403,7 +418,8 @@ export class DemoWorld {
         filed.push(f);
       }
     }
-    this.piles = [];
+    this.piles = this.piles.filter((p) => !taken.includes(p));
+    this.runPiles = new Set();
     this.syncInbox();
     const touch = (p: string): void => {
       const e = this.entries.get(p);
@@ -480,19 +496,19 @@ export class DemoWorld {
       note: (path) => this.wait(() => this.noteFor(path)),
       move: (path, to) =>
         change(() => {
-          const out = moveEntry(this.entries, path, to, Date.now());
-          const n = this.notes.get(path);
-          this.notes.delete(path);
-          if (n) this.notes.set(out, { ...n, path: out });
+          const before = new Map(this.entries);
+          const out = moveEntry(before, path, to, Date.now());
+          this.carryNotes(path, out);
+          this.entries = before;
           if (out !== path) this.record('move', `Moved ${displayName(nameOf(path))} to ${to.replaceAll('/', ' / ')}`, out);
           return out;
         }),
       rename: (path, name) =>
         change(() => {
-          const out = renameEntry(this.entries, path, name, Date.now());
-          const n = this.notes.get(path);
-          this.notes.delete(path);
-          if (n) this.notes.set(out, { ...n, path: out, title: displayName(nameOf(out)) });
+          const next = new Map(this.entries);
+          const out = renameEntry(next, path, name, Date.now());
+          this.carryNotes(path, out);
+          this.entries = next;
           if (out !== path) this.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, out);
           return out;
         }),
@@ -617,6 +633,7 @@ export class DemoWorld {
           if (scope === 'all' && !this.inboxCount()) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
           if (scope === 'instructions' && !this.journal.length) throw new BowerError('conflict', 'There is nothing new for Bower to read.');
           this.run = this.newRun(scope, Date.now());
+          this.runPiles = new Set(this.piles.map((p) => p.id));
           this.advance('queued', PHASE_MS[this.scale].queued);
           this.emitRun();
           return this.run;

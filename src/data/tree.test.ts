@@ -62,7 +62,13 @@ describe('the folder tree', () => {
   it('keeps the extension on rename and refuses a taken name', () => {
     const m = make(base);
     expect(renameEntry(m, 'Projects/Flat hunt/Lease.pdf', 'Lease 2026', 1)).toBe('Projects/Flat hunt/Lease 2026.pdf');
-    expect(() => renameEntry(m, 'Projects/Flat hunt/A.md', 'Lease 2026.pdf', 1)).toThrow(/already/);
+    const n = make([...base, 'Projects/Flat hunt/B.md']);
+    expect(() => renameEntry(n, 'Projects/Flat hunt/B.md', 'A', 1)).toThrow(/already/);
+  });
+
+  it('keeps a note a note when its new name has a dot', () => {
+    const m = make(base);
+    expect(renameEntry(m, 'Projects/Flat hunt/A.md', 'Plan v1.2', 1)).toBe('Projects/Flat hunt/Plan v1.2.md');
   });
 
   it('sorts folders first, then files in the chosen order', () => {

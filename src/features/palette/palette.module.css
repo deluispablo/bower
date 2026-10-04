@@ -11,3 +11,5 @@
 .label { flex: none; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .path { margin-left: auto; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .empty { padding: 18px; color: var(--text-muted); }
+.close { border: 0; background: none; color: var(--brand-line); font: 600 16px var(--font-body); cursor: pointer; padding: 6px; }
+@media (max-width: 899px) { .box { top: 8px; } }

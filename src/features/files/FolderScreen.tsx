@@ -5,11 +5,14 @@ import { countFiles, displayName, findNode, parentOf, sortNodes, type SortOrder 
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
-import { ago } from '@/app/words';
+import { ago, plural } from '@/app/words';
 import { useIsDesktop } from '@/ui/media';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
 import { Explorer } from './Explorer';
+import { Sheet } from '@/ui/Sheet';
+import { Button } from '@/ui/Button';
+import { toast } from '@/ui/toast';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
 
@@ -23,6 +26,7 @@ export function FolderScreen() {
       return (
         <div className={s.filesPage}>
           <h1 className={s.pageTitle}>Files</h1>
+          <PhoneBookmarks />
           <Explorer variant="page" />
         </div>
       );
@@ -43,7 +47,7 @@ function RootOverview() {
             <Link to={folderRoute(n.path)} className={s.rootCard}>
               <span className={s.dot} style={{ background: paraColor(n.path) }} />
               <span className={s.rootName}>{n.name}</span>
-              <span className="muted">{countFiles(n)} things</span>
+              <span className="muted">{plural(countFiles(n), 'thing')}</span>
             </Link>
           </li>
         ))}
@@ -59,7 +63,6 @@ function Folder({ path }: { path: string }) {
   const { data: tree, loading } = useTree();
   const desktop = useIsDesktop();
   const nav = useNavigate();
-  const act = useFileActions();
   const sort = useUi((u) => u.sort);
   const [view, setView] = useState<View>(() => {
     try {
@@ -84,10 +87,20 @@ function Folder({ path }: { path: string }) {
     return (
       <div className={s.page}>
         <h1 className={s.title}>Not here any more</h1>
-        <p className="muted">This folder may have been moved or renamed.</p>
+        <p className="muted">This folder may have been moved, renamed or put in the Bin.</p>
+        <p style={{ marginTop: 14 }}>
+          <Link to="/files">Look in your folders</Link>
+        </p>
       </div>
     );
-  if (!node) return <div className={s.page} aria-busy="true" />;
+  if (!node)
+    return (
+      <div className={s.page} aria-busy="true" aria-label="Opening the folder">
+        {[40, 90, 80, 85, 70].map((w, i) => (
+          <span key={i} className={s.skel} style={{ width: `${w}%`, height: i === 0 ? 34 : 44 }} />
+        ))}
+      </div>
+    );
 
   const parent = parentOf(path);
   return (
@@ -111,7 +124,7 @@ function Folder({ path }: { path: string }) {
             <span className={s.dotBig} style={{ background: paraColor(path) }} />
             {node.name}
           </h1>
-          <p className="muted">{countFiles(node)} things</p>
+          <p className="muted">{plural(countFiles(node), 'thing')}</p>
         </div>
         <div className={s.views} role="radiogroup" aria-label="View">
           <button type="button" role="radio" aria-checked={view === 'list'} onClick={() => changeView('list')}>
@@ -126,9 +139,7 @@ function Folder({ path }: { path: string }) {
       {children.length === 0 ? (
         <div className={s.empty}>
           <p>Nothing in here yet.</p>
-          <button type="button" className={s.linkBtn} onClick={() => void act.create(path, 'note')}>
-            New note in {node.name}
-          </button>
+          <NewNoteButton folder={path} label={`New note in ${node.name}`} />
         </div>
       ) : view === 'list' ? (
         <ul className={s.list}>
@@ -138,7 +149,7 @@ function Folder({ path }: { path: string }) {
                 <span className={s.tile}>{c.type === 'folder' ? <Icon name="folder" /> : c.byBower ? <BowerHead size={20} /> : <Icon name={c.kind === 'image' ? 'image' : c.kind === 'link' ? 'link' : 'file'} />}</span>
                 <span className={s.main}>
                   <span className={c.type === 'file' && c.kind !== 'note' ? `${s.name} ${s.mono}` : s.name}>{c.type === 'folder' ? c.name : displayName(c.name)}</span>
-                  <span className={s.sub}>{c.type === 'folder' ? `${countFiles(c)} things` : `Changed ${ago(c.modified).toLowerCase()}`}</span>
+                  <span className={s.sub}>{c.type === 'folder' ? plural(countFiles(c), 'thing') : `Changed ${ago(c.modified).toLowerCase()}`}</span>
                 </span>
                 {c.isNew && <span className={s.new}>New</span>}
                 <Icon name="chev" size={16} />
@@ -150,6 +161,69 @@ function Folder({ path }: { path: string }) {
         <FolderTable items={children.filter((c) => !c.hub)} />
       )}
     </div>
+  );
+}
+
+/** Inside a link card, wikilinks read as their names. */
+const plainLinks = (t: string): string => t.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, a: string, b?: string) => b ?? a);
+
+function PhoneBookmarks() {
+  const { bookmarks } = useUi();
+  const act = useFileActions();
+  if (!bookmarks.length) return null;
+  return (
+    <section className={s.bookmarks} aria-label="Bookmarks">
+      {bookmarks.map((b) => {
+        const folder = !/\.[A-Za-z0-9]{1,5}$/.test(b);
+        return (
+          <button key={b} type="button" onClick={() => act.open({ path: b, type: folder ? 'folder' : 'file' })}>
+            <Icon name="bookmark" size={14} />
+            {displayName(b.slice(b.lastIndexOf('/') + 1))}
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+/** A new note gets its name first, then opens. */
+function NewNoteButton({ folder, label }: { folder: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const { vault } = useSources();
+  const act = useFileActions();
+  const make = async (): Promise<void> => {
+    const n = name.trim();
+    if (!n) return;
+    try {
+      const path = await vault.create(folder, 'note', `${n.replace(/[/\\]/g, '-')}.md`);
+      setOpen(false);
+      setName('');
+      act.open({ path, type: 'file' });
+    } catch {
+      toast('The note was not made. Try again.');
+    }
+  };
+  return (
+    <>
+      <button type="button" className={s.linkBtn} onClick={() => setOpen(true)}>
+        {label}
+      </button>
+      <Sheet open={open} onOpenChange={setOpen} title="New note" description={`In ${crumbs(folder)}`}>
+        <form
+          className={s.nameForm}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void make();
+          }}
+        >
+          <input autoFocus aria-label="Name of the note" placeholder="Name of the note" value={name} onChange={(e) => setName(e.target.value)} />
+          <Button type="submit" disabled={!name.trim()}>
+            Make the note
+          </Button>
+        </form>
+      </Sheet>
+    </>
   );
 }
 
@@ -168,8 +242,8 @@ function HubSummary({ hub }: { hub: TreeNode }) {
     <Link to={routeFor(hub)} className={s.hub}>
       <BowerHead size={22} />
       <span>
-        <span className={s.hubTitle}>{note.summary || `About ${note.title}`}</span>
-        {note.currentState[0] && <span className={s.sub}>{note.currentState[0]}</span>}
+        <span className={s.hubTitle}>{plainLinks(note.summary) || `About ${note.title}`}</span>
+        {note.currentState[0] && <span className={s.sub}>{plainLinks(note.currentState[0])}</span>}
       </span>
     </Link>
   );

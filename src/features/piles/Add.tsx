@@ -10,6 +10,9 @@ import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import s from './piles.module.css';
+import { normaliseLink } from './link';
+
+const DRAFT_KEY = 'bower:add-draft';
 
 interface Draft {
   key: string;
@@ -25,7 +28,22 @@ interface Draft {
 export function Add() {
   const { vault } = useSources();
   const nav = useNavigate();
-  const [text, setText] = useState('');
+  const [text, setTextState] = useState(() => {
+    try {
+      return sessionStorage.getItem(DRAFT_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const setText = (v: string): void => {
+    setTextState(v);
+    try {
+      if (v) sessionStorage.setItem(DRAFT_KEY, v);
+      else sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Without storage the draft lasts while the screen is open.
+    }
+  };
   const [items, setItems] = useState<Draft[]>([]);
   const [link, setLink] = useState('');
   const [over, setOver] = useState(false);
@@ -47,9 +65,12 @@ export function Add() {
   };
   const fromFiles = (fl: FileList | null, origin: string): void => add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin })));
   const addLink = (): void => {
-    const v = link.trim();
-    if (!v) return;
-    add([{ name: v.replace(/^https?:\/\//, ''), kind: 'link', origin: 'A link you pasted' }]);
+    const v = normaliseLink(link);
+    if (!v) {
+      toast('That does not look like a link.');
+      return;
+    }
+    add([{ name: v.replace(/^https?:\/\//, '').replace(/\/$/, ''), kind: 'link', origin: 'A link you pasted' }]);
     setLink('');
   };
   const onDrop = (e: DragEvent): void => {
@@ -61,6 +82,7 @@ export function Add() {
     setBusy(true);
     try {
       await vault.addPile({ text, items: items.map(({ name, kind, origin }) => ({ name, kind, origin })) });
+      setText('');
       toast(items.length ? `${plural(items.length, 'thing')} in the inbox` : 'Your note is in the inbox', { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
       nav('/');
     } catch (e) {
@@ -117,7 +139,7 @@ export function Add() {
           }}
         >
           <Icon name="link" size={18} />
-          <input type="url" inputMode="url" placeholder="Paste a link" aria-label="Paste a link" value={link} onChange={(e) => setLink(e.target.value)} />
+          <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="Paste a link" aria-label="Paste a link" value={link} onChange={(e) => setLink(e.target.value)} />
           <Button size="sm" variant="ghost" type="submit" disabled={!link.trim()}>
             Add link
           </Button>

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useRun, useSources } from '@/data/provider';
 import { useUi } from '@/app/ui-store';
 import { toast } from '@/ui/toast';
+import { usePrefs } from '@/app/prefs';
 import { hasReplay, runTitle } from './run-words';
 
 /** Says so when a run ends while its sheet is hidden. */
@@ -15,6 +16,10 @@ export function useRunWatcher(): void {
     const before = last.current;
     last.current = key;
     if (!before || before === key || !before.startsWith(`${run.id}:`)) return;
+    // In the background, a notification says it ended (when the person asked for one).
+    if ((run.phase === 'done' || run.phase === 'failed') && document.hidden && usePrefs.getState().notifyRuns && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification('Bower', { body: runTitle(run), icon: '/favicon.svg' });
+    }
     if (run.phase === 'done' && !hasReplay(run)) {
       // Nothing to replay (a run that only read your changes): say so, and it is
       // seen. With the sheet open, the sheet shows it and marks it seen on close.

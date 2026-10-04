@@ -26,6 +26,22 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
   );
 }
 
+/** Turning notifications on asks the browser first; a refusal keeps the switch off and says why. */
+async function setNotify(on: boolean, save: (on: boolean) => void): Promise<void> {
+  if (!on) return save(false);
+  if (typeof Notification === 'undefined') {
+    toast('This browser cannot show notifications.');
+    return save(false);
+  }
+  const answer = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (answer !== 'granted') {
+    toast('Notifications are blocked for Bower in this browser. Allow them in its settings.');
+    return save(false);
+  }
+  save(true);
+  toast('Bower tells you here when a tidy-up ends.');
+}
+
 export function Settings() {
   const prefs = usePrefs();
   const { data: rules } = useRules();
@@ -49,10 +65,10 @@ export function Settings() {
 
       <h2 className={s.h2}>Tidying up</h2>
       <Row title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
-        <Toggle on label="Look things up on the web" onChange={() => toast('Saved for your next tidy-up.')} />
+        <Toggle on={prefs.lookUpWeb} label="Look things up on the web" onChange={(v) => prefs.set({ lookUpWeb: v })} />
       </Row>
       <Row title="Tell me when a tidy-up ends" sub="A notification on this device">
-        <Toggle on={false} label="Tell me when a tidy-up ends" onChange={() => toast('Notifications arrive in the next version.')} />
+        <Toggle on={prefs.notifyRuns} label="Tell me when a tidy-up ends" onChange={(v) => void setNotify(v, (on) => prefs.set({ notifyRuns: on }))} />
       </Row>
 
       <h2 className={s.h2}>This device</h2>

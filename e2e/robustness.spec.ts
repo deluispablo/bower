@@ -73,3 +73,14 @@ test('letting Bower read your changes gives a short run with no replay', async (
   await expect(page.getByText(/Done\. Bower read your changes/).last()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Watch what Bower did' })).toHaveCount(0);
 });
+
+test('back closes an open sheet and leaves the page where it was', async ({ page }) => {
+  await open(page, '/files', 'running', 'real');
+  await page.getByRole('link', { name: /^Home/ }).first().click();
+  await expect(page).toHaveURL(/\/(\?|$)/);
+  await page.getByRole('button', { name: /Search your notes/ }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/(\?|$)/);
+});

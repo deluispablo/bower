@@ -3,8 +3,9 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { useTree } from '@/data/provider';
-import { countFiles, displayName, findNode, isRoot, parentOf, visibleRows, type SortOrder } from '@/data/tree';
+import { displayName, findNode, isRoot, parentOf, visibleRows, type SortOrder } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
+import { PILE_NOTE } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
 import { decodeSplat, paraColor } from '@/app/paths';
 import { IconButton } from '@/ui/Button';
@@ -12,6 +13,7 @@ import { Icon, BowerHead } from '@/ui/Icon';
 import { menuCls } from '@/ui/menu';
 import { Sheet } from '@/ui/Sheet';
 import { useFileActions } from './file-actions';
+import { toast } from '@/ui/toast';
 import s from './explorer.module.css';
 
 const SORTS: Array<[SortOrder, string] | null> = [
@@ -24,6 +26,12 @@ const SORTS: Array<[SortOrder, string] | null> = [
   ['created-new', 'Created time (new to old)'],
   ['created-old', 'Created time (old to new)'],
 ];
+
+/** Things in a folder, not counting the notes that describe piles. */
+function countThings(n: TreeNode): number {
+  if (n.type === 'file') return n.name === PILE_NOTE ? 0 : 1;
+  return (n.children ?? []).reduce((t, c) => t + countThings(c), 0);
+}
 
 const KIND_BADGE: Record<string, string> = { pdf: 'pdf', image: 'jpg', link: 'link', doc: 'doc', sheet: 'sheet', audio: 'audio' };
 
@@ -89,10 +97,11 @@ export function Explorer({ variant }: Props) {
 
   const nodeAt = (path: string | null): TreeNode | null => (path ? findNode(roots, path) : null);
 
+  /** Where New note and New folder put things: the selected folder, else the open note's, else Resources. */
   const targetFolder = (): string => {
-    const n = nodeAt(ui.selected);
-    if (!n) return 'Inbox';
-    return n.type === 'folder' ? n.path : parentOf(n.path) || 'Inbox';
+    const n = nodeAt(ui.selected) ?? nodeAt(routePath);
+    const f = !n ? '' : n.type === 'folder' ? n.path : parentOf(n.path);
+    return f && !f.startsWith('Inbox') ? f : 'Resources';
   };
 
   /**
@@ -317,7 +326,7 @@ export function Explorer({ variant }: Props) {
         )}
         {badge && !renaming && <span className={s.badge}>{badge}</span>}
         {node.isNew && <span className={s.newDot} title="New since you last looked" aria-label="New" />}
-        {folder && !isOpen && <span className={s.count}>{countFiles(node)}</span>}
+        {folder && !isOpen && <span className={s.count}>{countThings(node)}</span>}
       </div>
     );
   };
@@ -355,6 +364,7 @@ export function Explorer({ variant }: Props) {
           </Dropdown.Content>
         </Dropdown.Portal>
       </Dropdown.Root>
+      {desktop && (
       <IconButton
         small
         label="Reveal the open note"
@@ -368,6 +378,7 @@ export function Explorer({ variant }: Props) {
       >
         <Icon name="reveal" size={18} />
       </IconButton>
+      )}
       <IconButton
         small
         label={ui.open.size ? 'Collapse all' : 'Expand all'}
@@ -395,7 +406,6 @@ export function Explorer({ variant }: Props) {
       tabIndex={0}
       aria-activedescendant={current ? `row-${encodeURIComponent(current)}` : undefined}
       onKeyDown={onKey}
-      onFocus={() => setKb(true)}
       onBlur={() => setKb(false)}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOn(null);
@@ -479,7 +489,15 @@ export function useNodeMenu(node: TreeNode) {
     items.push({ key: 'rename', label: 'Rename', icon: 'rename', run: () => ui.setRenaming(node.path) });
     items.push({ key: 'move', label: 'Move to…', icon: 'move', run: () => ui.setMoveFor(node.path) });
   }
-  items.push({ key: 'bm', label: marked ? 'Remove bookmark' : 'Bookmark', icon: 'bookmark', run: () => ui.toggleBookmark(node.path) });
+  items.push({
+    key: 'bm',
+    label: marked ? 'Remove bookmark' : 'Bookmark',
+    icon: 'bookmark',
+    run: () => {
+      ui.toggleBookmark(node.path);
+      toast(marked ? 'Bookmark removed' : 'Bookmarked. Find it at the top of Files.');
+    },
+  });
   items.push({ key: 'link', label: 'Copy link', icon: 'link', run: () => act.copyLink(node) });
   items.push({ key: 'drive', label: 'Open in Drive', icon: 'drive', run: () => act.openInDrive(node.path) });
   if (!root) {

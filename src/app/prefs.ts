@@ -7,6 +7,10 @@ interface Prefs {
   theme: Theme;
   /** "Bower moves": off holds Bower still everywhere. */
   birdMoves: boolean;
+  /** "Look things up on the web" (phase 2: an account setting kept by the Worker). */
+  lookUpWeb: boolean;
+  /** "Tell me when a tidy-up ends": a notification when the app is in the background. */
+  notifyRuns: boolean;
   leftWidth: number;
   rightWidth: number;
   leftOpen: boolean;
@@ -28,6 +32,8 @@ function load(): Partial<Prefs> {
 export const usePrefs = create<Prefs>((set, get) => ({
   theme: 'system',
   birdMoves: true,
+  lookUpWeb: true,
+  notifyRuns: false,
   leftWidth: 300,
   rightWidth: 320,
   leftOpen: true,
