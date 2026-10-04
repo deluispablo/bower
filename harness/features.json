@@ -1114,6 +1114,6 @@
     "what": "When notifications are blocked, only a passing toast says so; the row never does.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the notifications row says when they are blocked\"",
-    "passes": false
+    "passes": true
   }
 ]

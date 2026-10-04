@@ -175,3 +175,11 @@ test("Escape on a new note's name takes it back", async ({ page, isMobile }) => 
   await expect(page).not.toHaveURL(/\/note\//);
   await expect(tree.getByRole('treeitem', { name: /^(Untitled|Soup ideas)/ })).toHaveCount(0);
 });
+
+test('the notifications row says when they are blocked', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'Notification', { value: { permission: 'denied', requestPermission: () => Promise.resolve('denied') } });
+  });
+  await open(page, '/settings');
+  await expect(page.getByText('Blocked in this browser. Allow them in its settings to turn this on.')).toBeVisible();
+});

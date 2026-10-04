@@ -105,3 +105,4 @@ failed-card-dismiss	1a3aa85010dac8ff	2026-10-04	green-before: landed in 0a2c48e 
 web-source-links	efda7dab831acb3e	2026-10-04	red
 palette-search-error	d0c781bd42c97214	2026-10-04	red
 new-note-escape	bc1ee97e4878c622	2026-10-04	green-before: not reproducible: Escape after typing already discards the note; the test pins it
+notify-row-state	a6da6373e120bd87	2026-10-04	red

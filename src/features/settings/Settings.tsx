@@ -54,6 +54,8 @@ async function setNotify(on: boolean, save: (on: boolean) => void): Promise<void
 }
 
 export function Settings() {
+  // Read each time Settings shows: the person may have allowed them in the browser meanwhile.
+  const blocked = typeof Notification !== 'undefined' && Notification.permission === 'denied';
   const { data: user } = useUser();
   const prefs = usePrefs();
   const { data: rules } = useRules();
@@ -79,7 +81,7 @@ export function Settings() {
       <Row title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
         <Toggle on={prefs.lookUpWeb} label="Look things up on the web" onChange={(v) => prefs.set({ lookUpWeb: v })} />
       </Row>
-      <Row title="Tell me when a tidy-up ends" sub="A notification on this device">
+      <Row title="Tell me when a tidy-up ends" sub={blocked ? 'Blocked in this browser. Allow them in its settings to turn this on.' : 'A notification on this device'}>
         <Toggle on={prefs.notifyRuns} label="Tell me when a tidy-up ends" onChange={(v) => void setNotify(v, (on) => prefs.set({ notifyRuns: on }))} />
       </Row>
 
