@@ -194,7 +194,7 @@
       "Enter"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"Move to works from the keyboard\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "new-note-opens",

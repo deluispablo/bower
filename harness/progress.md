@@ -23,3 +23,4 @@
 - 2026-10-04: instant-fast passes — fix(fake): the pretend Worker is asked every 300 ms while a run goes
 - 2026-10-04: scene-matches-result passes — fix(tidy): the run scene ends as the result says: empty inbox, the real count in the folder
 - 2026-10-04: tree-focus-after-move passes — fix(explorer): keyboard focus follows a row that moved
+- 2026-10-04: move-keyboard passes — fix(move): Enter takes the first folder that matches; arrows walk the list
