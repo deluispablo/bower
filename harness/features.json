@@ -1876,8 +1876,8 @@
       "Run in a terminal in the repo:",
       "Close an entry --fixed-in <sha> after later commits touched the same file: only that commit's change is undone (git apply -R), and the red is about it."
     ],
-    "verify": "pnpm vitest run src/harness.test.ts -t \"fixed-in undoes only that commit\"",
-    "passes": false
+    "verify": "pnpm vitest run src/harness-git.test.ts -t \"fixed-in undoes only that commit|fixed-in reads renamed paths\"",
+    "passes": true
   },
   {
     "id": "link-files-url",

@@ -48,7 +48,9 @@ others=$(node --input-type=module -e '
 excl='\.test\.tsx?$|^e2e/|^src/data/contract/|^src/testing/'
 paths="src public index.html vite.config.ts scripts package.json AGENTS.md docs"
 # Changed or new code (tests and the harness's own records stay): the change being proved.
-code=$(git status --porcelain --untracked-files=all -- $paths | sed 's/^...//' | grep -vE "$excl" || true)
+cp scripts/harness-git.mjs "$(dirname "$HARNESS_RULES")/harness-git.mjs"
+export HARNESS_GIT="$(dirname "$HARNESS_RULES")/harness-git.mjs"
+code=$(git status --porcelain --untracked-files=all -- $paths | node --input-type=module -e 'const { statusPaths } = await import(process.env.HARNESS_GIT); let t = ""; for await (const c of process.stdin) t += c; console.log(statusPaths(t).join("\n"));' | grep -vE "$excl" || true)
 expect_red() {
   if bash -c "$verify" >"$log" 2>&1; then
     echo "The verify passes without the change: it does not pin it. Fix the test."; exit 1
@@ -78,9 +80,10 @@ case "$mode" in
     [ -z "$fix" ] && { echo "$sha changes no code."; exit 1; }
     echo "red: putting back $(echo "$fix" | wc -l | tr -d ' ') file(s) as they were before $sha and running the verify…"
     trap 'git checkout --quiet HEAD -- $fix 2>/dev/null; git clean -fq -- $fix' EXIT
-    for f in $fix; do
-      if git cat-file -e "$sha^:$f" 2>/dev/null; then git show "$sha^:$f" > "$f"; else rm -f "$f"; fi
-    done
+    # Only that commit's change goes back; later edits to the same files stay.
+    if ! node --input-type=module -e 'const { undoCommit } = await import(process.env.HARNESS_GIT); process.exit(undoCommit(process.argv[1], process.argv.slice(2)) ? 0 : 1);' "$sha" $fix; then
+      echo "$sha's change no longer comes off cleanly (later commits touched the same lines): prove the red by hand and close with --known-green and a committed note."; exit 1
+    fi
     expect_red
     git checkout --quiet HEAD -- $fix 2>/dev/null || true; trap - EXIT
     [ -n "$(git status --porcelain -- $fix)" ] && { echo "Could not restore the fix's files."; exit 1; }
