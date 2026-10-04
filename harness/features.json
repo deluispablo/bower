@@ -181,7 +181,7 @@
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"after a move the tree keeps keyboard focus\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "move-keyboard",

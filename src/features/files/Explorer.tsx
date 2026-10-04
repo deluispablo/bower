@@ -91,7 +91,18 @@ export function Explorer({ variant }: Props) {
   const roots = useMemo(() => tree ?? [], [tree]);
   // A folder's own note (Flat hunt/Flat hunt.md) is the folder: it opens from the folder view.
   const rows = useMemo(() => visibleRows(roots, ui.open, ui.sort).filter((r) => !r.node.hub), [roots, ui.open, ui.sort]);
-  const current = focus ?? ui.selected ?? rows[0]?.node.path ?? null;
+  const visible = (p: string | null): p is string => !!p && rows.some((r) => r.node.path === p);
+  // Keyboard focus follows a row that moved or was renamed; a row that is gone gives way to the selection.
+  const current = (visible(focus) ? focus : null) ?? (focus && visible(ui.whereNow(focus)) ? ui.whereNow(focus) : null) ?? (visible(ui.selected) ? ui.selected : null) ?? rows[0]?.node.path ?? null;
+
+  // A row moved into a closed folder: open the way to it, so focus can stay on it.
+  useEffect(() => {
+    if (!focus || visible(focus)) return;
+    const now = ui.whereNow(focus);
+    const closed = now ? [...ancestors(now)].filter((p) => !ui.open.has(p)) : [];
+    if (closed.length) ui.openAll(closed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, rows]);
 
   useEffect(() => {
     if (!kb || !current) return;

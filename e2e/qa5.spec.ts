@@ -45,3 +45,47 @@ test('the run scene ends with an empty inbox', async ({ page }) => {
   await expect(dialog.locator('[data-spot="read"]')).toHaveAttribute('data-sheets', '0');
   await expect(dialog.locator('[data-spot="folder"]')).toHaveAttribute('data-filed', '15');
 });
+
+test.describe('the explorer from the keyboard', () => {
+  test.skip(({ isMobile }) => isMobile, 'the desktop tree');
+
+  test('after a move the tree keeps keyboard focus', async ({ page }) => {
+    await open(page, '/');
+    const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+    await tree.getByRole('treeitem', { name: /Lease draft/ }).click();
+    await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Move to…' }).click();
+    await page.getByLabel('Find a folder').fill('Documents');
+    await page.getByRole('button', { name: /^Documents/ }).first().click();
+    await expect(tree).toHaveAttribute('aria-activedescendant', `row-${encodeURIComponent('Areas/Documents/Lease draft.pdf')}`);
+    await expect(page.locator(`#row-${CSS_ESCAPE('Areas/Documents/Lease draft.pdf')}`)).toHaveCount(1);
+  });
+
+  test('Move to works from the keyboard', async ({ page }) => {
+    await open(page, '/');
+    const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+    await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Move to…' }).click();
+    await page.getByLabel('Find a folder').fill('Documents');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status').getByText(/Moved Lease draft\.pdf to Areas \/ Documents/)).toBeVisible();
+    await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Move to…' }).click();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('dialog').getByRole('button').filter({ hasText: /\S/ }).first()).toBeFocused();
+  });
+
+  test('a new note opens and says how to write in it', async ({ page }) => {
+    await open(page, '/');
+    const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+    await tree.getByRole('treeitem', { name: /^Cooking/ }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'New note' }).click();
+    await page.keyboard.type('Soup ideas');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/note\/Resources\/Cooking\/Soup%20ideas\.md/);
+    await expect(page.getByText(/This note is empty/)).toBeVisible();
+    await expect(page.getByRole('status').getByText(/New note in Resources \/ Cooking/)).toBeVisible();
+  });
+});
+
+const CSS_ESCAPE = (path: string): string => `row-${encodeURIComponent(path)}`.slice(4).replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);

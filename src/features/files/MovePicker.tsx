@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTree } from '@/data/provider';
 import { displayName, nameOf, parentOf } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
@@ -35,23 +35,45 @@ export function MovePicker() {
     setMoveFor(null);
     setQ('');
   };
+  const listRef = useRef<HTMLUListElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const pick = (f: string): void => {
+    const p = moveFor;
+    close();
+    if (p) void act.move(p, f);
+  };
+  /** Arrows walk the folders; up from the first goes back to the box. */
+  const walk = (e: KeyboardEvent, i: number): void => {
+    const buttons = [...(listRef.current?.querySelectorAll('button') ?? [])];
+    if (e.key === 'ArrowDown') buttons[Math.min(i + 1, buttons.length - 1)]?.focus();
+    else if (e.key === 'ArrowUp') (i <= 0 ? input.current : buttons[i - 1])?.focus();
+    else return;
+    e.preventDefault();
+  };
   return (
     <Sheet open={!!moveFor} onOpenChange={(o) => !o && close()} title={moveFor ? `Move ${displayName(nameOf(moveFor))}` : 'Move'} description={from ? `Now in ${crumbs(from)}` : undefined}>
       <label className={s.search}>
         <Icon name="search" size={18} />
-        <input autoFocus placeholder="Find a folder" aria-label="Find a folder" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input
+          ref={input}
+          autoFocus
+          placeholder="Find a folder"
+          aria-label="Find a folder"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter takes the first folder that matches; arrows go into the list.
+            if (e.key === 'Enter' && list[0]) {
+              e.preventDefault();
+              pick(list[0]);
+            } else walk(e, -1);
+          }}
+        />
       </label>
-      <ul className={s.pickList}>
-        {list.map((f) => (
+      <ul className={s.pickList} ref={listRef}>
+        {list.map((f, i) => (
           <li key={f}>
-            <button
-              type="button"
-              onClick={() => {
-                const p = moveFor;
-                close();
-                if (p) void act.move(p, f);
-              }}
-            >
+            <button type="button" onClick={() => pick(f)} onKeyDown={(e) => walk(e, i)}>
               <span className={s.dot} style={{ background: paraColor(f) }} />
               <span className={s.pickName}>{nameOf(f)}</span>
               <span className={s.pickPath}>{crumbs(parentOf(f))}</span>

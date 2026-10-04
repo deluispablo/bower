@@ -22,3 +22,4 @@
 - 2026-10-04: running-live passes — fix(runs): follow a run already going at the fast pace; the running situation starts mid-reading on the pretend Drive
 - 2026-10-04: instant-fast passes — fix(fake): the pretend Worker is asked every 300 ms while a run goes
 - 2026-10-04: scene-matches-result passes — fix(tidy): the run scene ends as the result says: empty inbox, the real count in the folder
+- 2026-10-04: tree-focus-after-move passes — fix(explorer): keyboard focus follows a row that moved
