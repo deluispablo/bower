@@ -1144,7 +1144,7 @@
     "what": "--green-before is a free-text escape; done.sh commits everything; a mistyped flag skips the red step.",
     "steps": [],
     "verify": "pnpm vitest run src/harness.test.ts -t \"done.sh takes fixed-in\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "swallow-then-handlers",

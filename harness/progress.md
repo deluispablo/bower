@@ -119,3 +119,4 @@
 - 2026-10-04: phone-row-menu passes — feat(phone): the note and folder pages have a ⋯ menu with Rename, Move to, Bookmark and the Bin; the tree keeps its long press
 - 2026-10-04: verify-matches-tests passes — chore(harness): close verify-matches-tests
 - 2026-10-04: proofs-only-done passes — chore(harness): close proofs-only-done
+- 2026-10-04: green-before-checked passes — chore(harness): close green-before-checked
