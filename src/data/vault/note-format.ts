@@ -64,7 +64,7 @@ function split(raw: string): Parts {
   const unquote = (v: string): string => (/^(["']).*\1$/.test(v) ? v.slice(1, -1) : v);
   for (const line of text.slice(4, close).split('\n')) {
     // A YAML block list, as Obsidian writes tags: "tags:" then "  - a" lines.
-    const item = /^\s+-\s+(.*)$/.exec(line);
+    const item = /^\s*-\s+(.*)$/.exec(line);
     if (item && listKey) {
       const prev = front.get(listKey) ?? '';
       front.set(listKey, prev ? `${prev}, ${unquote((item[1] ?? '').trim())}` : unquote((item[1] ?? '').trim()));

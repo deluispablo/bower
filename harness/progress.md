@@ -79,3 +79,4 @@
 - 2026-10-04: swallow-sensor-strong passes — fix: every catch logs, rethrows, or says why ignoring is right; one report() for the person and the console
 - 2026-10-04: copy-sensor-ts passes — fix(copy): the copy check reads the words in .ts files too, data included
 - 2026-10-04: loading-component-test passes — test: the footer and the side panel are pinned in their loading state
+- 2026-10-04: confirmbin-grammar passes — fix(copy): the Bin question agrees with how many things go

@@ -70,6 +70,12 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect(await vault.rename(TART, 'a'.repeat(120))).toBe(`Resources/Cooking/${'a'.repeat(120)}.md`);
       });
 
+      it('create refuses a name longer than 120 characters', async () => {
+        const { vault } = await open();
+        await expect(vault.create('Resources', 'note', `${'a'.repeat(121)}.md`)).rejects.toThrow(/too long/);
+        await expect(vault.create('Resources', 'folder', 'b'.repeat(121))).rejects.toThrow(/too long/);
+      });
+
       it('rename refuses a leading dot', async () => {
         const { vault } = await open();
         await expect(vault.rename(TART, '.md')).rejects.toThrow(/dot/);

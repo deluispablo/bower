@@ -36,3 +36,9 @@ export const countOr = (n: number | undefined, one: string, loading: string): st
 export function greeting(name: string): string {
   return `G'day, ${name}`;
 }
+
+/** What happens to a folder's things when it goes to the Bin, in words that agree. */
+export const goWithIt = (n: number): string =>
+  n === 1
+    ? 'The thing inside goes with it. You can get it back with Undo, or from the Bin of your Drive.'
+    : `The ${plural(n, 'thing')} inside go with it. You can get them back with Undo, or from the Bin of your Drive.`;

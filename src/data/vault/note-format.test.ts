@@ -87,3 +87,9 @@ describe('notes written elsewhere (Obsidian)', () => {
     expect(out.text).toContain('2. [x] second');
   });
 });
+
+describe('more YAML from elsewhere', () => {
+  it('reads a list that is not indented', () => {
+    expect(parseNote('x.md', '---\ntags:\n- flat\n- shortlist\n---\nbody').tags).toEqual(['flat', 'shortlist']);
+  });
+});

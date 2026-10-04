@@ -732,7 +732,7 @@
     "what": "ConfirmBin says \"The 1 thing inside go with it … get them back\".",
     "steps": [],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"agree\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "palette-search-error",
