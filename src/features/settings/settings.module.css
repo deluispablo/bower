@@ -13,3 +13,5 @@
 .seg { display: flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--line); }
 .seg button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font-weight: 600; cursor: pointer; }
 .seg button[aria-checked='true'] { background: var(--surface-strong); color: var(--heading); }
+.linkBtn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--heading) 35%, transparent); color: var(--heading); font-weight: 600; font-size: 15px; text-decoration: none; }
+.linkBtn:hover { background: var(--hover); }

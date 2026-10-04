@@ -9,3 +9,4 @@ Guide for AI sessions in the Bower app rebuild. Short on purpose.
 - Copy: English, sentence case, no jargon, never "vault". Bower is a bowerbird, never "the bird" in copy.
 - TypeScript strict, no `any`. Pure logic gets Vitest tests; flows get Playwright tests.
 - `pnpm check` and `pnpm e2e` green before a commit. Local only: never push.
+- `public/landing/`: the landing (A7) as exported from the design canvas, with that canvas's runtime (`support.js`). A stopgap for the demo; the public website gets its own build later. Do not edit it by hand.

@@ -1,0 +1,1252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bower</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&amp;family=Source+Sans+3:wght@400;600&amp;family=JetBrains+Mono&amp;display=swap">
+<style>
+body{margin:0;background:#0b1220}
+.pg{--night:#0b1220;--deep:#111a2b;--panel:#162034;--line:rgb(240 182 79 / .26);--teal:#5fcfbc;--straw:#f0b64f;--cap:#3b82f6;--violet:#c4b5fd;--moon:#f3f6fa;--mist:#c6cfdc;--dim:#9fabbf;
+  position:relative;font:400 18px/1.6 'Source Sans 3',system-ui,sans-serif;color:var(--mist);background:var(--night);overflow-x:hidden}
+.pg a{color:var(--straw);text-underline-offset:3px}
+.pg a:hover{color:#f6cf86}
+.d{font-family:'Poppins',system-ui,sans-serif;letter-spacing:-.025em;color:var(--moon);font-weight:700}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.84em}
+.wrap{max-width:1180px;margin:0 auto}
+.sec{padding:128px 24px}
+.split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:40px 64px;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:minmax(0,1fr)}.sec{padding:80px 20px}}
+@media (max-width:520px){
+  .pg{font-size:17px}
+  .h2{font-size:32px}
+  .htext h1{font-size:44px!important}
+  .htext p{font-size:18px!important}
+  .hfoot .btn-s{flex:1 1 auto}
+  .tabs{gap:2px 16px}.tabb{font-size:16px}
+  .fbtn{margin-left:0;width:100%}
+  .fnote{margin-left:10px}
+  .panel{padding:16px}
+  #end h2{font-size:42px!important}
+}
+.h2{margin:0;font-size:clamp(34px,4.2vw,54px);line-height:1.02}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 24px;border-radius:999px;font:600 17px 'Source Sans 3',sans-serif;text-decoration:none;cursor:pointer;border:0}
+.pg .btn-p{background:var(--teal);color:#111a2b}.pg .btn-p:hover{background:#82dccc;color:#111a2b}
+.pg .btn-g{background:transparent;color:var(--moon);box-shadow:inset 0 0 0 1.5px rgb(223 229 238 / .35)}.pg .btn-g:hover{box-shadow:inset 0 0 0 1.5px var(--moon);color:var(--moon)}
+.btn-s{min-height:40px;padding:0 16px;font-size:15px}
+.pg :focus-visible{outline:2px solid var(--straw);outline-offset:3px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px 22px;border-bottom:1px solid var(--line)}
+.tabb{min-height:46px;padding:0;border:0;background:none;cursor:pointer;font:600 17px 'Source Sans 3',sans-serif;color:var(--dim);box-shadow:inset 0 -2px 0 transparent}
+.tabb[aria-selected="true"],.tabb[aria-pressed="true"]{color:var(--moon);box-shadow:inset 0 -2px 0 var(--straw)}
+.birdbtn{position:absolute;left:0;top:0;padding:0;margin:0;border:0;background:none;cursor:pointer;transform-origin:50% 92%;will-change:transform;border-radius:50%;pointer-events:auto}
+
+/* hero */
+.hero{position:relative;min-height:840px;overflow:hidden;background:radial-gradient(60% 55% at 72% 58%,rgb(95 207 188 / .12),transparent 70%),linear-gradient(#111a2b,#0f1a2e 55%,#13213a)}
+.scene{position:absolute;inset:0;touch-action:none;cursor:crosshair}
+.find{cursor:grab}
+.htext{position:relative;z-index:3;max-width:1180px;margin:0 auto;padding:150px 24px 0;pointer-events:none}
+.htext a{pointer-events:auto}
+.hfoot{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:0 24px 26px}
+.hfoot>div{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between}
+@media (max-width:980px){
+  .navtxt{display:none}
+  .hero{min-height:0;display:flex;flex-direction:column}
+  .htext{order:1;padding:112px 20px 12px}
+  .scene{order:2;position:relative;inset:auto;height:430px}
+  .hfoot{order:3;position:relative;padding:8px 20px 32px}
+}
+
+/* why */
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin-top:44px;border-top:1px solid var(--line)}
+.facts>div{padding:26px 24px 0 0}
+.facts>div+div{padding-left:24px;border-left:1px solid var(--line)}
+@media (max-width:700px){.facts{grid-template-columns:minmax(0,1fr)}.facts>div+div{border-left:0;padding-left:0;border-top:1px solid var(--line)}}
+
+/* steps */
+.steps{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.steps li{display:grid;grid-template-columns:72px minmax(0,1fr);gap:0 20px;padding:28px 0;border-bottom:1px solid var(--line)}
+
+/* examples */
+.ex{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) auto;gap:6px 20px;align-items:center;padding:16px 4px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.ex:hover{background:rgb(223 229 238 / .03)}
+@media (max-width:700px){.ex{grid-template-columns:minmax(0,1fr)}}
+.strike{text-decoration:line-through;text-decoration-color:rgb(240 182 79 / .7);text-decoration-thickness:1.5px}
+.note{padding:0 4px 18px;border-bottom:1px solid var(--line);color:var(--mist);animation:open .3s ease both}
+@keyframes open{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* panels */
+.panel{border-radius:28px;background:var(--deep);padding:28px;box-shadow:inset 0 0 0 1px rgb(223 229 238 / .06)}
+@media (max-width:640px){.panel{padding:18px;border-radius:20px}}
+.ln{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .8s cubic-bezier(.5,0,.3,1) forwards}
+.l1{animation-delay:.1s}.l2{animation-delay:.3s}.l3{animation-delay:.5s}.l4{animation-delay:.7s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.hot{animation:hot .5s ease both}
+@keyframes hot{from{box-shadow:0 0 0 0 transparent}}
+.doc{animation:docin .5s cubic-bezier(.3,1.4,.5,1) .2s both}
+@keyframes docin{from{opacity:0;transform:translate(-50%,-50%) scale(.7)}to{opacity:1;transform:translate(-50%,-50%)}}
+.bar{display:block;height:5px;border-radius:3px;transform-origin:left;animation:grow .45s ease both}
+.k1{animation-delay:.9s}.k2{animation-delay:1.15s}.k3{animation-delay:1.4s}.k4{animation-delay:1.65s}
+@keyframes grow{from{transform:scaleX(0);opacity:0}}
+.ins{animation:open .4s ease both}
+@media (max-width:760px){.graph{display:none!important}}
+.skin{animation:open .3s ease both}
+.pkt{position:absolute;top:31px;left:var(--to);width:14px;height:14px;margin-left:-7px;border-radius:50%;background:var(--straw);box-shadow:0 0 14px var(--straw);z-index:3;animation:pkt .9s cubic-bezier(.5,0,.5,1) both}
+@keyframes pkt{from{left:var(--from)}to{left:var(--to)}}
+@media (max-width:640px){.archrow{grid-template-columns:repeat(2,minmax(0,1fr))!important;row-gap:16px!important}.archline,.pkt{display:none}}
+details:not(.whyb){border-bottom:1px solid var(--line)}
+details:not(.whyb) summary{list-style:none;cursor:pointer;padding:18px 0;display:flex;justify-content:space-between;gap:16px;align-items:center;color:var(--moon);font-weight:600}
+details summary::-webkit-details-marker{display:none}
+details .pl{flex:none;color:var(--straw);font-size:24px;line-height:1;transition:transform .2s}
+details[open] .pl{transform:rotate(45deg)}
+
+
+/* tidy demo */
+.tcols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:32px}
+@media (max-width:860px){.tcols{grid-template-columns:minmax(0,1fr)}}
+.frow2{animation:arrive .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes arrive{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+.fbtn{width:100%;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:6px 0 0 20px;padding:8px 10px;border:0;border-radius:10px;background:rgb(95 207 188 / .08);text-align:left;cursor:pointer;font:inherit;width:calc(100% - 20px)}
+.fbtn:hover{background:rgb(95 207 188 / .14)}
+.newtag{margin-left:auto;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--teal);color:#0b1220}
+.fnote{margin:6px 0 4px 30px;color:var(--mist);font-size:16px;animation:open .3s ease both}
+.type{display:inline-block;overflow:hidden;white-space:nowrap;vertical-align:bottom;animation:type .8s steps(24,end) .25s both}
+@keyframes type{from{max-width:0}to{max-width:40ch}}
+.strk{text-decoration:line-through;text-decoration-color:rgb(240 182 79 / .8)}
+.whyb{margin-top:8px;font-size:15px}
+.whyb summary{list-style:none;cursor:pointer;color:var(--amber,#f0b64f);display:inline;padding:0;font-weight:600}
+.whyb summary::-webkit-details-marker{display:none}
+.whyb p{margin:8px 0 0;max-width:34em;color:var(--mist);background:rgb(11 18 32 / .7);padding:12px 14px;border-radius:12px}
+/* sparkles */
+.spark{position:absolute;left:0;top:0;width:0;height:0}
+.spark i{position:absolute;left:0;top:0;width:10px;height:10px;margin:-5px;background:var(--straw);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0}
+.spark.go i{animation:spk .9s ease-out both}
+.spark i:nth-child(1){--dx:-46px;--dy:-40px}.spark i:nth-child(2){--dx:-14px;--dy:-62px}.spark i:nth-child(3){--dx:24px;--dy:-58px;background:var(--teal)}.spark i:nth-child(4){--dx:50px;--dy:-30px}.spark i:nth-child(5){--dx:-56px;--dy:-6px;background:var(--cap)}.spark i:nth-child(6){--dx:58px;--dy:2px;background:var(--violet)}
+.spark.go i:nth-child(2n){animation-delay:.08s}
+@keyframes spk{0%{opacity:0;transform:scale(.2)}25%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.1) rotate(90deg)}}
+@media (prefers-reduced-motion: reduce){.pg *{animation:none!important;transition:none!important}.ln{stroke-dashoffset:0}}
+</style>
+</helmet>
+<div class="pg" ref="{{ setRoot }}" onPointerMove="{{ onMove }}" onPointerUp="{{ onUp }}" onPointerCancel="{{ onUp }}">
+
+<section id="top" data-sec="hero" class="hero">
+  <header style="position:absolute;left:0;right:0;top:0;z-index:5;padding:0 24px">
+    <div class="wrap" style="padding:22px 0;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+      <a href="#top" style="display:flex;align-items:center;gap:10px;text-decoration:none" aria-label="Bower, home">
+        <svg viewBox="0 8 100 88" width="44" height="39" aria-hidden="true"><g transform="translate(1 0)"><rect fill="#2f9c8d" x="5" y="66" width="29" height="8" rx="4" transform="rotate(-30 32 70)"/><rect fill="#2a8d80" x="9" y="65" width="25" height="8" rx="4" transform="rotate(-12 32 70)"/><path fill="none" stroke="#f0b64f" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M46 81L44 91H51M55 81L56 91H63"/><path fill="#5fcfbc" d="M30 70C30 54 44 44 58 46C72 48 76 62 72 72C68 82 56 86 46 85C36 84 30 78 30 70Z"/><ellipse fill="#5fcfbc" cx="60" cy="47" rx="9" ry="7"/><circle fill="#5fcfbc" cx="64" cy="36" r="15"/><path fill="#5fcfbc" d="M58 24Q54 13 61 15Q63 19 63 23Z"/><path fill="#2f9c8d" d="M58 52C66 56 64 70 54 74C44 78 32 76 24 72C32 68 40 58 58 52Z"/><circle fill="#ffffff" cx="70" cy="34" r="6.6"/><circle fill="#1b2233" cx="71.4" cy="34" r="4.6"/><circle fill="#ffffff" cx="72.8" cy="32.4" r="1.5"/><path fill="#f0b64f" d="M78 30Q89 33 93 37.5Q87 40 78 40Z"/></g></svg>
+        <span class="d" style="font-size:24px">Bower</span>
+      </a>
+      <nav aria-label="Main" style="display:flex;flex-wrap:wrap;gap:4px 26px;align-items:center;font-size:17px">
+        <a class="navtxt" href="#tidy" style="color:var(--mist);text-decoration:none">How it works</a>
+        <a class="navtxt" href="#dots" style="color:var(--mist);text-decoration:none">Connects the dots</a>
+        <a class="navtxt" href="#yours" style="color:var(--mist);text-decoration:none">Privacy</a>
+        <a class="btn btn-g btn-s" href="https://github.com/deluispablo/bower">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="scene" ref="{{ setCourt }}" onPointerDown="{{ onDown }}" role="img" aria-label="Bower, a bowerbird, sets out bright things in rows in front of its bower of straw: small at the back, large at the front. Drag one out of line and Bower puts it back.">
+    <svg viewBox="0 0 400 200" preserveAspectRatio="none" width="100%" height="36%" style="position:absolute;left:0;bottom:0" aria-hidden="true">
+      <path d="M0 64Q210 18 400 52V200H0Z" fill="#1b2b42"></path>
+      <path d="M0 96Q230 46 400 84V200H0Z" fill="#20334d"></path>
+    </svg>
+    <div ref="{{ setBart }}" aria-hidden="true" style="position:absolute;left:0;top:0;width:240px;height:156px">
+      <svg viewBox="0 0 200 130" width="240" height="156" style="overflow:visible">
+        <ellipse cx="100" cy="124" rx="104" ry="13" fill="#c2ad74" fill-opacity=".10"></ellipse>
+        <ellipse cx="100" cy="121" rx="66" ry="7" fill="#111a2b" fill-opacity=".55"></ellipse>
+        <g fill="none" stroke-linecap="round">
+          <path d="{{ bwr.w0 }}" stroke="#6b4a2e" stroke-width="2.1"></path>
+          <path d="{{ bwr.w1 }}" stroke="#8a6038" stroke-width="1.8"></path>
+          <path d="{{ bwr.w2 }}" stroke="#b78a58" stroke-width="1.4"></path>
+          <path d="{{ bwr.straw }}" stroke="#c2ad74" stroke-width="1" stroke-opacity=".7"></path>
+        </g>
+      </svg>
+    </div>
+    <sc-for list="{{ itemList }}" as="it" hint-placeholder-count="6">
+      <div class="find" data-id="{{ it.id }}" ref="{{ it.ref }}" aria-hidden="true" style="{{ it.style }}"></div>
+    </sc-for>
+  </div>
+
+  <div class="htext">
+    <h1 class="d" style="margin:0;max-width:9.6em;font-weight:800;font-size:clamp(48px,6.6vw,92px);line-height:.94;white-space:pre-line">{{ headline }}</h1>
+    <p style="margin:26px 0 0;max-width:25em;font-size:20px;line-height:1.5;color:var(--mist)">Save photos, PDFs, links and notes as they come. Tap once, and Bower reads each one, names it and files it in your own Google Drive.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:30px">
+      <a class="btn btn-p" href="#run">Set up your own Bower</a>
+      <a class="btn btn-g" href="#tidy">Try a tidy-up</a>
+    </div>
+  </div>
+
+  <div class="hfoot"><div>
+    <div style="max-width:36em">
+      <p style="margin:0;font-size:16px;color:var(--dim)">Drag one of Bower's finds out of line, or click the ground to give it something new.</p>
+      <details class="whyb"><summary>Why a bowerbird?</summary><p>Bowerbirds live in Australia and New Guinea. They build a bower of twigs, collect bright things, mostly blue, and set them out by size in front of it. Move one and they put it back. That is the job Bower does for everything you save.</p></details>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <button class="btn btn-g btn-s" type="button" onClick="{{ dropOne }}">Give Bower something</button>
+      <button class="btn btn-g btn-s" type="button" onClick="{{ mess }}">Scatter them</button>
+      <button class="btn btn-g btn-s" type="button" onClick="{{ toggleHide }}">{{ hideLabel }}</button>
+    </div>
+  </div></div>
+</section>
+
+<section id="tidy" data-sec="tidy" class="sec" style="background:var(--deep)">
+  <div class="wrap">
+    <div class="split" style="margin-bottom:44px">
+      <h2 class="d h2">Throw it all in. Tap once.</h2>
+      <p style="margin:6px 0 0">Save things as they come, from any app. When you are ready, tap Tidy up: Bower reads each one, names it for what it is and files it in your Drive, using PARA unless your rules say otherwise. Try it here.</p>
+    </div>
+    <div class="panel" data-perch=".5">
+      <div class="tcols">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+            <h3 class="d" style="margin:0;font-size:22px">Your inbox</h3>
+            <span style="font-size:15px;color:var(--dim)">{{ inboxCount }}</span>
+          </div>
+          <sc-for list="{{ inbox }}" as="i" hint-placeholder-count="4">
+            <div class="irow" style="{{ i.style }}">
+              <span style="flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{ i.color }}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ i.icon }}"></path></svg></span>
+              <span style="min-width:0"><span class="{{ i.nameCls }}" style="display:block;color:var(--moon);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ i.before }}</span><span style="display:block;font-size:14px;color:{{ i.fromColor }}">{{ i.from }}</span></span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:18px 0 0;color:var(--dim)">Nothing waiting. Add something, or start again.</p>
+          </sc-if>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:20px">
+            <button class="btn btn-p" type="button" onClick="{{ runTidyUp }}" aria-disabled="{{ tidyBusy }}" style="{{ tidyBtnStyle }}">{{ tidyLabel }}</button>
+            <button class="btn btn-g" type="button" onClick="{{ addThing }}">{{ addLabel }}</button>
+          </div>
+          <p aria-live="polite" style="margin:14px 0 0;font-size:15px;color:var(--dim)">{{ tidyNote }}</p>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)">
+            <h3 class="d" style="margin:0;font-size:22px">Your Drive</h3>
+            <span style="font-size:15px;color:var(--dim)">Open a new one to read Bower's note</span>
+          </div>
+          <sc-for list="{{ folders }}" as="f" hint-placeholder-count="4">
+            <div style="padding:14px 0 6px;border-bottom:1px solid var(--line)">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:50%;background:{{ f.color }}"></span><span class="d" style="font-size:17px">{{ f.name }}</span><span style="font-size:14px;color:var(--dim)">{{ f.sub }}</span></div>
+              <div style="margin:6px 0 0 20px;font-size:15px;color:var(--dim)">{{ f.old }}</div>
+              <sc-for list="{{ f.items }}" as="t" hint-placeholder-count="1">
+                <div class="frow2">
+                  <button type="button" onClick="{{ t.open }}" aria-expanded="{{ t.isOpen }}" class="fbtn">
+                    <span class="type" style="color:var(--moon);font-weight:600">{{ t.after }}</span>
+                    <span class="mono strk" style="color:var(--dim);font-size:13px">{{ t.before }}</span>
+                    <span class="newtag">New</span>
+                  </button>
+                  <sc-if value="{{ t.isOpen }}" hint-placeholder-val="{{ false }}">
+                    <div class="fnote"><span style="color:var(--teal);font-weight:600">{{ t.where }}.</span> {{ t.note }}</div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="dots" data-sec="dots" class="sec" style="background:var(--night)">
+  <div class="wrap">
+    <div class="split" style="margin-bottom:44px">
+      <h2 class="d h2">It remembers, and it joins the dots.</h2>
+      <p style="margin:6px 0 0">Everything Bower files becomes something it can use next time. When a new thing arrives, it checks it against your notes, can look up on the web what the document leaves out, and writes down what follows. Every line says where it came from.</p>
+    </div>
+    <div class="panel" data-perch=".95">
+      <div class="tabs" role="group" aria-label="What arrives">
+        <sc-for list="{{ dots }}" as="d" hint-placeholder-count="4">
+          <button type="button" class="tabb" onClick="{{ d.pick }}" aria-pressed="{{ d.on }}">{{ d.label }}</button>
+        </sc-for>
+      </div>
+      <sc-for list="{{ dots }}" as="d" hint-placeholder-count="1">
+        <sc-if value="{{ d.on }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-wrap:wrap;gap:28px;margin-top:26px;align-items:stretch">
+            <div class="graph" aria-hidden="true" style="flex:1 1 520px;min-width:0;position:relative;aspect-ratio:160/110">
+              <svg viewBox="0 0 160 110" width="100%" height="100%" style="position:absolute;inset:0">
+                <defs>
+                  <marker id="ah{{ d.i }}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#f0b64f"></path></marker>
+                  <marker id="aw{{ d.i }}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#3b82f6"></path></marker>
+                </defs>
+                <g fill="none" stroke-width="1.1" stroke-linecap="round">
+                  <path class="ln l1" pathLength="1" d="{{ d.p0 }}" stroke="#f0b64f" marker-end="url(#ah{{ d.i }})"></path>
+                  <path class="ln l2" pathLength="1" d="{{ d.p1 }}" stroke="#f0b64f" marker-end="url(#ah{{ d.i }})"></path>
+                  <path class="ln l3" pathLength="1" d="{{ d.p2 }}" stroke="#f0b64f" marker-end="url(#ah{{ d.i }})"></path>
+                  <path class="ln l4" pathLength="1" d="{{ d.p3 }}" stroke="#3b82f6" marker-end="url(#aw{{ d.i }})" opacity="{{ d.webOp }}"></path>
+                </g>
+              </svg>
+              <sc-for list="{{ d.nodes }}" as="n" hint-placeholder-count="8">
+                <div style="{{ n.style }}"><span style="width:8px;height:8px;border-radius:50%;flex:none;background:{{ n.color }}"></span>{{ n.name }}</div>
+              </sc-for>
+              <div style="position:absolute;left:88%;top:9%;transform:translate(-50%,-50%);display:flex;gap:7px;align-items:center;padding:6px 11px;border-radius:999px;background:#0b1220;color:#93c5fd;font-size:clamp(11px,1.15vw,14px);white-space:nowrap;opacity:{{ d.webOp }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>The web</div>
+              <div class="doc" style="position:absolute;left:50%;top:50%;width:28%;border-radius:12px;background:#f3f6fa;padding:4% 3.6%;box-sizing:border-box;box-shadow:0 0 0 6px rgb(240 182 79 / .16),0 18px 40px rgb(0 0 0 / .35)">
+                <div style="font-size:clamp(9px,.95vw,12px);color:#475569">New note</div>
+                <div class="d" style="margin-top:2px;font-size:clamp(10px,1.3vw,15px);color:#111a2b;line-height:1.15">{{ d.newName }}</div>
+                <div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
+                  <span class="bar k1" style="background:#5fcfbc"></span><span class="bar k2" style="background:#5fcfbc;width:84%"></span><span class="bar k3" style="background:#5fcfbc;width:92%"></span><span class="bar k4" style="background:#3b82f6;width:70%"></span>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px">
+              <div><div class="d" style="font-size:22px">{{ d.newName }}</div><div style="font-size:15px;color:var(--dim)">Fed by {{ d.fedText }}</div></div>
+              <sc-for list="{{ d.lines }}" as="l" hint-placeholder-count="4">
+                <div class="ins" style="{{ l.style }}"><div style="color:var(--moon);line-height:1.45">{{ l.text }}</div><div style="margin-top:4px;font-size:14px;color:{{ l.srcColor }}">{{ l.src }}</div></div>
+              </sc-for>
+              <div class="ins" style="animation-delay:1.9s;font-size:15px;color:var(--dim)">Bower now remembers: <span style="color:var(--straw)">{{ d.memText }}</span></div>
+            </div>
+          </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<section id="yours" data-sec="yours" class="sec" style="background:var(--deep)">
+  <div class="wrap">
+    <div class="split" style="margin-bottom:44px">
+      <h2 class="d h2">Your notes live in one place: your Drive.</h2>
+      <p style="margin:6px 0 0">Plain files in a folder you own, readable by any app. Bower keeps your sign-in and a pointer to the folder, never your notes. Delete the app and nothing is lost.</p>
+    </div>
+    <div class="panel" data-perch=".95" style="background:var(--night)">
+      <div class="tabs" role="tablist" aria-label="Show">
+        <sc-for list="{{ yoursTabs }}" as="t" hint-placeholder-count="2"><button type="button" role="tab" class="tabb" aria-selected="{{ t.on }}" onClick="{{ t.pick }}">{{ t.name }}</button></sc-for>
+      </div>
+      <sc-if value="{{ yours0 }}" hint-placeholder-val="{{ true }}">
+        <div class="skin" style="display:flex;flex-wrap:wrap;gap:28px;margin-top:26px;align-items:flex-start">
+          <div style="flex:1 1 260px;min-width:0">
+            <p style="margin:0 0 16px;color:var(--moon)">The same four files, opened in three apps.</p>
+            <div role="tablist" aria-label="Open the folder in" style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ views }}" as="v" hint-placeholder-count="3">
+                <button type="button" role="tab" aria-selected="{{ v.on }}" onClick="{{ v.pick }}" style="{{ v.tab }}"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="flex:none"><path d="{{ v.icon }}" fill="{{ v.iconColor }}"></path></svg>{{ v.name }}</button>
+              </sc-for>
+            </div>
+            <div style="margin-top:22px;display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+              <button class="btn btn-s" type="button" onClick="{{ toggleApp }}" style="{{ delStyle }}">{{ delLabel }}</button>
+              <span aria-live="polite" style="font-size:15px;color:var(--dim)">{{ delNote }}</span>
+            </div>
+          </div>
+          <div style="flex:2 1 440px;min-width:0;border-radius:16px;overflow:hidden;min-height:300px;box-shadow:0 0 0 1px rgb(223 229 238 / .12),0 30px 70px rgb(0 0 0 / .35)">
+<sc-if value="{{ vBower }}" hint-placeholder-val="{{ true }}">
+          <div class="skin" style="background:#111a2b;padding:18px;min-height:300px;box-sizing:border-box">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><svg viewBox="0 0 100 100" width="28" height="28" aria-hidden="true"><path fill="#5fcfbc" d="M30 70C30 54 44 44 58 46C72 48 76 62 72 72C68 82 56 86 46 85C36 84 30 78 30 70Z"></path><circle fill="#5fcfbc" cx="64" cy="36" r="15"></circle><circle fill="#fff" cx="70" cy="34" r="6.4"></circle><circle fill="#1b2233" cx="71" cy="34" r="4.4"></circle><path fill="#f0b64f" d="M78 31Q88 33 92 37Q86 38 78 38Z"></path></svg><span class="disp" style="font-weight:700;color:#f3f6fa">Bower</span><span class="mono" style="margin-left:auto;font-size:12px;color:#7f8ba0">app</span></div>
+            <sc-for list="{{ files }}" as="f" hint-placeholder-count="4">
+              <div class="frow" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;background:#162034;margin-top:8px"><span style="width:10px;height:10px;border-radius:50%;flex:none;background:{{ f.color }}"></span><span style="min-width:0"><span style="display:block;color:#f3f6fa;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</span><span style="display:block;font-size:13px;color:#c6cfdc">{{ f.path }}</span></span></div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ vGone }}" hint-placeholder-val="{{ false }}">
+          <div class="skin" style="background:#111a2b;min-height:300px;display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box">
+            <div><div class="disp" style="font-size:22px;font-weight:700;color:#f3f6fa">The app is gone.</div><div style="margin-top:6px;color:#c6cfdc">Your notes are not. Look in Google Drive or Obsidian.</div></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ vDrive }}" hint-placeholder-val="{{ false }}">
+          <div class="skin" style="background:#ffffff;color:#1f1f1f;padding:18px;min-height:300px;box-sizing:border-box;font-family:system-ui,sans-serif">
+            <div style="font-size:15px;color:#444;margin-bottom:10px">My Drive <span style="color:#999">›</span> <b style="color:#1f1f1f">Bower</b></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 120px;font-size:13px;color:#666;padding:8px 6px;border-bottom:1px solid #e3e3e3"><span>Name</span><span>Location</span></div>
+            <sc-for list="{{ files }}" as="f" hint-placeholder-count="4">
+              <div class="frow" style="display:grid;grid-template-columns:minmax(0,1fr) 120px;align-items:center;gap:10px;padding:11px 6px;border-bottom:1px solid #eee;font-size:15px"><span style="display:flex;gap:10px;align-items:center;min-width:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4"></path></svg><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</span></span><span style="font-size:13px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.folder }}</span></div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ vObsidian }}" hint-placeholder-val="{{ false }}">
+          <div class="skin" style="background:#1e1e1e;color:#dcddde;min-height:300px;display:flex;font-family:system-ui,sans-serif">
+            <div style="flex:0 0 46%;background:#262626;padding:16px 12px;box-sizing:border-box;font-size:14px">
+              <div style="font-weight:700;color:#fff;margin-bottom:10px">Bower</div>
+              <sc-for list="{{ files }}" as="f" hint-placeholder-count="4">
+                <div class="frow" style="padding:4px 0"><div style="color:#9a9a9a">▾ {{ f.top }}</div><div style="padding:3px 0 0 16px;color:#dcddde;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</div></div>
+              </sc-for>
+            </div>
+            <div style="flex:1;padding:18px;font-size:14px;line-height:1.6">
+              <div style="font-size:20px;font-weight:700;color:#fff">Flat 3, 12 Mill Lane</div>
+              <div style="color:#a88bfa;margin:4px 0 10px">#flat-hunt #camden</div>
+              <div>68 m², two bedrooms.</div><div>6 minutes to the Tube.</div><div style="color:#a88bfa">[[Lease 2026, signed]]</div>
+            </div>
+          </div>
+        </sc-if>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ yours1 }}" hint-placeholder-val="{{ false }}">
+        <div class="skin" style="margin-top:26px">
+<div>
+      <div class="archrow" style="position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:start">
+        <div class="archline" aria-hidden="true" style="position:absolute;left:12.5%;right:12.5%;top:38px;height:2px;background:repeating-linear-gradient(90deg,rgb(240 182 79 / .35) 0 8px,transparent 8px 14px)"></div>
+        <sc-for list="{{ archSteps }}" as="a" hint-placeholder-count="1">
+          <sc-if value="{{ a.on }}" hint-placeholder-val="{{ false }}">
+            <span class="pkt" aria-hidden="true" style="--from:{{ a.from }};--to:{{ a.to }}"></span>
+          </sc-if>
+        </sc-for>
+        <sc-for list="{{ arch }}" as="b" hint-placeholder-count="4">
+          <button type="button" data-arch="{{ b.i }}" onClick="{{ b.pick }}" aria-pressed="{{ b.on }}" style="{{ b.style }}">
+            <span style="{{ b.disc }}"><svg width="30" height="30" viewBox="0 0 24 24" fill="{{ b.fill }}" stroke="{{ b.stroke }}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ b.icon }}"></path></svg></span>
+            <span class="disp" style="font-size:16px;font-weight:700;color:#f3f6fa;line-height:1.2">{{ b.name }}</span>
+            <span style="font-size:13px;color:#c6cfdc">{{ b.role }}</span>
+            <span style="{{ b.temp }}">temporary copy</span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:stretch;margin-top:24px">
+        <div style="flex:1 1 380px;min-width:0;border-radius:18px;background:#162034;padding:20px 22px" aria-live="polite">
+          <div class="disp" style="font-size:18px;font-weight:700;color:#f3f6fa">{{ archSel.name }}</div>
+          <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 14px;margin-top:12px;font-size:16px;line-height:1.5">
+            <span style="color:#5fcfbc;font-weight:600">Keeps</span><span style="color:#f3f6fa">{{ archSel.keeps }}</span>
+            <span style="color:#f4a28c;font-weight:600">Never</span><span style="color:#f3f6fa">{{ archSel.never }}</span>
+          </div>
+        </div>
+        <div style="flex:1 1 320px;min-width:0;border-radius:18px;background:#162034;padding:20px 22px;display:flex;flex-direction:column;gap:14px;justify-content:space-between">
+          <div aria-live="polite"><div style="font-size:14px;color:#9fabbf">{{ runCount }}</div><div style="margin-top:6px;color:#f3f6fa;font-size:17px;line-height:1.45">{{ runText }}</div></div>
+          <button class="btn btn-p" type="button" onClick="{{ runTidy }}">{{ runLabel }}</button>
+        </div>
+      </div>
+    </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</section>
+
+
+<section id="run" data-sec="run" class="sec">
+  <div class="wrap split">
+    <div data-perch=".8">
+      <h2 class="d h2">Run your own Bower.</h2>
+      <p style="margin:20px 0 0">Bower is self-hosted. Someone comfortable with a terminal sets it up once, on free tiers, for themselves and up to 100 people they invite. Everyone gets a folder in their own Drive.</p>
+      <dl style="margin:28px 0 0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px 24px;border-top:1px solid var(--line);padding-top:22px">
+        <dt style="color:var(--dim)">You need</dt><dd style="margin:0;color:var(--moon)">A Google account, a Claude subscription or API key, and free Cloudflare and GitHub accounts</dd>
+        <dt style="color:var(--dim)">Setup</dt><dd style="margin:0;color:var(--moon)">About an hour, once, following the runbook</dd>
+        <dt style="color:var(--dim)">It costs</dt><dd class="d" style="margin:0;font-size:30px;line-height:1.1">0 € a month</dd>
+      </dl>
+      <div style="display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin-top:30px">
+        <a class="btn btn-p" href="https://github.com/deluispablo/bower">Set up your own Bower</a>
+        <span style="font-size:16px;color:var(--dim)">Got an invite? Open the link from whoever runs your Bower.</span>
+      </div>
+    </div>
+    <div>
+      <h3 class="d" style="margin:0 0 6px;font-size:24px">Questions</h3>
+      <sc-for list="{{ faq }}" as="q" hint-placeholder-count="9">
+        <details><summary>{{ q.q }}<span class="pl" aria-hidden="true">+</span></summary><p style="margin:0 0 18px">{{ q.a }}</p></details>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<section id="end" data-sec="end" class="sec" style="padding-bottom:56px;background:var(--deep)">
+  <div class="wrap">
+    <h2 class="d" data-perch=".62" style="margin:0;max-width:11em;font-size:clamp(44px,7vw,104px);line-height:.94;font-weight:800">Give your notes a&#160;Bower.</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:32px">
+      <a class="btn btn-p" href="https://github.com/deluispablo/bower">Set up your own Bower</a>
+      <a class="btn btn-g" href="#top">Back to the bower</a>
+    </div>
+    <div class="split" style="margin-top:120px;padding-top:40px;border-top:1px solid var(--line)">
+      <div>
+        <h3 class="d" style="margin:0;font-size:26px;line-height:1.2">Designed and built by Pablo de Luis.</h3>
+        <p style="margin:10px 0 0"><a href="https://github.com/deluispablo">github.com/deluispablo</a></p>
+      </div>
+      <p style="margin:0">Bower is a side project about a second brain that does the boring part for you: the brand, the bird and the code. Bower is one drawing with twelve poses and a small motion engine, so it hops, flies and snaps its head like a real bird. It runs on free tiers with no servers, it was designed and coded with Claude Code, and its filing runs on Claude.</p>
+    </div>
+    <p style="margin:56px 0 0;font-size:15px;color:var(--dim)">Bower is source available under FSL-1.1-MIT. <a href="https://github.com/deluispablo/bower">github.com/deluispablo/bower</a></p>
+  </div>
+</section>
+
+<div ref="{{ setLayer }}" style="position:absolute;inset:0;pointer-events:none;z-index:40;overflow:hidden">
+  <div ref="{{ setSpark }}" class="spark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <button class="birdbtn" type="button" ref="{{ setBird }}" onClick="{{ poke }}" aria-label="Bower. Tap to say hello.">
+      <svg viewBox="0 0 100 100" width="100%" height="100%" style="overflow:visible;display:block" aria-hidden="true">
+        <g ref="{{ setRig }}">
+          <g ref="{{ setTail }}">
+            <rect fill="#2a8d80" x="6" y="66" width="28" height="7" rx="3.5" transform="rotate(-40 32 70)"></rect>
+            <rect fill="#2f9c8d" x="4" y="66" width="30" height="7" rx="3.5" transform="rotate(-24 32 70)"></rect>
+            <rect fill="#2a8d80" x="8" y="66" width="26" height="7" rx="3.5" transform="rotate(-10 32 70)"></rect>
+          </g>
+          <g ref="{{ setLegs }}" fill="none" stroke="#f0b64f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M46 81L44 91M44 91H51M44 91L40 92.4"></path>
+            <path d="M55 81L56 91M56 91H63M56 91L52 92.4"></path>
+          </g>
+          <path fill="#5fcfbc" d="M30 70C30 54 44 44 58 46C72 48 76 62 72 72C68 82 56 86 46 85C36 84 30 78 30 70Z"></path>
+          <ellipse fill="#b9ece2" cx="59" cy="73" rx="11" ry="8.5" transform="rotate(-30 59 73)"></ellipse>
+          <g ref="{{ setWing }}">
+            <path fill="#2f9c8d" d="M58 52C66 56 64 70 54 74C44 78 32 76 24 72C32 68 40 58 58 52Z"></path>
+            <path fill="none" stroke="#45b3a3" stroke-width="1.2" stroke-linecap="round" d="M50 62C44 66 38 69 31 71M54 67C48 70 42 72 36 73"></path>
+          </g>
+          <g ref="{{ setHead }}">
+            <ellipse fill="#5fcfbc" cx="60" cy="47" rx="9" ry="7"></ellipse>
+            <g ref="{{ setTuft }}" fill="#5fcfbc"><path d="M57 24Q52 14 59 15Q61 19 62 23Z"></path><path d="M62 22Q62 11 68 14Q66 18 66 23Z"></path></g>
+            <circle fill="#5fcfbc" cx="64" cy="36" r="15"></circle>
+            <ellipse fill="#ff9fb4" fill-opacity=".55" cx="73" cy="44" rx="3.2" ry="2"></ellipse>
+            <g ref="{{ setEye }}">
+              <circle fill="#fff" cx="70" cy="34" r="6.4"></circle>
+              <g ref="{{ setIris }}"><circle fill="#1b2233" cx="70.6" cy="34" r="4.4"></circle><circle fill="none" stroke="#8e7cf3" stroke-width="1.1" cx="70.6" cy="34" r="3.8"></circle><circle fill="#fff" cx="72" cy="32.4" r="1.5"></circle></g>
+            </g>
+            <g ref="{{ setJaw }}"><path fill="#d9952e" d="M78 38Q86 38 89 39Q85 42 78 41Z"></path></g>
+            <path fill="#f0b64f" d="M78 31Q88 33 92 37Q86 38 78 38Z"></path>
+          </g>
+        </g>
+      </svg>
+    </button>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tagline":{"editor":"enum","options":["drive","throw","rename"],"default":"drive","section":"Copy"},"$preview":{"width":1280,"height":7400}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    const self = this;
+    this.P = {}; this.els = {}; this.items = []; this.uid = 0; this.perches = {}; this.vis = {};
+    this.reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.bwr = this.makeBower();
+    this.setters = {};
+    ['Root', 'Court', 'Bart', 'Layer', 'Spark', 'Bird', 'Rig', 'Head', 'Tail', 'Wing', 'Legs', 'Jaw', 'Tuft', 'Eye', 'Iris'].forEach(function (k) {
+      self.setters['set' + k] = function (el) { self.P[k.toLowerCase()] = el; };
+    });
+    const sp = function (v, k, c) { return { v: v, vel: 0, t: v, k: k, c: c }; };
+    this.C = { head: sp(0, 900, 38), tail: sp(0, 420, 14), wing: sp(0, 520, 22), squash: sp(1, 700, 16), pitch: sp(0, 380, 24), legs: sp(1, 500, 28), jaw: sp(0, 1400, 46), tuft: sp(0, 300, 12), face: sp(1, 700, 34), ix: sp(.4, 600, 40), iy: sp(0, 600, 40) };
+    this.B = { x: -200, y: 60, face: 1, hopY: 0, hopKick: 0, bob: 0, flying: false, flare: false, ph: 0, ws: 1, at: null, onGround: false, ground: null, carry: null };
+    this.S = { t: 0, queue: [], action: null, ptr: null, ptrT: -10, lastSnap: 0, nextIdle: 1.2, nextBlink: 2, blinkT: -1, blink: 0, blinkDouble: false, chirpT: 0, behindT: 0, size: 112, mode: 'hero', cand: 'hero', candT: 0, W: 1280, H: 7000, shown: false, hidden: false, override: null, wantShow: false };
+    this.rows = [[], [], []];
+    this.pool = [
+      { kind: 'link', before: 'https://…/listing/88213', from: 'Shared from the browser', after: 'Flat 3, 12 Mill Lane', f: 'P', where: 'Projects / Flat hunt', note: '68 m², two bedrooms, 6 minutes to the Tube, 10 % under the average for the area.' },
+      { kind: 'pdf', before: 'Offer_letter_final(2).pdf', from: 'Shared from Mail', after: 'Offer, Data Engineer', f: 'P', where: 'Projects / Job hunt', note: 'Salary, start date and notice period, with the commute from the flat you shortlisted.' },
+      { kind: 'voice', before: '"book the boat for mum\'s 70th"', from: 'Dictated on your phone', after: 'Mum\'s 70th, boat trip', f: 'P', where: 'Projects / Mum\'s 70th', note: 'Added to the plan, next to the guest list you saved last week.' },
+      { kind: 'pdf', before: 'scan_0012.pdf', from: 'Uploaded from your computer', after: 'Lease 2026, signed', f: 'A', where: 'Areas / Home', note: 'Rent due on the 1st, two months of notice, ends 30 April 2027.' },
+      { kind: 'photo', before: 'IMG_2290.jpg', from: 'Photo from your phone', after: 'Boiler service, 12 Sep', f: 'A', where: 'Areas / Money', note: '120.00, paid by card. Filed by month, as your rule says.' },
+      { kind: 'pdf', before: 'Scan 14 Oct.pdf', from: 'Shared from Files', after: 'Blood test, October', f: 'A', where: 'Areas / Health', note: 'Added to your yearly table: what changed since March.' },
+      { kind: 'link', before: 'https://…/blog?p=88', from: 'Shared from the browser', after: 'Sourdough, the short version', f: 'R', where: 'Resources / Baking', note: 'The method in six steps, with a link back to where it came from.' },
+      { kind: 'pdf', before: 'Lisbon.pdf', from: 'Shared from Mail', after: 'Lisbon, May 2026, bookings', f: 'X', where: 'Archive / Trips', note: 'The trip is over, so it goes to the archive. Nothing is deleted.' }
+    ];
+    [['cap', 14], ['paper', 30], ['ycap', 20], ['photo', 34], ['feather', 26], ['cap', 24], ['cap', 12], ['link', 15]].forEach(function (d) { self.addItem(d[0], d[1], 'ground'); });
+    this.state = {
+      itemList: this.items.map(function (it) { return it.meta; }), placed: 0,
+      inbox: [0, 3, 4, 6], filed: [], tidyRun: false, openId: -1, dotsI: 0, yoursTab: 0, view: 'bower', appGone: false, archSel: 3, runStep: -1, hidden: false
+    };
+    this.loopB = this.loop.bind(this);
+  }
+
+  addItem(type, size, state) {
+    const self = this, id = ++this.uid;
+    let w = size, h = size, look = '';
+    if (type === 'cap') look = 'border-radius:50%;background:#3b82f6;box-shadow:inset -3px -3px 0 #2563eb,inset 0 0 0 2px #60a5fa';
+    if (type === 'ycap') look = 'border-radius:50%;background:#f0b64f;box-shadow:inset -3px -3px 0 #d9952e,inset 0 0 0 2px #f6cf86';
+    if (type === 'paper') { w = Math.round(size * .78); look = 'border-radius:2px;background:repeating-linear-gradient(#f3f6fa 0 5px,#c6cfdc 5px 6px);box-shadow:inset 0 0 0 2px #f3f6fa'; }
+    if (type === 'photo') { h = Math.round(size * .8); look = 'border-radius:3px;background:#5fcfbc;box-shadow:inset 0 0 0 3px #f3f6fa'; }
+    if (type === 'feather') { w = Math.round(size * .5); look = 'border-radius:0 100% 0 100%;background:#60a5fa'; }
+    if (type === 'link') { w = Math.round(size * 1.8); h = Math.round(size * .6); look = 'border-radius:999px;background:#162034;box-shadow:inset 0 0 0 2px #c4b5fd'; }
+    const it = { id: id, type: type, w: w, h: h, area: w * h, state: state, x: 0, y: 0, vx: 0, vy: 0, r: 0, vr: 0, sx: 0, sy: 0, slot: null, reserved: false, fresh: true };
+    it.row = it.area < 280 ? 0 : it.area < 620 ? 1 : 2;
+    it.meta = { id: id, style: 'position:absolute;left:0;top:0;width:' + w + 'px;height:' + h + 'px;will-change:transform;z-index:2;' + look, ref: function (el) { if (el) self.els[id] = el; } };
+    this.items.push(it);
+    return it;
+  }
+
+  // ---------- geometry (all in page coordinates: relative to the root) ----------
+  geo() {
+    const S = this.S, ct = this.P.court, self = this;
+    if (!ct) return;
+    const pW = S.CW, pH = S.CH;
+    S.CW = ct.clientWidth; S.CH = ct.clientHeight;
+    if (!S.CW || !S.CH) return;
+    S.small = S.CW < 980;
+    S.heroSize = S.small ? 86 : 112; S.guideSize = S.small ? 58 : 76;
+    S.floorY = S.CH - (S.small ? 30 : 92);
+    S.bx = S.small ? S.CW * .5 : S.CW * .7;
+    S.by = S.small ? S.CH * .44 : S.CH * .55;
+    if (this.P.bart) this.P.bart.style.transform = 'translate(' + (S.bx - 120) + 'px,' + (S.by - 150) + 'px)';
+    // fixed slots: one row per size, filled from the middle outwards; nothing ever moves without Bower
+    const k = S.small ? .78 : 1, rowY = [S.by + 14, S.by + 48, S.by + 90], gap = [30 * k, 44 * k, 60 * k], order = [0, -1, 1, -2, 2, -3, 3, -4, 4];
+    this.slotPos = function (r, j) { return { x: S.bx + order[j] * gap[r], y: Math.min(S.floorY - 2, rowY[r]) }; };
+    this.items.forEach(function (it) {
+      // the frame can change size after load: keep loose things inside the court
+      if (pW && pW !== S.CW && it.state === 'ground') it.x = it.x * S.CW / pW;
+      if (it.state === 'ground') { it.x = Math.max(it.w, Math.min(S.CW - it.w, it.x)); if (it.y > S.floorY) { it.y = S.floorY; it.vy = 0; } }
+      if (it.slot) { const p = self.slotPos(it.slot[0], it.slot[1]); it.sx = p.x; it.sy = p.y; }
+      if (it.fresh && it.state === 'ground') { it.fresh = false; it.x = self.scatterX(); it.y = S.floorY; it.r = (Math.random() - .5) * 120; }
+    });
+    if (this.reduced) this.items.forEach(function (it) { self.placeNow(it); });
+  }
+
+  scatterX() { const S = this.S; return S.small ? (.08 + Math.random() * .84) * S.CW : (.48 + Math.random() * .48) * S.CW; }
+
+  takeSlot(it) {
+    if (it.slot) return;
+    const row = this.rows[it.row];
+    let j = 0; while (row[j]) j++;
+    if (j > 8) j = 8;
+    row[j] = it.id; it.slot = [it.row, j];
+    const p = this.slotPos(it.row, j); it.sx = p.x; it.sy = p.y;
+  }
+  freeSlot(it) { if (!it.slot) return; this.rows[it.slot[0]][it.slot[1]] = null; it.slot = null; }
+  placeNow(it) { this.takeSlot(it); it.state = 'placed'; it.x = it.sx; it.y = it.sy; it.r = 0; }
+
+  rel(el) { const r = el.getBoundingClientRect(), rr = this.rr; return { left: r.left - rr.left, top: r.top - rr.top, width: r.width, height: r.height, right: r.right - rr.left }; }
+
+  frameGeo(dt) {
+    const S = this.S, P = this.P;
+    if (!P.root) return;
+    this.rr = P.root.getBoundingClientRect();
+    S.W = P.root.clientWidth;
+    S.cr = P.court ? this.rel(P.court) : null;
+    if (S.cr && (Math.abs(S.cr.width - (S.CW || 0)) > 1 || Math.abs(S.cr.height - (S.CH || 0)) > 1)) this.geo();
+    if (S.cand !== S.mode) { S.candT += dt; if (S.candT > .35) this.setMode(S.cand); }
+  }
+
+  pickSection() {
+    let best = 'hero', bh = -1;
+    for (const k in this.vis) if (this.vis[k] > bh) { bh = this.vis[k]; best = k; }
+    if (this.S.cand !== best) { this.S.cand = best; this.S.candT = 0; }
+  }
+
+  setMode(m) {
+    const S = this.S, B = this.B, C = this.C;
+    S.mode = m; S.queue = []; S.action = null;
+    B.flying = false; B.flare = false; B.hopY = 0; C.pitch.t = 0; C.head.t = 0; C.jaw.t = 0; C.legs.t = 1; C.tail.t = 0; C.wing.t = 0; C.tuft.t = 0;
+    if (B.carry) this.release(B.carry);
+    B.at = null;
+    this.items.forEach(function (it) { it.reserved = false; });
+    S.wantShow = false;
+  }
+
+  release(it) {
+    const p = this.beak(), r = this.S.cr;
+    it.state = 'ground'; this.freeSlot(it);
+    if (r) { it.x = p.x - r.left; it.y = p.y - r.top; }
+    it.vx = 0; it.vy = 10;
+    this.B.carry = null;
+  }
+
+  home() {
+    const S = this.S;
+    if (S.hidden) return { x: S.W + 160, y: this.B.y };
+    if (S.mode === 'hero' && S.cr) return { x: S.cr.left + S.bx + (S.small ? 72 : 100), y: S.cr.top + S.by + 2, perch: true, ground: 'court' };
+    if (S.mode === 'yours' && S.override != null && this.P.root) {
+      const d = this.P.root.querySelector('[data-arch="' + S.override + '"]');
+      if (d) { const r = this.rel(d); if (r.width) return { x: r.left + r.width * .5 + 18, y: r.top + 4, perch: true }; }
+    }
+    const el = this.perches[S.mode];
+    if (!el) return { x: S.W - 70, y: this.B.y, perch: true };
+    const r = this.rel(el), px = parseFloat(el.getAttribute('data-perch'));
+    return { x: Math.max(50, Math.min(S.W - 50, r.left + r.width * px)), y: r.top + 1, perch: true };
+  }
+
+  componentDidMount() {
+    const self = this, root = this.P.root;
+    if (!root) return;
+    this.rr = root.getBoundingClientRect();
+    this.geo();
+    if (typeof ResizeObserver !== 'undefined' && this.P.court) { this.ro = new ResizeObserver(function () { self.geo(); }); this.ro.observe(this.P.court); }
+    root.querySelectorAll('[data-sec]').forEach(function (sec) { const pe = sec.querySelector('[data-perch]'); if (pe) self.perches[sec.getAttribute('data-sec')] = pe; });
+    if (typeof IntersectionObserver !== 'undefined') {
+      const th = []; for (let i = 0; i <= 20; i++) th.push(i / 20);
+      // visible height of each section, measured against the real screen (works inside frames too)
+      this.secIO = new IntersectionObserver(function (es) { es.forEach(function (e) { self.vis[e.target.getAttribute('data-sec')] = e.isIntersecting ? e.intersectionRect.height : 0; }); self.pickSection(); }, { threshold: th });
+      root.querySelectorAll('[data-sec]').forEach(function (sec) { self.secIO.observe(sec); });
+    }
+    this.frameGeo(0);
+    this.S.size = this.S.heroSize || 112;
+    if (this.reduced) { const h = this.home(); this.B.x = h.x; this.B.y = h.y; this.B.at = 'home'; this.setState({ placed: this.items.length }); this.apply(); return; }
+    this.B.x = this.S.W + 120; this.B.y = 60;
+    this.raf = requestAnimationFrame(this.loopB);
+  }
+  componentWillUnmount() { clearInterval(this.tidyTimer); cancelAnimationFrame(this.raf); if (this.ro) this.ro.disconnect(); if (this.secIO) this.secIO.disconnect(); clearInterval(this.runTimer); }
+
+  componentDidUpdate(pp, ps) {
+    ps = ps || {};
+    const st = this.state, m = this.S.mode;
+    if (st.tidyRun && !ps.tidyRun && m === 'tidy') this.react('peck');
+    if (!st.tidyRun && ps.tidyRun && st.filed.length && m === 'tidy') { if (!this.S.action && !this.S.queue.length && this.B.at && !this.reduced) this.act(this.showOff()); }
+    if (st.dotsI !== ps.dotsI && m === 'dots') this.react('peck');
+    if (st.appGone !== ps.appGone && m === 'yours') this.react(st.appGone ? 'alarm' : 'happy');
+    if (st.runStep !== ps.runStep) {
+      const hot = [0, 1, 3, 2, 3, 2, 0];
+      this.S.override = st.runStep >= 0 && st.runStep < hot.length ? hot[st.runStep] : null;
+      if (st.runStep === hot.length && m === 'yours') this.react('happy');
+    }
+  }
+
+  act(a) { this.S.queue.push(a); }
+
+  react(type) {
+    const S = this.S, C = this.C;
+    if (this.reduced || S.hidden || S.action || S.queue.length || !this.B.at) return;
+    if (type === 'peck') this.act(this.peck(null));
+    if (type === 'happy') { this.chirp(.4); this.act(this.hopInPlace(2)); }
+    if (type === 'alarm') { this.chirp(.7); C.tuft.t = -28; C.squash.vel += 3; this.act(this.hopInPlace(1)); this.act({ update: function (el) { if (el > .3) C.tuft.t = 0; return el > .35; } }); }
+  }
+
+  loop(ts) {
+    const dt = Math.min(.033, (ts - (this.last || ts)) / 1000);
+    this.last = ts; this.S.t += dt;
+    this.frameGeo(dt);
+    const target = this.S.mode === 'hero' ? this.S.heroSize : this.S.guideSize;
+    this.S.size += ((target || 112) - this.S.size) * Math.min(1, dt * 3);
+    this.think(dt); this.step(dt); this.physics(dt); this.apply();
+    this.raf = requestAnimationFrame(this.loopB);
+  }
+
+  // ---------- behaviour ----------
+  think(dt) {
+    const S = this.S, B = this.B, self = this;
+    if (!S.action && S.queue.length) { S.action = S.queue.shift(); S.action.el = 0; if (S.action.start) S.action.start(); }
+    if (S.action) { S.action.el += dt; if (S.action.update(S.action.el, dt)) { if (S.action.end) S.action.end(); S.action = null; } return; }
+    const home = function () { return self.home(); };
+    if (S.hidden) { if (B.x < S.W + 100) this.act(this.flyTo(home)); return; }
+    if (S.mode === 'hero') {
+      const todo = this.items.filter(function (it) { return it.state === 'ground' && !it.reserved && it.vy === 0 && Math.abs(it.vx) < 12; });
+      if (todo.length) {
+        const bx = B.x - (S.cr ? S.cr.left : 0);
+        todo.sort(function (a, b) { return Math.abs(a.x - bx) - Math.abs(b.x - bx); });
+        const it = todo[0]; it.reserved = true; S.shown = false;
+        this.act(this.goNear(it)); this.act(this.peck(it)); this.act(this.goSlot(it)); this.act(this.place(it));
+        return;
+      }
+      if (this.items.some(function (it) { return (it.state === 'ground' && !it.reserved) || it.state === 'drag'; })) { this.idle(dt); return; }
+      if (!S.shown && B.at) { S.shown = true; this.act(this.showOff()); return; }
+    }
+    if (!B.at) { this.act(this.flyTo(home)); return; }
+    if (S.wantShow) { S.wantShow = false; this.act(this.showOff()); return; }
+    const h = this.home();
+    if (Math.hypot(h.x - B.x, h.y - B.y) > 40) { B.at = null; this.act(this.flyTo(home)); return; }
+    B.x = h.x; B.y = h.y;
+    this.idle(dt);
+  }
+
+  idle(dt) {
+    const S = this.S, B = this.B, C = this.C, R = function (a, b) { return a + (b - a) * Math.random(); };
+    const looking = S.ptr && S.t - S.ptrT < 2.5, calm = S.mode !== 'hero';
+    if (looking) {
+      const Z = S.size, eye = { x: B.x + C.face.v * 20 * Z / 100, y: B.y - 58 * Z / 100 };
+      const dx = (S.ptr.x - eye.x) * B.face, dy = S.ptr.y - eye.y;
+      if (dx < -30) { S.behindT += dt; if (S.behindT > .6) { S.behindT = 0; this.turn(); } } else S.behindT = 0;
+      const ang = Math.atan2(dy, Math.max(20, dx)) * 180 / Math.PI, want = Math.max(-32, Math.min(30, ang * .7));
+      if (S.t - S.lastSnap > R(.14, .4) && Math.abs(want - C.head.t) > 6) { C.head.t = want; S.lastSnap = S.t; }
+      const m = Math.hypot(dx, dy) || 1;
+      C.ix.t = .3 + 1.3 * dx / m; C.iy.t = 1.4 * dy / m;
+      C.pitch.t = Math.max(-6, Math.min(8, ang * .12));
+    } else { C.ix.t = .4; C.iy.t = 0; C.pitch.t = 0; }
+    S.nextIdle -= dt;
+    if (S.nextIdle <= 0) {
+      S.nextIdle = calm ? R(1.8, 3.6) : R(.6, 1.8);
+      const r = Math.random();
+      if (!looking && r < .36) C.head.t = R(-26, 22);
+      else if (r < .52) C.tail.vel += R(220, 380);
+      else if (r < .64) C.wing.vel += 260;
+      else if (r < .72 && !calm) this.chirp(.35);
+      else if (r < .8) C.squash.vel += 2.2;
+      else if (!looking && r < .88 && !calm) this.turn();
+      else if (r < .94 && !calm) this.act(this.hopInPlace(1));
+      else { C.head.t = R(-30, -18); C.ix.t = 1.6; }
+    }
+  }
+
+  turn() { this.B.face *= -1; this.C.squash.vel += 1.6; this.B.hopKick = .16; this.C.tail.vel += 200; }
+  chirp(d) { this.S.chirpT = d; this.C.tuft.vel -= 120; }
+  worldOf(it) { const r = this.S.cr; return r ? { x: r.left + it.x, y: r.top + it.y } : { x: it.x, y: it.y }; }
+
+  goNear(it) {
+    const self = this;
+    return {
+      start: function () {
+        const B = self.B, S = self.S, w = self.worldOf(it), off = .36 * S.size, r = S.cr;
+        let dir = Math.sign(w.x - B.x) || 1;
+        if (r && (w.x - dir * off < r.left + S.size * .4 || w.x - dir * off > r.right - S.size * .4)) dir = -dir;
+        this.dir = dir;
+        const get = function () { const p = self.worldOf(it); return { x: p.x - dir * .36 * self.S.size, y: p.y, ground: 'court' }; };
+        this.sub = (B.onGround && Math.abs(get().x - B.x) < 150 && Math.abs(get().y - B.y) < 50) ? self.hopTo(get) : self.flyTo(get);
+        this.sub.el = 0; this.sub.start();
+      },
+      update: function (el, dt) {
+        if (it.state === 'drag') { self.S.queue = []; it.reserved = false; return true; }
+        this.sub.el += dt; const d = this.sub.update(this.sub.el, dt); if (d) self.B.face = this.dir; return d;
+      }
+    };
+  }
+
+  goSlot(it) {
+    const self = this;
+    return {
+      start: function () {
+        self.takeSlot(it);
+        const B = self.B, cr = self.S.cr, dir = (cr && cr.left + it.sx > B.x) ? 1 : -1;
+        this.dir = dir;
+        const get = function () { const r = self.S.cr; return { x: r.left + it.sx - dir * .36 * self.S.size, y: r.top + it.sy, ground: 'court' }; };
+        this.sub = Math.abs(get().x - B.x) < 160 && Math.abs(get().y - B.y) < 50 ? self.hopTo(get) : self.flyTo(get);
+        this.sub.el = 0; this.sub.start();
+      },
+      update: function (el, dt) { this.sub.el += dt; const d = this.sub.update(this.sub.el, dt); if (d) self.B.face = this.dir; return d; }
+    };
+  }
+
+  place(it) {
+    const self = this;
+    return {
+      update: function (el) {
+        const C = self.C, B = self.B;
+        if (el < .2) { C.pitch.t = 32; C.head.t = 22; }
+        else if (!this.done) {
+          this.done = true; C.jaw.t = 22; it.state = 'placed'; it.reserved = false; B.carry = null; it.vx = 0; it.vy = 0;
+          self.setState({ placed: self.items.filter(function (i) { return i.state === 'placed'; }).length });
+        }
+        if (el > .34) C.jaw.t = 0;
+        if (el > .42) { C.pitch.t = 0; C.head.t = -6; }
+        return el > .6;
+      }
+    };
+  }
+
+  makeBower() {
+    let s = 5;
+    const rnd = function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    const R = function (a, b) { return a + (b - a) * rnd(); }, f = function (n) { return n.toFixed(1); };
+    const w = ['', '', ''];
+    let straw = '';
+    [[50, 86, 1], [114, 150, -1]].forEach(function (wall) {
+      for (let i = 0; i < 64; i++) {
+        const bx = R(wall[0], wall[1]), by = R(114, 124), depth = Math.abs(bx - 100) / 50, lean = wall[2] * R(10, 26) * (.6 + depth), h = R(54, 90) * (1.15 - depth * .45);
+        const tx = bx + lean, ty = by - h, mx = bx + lean * .25 + R(-3, 3), my = by - h * .6;
+        w[i % 3] += 'M' + f(bx) + ' ' + f(by) + 'Q' + f(mx) + ' ' + f(my) + ' ' + f(tx) + ' ' + f(ty);
+      }
+    });
+    for (let i = 0; i < 26; i++) { const x = R(40, 160), y = R(118, 128); straw += 'M' + f(x) + ' ' + f(y) + 'l' + f(R(-10, 10)) + ' ' + f(R(-2, 2)); }
+    return { w0: w[0], w1: w[1], w2: w[2], straw: straw };
+  }
+
+  flyTo(get) {
+    const self = this;
+    return {
+      start: function () {
+        const B = self.B, C = self.C, T = get();
+        this.x0 = B.x; this.y0 = B.y;
+        const dist = Math.hypot(T.x - this.x0, T.y - this.y0);
+        this.dur = Math.max(.55, Math.min(1.3, dist / 600));
+        if (Math.abs(T.x - this.x0) > 6) B.face = Math.sign(T.x - this.x0);
+        this.pre = B.at || B.onGround ? .12 : 0;
+        if (this.pre) { C.squash.t = .8; C.pitch.t = 10; }
+        B.at = null; B.onGround = false;
+      },
+      update: function (el) {
+        const B = self.B, C = self.C;
+        if (el < this.pre) return false;
+        if (!this.go) { this.go = true; C.squash.t = 1; C.squash.vel += 4; B.flying = true; C.legs.t = .3; C.tuft.t = 6; }
+        const T = get(), dist = Math.hypot(T.x - this.x0, T.y - this.y0);
+        const cx = (this.x0 + T.x) / 2, cy = Math.min(this.y0, T.y) - 40 - Math.min(dist, 700) * .18;
+        const q = Math.min(1, (el - this.pre) / this.dur), e = q < .5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2, u = 1 - e;
+        const nx = u * u * this.x0 + 2 * u * e * cx + e * e * T.x, ny = u * u * this.y0 + 2 * u * e * cy + e * e * T.y;
+        const vy = ny - B.y;
+        if (Math.abs(nx - B.x) > .5) B.face = Math.sign(nx - B.x);
+        B.x = nx; B.y = ny;
+        C.pitch.t = Math.max(-24, Math.min(22, vy * 3));
+        B.flare = q > .8; if (B.flare) { C.legs.t = 1; C.pitch.t = -14; }
+        if (q >= 1) {
+          B.flying = false; B.flare = false; C.squash.v = .74; C.squash.vel = 0; C.squash.t = 1; C.tail.vel += 340; C.pitch.t = 0; C.wing.v = 10; C.wing.t = 0; C.legs.t = 1; C.tuft.t = 0;
+          B.at = T.perch ? 'home' : null; B.onGround = !!T.ground; B.ground = T.ground || null;
+          return true;
+        }
+        return false;
+      }
+    };
+  }
+
+  hopTo(get) {
+    const self = this;
+    return {
+      start: function () { const B = self.B, T = get(); this.x0 = B.x; this.dx = T.x - B.x; this.n = Math.max(1, Math.ceil(Math.abs(this.dx) / 40)); this.hd = .26; this.dur = this.n * this.hd; if (Math.abs(this.dx) > 2) B.face = Math.sign(this.dx); this.landed = -1; this.T = T; B.at = null; },
+      update: function (el) {
+        const B = self.B, C = self.C, T = get(), i = Math.min(this.n - 1, Math.floor(el / this.hd)), u = (el - i * this.hd) / this.hd;
+        const x1 = T.x; B.y = T.y;
+        if (u < .3) { C.squash.t = .82; C.pitch.t = 8; B.hopY = 0; B.x = this.x0 + (x1 - this.x0) * i / this.n; C.legs.t = 1; }
+        else {
+          const s = (u - .3) / .7; C.squash.t = 1.06; C.pitch.t = -6; C.legs.t = .75; B.hopY = -20 * 4 * s * (1 - s); B.x = this.x0 + (x1 - this.x0) * (i + s) / this.n;
+          if (s > .92 && this.landed !== i) { this.landed = i; C.squash.v = .84; C.tail.vel += 240; C.wing.vel += 120; C.legs.t = 1; }
+        }
+        if (el >= this.dur) { B.x = x1; B.hopY = 0; C.squash.t = 1; C.pitch.t = 0; C.legs.t = 1; B.onGround = !!T.ground; B.ground = T.ground || null; B.at = T.perch ? 'home' : null; return true; }
+        return false;
+      }
+    };
+  }
+
+  hopInPlace(n) {
+    const self = this;
+    return {
+      start: function () {
+        const B = self.B, wasAt = B.at, x = B.x, y = B.y;
+        this.wasAt = wasAt; this.og = B.onGround; this.gr = B.ground;
+        this.sub = self.hopTo(function () { if (wasAt) { const h = self.home(); return { x: h.x, y: h.y }; } return { x: x, y: y }; });
+        this.sub.start(); this.sub.n = n; this.sub.dur = n * this.sub.hd; this.sub.el = 0;
+      },
+      update: function (el, dt) { this.sub.el += dt; const d = this.sub.update(this.sub.el, dt); if (d) { self.B.at = this.wasAt; self.B.onGround = this.og; self.B.ground = this.gr; } return d; }
+    };
+  }
+
+  peck(it) {
+    const self = this;
+    return {
+      start: function () { if (it) self.B.face = Math.sign(self.worldOf(it).x - self.B.x) || self.B.face; this.wasAt = self.B.at; },
+      update: function (el) {
+        const C = self.C, B = self.B;
+        if (el < .16) { C.pitch.t = 36; C.head.t = 24; C.jaw.t = 20; C.legs.t = .9; }
+        else if (el < .3) { C.jaw.t = 0; if (!this.got) { this.got = true; C.squash.vel -= 1.2; if (it) { it.state = 'carried'; B.carry = it; } } }
+        else { C.pitch.t = -8; C.head.t = -10; C.legs.t = 1; }
+        return el > .55;
+      },
+      end: function () { self.C.pitch.t = 0; self.C.head.t = 0; self.B.at = this.wasAt; }
+    };
+  }
+
+  showOff() {
+    const self = this;
+    return {
+      start: function () { self.B.face = 1; },
+      update: function (el) {
+        const C = self.C;
+        C.tail.t = 32; C.wing.t = 42; C.tuft.t = -26; C.head.t = -18;
+        C.pitch.t = 14 * Math.max(0, Math.sin(el * Math.PI * 1.4));
+        if (el > .2 && !this.c1) { this.c1 = true; self.chirp(.5); self.sparkle(); }
+        if (el > 1.5 && !this.c2) { this.c2 = true; self.chirp(.5); self.sparkle(); self.B.face = -1; }
+        if (el > 2.1 && !this.c3) { this.c3 = true; self.B.face = 1; }
+        return el > 2.8;
+      },
+      end: function () { const C = self.C; C.tail.t = 0; C.wing.t = 0; C.tuft.t = 0; C.head.t = 0; C.pitch.t = 0; C.squash.vel += 2; }
+    };
+  }
+
+  sparkle() {
+    const el = this.P.spark, B = this.B, Z = this.S.size;
+    if (!el) return;
+    el.style.transform = 'translate(' + B.x + 'px,' + (B.y - Z * .7) + 'px)';
+    el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+  }
+
+  // ---------- simulation ----------
+  step(dt) {
+    const C = this.C, B = this.B, S = this.S;
+    C.face.t = B.face;
+    if (B.hopKick > 0) { B.hopKick -= dt; B.hopY = -9 * Math.sin(Math.PI * (1 - Math.max(0, B.hopKick) / .16)); if (B.hopKick <= 0) B.hopY = 0; }
+    if (S.chirpT > 0) { S.chirpT -= dt; C.jaw.t = 18 * Math.abs(Math.sin(S.chirpT * Math.PI * 6)); if (S.chirpT <= 0) C.jaw.t = 0; }
+    for (const k in C) { const c = C[k], a = c.k * (c.t - c.v) - c.c * c.vel; c.vel += a * dt; c.v += c.vel * dt; }
+    if (B.flying) {
+      B.ph += dt * Math.PI * 2 * (B.flare ? 6 : 10);
+      const s = Math.sin(B.ph);
+      C.wing.v = B.flare ? 62 + 18 * s : 26 + 46 * s;
+      B.ws = .8 + .25 * Math.cos(B.ph); B.bob = -2.5 * s;
+      C.tail.t = B.flare ? 26 : -6 + 4 * s;
+    } else { B.ws += (1 - B.ws) * .2; B.bob = 0; }
+    S.nextBlink -= dt;
+    if (S.nextBlink <= 0) { S.blinkT = 0; S.nextBlink = 1.6 + Math.random() * 3.6; S.blinkDouble = Math.random() < .25; }
+    if (S.blinkT >= 0) { S.blinkT += dt; const d = S.blinkDouble ? .26 : .12; S.blink = S.blinkT < d ? Math.abs(Math.sin(S.blinkT / .12 * Math.PI)) : 0; if (S.blinkT >= d) S.blinkT = -1; } else S.blink = 0;
+  }
+
+  beak() {
+    const C = this.C, B = this.B, Z = this.S.size;
+    let px = 91, py = 38, a = C.head.v * Math.PI / 180, dx = px - 60, dy = py - 50;
+    px = 60 + dx * Math.cos(a) - dy * Math.sin(a); py = 50 + dx * Math.sin(a) + dy * Math.cos(a);
+    const sy = C.squash.v, sx = 1 + (1 - sy) * .7; px = 50 + (px - 50) * sx; py = 92 + (py - 92) * sy;
+    a = C.pitch.v * Math.PI / 180; dx = px - 50; dy = py - 92;
+    px = 50 + dx * Math.cos(a) - dy * Math.sin(a); py = 92 + dx * Math.sin(a) + dy * Math.cos(a);
+    return { x: B.x + C.face.v * (px - 50) * Z / 100, y: B.y + B.hopY + B.bob + (py - 92) * Z / 100 };
+  }
+
+
+  physics(dt) {
+    const S = this.S, self = this;
+    this.items.forEach(function (it) {
+      if (it.state === 'ground') {
+        if (it.y < S.floorY || it.vy !== 0) {
+          it.vy += 1800 * dt; it.x += it.vx * dt; it.y += it.vy * dt; it.r += it.vr * dt;
+          if (it.x < it.w / 2) { it.x = it.w / 2; it.vx = Math.abs(it.vx) * .5; }
+          if (it.x > S.CW - it.w / 2) { it.x = S.CW - it.w / 2; it.vx = -Math.abs(it.vx) * .5; }
+          if (it.y >= S.floorY) { it.y = S.floorY; if (it.vy > 160) { it.vy = -it.vy * .38; it.vx *= .7; it.vr *= .5; } else it.vy = 0; }
+        } else { it.vx *= Math.pow(.004, dt); it.x += it.vx * dt; if (Math.abs(it.vx) < 4) it.vx = 0; }
+      } else if (it.state === 'carried') {
+        const p = self.beak(), r = S.cr || { left: 0, top: 0 };
+        it.x = p.x - r.left + self.C.face.v * it.w * .25; it.y = p.y - r.top + it.h * .5; it.r = self.C.pitch.v * self.C.face.v * .6;
+      } else if (it.state === 'placed') {
+        it.vx += ((it.sx - it.x) * 160 - it.vx * 14) * dt; it.vy += ((it.sy - it.y) * 160 - it.vy * 14) * dt;
+        it.x += it.vx * dt; it.y += it.vy * dt; it.r += (0 - it.r) * Math.min(1, dt * 8);
+      }
+    });
+  }
+
+  apply() {
+    const P = this.P, B = this.B, C = this.C, S = this.S, Z = S.size;
+    if (!P.bird || !P.rig) return;
+    if (Math.abs((this.lastZ || 0) - Z) > .5) { P.bird.style.width = Z + 'px'; P.bird.style.height = Z + 'px'; this.lastZ = Z; }
+    let f = C.face.v; if (Math.abs(f) < .06) f = f < 0 ? -.06 : .06;
+    P.bird.style.transform = 'translate(' + (B.x - Z / 2).toFixed(1) + 'px,' + (B.y + B.hopY + B.bob - .92 * Z).toFixed(1) + 'px) scaleX(' + f.toFixed(3) + ')';
+    const sy = C.squash.v * (1 + .014 * Math.sin(S.t * 2.6)), sx = 1 + (1 - sy) * .7;
+    P.rig.setAttribute('transform', 'rotate(' + C.pitch.v.toFixed(2) + ' 50 92) translate(50 92) scale(' + sx.toFixed(3) + ' ' + sy.toFixed(3) + ') translate(-50 -92)');
+    P.head.setAttribute('transform', 'rotate(' + C.head.v.toFixed(2) + ' 60 50)');
+    P.tail.setAttribute('transform', 'rotate(' + C.tail.v.toFixed(2) + ' 32 70)');
+    P.wing.setAttribute('transform', 'rotate(' + C.wing.v.toFixed(2) + ' 56 55) translate(56 55) scale(1 ' + B.ws.toFixed(3) + ') translate(-56 -55)');
+    P.legs.setAttribute('transform', 'translate(50 82) scale(1 ' + Math.max(.2, C.legs.v).toFixed(3) + ') translate(-50 -82)');
+    P.jaw.setAttribute('transform', 'rotate(' + Math.max(0, C.jaw.v).toFixed(2) + ' 78 38)');
+    P.tuft.setAttribute('transform', 'rotate(' + C.tuft.v.toFixed(2) + ' 61 23)');
+    P.eye.setAttribute('transform', 'translate(70 34) scale(1 ' + (1 - .92 * (S.blink || 0)).toFixed(3) + ') translate(-70 -34)');
+    P.iris.setAttribute('transform', 'translate(' + C.ix.v.toFixed(2) + ' ' + C.iy.v.toFixed(2) + ')');
+    const els = this.els;
+    this.items.forEach(function (it) {
+      const el = els[it.id]; if (!el) return;
+      el.style.transform = 'translate(' + (it.x - it.w / 2).toFixed(1) + 'px,' + (it.y - it.h).toFixed(1) + 'px) rotate(' + it.r.toFixed(1) + 'deg)' + (it.state === 'drag' ? ' scale(1.15)' : '');
+      el.style.zIndex = it.state === 'carried' || it.state === 'drag' ? 6 : 2;
+    });
+  }
+
+  local(e) { const r = this.P.court.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+  drop(x, y) {
+    const S = this.S, types = [['paper', 28], ['photo', 30], ['cap', 18], ['link', 16], ['feather', 26], ['ycap', 22], ['paper', 22], ['cap', 12]];
+    if (this.items.length >= 18) { this.chirp(.5); return; }
+    const d = types[this.uid % types.length];
+    const it = this.addItem(d[0], d[1], 'ground');
+    it.fresh = false; it.x = x; it.y = Math.min(y, S.floorY - 40);
+    it.vx = (Math.random() - .5) * 120; it.vy = 10; it.vr = (Math.random() - .5) * 400;
+    if (this.reduced) this.placeNow(it);
+    this.setState({ itemList: this.items.map(function (i) { return i.meta; }) });
+    if (this.reduced) { const self = this; setTimeout(function () { self.apply(); }, 0); }
+    else { this.C.head.t = 20; this.C.tuft.vel -= 160; }
+  }
+
+  tidyContent() {
+    const self = this, st = this.state;
+    const IC = {
+      link: 'M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1',
+      pdf: 'M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h4',
+      photo: 'M4 6h16v12H4zM8 13l3-3 5 5M15 9.5h.01',
+      voice: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3'
+    };
+    const P = this.pool;
+    const F = [
+      { key: 'P', name: 'Projects', sub: 'things with an end', color: '#5fcfbc', old: 'Already here: Flat hunt, Job hunt' },
+      { key: 'A', name: 'Areas', sub: 'things that go on', color: '#f0b64f', old: 'Already here: Home, Money, Health' },
+      { key: 'R', name: 'Resources', sub: 'for later', color: '#93c5fd', old: 'Already here: Baking, Manuals' },
+      { key: 'X', name: 'Archive', sub: 'done', color: '#c4b5fd', old: 'Already here: Trips' }
+    ];
+    const inbox = st.inbox.map(function (id, k) {
+      const p = P[id], leaving = st.tidyRun && k === 0;
+      return { before: leaving ? p.after : p.before, from: leaving ? 'Filed in ' + p.where : p.from, nameCls: leaving ? 'd' : 'mono', fromColor: leaving ? '#5fcfbc' : 'var(--dim)', icon: IC[p.kind], color: p.kind === 'link' ? '#93c5fd' : p.kind === 'photo' ? '#5fcfbc' : p.kind === 'voice' ? '#c4b5fd' : '#f0b64f',
+        style: 'display:flex;gap:12px;align-items:center;padding:12px 8px;margin:0 -8px;border-radius:12px;border-bottom:1px solid var(--line);transition:background .3s;' + (leaving ? 'background:rgb(95 207 188 / .12)' : '') };
+    });
+    const filed = st.filed;
+    const left = st.inbox.length;
+    return {
+      inbox: inbox, inboxEmpty: left === 0,
+      inboxCount: left === 1 ? '1 waiting' : left + ' waiting',
+      folders: F.map(function (f) {
+        return Object.assign({}, f, { items: filed.filter(function (id) { return P[id].f === f.key; }).map(function (id) {
+          const p = P[id];
+          return { after: p.after, before: p.before, note: p.note, where: p.where, isOpen: st.openId === id,
+            open: function () { self.setState({ openId: self.state.openId === id ? -1 : id }); } };
+        }) });
+      }),
+      tidyBusy: st.tidyRun,
+      tidyLabel: st.tidyRun ? 'Tidying up' : left ? 'Tidy up ' + left + (left === 1 ? ' thing' : ' things') : 'Start again',
+      tidyBtnStyle: st.tidyRun ? 'opacity:.6;cursor:default' : '',
+      addLabel: 'Add something',
+      tidyNote: st.tidyRun ? 'Bower is reading and filing. In the app you could close it and carry on.' : filed.length ? filed.length + ' filed, each with a name that says what it is.' : '',
+      runTidyUp: function () {
+        const s = self.state;
+        if (s.tidyRun) return;
+        if (!s.inbox.length) { self.setState({ inbox: [0, 3, 4, 6], filed: [], openId: -1, nextAdd: 0 }); return; }
+        self.setState({ tidyRun: true });
+        clearInterval(self.tidyTimer);
+        self.tidyTimer = setInterval(function () {
+          const s2 = self.state;
+          if (!s2.inbox.length) { clearInterval(self.tidyTimer); self.setState({ tidyRun: false }); return; }
+          const id = s2.inbox[0];
+          self.setState({ inbox: s2.inbox.slice(1), filed: s2.filed.concat([id]), tidyRun: s2.inbox.length > 1 });
+          if (s2.inbox.length <= 1) clearInterval(self.tidyTimer);
+        }, self.reduced ? 300 : 1300);
+      },
+      addThing: function () {
+        const s = self.state, used = s.inbox.concat(s.filed);
+        const free = P.map(function (_, i) { return i; }).filter(function (i) { return used.indexOf(i) < 0; });
+        if (!free.length || s.inbox.length >= 6) return;
+        self.setState({ inbox: s.inbox.concat([free[0]]) });
+      }
+    };
+  }
+
+  content() {
+    const self = this, st = this.state;
+    const ICON = {"phone": "M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2", "cloudflare": "M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727", "github": "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12", "drive": "M12.01 1.485c-2.082 0-3.754.02-3.743.047.01.02 1.708 3.001 3.774 6.62l3.76 6.574h3.76c2.081 0 3.753-.02 3.742-.047-.005-.02-1.708-3.001-3.775-6.62l-3.76-6.574zm-4.76 1.73a789.828 789.861 0 0 0-3.63 6.319L0 15.868l1.89 3.298 1.885 3.297 3.62-6.335 3.618-6.33-1.88-3.287C8.1 4.704 7.255 3.22 7.25 3.214zm2.259 12.653-.203.348c-.114.198-.96 1.672-1.88 3.287a423.93 423.948 0 0 1-1.698 2.97c-.01.026 3.24.042 7.222.042h7.244l1.796-3.157c.992-1.734 1.85-3.23 1.906-3.323l.104-.167h-7.249z", "obsidian": "M19.355 18.538a68.967 68.959 0 0 0 1.858-2.954.81.81 0 0 0-.062-.9c-.516-.685-1.504-2.075-2.042-3.362-.553-1.321-.636-3.375-.64-4.377a1.707 1.707 0 0 0-.358-1.05l-3.198-4.064a3.744 3.744 0 0 1-.076.543c-.106.503-.307 1.004-.536 1.5-.134.29-.29.6-.446.914l-.31.626c-.516 1.068-.997 2.227-1.132 3.59-.124 1.26.046 2.73.815 4.481.128.011.257.025.386.044a6.363 6.363 0 0 1 3.326 1.505c.916.79 1.744 1.922 2.415 3.5zM8.199 22.569c.073.012.146.02.22.02.78.024 2.095.092 3.16.29.87.16 2.593.64 4.01 1.055 1.083.316 2.198-.548 2.355-1.664.114-.814.33-1.735.725-2.58l-.01.005c-.67-1.87-1.522-3.078-2.416-3.849a5.295 5.295 0 0 0-2.778-1.257c-1.54-.216-2.952.19-3.84.45.532 2.218.368 4.829-1.425 7.531zM5.533 9.938c-.023.1-.056.197-.098.29L2.82 16.059a1.602 1.602 0 0 0 .313 1.772l4.116 4.24c2.103-3.101 1.796-6.02.836-8.3-.728-1.73-1.832-3.081-2.55-3.831zM9.32 14.01c.615-.183 1.606-.465 2.745-.534-.683-1.725-.848-3.233-.716-4.577.154-1.552.7-2.847 1.235-3.95.113-.235.223-.454.328-.664.149-.297.288-.577.419-.86.217-.47.379-.885.46-1.27.08-.38.08-.72-.014-1.043-.095-.325-.297-.675-.68-1.06a1.6 1.6 0 0 0-1.475.36l-4.95 4.452a1.602 1.602 0 0 0-.513.952l-.427 2.83c.672.59 2.328 2.316 3.335 4.711.09.21.175.43.253.653z", "bower": "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"};
+    const caseData = [
+      { before: 'https://…/listing/88213', after: 'Flat 3, 12 Mill Lane', folder: 'Flat hunt', color: '#5fcfbc', kind: 'A flat to rent', note: '68 m², two bedrooms, 6 minutes to the Tube, 10 % under the average for the area.' },
+      { before: 'Offer_letter_final(2).pdf', after: 'Offer, Data Engineer', folder: 'Job hunt', color: '#5fcfbc', kind: 'A job offer', note: 'Salary, start date and notice period, with the commute from the flat you shortlisted.' },
+      { before: '"book the boat for mum\'s 70th"', after: 'Mum\'s 70th, boat trip', folder: 'Mum\'s 70th', color: '#5fcfbc', kind: 'A to-do for a plan', note: 'Added to the plan, next to the guest list you saved last week.' },
+      { before: 'scan_0012.pdf', after: 'Lease 2026, signed', folder: 'Home', color: '#f0b64f', kind: 'A tenancy agreement', note: 'Rent due on the 1st, two months of notice, ends 30 April 2027.' },
+      { before: 'IMG_2290.jpg', after: 'Boiler service, 12 Sep', folder: 'Money', color: '#f0b64f', kind: 'A receipt', note: '120.00, paid by card. Filed by month, as your rule says.' },
+      { before: 'Scan 14 Oct.pdf', after: 'Blood test, October', folder: 'Health', color: '#f0b64f', kind: 'Blood test results', note: 'Added to your yearly table: what changed since March.' },
+      { before: 'https://…/blog?p=88', after: 'Sourdough, the short version', folder: 'Baking', color: '#3b82f6', kind: 'An article to keep', note: 'The method in six steps, with a link back to where it came from.' },
+      { before: 'Lisbon.pdf', after: 'Lisbon, May 2026, bookings', folder: 'Trips', color: '#c4b5fd', kind: 'Travel bookings, trip done', note: 'The trip is over, so it goes to the archive. Nothing is deleted.' }
+    ];
+    const N = {
+      cv: { name: 'CV insights', color: '#5fcfbc', x: 16, y: 15 }, flat: { name: 'Flat 3, Mill Lane', color: '#5fcfbc', x: 13, y: 52 },
+      budget: { name: 'Budget 2026', color: '#f0b64f', x: 22, y: 86 }, lease: { name: 'Lease 2026', color: '#f0b64f', x: 50, y: 88 },
+      blood: { name: 'Blood test, March', color: '#f0b64f', x: 79, y: 84 }, gp: { name: 'GP letter', color: '#f0b64f', x: 85, y: 55 },
+      run: { name: '10K training plan', color: '#3b82f6', x: 48, y: 13 }, rules: { name: 'Your rules', color: '#c4b5fd', x: 75, y: 28 }
+    };
+    const D = [
+      { label: 'A job offer', newName: 'Offer, Data Engineer', links: ['cv', 'flat', 'budget'], web: true,
+        lines: [['Pays 12 % more than your current role.', 'n', 'CV insights'], ['14 minutes by bike from Flat 3 on Mill Lane, the flat you shortlisted.', 'b', 'Flat 3, Mill Lane and a route'], ['Rent would be 31 % of the new take-home pay, under the 35 % you set.', 'n', 'Budget 2026'], ['The company moved to a four-day week this year.', 'w', 'company news']],
+        mem: 'you cycle to work, rent under 35 % of pay' },
+      { label: 'Test results', newName: 'Blood test, October', links: ['blood', 'gp', 'run'], web: true,
+        lines: [['Vitamin D is up from 18 to 41 since March.', 'n', 'Blood test, March'], ['Your GP asked for a recheck in six months. This is it; the letter is linked.', 'n', 'GP letter'], ['Iron is at the low end of normal. Worth raising before your 10K in November.', 'n', '10K training plan'], ['What each range means, with the sources linked.', 'w', 'reference ranges']],
+        mem: 'recheck due in October, training for a 10K' },
+      { label: 'A flat listing', newName: 'Flat 7, Rosebery Ave', links: ['flat', 'budget', 'lease'], web: true,
+        lines: [['40 a month cheaper than Flat 3, but 9 minutes further from the Tube.', 'b', 'Flat 3, Mill Lane and a map'], ['Your lease needs two months of notice: the earliest move is 1 January.', 'n', 'Lease 2026'], ['The two-bedroom average for the area is 1,610. This one is 6 % under.', 'w', 'local listings'], ['Added to your comparison of flats, ranked second.', 'n', 'Flat hunt']],
+        mem: 'two bedrooms, under 1,600 a month' },
+      { label: 'A rule you give it', newName: 'Receipts go to Money, by month', links: ['rules', 'budget', 'lease'], web: false,
+        lines: [['Kept as a rule, dated, in your rules file. You can read it and change it.', 'n', 'Your rules'], ['Applied to the 14 receipts already filed: one folder per month.', 'n', 'Money'], ['Boiler and rent receipts now add up in Budget 2026.', 'n', 'Budget 2026'], ['Next time, a receipt goes straight to its month.', 'n', 'Your rules']],
+        mem: 'receipts by month' }
+    ];
+    const feed = function (n) {
+      const nx = n.x * 1.6, ny = n.y * 1.1, cx = 80, cy = 55, dx = nx - cx, dy = ny - cy, L = Math.hypot(dx, dy) || 1;
+      const t = Math.min(26 / Math.max(.001, Math.abs(dx)), 21 / Math.max(.001, Math.abs(dy))), ex = cx + dx * t, ey = cy + dy * t;
+      const sx = nx - dx / L * 7, sy = ny - dy / L * 4, mx = (sx + ex) / 2 - (ey - sy) * .2, my = (sy + ey) / 2 + (ex - sx) * .2;
+      return 'M' + sx.toFixed(1) + ' ' + sy.toFixed(1) + 'Q' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + ex.toFixed(1) + ' ' + ey.toFixed(1);
+    };
+    const srcC = { n: '#5fcfbc', w: '#93c5fd', b: '#c4b5fd' }, srcT = { n: 'From your notes: ', w: 'From the web: ', b: 'From your notes and the web: ' };
+    const files = [
+      { name: 'Flat 3, 12 Mill Lane.md', path: 'Projects / Flat hunt', folder: 'Flat hunt', top: 'Projects', color: '#5fcfbc' },
+      { name: 'Lease 2026, signed.pdf', path: 'Areas / Home', folder: 'Home', top: 'Areas', color: '#f0b64f' },
+      { name: 'Sourdough, the short version.md', path: 'Resources / Baking', folder: 'Baking', top: 'Resources', color: '#3b82f6' },
+      { name: 'Lisbon, May 2026.pdf', path: 'Archive / Trips', folder: 'Trips', top: 'Archive', color: '#c4b5fd' }
+    ];
+    const views = [['bower', 'Bower'], ['drive', 'Google Drive'], ['obsidian', 'Obsidian']];
+    const arch = [
+      { name: 'Your phone', role: 'the app', color: '#f0b64f', keeps: 'The app, and your notes cached so you can read them offline.', never: 'Anything you did not save to Bower.' },
+      { name: 'Cloudflare', role: 'sign-in and keys', color: '#93c5fd', keeps: 'Your sign-in, a pointer to your folder, and the pages of the app.', never: 'A note, a file or a summary of one. Ever.' },
+      { name: 'GitHub', role: "Bower's workshop", color: '#c4b5fd', keeps: 'Nothing between tidy-ups. During one, a temporary copy of your folder.', never: 'Anything once the tidy-up ends: the copy is deleted.' },
+      { name: 'Your Google Drive', role: 'your notes', color: '#5fcfbc', keeps: 'Every note, every file and every rule. Plain files that you own.', never: 'Anything you cannot open and read yourself.' }
+    ];
+    const run = [
+      ['12.5%', '37.5%', 'You tap Tidy up on your phone.', [0]],
+      ['37.5%', '62.5%', 'Cloudflare checks it is you and wakes Bower up.', [1]],
+      ['87.5%', '62.5%', 'Bower makes a temporary copy of your folder.', [3, 2]],
+      ['62.5%', '62.5%', 'It reads, names and files each thing, on that copy.', [2]],
+      ['62.5%', '87.5%', 'The changes go back to your Drive.', [2, 3]],
+      ['62.5%', '62.5%', 'The temporary copy is deleted.', [2]],
+      ['62.5%', '12.5%', 'Your phone shows what changed.', [0]]
+    ];
+    const rs = st.runStep, hotSet = rs >= 0 && rs < run.length ? run[rs][3] : [];
+    return {
+      cases: caseData.map(function (c, i) { return Object.assign({}, c, { on: i === st.caseI, pick: function () { self.setState({ caseI: self.state.caseI === i ? -1 : i }); } }); }),
+      dots: D.map(function (sc, i) {
+        const lk = sc.links;
+        const nodes = Object.keys(N).map(function (k) {
+          const n = N[k], j = lk.indexOf(k), hot = j >= 0;
+          return { name: n.name, color: n.color, style: 'position:absolute;left:' + n.x + '%;top:' + n.y + '%;transform:translate(-50%,-50%);display:flex;gap:8px;align-items:center;padding:7px 12px;border-radius:999px;font-size:clamp(10px,1.15vw,14px);white-space:nowrap;' + (hot ? 'background:#162034;color:#f3f6fa;box-shadow:0 0 0 1.5px ' + n.color + ';animation:hot .5s ease ' + (.15 + j * .2) + 's both' : 'background:#131d30;color:#9fabbf') };
+        });
+        return { label: sc.label, newName: sc.newName, on: i === st.dotsI, nodes: nodes, i: i, webOp: sc.web ? 1 : 0,
+          fedText: lk.map(function (k) { return N[k].name; }).join(', ') + (sc.web ? ' and the web' : ''),
+          memText: sc.mem,
+          pick: function () { self.setState({ dotsI: i }); },
+          p0: feed(N[lk[0]]), p1: feed(N[lk[1]]), p2: feed(N[lk[2]]), p3: feed({ x: 88, y: 9 }),
+          lines: sc.lines.map(function (l, j) { return { text: l[0], src: srcT[l[1]] + l[2], srcColor: srcC[l[1]], style: 'padding:0 0 12px;border-bottom:1px solid rgb(240 182 79 / .18);animation-delay:' + (.7 + j * .25) + 's' }; })
+        };
+      }),
+      yoursTabs: ['Same folder, any app', 'Where everything lives'].map(function (n, i) { return { name: n, on: st.yoursTab === i, pick: function () { self.setState({ yoursTab: i }); } }; }),
+      yours0: st.yoursTab === 0, yours1: st.yoursTab === 1,
+      views: views.map(function (v) { const on = st.view === v[0]; return { name: v[1], on: on, icon: ICON[v[0]], iconColor: v[0] === 'bower' ? '#5fcfbc' : (on ? '#111a2b' : '#c6cfdc'), pick: function () { self.setState({ view: v[0] }); }, tab: 'display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;border:0;border-radius:12px;cursor:pointer;font:600 16px Source Sans 3,sans-serif;text-align:left;' + (on ? 'background:#f3f6fa;color:#111a2b' : 'background:transparent;color:#c6cfdc') }; }),
+      files: files,
+      vBower: st.view === 'bower' && !st.appGone, vGone: st.view === 'bower' && st.appGone, vDrive: st.view === 'drive', vObsidian: st.view === 'obsidian',
+      toggleApp: function () { if (self.state.appGone) self.setState({ appGone: false, view: 'bower' }); else self.setState({ appGone: true, view: 'drive' }); },
+      delLabel: st.appGone ? 'Reinstall the app' : 'Delete the app',
+      delStyle: st.appGone ? 'background:transparent;color:#f3f6fa;box-shadow:inset 0 0 0 1.5px rgb(223 229 238 / .35)' : 'background:transparent;color:#f4a28c;box-shadow:inset 0 0 0 1.5px rgb(244 162 140 / .6)',
+      delNote: st.appGone ? 'Deleted. Every note is still in your Drive.' : 'Go on, delete it.',
+      arch: arch.map(function (b, i) {
+        const on = i === st.archSel, hot = hotSet.indexOf(i) >= 0;
+        return Object.assign({}, b, { i: i, icon: ICON[['phone', 'cloudflare', 'github', 'drive'][i]], fill: i === 0 ? 'none' : b.color, stroke: i === 0 ? b.color : 'none', on: on, pick: function () { self.setState({ archSel: i }); },
+          style: 'position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 4px 12px;border:0;border-radius:16px;cursor:pointer;text-align:center;font:inherit;background:' + (on ? '#162034' : 'transparent'),
+          disc: 'width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#111a2b;transition:box-shadow .3s,transform .3s;box-shadow:0 0 0 2px ' + (hot ? b.color + ',0 0 28px ' + b.color : '#2c3a54') + ';transform:scale(' + (hot ? 1.1 : 1) + ')',
+          temp: 'font-size:12px;padding:3px 8px;border-radius:999px;background:rgb(196 181 253 / .16);color:#c4b5fd;transition:opacity .3s;opacity:' + (i === 2 && rs >= 2 && rs <= 4 ? 1 : 0) });
+      }),
+      archSel: arch[st.archSel],
+      archSteps: run.map(function (r, i) { return { on: i === rs && r[0] !== r[1], from: r[0], to: r[1] }; }),
+      runCount: rs < 0 ? 'A tidy-up, step by step' : rs >= run.length ? 'Done' : 'Step ' + (rs + 1) + ' of ' + run.length,
+      runText: rs < 0 ? 'Watch where your things go when you tap Tidy up.' : rs >= run.length ? 'Your notes are back in your Drive, and only there.' : run[rs][2],
+      runLabel: rs >= 0 && rs < run.length ? 'Running' : rs >= run.length ? 'Watch again' : 'Watch a tidy-up',
+      runTidy: function () {
+        if (self.state.runStep >= 0 && self.state.runStep < run.length) return;
+        clearInterval(self.runTimer);
+        self.setState({ runStep: 0 });
+        self.runTimer = setInterval(function () { const n = self.state.runStep + 1; self.setState({ runStep: n }); if (n >= run.length) clearInterval(self.runTimer); }, self.reduced ? 2200 : 1500);
+      },
+      faq: [
+        { q: 'Does it cost anything?', a: 'Running Bower is free on the Cloudflare and GitHub free tiers. Bower itself uses a Claude subscription or API key, which whoever runs your Bower brings.' },
+        { q: 'Who can use it?', a: 'Whoever sets up a Bower can invite up to 100 people. Each person signs in with Google and gets their own folder in their own Drive.' },
+        { q: 'Does Bower see my whole Drive?', a: 'Bower works in one folder you choose. Google asks for Drive access because Bower must also see the notes other apps, such as Obsidian, add to that folder.' },
+        { q: 'Does it do things on its own?', a: 'No. Nothing is filed until you tap Tidy up. The only thing that runs by itself is a weekly health check of the folder.' },
+        { q: 'Can I keep using Obsidian?', a: 'Yes. Point Obsidian at the same folder. Bower hides Obsidian\'s own files, never touches them, and picks up your edits at the next tidy-up.' },
+        { q: 'What can I add?', a: 'Photos, PDFs, links, Word, OpenDocument, HTML, EPUB and RTF documents, and anything you type or dictate.' },
+        { q: 'What is PARA?', a: 'A way to organise by how soon you need things, made popular by Tiago Forte: Projects have an end, Areas go on, Resources are for later, the Archive is done.' },
+        { q: 'What does it run on?', a: 'A web app on Cloudflare Pages, with a small Cloudflare Worker for sign-in. Tidy-ups run Claude Code on GitHub Actions. Your notes are plain Markdown files in Google Drive.' },
+        { q: 'Are the examples on this page real?', a: 'No. The names, figures and documents here are made up to show what Bower does. Looking things up on the web is an option you turn on in Settings, if whoever runs your Bower allows it.' }
+      ]
+    };
+  }
+
+  renderVals() {
+    const self = this, st = this.state;
+    const lines = { drive: 'Your Drive,\ntidied by a bowerbird.', throw: 'Throw it all in.\nFind it all later.', rename: 'Never rename\na file again.' };
+    return Object.assign({}, this.setters, this.content(), this.tidyContent(), {
+      headline: lines[this.props.tagline] || lines.drive,
+      bwr: this.bwr,
+      itemList: st.itemList,
+      hideLabel: st.hidden ? 'Bring Bower back' : 'Hide Bower',
+      toggleHide: function () { const h = !self.state.hidden; self.S.hidden = h; self.S.queue = []; self.S.action = null; if (self.B.carry) self.release(self.B.carry); self.B.at = null; self.setState({ hidden: h }); },
+      onMove: function (e) {
+        const rr = self.P.root.getBoundingClientRect();
+        self.S.ptr = { x: e.clientX - rr.left, y: e.clientY - rr.top }; self.S.ptrT = self.S.t;
+        const d = self.drag; if (!d) return;
+        const p = self.local(e), it = d.it, now = performance.now();
+        if (Math.hypot(p.x - d.x0, p.y - d.y0) > 4) d.moved = true;
+        const dtm = Math.max(1, now - d.t) / 1000; d.vx = (p.x - d.px) / dtm; d.vy = (p.y - d.py) / dtm; d.px = p.x; d.py = p.y; d.t = now;
+        it.x = p.x + d.ox; it.y = Math.min(self.S.floorY, p.y + d.oy);
+        if (self.reduced) self.apply();
+      },
+      onUp: function () {
+        const d = self.drag; if (!d) return; self.drag = null;
+        const it = d.it;
+        if (!d.moved) { it.state = d.was; return; }
+        if (self.reduced) { self.placeNow(it); self.apply(); return; }
+        it.state = 'ground'; it.vx = Math.max(-900, Math.min(900, d.vx * .6)); it.vy = Math.max(-900, Math.min(400, d.vy * .6)); if (it.vy === 0) it.vy = 10; it.vr = (Math.random() - .5) * 500;
+        self.C.head.t = 18; self.chirp(.3);
+      },
+      onDown: function (e) {
+        if (e.target.closest && e.target.closest('a,button')) return;
+        const p = self.local(e);
+        const f = e.target.closest && e.target.closest('[data-id]');
+        if (f) {
+          const id = +f.getAttribute('data-id'), it = self.items.filter(function (i) { return i.id === id; })[0];
+          if (!it || it.state === 'carried') return;
+          if (e.preventDefault) e.preventDefault();
+          const was = it.state;
+          self.freeSlot(it); it.reserved = false; it.state = 'drag'; it.vx = 0; it.vy = 0;
+          self.drag = { it: it, was: was === 'placed' ? 'ground' : was, ox: it.x - p.x, oy: it.y - p.y, x0: p.x, y0: p.y, px: p.x, py: p.y, t: performance.now(), vx: 0, vy: 0, moved: false };
+          return;
+        }
+        self.drop(p.x, p.y);
+      },
+      dropOne: function () { self.drop(self.scatterX(), 40); },
+      poke: function () { if (self.reduced) return; self.chirp(.5); if (!self.S.action && !self.S.queue.length && self.B.at) self.act(self.hopInPlace(2)); else self.C.squash.vel += 2; },
+      mess: function () {
+        if (self.reduced) return;
+        self.items.forEach(function (it) {
+          if (it.state !== 'placed') return;
+          self.freeSlot(it); it.state = 'ground'; it.reserved = false;
+          it.vx = (Math.random() - .25) * 640; it.vy = -(420 + Math.random() * 360); it.vr = (Math.random() - .5) * 900;
+        });
+        self.S.shown = false; self.setState({ placed: 0 });
+        self.chirp(.7); self.C.tuft.t = -28; self.C.squash.vel += 3;
+        setTimeout(function () { self.C.tuft.t = 0; }, 400);
+      }
+    });
+  }
+}
+
+</script>
+</body>
+</html>

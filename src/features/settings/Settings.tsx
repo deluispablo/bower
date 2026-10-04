@@ -75,6 +75,13 @@ export function Settings() {
         <Toggle on={prefs.birdMoves} label="Bower moves" onChange={(v) => prefs.set({ birdMoves: v })} />
       </Row>
 
+      <h2 className={s.h2}>About Bower</h2>
+      <Row title="The Bower website" sub="What Bower is, for people who have not met it yet">
+        <a className={s.linkBtn} href="/landing/index.html" target="_blank" rel="noopener">
+          Open it
+        </a>
+      </Row>
+
       <h2 className={s.h2}>Account</h2>
       <Row title="Alex" sub="you@example.com">
         <Button size="sm" variant="ghost" onClick={() => void session.signOut()}>
