@@ -375,6 +375,44 @@ describe('things that arrive late', () => {
     expect((await drive.listAll(root)).filter((f) => f.name === 'late.pdf')).toHaveLength(1);
   });
 
+  it('a late file still goes to the Bin when the first Bin fails, and comes back on Undo', async () => {
+    const real = drive.upload.bind(drive);
+    const realTrash = drive.trash.bind(drive);
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    let lateId = '';
+    let started: () => void = () => undefined;
+    const onItsWay = new Promise<void>((r) => (started = r));
+    drive.upload = async (parent, name, body, onProgress, props) => {
+      // It arrives in Drive, but its answer comes only after the pile went to the Bin.
+      const made = await real(parent, name, body, onProgress, props);
+      lateId = made.id;
+      started();
+      await slow;
+      return made;
+    };
+    let failOnce = true;
+    drive.trash = async (id) => {
+      if (id === lateId && failOnce) {
+        failOnce = false;
+        throw new TypeError('Failed to fetch');
+      }
+      return realTrash(id);
+    };
+    const p = await vault.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    // The file is on its way when the pile goes to the Bin.
+    await onItsWay;
+    await vault.trash(p.path ?? '');
+    release();
+    await vault.settled();
+    expect(failOnce).toBe(false);
+    // In the Bin itself, not only inside a binned folder.
+    await expect(drive.get(lateId)).rejects.toThrow();
+    await vault.restore(p.path ?? '');
+    await vault.settled();
+    expect((await drive.listAll(root)).filter((f) => f.name === 'late.pdf')).toHaveLength(1);
+  });
+
   it('a note whose text changed elsewhere can still be renamed, its text kept', async () => {
     await vault.tree();
     const id = await idOf('Resources/Cooking/Lemon tart.md');

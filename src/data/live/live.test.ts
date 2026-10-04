@@ -168,6 +168,15 @@ describe('the outbox', () => {
   });
 });
 
+describe('signing out', () => {
+  it('forgets that this person was toured, so the next one gets the tour', async () => {
+    const s = await open();
+    sessionStorage.setItem('bower:toured', '1');
+    await s.session.signOut();
+    expect(sessionStorage.getItem('bower:toured')).toBeNull();
+  });
+});
+
 describe('deleting the account', () => {
   it('says goodbye only when the delete went through', async () => {
     const s = await open();

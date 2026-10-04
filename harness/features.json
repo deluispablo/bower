@@ -1580,7 +1580,8 @@
       "Read those tests",
       "Green now: each one checks what the screen or the Drive shows, and fails if the fix is undone"
     ],
-    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file|Bin fails\"",
-    "passes": false
+    "verify": "pnpm vitest run src/features/files src/data/demo src/data/live src/data/vault/drive-vault.test.ts -t \"ConfirmBin|repeats a rule|toured|late file\" && bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"New note in an empty folder\"",
+    "passes": true,
+    "note": "Tests only, so done.sh has no code to set aside. Red checked by hand on 2026-10-04 by breaking the code each pins: ConfirmBin without nested words, toured kept at sign-out, a question repeating a rule, the late file's Bin without its retry, New note in an empty folder made without asking. The vacuous demo-question test is gone."
   }
 ]

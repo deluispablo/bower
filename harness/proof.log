@@ -130,3 +130,4 @@ move-exact-match	b90ea268129742c4	2026-10-04	red
 folder-length-dots	371c9e6fb7ae9db7	2026-10-04	red
 outbox-kept-signout	1066277e5139c24e	2026-10-04	red
 steps-for-findings	80edb79f4c7b8c2d	2026-10-04	red
+weak-tests	d096aaf5c827be97	2026-10-04	known-green: tests only; each checked red by hand

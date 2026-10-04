@@ -284,11 +284,17 @@ describe('the demo notes', () => {
 import { seedQuestions, seedRules } from './fixture';
 
 describe('the demo questions', () => {
-  it('no question asks for a rule that exists', () => {
-    const rules = seedRules(0).map((r) => r.text.toLowerCase());
-    for (const q of seedQuestions(0).filter((x) => /rule/i.test(x.yes) || /as a rule/i.test(x.text))) {
-      const topic = (q.text.split(' ')[0] ?? '').toLowerCase();
-      expect(rules.some((r) => r.includes(topic)), q.text).toBe(false);
-    }
+  it('no question asks for a rule that exists (none repeats a rule)', () => {
+    const words = (t: string): string[] => t.toLowerCase().match(/[a-z]{4,}/g) ?? [];
+    const questions = seedQuestions(0);
+    expect(questions.length).toBeGreaterThan(0);
+    for (const q of questions)
+      for (const r of seedRules(0)) {
+        // Most of a rule's words in a question means the question asks for that rule again.
+        const rw = new Set(words(r.text));
+        const shared = words(q.text).filter((w) => rw.has(w));
+        expect(new Set(shared).size / rw.size, `${q.text} / ${r.text}`).toBeLessThan(0.5);
+      }
   });
+
 });

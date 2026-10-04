@@ -142,3 +142,4 @@
 - 2026-10-04: folder-length-dots passes — fix(app): a folder's name length counts its dots
 - 2026-10-04: outbox-kept-signout passes — docs: why the journal outbox stays at sign-out
 - 2026-10-04: steps-for-findings passes — chore(harness): every finding has replay steps; the progress log says what comes next
+- 2026-10-04: weak-tests passes — test: pin ConfirmBin, the tour at sign-out, demo questions, a late file's Bin and New note in an empty folder
