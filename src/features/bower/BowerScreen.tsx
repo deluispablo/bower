@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { shortDay } from '@/app/words';
 import { report } from '@/ui/report';
 import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
@@ -169,7 +170,7 @@ export function BowerScreen() {
               ) : (
                 r.yourWords && <span className="muted">You wrote: "{r.yourWords}"</span>
               )}
-              <span className="muted">Added {new Date(r.since).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+              <span className="muted">Added {shortDay(r.since)}</span>
             </li>
           ))}
         </ul>

@@ -7,7 +7,7 @@ import { displayName, findNode, parentOf, sortNodes, type SortOrder } from '@/da
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
-import { ago, plural } from '@/app/words';
+import { ago, plural, agoInSentence } from '@/app/words';
 import { useIsDesktop } from '@/ui/media';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
@@ -165,7 +165,7 @@ function Folder({ path }: { path: string }) {
                 <span className={s.tile}>{c.type === 'folder' ? <Icon name="folder" /> : c.byBower ? <BowerHead size={20} /> : <Icon name={c.kind === 'image' ? 'image' : c.kind === 'link' ? 'link' : 'file'} />}</span>
                 <span className={s.main}>
                   <span className={c.type === 'file' && c.kind !== 'note' ? `${s.name} ${s.mono}` : s.name}>{c.type === 'folder' ? c.name : displayName(c.name)}</span>
-                  <span className={s.sub}>{c.type === 'folder' ? plural(folderCount(c), 'thing') : `Changed ${ago(c.modified).toLowerCase()}`}</span>
+                  <span className={s.sub}>{c.type === 'folder' ? plural(folderCount(c), 'thing') : `Changed ${agoInSentence(c.modified)}`}</span>
                 </span>
                 {c.isNew && <span className={s.new}>New</span>}
                 <Icon name="chev" size={16} />

@@ -1,7 +1,9 @@
 /** Small, pure helpers for the words screens show. */
+import { shortDay } from '@/data/dates';
+
+export { shortDay };
 
 const MIN = 60_000;
-
 export function ago(ts: number, now = Date.now()): string {
   const d = now - ts;
   if (d < MIN) return 'just now';
@@ -13,7 +15,12 @@ export function ago(ts: number, now = Date.now()): string {
   if (sameDay) return `Today, ${time}`;
   const y = new Date(now - 86_400_000);
   if (date.toDateString() === y.toDateString()) return `Yesterday, ${time}`;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return shortDay(ts);
+}
+
+/** `ago` inside a sentence ("Changed today, 10:00", "Changed 28 Sep"). */
+export function agoInSentence(ts: number, now = Date.now()): string {
+  return ago(ts, now).replace(/^(Today|Yesterday)/, (w) => w.toLowerCase());
 }
 
 export function clock(ts: number): string {

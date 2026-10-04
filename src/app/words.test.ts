@@ -17,3 +17,16 @@ describe('words that agree', () => {
     expect(goWithIt(3)).toBe('The 3 things inside go with it. You can get them back with Undo, or from the Bin of your Drive.');
   });
 });
+
+import { ago, agoInSentence, shortDay } from './words';
+
+describe('dates', () => {
+  it('one way to write a day', () => {
+    const sep28 = new Date(2026, 8, 28, 12).getTime();
+    const now = new Date(2026, 9, 4, 12).getTime();
+    expect(shortDay(sep28)).toBe('28 Sep');
+    expect(ago(sep28, now)).toBe('28 Sep');
+    expect(agoInSentence(sep28, now)).toBe('28 Sep');
+    expect(agoInSentence(now - 3_600_000 * 2, now)).toMatch(/^today, /);
+  });
+});

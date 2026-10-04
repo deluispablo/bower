@@ -59,6 +59,7 @@ import { PHASE_MS, type Scenario, type TimeScale } from './scenario';
 import { placeOf, plainSnippet, searchLines } from '../search-text';
 import { TASK_LINE } from '../tasks';
 import { forgetThisPerson } from '../device';
+import { shortDay } from '../dates';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
 
 type Listener = () => void;
@@ -336,7 +337,7 @@ export class DemoWorld {
           body: e.hub
             ? `Everything about ${displayName(nameOf(path))} lives in this folder. Bower keeps this note up to date.`
             : '',
-          timeline: e.byBower ? [{ date: new Date(e.modified).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), text: 'Filed by Bower.' }] : [],
+          timeline: e.byBower ? [{ date: shortDay(e.modified), text: 'Filed by Bower.' }] : [],
           links: [],
           backlinks,
           byBower: !!e.byBower,
