@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { report } from '@/ui/report';
 import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { BowerError } from '@/data/types';
@@ -40,7 +41,7 @@ export function BowerScreen() {
       } else await vault.addRequest(t);
       setText('');
     } catch (e) {
-      toast(e instanceof BowerError ? e.message : 'That did not send. Try again.');
+      report(e, 'That did not send. Try again.');
     }
   };
 

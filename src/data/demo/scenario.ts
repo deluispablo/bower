@@ -35,6 +35,7 @@ export function readScenario(): Scenario {
     const s = sessionStorage.getItem(KEY);
     return isScenario(s) ? s : 'default';
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return 'default';
   }
 }
@@ -47,7 +48,7 @@ export function readTimeScale(): TimeScale {
       return q;
     }
   } catch {
-    // Storage may be blocked; the default holds.
+    // expected: Storage may be blocked; the default holds.
   }
   return 'demo';
 }
@@ -57,7 +58,7 @@ export function chooseScenario(s: Scenario, scale?: TimeScale): void {
     sessionStorage.setItem(KEY, s);
     if (scale) sessionStorage.setItem(SCALE_KEY, scale);
   } catch {
-    // Without storage the URL carries it.
+    // expected: Without storage the URL carries it.
   }
   const url = new URL(location.href);
   url.searchParams.set('scenario', s);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useNote, useSources, useTree } from '@/data/provider';
 import { displayName, findNode, nameOf, parentOf } from '@/data/tree';
@@ -14,9 +15,7 @@ import { Inline, Markdown } from './markdown';
 import { useResolver } from './resolve';
 import { useFileActions } from '@/features/files/file-actions';
 import { LinkedList } from './RightPanel';
-import { toast } from '@/ui/toast';
 import { inAppHistory } from '@/app/paths';
-import { BowerError } from '@/data/types';
 import s from './note.module.css';
 
 export function NoteScreen() {
@@ -125,7 +124,7 @@ function NoteView({ path }: { path: string }) {
           text={note.body}
           link={link}
           onToggle={(i) =>
-            void vault.toggleTask(path, i).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'That did not save. Try again.'))
+            void vault.toggleTask(path, i).catch((e: unknown) => report(e, 'That did not save. Try again.'))
           }
         />
       </div>

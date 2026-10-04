@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { usePiles, useSources, useTree } from '@/data/provider';
 import { folderCount } from '@/data/piles';
@@ -13,7 +14,6 @@ import { IconButton } from '@/ui/Button';
 import { Explorer } from './Explorer';
 import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
-import { toast } from '@/ui/toast';
 import { useFileActions } from './file-actions';
 import s from './folder.module.css';
 import { useBookmarks } from './bookmarks';
@@ -79,6 +79,7 @@ function Folder({ path }: { path: string }) {
     try {
       return (localStorage.getItem(VIEW_KEY) as View) || 'list';
     } catch {
+      // expected: storage may be blocked (a private window); the default holds.
       return 'list';
     }
   });
@@ -90,7 +91,7 @@ function Folder({ path }: { path: string }) {
     try {
       localStorage.setItem(VIEW_KEY, v);
     } catch {
-      // Keeps the choice for this visit only.
+      // expected: Keeps the choice for this visit only.
     }
   };
 
@@ -215,8 +216,8 @@ function NewNoteButton({ folder, label }: { folder: string; label: string }) {
       setOpen(false);
       setName('');
       act.open({ path, type: 'file' });
-    } catch {
-      toast('The note was not made. Try again.');
+    } catch (e) {
+      report(e, 'The note was not made. Try again.');
     }
   };
   return (

@@ -76,3 +76,4 @@
 - 2026-10-04: one-count-rule passes — fix(files): one count for a folder everywhere: what is directly in it; the inbox counts what waits
 - 2026-10-04: move-enter-empty passes — fix(move): Enter moves only once you typed what to look for
 - 2026-10-04: fake-run-persists passes — fix(fake): a tidy-up cut by a reload shows as stopped, and the running situation starts only on a fresh pretend Drive
+- 2026-10-04: swallow-sensor-strong passes — fix: every catch logs, rethrows, or says why ignoring is right; one report() for the person and the console

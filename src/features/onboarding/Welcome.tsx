@@ -27,13 +27,14 @@ function markToured(): void {
   try {
     sessionStorage.setItem(TOURED, '1');
   } catch {
-    // Without storage, Back may show the tour once more.
+    // expected: Without storage, Back may show the tour once more.
   }
 }
 function toured(): boolean {
   try {
     return sessionStorage.getItem(TOURED) === '1';
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return false;
   }
 }

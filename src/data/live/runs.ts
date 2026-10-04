@@ -20,6 +20,7 @@ function seenId(): string | null {
   try {
     return localStorage.getItem(SEEN);
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return null;
   }
 }
@@ -76,7 +77,7 @@ export class LiveRuns implements RunSource {
     try {
       localStorage.setItem(SEEN, id);
     } catch {
-      // Without storage the replay is offered again next time.
+      // expected: Without storage the replay is offered again next time.
     }
     this.emit();
   }

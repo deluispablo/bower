@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { report } from '@/ui/report';
 import { startRun } from '@/features/tidy/start-run';
 import { waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
@@ -94,7 +95,7 @@ function StoppedCard({ run }: { run: RunState }) {
         </div>
       </div>
       <div className={s.row2}>
-        <Button size="sm" onClick={() => void startRun(runs, run.scope).catch(() => toast('It did not start. Try again in a minute.'))}>
+        <Button size="sm" onClick={() => void startRun(runs, run.scope).catch((e: unknown) => report(e, 'It did not start. Try again in a minute.'))}>
           Try again
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id)}>

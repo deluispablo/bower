@@ -53,6 +53,7 @@ function deviceId(): string {
     localStorage.setItem('bower:device', id);
     return id;
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return 'this-device';
   }
 }
@@ -500,6 +501,7 @@ export class DriveVault implements VaultSource {
         return VaultIndex.build(root, await this.drive.listAll(root));
       })();
       this.ix = p;
+      // expected: the caller hears the error; this only forgets the failed listing, so the next call lists again.
       p.catch(() => {
         if (this.ix === p) this.ix = null;
       });
@@ -708,6 +710,7 @@ function dismissed(): string[] {
     const v: unknown = JSON.parse(localStorage.getItem(DISMISSED) ?? '[]');
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return [];
   }
 }
@@ -716,7 +719,7 @@ function dismiss(id: string): void {
   try {
     localStorage.setItem(DISMISSED, JSON.stringify([...dismissed(), id].slice(-200)));
   } catch {
-    // Without storage it comes back next time; nothing is lost.
+    // expected: Without storage it comes back next time; nothing is lost.
   }
 }
 

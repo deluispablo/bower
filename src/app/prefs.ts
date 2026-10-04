@@ -25,6 +25,7 @@ function load(): Partial<Prefs> {
     const raw = localStorage.getItem(KEY);
     return raw ? (JSON.parse(raw) as Partial<Prefs>) : {};
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return {};
   }
 }
@@ -46,7 +47,7 @@ export const usePrefs = create<Prefs>((set, get) => ({
     try {
       localStorage.setItem(KEY, JSON.stringify(rest));
     } catch {
-      // Private windows may refuse storage; the preference holds for this visit.
+      // expected: Private windows may refuse storage; the preference holds for this visit.
     }
   },
 }));

@@ -11,6 +11,7 @@ const safeDecode = (part: string): string => {
   try {
     return decodeURIComponent(part);
   } catch {
+    // expected: a malformed address; its text is used as it is.
     return part;
   }
 };

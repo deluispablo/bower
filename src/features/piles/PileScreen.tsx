@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { report } from '@/ui/report';
 import { Link, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, type Pile } from '@/data/types';
@@ -73,7 +74,7 @@ export function PileScreen() {
       {pile.items.some((it) => it.upload === -1) && (
         <p className={s.retry} role="alert">
           Some things did not reach your Bower folder.{' '}
-          <Button size="sm" variant="ghost" onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'That did not work. Try again.'))}>
+          <Button size="sm" variant="ghost" onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => report(e, 'That did not work. Try again.'))}>
             Try again
           </Button>
         </p>
@@ -131,7 +132,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       await vault.updatePile(pile.id, text);
       toast('Note saved. Bower reads it in the next tidy-up.');
     } catch (e) {
-      toast(e instanceof BowerError ? e.message : 'The note did not save. Try again.');
+      report(e, 'The note did not save. Try again.');
     } finally {
       setBusy(false);
     }

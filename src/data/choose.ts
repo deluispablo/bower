@@ -30,7 +30,7 @@ export function readSource(): SourceKind {
     const kept = sessionStorage.getItem(KEY);
     if (isKind(kept) && (kept !== 'real' || api)) return kept;
   } catch {
-    // Storage may be blocked; the address decides.
+    // expected: Storage may be blocked; the address decides.
   }
   return api ? 'real' : 'demo';
 }
@@ -40,7 +40,7 @@ export function chooseSource(kind: SourceKind): void {
   try {
     sessionStorage.setItem(KEY, kind);
   } catch {
-    // Without storage the address carries it.
+    // expected: Without storage the address carries it.
   }
   const url = new URL(location.href);
   url.searchParams.set('source', kind);

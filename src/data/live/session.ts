@@ -95,6 +95,7 @@ export class LiveSession implements Session {
     if (!this.me) {
       const p = this.worker.me();
       this.me = p;
+      // expected: the caller hears the error; this only forgets the failed answer, so the next call asks again.
       p.catch(() => {
         if (this.me === p) this.me = null;
       });

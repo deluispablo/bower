@@ -51,7 +51,7 @@ export function forgetPretendDrive(): void {
   try {
     for (const k of Object.keys(sessionStorage)) if (k.startsWith('bower:fake:')) sessionStorage.removeItem(k);
   } catch {
-    // Nothing kept, nothing to forget.
+    // expected: Nothing kept, nothing to forget.
   }
 }
 

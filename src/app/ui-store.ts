@@ -57,6 +57,7 @@ function read<T>(k: string, fallback: T): T {
     const v = localStorage.getItem(k);
     return v ? (JSON.parse(v) as T) : fallback;
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return fallback;
   }
 }
@@ -64,7 +65,7 @@ function write(k: string, v: unknown): void {
   try {
     localStorage.setItem(k, JSON.stringify(v));
   } catch {
-    // Storage blocked: the choice lasts for this visit.
+    // expected: Storage blocked: the choice lasts for this visit.
   }
 }
 

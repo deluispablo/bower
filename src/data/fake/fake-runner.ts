@@ -106,8 +106,9 @@ class Writer {
       if (f.folder || !f.name.endsWith('.json')) continue;
       try {
         out.push({ ...(JSON.parse(await this.drive.readText(f.id)) as JournalRecord), fileId: f.id });
-      } catch {
-        // Not a journal record; left where it is.
+      } catch (e) {
+        // A file that is not a journal record is left where it is; a Drive failure stops the run.
+        if (!(e instanceof SyntaxError)) throw e;
       }
     }
     return out.sort((a, b) => a.at - b.at);
@@ -244,8 +245,10 @@ class Writer {
     if (!id) return null;
     try {
       return JSON.parse(await this.drive.readText(id)) as T;
-    } catch {
-      return null;
+    } catch (e) {
+      // A file that is not JSON reads as missing; a Drive failure stops the run.
+      if (e instanceof SyntaxError) return null;
+      throw e;
     }
   }
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { report } from '@/ui/report';
 import { startRun } from './start-run';
 import { thingsIn, waitingIn } from '@/data/piles';
 import { usePiles, useRun, useSources } from '@/data/provider';
@@ -7,7 +8,6 @@ import { useUi } from '@/app/ui-store';
 import { plural } from '@/app/words';
 import { Sheet } from '@/ui/Sheet';
 import { Button } from '@/ui/Button';
-import { toast } from '@/ui/toast';
 import { Icon } from '@/ui/Icon';
 import { PoseBower } from '@/bird/Bower';
 import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
@@ -165,7 +165,7 @@ function RunView({ run }: { run: RunState }) {
           </>
         ) : run.phase === 'failed' ? (
           <>
-            <Button onClick={() => void startRun(runs, run.scope).catch((e: unknown) => toast(e instanceof BowerError ? e.message : 'The tidy-up did not start. Try again in a minute.'))}>Try again</Button>
+            <Button onClick={() => void startRun(runs, run.scope).catch((e: unknown) => report(e, 'The tidy-up did not start. Try again in a minute.'))}>Try again</Button>
             <Button
               variant="ghost"
               onClick={() => {

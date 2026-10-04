@@ -1,7 +1,8 @@
 import { useRef, useState, type DragEvent } from 'react';
+import { report } from '@/ui/report';
 import { useNavigate } from 'react-router';
 import { useSources } from '@/data/provider';
-import { BowerError, type FileKind } from '@/data/types';
+import type { FileKind } from '@/data/types';
 import { kindOf } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { plural } from '@/app/words';
@@ -43,6 +44,7 @@ export function Add() {
     try {
       return sessionStorage.getItem(DRAFT_KEY) ?? '';
     } catch {
+      // expected: storage may be blocked (a private window); the default holds.
       return '';
     }
   });
@@ -52,7 +54,7 @@ export function Add() {
       if (v) sessionStorage.setItem(DRAFT_KEY, v);
       else sessionStorage.removeItem(DRAFT_KEY);
     } catch {
-      // Without storage the draft lasts while the screen is open.
+      // expected: Without storage the draft lasts while the screen is open.
     }
   };
   // The things in the draft are kept for the visit too (in the real app, files are already
@@ -62,6 +64,7 @@ export function Add() {
       const raw = sessionStorage.getItem(ITEMS_KEY);
       return raw ? (JSON.parse(raw) as Draft[]) : [];
     } catch {
+      // expected: storage may be blocked (a private window); the default holds.
       return [];
     }
   });
@@ -72,7 +75,7 @@ export function Add() {
         if (v.length) sessionStorage.setItem(ITEMS_KEY, JSON.stringify(v));
         else sessionStorage.removeItem(ITEMS_KEY);
       } catch {
-        // Without storage the list lasts while the screen is open.
+        // expected: Without storage the list lasts while the screen is open.
       }
       return v;
     });
@@ -147,7 +150,7 @@ export function Add() {
       toast(ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
       nav('/');
     } catch (e) {
-      toast(e instanceof BowerError ? e.message : 'That did not save. Try again.');
+      report(e, 'That did not save. Try again.');
     } finally {
       setBusy(false);
     }

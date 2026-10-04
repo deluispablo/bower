@@ -687,7 +687,7 @@
     "what": "The swallowed-errors check misses catch {} blocks, .catch(() => []|false) and toasts with no console.error.",
     "steps": [],
     "verify": "pnpm vitest run src/architecture.test.ts -t \"errors are never swallowed\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "copy-sensor-ts",

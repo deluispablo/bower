@@ -55,6 +55,7 @@ async function isRateLimit(res: Response): Promise<boolean> {
     const body = (await res.clone().json()) as { error?: { errors?: Array<{ reason?: string }> } };
     return (body.error?.errors ?? []).some((e) => e.reason === 'rateLimitExceeded' || e.reason === 'userRateLimitExceeded');
   } catch {
+    // expected: an error body that is not JSON is not a rate limit.
     return false;
   }
 }

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { report } from '@/ui/report';
 import { useLocation, useNavigate } from 'react-router';
 import { useSources } from '@/data/provider';
 import { crumbs, decodeSplat, folderRoute, routeFor } from '@/app/paths';
@@ -10,9 +11,9 @@ import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
 
 function fail(e: unknown): void {
+  console.error(e);
   if (e instanceof BowerError) toast(e.message);
   else {
-    console.error(e);
     toast('That did not work. Try again.');
   }
 }
@@ -74,7 +75,7 @@ export function useFileActions() {
           });
           return moved;
         } catch (e) {
-          fail(e);
+          report(e, 'That did not work. Try again.');
           return null;
         }
       },
@@ -86,7 +87,7 @@ export function useFileActions() {
           follow(path, to);
           return to;
         } catch (e) {
-          fail(e);
+          report(e, 'That did not work. Try again.');
           return null;
         }
       },
@@ -104,7 +105,7 @@ export function useFileActions() {
               }, fail),
           });
         } catch (e) {
-          fail(e);
+          report(e, 'That did not work. Try again.');
         }
       },
       async create(folder: string, type: 'note' | 'folder'): Promise<void> {
@@ -115,7 +116,7 @@ export function useFileActions() {
           useUi.getState().setJustMade(path);
           useUi.getState().setRenaming(path);
         } catch (e) {
-          fail(e);
+          report(e, 'That did not work. Try again.');
         }
       },
       /** Takes back a thing just made (Escape on its name), with no Bin and no journal line. */
@@ -124,7 +125,7 @@ export function useFileActions() {
           await vault.trash(path);
           useUi.getState().relocate(path, null);
         } catch (e) {
-          fail(e);
+          report(e, 'That did not work. Try again.');
         }
       },
       copyLink(node: Pick<TreeNode, 'path' | 'type'>): void {

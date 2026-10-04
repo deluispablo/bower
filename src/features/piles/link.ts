@@ -7,6 +7,7 @@ export function normaliseLink(raw: string): string | null {
     const u = new URL(withScheme);
     return u.hostname.includes('.') ? u.toString() : null;
   } catch {
+    // expected: not a link; the person is told so by the caller.
     return null;
   }
 }

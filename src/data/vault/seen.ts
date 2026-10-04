@@ -12,6 +12,7 @@ function read(): string[] {
     const v: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
   } catch {
+    // expected: storage may be blocked (a private window); the default holds.
     return [];
   }
 }
@@ -23,7 +24,7 @@ export function markSeen(id: string, modified: string): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(all.slice(-MAX)));
   } catch {
-    // Storage may be full or blocked; the dot just stays.
+    // expected: Storage may be full or blocked; the dot just stays.
   }
 }
 

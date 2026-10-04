@@ -43,7 +43,8 @@ export function SignIn() {
           onClick={() => {
             setBusy(true);
             setError(null);
-            session.signIn().catch(() => {
+            session.signIn().catch((e: unknown) => {
+              console.error(e);
               setBusy(false);
               setError('Google did not answer. Try again.');
             });
