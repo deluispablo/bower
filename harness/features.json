@@ -1670,7 +1670,7 @@
       "Press Got it on Home: focus goes to the start of Home's content, not the body."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"focus after a stopped run is put away\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "answer-toast-words",

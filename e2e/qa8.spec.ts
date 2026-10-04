@@ -48,3 +48,18 @@ test('after Delete the tree keeps its place, and Undo brings the row back to the
   await expect(tree).toHaveAttribute('aria-activedescendant', 'row-Projects%2FFlat%20hunt%2FLease%20draft.pdf');
   await expect(tree).toBeFocused();
 });
+
+test('focus after a stopped run is put away stays in the page', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop side panel');
+  for (const where of ['home', 'panel'] as const) {
+    await open(page, '/', 'fail-run');
+    await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+    await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
+    await page.keyboard.press('Escape');
+    if (where === 'home') await page.getByRole('alert').getByRole('button', { name: 'Got it' }).click();
+    else await page.getByRole('complementary').getByRole('button', { name: 'Put it away' }).click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id), { message: where }).toBe('main');
+  }
+});

@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router';
 import { useQuestions, useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { report } from '@/ui/report';
+import { focusMain } from '@/ui/focus';
 import { useUi } from '@/app/ui-store';
 import { countOr, plural } from '@/app/words';
 import { Button } from '@/ui/Button';
@@ -17,7 +18,7 @@ export function BowerPanel() {
   const { setTidy } = useUi();
   const { runs } = useSources();
   // Put away is Home's Got it: the stopped run is seen, everywhere.
-  const putAway = (id: string): void => void runs.markSeen(id).catch((e: unknown) => report(e, 'That did not work. Try again.'));
+  const putAway = (id: string): void => void runs.markSeen(id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'));
   const nav = useNavigate();
   return (
     <div className={s.panel}>

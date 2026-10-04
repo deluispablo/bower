@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { report } from '@/ui/report';
+import { focusMain } from '@/ui/focus';
 import { answered } from './answer-words';
 import { startRun } from '@/features/tidy/start-run';
 import { waitingIn } from '@/data/piles';
@@ -74,7 +75,7 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
         <Button size="sm" onClick={() => startReplay(run.id)}>
           <Icon name="play" size={15} /> Watch what Bower did
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id)}>
+        <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
           Got it
         </Button>
       </div>
@@ -99,7 +100,7 @@ function StoppedCard({ run }: { run: RunState }) {
         <Button size="sm" onClick={() => void startRun(runs, run.scope).catch((e: unknown) => report(e, 'It did not start. Try again in a minute.'))}>
           Try again
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id)}>
+        <Button size="sm" variant="ghost" onClick={() => void runs.markSeen(run.id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
           Got it
         </Button>
       </div>
