@@ -2,9 +2,9 @@ import { usePiles, useRun, useTree } from '@/data/provider';
 import { waitingIn } from '@/data/piles';
 import { countFiles } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
-import { clock, plural } from '@/app/words';
+import { plural } from '@/app/words';
 import { BowerHead } from '@/ui/Icon';
-import { replayWaiting, isRunning, runShort, stoppedUnseen } from './run-words';
+import { replayWaiting, isRunning, runShort, statusLine, stoppedUnseen } from './run-words';
 import s from './tidy.module.css';
 
 /** The desktop's bottom line: the tidy-up, what waits, how much there is. */
@@ -20,8 +20,7 @@ export function StatusBar() {
   if (running && run) left = runShort(run);
   else if (run && stoppedUnseen(run)) left = 'The tidy-up stopped. Nothing was moved. See why';
   else if (run && replayWaiting(run)) left = `${runShort(run)}. Watch what Bower did`;
-  else if (run?.phase === 'done') left = `Last tidy-up ${clock(run.finishedAt ?? run.phaseAt)}. ${waiting ? `${plural(waiting, 'thing')} waiting` : 'Nothing waiting'}`;
-  else left = waiting ? `${plural(waiting, 'thing')} waiting` : 'Nothing waiting';
+  else left = statusLine(run, piles === undefined ? undefined : waiting);
   return (
     <footer className={s.status}>
       <button type="button" className={s.statusBtn} onClick={() => (run && replayWaiting(run) ? startReplay(run.id) : setTidy(true))}>

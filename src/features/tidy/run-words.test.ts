@@ -39,3 +39,13 @@ describe('what a run says', () => {
     expect(landedSummary(done)).toBe('Flat hunt got 2 and Money got 1.');
   });
 });
+
+import { statusLine } from './run-words';
+
+describe('the status line', () => {
+  it('says it is looking while the inbox loads, never "Nothing waiting"', () => {
+    expect(statusLine(null, undefined)).toBe('Looking at the inbox…');
+    expect(statusLine(null, 0)).toBe('Nothing waiting');
+    expect(statusLine(null, 3)).toBe('3 things waiting');
+  });
+});

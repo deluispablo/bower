@@ -239,8 +239,9 @@
     "steps": [
       "?scenario=slow"
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"while loading nothing claims to be empty\"",
-    "passes": false
+    "verify": "pnpm vitest run src/features/tidy/run-words.test.ts src/app/words.test.ts && bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"while loading nothing claims to be empty\"",
+    "passes": true,
+    "note": "verify tightened before closing: the e2e alone passed on the old code (a race), so the wording is pinned by unit tests."
   },
   {
     "id": "boot-dark",

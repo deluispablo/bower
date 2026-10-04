@@ -99,3 +99,13 @@ test('the palette finds words inside notes', async ({ page }) => {
   await hit.click();
   await expect(page).toHaveURL(/\/note\/Projects\/Job%20hunt\/CV%20insights\.md/);
 });
+
+test('while loading nothing claims to be empty', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop footer and side panel');
+  await page.goto('/?scenario=slow&time=instant');
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('footer')).toContainText(/Looking at the inbox|waiting/);
+  await expect(page.locator('footer')).not.toContainText('Nothing waiting');
+  await expect(page.getByText(/^0 rules$/)).toHaveCount(0);
+  await expect(page.locator('footer')).toContainText(/15 things waiting/, { timeout: 15_000 });
+});

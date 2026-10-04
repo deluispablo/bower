@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router';
 import { useQuestions, useRules, useRun } from '@/data/provider';
 import { useUi } from '@/app/ui-store';
-import { plural } from '@/app/words';
+import { countOr, plural } from '@/app/words';
 import { Button } from '@/ui/Button';
 import { isRunning, runDetail, runTitle } from '@/features/tidy/run-words';
 import s from './bower.module.css';
@@ -38,7 +38,7 @@ export function BowerPanel() {
         </section>
       )}
       <section>
-        <h3 className={s.ph}>{plural(rules?.length ?? 0, 'rule')}</h3>
+        <h3 className={s.ph}>{countOr(rules?.length, 'rule', 'Rules')}</h3>
         <ul className={s.panelRules}>
           {(rules ?? []).slice(0, 5).map((r) => (
             <li key={r.id}>{r.text}</li>

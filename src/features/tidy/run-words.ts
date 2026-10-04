@@ -127,3 +127,9 @@ export function landedSummary(r: RunState): string {
   else if (rest.length > 1) parts.push(`${rest.length} other folders got the rest`);
   return parts.length ? `${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : '';
 }
+
+/** The footer's line when nothing is running or waiting to be seen; `waiting` is undefined while the inbox loads. */
+export function statusLine(run: RunState | null | undefined, waiting: number | undefined): string {
+  const what = waiting === undefined ? 'Looking at the inbox…' : waiting ? `${plural(waiting, 'thing')} waiting` : 'Nothing waiting';
+  return run?.phase === 'done' ? `Last tidy-up ${clock(run.finishedAt ?? run.phaseAt)}. ${what}` : what;
+}

@@ -31,3 +31,4 @@
 - 2026-10-04: merge-answer passes — fix(tidy): yes to keeping one note makes the next tidy-up merge
 - 2026-10-04: result-new-questions passes — fix(tidy): a result counts only the questions it asked
 - 2026-10-04: palette-search-text passes — fix(palette): find words inside notes too
+- 2026-10-04: loading-states passes — fix: while things load, the footer and side panel say so instead of claiming zero
