@@ -1,0 +1,43 @@
+.page { max-width: 1100px; margin: 0 auto; padding: 18px 20px 40px; }
+@media (min-width: 900px) { .page { padding: 34px 40px 60px; } }
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.hello { font-size: clamp(28px, 4vw, 40px); }
+.avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--surface-strong); color: var(--heading); font-weight: 600; text-decoration: none; }
+.grid { display: grid; gap: 22px; }
+@media (min-width: 1100px) { .grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 36px; align-items: start; } }
+.colMain, .colSide { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.card { position: relative; border-radius: 22px; background: var(--bg-alt); padding: 18px; }
+.away { margin-top: 44px; background: var(--surface); }
+.perch { position: absolute; right: 16px; top: -70px; }
+.cardTitle { display: block; font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; color: var(--heading); font-size: 21px; line-height: 1.2; margin: 3px 0 4px; }
+.running { display: flex; align-items: center; gap: 14px; width: 100%; border: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent); }
+.row2 { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.inboxHead { display: flex; align-items: flex-end; gap: 10px; }
+.inboxBird { margin: -18px 0 -6px -8px; }
+.piles { list-style: none; margin: 10px 0 0; padding: 0; }
+.pile { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--text-muted); border-radius: 8px; }
+.pile:hover { background: var(--hover); }
+.pileMain { flex: 1; min-width: 0; }
+.pileText { display: block; color: var(--heading); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pileSub { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-muted); }
+.sep { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+.skel { display: grid; gap: 10px; margin-top: 14px; }
+.skel span { display: block; height: 52px; border-radius: 12px; background: var(--surface); }
+.search { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-muted); font: 17px var(--font-body); cursor: pointer; text-align: left; }
+.search span { flex: 1; }
+.search kbd { font: 13px var(--font-body); padding: 2px 7px; border-radius: 6px; background: var(--surface-strong); }
+@media (max-width: 899px) { .search kbd { display: none; } }
+.h2 { font-size: 20px; margin-bottom: 8px; }
+.questions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.question { padding: 14px 16px; border-radius: 16px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+.question p { color: var(--heading); }
+.question .row2 { margin-top: 10px; }
+.suggest { padding: 14px 16px; border-radius: 18px; background: var(--fresh); }
+.suggestBy { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--brand-line); font-weight: 600; }
+.suggestTitle { font-family: var(--font-display); font-weight: 700; color: var(--heading); font-size: 18px; margin: 4px 0 2px; }
+.recent { list-style: none; margin: 0; padding: 0; }
+.recentRow { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); text-decoration: none; border-radius: 8px; }
+.recentRow:hover { background: var(--hover); }
+.tile { flex: none; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--surface); color: var(--text-muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.new { flex: none; padding: 1px 9px; border-radius: 999px; background: var(--fresh); color: var(--brand-line); font-size: 13px; font-weight: 600; }

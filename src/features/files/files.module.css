@@ -1,0 +1,18 @@
+.panel { flex: 1; min-height: 0; overflow: auto; padding: 10px; }
+.search { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 10px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-muted); }
+.search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--heading); font: 16px var(--font-body); outline: none; }
+.hint { margin: 10px 4px; font-size: 14px; color: var(--text-muted); }
+.results { list-style: none; margin: 0; padding: 0; }
+.results button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 8px; border: 0; border-radius: 8px; background: none; text-align: left; cursor: pointer; }
+.results button:hover { background: var(--hover); }
+.resTitle { display: flex; align-items: center; gap: 6px; color: var(--heading); font-weight: 600; font-size: 15px; }
+.resPath { font-size: 13px; color: var(--text-muted); }
+.bmRow { display: flex; align-items: center; }
+.bmRow > button:first-child { flex: 1; }
+.unmark { flex: none !important; width: 30px !important; height: 30px; display: grid !important; place-items: center; color: var(--text-muted); }
+.pickList { list-style: none; margin: 12px 0 0; padding: 0; max-height: 52dvh; overflow: auto; }
+.pickList button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 8px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; color: var(--heading); }
+.pickList button:hover { background: var(--hover); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.pickName { font-weight: 600; white-space: nowrap; }
+.pickPath { margin-left: auto; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

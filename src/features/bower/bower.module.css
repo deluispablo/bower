@@ -1,0 +1,24 @@
+.page { max-width: 680px; margin: 0 auto; padding: 18px 20px 40px; }
+@media (min-width: 900px) { .page { padding: 34px 32px 60px; } }
+.hero { display: flex; align-items: flex-end; gap: 14px; }
+.title { font-size: clamp(28px, 4vw, 36px); }
+.composer { margin-top: 18px; padding: 14px; border-radius: 20px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--line); }
+.kinds { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--bg); }
+.kinds button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font-weight: 600; cursor: pointer; }
+.kinds button[aria-checked='true'] { background: var(--surface-strong); color: var(--heading); }
+.composer textarea { display: block; width: 100%; margin-top: 10px; padding: 10px 4px; border: 0; background: none; resize: vertical; color: var(--heading); font: 18px/1.45 var(--font-body); outline: none; }
+.composerFoot { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.sent { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.bubble { align-self: flex-end; max-width: 92%; padding: 12px 14px; border-radius: 18px 18px 4px 18px; background: var(--surface-strong); }
+.bubble p { color: var(--heading); }
+.bubbleSub { margin: 4px 0 8px; font-size: 14px; color: var(--text-muted) !important; }
+.rules { margin-top: 28px; }
+.h2 { font-size: 20px; margin-bottom: 6px; }
+.rules ul { list-style: none; margin: 0; padding: 0; }
+.rules li { display: flex; flex-direction: column; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.ruleText { color: var(--heading); font-weight: 600; }
+.panel { display: flex; flex-direction: column; gap: 18px; }
+.ph { font-family: var(--font-body); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text-muted); margin-bottom: 6px; }
+.panelCard { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--surface); text-align: left; color: var(--heading); font: inherit; font-size: 15px; cursor: pointer; }
+.panelQ { font-size: 15px; color: var(--heading); margin-bottom: 8px; }
+.panelRules { margin: 0; padding-left: 18px; font-size: 15px; }

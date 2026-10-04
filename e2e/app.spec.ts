@@ -1,0 +1,104 @@
+import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+const open = async (page: import('@playwright/test').Page, path: string, scenario = 'default', time = 'instant') => {
+  const sep = path.includes('?') ? '&' : '?';
+  await page.goto(`${path}${sep}scenario=${scenario}&time=${time}`);
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 5000 });
+};
+
+test('a signed-out visitor lands on sign in and gets in', async ({ page }) => {
+  await open(page, '/', 'signed-out');
+  await expect(page).toHaveURL(/\/sign-in/);
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
+});
+
+test('first sign-in makes the five folders', async ({ page }) => {
+  await open(page, '/', 'first');
+  await expect(page.getByRole('heading', { name: 'Your folder is ready' })).toBeVisible({ timeout: 8000 });
+  await page.getByRole('button', { name: 'Show me around' }).click();
+  await expect(page.getByRole('heading', { name: 'Throw it in' })).toBeVisible();
+});
+
+test('a tidy-up walks the phases, files the inbox and offers the replay', async ({ page }) => {
+  await open(page, '/');
+  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
+  await expect(page.getByRole('dialog').getByText(/Done\. 15 things filed/).last()).toBeVisible();
+  await page.getByRole('button', { name: 'Watch what Bower did' }).click();
+  await expect(page.getByRole('dialog', { name: 'What Bower did in the tidy-up' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Nothing waiting', { exact: false }).first()).toBeVisible();
+});
+
+test('a failed run says why and moves nothing', async ({ page }) => {
+  await open(page, '/', 'fail-run');
+  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
+  await expect(page.getByRole('dialog').getByText(/Nothing was moved/)).toBeVisible();
+});
+
+test('a note shows its properties, current state and timeline', async ({ page }) => {
+  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Mill%20Lane.md');
+  await expect(page.getByRole('heading', { name: 'Flat 3, 12 Mill Lane', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Current state' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Timeline' })).toBeVisible();
+  await page.getByRole('link', { name: 'Flat 7, Rosebery Ave' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Flat 7, Rosebery Ave', level: 1 })).toBeVisible();
+});
+
+test('a pile can be added', async ({ page }) => {
+  await open(page, '/add');
+  await page.getByLabel('What is this?').fill('Car insurance renewal');
+  await page.getByLabel('Paste a link').fill('https://insurer.example/renewal');
+  await page.getByRole('button', { name: 'Add link' }).click();
+  await page.getByRole('button', { name: /Put 1 thing in the inbox/ }).click();
+  await expect(page.getByRole('link', { name: /Car insurance renewal/ })).toBeVisible();
+});
+
+test.describe('desktop explorer', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop only');
+
+  test('moves a file by keyboard and menu, and undoes it', async ({ page }) => {
+    await open(page, '/');
+    const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+    await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Move to…' }).click();
+    await page.getByLabel('Find a folder').fill('Home');
+    await page.getByRole('button', { name: /^Home/ }).first().click();
+    await expect(page.getByText(/Moved Lease draft\.pdf to Areas \/ Home/)).toBeVisible();
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(tree.getByRole('treeitem', { name: /Lease draft/ })).toBeVisible();
+  });
+
+  test('renames with F2 and walks the tree with arrows', async ({ page }) => {
+    await open(page, '/note/Projects/Flat%20hunt/Flat%207%2C%20Rosebery%20Ave.md');
+    const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+    await tree.focus();
+    await page.keyboard.press('F2');
+    const input = page.getByLabel(/New name for Flat 7/);
+    await input.fill('Flat 7, Rosebery Avenue');
+    await input.press('Enter');
+    await expect(tree.getByRole('treeitem', { name: /Flat 7, Rosebery Avenue/ })).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await expect(tree).toHaveAttribute('aria-activedescendant', /^row-/);
+  });
+
+  test('the command palette opens a note', async ({ page }) => {
+    await open(page, '/');
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByPlaceholder('Type a command or a note').fill('budget');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Budget 2026', level: 1 })).toBeVisible();
+  });
+});
+
+for (const path of ['/', '/files', '/add', '/bower', '/settings', '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Mill%20Lane.md', '/files/Projects/Flat%20hunt']) {
+  test(`no serious accessibility problems on ${path}`, async ({ page }) => {
+    await open(page, path);
+    const r = await new AxeBuilder({ page }).disableRules(['region']).analyze();
+    const serious = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+    expect(serious.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  });
+}

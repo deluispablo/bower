@@ -1,0 +1,13 @@
+.scrim { position: fixed; inset: 0; z-index: 80; background: var(--scrim); }
+.box { position: fixed; z-index: 81; left: 50%; top: 12vh; transform: translateX(-50%); width: min(640px, calc(100vw - 24px)); border-radius: 16px; background: var(--raised); box-shadow: var(--shadow-pop), inset 0 0 0 1px var(--line); overflow: hidden; }
+.inputRow { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 16px; border-bottom: 1px solid var(--line); color: var(--text-muted); }
+.input { flex: 1; min-width: 0; border: 0; background: none; color: var(--heading); font: 18px var(--font-body); outline: none; }
+.kbd { font: 12px var(--font-body); padding: 2px 7px; border-radius: 6px; background: var(--surface-strong); color: var(--text-muted); }
+.list { max-height: min(60vh, 460px); overflow: auto; padding: 6px; }
+.group [cmdk-group-heading] { padding: 8px 12px 4px; font-size: 13px; color: var(--text-muted); }
+.item { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 12px; border-radius: 10px; color: var(--text); cursor: pointer; }
+.item[data-selected='true'] { background: var(--raised-hover); color: var(--heading); }
+.item svg { color: var(--text-muted); flex: none; }
+.label { flex: none; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.path { margin-left: auto; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.empty { padding: 18px; color: var(--text-muted); }

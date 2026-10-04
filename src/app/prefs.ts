@@ -1,0 +1,57 @@
+import { create } from 'zustand';
+
+/** Per-device preferences. Kept in localStorage; never sent anywhere. */
+export type Theme = 'system' | 'dark' | 'light';
+
+interface Prefs {
+  theme: Theme;
+  /** "Bower moves": off holds Bower still everywhere. */
+  birdMoves: boolean;
+  leftWidth: number;
+  rightWidth: number;
+  leftOpen: boolean;
+  rightOpen: boolean;
+  set: (patch: Partial<Omit<Prefs, 'set'>>) => void;
+}
+
+const KEY = 'bower:prefs';
+
+function load(): Partial<Prefs> {
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw ? (JSON.parse(raw) as Partial<Prefs>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export const usePrefs = create<Prefs>((set, get) => ({
+  theme: 'system',
+  birdMoves: true,
+  leftWidth: 300,
+  rightWidth: 320,
+  leftOpen: true,
+  rightOpen: true,
+  ...load(),
+  set: (patch) => {
+    set(patch);
+    const { set: _omit, ...rest } = { ...get(), ...patch };
+    void _omit;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(rest));
+    } catch {
+      // Private windows may refuse storage; the preference holds for this visit.
+    }
+  },
+}));
+
+export function applyTheme(theme: Theme): void {
+  const root = document.documentElement;
+  if (theme === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', theme);
+}
+
+/** Whether the system asks for less motion. */
+export function prefersReducedMotion(): boolean {
+  return typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}

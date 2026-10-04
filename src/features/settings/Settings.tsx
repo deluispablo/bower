@@ -1,0 +1,91 @@
+import type { ReactNode } from 'react';
+import { useSources, useRules } from '@/data/provider';
+import { usePrefs, type Theme } from '@/app/prefs';
+import { Button } from '@/ui/Button';
+import { toast } from '@/ui/toast';
+import { useNavigate } from 'react-router';
+import s from './settings.module.css';
+
+function Row({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
+  return (
+    <div className={s.row}>
+      <div className={s.rowText}>
+        <span className={s.rowTitle}>{title}</span>
+        {sub && <span className={s.rowSub}>{sub}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange: (v: boolean) => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} className={s.toggle} onClick={() => onChange(!on)}>
+      <span />
+    </button>
+  );
+}
+
+export function Settings() {
+  const prefs = usePrefs();
+  const { data: rules } = useRules();
+  const { session } = useSources();
+  const nav = useNavigate();
+  return (
+    <div className={s.page}>
+      <h1 className={s.title}>Settings</h1>
+
+      <h2 className={s.h2}>Your Bower folder</h2>
+      <Row title="Bower" sub="In My Drive">
+        <Button size="sm" variant="ghost" onClick={() => toast('Your Bower folder opens in Google Drive.')}>
+          Open in Drive
+        </Button>
+      </Row>
+      <Row title="Rules" sub={`${rules?.length ?? 0} rules`}>
+        <Button size="sm" variant="ghost" onClick={() => nav('/bower')}>
+          See them
+        </Button>
+      </Row>
+
+      <h2 className={s.h2}>Tidying up</h2>
+      <Row title="Look things up on the web" sub="Fill in what a document leaves out, with sources">
+        <Toggle on label="Look things up on the web" onChange={() => toast('Saved for your next tidy-up.')} />
+      </Row>
+      <Row title="Tell me when a tidy-up ends" sub="A notification on this device">
+        <Toggle on={false} label="Tell me when a tidy-up ends" onChange={() => toast('Notifications arrive in the next version.')} />
+      </Row>
+
+      <h2 className={s.h2}>This device</h2>
+      <Row title="Appearance">
+        <div className={s.seg} role="radiogroup" aria-label="Appearance">
+          {(
+            [
+              ['system', 'System'],
+              ['dark', 'Dark'],
+              ['light', 'Light'],
+            ] as Array<[Theme, string]>
+          ).map(([v, l]) => (
+            <button key={v} type="button" role="radio" aria-checked={prefs.theme === v} onClick={() => prefs.set({ theme: v })}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </Row>
+      <Row title="Bower moves" sub="Hops, flies and carries things around the app. Off keeps Bower still.">
+        <Toggle on={prefs.birdMoves} label="Bower moves" onChange={(v) => prefs.set({ birdMoves: v })} />
+      </Row>
+
+      <h2 className={s.h2}>Account</h2>
+      <Row title="Alex" sub="you@example.com">
+        <Button size="sm" variant="ghost" onClick={() => void session.signOut()}>
+          Sign out
+        </Button>
+      </Row>
+      <Row title="Delete the app" sub="Bower forgets you. Your folder stays in your Drive.">
+        <Button size="sm" variant="danger" onClick={() => toast('In the demo nothing is deleted.')}>
+          Delete
+        </Button>
+      </Row>
+    </div>
+  );
+}

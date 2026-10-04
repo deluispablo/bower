@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="description" content="Bower files what you save, in a folder of your own Drive." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/app-icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono&display=swap" />
+    <title>Bower</title>
+    <style>
+      /* The start-up screen: static, so it shows from the first paint, before any script. */
+      #boot { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0b1220; color: #dfe5ee; font: 400 15px/1.45 'Source Sans 3', system-ui, sans-serif; transition: opacity .25s ease; }
+      #boot.leaving { opacity: 0; }
+      #boot .wm { margin-top: 20px; font: 700 38px/1 Poppins, system-ui, sans-serif; letter-spacing: -.025em; color: #f3f6fa; animation: bootWm 1.4s ease both .5s; }
+      #boot .twig { margin-top: -14px; }
+      #boot .line { position: absolute; left: 0; right: 0; bottom: max(60px, env(safe-area-inset-bottom)); text-align: center; color: #9fabbf; opacity: 0; transition: opacity .4s; padding: 0 32px; }
+      #boot .line.show { opacity: 1; }
+      #boot .line b { display: block; color: #f3f6fa; font: 700 20px/1.3 Poppins, system-ui, sans-serif; margin-bottom: 4px; }
+      #boot button { margin-top: 16px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: #5fcfbc; color: #0b1220; font: 600 16px 'Source Sans 3', sans-serif; cursor: pointer; }
+      #boot button:focus-visible { outline: 2px solid #f0b64f; outline-offset: 3px; }
+      @keyframes bootWm { from { opacity: 0; transform: translateY(6px); } }
+      @media (prefers-color-scheme: light) { #boot { background: #faf9f6; color: #1c2333; } #boot .wm, #boot .line b { color: #1c2333; } #boot .line { color: #475569; } }
+      .bird { position: relative; }
+/* Looping poses, CSS only. Used when Bower stays in one place. */
+
+.bird{position:relative;flex:none}
+.bird svg g{transform-box:view-box}
+.b-rig{transform-origin:50px 92px}
+.posed .b-eye{animation:blink 5.2s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
+/* read: pecks at the pile, then looks up */
+.posed.read .b-rig{animation:peck 2.2s infinite cubic-bezier(.5,0,.3,1)}
+/* carry: hops with something in the beak, wings beat in the air */
+.posed
+.posed.carry .b-rig{animation:hop 1.3s infinite}
+.posed.sleep .b-rig{animation:breathe 3.6s infinite ease-in-out}
+/* proud: tail fans, chest out (done) */
+.posed.proud .b-rig{animation:proud 3s infinite}
+/* land: flies in, squashes on the twig, flicks, then idles (6 s cycle on the canvas) */
+.posed.land .b-rig{animation:landin 6s infinite}
+.posed.land .b-wing{animation:landwing 6s infinite}
+.posed.land .b-legs{animation:landlegs 6s infinite}
+.posed.land .b-tail{animation:landtail 6s infinite}
+.posed.land .b-head{animation:landhead 6s infinite}
+@keyframes landin{0%{transform:translate(-120px,-150px) rotate(-18deg);opacity:0}4%{opacity:1}22%{transform:translate(0,-6px) rotate(-6deg)}26%{transform:translate(0,0) scale(1.12,.86)}31%{transform:scale(.97,1.04)}35%,100%{transform:scale(1)}}
+@keyframes landwing{0%,2%,6%,10%,14%,18%{transform:rotate(-46deg) scaleY(.6)}4%,8%,12%,16%,20%{transform:rotate(22deg)}24%,100%{transform:rotate(0)}}
+@keyframes landlegs{0%,19%{transform:scaleY(.5)}24%,100%{transform:scaleY(1)}}
+@keyframes landtail{0%,30%,40%,100%{transform:rotate(0)}33%{transform:rotate(-18deg)}36%{transform:rotate(5deg)}}
+@keyframes landhead{0%,44%{transform:rotate(0)}45%,62%{transform:rotate(-12deg)}63%,80%{transform:rotate(8deg)}81%,100%{transform:rotate(0)}}
+      #boot .land .b-rig, #boot .land .b-wing, #boot .land .b-legs, #boot .land .b-tail, #boot .land .b-head { animation-iteration-count: 1; animation-fill-mode: both; animation-duration: 2.4s; }
+      @media (prefers-reduced-motion: reduce) { #boot * { animation: none !important; } }
+    </style>
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite">
+      <div class="bird posed land" style="width:140px;height:140px"><svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true"> <g class="b-rig"> <g class="b-tail"> <rect fill="#2a8d80" x="6" y="66" width="28" height="7" rx="3.5" transform="rotate(-40 32 70)" /> <rect fill="#2f9c8d" x="4" y="66" width="30" height="7" rx="3.5" transform="rotate(-24 32 70)" /> <rect fill="#2a8d80" x="8" y="66" width="26" height="7" rx="3.5" transform="rotate(-10 32 70)" /> </g> <g class="b-legs" fill="none" stroke="#f0b64f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"> <path d="M46 81L44 91M44 91H51M44 91L40 92.4" /> <path d="M55 81L56 91M56 91H63M56 91L52 92.4" /> </g> <path fill="#5fcfbc" d="M30 70C30 54 44 44 58 46C72 48 76 62 72 72C68 82 56 86 46 85C36 84 30 78 30 70Z" /> <ellipse fill="#b9ece2" cx="59" cy="73" rx="11" ry="8.5" transform="rotate(-30 59 73)" /> <g class="b-wing"> <path fill="#2f9c8d" d="M58 52C66 56 64 70 54 74C44 78 32 76 24 72C32 68 40 58 58 52Z" /> <path fill="none" stroke="#45b3a3" stroke-width="1.2" stroke-linecap="round" d="M50 62C44 66 38 69 31 71M54 67C48 70 42 72 36 73" /> </g> <g class="b-head"> <ellipse fill="#5fcfbc" cx="60" cy="47" rx="9" ry="7" /> <g class="b-tuft" fill="#5fcfbc"> <path d="M57 24Q52 14 59 15Q61 19 62 23Z" /> <path d="M62 22Q62 11 68 14Q66 18 66 23Z" /> </g> <circle fill="#5fcfbc" cx="64" cy="36" r="15" /> <ellipse fill="#ff9fb4" fill-opacity=".55" cx="73" cy="44" rx="3.2" ry="2" /> <g class="b-eye"> <circle fill="#fff" cx="70" cy="34" r="6.4" /> <g class="b-iris"> <circle fill="#1b2233" cx="70.6" cy="34" r="4.4" /> <circle fill="none" stroke="#8e7cf3" stroke-width="1.1" cx="70.6" cy="34" r="3.8" /> <circle fill="#fff" cx="72" cy="32.4" r="1.5" /> </g> </g> <g class="b-jaw"> <path fill="#d9952e" d="M78 38Q86 38 89 39Q85 42 78 41Z" /> </g> <path fill="#f0b64f" d="M78 31Q88 33 92 37Q86 38 78 38Z" /> </g> </g> </svg></div>
+      <svg class="twig" viewBox="0 0 200 20" width="180" height="18" aria-hidden="true"><path d="M4 9 C60 6 140 12 196 8" stroke="#8a6038" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M60 8 l-14 -7 M132 10 l12 -8 M98 9 l6 8" stroke="#6b4a2e" stroke-width="3" stroke-linecap="round"/></svg>
+      <div class="wm">Bower</div>
+      <p class="line" data-boot-line>Opening your notes</p>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

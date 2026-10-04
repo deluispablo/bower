@@ -1,0 +1,70 @@
+import { useState } from 'react';
+import { useSources } from '@/data/provider';
+import { PoseBower } from '@/bird/Bower';
+import { BowerMark } from '@/ui/Icon';
+import { Court } from '@/bird/Court';
+import s from './signin.module.css';
+
+function GoogleG() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z" />
+      <path fill="#FBBC05" d="M10.5 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.9-6.1z" />
+      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.8-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.4 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z" />
+    </svg>
+  );
+}
+
+export function SignIn() {
+  const { session } = useSources();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className={s.wrap}>
+      <div className={s.art}>
+        <span className={s.brand}>
+          <BowerMark size={30} />
+          <span>Bower</span>
+        </span>
+        <div className={s.court}>
+          <PoseBower pose="idle" size={180} className={s.bird} />
+          <Court />
+        </div>
+      </div>
+      <main className={s.panel}>
+        <h1 className={s.hero}>Your Drive, tidied by a bowerbird.</h1>
+        <p className={s.lead}>Throw in photos, PDFs, links and notes. Bower names each one and files it in a folder of your own Drive.</p>
+        <button
+          type="button"
+          className={s.google}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            session.signIn().catch(() => {
+              setBusy(false);
+              setError('Google did not answer. Try again.');
+            });
+          }}
+        >
+          <GoogleG />
+          {busy ? 'Opening Google…' : 'Continue with Google'}
+        </button>
+        {error && (
+          <p role="alert" className={s.error}>
+            {error}
+          </p>
+        )}
+        <p className={s.small}>Bower makes one folder in your Drive and works only there. Only people invited to this Bower can sign in.</p>
+        <nav aria-label="About" className={s.links}>
+          <a href="#privacy">Privacy</a>
+          <a href="#terms">Terms</a>
+          <a href="https://github.com/deluispablo" rel="noreferrer">
+            Run your own Bower
+          </a>
+        </nav>
+      </main>
+    </div>
+  );
+}

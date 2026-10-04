@@ -1,0 +1,62 @@
+.bower-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  overflow: visible;
+}
+.bower-flyer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: 50% 92%;
+  will-change: transform;
+}
+.bower-carry {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 180px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: var(--heading);
+  color: var(--bg);
+  font: 600 12px/1.3 var(--font-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+.bower-spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+.bower-spark i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+}
+.bower-spark.go i {
+  animation: spark 0.7s var(--ease-out) forwards;
+}
+.bower-spark i:nth-child(1) { --dx: -26px; --dy: -18px; }
+.bower-spark i:nth-child(2) { --dx: 22px; --dy: -24px; background: var(--brand); }
+.bower-spark i:nth-child(3) { --dx: 30px; --dy: 4px; }
+.bower-spark i:nth-child(4) { --dx: -30px; --dy: 6px; background: var(--para-archive); }
+.bower-spark i:nth-child(5) { --dx: 2px; --dy: -34px; background: var(--brand); }
+@keyframes spark {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
+}

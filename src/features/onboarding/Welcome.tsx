@@ -1,0 +1,101 @@
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useSources } from '@/data/provider';
+import { PARA_ROOTS, type ParaRoot } from '@/data/types';
+import { paraColor } from '@/app/paths';
+import { PoseBower } from '@/bird/Bower';
+import { Button } from '@/ui/Button';
+import { Icon } from '@/ui/Icon';
+import s from './welcome.module.css';
+
+const MEANING: Record<ParaRoot, string> = {
+  Inbox: 'Where new things wait for a tidy-up',
+  Projects: 'Things with an end, like a flat hunt',
+  Areas: 'Things that go on: home, money, health',
+  Resources: 'Things for later: recipes, manuals',
+  Archive: 'Things that are done',
+};
+
+const STEPS = [
+  { title: 'Throw it in', text: 'Add photos, PDFs, links and notes as they come. Group the ones that belong together and say what they are.' },
+  { title: 'Tap Tidy up', text: 'Bower reads each one, names it, writes what matters into your notes and files it. About five minutes; close the app if you like.' },
+  { title: 'Find it later', text: 'Everything lives in your own Drive, in folders you can open anywhere, Obsidian included.' },
+];
+
+/** First sign-in: Bower makes the folder, then shows the three ideas. */
+export function Welcome() {
+  const { session } = useSources();
+  const nav = useNavigate();
+  const [made, setMade] = useState<ParaRoot[]>([]);
+  const [ready, setReady] = useState(false);
+  const [step, setStep] = useState(-1);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void session.folderState().then((st) => {
+      if (st === 'ready') {
+        setMade([...PARA_ROOTS]);
+        setReady(true);
+        return;
+      }
+      void session.createFolder((r) => setMade((m) => [...m, r])).then(() => setReady(true));
+    });
+  }, [session]);
+
+  if (step >= 0) {
+    const st = STEPS[step];
+    return (
+      <div className={s.page}>
+        <div className={s.dots} aria-label={`Step ${step + 1} of ${STEPS.length}`}>
+          {STEPS.map((_, i) => (
+            <span key={i} className={i === step ? s.dotOn : ''} />
+          ))}
+        </div>
+        <PoseBower pose={(['carry', 'read', 'proud'] as const)[step] ?? 'idle'} size={150} />
+        <h1 className={s.title}>{st?.title}</h1>
+        <p className={s.text}>{st?.text}</p>
+        <div className={s.foot}>
+          <Button block onClick={() => (step + 1 < STEPS.length ? setStep(step + 1) : nav('/add'))}>
+            {step + 1 < STEPS.length ? 'Next' : 'Add your first pile'}
+          </Button>
+          <Button variant="ghost" block onClick={() => nav('/')}>
+            {step + 1 < STEPS.length ? 'Skip' : 'Look around first'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={s.page}>
+      <div className={s.head}>
+        <PoseBower pose={ready ? 'proud' : 'carry'} size={96} />
+        <div>
+          <h1 className={s.title}>{ready ? 'Your folder is ready' : 'Making your Bower folder'}</h1>
+          <p className="muted">{ready ? 'It is called Bower, in My Drive.' : 'In your Google Drive. A few seconds.'}</p>
+        </div>
+      </div>
+      <ul className={s.folders} aria-live="polite">
+        {PARA_ROOTS.map((r) => (
+          <li key={r} className={made.includes(r) ? s.in : s.out}>
+            <span className={s.ftile} style={{ color: paraColor(r) }}>
+              <Icon name="folder" size={20} />
+            </span>
+            <span className={s.fmain}>
+              <span className={s.fname}>{r}</span>
+              <span className="muted">{MEANING[r]}</span>
+            </span>
+            {made.includes(r) && <Icon name="check" size={20} stroke={2.4} className={s.check} />}
+          </li>
+        ))}
+      </ul>
+      <div className={s.foot}>
+        <Button block disabled={!ready} onClick={() => setStep(0)}>
+          Show me around
+        </Button>
+      </div>
+    </div>
+  );
+}

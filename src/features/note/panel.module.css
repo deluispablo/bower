@@ -1,0 +1,21 @@
+.tabs { display: flex; gap: 2px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.tab { display: grid; place-items: center; width: 36px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-muted); cursor: pointer; }
+.tab:hover { background: var(--hover); color: var(--heading); }
+.tab[aria-selected='true'] { background: var(--surface-strong); color: var(--heading); }
+.body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 40px; }
+.hint { color: var(--text-muted); font-size: 14px; margin: 6px 2px 12px; }
+.h { font-family: var(--font-body); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text-muted); margin: 16px 2px 4px; }
+.list { list-style: none; margin: 0; padding: 0; }
+.link { display: flex; flex-direction: column; padding: 7px 8px; border-radius: 8px; text-decoration: none; }
+.link:hover { background: var(--hover); }
+.linkTitle { color: var(--heading); font-weight: 600; font-size: 15px; }
+.linkPath { color: var(--text-muted); font-size: 13px; }
+.outline { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+.outline li { padding: 5px 0; color: var(--text); }
+.graph { margin: 0 0 6px; border-radius: 12px; background: var(--bg); }
+.graph svg { display: block; width: 100%; height: auto; }
+.graph text { font: 11px var(--font-body); fill: var(--text-muted); }
+.graph .gself { font-weight: 600; fill: var(--heading); font-size: 12px; }
+.gnode { cursor: pointer; outline: none; }
+.gnode:hover circle, .gnode:focus-visible circle { r: 8; }
+.gnode:hover text, .gnode:focus-visible text { fill: var(--heading); }

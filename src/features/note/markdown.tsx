@@ -1,0 +1,117 @@
+import type { ReactNode } from 'react';
+
+/**
+ * A small Markdown reader for Bower's notes: headings, paragraphs, lists,
+ * tables, bold, italics, code and [[wikilinks]]. It builds React elements, so
+ * nothing in a note can run as HTML. Phase 2 may swap it for a full parser.
+ */
+export type LinkFn = (target: string, label: string, key: string) => ReactNode;
+
+function inline(text: string, link: LinkFn, keyBase: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const key = `${keyBase}-${k++}`;
+    if (m[1]) out.push(link(m[1], m[2] ?? m[1], key));
+    else if (m[3]) out.push(<strong key={key}>{m[3]}</strong>);
+    else if (m[4]) out.push(<em key={key}>{m[4]}</em>);
+    else if (m[5]) out.push(<code key={key}>{m[5]}</code>);
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+export function Markdown({ text, link }: { text: string; link: LinkFn }) {
+  const lines = text.split('\n');
+  const blocks: ReactNode[] = [];
+  let i = 0;
+  let b = 0;
+  while (i < lines.length) {
+    const line = lines[i] ?? '';
+    const key = `b${b++}`;
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+    const h = /^(#{1,4})\s+(.*)$/.exec(line);
+    if (h) {
+      const level = Math.min(4, (h[1]?.length ?? 2) + 0);
+      const content = inline(h[2] ?? '', link, key);
+      blocks.push(level <= 2 ? <h2 key={key}>{content}</h2> : <h3 key={key}>{content}</h3>);
+      i++;
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
+      const ordered = /^\s*\d+\./.test(line);
+      const items: ReactNode[] = [];
+      while (i < lines.length && (ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/).test(lines[i] ?? '')) {
+        const t = (lines[i] ?? '').replace(/^\s*([-*]|\d+\.)\s+/, '');
+        const task = /^\[( |x)\]\s+/.exec(t);
+        items.push(
+          <li key={`${key}-${items.length}`}>
+            {task ? (
+              <>
+                <input type="checkbox" checked={task[1] === 'x'} readOnly aria-label={t.slice(4)} /> {inline(t.slice(4), link, `${key}-${items.length}`)}
+              </>
+            ) : (
+              inline(t, link, `${key}-${items.length}`)
+            )}
+          </li>,
+        );
+        i++;
+      }
+      blocks.push(ordered ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>);
+      continue;
+    }
+    if (line.trim().startsWith('|')) {
+      const rows: string[][] = [];
+      while (i < lines.length && (lines[i] ?? '').trim().startsWith('|')) {
+        const cells = (lines[i] ?? '').trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) rows.push(cells);
+        i++;
+      }
+      const [head, ...body] = rows;
+      blocks.push(
+        <div key={key} className="md-table">
+          <table>
+            {head && (
+              <thead>
+                <tr>{head.map((c, j) => <th key={j}>{inline(c, link, `${key}-h${j}`)}</th>)}</tr>
+              </thead>
+            )}
+            <tbody>
+              {body.map((r, ri) => (
+                <tr key={ri}>{r.map((c, j) => <td key={j}>{inline(c, link, `${key}-${ri}-${j}`)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+    if (line.startsWith('> ')) {
+      const quote: string[] = [];
+      while (i < lines.length && (lines[i] ?? '').startsWith('> ')) quote.push((lines[i++] ?? '').slice(2));
+      blocks.push(<blockquote key={key}>{inline(quote.join(' '), link, key)}</blockquote>);
+      continue;
+    }
+    const para: string[] = [];
+    while (i < lines.length && (lines[i] ?? '').trim() && !/^(#{1,4}\s|\s*[-*]\s|\s*\d+\.\s|\||> )/.test(lines[i] ?? '')) para.push(lines[i++] ?? '');
+    blocks.push(<p key={key}>{inline(para.join(' '), link, key)}</p>);
+  }
+  return <>{blocks}</>;
+}
+
+/** The headings of a note, for the Outline panel. */
+export function outlineOf(text: string): Array<{ level: number; text: string }> {
+  return text
+    .split('\n')
+    .map((l) => /^(#{1,4})\s+(.*)$/.exec(l))
+    .filter((m): m is RegExpExecArray => !!m)
+    .map((m) => ({ level: m[1]?.length ?? 2, text: (m[2] ?? '').replace(/\[\[|\]\]/g, '') }));
+}
