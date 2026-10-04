@@ -96,3 +96,17 @@ describe('LiveSession', () => {
     expect((await s.vault.tree()).map((n) => n.name)).toContain('Projects');
   });
 });
+
+describe('an ended session', () => {
+  it('Drive refusing the person sends them to sign in', async () => {
+    const s = await open();
+    expect((await s.session.current())?.name).toBe('Alex');
+    let told = 0;
+    s.session.subscribe(() => told++);
+    await s.worker.signOut(); // the Worker's session ended elsewhere
+    (s.drive as FakeDrive).failNext('auth');
+    await expect(s.vault.tree()).rejects.toMatchObject({ code: 'auth' });
+    expect(await s.session.current()).toBeNull();
+    expect(told).toBeGreaterThan(0);
+  });
+});

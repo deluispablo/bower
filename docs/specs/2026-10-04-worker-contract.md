@@ -4,6 +4,18 @@ Date: 2026-10-04. Status: written in phase 2 with the fake Worker that the app u
 
 The Worker keeps credentials and pointers, never content: the person's Google refresh token (encrypted), their Bower folder id and the state of their runs. The app reads and writes the Bower folder in Google Drive itself, with a short-lived access token from the Worker. The runner (GitHub Actions) does the tidy-up and writes its result to the folder.
 
+## Two things the deployment must get right
+
+- **One Google OAuth client for the app and the runner, with the full `drive` scope.**
+  - Bower marks files with Drive `appProperties`: `by`, `bowerNew`, `pile`, `asAdded`, `origin`, `kind` and `bowerItem`.
+  - Drive shows `appProperties` only to the OAuth client that wrote them. If the runner's token comes from another client, Bower's marks, "new" and pile ids silently disappear.
+  - The narrower `drive.file` scope would hide everything the person puts in the folder some other way, such as through drive.google.com or Obsidian.
+- **The Worker on the app's own site** (for example `api.<app domain>`), never on another site.
+  - The session cookie travels with `credentials: 'include'`. Across sites it is a third-party cookie, which Safari blocks, and Safari is how the app is installed on iPhones.
+  - Cookie: `HttpOnly; Secure; SameSite=Lax`.
+  - CORS: the app's origin only, with credentials allowed.
+  - The app's service worker leaves the Worker's paths (`/auth/*`, `/me`, `/drive/*`, `/vault`, `/process`, `/status`) to the network. When both are on one origin, they go in `navigateFallbackDenylist` in `vite.config.ts`.
+
 ## Calls from the app
 
 Every call sends the session cookie (`credentials: 'include'`). A call that changes something also needs the request to come from the app's own origin. Errors are JSON: `{ "error": { "code": "<code>", "message": "<one sentence for the person>" } }`, with the status codes below. The app shows `message` when there is one.

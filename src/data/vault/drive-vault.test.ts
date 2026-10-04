@@ -183,3 +183,77 @@ describe('sending things again', () => {
     expect((await drive.listAll(root)).filter((f) => f.name === 'a.jpg')).toHaveLength(1);
   });
 });
+
+describe('what the review found', () => {
+  it("Bower's own root names cannot be made, renamed into or moved to", async () => {
+    await expect(vault.create('', 'note', 'index.md')).rejects.toMatchObject({ code: 'conflict' });
+    const plan = await vault.create('', 'note', 'Plan.md');
+    await expect(vault.rename(plan, 'Log')).rejects.toMatchObject({ code: 'conflict' });
+    const inner = await vault.create('Resources', 'note', 'hot.md');
+    await expect(vault.move(inner, '')).rejects.toMatchObject({ code: 'conflict' });
+    expect(drive.dump(root).has('index.md')).toBe(false);
+  });
+
+  it('a retry never sends twice a thing that arrived but whose answer was lost', async () => {
+    const real = drive.upload.bind(drive);
+    let lose = true;
+    drive.upload = async (parent, name, body, onProgress, props) => {
+      const f = await real(parent, name, body, onProgress, props);
+      if (name === 'b.jpg' && lose) {
+        lose = false;
+        throw new TypeError('Failed to fetch');
+      }
+      return f;
+    };
+    const p = await vault.addPile({ text: 'Two photos', items: [{ name: 'a.jpg', kind: 'image', origin: 'x', body: new Blob(['a']) }, { name: 'b.jpg', kind: 'image', origin: 'x', body: new Blob(['b']) }] });
+    await vault.settled();
+    await vault.retryPile(p.id);
+    await vault.settled();
+    expect((await drive.listAll(root)).filter((f) => f.name.startsWith('b'))).toHaveLength(1);
+    expect((await vault.piles()).find((x) => x.id === p.id)?.items.map((i) => i.upload)).toEqual([undefined, undefined]);
+  });
+
+  it('Try again works while another pile is still on its way', async () => {
+    const real = drive.upload.bind(drive);
+    let failA = true;
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    drive.upload = async (parent, name, body, onProgress, props) => {
+      if (name === 'a.jpg' && failA) {
+        failA = false;
+        throw new Error('network down');
+      }
+      if (name === 'slow.jpg') await slow;
+      return real(parent, name, body, onProgress, props);
+    };
+    const a = await vault.addPile({ text: 'Pile A', items: [{ name: 'a.jpg', kind: 'image', origin: 'x', body: new Blob(['a']) }] });
+    await new Promise((r) => setTimeout(r, 0));
+    await vault.addPile({ text: 'Pile B', items: [{ name: 'slow.jpg', kind: 'image', origin: 'x', body: new Blob(['s']) }] });
+    for (let i = 0; i < 20 && (await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload !== -1; i++) await new Promise((r) => setTimeout(r, 0));
+    await vault.retryPile(a.id);
+    for (let i = 0; i < 50 && (await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload !== undefined; i++) await new Promise((r) => setTimeout(r, 0));
+    expect((await vault.piles()).find((x) => x.id === a.id)?.items[0]?.upload).toBeUndefined();
+    release();
+    await vault.settled();
+  });
+
+  it('backlinks are only notes that really link here', async () => {
+    const all = await drive.listAll(root);
+    drive.fullText = async () => all.filter((f) => f.name.endsWith('.md'));
+    const back = (await vault.note('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md')).backlinks;
+    expect(back).toContain('Projects/Flat hunt/Flat hunt.md');
+    expect(back).not.toContain('Resources/Cooking/Lemon tart.md');
+  });
+
+  it('search reads a bounded number of notes', async () => {
+    const folder = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === 'Resources');
+    for (let i = 0; i < 150; i++) await drive.createText(folder?.id ?? '', `Idea ${i}.md`, `---\nsummary: idea ${i}\n---\n\nthe rent idea number ${i}\n`);
+    await vault.refresh();
+    let reads = 0;
+    const read = drive.readText.bind(drive);
+    drive.readText = async (id) => (reads++, read(id));
+    const hits = await vault.search('rent idea');
+    expect(hits.length).toBeGreaterThan(10);
+    expect(reads).toBeLessThanOrEqual(60);
+  });
+});

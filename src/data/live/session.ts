@@ -78,6 +78,12 @@ export class LiveSession implements Session {
     this.emit();
   }
 
+  /** Google or the Worker no longer accepts this person: ask again, and tell the screens (sign-in shows). */
+  expire(): void {
+    this.me = null;
+    this.emit();
+  }
+
   subscribe(cb: () => void): Unsubscribe {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);

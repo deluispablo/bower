@@ -182,4 +182,18 @@ describe('DriveHttp', () => {
     expect(s.calls[0]?.method).toBe('PATCH');
     expect(JSON.parse(String(s.calls[0]?.body))).toEqual({ trashed: true });
   });
+
+  it('a 5xx on a create is not sent again, so it never makes two files', async () => {
+    const s = stub(() => new Response('', { status: 503 }));
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    await expect(d.createText('ROOT', 'a.md', 'x')).rejects.toMatchObject({ code: 'unknown' });
+    expect(s.calls).toHaveLength(1);
+  });
+
+  it('full-text search reads at most two pages', async () => {
+    const s = stub((c) => (c.url.searchParams.get('q')?.startsWith('fullText') ? json({ files: [file('h', 'a.md', 'ROOT')], nextPageToken: 'more' }) : json({ files: [file('h', 'a.md', 'ROOT')] })));
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    await d.fullText('ROOT', 'rent');
+    expect(s.calls.filter((c) => c.url.searchParams.get('q')?.startsWith('fullText'))).toHaveLength(2);
+  });
 });

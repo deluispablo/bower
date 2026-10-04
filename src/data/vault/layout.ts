@@ -68,4 +68,6 @@ export const PROP = {
   kind: 'kind',
   /** On a pile's folder: the pile's id, kept when a lone thing becomes a folder. */
   pile: 'pile',
+  /** On a thing sent to the inbox: a key made before sending, so a retry never sends it twice. */
+  item: 'bowerItem',
 } as const;

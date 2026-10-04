@@ -25,7 +25,7 @@ import {
   type TreeNode,
 } from '../types';
 import { Journal, type JournalRecord } from './journal';
-import { PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
+import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
@@ -68,7 +68,8 @@ export class DriveVault implements VaultSource {
   private bin = new Map<string, { id: string; change: string | null }>();
   private texts = new Map<string, { modified: string; text: string }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
-  private uploads = new Map<string, { lone: boolean; createdAt: number; parent: string; entries: Sending[] }>();
+  private uploads = new Map<string, Upload>();
+  private sendingPiles = new Set<string>();
   private sending = new Set<Promise<void>>();
 
   constructor(opts: DriveVaultOptions) {
@@ -120,8 +121,15 @@ export class DriveVault implements VaultSource {
       if (!byName.has(key)) byName.set(key, p);
     }
     const links = parsed.links.map((l) => byName.get(l.toLowerCase())).filter((p): p is string => !!p && p !== path);
+    // Full text only finds the words; a backlink is a note whose own links name this one.
     const hits = await this.drive.fullText(await this.rootId(), `[[${parsed.title}`);
-    const backlinks = [...new Set(hits.map((h) => ix.pathOf(h.id)).filter((p): p is string => !!p && p !== path && p.endsWith('.md')))];
+    const title = parsed.title.toLowerCase();
+    const candidates = [...new Set(hits.map((h) => ix.pathOf(h.id)).filter((p): p is string => !!p && p !== path && p.endsWith('.md')))].slice(0, MAX_READS);
+    const linking = await inBatches(candidates, async (p) => {
+      const f = ix.file(p);
+      return f && (await this.parsed(f, p)).links.some((l) => l.toLowerCase() === title) ? p : null;
+    });
+    const backlinks = linking.filter((p): p is string => !!p);
     return { ...parsed, path, links: [...new Set(links)], backlinks };
   }
 
@@ -130,6 +138,7 @@ export class DriveVault implements VaultSource {
     const f = this.mustFile(ix, path);
     const out = moveEntry(ix.entries(), path, toFolder, Date.now());
     if (out === path) return path;
+    refuseReserved(out);
     const to = ix.idOf(toFolder);
     if (!to) throw new BowerError('not-found', 'That folder is no longer there.');
     const name = nameOf(out);
@@ -146,6 +155,7 @@ export class DriveVault implements VaultSource {
     const f = this.mustFile(ix, path);
     const out = renameEntry(ix.entries(), path, name, Date.now());
     if (out === path) return path;
+    refuseReserved(out);
     ix.put(await this.drive.update(f.id, { name: nameOf(out) }));
     await this.journal.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, { path: out, from: path });
     this.emit();
@@ -157,6 +167,7 @@ export class DriveVault implements VaultSource {
     const parent = ix.idOf(folder);
     if (!parent) throw new BowerError('not-found', 'That folder is no longer there.');
     const path = join(folder, freeName(ix.entries(), folder, name ?? (type === 'folder' ? 'New folder' : 'Untitled.md')));
+    refuseReserved(path);
     const made = type === 'folder' ? await this.drive.createFolder(parent, nameOf(path)) : await this.drive.createText(parent, nameOf(path), '');
     ix.put(made);
     await this.journal.record('create', `New ${type} "${displayName(nameOf(path))}" in ${where(folder)}`, { path });
@@ -243,16 +254,20 @@ export class DriveVault implements VaultSource {
       named.add(e.path);
       hits.push({ path: e.path, title, snippet: where(parentOf(e.path)), score: 3 });
     }
-    for (const h of await this.drive.fullText(await this.rootId(), first)) {
-      const path = ix.pathOf(h.id);
-      if (!path || named.has(path) || inInbox(path) || !path.endsWith('.md') || !ix.entries().has(path)) continue;
+    const entries = ix.entries();
+    const candidates = (await this.drive.fullText(await this.rootId(), first))
+      .map((h) => ({ h, path: ix.pathOf(h.id) }))
+      .filter((c): c is { h: DriveFile; path: string } => !!c.path && !named.has(c.path) && !inInbox(c.path) && c.path.endsWith('.md') && entries.has(c.path))
+      .slice(0, MAX_READS);
+    const found = await inBatches(candidates, async ({ h, path }) => {
       const n = await this.parsed(h, path);
       const lines = [n.summary, ...n.currentState, ...n.body.split('\n'), ...n.properties.map((p) => `${p.label}: ${p.value}`)];
       const line = lines.find((l) => words.every((w) => l.toLowerCase().includes(w)));
-      if (!line) continue;
+      if (!line) return null;
       const snippet = line.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, '$1').replace(/^[-*#\s|]+/, '').slice(0, 120);
-      hits.push({ path, title: n.title, snippet, score: 1 });
-    }
+      return { path, title: n.title, snippet, score: 1 };
+    });
+    for (const f of found) if (f) hits.push(f);
     return hits
       .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
       .slice(0, 50)
@@ -306,6 +321,8 @@ export class DriveVault implements VaultSource {
       if (text) ix.put(await this.drive.createText(folder.id, PILE_NOTE, text));
     }
     const entries: Sending[] = input.items.map((it, i) => ({
+      key: `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
+      tried: false,
       item: { id: `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
       ...(it.body ? { body: it.body } : {}),
       ...(it.url ? { url: it.url } : {}),
@@ -367,7 +384,7 @@ export class DriveVault implements VaultSource {
 
   async retryPile(id: string): Promise<void> {
     const u = this.uploads.get(id);
-    if (!u || this.sending.size) return;
+    if (!u || this.sendingPiles.has(id)) return;
     for (const e of u.entries) e.item.upload = 0;
     this.emit();
     this.track(this.send(id));
@@ -522,14 +539,34 @@ export class DriveVault implements VaultSource {
   /** Sends a pile's things one by one; a failure marks that thing and goes on. */
   private async send(pileId: string): Promise<void> {
     const u = this.uploads.get(pileId);
-    if (!u) return;
+    if (!u || this.sendingPiles.has(pileId)) return;
+    this.sendingPiles.add(pileId);
+    try {
+      await this.sendAll(pileId, u);
+    } finally {
+      this.sendingPiles.delete(pileId);
+    }
+  }
+
+  private async sendAll(pileId: string, u: Upload): Promise<void> {
     for (const e of [...u.entries]) {
       if (this.uploads.get(pileId) !== u) return;
       try {
         const ix = await this.index();
+        if (e.tried) {
+          // The last try may have arrived with its answer lost: look before sending again.
+          const there = (await this.drive.listAll(u.parent)).find((f) => f.parents[0] === u.parent && f.appProperties?.[PROP.item] === e.key);
+          if (there) {
+            ix.put(there);
+            u.entries = u.entries.filter((x) => x !== e);
+            this.emit();
+            continue;
+          }
+        }
+        e.tried = true;
         const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
         const name = freeName(ix.entries(), parentPath, safeInboxName(e.item));
-        const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, ...(u.lone ? { [PROP.pile]: pileId } : {}) };
+        const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}) };
         e.item.upload = 0;
         const made = e.url
           ? await this.drive.createText(u.parent, name, `[InternetShortcut]\nURL=${e.url}\n`, props)
@@ -578,9 +615,34 @@ export class DriveVault implements VaultSource {
 }
 
 interface Sending {
+  /** Set on the file as appProperties.bowerItem, so a retry can tell it already arrived. */
+  key: string;
+  tried: boolean;
   item: PileItem;
   body?: Blob;
   url?: string;
+}
+
+interface Upload {
+  lone: boolean;
+  createdAt: number;
+  parent: string;
+  entries: Sending[];
+}
+
+/** Notes read for one search or one backlink list, at most. */
+const MAX_READS = 60;
+
+/** Runs `fn` over the list a few at a time, keeping the order. */
+async function inBatches<T, R>(list: readonly T[], fn: (x: T) => Promise<R>, size = 5): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < list.length; i += size) out.push(...(await Promise.all(list.slice(i, i + size).map(fn))));
+  return out;
+}
+
+/** Bower's own files at the top of the folder (index.md, hot.md, log.md) keep their names. */
+function refuseReserved(path: string): void {
+  if (!path.includes('/') && (HIDDEN_AT_ROOT as readonly string[]).includes(path.toLowerCase())) throw new BowerError('conflict', "That name is kept for Bower's own files. Choose another.");
 }
 
 function itemOf(f: DriveFile): PileItem {

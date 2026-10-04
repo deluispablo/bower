@@ -135,6 +135,7 @@ export class DriveHttp implements DriveApi {
     throw driveError('unknown');
   }
 
+  /** Drive v3 has no If-Match on files: this reads, then writes, which leaves a short window. */
   async writeText(id: string, text: string, ifModified: string): Promise<DriveFile> {
     const now = await this.get(id);
     if (now.modifiedTime !== ifModified) throw driveError('conflict');
@@ -159,14 +160,17 @@ export class DriveHttp implements DriveApi {
 
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
     const inside = this.known.get(rootId) ?? new Set((await this.listAll(rootId)).map((f) => f.id));
-    const hits = await this.query(`fullText contains ${quote(query)} and trashed = false`);
+    // Full text runs over the person's whole Drive: the first two pages are plenty for one folder.
+    const hits = await this.query(`fullText contains ${quote(query)} and trashed = false`, 2);
     return hits.filter((f) => inside.has(f.id));
   }
 
-  private async query(q: string): Promise<DriveFile[]> {
+  private async query(q: string, maxPages = Infinity): Promise<DriveFile[]> {
     const out: DriveFile[] = [];
     let pageToken = '';
+    let pages = 0;
     do {
+      if (++pages > maxPages) break;
       const params = new URLSearchParams({ q, fields: `nextPageToken,files(${FIELDS})`, pageSize: '1000' });
       if (pageToken) params.set('pageToken', pageToken);
       const body = (await (await this.call(`${API}/files?${params}`)).json()) as { files?: WireFile[]; nextPageToken?: string };
@@ -220,7 +224,9 @@ export class DriveHttp implements DriveApi {
         continue;
       }
       const wait = WAITS[tries];
-      if ((res.status === 429 || res.status >= 500 || (await isRateLimit(res))) && wait !== undefined) {
+      // A create that failed on Google's side may still have made the file: never send it twice.
+      const safe = res.status === 429 || (await isRateLimit(res)) || (res.status >= 500 && (init.method ?? 'GET') !== 'POST');
+      if (safe && wait !== undefined) {
         tries++;
         await sleep(wait);
         continue;

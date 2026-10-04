@@ -6,6 +6,7 @@ import type { DriveApi } from '../drive/drive-api';
 import type { Sources } from '../sources';
 import { DriveVault } from '../vault/drive-vault';
 import type { WorkerApi } from '../worker/worker-api';
+import { BowerError } from '../types';
 import { LiveRuns } from './runs';
 import { LiveSession } from './session';
 
@@ -25,19 +26,45 @@ export interface LiveSources extends Sources {
   dispose(): void;
 }
 
+/**
+ * The same client, but an `auth` refusal from any call also runs `onAuth`,
+ * so an ended session reaches the sign-in screen from whatever screen hit it.
+ */
+export function watchAuth<T extends object>(api: T, onAuth: () => void): T {
+  return new Proxy(api, {
+    get(target, prop, receiver) {
+      const value: unknown = Reflect.get(target, prop, receiver);
+      if (typeof value !== 'function') return value;
+      return (...args: unknown[]): unknown => {
+        const out: unknown = Reflect.apply(value, target, args);
+        if (out instanceof Promise)
+          return out.catch((e: unknown) => {
+            if (e instanceof BowerError && e.code === 'auth') onAuth();
+            throw e;
+          });
+        return out;
+      };
+    },
+  });
+}
+
 export function makeLiveSources(opts: LiveOptions): LiveSources {
   let runs: LiveRuns | null = null;
   let vault: DriveVault | null = null;
-  const session = new LiveSession(opts.worker, opts.drive, () => void vault?.refresh());
+  let session: LiveSession | null = null;
+  const expire = (): void => session?.expire();
+  const drive = watchAuth(opts.drive, expire);
+  const worker = watchAuth(opts.worker, expire);
+  session = new LiveSession(opts.worker, drive, () => void vault?.refresh());
   vault = new DriveVault({
-    drive: opts.drive,
+    drive,
     rootId: () => session.rootId(),
     runningPiles: () => {
       const theirs = opts.runningPiles?.();
       return theirs?.size ? theirs : (runs?.runningPiles() ?? new Set());
     },
   });
-  runs = new LiveRuns(opts.worker, vault);
+  runs = new LiveRuns(worker, vault);
   const v = vault;
   const r = runs;
   return {
