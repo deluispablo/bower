@@ -132,3 +132,4 @@
 - 2026-10-04: panel-putaway-seen passes — fix(app): the panel's Put it away marks the stopped run seen, as Got it does
 - 2026-10-04: web-source-shapes passes — fix(app): a timeline source given as a full web address is a link; a saved link file is not an address
 - 2026-10-04: reload-filing-truth passes — fix(app): a reload while filing no longer says nothing was moved
+- 2026-10-04: move-exact-match passes — fix(app): Move to takes an exact folder name with Enter and says what to do in an empty box

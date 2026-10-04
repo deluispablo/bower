@@ -15,7 +15,7 @@ export function MovePicker() {
   const { data: tree } = useTree();
   const act = useFileActions();
   const [q, setQ] = useState('');
-  const [hint, setHint] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
   const folders = useMemo(() => {
     const out: string[] = [];
     const walk = (ns: TreeNode[]): void =>
@@ -63,22 +63,25 @@ export function MovePicker() {
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
-            setHint(false);
+            setHint(null);
           }}
           onKeyDown={(e) => {
-            // Enter takes the first folder that matches; arrows go into the list.
-            if (e.key === 'Enter' && q.trim()) {
-              // Enter moves only when one folder matches; with more, the arrows pick one.
+            // Enter moves to the one folder that matches, or the one named exactly so; arrows go into the list.
+            if (e.key === 'Enter') {
               e.preventDefault();
-              if (list.length === 1 && list[0]) pick(list[0]);
-              else if (list.length > 1) setHint(true);
+              const want = q.trim().toLowerCase();
+              const exact = list.filter((f) => nameOf(f).toLowerCase() === want);
+              const one = list.length === 1 ? list[0] : exact.length === 1 ? exact[0] : undefined;
+              if (!want) setHint('Type a folder name, or pick one with the arrows.');
+              else if (one) pick(one);
+              else if (list.length > 1) setHint('Several folders match. Pick one with the arrows, or type more.');
             } else walk(e, -1);
           }}
         />
       </label>
       {hint && (
         <p className="muted" role="status">
-          Several folders match. Pick one with the arrows, or type more.
+          {hint}
         </p>
       )}
       <ul className={s.pickList} ref={listRef}>

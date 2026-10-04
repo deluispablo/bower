@@ -38,3 +38,24 @@ test("Home's Got it puts the panel's card away too", async ({ page, isMobile }) 
   await page.getByRole('alert').getByRole('button', { name: 'Got it' }).click();
   await expect(panel.getByText(/tidy-up stopped/)).toHaveCount(0);
 });
+
+test('Move to: an exact folder name is picked with Enter, even when others match', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.getByLabel('Find a folder').fill('areas');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status').getByText(/Moved Lease draft\.pdf to Areas$/)).toBeVisible();
+});
+
+test('Move to: Enter in an empty box says what to do', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog').getByRole('status')).toHaveText('Type a folder name, or pick one with the arrows.');
+});

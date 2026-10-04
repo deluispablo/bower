@@ -1233,8 +1233,8 @@
     "category": "polish",
     "what": "Move to: with several matches, an exact folder name cannot be picked with Enter; Enter in an empty box says nothing.",
     "steps": [],
-    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"an exact folder name\"",
-    "passes": false
+    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"Move to: \"",
+    "passes": true
   },
   {
     "id": "folder-length-dots",
