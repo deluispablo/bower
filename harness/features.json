@@ -1023,7 +1023,7 @@
     "what": "The bookmark toast says \"at the top of Files\" on the desktop, where bookmarks are in the Bookmarks tab.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the bookmark toast says where bookmarks are\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "pile-folder-names",

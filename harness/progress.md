@@ -104,3 +104,4 @@
 - 2026-10-04: signout-sticks passes — fix(demo): signing out or in sticks across a reload; a new situation address starts it afresh
 - 2026-10-04: first-run-repeatable passes — fix(demo): choosing First sign-in again shows the welcome
 - 2026-10-04: loading-claims-more passes — fix: while loading, the footer and side panel claim no count, sync or rest
+- 2026-10-04: bookmark-toast passes — fix(copy): the bookmark toast says where bookmarks are on this device

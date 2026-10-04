@@ -111,3 +111,11 @@ test('first sign-in can be chosen again', async ({ page }) => {
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('heading', { name: 'Your folder is ready' })).toBeVisible({ timeout: 10_000 });
 });
+
+test('the bookmark toast says where bookmarks are', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Bookmark' }).click();
+  await expect(page.getByRole('status').getByText('Bookmarked. Find it in the Bookmarks tab.')).toBeVisible();
+});

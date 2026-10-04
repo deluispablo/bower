@@ -14,6 +14,7 @@ import { menuCls } from '@/ui/menu';
 import { Sheet } from '@/ui/Sheet';
 import { useFileActions } from './file-actions';
 import { toast } from '@/ui/toast';
+import { useIsDesktop } from '@/ui/media';
 import s from './explorer.module.css';
 
 const SORTS: Array<[SortOrder, string] | null> = [
@@ -551,6 +552,7 @@ type SepComp = typeof ContextMenu.Separator;
 
 /** The menu of a row; the same items on right-click and in the phone sheet. */
 export function useNodeMenu(node: TreeNode) {
+  const wide = useIsDesktop();
   const act = useFileActions();
   const binOrAsk = useBinOrAsk();
   const ui = useUi();
@@ -589,7 +591,7 @@ export function useNodeMenu(node: TreeNode) {
     icon: 'bookmark',
     run: () => {
       ui.toggleBookmark(node.path);
-      toast(marked ? 'Bookmark removed' : 'Bookmarked. Find it at the top of Files.');
+      toast(marked ? 'Bookmark removed' : wide ? 'Bookmarked. Find it in the Bookmarks tab.' : 'Bookmarked. Find it at the top of Files.');
     },
   });
   items.push({ key: 'link', label: 'Copy link', icon: 'link', run: () => act.copyLink(node) });
