@@ -624,7 +624,7 @@
     "what": "The service worker's fallback would answer the Worker's paths on a shared origin.",
     "steps": [],
     "verify": "pnpm build && pnpm exec playwright test -c e2e/pwa.config.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "no-swallowed-errors",

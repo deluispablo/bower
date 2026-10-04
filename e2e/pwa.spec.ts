@@ -26,3 +26,8 @@ test('with no network the app still opens', async ({ page, context }) => {
   await expect(page.locator('#root')).not.toBeEmpty({ timeout: 8000 });
   await context.setOffline(false);
 });
+
+test("the app shell never answers the Worker's own paths", async ({ request }) => {
+  const sw = await (await request.get('/sw.js')).text();
+  for (const p of ['auth', 'drive', 'process', 'status']) expect(sw).toMatch(new RegExp(p));
+});

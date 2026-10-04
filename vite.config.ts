@@ -29,7 +29,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         globIgnores: ['landing/**'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/landing/],
+        // The landing, and the Worker's paths when it shares the app's site (docs/specs/2026-10-04-worker-contract.md).
+        navigateFallbackDenylist: [/^\/landing/, /^\/(auth|me|drive|vault|process|status|runs|push)(\/|$)/],
       },
     }),
   ],
