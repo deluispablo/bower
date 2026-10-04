@@ -394,7 +394,7 @@
       "fail-run"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the side panel shows what waits and what failed\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "tidy-confirm-close",

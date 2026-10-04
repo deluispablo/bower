@@ -213,3 +213,28 @@ test('run your own Bower opens the repo', async ({ page }) => {
   await open(page, '/', 'signed-out');
   await expect(page.getByRole('link', { name: /Run your own Bower/ })).toHaveAttribute('href', 'https://github.com/deluispablo/bower');
 });
+
+test.describe('the side panel', () => {
+  test.skip(({ isMobile }) => isMobile, 'the desktop side panel');
+
+  test('the side panel shows what waits and what failed', async ({ page }) => {
+    await open(page, '/bower', 'fail-run', 'instant');
+    await page.getByRole('radio', { name: 'A rule' }).click();
+    await page.getByRole('button', { name: 'anything from the dentist goes in health' }).click();
+    await page.getByRole('button', { name: 'Keep this rule' }).click();
+    await page.getByRole('radio', { name: 'A request' }).click();
+    await page.getByRole('textbox', { name: 'Your request' }).fill('Put my id papers together');
+    await page.getByRole('button', { name: 'Send' }).click();
+    const panel = page.getByRole('complementary').filter({ hasText: 'Tell Bower something' });
+    await expect(panel.getByText('anything from the dentist goes in health')).toBeVisible();
+    await expect(panel.getByText(/waits for the next tidy-up/i).first()).toBeVisible();
+    await expect(panel.getByText('Put my id papers together')).toBeVisible();
+    await page.getByRole('link', { name: /^Home/ }).first().click();
+    await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+    await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
+    await expect(panel.getByText(/tidy-up stopped/).first()).toBeVisible();
+    await expect(panel.getByText(/^Resting/)).toHaveCount(0);
+  });
+});

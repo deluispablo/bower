@@ -41,3 +41,4 @@
 - 2026-10-04: landing-console passes — fix(landing): placeholders in drawings use the runtime's own attribute form, so the page logs no errors
 - 2026-10-04: github-links passes — fix(sign-in): Run your own Bower opens the repo, as the landing does
 - 2026-10-04: copy-sensor passes — fix(copy): no file names or product names in sentences, durations in digits, one way to say read your changes; a copy test keeps it so
+- 2026-10-04: side-panel-state passes — fix(panel): the side panel marks rules and requests that wait, and keeps a stopped tidy-up in view
