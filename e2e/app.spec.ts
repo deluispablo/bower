@@ -40,7 +40,7 @@ test('a failed run says why and moves nothing', async ({ page }) => {
 });
 
 test('a note shows its properties, current state and timeline', async ({ page }) => {
-  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Mill%20Lane.md');
+  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   await expect(page.getByRole('heading', { name: 'Flat 3, 12 Larkspur Lane', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Current state' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Timeline' })).toBeVisible();
@@ -54,7 +54,7 @@ test('a pile can be added', async ({ page }) => {
   await page.getByLabel('Paste a link').fill('https://insurer.example/renewal');
   await page.getByRole('button', { name: 'Add link' }).click();
   await page.getByRole('button', { name: /Put 1 thing in the inbox/ }).click();
-  await expect(page.getByRole('link', { name: /Car insurance renewal/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Inbox' }).getByRole('link', { name: /Car insurance renewal/ })).toBeVisible();
 });
 
 test.describe('desktop explorer', () => {
@@ -73,7 +73,7 @@ test.describe('desktop explorer', () => {
   });
 
   test('renames with F2 and walks the tree with arrows', async ({ page }) => {
-    await open(page, '/note/Projects/Flat%20hunt/Flat%207%2C%20Rosebery%20Ave.md');
+    await open(page, '/note/Projects/Flat%20hunt/Flat%207%2C%20Cobble%20Row.md');
     const tree = page.getByRole('tree', { name: 'Your Bower folder' });
     await tree.focus();
     await page.keyboard.press('F2');
@@ -94,7 +94,7 @@ test.describe('desktop explorer', () => {
   });
 });
 
-for (const path of ['/', '/files', '/add', '/bower', '/settings', '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Mill%20Lane.md', '/files/Projects/Flat%20hunt']) {
+for (const path of ['/', '/files', '/add', '/bower', '/settings', '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md', '/files/Projects/Flat%20hunt']) {
   test(`no serious accessibility problems on ${path}`, async ({ page }) => {
     await open(page, path);
     const r = await new AxeBuilder({ page }).disableRules(['region']).analyze();

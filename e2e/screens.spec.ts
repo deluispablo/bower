@@ -45,7 +45,7 @@ test('screens', async ({ page }, info) => {
   await go(page, '/pile/p1');
   await shot(page, '06-pile', p);
 
-  await go(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Mill%20Lane.md');
+  await go(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   await shot(page, '07-note', p);
 
   await go(page, '/note/Areas/Documents/Passport%20renewal.md');
