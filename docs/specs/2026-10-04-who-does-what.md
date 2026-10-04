@@ -42,6 +42,15 @@ Every change made in the app leaves one small file in `.bower/changes/` (one fil
 - After the run the entries are archived and logged in `log.md` as "by you".
 - The app shows the journal on Home ("Since the last tidy-up") and offers "Let Bower read them now" (a short run that only reads the journal).
 
+## Piles in the inbox
+
+A pile is what you add together, with one line about it. In Drive it is a subfolder of the inbox, named by its day and its line (`Inbox/2026-10-04 Receipts from the Saltmere weekend/`), holding its things and `Pile note.md` with your words. A single thing with no line sits at the inbox root. A pile can also be only a note.
+
+- The runner reads each subfolder as one pile and its note as context for every thing in it. No frontmatter matching between files and notes.
+- A tidy-up takes the piles that were in the inbox when it started; piles added during a run wait for the next one.
+- In the app the inbox is handled as piles: a pile is opened or removed as a whole; its things are never dragged, renamed or moved one by one. The pile's note can be changed until a tidy-up starts.
+- Names in the inbox are made safe for Drive (no slashes); a pasted link becomes a `.url` file.
+
 ## Who owns what in a note
 
 - Bower's: *Current state*, *Timeline*, Bower's note, and the frontmatter fields Bower writes. The app shows them, read-only.
