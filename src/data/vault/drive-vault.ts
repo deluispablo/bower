@@ -82,6 +82,7 @@ export class DriveVault implements VaultSource {
       this.drive,
       {
         folder: () => this.systemFolder(SYSTEM.changes),
+        owner: () => this.rootId(),
         files: async () => (await this.index()).filesIn(SYSTEM.changes),
         wrote: (f) => void this.ix?.then((ix) => ix.put(f)),
         removed: (id) => void this.ix?.then((ix) => ix.drop(id)),

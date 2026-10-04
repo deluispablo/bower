@@ -71,3 +71,4 @@
 - 2026-10-04: one-entry-per-commit passes — fix(harness): done.sh refuses a change that flips more than one entry
 - 2026-10-04: agents-lost-rules passes — docs: AGENTS.md keeps the brand and copy rules it had lost
 - 2026-10-04: landing-source-fix passes — fix(landing): the fix lives in a script run after each export, and a test checks it
+- 2026-10-04: journal-outbox passes — fix(journal): a line Drive cannot take waits in this device's outbox, per folder, and each change shows once

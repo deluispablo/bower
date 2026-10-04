@@ -642,7 +642,7 @@
     "what": "A journal line that cannot be written (offline) is lost; a retry after a lost answer can write it twice and the change shows twice.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"outbox|twice\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "web-pref-sent",

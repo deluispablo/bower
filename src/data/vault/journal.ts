@@ -24,6 +24,8 @@ export type JournalRecord = ChangeEntry & JournalExtra & { v: 1; device: string 
 export interface JournalPlace {
   /** The id of `.bower/changes/`, made if missing. */
   folder: () => Promise<string>;
+  /** The Bower folder's id: whose journal this is. */
+  owner: () => Promise<string>;
   /** The files in it now (not its archive). */
   files: () => Promise<DriveFile[]>;
   /** Told about each file the journal writes or bins, so a listing cache stays true. */
@@ -39,10 +41,32 @@ function isRecord(v: unknown): v is JournalRecord {
   return r.v === 1 && typeof r.id === 'string' && typeof r.at === 'number' && typeof r.what === 'string' && KINDS.includes(r.kind as ChangeKind);
 }
 
+/** This device's unsent lines, per Bower folder, so one person's never reach another's. */
+const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
+
+function readOutbox(key: string): JournalRecord[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return Array.isArray(v) ? v.filter(isRecord) : [];
+  } catch {
+    // expected: no storage, or an old shape; nothing waits to be sent.
+    return [];
+  }
+}
+
+function writeOutbox(key: string, recs: JournalRecord[]): void {
+  try {
+    if (recs.length) localStorage.setItem(key, JSON.stringify(recs));
+    else localStorage.removeItem(key);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 export class Journal {
   private read = new Map<string, JournalRecord | null>();
-  /** Drive file id per record id, for remove. */
-  private fileOf = new Map<string, string>();
+  /** Drive file ids per record id (a line written twice has two), for remove. */
+  private filesOf = new Map<string, string[]>();
   /** Two changes in one millisecond still keep their order. */
   private lastAt = 0;
 
@@ -52,26 +76,49 @@ export class Journal {
     private readonly device: string,
   ) {}
 
+  /**
+   * Writes the line of a change already done in Drive. When Drive does not
+   * answer, the line waits in this device's outbox and goes with the next
+   * one; the change is never reported as failed for its line alone.
+   */
   async record(kind: ChangeKind, what: string, extra: JournalExtra = {}): Promise<JournalRecord> {
     const at = (this.lastAt = Math.max(Date.now(), this.lastAt + 1));
     const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
-    const write = async (): Promise<DriveFile> => this.drive.createText(await this.place.folder(), `${id}.json`, `${JSON.stringify(rec)}\n`);
-    // The change itself is done in Drive: try its line twice before saying it failed.
-    const f = await write().catch((e: unknown) => {
-      console.error(e);
-      return write();
-    });
-    this.read.set(f.id, rec);
-    this.fileOf.set(id, f.id);
-    this.place.wrote?.(f);
+    await this.flush();
+    const key = outboxKey(await this.place.owner());
+    if (!(await this.send(rec))) writeOutbox(key, [...readOutbox(key), rec]);
     return rec;
   }
 
-  /** Every change since the last tidy-up, oldest first. */
+  /** Sends what waits in the outbox; what still cannot go stays. */
+  async flush(): Promise<void> {
+    const key = outboxKey(await this.place.owner());
+    const waiting = readOutbox(key);
+    if (!waiting.length) return;
+    const left: JournalRecord[] = [];
+    for (const r of waiting) if (!(await this.send(r))) left.push(r);
+    writeOutbox(key, left);
+  }
+
+  private async send(rec: JournalRecord): Promise<boolean> {
+    try {
+      const f = await this.drive.createText(await this.place.folder(), `${rec.id}.json`, `${JSON.stringify(rec)}\n`);
+      this.read.set(f.id, rec);
+      this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f.id]);
+      this.place.wrote?.(f);
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  }
+
+  /** Every change since the last tidy-up, oldest first, each once (Drive and this device's outbox). */
   async list(): Promise<JournalRecord[]> {
     const files = (await this.place.files()).filter((f) => !f.folder && f.name.endsWith('.json'));
-    const out: JournalRecord[] = [];
+    const byId = new Map<string, JournalRecord>();
+    const seenFiles = new Map<string, string[]>();
     for (const f of files) {
       if (!this.read.has(f.id)) {
         let rec: JournalRecord | null = null;
@@ -85,21 +132,26 @@ export class Journal {
       }
       const rec = this.read.get(f.id);
       if (rec) {
-        out.push(rec);
-        this.fileOf.set(rec.id, f.id);
+        byId.set(rec.id, rec);
+        seenFiles.set(rec.id, [...(seenFiles.get(rec.id) ?? []), f.id]);
       }
     }
-    return out.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
+    for (const [rid, ids] of seenFiles) this.filesOf.set(rid, ids);
+    for (const r of readOutbox(outboxKey(await this.place.owner()))) if (!byId.has(r.id)) byId.set(r.id, r);
+    return [...byId.values()].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
 
-  /** Takes a change back (an Undo): its file goes to the Bin. */
+  /** Takes a change back (an Undo): its file goes to the Bin, or it leaves the outbox. */
   async remove(id: string): Promise<void> {
-    if (!this.fileOf.has(id)) await this.list();
-    const fileId = this.fileOf.get(id);
-    if (!fileId) return;
-    await this.drive.trash(fileId);
-    this.place.removed?.(fileId);
-    this.fileOf.delete(id);
-    this.read.delete(fileId);
+    const key = outboxKey(await this.place.owner());
+    const waiting = readOutbox(key);
+    if (waiting.some((r) => r.id === id)) writeOutbox(key, waiting.filter((r) => r.id !== id));
+    if (!this.filesOf.has(id)) await this.list();
+    for (const fileId of this.filesOf.get(id) ?? []) {
+      await this.drive.trash(fileId);
+      this.place.removed?.(fileId);
+      this.read.delete(fileId);
+    }
+    this.filesOf.delete(id);
   }
 }
