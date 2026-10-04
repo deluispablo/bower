@@ -894,6 +894,6 @@
     "what": "The 120-character limit applies to rename only, not to New note or New folder names.",
     "steps": [],
     "verify": "pnpm vitest run src/data/contract -t \"longer than 120\"",
-    "passes": false
+    "passes": true
   }
 ]

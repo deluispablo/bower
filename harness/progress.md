@@ -81,3 +81,4 @@
 - 2026-10-04: loading-component-test passes — test: the footer and the side panel are pinned in their loading state
 - 2026-10-04: confirmbin-grammar passes — fix(copy): the Bin question agrees with how many things go
 - 2026-10-04: yaml-unindented-list passes — fix(notes): a YAML list that is not indented reads right
+- 2026-10-04: rename-length-create passes — fix(names): the 120-character limit holds for new notes and folders too
