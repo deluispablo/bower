@@ -543,7 +543,7 @@
     "what": "Restoring a path inside a binned pile would rename the pile folder.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts",
-    "passes": false
+    "passes": true
   },
   {
     "id": "journal-retry",
