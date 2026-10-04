@@ -348,7 +348,7 @@
       "Sign in screen"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"run your own Bower opens the repo\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "inbox-order",
