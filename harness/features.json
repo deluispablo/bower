@@ -1964,7 +1964,7 @@
       "The row has the keyboard both times."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"Undo twice\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "toast-hold-both",

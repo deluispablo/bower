@@ -38,7 +38,7 @@ interface UiState {
   confirmBin: { path: string; count: number; nested?: boolean } | null;
   setConfirmBin: (v: UiState['confirmBin']) => void;
   /** The last thing Undo brought back from the Bin, so the tree gives it the keyboard. */
-  restored: string | null;
+  restored: { path: string; at: number } | null;
   setRestored: (path: string | null) => void;
   /** A name asked for in a sheet (from a page, where there is no tree row to type in). */
   naming: { rename: string } | { folder: string; type: 'note' | 'folder' } | null;
@@ -132,7 +132,7 @@ export const useUi = create<UiState>((set, get) => ({
   naming: null,
   setNaming: (v) => set({ naming: v }),
   restored: null,
-  setRestored: (restored) => set({ restored }),
+  setRestored: (path) => set({ restored: path ? { path, at: Date.now() } : null }),
   forgetPerson: () => {
     write(OPEN_KEY, []);
     write(BM_KEY, []);

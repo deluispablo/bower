@@ -64,3 +64,18 @@ test('a link follows a rename through a tidy-up', async ({ page, isMobile }) => 
   await expect(page).toHaveURL(/\/note\/Projects\/Flat%20hunt\/Cobble%20Row%20flat\.md/);
   await expect(page.getByText('Flat 3, 12 Larkspur Lane').first()).toBeVisible();
 });
+
+test('Undo twice on the same thing gives its row the keyboard both times', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  for (let i = 0; i < 2; i++) {
+    await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+    await page.keyboard.press('Escape');
+    await expect(tree).toBeFocused();
+    await page.keyboard.press('Delete');
+    await page.getByRole('status').getByRole('button', { name: 'Undo' }).last().click();
+    await expect(tree, `time ${i + 1}`).toBeFocused();
+    await expect(tree).toHaveAttribute('aria-activedescendant', 'row-Projects%2FFlat%20hunt%2FLease%20draft.pdf');
+  }
+});

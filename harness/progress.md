@@ -173,3 +173,4 @@
 - 2026-10-05: demo-links-after-tidy passes — fix(demo): links follow a rename through a tidy-up, and linking notes follow a move
 - 2026-10-05: demo-pending-rule-remove passes — fix(demo): removing a waiting rule takes its line out, as on Drive
 - 2026-10-05: note-without-journal passes — fix(app): a note opens even when the journal cannot be read
+- 2026-10-05: undo-focus-twice passes — fix(app): a second Undo of the same thing gives its row the keyboard too
