@@ -73,3 +73,4 @@
 - 2026-10-04: landing-source-fix passes — fix(landing): the fix lives in a script run after each export, and a test checks it
 - 2026-10-04: journal-outbox passes — fix(journal): a line Drive cannot take waits in this device's outbox, per folder, and each change shows once
 - 2026-10-04: web-pref-sent passes — fix(runs): the web choice in Settings travels with every tidy-up (allowWeb), as the Worker contract now says
+- 2026-10-04: one-count-rule passes — fix(files): one count for a folder everywhere: what is directly in it; the inbox counts what waits

@@ -1,0 +1,26 @@
+/**
+ * Round six: what the review of round five found. Each test pins one entry of
+ * harness/features.json with "task": "qa-6", on demo and on fake.
+ */
+import type { Page } from '@playwright/test';
+import { expect, isFake, test } from './fixtures';
+
+const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
+  await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+};
+void isFake;
+
+test('one counting rule for folders', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the folder cards of the desktop');
+  await open(page, '/files');
+  const card = await page.getByRole('link', { name: /^Projects/ }).first().innerText();
+  await page.getByRole('link', { name: /^Projects/ }).first().click();
+  await expect(page.locator('main header p').first()).toHaveText(/\d+ things?/);
+  const header = await page.locator('main header p').first().innerText();
+  expect(card).toContain(header);
+  const row = page.locator('main ul a').filter({ hasText: /^Flat hunt/ }).first();
+  const rowCount = /(\d+ things?)/.exec(await row.innerText())?.[1] ?? '';
+  await row.click();
+  await expect(page.locator('main header p').first()).toHaveText(rowCount);
+});

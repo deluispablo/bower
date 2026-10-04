@@ -660,7 +660,7 @@
     "what": "Folder counts disagree between the card or row (everything inside) and the folder's own header (what is directly in it).",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"one counting rule for folders\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "move-enter-empty",

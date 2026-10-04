@@ -45,3 +45,14 @@ export function countThings(n: TreeNode): number {
   if (n.type === 'file') return n.name === PILE_NOTE ? 0 : 1;
   return (n.children ?? []).reduce((t, c) => t + countThings(c), 0);
 }
+
+/**
+ * The one count a folder shows, wherever it shows (card, row, header, tree):
+ * what is directly in it, a subfolder counting once, its own note and pile
+ * notes not at all. The inbox counts the things waiting, as Home does.
+ */
+export function folderCount(n: TreeNode): number {
+  if (n.type === 'file') return 1;
+  if (n.path === 'Inbox') return countThings(n);
+  return (n.children ?? []).filter((c) => !c.hub && c.name !== PILE_NOTE).length;
+}

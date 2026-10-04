@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { usePiles, useTree } from '@/data/provider';
 import { displayName, findNode, isRoot, parentOf, visibleRows, type SortOrder } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
-import { countThings } from '@/data/piles';
+import { countThings, folderCount } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
 import { crumbs, decodeSplat, paraColor, routeFor } from '@/app/paths';
 import { IconButton } from '@/ui/Button';
@@ -374,7 +374,7 @@ export function Explorer({ variant }: Props) {
         )}
         {badge && !renaming && <span className={s.badge}>{badge}</span>}
         {node.isNew && <span className={s.newDot} title="New since you last looked" aria-label="New" />}
-        {folder && !isOpen && <span className={s.count}>{countThings(node)}</span>}
+        {folder && !isOpen && <span className={s.count}>{folderCount(node)}</span>}
       </div>
     );
   };

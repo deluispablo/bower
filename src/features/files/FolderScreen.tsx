@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { usePiles, useSources, useTree } from '@/data/provider';
-import { countThings } from '@/data/piles';
+import { folderCount } from '@/data/piles';
 import { displayName, findNode, parentOf, sortNodes, type SortOrder } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, paraColor, routeFor } from '@/app/paths';
@@ -58,7 +58,7 @@ function RootOverview() {
             <Link to={folderRoute(n.path)} className={s.rootCard}>
               <span className={s.dot} style={{ background: paraColor(n.path) }} />
               <span className={s.rootName}>{n.name}</span>
-              <span className="muted">{plural(countThings(n), 'thing')}</span>
+              <span className="muted">{plural(folderCount(n), 'thing')}</span>
             </Link>
           </li>
         ))}
@@ -139,7 +139,7 @@ function Folder({ path }: { path: string }) {
             {node.name}
           </h1>
           {/* What is directly here, as the list shows it: a subfolder counts once, the folder's own note not at all. */}
-          <p className="muted">{plural(children.filter((c) => !c.hub).length, 'thing')}</p>
+          <p className="muted">{plural(folderCount(node), 'thing')}</p>
         </div>
         <div className={s.views} role="radiogroup" aria-label="View">
           <button type="button" role="radio" aria-checked={view === 'list'} onClick={() => changeView('list')}>
@@ -164,7 +164,7 @@ function Folder({ path }: { path: string }) {
                 <span className={s.tile}>{c.type === 'folder' ? <Icon name="folder" /> : c.byBower ? <BowerHead size={20} /> : <Icon name={c.kind === 'image' ? 'image' : c.kind === 'link' ? 'link' : 'file'} />}</span>
                 <span className={s.main}>
                   <span className={c.type === 'file' && c.kind !== 'note' ? `${s.name} ${s.mono}` : s.name}>{c.type === 'folder' ? c.name : displayName(c.name)}</span>
-                  <span className={s.sub}>{c.type === 'folder' ? plural(countThings(c), 'thing') : `Changed ${ago(c.modified).toLowerCase()}`}</span>
+                  <span className={s.sub}>{c.type === 'folder' ? plural(folderCount(c), 'thing') : `Changed ${ago(c.modified).toLowerCase()}`}</span>
                 </span>
                 {c.isNew && <span className={s.new}>New</span>}
                 <Icon name="chev" size={16} />
