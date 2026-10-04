@@ -356,6 +356,14 @@ describe('what the code review found', () => {
   });
 });
 
+describe('links', () => {
+  it('links follow a rename, before the next tidy-up', async () => {
+    const to = await vault.rename('Projects/Flat hunt/Flat 7, Cobble Row.md', 'Cobble Row flat');
+    expect((await vault.note('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md')).links).toContain(to);
+    expect((await vault.note(to)).backlinks).toContain('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md');
+  });
+});
+
 describe('things that arrive late', () => {
   it('a late thing comes back with its pile on Undo', async () => {
     const real = drive.upload.bind(drive);

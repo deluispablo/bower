@@ -1,19 +1,27 @@
 import { useMemo } from 'react';
-import { useTree } from '@/data/provider';
+import { useChanges, useTree } from '@/data/provider';
+import { formerNames } from '@/data/links';
 import { displayName } from '@/data/tree';
-import type { TreeNode } from '@/data/types';
+import type { ChangeEntry, TreeNode } from '@/data/types';
 
-/** Finds a note by its name, as a [[wikilink]] names it. */
+/** Finds a note by its name, as a [[wikilink]] names it, or by a name it had before a rename. */
+export function resolverFor(tree: readonly TreeNode[], changes: readonly ChangeEntry[]): (name: string) => string | null {
+  const byName = new Map<string, string>();
+  const walk = (ns: readonly TreeNode[]): void =>
+    ns.forEach((n) => {
+      if (n.type === 'file') byName.set(displayName(n.name).toLowerCase(), n.path);
+      else walk(n.children ?? []);
+    });
+  walk(tree);
+  const former = formerNames(changes);
+  return (name: string) => {
+    const key = name.trim().toLowerCase();
+    return byName.get(key) ?? former.get(key) ?? null;
+  };
+}
+
 export function useResolver(): (name: string) => string | null {
   const { data } = useTree();
-  return useMemo(() => {
-    const byName = new Map<string, string>();
-    const walk = (ns: TreeNode[]): void =>
-      ns.forEach((n) => {
-        if (n.type === 'file') byName.set(displayName(n.name).toLowerCase(), n.path);
-        else walk(n.children ?? []);
-      });
-    walk(data ?? []);
-    return (name: string) => byName.get(name.trim().toLowerCase()) ?? null;
-  }, [data]);
+  const { data: changes } = useChanges();
+  return useMemo(() => resolverFor(data ?? [], changes ?? []), [data, changes]);
 }

@@ -1607,8 +1607,8 @@
       "Open Flat 3, 12 Larkspur Lane: 'Compare with Flat 7, Cobble Row' is still a link and opens the renamed note.",
       "The renamed note's Linked notes lists Flat 3."
     ],
-    "verify": "pnpm vitest run src/data -t \"links follow a rename\"",
-    "passes": false
+    "verify": "pnpm vitest run src/data src/features/note -t \"links follow a rename\"",
+    "passes": true
   },
   {
     "id": "bin-count-hub",

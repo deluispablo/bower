@@ -140,6 +140,8 @@ export interface ChangeEntry {
   /** One line, as the app shows it: "Moved Lease draft.pdf to Areas / Home". */
   what: string;
   path?: string;
+  /** Where a move or rename came from. */
+  from?: string;
 }
 
 export interface Suggestion {

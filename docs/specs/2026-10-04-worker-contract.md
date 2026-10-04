@@ -53,6 +53,7 @@ The app counts a run from `requestedAt` on every device. It asks `/status` every
 - `.bower/last-run.json`: `{ v: 1, run: <RunWire with report> }`, where `report` is the app's `RunReport` (`filed`, `created`, `updated`, `setAside`, `questions`, `yourChanges`).
 - `.bower/questions.json`, `.bower/suggestions.json`, `.bower/requests.json`, `.bower/hashes.json` (shapes in `src/data/vault/layout.ts`).
 - `Rules.md` with the rules typed in the app worded (`src/data/vault/rules-format.ts`).
+- After a `rename` or `move` line (`from` → `path`), every `[[link]]` to the old name written with the new one, in every note (a label after `|` stays). Until then the app finds a note by the names it had (`src/data/links.ts`).
 - The journal files it read moved to `.bower/changes/archive/`.
 - `appProperties.bowerNew = "1"` on what it filed or changed, cleared from the previous run's things first.
 

@@ -11,6 +11,7 @@ import type { DriveFile } from '../drive/drive-api';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
+import { formerNames } from '../links';
 import { thingsIn } from '../piles';
 import { displayName, freeName, join, kindOf, nameOf, parentOf } from '../tree';
 import type { FiledItem, Pile, Question, Request, Rule, RunPhase, RunReport } from '../types';
@@ -83,6 +84,7 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
     for (const pile of piles.filter((p) => taken.has(p.id))) await w.filePile(pile, report, saidYes);
     for (const u of UPDATES) if (await w.addTimeline(u.path, u.what)) report.updated.push(u);
   }
+  await w.followRenames(journal);
   await w.wordRules(journal.filter((r) => r.kind === 'rule'));
   await w.doRequests(journal.filter((r) => r.kind === 'request'));
   // The report lists only the questions this run asked; the open ones stay in questions.json with them.
@@ -174,6 +176,22 @@ class Writer {
     if (top?.folder) {
       await this.drive.trash(top.id);
       this.ix.drop(top.id);
+    }
+  }
+
+  /** After renames, every [[link]] to an old name is written with the new one (a label after | stays). */
+  async followRenames(journal: JournalRecord[]): Promise<void> {
+    const former = formerNames(journal.map((r) => ({ id: r.id, at: r.at, kind: r.kind, what: r.what, ...(r.path ? { path: r.path } : {}), ...(r.from ? { from: r.from } : {}) })));
+    if (!former.size) return;
+    for (const [path] of this.ix.entries()) {
+      const f = this.ix.file(path);
+      if (!f || f.folder || !path.endsWith('.md') || path.startsWith(`${SYSTEM.dir}/`)) continue;
+      const text = await this.drive.readText(f.id);
+      const next = text.replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, (all, name: string, label: string | undefined) => {
+        const now = former.get(name.trim().toLowerCase());
+        return now ? `[[${displayName(nameOf(now))}${label ?? ''}]]` : all;
+      });
+      if (next !== text) this.ix.put(await this.drive.writeText(f.id, next, f.modifiedTime));
     }
   }
 

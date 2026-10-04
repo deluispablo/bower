@@ -25,6 +25,7 @@ import {
   type TreeNode,
 } from '../types';
 import { Journal, type JournalRecord } from './journal';
+import { formerNames } from '../links';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, searchLines } from '../search-text';
@@ -129,14 +130,17 @@ export class DriveVault implements VaultSource {
       const key = displayName(nameOf(p)).toLowerCase();
       if (!byName.has(key)) byName.set(key, p);
     }
-    const links = parsed.links.map((l) => byName.get(l.toLowerCase())).filter((p): p is string => !!p && p !== path);
-    // Full text only finds the words; a backlink is a note whose own links name this one.
-    const hits = await this.drive.fullText(await this.rootId(), `[[${parsed.title}`);
-    const title = parsed.title.toLowerCase();
+    // A link to a name the note had before a rename since the last tidy-up still finds it.
+    const former = formerNames((await this.journal.list()).map(toChange));
+    const links = parsed.links.map((l) => byName.get(l.toLowerCase()) ?? former.get(l.toLowerCase())).filter((p): p is string => !!p && p !== path);
+    // Full text only finds the words; a backlink is a note whose own links name this one (or a name it had).
+    const names = [parsed.title, ...[...former].filter(([, now]) => now === path).map(([was]) => was)];
+    const hits = (await Promise.all(names.map(async (n) => this.drive.fullText(await this.rootId(), `[[${n}`)))).flat();
+    const wanted = new Set(names.map((n) => n.toLowerCase()));
     const candidates = [...new Set(hits.map((h) => ix.pathOf(h.id)).filter((p): p is string => !!p && p !== path && p.endsWith('.md')))].slice(0, MAX_READS);
     const linking = await inBatches(candidates, async (p) => {
       const f = ix.file(p);
-      return f && (await this.parsed(f, p)).links.some((l) => l.toLowerCase() === title) ? p : null;
+      return f && (await this.parsed(f, p)).links.some((l) => wanted.has(l.toLowerCase())) ? p : null;
     });
     const backlinks = linking.filter((p): p is string => !!p);
     return { ...parsed, path, links: [...new Set(links)], backlinks };
@@ -749,5 +753,5 @@ function dismiss(id: string): void {
 }
 
 function toChange(r: JournalRecord): ChangeEntry {
-  return { id: r.id, at: r.at, kind: r.kind, what: r.what, ...(r.path ? { path: r.path } : {}) };
+  return { id: r.id, at: r.at, kind: r.kind, what: r.what, ...(r.path ? { path: r.path } : {}), ...(r.from ? { from: r.from } : {}) };
 }

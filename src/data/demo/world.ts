@@ -259,9 +259,9 @@ export class DemoWorld {
     return this.piles.reduce((s, p) => s + thingsIn(p), 0);
   }
 
-  private record(kind: ChangeKind, what: string, path?: string): string {
+  private record(kind: ChangeKind, what: string, path?: string, from?: string): string {
     const id = `c${++this.seq}`;
-    this.journal.push({ id, at: Date.now(), kind, what, ...(path ? { path } : {}) });
+    this.journal.push({ id, at: Date.now(), kind, what, ...(path ? { path } : {}), ...(from ? { from } : {}) });
     return id;
   }
   private unrecord(id: string | null | undefined): void {
@@ -542,7 +542,7 @@ export class DemoWorld {
           if (out !== path) {
             const last = [...this.journal].reverse().find((c) => c.kind === 'move' && c.path === path);
             if (opts?.undo && last) this.unrecord(last.id);
-            else this.record('move', `Moved ${displayName(nameOf(path))} to ${to.replaceAll('/', ' / ') || 'your Bower folder'}`, out);
+            else this.record('move', `Moved ${displayName(nameOf(path))} to ${to.replaceAll('/', ' / ') || 'your Bower folder'}`, out, path);
           }
           return out;
         }),
@@ -559,7 +559,7 @@ export class DemoWorld {
               this.unrecord(made.id);
               const type = this.entries.get(out)?.type === 'folder' ? 'folder' : 'note';
               this.record('create', `New ${type} "${displayName(nameOf(out))}" in ${parentOf(out).replaceAll('/', ' / ') || 'your Bower folder'}`, out);
-            } else this.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, out);
+            } else this.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, out, path);
           }
           return out;
         }),

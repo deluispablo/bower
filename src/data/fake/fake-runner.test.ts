@@ -91,6 +91,15 @@ describe('the fake runner', () => {
     expect([...drive.dump(root).keys()].filter((p) => /^\.bower\/changes\/[^/]+\.json$/.test(p))).toEqual([]);
   });
 
+  it('links follow a rename: the tidy-up writes the new name into the notes that link', async () => {
+    const to = await vault.rename('Projects/Flat hunt/Flat 7, Cobble Row.md', 'Cobble Row flat');
+    await runFake(drive, root, opts({ scope: 'instructions' }));
+    const text = (await fresh().note('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md')).body;
+    expect(text).toContain('[[Cobble Row flat]]');
+    expect(text).not.toContain('[[Flat 7, Cobble Row]]');
+    expect((await fresh().note(to)).backlinks).toContain('Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md');
+  });
+
   it('pending rules are worded with your words kept', async () => {
     await vault.addRule('anything from the dentist goes in health');
     await runFake(drive, root, opts({ scope: 'instructions' }));
