@@ -34,8 +34,8 @@ interface UiState {
   bookmarks: string[];
   toggleBookmark: (path: string) => void;
   /** A folder with things in it, waiting for a yes before it goes to the Bin. */
-  confirmBin: { path: string; count: number } | null;
-  setConfirmBin: (v: { path: string; count: number } | null) => void;
+  confirmBin: { path: string; count: number; nested?: boolean } | null;
+  setConfirmBin: (v: UiState['confirmBin']) => void;
   /** Keeps only the bookmarks for which `exists` says yes (things gone from the folder are dropped). */
   pruneBookmarks: (exists: (path: string) => boolean) => void;
   /** Sign-out: what this screen holds about the person goes (the device's copy is cleared by data/device). */

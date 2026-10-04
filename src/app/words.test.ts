@@ -16,6 +16,11 @@ describe('words that agree', () => {
     expect(goWithIt(1)).toBe('The thing inside goes with it. You can get it back with Undo, or from the Bin of your Drive.');
     expect(goWithIt(3)).toBe('The 3 things inside go with it. You can get them back with Undo, or from the Bin of your Drive.');
   });
+
+  it('a folder with folders in it counts everything inside, and says so', () => {
+    expect(goWithIt(7, true)).toBe('Everything inside goes with it: 7 things, counting what is in its folders. You can get them back with Undo, or from the Bin of your Drive.');
+    expect(goWithIt(1, true)).toBe('Everything inside goes with it: 1 thing, in one of its folders. You can get it back with Undo, or from the Bin of your Drive.');
+  });
 });
 
 import { ago, agoInSentence, shortDay } from './words';

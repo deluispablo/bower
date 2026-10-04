@@ -1197,8 +1197,8 @@
     "category": "polish",
     "what": "The Bin question counts everything inside while the row counts what is directly in it, without saying so.",
     "steps": [],
-    "verify": "pnpm vitest run src/app/words.test.ts -t \"everything inside\"",
-    "passes": false
+    "verify": "pnpm vitest run src/app/words.test.ts -t \"counts everything inside\"",
+    "passes": true
   },
   {
     "id": "panel-putaway-seen",

@@ -13,7 +13,7 @@ export function ConfirmBin() {
   const name = confirmBin ? displayName(nameOf(confirmBin.path)) : '';
   return (
     <Sheet open={!!confirmBin} onOpenChange={(o) => !o && setConfirmBin(null)} title={`Put ${name} in the Bin?`}>
-      <p className="muted">{confirmBin ? goWithIt(confirmBin.count) : ''}</p>
+      <p className="muted">{confirmBin ? goWithIt(confirmBin.count, confirmBin.nested) : ''}</p>
       <div className={s.confirmRow}>
         <Button variant="ghost" onClick={() => setConfirmBin(null)}>
           Keep it

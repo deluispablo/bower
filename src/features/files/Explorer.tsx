@@ -35,7 +35,7 @@ function useBinOrAsk(): (node: TreeNode) => void {
   const act = useFileActions();
   return (node) => {
     const count = node.type === 'folder' ? countThings(node) : 0;
-    if (count > 0) useUi.getState().setConfirmBin({ path: node.path, count });
+    if (count > 0) useUi.getState().setConfirmBin({ path: node.path, count, nested: (node.children ?? []).some((c) => c.type === 'folder') });
     else void act.trash(node.path);
   };
 }

@@ -128,3 +128,4 @@
 - 2026-10-04: bye-only-when-gone passes — fix(app): say the account is gone only after the delete went through
 - 2026-10-04: outbox-flush-dedupe passes — fix(app): the journal outbox goes before a tidy-up and when back online, never twice, never lost
 - 2026-10-04: docs-stale-decision passes — docs: which writes check modifiedTime and which check name and place
+- 2026-10-04: bin-count-words passes — fix(app): the Bin question says its count is everything inside
