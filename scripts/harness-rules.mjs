@@ -95,10 +95,10 @@ export function othersFlipped(before, now, id) {
 /**
  * done.sh's arguments: <id> "<message>" and at most one of
  *   --fixed-in <sha>   the fix is that commit: the red step puts its code back as it was before it;
- *   --known-green "<why>"  no red is possible (a decision kept, a finding not reproduced); the entry needs a note.
+ *   --known-green "<why>"  no red is possible (a decision kept, a finding not reproduced); the entry needs a note, committed before.
  * Anything else is refused, so a mistyped flag never skips the red step.
  */
-export function doneArgs(argv, entry) {
+export function doneArgs(argv, entry, committed) {
   const [id, msg, flag, value, ...rest] = argv;
   if (!id || !msg) throw new Error('usage: done.sh <id> "<message>" [--fixed-in <sha> | --known-green "<why>"]');
   if (rest.length) throw new Error(`unknown arguments: ${rest.join(' ')}`);
@@ -110,6 +110,8 @@ export function doneArgs(argv, entry) {
   if (flag === '--known-green') {
     if (!value) throw new Error('--known-green needs a reason');
     if (!entry?.note) throw new Error('--known-green needs the entry to carry a note saying why');
+    // The note is decided before the close: written in the same change, it would excuse itself.
+    if (!committed?.note) throw new Error('--known-green needs the note committed first (git commit it, then close)');
     return { id, msg, mode: 'known-green', reason: value };
   }
   throw new Error(`unknown flag ${flag}`);

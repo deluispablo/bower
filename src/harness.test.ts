@@ -71,7 +71,7 @@ describe('the harness', () => {
     expect(doneArgs(['a', 'msg', '--fixed-in', 'abc1234'], {})).toMatchObject({ mode: 'fixed-in', sha: 'abc1234' });
     expect(() => doneArgs(['a', 'msg', '--green-befor', 'x'], {})).toThrow(/unknown/);
     expect(() => doneArgs(['a', 'msg', '--known-green', 'why'], {})).toThrow(/note/);
-    expect(doneArgs(['a', 'msg', '--known-green', 'why'], { note: 'decided' })).toMatchObject({ mode: 'known-green', reason: 'why' });
+    expect(doneArgs(['a', 'msg', '--known-green', 'why'], { note: 'decided' }, { note: 'decided' })).toMatchObject({ mode: 'known-green', reason: 'why' });
   });
 
   it('every finding has steps an evaluator can replay', () => {
@@ -106,6 +106,11 @@ describe('the harness', () => {
     // A group keeps its own alternatives: "row.s menu (opens|shows)" is one name.
     const grouped: Entry = { ...both, verify: 'pnpm vitest run src -t "the (tour|walk) goes"' };
     expect(problems([grouped], proofOf(grouped), tests)).toEqual([]);
+  });
+
+  it('known-green needs a note already committed, not one written in the same change', () => {
+    expect(() => doneArgs(['a', 'msg', '--known-green', 'why'], { note: 'decided now' }, {})).toThrow(/committed/);
+    expect(() => doneArgs(['a', 'msg', '--known-green', 'why'], { note: 'decided now' }, undefined)).toThrow(/committed/);
   });
 });
 

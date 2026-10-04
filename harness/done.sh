@@ -19,7 +19,10 @@ args=$(node --input-type=module -e '
   import { readFileSync } from "node:fs";
   const argv = process.argv.slice(1);
   const entry = JSON.parse(readFileSync("harness/features.json", "utf8")).find((x) => x.id === argv[0]);
-  try { const a = doneArgs(argv, entry); console.log(JSON.stringify(a)); } catch (e) { console.error(e.message); process.exit(2); }' "$@") || exit 2
+  const { execSync } = await import("node:child_process");
+  let committed;
+  try { committed = JSON.parse(execSync("git show HEAD:harness/features.json", { encoding: "utf8" })).find((x) => x.id === argv[0]); } catch { committed = undefined; }
+  try { const a = doneArgs(argv, entry, committed); console.log(JSON.stringify(a)); } catch (e) { console.error(e.message); process.exit(2); }' "$@") || exit 2
 get() { node -e 'process.stdout.write(String(JSON.parse(process.argv[1])[process.argv[2]] ?? ""))' "$args" "$1"; }
 id=$(get id); msg=$(get msg); mode=$(get mode); sha=$(get sha); reason=$(get reason)
 

@@ -1865,7 +1865,7 @@
       "Add a note to an open entry without committing, run done.sh <id> m --known-green why: it refuses until the note is committed."
     ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"known-green needs a note already committed\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "harness-fixed-in-precise",
