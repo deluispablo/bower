@@ -90,3 +90,4 @@ fake-quota	b98332e8cd8a2e5a	2026-10-04	red
 arch-test-imports	48639851e30f1d19	2026-10-04	green-before: rule and test share src/architecture.test.ts; the old rule missed both examples (checked: dynamic false, relative false)
 signout-memory	c770eb44393b555c	2026-10-04	red
 undo-late-pile	8ffa80bc589677d9	2026-10-04	red
+stale-check-mtime	90c07a711f2ab064	2026-10-04	green-before: deliberate: the behaviour was already right; the test pins the decision (see the entry's note)

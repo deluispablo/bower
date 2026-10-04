@@ -787,7 +787,8 @@
     "what": "stillAsSeen checks name and parent but not modifiedTime; the metadata update ignores it.",
     "steps": [],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"changed elsewhere\"",
-    "passes": false
+    "passes": true,
+    "note": "Decided against the finding: a rename or move does not touch the text, so a text change elsewhere is not a conflict (pinned by a test); a change of name or place is (stillAsSeen)."
   },
   {
     "id": "demo-dates-relative",

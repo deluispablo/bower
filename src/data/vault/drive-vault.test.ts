@@ -374,4 +374,14 @@ describe('things that arrive late', () => {
     expect((await vault.piles()).find((x) => x.id === p.id)?.items.map((i) => [i.name, i.upload])).toEqual([['late.pdf', undefined]]);
     expect((await drive.listAll(root)).filter((f) => f.name === 'late.pdf')).toHaveLength(1);
   });
+
+  it('a note whose text changed elsewhere can still be renamed, its text kept', async () => {
+    await vault.tree();
+    const id = await idOf('Resources/Cooking/Lemon tart.md');
+    const f = await drive.get(id);
+    await drive.writeText(id, 'written on another device', f.modifiedTime);
+    const to = await vault.rename('Resources/Cooking/Lemon tart.md', 'Lemon tart, best');
+    expect(to).toBe('Resources/Cooking/Lemon tart, best.md');
+    expect(await drive.readText(id)).toBe('written on another device');
+  });
 });
