@@ -210,13 +210,15 @@ export interface VisibleRow {
 /** The rows an explorer shows: open folders expanded, roots in their own order. */
 export function visibleRows(roots: TreeNode[], open: ReadonlySet<string>, order: SortOrder): VisibleRow[] {
   const out: VisibleRow[] = [];
-  const walk = (nodes: TreeNode[], level: number): void => {
-    for (const n of level === 0 ? nodes : sortNodes(nodes, order)) {
+  // The inbox lists its piles newest first, as Home does, whatever the order chosen for folders.
+  const inboxOrder = (nodes: TreeNode[]): TreeNode[] => [...nodes].sort((a, b) => b.created - a.created || a.name.localeCompare(b.name));
+  const walk = (nodes: TreeNode[], level: number, parent: string): void => {
+    for (const n of level === 0 ? nodes : parent === 'Inbox' ? inboxOrder(nodes) : sortNodes(nodes, order)) {
       out.push({ node: n, level });
-      if (n.children && open.has(n.path)) walk(n.children, level + 1);
+      if (n.children && open.has(n.path)) walk(n.children, level + 1, n.path);
     }
   };
-  walk(roots, 0);
+  walk(roots, 0, '');
   return out;
 }
 

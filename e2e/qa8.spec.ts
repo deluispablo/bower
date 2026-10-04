@@ -63,3 +63,20 @@ test('focus after a stopped run is put away stays in the page', async ({ page, i
     await expect.poll(() => page.evaluate(() => document.activeElement?.id), { message: where }).toBe('main');
   }
 });
+
+test('the inbox reads the same in the tree and on Home: same order, same names', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree next to Home');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  const inbox = tree.getByRole('treeitem', { name: /^Inbox/ });
+  if ((await inbox.getAttribute('aria-expanded')) !== 'true') await inbox.click();
+  const start = (t: string): string => t.trim().slice(0, 14).toLowerCase();
+  const inTree = (await tree.locator('[data-path^="Inbox/"]').evaluateAll((els) => els.filter((e) => (e.getAttribute('data-path') ?? '').split('/').length === 2).map((e) => e.querySelector('[class*="name"]')?.textContent ?? ''))).map(start);
+  const homePiles = page.locator('main a[href*="/pile/"] [class*="pileText"]');
+  await expect(homePiles.first()).toBeVisible();
+  const onHome = (await homePiles.allTextContents()).map(start);
+  expect(inTree.length).toBeGreaterThan(1);
+  expect(inTree).toEqual(onHome);
+  // A lone file is named as the tree names it: no extension (its kind shows beside it).
+  for (const t of await homePiles.allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,5}$/);
+});

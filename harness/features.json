@@ -1693,8 +1693,8 @@
       "Open http://localhost:5190/?scenario=default&time=instant on desktop.",
       "Inbox in the tree and the piles on Home are in the same order and the same names."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"inbox reads the same in the tree and on Home\"",
-    "passes": false
+    "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"the inbox reads the same in the tree and on Home\"",
+    "passes": true
   },
   {
     "id": "first-run-restart",

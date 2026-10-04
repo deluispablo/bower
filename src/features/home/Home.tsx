@@ -151,7 +151,7 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
               <Link to={`/pile/${p.id}`} className={s.pile}>
                 <PileStack items={p.items} />
                 <span className={s.pileMain}>
-                  <span className={p.text ? s.pileText : `${s.pileText} mono`}>{p.text || p.items[0]?.name}</span>
+                  <span className={p.text ? s.pileText : `${s.pileText} mono`}>{p.text || p.items[0]?.name.replace(/\.[A-Za-z0-9]{1,5}$/, '')}</span>
                   <span className={s.pileSub}>
                     {!p.items.length ? 'A note' : p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
                     <span aria-hidden="true" className={s.sep} />
