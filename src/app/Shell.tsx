@@ -8,6 +8,7 @@ import { useUi } from './ui-store';
 import { Palette } from '@/features/palette/Palette';
 import { TidySheet } from '@/features/tidy/TidySheet';
 import { ConfirmBin } from '@/features/files/ConfirmBin';
+import { NameSheet } from '@/features/files/NameSheet';
 import { MovePicker } from '@/features/files/MovePicker';
 import { useRunWatcher } from '@/features/tidy/useRunWatcher';
 import { Replay } from '@/features/tidy/Replay';
@@ -40,6 +41,7 @@ export function Shell() {
       <TidySheet />
       <MovePicker />
       <ConfirmBin />
+      <NameSheet />
       <Replay />
       <Toasts />
     </>

@@ -640,8 +640,17 @@ export function NodeMenuButton({ node }: { node: TreeNode }) {
   );
 }
 
+/** A page has no tree row to type a name in: Rename, New note and New folder ask in a sheet. */
+const ASKS: Record<string, (node: TreeNode) => void> = {
+  rename: (node) => useUi.getState().setNaming({ rename: node.path }),
+  note: (node) => useUi.getState().setNaming({ folder: node.path, type: 'note' }),
+  folder: (node) => useUi.getState().setNaming({ folder: node.path, type: 'folder' }),
+};
+
 function NodeSheetActions({ node, done }: { node: TreeNode; done: () => void }) {
-  const items = useNodeMenu(node).filter((x) => x === 'sep' || x.key !== 'tab');
+  const items = useNodeMenu(node)
+    .filter((x) => x === 'sep' || x.key !== 'tab')
+    .map((x) => (x !== 'sep' && ASKS[x.key] ? { ...x, run: () => ASKS[x.key]?.(node) } : x));
   return (
     <div className={s.sheetList}>
       {items.map((it, i) =>

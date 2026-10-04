@@ -143,3 +143,4 @@
 - 2026-10-04: outbox-kept-signout passes — docs: why the journal outbox stays at sign-out
 - 2026-10-04: steps-for-findings passes — chore(harness): every finding has replay steps; the progress log says what comes next
 - 2026-10-04: weak-tests passes — test: pin ConfirmBin, the tour at sign-out, demo questions, a late file's Bin and New note in an empty folder
+- 2026-10-04: phone-page-menus passes — fix(app): the page menu on the phone asks for a name to rename or make a note or folder

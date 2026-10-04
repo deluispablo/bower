@@ -36,6 +36,9 @@ interface UiState {
   /** A folder with things in it, waiting for a yes before it goes to the Bin. */
   confirmBin: { path: string; count: number; nested?: boolean } | null;
   setConfirmBin: (v: UiState['confirmBin']) => void;
+  /** A name asked for in a sheet (from a page, where there is no tree row to type in). */
+  naming: { rename: string } | { folder: string; type: 'note' | 'folder' } | null;
+  setNaming: (v: UiState['naming']) => void;
   /** Keeps only the bookmarks for which `exists` says yes (things gone from the folder are dropped). */
   pruneBookmarks: (exists: (path: string) => boolean) => void;
   /** Sign-out: what this screen holds about the person goes (the device's copy is cleared by data/device). */
@@ -122,10 +125,12 @@ export const useUi = create<UiState>((set, get) => ({
   },
   confirmBin: null,
   setConfirmBin: (v) => set({ confirmBin: v }),
+  naming: null,
+  setNaming: (v) => set({ naming: v }),
   forgetPerson: () => {
     write(OPEN_KEY, []);
     write(BM_KEY, []);
-    set({ open: new Set(), selected: null, bookmarks: [], moved: {}, justMade: null, renaming: null, confirmBin: null });
+    set({ open: new Set(), selected: null, bookmarks: [], moved: {}, justMade: null, renaming: null, confirmBin: null, naming: null });
   },
   pruneBookmarks: (exists) => {
     const b = get().bookmarks;
