@@ -10,6 +10,8 @@ interface Toasts {
   list: Toast[];
   show: (text: string, action?: Toast['action']) => void;
   dismiss: (id: number) => void;
+  /** Drops toasts whose action no longer makes sense (e.g. "Tidy up now" once a run started). */
+  dismissAction: (label: string) => void;
 }
 
 let n = 0;
@@ -21,6 +23,7 @@ export const useToasts = create<Toasts>((set, get) => ({
     setTimeout(() => get().dismiss(id), action ? 6000 : 3500);
   },
   dismiss: (id) => set({ list: get().list.filter((t) => t.id !== id) }),
+  dismissAction: (label) => set({ list: get().list.filter((t) => t.action?.label !== label) }),
 }));
 
 export const toast = (text: string, action?: Toast['action']): void => useToasts.getState().show(text, action);

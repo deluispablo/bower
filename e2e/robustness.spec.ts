@@ -123,3 +123,31 @@ test('a tab or newline in the sign-in address still lands on Home', async ({ pag
     await expect(page.getByRole('heading', { name: /G'day, Alex/ })).toBeVisible();
   }
 });
+
+test('New note from the right-click menu asks for its name', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'desktop menu');
+  await open(page, '/files/Projects', 'default', 'instant');
+  await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /^Job hunt/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New note' }).click();
+  const box = page.getByLabel(/New name for Untitled/);
+  await expect(box).toBeFocused();
+  await box.fill('Interview questions');
+  await box.press('Enter');
+  await expect(page.getByRole('treeitem', { name: /Interview questions/ })).toBeVisible();
+});
+
+test('clicking away from a refused name cancels without a second toast', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'desktop tree');
+  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md', 'default', 'instant');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Flat 3, 12 Larkspur/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  const box = page.getByLabel(/New name for Flat 3/);
+  await box.fill('Flat 7, Cobble Row');
+  await box.press('Enter');
+  await expect(page.getByRole('status').getByText(/There is already/)).toHaveCount(1);
+  await page.getByRole('heading', { level: 1 }).click();
+  await page.waitForTimeout(300);
+  await expect(page.getByRole('status').getByText(/There is already/)).toHaveCount(1);
+  await expect(tree.getByRole('treeitem', { name: /Flat 3, 12 Larkspur/ })).toBeVisible();
+});

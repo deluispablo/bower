@@ -43,6 +43,8 @@ export function Palette() {
     setPalette(false);
     setQ('');
     fn();
+    // The page that opened gets the focus, so Tab carries on from it.
+    setTimeout(() => document.getElementById('main')?.focus(), 60);
   };
   const actions: Array<{ id: string; label: string; icon: IconName; hint?: string; fn: () => void }> = [
     { id: 'tidy', label: running ? 'See the tidy-up that is running' : waiting ? `Tidy up ${plural(waiting, 'thing')}` : 'Tidy up', icon: 'sweep', fn: () => setTidy(true) },
@@ -63,7 +65,7 @@ export function Palette() {
     <Dialog.Root open={paletteOpen} onOpenChange={(o) => (setPalette(o), o || setQ(''))}>
       <Dialog.Portal>
         <Dialog.Overlay className={s.scrim} />
-        <Dialog.Content className={s.box} aria-describedby={undefined}>
+        <Dialog.Content className={s.box} aria-describedby={undefined} onCloseAutoFocus={(e) => e.preventDefault()}>
           <Dialog.Title className="sr-only">{desktop ? 'Command palette' : 'Search'}</Dialog.Title>
           <Command
             label={desktop ? 'Command palette' : 'Search'}

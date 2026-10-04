@@ -323,13 +323,16 @@ export function Explorer({ variant }: Props) {
                 // Escape on a brand-new note or folder: it was never wanted.
                 ui.setJustMade(null);
                 await act.discard(node.path);
-              } else if (name === null) {
+              } else if (name === null || (how === 'blur' && name === draft)) {
+                // Escape, or clicking away from a name already refused: cancel, quietly.
                 ui.setJustMade(null);
+                setDraft(null);
               } else {
                 const to = await act.rename(node.path, name);
                 if (to) {
                   setFocus(to);
                   ui.setJustMade(null);
+                  setDraft(null);
                 } else if (how === 'enter') {
                   // Refused on Enter: back in the box with what you typed.
                   setDraft(name);
@@ -440,7 +443,7 @@ export function Explorer({ variant }: Props) {
         <ContextMenu.Root modal={false} onOpenChange={(o) => !o && setMenuNode(null)}>
           <ContextMenu.Trigger asChild>{treeEl}</ContextMenu.Trigger>
           <ContextMenu.Portal>
-            <ContextMenu.Content className={menuCls.content} hidden={!menuNode}>
+            <ContextMenu.Content className={menuCls.content} hidden={!menuNode} onCloseAutoFocus={(e) => e.preventDefault()}>
               {menuNode && <NodeMenuItems node={menuNode} Item={ContextMenu.Item} Separator={ContextMenu.Separator} />}
             </ContextMenu.Content>
           </ContextMenu.Portal>

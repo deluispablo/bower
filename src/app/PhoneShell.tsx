@@ -31,7 +31,7 @@ export function PhoneShell() {
         }}
         onPointerUp={() => (start.current = null)}
       />
-      <main id="main">
+      <main id="main" tabIndex={-1} style={{ outline: 'none' }}>
         <Outlet />
       </main>
       <RunChip />

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useRun, useSources } from '@/data/provider';
 import { useUi } from '@/app/ui-store';
-import { toast } from '@/ui/toast';
+import { toast, useToasts } from '@/ui/toast';
 import { usePrefs } from '@/app/prefs';
 import { hasReplay, runTitle } from './run-words';
 
@@ -15,6 +15,7 @@ export function useRunWatcher(): void {
     const key = `${run.id}:${run.phase}`;
     const before = last.current;
     last.current = key;
+    if (run.phase !== 'done' && run.phase !== 'failed') useToasts.getState().dismissAction('Tidy up now');
     if (!before || before === key || !before.startsWith(`${run.id}:`)) return;
     // In the background, a notification says it ended (when the person asked for one).
     if ((run.phase === 'done' || run.phase === 'failed') && document.hidden && usePrefs.getState().notifyRuns && typeof Notification !== 'undefined' && Notification.permission === 'granted') {

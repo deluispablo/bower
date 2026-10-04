@@ -141,7 +141,8 @@ function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summa
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      if (opener && document.contains(opener)) opener.focus();
+      if (opener && document.contains(opener) && opener !== document.body) opener.focus();
+      else document.getElementById('main')?.focus();
     };
   }, [onClose]);
 
