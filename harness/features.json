@@ -301,7 +301,7 @@
       "Tidy up"
     ],
     "verify": "pnpm vitest run src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "instructions-run-copy",
