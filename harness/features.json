@@ -416,7 +416,8 @@
       "Add the same file twice"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"Add keeps one copy of a file added twice\"",
-    "passes": false
+    "passes": true,
+    "note": "axe finds no unnamed control on Add (the test runs it); the drop zone's buttons are named Choose files and Take a photo."
   },
   {
     "id": "rename-length",

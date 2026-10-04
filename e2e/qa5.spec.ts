@@ -3,6 +3,7 @@
  * harness/features.json (category bug or polish), on demo and on fake.
  */
 import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, isFake, test } from './fixtures';
 
 const open = async (page: Page, path: string, scenario = 'default', time = 'instant'): Promise<void> => {
@@ -247,4 +248,15 @@ test('the tidy-up question can be cancelled', async ({ page }) => {
   await expect(dialog.getByText('Tidy up', { exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Not now' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('Add keeps one copy of a file added twice', async ({ page }) => {
+  await open(page, '/add', 'empty', 'instant');
+  const file = { name: 'Boiler service.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF made up') };
+  await page.locator('input[type=file][multiple]').setInputFiles(file);
+  await page.locator('input[type=file][multiple]').setInputFiles(file);
+  await expect(page.getByRole('button', { name: /Put 1 thing in the inbox/ })).toBeVisible();
+  await expect(page.getByRole('status').getByText(/already in this pile/)).toBeVisible();
+  const axe = await new AxeBuilder({ page }).include('main').analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
 });

@@ -85,7 +85,12 @@ export function Add() {
   const zone = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
 
-  const add = (list: Array<Omit<Draft, 'key'> & { file?: Blob }>): void => {
+  const add = (all: Array<Omit<Draft, 'key'> & { file?: Blob }>): void => {
+    // The same file (name and size) or the same link, added again, is already here.
+    const same = (d: Draft, x: (typeof all)[number]): boolean => (x.url ? d.url === x.url : d.name === x.name && !d.url && get(d.key)?.size === x.file?.size);
+    const list = all.filter((x, i) => !items.some((d) => same(d, x)) && all.findIndex((y) => y.name === x.name && y.url === x.url && y.file?.size === x.file?.size) === i);
+    const twice = all.find((x) => !list.includes(x));
+    if (twice) toast(`${twice.name} is already in this pile.`);
     if (!list.length) return;
     const drafts = list.map(({ file, ...d }, i) => {
       const key = `${Date.now()}-${i}-${d.name}`;
