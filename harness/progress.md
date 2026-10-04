@@ -108,3 +108,4 @@
 - 2026-10-04: pile-folder-names passes — fix(tree): piles in the inbox read as on Home, without the day of their folder
 - 2026-10-04: fail-card-close passes — fix(tidy): a stopped tidy-up stays on Home until Got it, however its sheet is closed
 - 2026-10-04: failed-card-dismiss passes — fix(panel): a stopped tidy-up in the side panel can be put away
+- 2026-10-04: web-source-links passes — fix(note): a saved web address in the Timeline opens in a new tab

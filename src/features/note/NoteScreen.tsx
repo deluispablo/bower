@@ -18,6 +18,9 @@ import { LinkedList } from './RightPanel';
 import { inAppHistory } from '@/app/paths';
 import s from './note.module.css';
 
+/** A source that is a web address someone saved ("flat-listing.example"), not a file in the folder. */
+const isWebAddress = (s: string): boolean => /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(s) && !/\.(pdf|jpe?g|png|heic|webp|gif|docx?|xlsx?|csv|md|txt)$/i.test(s);
+
 export function NoteScreen() {
   const loc = useLocation();
   const path = decodeSplat(loc.pathname.slice('/note/'.length));
@@ -152,7 +155,19 @@ function NoteView({ path }: { path: string }) {
                 <span className={s.when}>{t.date}</span>
                 <span>
                   <Inline text={t.text} link={link} />
-                  {t.source && <span className={s.from}> From {link(t.source, t.source, `src-${i}`)}</span>}
+                  {t.source && (
+                    <span className={s.from}>
+                      {' '}
+                      From{' '}
+                      {resolve(t.source) || !isWebAddress(t.source) ? (
+                        link(t.source, t.source, `src-${i}`)
+                      ) : (
+                        <a href={`https://${t.source}`} target="_blank" rel="noreferrer noopener">
+                          {t.source}
+                        </a>
+                      )}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}

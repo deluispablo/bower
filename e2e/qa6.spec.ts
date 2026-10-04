@@ -156,3 +156,10 @@ test('a stopped tidy-up can be put away', async ({ page, isMobile }) => {
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(panel.getByText(/tidy-up stopped/)).toHaveCount(0);
 });
+
+test('a saved link in the timeline is a link', async ({ page }) => {
+  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
+  const link = page.locator('section[aria-labelledby="tl"]').getByRole('link', { name: 'flat-listing.example' });
+  await expect(link).toHaveAttribute('href', 'https://flat-listing.example');
+  await expect(link).toHaveAttribute('target', '_blank');
+});

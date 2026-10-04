@@ -1087,7 +1087,7 @@
     "what": "Timeline sources that are saved links are not links.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"a saved link in the timeline is a link\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "delete-flow-fake",
