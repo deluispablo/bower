@@ -39,4 +39,9 @@ describe('what the repository promises', () => {
     }
     expect(read('docs/superpowers/plans/2026-10-04-phase-2-ledger.md')).toMatch(/Ruling: a move or rename is not a content conflict/);
   });
+
+  it('the code says why the outbox stays at sign-out', () => {
+    expect(read('src/data/device.ts')).toMatch(/The journal outbox \(`bower:outbox:<folder>`\) stays at sign-out/);
+    expect(read('AGENTS.md')).toMatch(/outbox stays at sign-out/);
+  });
 });

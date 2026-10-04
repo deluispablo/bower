@@ -134,3 +134,4 @@
 - 2026-10-04: reload-filing-truth passes — fix(app): a reload while filing no longer says nothing was moved
 - 2026-10-04: move-exact-match passes — fix(app): Move to takes an exact folder name with Enter and says what to do in an empty box
 - 2026-10-04: folder-length-dots passes — fix(app): a folder's name length counts its dots
+- 2026-10-04: outbox-kept-signout passes — docs: why the journal outbox stays at sign-out

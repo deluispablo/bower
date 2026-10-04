@@ -3,6 +3,11 @@
  * sign-out: what they have seen, dismissed and bookmarked, open folders and
  * an unsent Add draft (names and links). Settings like the theme stay: they
  * belong to the device, not the person.
+ *
+ * The journal outbox (`bower:outbox:<folder>`) stays at sign-out: its lines are
+ * changes already made in that Drive folder, and dropping them would hide those
+ * changes from the next tidy-up. They are keyed by the folder, so they only ever
+ * go to it, the next time someone signed in to it uses this device.
  */
 const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away'];
 const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured'];

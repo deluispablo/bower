@@ -1251,8 +1251,8 @@
     "category": "review",
     "what": "The outbox keeps unsent lines (with note names) after sign-out without saying why.",
     "steps": [],
-    "verify": "pnpm vitest run src/docs.test.ts -t \"outbox at sign-out\"",
-    "passes": false
+    "verify": "pnpm vitest run src/docs.test.ts -t \"outbox stays at sign-out\"",
+    "passes": true
   },
   {
     "id": "steps-for-findings",
