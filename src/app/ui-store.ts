@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { SortOrder } from '@/data/tree';
+import { useTabs } from './tabs-store';
 
 /** UI state shared across screens. Data lives in the sources, not here. */
 interface UiState {
@@ -136,6 +137,7 @@ export const useUi = create<UiState>((set, get) => ({
     write(OPEN_KEY, []);
     write(BM_KEY, []);
     set({ open: new Set(), selected: null, bookmarks: [], moved: {}, justMade: null, renaming: null, confirmBin: null, naming: null });
+    useTabs.getState().reset();
   },
   pruneBookmarks: (exists) => {
     const b = get().bookmarks;

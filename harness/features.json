@@ -1755,7 +1755,7 @@
       "Reload: both tabs are there."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"tabs come back after a reload\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "empty-file-warning",

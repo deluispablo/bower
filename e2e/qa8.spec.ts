@@ -113,3 +113,15 @@ test('a saved link opens its web page, and a filed file is not promised a readin
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Lease draft/);
   await expect(page.getByText(/reads files like this one in a tidy-up/)).toHaveCount(0);
 });
+
+test('tabs come back after a reload', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'desktop tabs');
+  await open(page, '/');
+  await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Open in a new tab' }).click();
+  await expect(page.locator('[data-tab]')).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.locator('[data-tab]')).toHaveCount(2);
+  await expect(page.locator('[data-tab]').last()).toContainText(/Lease draft/);
+});

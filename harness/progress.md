@@ -156,3 +156,4 @@
 - 2026-10-04: run-result-requests passes — fix(app): a tidy-up's result says what it did with what you asked and the rules it worded
 - 2026-10-04: delete-words-return passes — fix(app): one name for deleting the account; coming back starts at the folder step
 - 2026-10-04: saved-link-page passes — fix(app): a saved link's page opens its web page, names it without .url, and promises a reading only in the inbox
+- 2026-10-04: tabs-survive-reload passes — fix(app): desktop tabs come back after a reload, and go at sign-out

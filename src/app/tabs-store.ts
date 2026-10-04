@@ -13,13 +13,31 @@ interface Tabs {
   open: (route: string) => Tab;
   close: (id: number) => Tab | null;
   activate: (id: number) => Tab | null;
+  /** One tab on Home, as on a first visit (sign-out). */
+  reset: () => void;
   /** A note or folder moved: tabs showing it (or something inside it) follow. */
   relocate: (fromRoute: string, toRoute: string) => void;
 }
-let n = 1;
+/** Kept for the browser tab, so a reload keeps them (forgotten at sign-out with the rest of the person's things). */
+const KEY = 'bower:tabs';
+function kept(): { tabs: Tab[]; active: number } {
+  try {
+    const v: unknown = JSON.parse(sessionStorage.getItem(KEY) ?? 'null');
+    if (v && typeof v === 'object' && Array.isArray((v as { tabs?: unknown }).tabs)) {
+      const tabs = (v as { tabs: unknown[] }).tabs.filter((t): t is Tab => !!t && typeof t === 'object' && typeof (t as Tab).id === 'number' && typeof (t as Tab).route === 'string');
+      const active = (v as { active?: unknown }).active;
+      if (tabs.length) return { tabs, active: typeof active === 'number' && tabs.some((t) => t.id === active) ? active : (tabs[0]?.id ?? 1) };
+    }
+  } catch {
+    // expected: no storage or an old shape; one tab, as on a first visit.
+  }
+  return { tabs: [{ id: 1, route: '/' }], active: 1 };
+}
+const start = kept();
+let n = Math.max(1, ...start.tabs.map((t) => t.id));
 export const useTabs = create<Tabs>((set, get) => ({
-  tabs: [{ id: 1, route: '/' }],
-  active: 1,
+  tabs: start.tabs,
+  active: start.active,
   follow: (route) => {
     const { tabs, active } = get();
     if (tabs.find((t) => t.id === active)?.route === route) return;
@@ -52,6 +70,7 @@ export const useTabs = create<Tabs>((set, get) => ({
     set({ tabs: next, active: newActive?.id ?? 1 });
     return active === id ? (newActive ?? null) : null;
   },
+  reset: () => set({ tabs: [{ id: 1, route: '/' }], active: 1 }),
   relocate: (fromRoute, toRoute) =>
     set({
       tabs: get().tabs.map((t) => (t.route === fromRoute || t.route.startsWith(`${fromRoute}/`) ? { ...t, route: toRoute + t.route.slice(fromRoute.length) } : t)),
@@ -62,3 +81,11 @@ export const useTabs = create<Tabs>((set, get) => ({
     return t;
   },
 }));
+
+useTabs.subscribe(({ tabs, active }) => {
+  try {
+    sessionStorage.setItem(KEY, JSON.stringify({ tabs, active }));
+  } catch (e) {
+    console.error(e);
+  }
+});
