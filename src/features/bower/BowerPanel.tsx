@@ -1,14 +1,11 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useQuestions, useRequests, useRules, useRun } from '@/data/provider';
+import { useQuestions, useRequests, useRules, useRun, useSources } from '@/data/provider';
+import { report } from '@/ui/report';
 import { useUi } from '@/app/ui-store';
 import { countOr, plural } from '@/app/words';
 import { Button } from '@/ui/Button';
 import { isRunning, runDetail, runTitle } from '@/features/tidy/run-words';
 import s from './bower.module.css';
-
-/** A stopped tidy-up put away from the panel, on this device. */
-const AWAY = 'bower:stopped-away';
 
 /** Bower in the desktop's right panel: what it is doing and what it asks. */
 export function BowerPanel() {
@@ -18,22 +15,9 @@ export function BowerPanel() {
   const { data: requests } = useRequests();
   const asked = (requests ?? []).filter((r) => !r.done);
   const { setTidy } = useUi();
-  const [away, setAway] = useState(() => {
-    try {
-      return localStorage.getItem(AWAY);
-    } catch {
-      // expected: no storage; the card shows until the next tidy-up.
-      return null;
-    }
-  });
-  const putAway = (id: string): void => {
-    setAway(id);
-    try {
-      localStorage.setItem(AWAY, id);
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const { runs } = useSources();
+  // Put away is Home's Got it: the stopped run is seen, everywhere.
+  const putAway = (id: string): void => void runs.markSeen(id).catch((e: unknown) => report(e, 'That did not work. Try again.'));
   const nav = useNavigate();
   return (
     <div className={s.panel}>
@@ -44,7 +28,7 @@ export function BowerPanel() {
             <strong>{runTitle(run)}</strong>
             <span className="muted">{runDetail(run)}</span>
           </button>
-        ) : run?.phase === 'failed' && away !== run.id ? (
+        ) : run?.phase === 'failed' && !run.seen ? (
           <div className={s.panelCard}>
             <button type="button" className={s.panelCardMain} onClick={() => setTidy(true)}>
               <strong>The last tidy-up stopped</strong>

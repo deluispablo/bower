@@ -129,3 +129,4 @@
 - 2026-10-04: outbox-flush-dedupe passes — fix(app): the journal outbox goes before a tidy-up and when back online, never twice, never lost
 - 2026-10-04: docs-stale-decision passes — docs: which writes check modifiedTime and which check name and place
 - 2026-10-04: bin-count-words passes — fix(app): the Bin question says its count is everything inside
+- 2026-10-04: panel-putaway-seen passes — fix(app): the panel's Put it away marks the stopped run seen, as Got it does

@@ -1206,8 +1206,8 @@
     "category": "polish",
     "what": "The panel's Put it away and Home's Got it dismiss one stopped run two ways.",
     "steps": [],
-    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"put away is Got it\"",
-    "passes": false
+    "verify": "bash scripts/e2e-both.sh e2e/qa7.spec.ts -g \"put away is Got it|puts the panel.s card away\"",
+    "passes": true
   },
   {
     "id": "web-source-shapes",
