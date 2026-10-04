@@ -358,7 +358,7 @@
       "Home on demo and fake"
     ],
     "verify": "pnpm vitest run src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "result-new-questions",

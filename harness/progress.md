@@ -26,3 +26,4 @@
 - 2026-10-04: move-keyboard passes — fix(move): Enter takes the first folder that matches; arrows walk the list
 - 2026-10-04: new-note-opens passes — fix(explorer): a new note opens once named, says where it was made, and an empty note says how to write in it
 - 2026-10-04: search-everything passes — fix(search): find words in Timeline and tags; snippets read as plain text
+- 2026-10-04: inbox-order passes — fix(demo): the inbox lists newest first, as on Drive
