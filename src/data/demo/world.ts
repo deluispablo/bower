@@ -30,7 +30,9 @@ import {
   type ParaRoot,
   type Pile,
   type Question,
+  type Request,
   type Rule,
+  type SearchHit,
   type RunReport,
   type RunState,
   type Suggestion,
@@ -70,7 +72,10 @@ export class DemoWorld {
   private questions: Question[] = [];
   private rules: Rule[] = [];
   private suggestions: Suggestion[] = [];
-  private trash = new Map<string, Entry[]>();
+  private trash = new Map<string, { entries: Entry[]; piles: Pile[] | null; change: string | null }>();
+  private requests: Request[] = [];
+  /** Where each pile sits in the inbox (folder or lone file), set by syncInbox. */
+  private pilePath = new Map<string, string>();
   private journal: ChangeEntry[] = [];
   /** Where each inbox thing goes in the next tidy-up (the demo's stand-in for Claude). */
   private plans = new Map<string, { title: string; to: string; note?: string }>(Object.entries(FILING));
@@ -127,6 +132,7 @@ export class DemoWorld {
       this.notes.delete(p);
     }
     const now = Date.now();
+    this.pilePath.clear();
     for (const pile of this.piles) {
       const at = pile.createdAt || now;
       let folder = 'Inbox';
@@ -154,7 +160,9 @@ export class DemoWorld {
       for (const it of pile.items) {
         const name = freeName(this.entries, folder, it.name);
         this.entries.set(join(folder, name), { path: join(folder, name), type: 'file', kind: it.kind, modified: at, created: at });
+        if (folder === 'Inbox') this.pilePath.set(pile.id, join(folder, name));
       }
+      if (folder !== 'Inbox') this.pilePath.set(pile.id, folder);
     }
   }
 
@@ -240,8 +248,13 @@ export class DemoWorld {
     return this.piles.reduce((s, p) => s + thingsIn(p), 0);
   }
 
-  private record(kind: ChangeKind, what: string, path?: string): void {
-    this.journal.push({ id: `c${++this.seq}`, at: Date.now(), kind, what, ...(path ? { path } : {}) });
+  private record(kind: ChangeKind, what: string, path?: string): string {
+    const id = `c${++this.seq}`;
+    this.journal.push({ id, at: Date.now(), kind, what, ...(path ? { path } : {}) });
+    return id;
+  }
+  private unrecord(id: string | null | undefined): void {
+    if (id) this.journal = this.journal.filter((c) => c.id !== id);
   }
 
   /** Where a thing from a pile you added goes: the demo guesses from the pile's words. */
@@ -366,6 +379,7 @@ export class DemoWorld {
         r.report = r.scope === 'all' ? this.fileInbox(now) : { filed: [], created: [], updated: [], setAside: [], questions: this.questions };
         r.report.yourChanges = yourChanges;
         this.rules = this.rules.map((x) => (x.pending ? { ...x, text: wordRule(x.yourWords ?? x.text), pending: false } : x));
+        this.requests = this.requests.map((q) => (q.done ? q : { ...q, done: 'Done. See what changed in your folders.' }));
         this.journal = [];
         r.finishedAt = now;
         this.emitVault();
@@ -494,13 +508,17 @@ export class DemoWorld {
     return {
       tree: () => this.wait(() => buildTree(this.entries)),
       note: (path) => this.wait(() => this.noteFor(path)),
-      move: (path, to) =>
+      move: (path, to, opts) =>
         change(() => {
           const before = new Map(this.entries);
           const out = moveEntry(before, path, to, Date.now());
           this.carryNotes(path, out);
           this.entries = before;
-          if (out !== path) this.record('move', `Moved ${displayName(nameOf(path))} to ${to.replaceAll('/', ' / ')}`, out);
+          if (out !== path) {
+            const last = [...this.journal].reverse().find((c) => c.kind === 'move' && c.path === path);
+            if (opts?.undo && last) this.unrecord(last.id);
+            else this.record('move', `Moved ${displayName(nameOf(path))} to ${to.replaceAll('/', ' / ') || 'your Bower folder'}`, out);
+          }
           return out;
         }),
       rename: (path, name) =>
@@ -518,19 +536,45 @@ export class DemoWorld {
           const base = name ?? (type === 'folder' ? 'New folder' : 'Untitled.md');
           const path = join(folder, freeName(this.entries, folder, base));
           this.entries.set(path, type === 'folder' ? { path, type, modified: now, created: now } : { path, type: 'file', kind: 'note', modified: now, created: now });
-          this.record('create', `New ${type} ${displayName(nameOf(path))} in ${folder.replaceAll('/', ' / ') || 'your Bower folder'}`, path);
+          this.record('create', `New ${type} "${displayName(nameOf(path))}" in ${folder.replaceAll('/', ' / ') || 'your Bower folder'}`, path);
           return path;
         }),
       trash: (path) =>
         change(() => {
-          this.trash.set(path, removeEntry(this.entries, path));
-          this.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, path);
+          if (path === 'Inbox' || path.startsWith('Inbox/')) {
+            // A pile goes to the Bin as a whole: its folder, or its lone file.
+            const pile = this.piles.find((p) => {
+              const pp = this.pilePath.get(p.id);
+              return pp && (path === pp || path.startsWith(`${pp}/`) || pp.startsWith(`${path}/`));
+            });
+            if (!pile) throw new BowerError('not-found', 'That is no longer in the inbox.');
+            const before = this.piles;
+            const entries = removeEntry(this.entries, this.pilePath.get(pile.id) ?? path);
+            this.piles = this.piles.filter((p) => p.id !== pile.id);
+            this.syncInbox();
+            this.trash.set(path, { entries, piles: before, change: null });
+            return;
+          }
+          const entries = removeEntry(this.entries, path);
+          // Something made and binned before any tidy-up saw it leaves no trace in the journal.
+          const made = this.journal.find((c) => c.kind === 'create' && c.path === path);
+          if (made) {
+            this.unrecord(made.id);
+            this.trash.set(path, { entries, piles: null, change: null });
+            return;
+          }
+          const id = this.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, path);
+          this.trash.set(path, { entries, piles: null, change: id });
         }),
       restore: (path) =>
         change(() => {
           const gone = this.trash.get(path);
           if (!gone) throw new BowerError('not-found', 'It is no longer in the Bin.');
-          gone.forEach((e) => this.entries.set(e.path, e));
+          if (gone.piles) {
+            this.piles = gone.piles;
+            this.syncInbox();
+          } else gone.entries.forEach((e) => this.entries.set(e.path, e));
+          this.unrecord(gone.change);
           this.trash.delete(path);
         }),
       markSeen: (path) =>
@@ -538,7 +582,13 @@ export class DemoWorld {
           const e = this.entries.get(path);
           if (e?.isNew) this.entries.set(path, { ...e, isNew: false });
         }),
-      piles: () => this.wait(() => this.piles.map((p) => ({ ...p, items: [...p.items] }))),
+      piles: () =>
+        this.wait(() =>
+          this.piles.map((p) => {
+            const path = this.pilePath.get(p.id);
+            return { ...p, items: [...p.items], ...(path ? { path } : {}) };
+          }),
+        ),
       addPile: (input) =>
         change(() => {
           if (!input.items.length && !input.text.trim()) throw new BowerError('conflict', 'Add a file, a link or a line first.');
@@ -577,6 +627,41 @@ export class DemoWorld {
           if (q) this.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`);
         }),
       rules: () => this.wait(() => [...this.rules]),
+      requests: () => this.wait(() => [...this.requests]),
+      addRequest: (text) =>
+        change(() => {
+          const t = text.trim();
+          if (!t) throw new BowerError('conflict', 'Write what you want first.');
+          const r: Request = { id: `q${++this.seq}`, text: t, at: Date.now() };
+          this.requests = [r, ...this.requests];
+          this.record('request', `Asked Bower: "${t}"`);
+          return r;
+        }),
+      search: (query) =>
+        this.wait(() => {
+          const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+          if (!words.length) return [];
+          const hits: Array<SearchHit & { score: number }> = [];
+          for (const e of this.entries.values()) {
+            if (e.type !== 'file' || e.path.startsWith('Inbox/')) continue;
+            const title = displayName(nameOf(e.path));
+            const t = title.toLowerCase();
+            let score = 0;
+            let snippet = e.path.slice(0, Math.max(0, e.path.lastIndexOf('/'))).replaceAll('/', ' / ');
+            if (words.every((w) => t.includes(w))) score = 3;
+            else if (e.kind === 'note') {
+              const n = this.noteFor(e.path);
+              const lines = [n.summary, ...n.currentState, ...n.body.split('\n'), ...n.properties.map((p) => `${p.label}: ${p.value}`)];
+              const line = lines.find((l) => words.every((w) => l.toLowerCase().includes(w)));
+              if (line) {
+                score = 1;
+                snippet = line.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, '$1').replace(/^[-*#\s|]+/, '').slice(0, 120);
+              }
+            }
+            if (score) hits.push({ path: e.path, title, snippet, score });
+          }
+          return hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title)).slice(0, 50).map(({ score, ...h }) => (void score, h));
+        }),
       addRule: (text) =>
         change(() => {
           const t = text.trim();

@@ -83,7 +83,7 @@ export function moveEntry(entries: Entries, path: string, toFolder: string, at: 
   if (toFolder && entries.get(toFolder)?.type !== 'folder') throw new BowerError('not-found', 'That folder is no longer there.');
   if (parentOf(path) === toFolder) return path;
   if (e.type === 'folder' && within(toFolder, path)) throw new BowerError('conflict', 'A folder cannot go inside itself.');
-  if (isRoot(path)) throw new BowerError('conflict', 'The main folders stay where they are.');
+  if (isRoot(path)) throw new BowerError('conflict', 'That stays where it is: Bower needs it there.');
   const to = join(toFolder, freeName(entries, toFolder, nameOf(path)));
   relocate(entries, path, to, at);
   return to;
@@ -93,9 +93,9 @@ export function moveEntry(entries: Entries, path: string, toFolder: string, at: 
 export function renameEntry(entries: Entries, path: string, newName: string, at: number): string {
   const e = entries.get(path);
   if (!e) throw new BowerError('not-found', 'That is no longer there.');
-  if (isRoot(path)) throw new BowerError('conflict', 'The main folders keep their names.');
+  if (isRoot(path)) throw new BowerError('conflict', 'That keeps its name: Bower needs it.');
   let name = newName.trim().replace(/[/\\]/g, '-');
-  if (!name) throw new BowerError('conflict', 'A name cannot be empty.');
+  if (!name || !displayName(name).replace(/\.[A-Za-z0-9]{1,5}$/, '').trim()) throw new BowerError('conflict', 'A name cannot be empty.');
   // A rename never changes a file's type: "Plan v1.2" stays a note (Plan v1.2.md).
   const ext = extOf(nameOf(path));
   if (e.type === 'file' && ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
@@ -111,13 +111,14 @@ export function removeEntry(entries: Entries, path: string): Entry[] {
   const gone: Entry[] = [];
   for (const e of entries.values()) if (within(e.path, path)) gone.push(e);
   if (!gone.length) throw new BowerError('not-found', 'That is no longer there.');
-  if (isRoot(path)) throw new BowerError('conflict', 'The main folders stay.');
+  if (isRoot(path)) throw new BowerError('conflict', 'That stays: Bower needs it.');
   for (const e of gone) entries.delete(e.path);
   return gone;
 }
 
+/** The main folders, and the two files Bower reads every run, stay where they are. */
 export function isRoot(path: string): boolean {
-  return (PARA_ROOTS as readonly string[]).includes(path);
+  return (PARA_ROOTS as readonly string[]).includes(path) || path === 'Rules.md' || path === 'About me.md';
 }
 
 export function buildTree(entries: Entries): TreeNode[] {

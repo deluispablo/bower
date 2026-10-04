@@ -80,6 +80,11 @@ function Confirm() {
         </p>
       )}
       <div className={s.actions}>
+        {count === 0 && (
+          <Button variant="ghost" block onClick={() => useUi.getState().setTidy(false)}>
+            Close
+          </Button>
+        )}
         {count > 0 && (
           <Button block onClick={() => void start()} disabled={busy}>
             {busy ? 'Starting…' : `Tidy up ${plural(count, 'thing')}`}

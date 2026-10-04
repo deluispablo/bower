@@ -18,7 +18,14 @@ let n = 1;
 export const useTabs = create<Tabs>((set, get) => ({
   tabs: [{ id: 1, route: '/' }],
   active: 1,
-  follow: (route) => set({ tabs: get().tabs.map((t) => (t.id === get().active ? { ...t, route } : t)) }),
+  follow: (route) => {
+    const { tabs, active } = get();
+    if (tabs.find((t) => t.id === active)?.route === route) return;
+    // Back and forward land on a page another tab already shows: make that tab the active one.
+    const other = tabs.find((t) => t.route === route);
+    if (other) set({ active: other.id });
+    else set({ tabs: tabs.map((t) => (t.id === active ? { ...t, route } : t)) });
+  },
   open: (route) => {
     const t = { id: ++n, route };
     set({ tabs: [...get().tabs, t], active: t.id });

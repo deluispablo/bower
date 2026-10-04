@@ -11,7 +11,7 @@ import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
+import { hasReplay, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
 import { PileStack } from '@/features/piles/PileStack';
 import s from './home.module.css';
 
@@ -288,9 +288,16 @@ function JustFiled({ run }: { run: RunState | null }) {
   if (!recent.length) return null;
   return (
     <section aria-labelledby="recent">
-      <h2 id="recent" className={s.h2}>
-        {run?.phase === 'done' ? 'Just filed' : 'Recent'}
-      </h2>
+      <div className={s.recentHead}>
+        <h2 id="recent" className={s.h2}>
+          {run?.phase === 'done' ? 'Just filed' : 'Recent'}
+        </h2>
+        {run && hasReplay(run) && run.seen && (
+          <button type="button" className={s.watchAgain} onClick={() => useUi.getState().startReplay(run.id)}>
+            <Icon name="play" size={14} /> Watch the last tidy-up
+          </button>
+        )}
+      </div>
       <ul className={s.recent}>
         {recent.map((n) => (
           <li key={n.path}>

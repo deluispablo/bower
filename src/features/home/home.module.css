@@ -48,3 +48,5 @@
 .changes li { margin: 3px 0; }
 .stopped { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--danger) 60%, transparent); }
 .stoppedHead { display: flex; align-items: center; gap: 12px; }
+.recentHead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.watchAgain { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--brand-line); font: 600 15px var(--font-body); cursor: pointer; padding: 4px 0; }

@@ -78,6 +78,8 @@ export interface PileItem {
 
 export interface Pile {
   id: string;
+  /** Where it is in the Bower folder: its inbox folder, or the lone file. */
+  path?: string;
   /** What the person wrote about the pile; empty for a loose thing. */
   text: string;
   createdAt: number;
@@ -113,7 +115,23 @@ export interface Rule {
  * The change journal: one entry for each thing you did in the app, so the
  * next tidy-up knows what happened and where to look (spec, "Who does what").
  */
-export type ChangeKind = 'rule' | 'move' | 'rename' | 'create' | 'trash' | 'task' | 'answer';
+export type ChangeKind = 'rule' | 'request' | 'move' | 'rename' | 'create' | 'trash' | 'task' | 'answer';
+
+/** Something you asked Bower to do once, in the next tidy-up. */
+export interface Request {
+  id: string;
+  text: string;
+  at: number;
+  /** Set when a tidy-up has done it: what Bower did, in one line. */
+  done?: string;
+}
+
+/** A search result: where, and the line that matched. */
+export interface SearchHit {
+  path: string;
+  title: string;
+  snippet: string;
+}
 export interface ChangeEntry {
   id: string;
   at: number;

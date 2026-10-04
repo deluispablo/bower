@@ -143,3 +143,60 @@ describe('piles and failures', () => {
     expect(findNode(await vault.tree(), 'Areas/Home/Bins and recycling.md')).not.toBeNull();
   });
 });
+
+describe('what the testers found', () => {
+  it('binning a pile folder removes the pile, and undo brings it back', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const p2 = (await vault.piles()).find((p) => p.id === 'p2');
+    if (!p2?.path) throw new Error('p2 has no folder');
+    await vault.trash(p2.path);
+    expect((await vault.piles()).some((p) => p.id === 'p2')).toBe(false);
+    await vault.restore(p2.path);
+    expect((await vault.piles()).some((p) => p.id === 'p2')).toBe(true);
+  });
+
+  it('undoing a move or a Bin leaves no journal line', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const to = await vault.move('Projects/Flat hunt/Lease draft.pdf', 'Areas/Home');
+    await vault.move(to, 'Projects/Flat hunt', { undo: true });
+    await vault.trash('Resources/Cooking/Lemon tart.md');
+    await vault.restore('Resources/Cooking/Lemon tart.md');
+    expect(await vault.changes()).toEqual([]);
+  });
+
+  it('a note made and binned straight away leaves no trace', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    const p = await vault.create('Resources', 'note');
+    await vault.trash(p);
+    expect(await vault.changes()).toEqual([]);
+  });
+
+  it('keeps what you ask and marks it done after a run', async () => {
+    vi.useFakeTimers();
+    const w = new DemoWorld({ scenario: 'default', scale: 'demo', latency: 0 });
+    const { vault, runs } = w.sources();
+    await vault.addRequest('Put my id papers together');
+    expect((await vault.requests())[0]?.done).toBeUndefined();
+    await runs.start('instructions');
+    await vi.runAllTimersAsync();
+    expect((await vault.requests())[0]?.done).toMatch(/^Done/);
+  });
+
+  it('finds notes by what they say, names first', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const hits = await w.sources().vault.search('£1,450');
+    expect(hits.map((h) => h.title)).toContain('Flat 3, 12 Larkspur Lane');
+    expect((await w.sources().vault.search('larkspur'))[0]?.title).toBe('Flat 3, 12 Larkspur Lane');
+    expect(hits.every((h) => !h.path.startsWith('Inbox/'))).toBe(true);
+  });
+
+  it('refuses a name that is only an extension, and keeps Rules where it is', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
+    const { vault } = w.sources();
+    await expect(vault.rename('Resources/Cooking/Lemon tart.md', '.md')).rejects.toThrow(/empty/);
+    await expect(vault.trash('Rules.md')).rejects.toThrow(/Bower needs it/);
+  });
+});

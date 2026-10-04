@@ -56,12 +56,15 @@ export function useFileActions() {
           const moved = await vault.move(path, to);
           if (moved === path) return path;
           follow(path, moved);
+          useUi.getState().relocate(path, moved);
           useUi.getState().openAll(ancestors(moved));
-          if (useUi.getState().selected === path) useUi.getState().select(moved);
           toast(`Moved ${displayName(nameOf(path))} to ${crumbs(to)}`, {
             label: 'Undo',
             run: () =>
-              void vault.move(moved, from).then((back) => follow(moved, back), fail),
+              void vault.move(moved, from, { undo: true }).then((back) => {
+                follow(moved, back);
+                useUi.getState().relocate(moved, back);
+              }, fail),
           });
           return moved;
         } catch (e) {
@@ -71,8 +74,9 @@ export function useFileActions() {
       },
       async rename(path: string, name: string): Promise<string | null> {
         try {
+          if (/[/\\]/.test(name)) toast('Names cannot have slashes; Bower used a dash.');
           const to = await vault.rename(path, name);
-          if (useUi.getState().selected === path) useUi.getState().select(to);
+          useUi.getState().relocate(path, to);
           follow(path, to);
           return to;
         } catch (e) {
@@ -84,9 +88,14 @@ export function useFileActions() {
         try {
           await vault.trash(path);
           follow(path, null);
+          const marks = useUi.getState().bookmarks;
+          useUi.getState().relocate(path, null);
           toast(`${displayName(nameOf(path))} is in the Bin of your Drive`, {
             label: 'Undo',
-            run: () => void vault.restore(path).catch(fail),
+            run: () =>
+              void vault.restore(path).then(() => {
+                marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
+              }, fail),
           });
         } catch (e) {
           fail(e);
@@ -96,8 +105,18 @@ export function useFileActions() {
         try {
           const path = await vault.create(folder, type);
           useUi.getState().openAll([...ancestors(path)]);
-          useUi.getState().select(path);
+          // The new thing gets its name in place; the selection stays, so New folder twice makes two siblings.
+          useUi.getState().setJustMade(path);
           useUi.getState().setRenaming(path);
+        } catch (e) {
+          fail(e);
+        }
+      },
+      /** Takes back a thing just made (Escape on its name), with no Bin and no journal line. */
+      async discard(path: string): Promise<void> {
+        try {
+          await vault.trash(path);
+          useUi.getState().relocate(path, null);
         } catch (e) {
           fail(e);
         }

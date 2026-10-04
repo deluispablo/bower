@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useRules, useRun, useSources } from '@/data/provider';
+import { useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { BowerError } from '@/data/types';
 import { PoseBower, type Pose } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
@@ -11,12 +11,6 @@ import { canDictate, dictate } from './dictation';
 import { isRunning } from '@/features/tidy/run-words';
 import s from './bower.module.css';
 
-interface Sent {
-  id: number;
-  text: string;
-  kind: 'request' | 'rule';
-  at: number;
-}
 
 /**
  * Talking to Bower: a request for the next tidy-up ("put my visa papers
@@ -29,7 +23,7 @@ export function BowerScreen() {
   const { data: run } = useRun();
   const [text, setText] = useState('');
   const [kind, setKind] = useState<'request' | 'rule'>('request');
-  const [sent, setSent] = useState<Sent[]>([]);
+  const { data: requests } = useRequests();
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
@@ -39,8 +33,10 @@ export function BowerScreen() {
     const t = text.trim();
     if (!t) return;
     try {
-      if (kind === 'rule') await vault.addRule(t);
-      setSent((x) => [{ id: Date.now(), text: t, kind, at: Date.now() }, ...x]);
+      if (kind === 'rule') {
+        await vault.addRule(t);
+        toast('Saved as you wrote it. Bower words it clearly in the next tidy-up.');
+      } else await vault.addRequest(t);
       setText('');
     } catch (e) {
       toast(e instanceof BowerError ? e.message : 'That did not send. Try again.');
@@ -127,15 +123,16 @@ export function BowerScreen() {
         </div>
       </form>
 
-      {sent.length > 0 && (
-        <section className={s.sent} aria-label="Sent">
-          {sent.map((m, i) => (
+      {(requests ?? []).length > 0 && (
+        <section className={s.sent} aria-labelledby="asked">
+          <h2 id="asked" className={s.h2}>
+            What you asked
+          </h2>
+          {(requests ?? []).map((m, i) => (
             <div key={m.id} className={s.bubble}>
               <p>{m.text}</p>
-              <p className={s.bubbleSub}>
-                {m.kind === 'rule' ? 'Saved as you wrote it. In the next tidy-up Bower words it clearly in your rules, and keeps your words next to it.' : 'In your inbox. Bower does it in the next tidy-up.'}
-              </p>
-              {i === 0 && !isRunning(run) && (
+              <p className={s.bubbleSub}>{m.done ?? 'Waiting for the next tidy-up.'}</p>
+              {i === 0 && !m.done && !isRunning(run) && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -146,7 +143,7 @@ export function BowerScreen() {
                     )
                   }
                 >
-                  Let Bower read it now
+                  Let Bower do it now
                 </Button>
               )}
             </div>

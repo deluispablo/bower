@@ -1,8 +1,8 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { useLocation } from 'react-router';
-import { useTree } from '@/data/provider';
+import { useLocation, useNavigate } from 'react-router';
+import { usePiles, useTree } from '@/data/provider';
 import { displayName, findNode, isRoot, parentOf, visibleRows, type SortOrder } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
 import { PILE_NOTE } from '@/data/piles';
@@ -32,6 +32,8 @@ function countThings(n: TreeNode): number {
   if (n.type === 'file') return n.name === PILE_NOTE ? 0 : 1;
   return (n.children ?? []).reduce((t, c) => t + countThings(c), 0);
 }
+
+const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
 
 const KIND_BADGE: Record<string, string> = { pdf: 'pdf', image: 'jpg', link: 'link', doc: 'doc', sheet: 'sheet', audio: 'audio' };
 
@@ -72,6 +74,7 @@ export function Explorer({ variant }: Props) {
   const [menuNode, setMenuNode] = useState<TreeNode | null>(null);
   const [sheetNode, setSheetNode] = useState<TreeNode | null>(null);
   const [dropOn, setDropOn] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
   const dragPath = useRef<string | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const treeRef = useRef<HTMLDivElement>(null);
@@ -185,7 +188,7 @@ export function Explorer({ variant }: Props) {
     return n.type === 'folder' ? n.path : parentOf(n.path) || null;
   };
   const onDragStart = (node: TreeNode) => (e: DragEvent): void => {
-    if (isRoot(node.path)) {
+    if (isRoot(node.path) || inInbox(node.path)) {
       e.preventDefault();
       return;
     }
@@ -197,7 +200,7 @@ export function Explorer({ variant }: Props) {
     const from = dragPath.current;
     if (!from) return;
     const to = folderFor(node.path);
-    if (!to || to === parentOf(from) || to === from || to.startsWith(`${from}/`)) {
+    if (!to || inInbox(to) || to === parentOf(from) || to === from || to.startsWith(`${from}/`)) {
       setDropOn(null);
       return;
     }
@@ -258,7 +261,7 @@ export function Explorer({ variant }: Props) {
         data-path={node.path}
         className={[s.row, folder ? s.folder : '', root ? s.root : '', selected ? s.sel : '', focused ? s.focus : '', dropOn === node.path ? s.drop : ''].join(' ')}
         style={{ paddingLeft: (desktop ? 6 : 10) + level * (desktop ? 16 : 20) }}
-        draggable={desktop && !renaming && !isRoot(node.path)}
+        draggable={desktop && !renaming && !isRoot(node.path) && !inInbox(node.path)}
         onDragStart={onDragStart(node)}
         onDragOver={onDragOver(node)}
         onDragEnd={endDrag}
@@ -312,11 +315,21 @@ export function Explorer({ variant }: Props) {
         {renaming ? (
           <RenameInput
             node={node}
-            onDone={async (name) => {
+            draft={draft}
+            onDone={async (name, typed) => {
               ui.setRenaming(null);
-              if (name !== null) {
+              const made = ui.justMade === node.path;
+              ui.setJustMade(null);
+              if (name === null && made && typed === null) {
+                // Escape on a brand-new note or folder: it was never wanted.
+                await act.discard(node.path);
+              } else if (name !== null) {
                 const to = await act.rename(node.path, name);
                 if (to) setFocus(to);
+                else {
+                  setDraft(name);
+                  ui.setRenaming(node.path);
+                }
               }
               treeRef.current?.focus();
             }}
@@ -437,14 +450,15 @@ export function Explorer({ variant }: Props) {
   );
 }
 
-function RenameInput({ node, onDone }: { node: TreeNode; onDone: (name: string | null) => void }) {
+function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, typed: string | null) => void }) {
   const initial = node.type === 'folder' ? node.name : displayName(node.name).replace(/\.[A-Za-z0-9]{1,5}$/, '');
-  const [v, setV] = useState(initial);
+  const [v, setV] = useState(draft ?? initial);
   const done = useRef(false);
-  const finish = (name: string | null): void => {
+  /** `typed` is null when the person pressed Escape. */
+  const finish = (name: string | null, escaped = false): void => {
     if (done.current) return;
     done.current = true;
-    onDone(name === initial ? null : name);
+    onDone(name === initial ? null : name, escaped ? null : v);
   };
   return (
     <input
@@ -458,7 +472,7 @@ function RenameInput({ node, onDone }: { node: TreeNode; onDone: (name: string |
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === 'Enter') finish(v.trim() || null);
-        if (e.key === 'Escape') finish(null);
+        if (e.key === 'Escape') finish(null, true);
       }}
       onBlur={() => finish(v.trim() || null)}
     />
@@ -475,7 +489,19 @@ export function useNodeMenu(node: TreeNode) {
   const folder = node.type === 'folder';
   const root = isRoot(node.path);
   const marked = ui.bookmarks.includes(node.path);
+  const { data: piles } = usePiles();
+  const nav = useNavigate();
   const items: Array<{ key: string; label: string; icon: Parameters<typeof Icon>[0]['name']; run: () => void; danger?: boolean } | 'sep'> = [];
+  if (inInbox(node.path) && node.path !== 'Inbox') {
+    const pile = piles?.find((p) => p.path && (node.path === p.path || node.path.startsWith(`${p.path}/`)));
+    if (pile) {
+      items.push({ key: 'pile', label: 'Open the pile', icon: 'pile', run: () => nav(`/pile/${pile.id}`) });
+      if (!folder) items.push({ key: 'tab', label: 'Open this file', icon: 'file', run: () => act.open(node) });
+      items.push('sep');
+      items.push({ key: 'bin', label: 'Remove the pile from the inbox', icon: 'trash', danger: true, run: () => void act.trash(pile.path ?? node.path) });
+    }
+    return items;
+  }
   if (folder) {
     items.push({ key: 'view', label: 'Open as a list or table', icon: 'table', run: () => act.open(node) });
     items.push({ key: 'note', label: 'New note', icon: 'newNote', run: () => void act.create(node.path, 'note') });

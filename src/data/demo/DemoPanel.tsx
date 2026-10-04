@@ -13,7 +13,7 @@ export function DemoPanel({ scenario, scale, world }: { scenario: Scenario; scal
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         setOpen((o) => !o);
-      }
+      } else if (e.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

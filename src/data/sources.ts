@@ -6,7 +6,9 @@ import type {
   ParaRoot,
   Pile,
   Question,
+  Request,
   Rule,
+  SearchHit,
   RunState,
   Suggestion,
   TreeNode,
@@ -34,7 +36,8 @@ export interface Session {
 export interface VaultSource {
   tree(): Promise<TreeNode[]>;
   note(path: string): Promise<Note>;
-  move(path: string, toFolder: string): Promise<string>;
+  /** `undo` takes back the journal line of the move it reverses. */
+  move(path: string, toFolder: string, opts?: { undo?: boolean }): Promise<string>;
   rename(path: string, name: string): Promise<string>;
   create(folder: string, type: 'note' | 'folder', name?: string): Promise<string>;
   trash(path: string): Promise<void>;
@@ -48,6 +51,10 @@ export interface VaultSource {
   questions(): Promise<Question[]>;
   answer(id: string, yes: boolean): Promise<void>;
   rules(): Promise<Rule[]>;
+  requests(): Promise<Request[]>;
+  addRequest(text: string): Promise<Request>;
+  /** Names, summaries and note text. */
+  search(query: string): Promise<SearchHit[]>;
   addRule(text: string): Promise<Rule>;
   suggestions(): Promise<Suggestion[]>;
   /** Ticks or unticks the n-th task (`- [ ]`) of a note's body. */

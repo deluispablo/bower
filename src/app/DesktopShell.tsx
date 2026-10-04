@@ -1,4 +1,4 @@
-import { useEffect, useRef, type PointerEvent as RPointerEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { Icon, BowerHead, BowerMark } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
@@ -37,6 +37,10 @@ export function DesktopShell() {
 
   const route = loc.pathname + loc.search;
   useEffect(() => follow(route), [route, follow]);
+  // The active tab stays in sight however many are open.
+  useEffect(() => {
+    document.querySelector(`[data-tab="${active}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [active, tabs.length]);
 
   const drag = useRef<{ side: 'left' | 'right'; x: number; w: number } | null>(null);
   const startDrag = (e: RPointerEvent<HTMLDivElement>): void => {
@@ -53,6 +57,13 @@ export function DesktopShell() {
   };
   const endDrag = (): void => {
     drag.current = null;
+  };
+  const keyResize = (side: 'left' | 'right') => (e: RKeyboardEvent<HTMLDivElement>): void => {
+    const step = e.key === 'ArrowLeft' ? -16 : e.key === 'ArrowRight' ? 16 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const w = side === 'left' ? leftWidth + step : rightWidth - step;
+    set(side === 'left' ? { leftWidth: Math.max(220, Math.min(480, w)) } : { rightWidth: Math.max(220, Math.min(480, w)) });
   };
 
   return (
@@ -99,7 +110,7 @@ export function DesktopShell() {
             {leftTab === 'search' && <SearchPanel />}
             {leftTab === 'bookmarks' && <BookmarksPanel />}
           </div>
-          <div className={s.resizer} role="separator" aria-orientation="vertical" aria-label="Resize the side panel" data-side="left" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
+          <div className={s.resizer} role="separator" tabIndex={0} aria-orientation="vertical" aria-valuenow={leftWidth} aria-valuemin={220} aria-valuemax={480} aria-label="Resize the side panel" onKeyDown={keyResize('left')} data-side="left" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
         </aside>
       )}
 
@@ -110,7 +121,7 @@ export function DesktopShell() {
           </IconButton>
           <nav aria-label="Open tabs" className={s.tabs}>
             {tabs.map((t) => (
-              <div key={t.id} className={`${s.tab} ${t.id === active ? s.tabOn : ''}`}>
+              <div key={t.id} data-tab={t.id} className={`${s.tab} ${t.id === active ? s.tabOn : ''}`}>
                 <button
                   type="button"
                   aria-current={t.id === active ? 'page' : undefined}
@@ -165,7 +176,7 @@ export function DesktopShell() {
 
       {rightOpen && (
         <aside className={s.right} aria-label="Right panel">
-          <div className={s.resizer + ' ' + s.resizerLeft} role="separator" aria-orientation="vertical" aria-label="Resize the right panel" data-side="right" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
+          <div className={s.resizer + ' ' + s.resizerLeft} role="separator" tabIndex={0} aria-orientation="vertical" aria-valuenow={rightWidth} aria-valuemin={220} aria-valuemax={480} aria-label="Resize the right panel" onKeyDown={keyResize('right')} data-side="right" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />
           <RightPanel />
         </aside>
       )}

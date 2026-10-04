@@ -25,7 +25,7 @@ export function BookmarksPanel() {
                 <span className={s.resTitle}>
                   <Icon name={folder ? 'folder' : 'file'} size={15} /> {displayName(nameOf(b))}
                 </span>
-                <span className={s.resPath}>{crumbs(b.slice(0, b.lastIndexOf('/')))}</span>
+                <span className={s.resPath}>{b.includes('/') ? crumbs(b.slice(0, b.lastIndexOf('/'))) : 'Your Bower folder'}</span>
               </button>
               <button type="button" className={s.unmark} aria-label={`Remove bookmark ${displayName(nameOf(b))}`} onClick={() => toggleBookmark(b)}>
                 <Icon name="x" size={14} />

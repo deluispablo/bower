@@ -33,6 +33,11 @@ interface UiState {
   // bookmarks (device-only in phase 1)
   bookmarks: string[];
   toggleBookmark: (path: string) => void;
+  /** A thing moved or was renamed: open folders, selection and bookmarks follow; gone: they drop it. */
+  relocate: (from: string, to: string | null) => void;
+  /** The note just made with New note, so Escape on its name takes it back. */
+  justMade: string | null;
+  setJustMade: (path: string | null) => void;
 }
 
 const SORT_KEY = 'bower:sort';
@@ -103,6 +108,18 @@ export const useUi = create<UiState>((set, get) => ({
     write(BM_KEY, next);
     set({ bookmarks: next });
   },
+  relocate: (from, to) => {
+    const under = (p: string): boolean => p === from || p.startsWith(`${from}/`);
+    const map = (p: string): string | null => (under(p) ? (to === null ? null : to + p.slice(from.length)) : p);
+    const open = new Set([...get().open].map(map).filter((p): p is string => !!p));
+    const bookmarks = get().bookmarks.map(map).filter((p): p is string => !!p);
+    const sel = get().selected;
+    write(OPEN_KEY, [...open]);
+    write(BM_KEY, bookmarks);
+    set({ open, bookmarks, selected: sel ? map(sel) : sel });
+  },
+  justMade: null,
+  setJustMade: (justMade) => set({ justMade }),
 }));
 
 /** Every ancestor folder of a path, nearest last. */

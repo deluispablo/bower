@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useQuestions, useRules, useRun } from '@/data/provider';
 import { useUi } from '@/app/ui-store';
 import { plural } from '@/app/words';
@@ -12,6 +12,7 @@ export function BowerPanel() {
   const { data: qs } = useQuestions();
   const { data: rules } = useRules();
   const { setTidy } = useUi();
+  const nav = useNavigate();
   return (
     <div className={s.panel}>
       <section>
@@ -44,11 +45,9 @@ export function BowerPanel() {
           ))}
         </ul>
       </section>
-      <Link to="/bower" style={{ textDecoration: 'none' }}>
-        <Button variant="ghost" size="sm" block>
-          Tell Bower something
-        </Button>
-      </Link>
+      <Button variant="ghost" size="sm" block onClick={() => nav('/bower')}>
+        Tell Bower something
+      </Button>
     </div>
   );
 }
