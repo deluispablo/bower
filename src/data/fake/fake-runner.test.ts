@@ -121,4 +121,11 @@ describe('the fake runner', () => {
     await runFake(drive, root, opts());
     expect(await fresh().duplicates([{ name: 'again.pdf', body: new Blob(['%PDF a made-up scan']) }])).toEqual([expect.stringMatching(/scan\.pdf$/) as unknown]);
   });
+
+  it('the report lists the new questions it asked, not the old ones', async () => {
+    const out = await runFake(drive, root, opts());
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.report.questions.map((q) => q.id)).toEqual(['q-saltmere']);
+    expect((await fresh().questions()).map((q) => q.id)).toEqual(['q1', 'q2', 'q-saltmere']);
+  });
 });

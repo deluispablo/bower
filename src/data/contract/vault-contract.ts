@@ -326,11 +326,15 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
         expect((await vault.note(LARKSPUR)).timeline.map((t) => t.text).join(' ')).toMatch(/Wrenfield Road/);
       });
 
-      it("a tidy-up's report lists only the questions it asked", async () => {
+      it("a tidy-up's report lists only the new questions it asked", async () => {
         const { vault } = await open();
+        const before = new Set((await vault.questions()).map((q) => q.id));
         const run = await world?.tidyUp();
-        expect(run?.report?.questions).toEqual([]);
-        expect((await vault.questions()).length).toBeGreaterThan(0);
+        const asked = run?.report?.questions ?? [];
+        expect(asked.length).toBeGreaterThan(0);
+        expect(asked.every((q) => !before.has(q.id))).toBe(true);
+        const now = (await vault.questions()).map((q) => q.id);
+        expect(now).toEqual(expect.arrayContaining([...before, ...asked.map((q) => q.id)]));
       });
 
       it('a pile added during a run waits for the next one', async () => {

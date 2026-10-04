@@ -43,6 +43,7 @@ import {
   ALEX,
   FILING,
   MERGES,
+  saltmereQuestion,
   guessFolder,
   wordRule,
   type SamplePile,
@@ -455,13 +456,15 @@ export class DemoWorld {
       const n = this.noteFor(u.path);
       this.notes.set(u.path, { ...n, timeline: [...n.timeline, { date: 'Today', text: u.what }] });
     });
+    // Only the questions this tidy-up asked; the open ones stay on Home.
+    const asked = taken.some((p) => /saltmere/i.test(p.text)) && !this.questions.some((q) => q.id === 'q-saltmere') ? [saltmereQuestion(at)] : [];
+    this.questions = [...this.questions, ...asked];
     return {
       filed,
       created: filed.filter((f) => f.note).map((f) => ({ path: f.note ?? '', what: `A note for ${f.title}.` })),
       updated,
       setAside: [],
-      // Only the questions this tidy-up asked; the open ones stay on Home.
-      questions: [],
+      questions: asked,
     };
   }
 

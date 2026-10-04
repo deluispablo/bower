@@ -144,6 +144,18 @@ export const MERGES: Array<{ question: string; item: string; into: string; title
   },
 ];
 
+/** The question a tidy-up asks when it files the Saltmere receipts (the stand-in for Claude asking). */
+export function saltmereQuestion(now: number): Question {
+  return {
+    id: 'q-saltmere',
+    text: 'The Saltmere receipts went to Money by month. Keep a copy of the list in the Saltmere weekend note too?',
+    yes: 'Yes, keep a copy',
+    no: 'No, Money is enough',
+    about: 'Projects/Saltmere weekend/Saltmere weekend.md',
+    askedAt: now,
+  };
+}
+
 /** The Saltmere receipts go by month, as the person's rule says. */
 export const RECEIPTS_TO = 'Areas/Money/Receipts/2026-10';
 

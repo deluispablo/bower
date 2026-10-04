@@ -177,7 +177,7 @@
     "what": "After moving a note from the tree's menu, keyboard focus points at a row that no longer exists.",
     "steps": [
       "Desktop",
-      "Right-click a note, Move to\u2026, pick a folder",
+      "Right-click a note, Move to…, pick a folder",
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"after a move the tree keeps keyboard focus\"",
@@ -187,9 +187,9 @@
     "id": "move-keyboard",
     "task": "qa-5",
     "category": "bug",
-    "what": "Move to\u2026: Enter does not pick the only folder left and arrows do not walk the list.",
+    "what": "Move to…: Enter does not pick the only folder left and arrows do not walk the list.",
     "steps": [
-      "Move to\u2026",
+      "Move to…",
       "Type a folder name",
       "Enter"
     ],
@@ -223,9 +223,9 @@
     "id": "palette-search-text",
     "task": "qa-5",
     "category": "bug",
-    "what": "The \u2318K palette only matches names although the box says \"Search your notes and files\".",
+    "what": "The ⌘K palette only matches names although the box says \"Search your notes and files\".",
     "steps": [
-      "\u2318K",
+      "⌘K",
       "Type a word from inside a note"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the palette finds words inside notes\"",
@@ -377,7 +377,7 @@
     "id": "copy-sensor",
     "task": "qa-5",
     "category": "polish",
-    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this\u2026\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
+    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this…\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
     "steps": [
       "Pile screen, Bower tab, tour, Home"
     ],
@@ -494,7 +494,7 @@
     "id": "small-upload-progress",
     "task": "qa-5",
     "category": "polish",
-    "what": "Small files jump from 0% to 99%; show Sending\u2026 without a percentage unless it is known.",
+    "what": "Small files jump from 0% to 99%; show Sending… without a percentage unless it is known.",
     "steps": [
       "Add a small file"
     ],
@@ -730,7 +730,7 @@
     "id": "confirmbin-grammar",
     "task": "qa-6",
     "category": "polish",
-    "what": "ConfirmBin says \"The 1 thing inside go with it \u2026 get them back\".",
+    "what": "ConfirmBin says \"The 1 thing inside go with it … get them back\".",
     "steps": [],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"agree\"",
     "passes": true
@@ -739,7 +739,7 @@
     "id": "palette-search-error",
     "task": "qa-6",
     "category": "polish",
-    "what": "If search fails, the palette says \"Looking in your notes\u2026\" forever.",
+    "what": "If search fails, the palette says \"Looking in your notes…\" forever.",
     "steps": [],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"the palette says when search fails\"",
     "passes": false
@@ -859,7 +859,7 @@
     "what": "The pretend runner always reports no questions, so the test cannot tell \"only new questions\" from \"never asks\".",
     "steps": [],
     "verify": "pnpm vitest run src/data/fake src/data/contract -t \"new questions\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "settings-real-user",

@@ -9,7 +9,7 @@
  */
 import type { DriveFile } from '../drive/drive-api';
 import type { FakeDrive } from '../drive/fake-drive';
-import { FILING, MERGES, guessFolder, seedPiles, wordRule } from '../demo/fixture';
+import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { thingsIn } from '../piles';
 import { displayName, freeName, join, kindOf, nameOf, parentOf } from '../tree';
@@ -85,8 +85,9 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
   }
   await w.wordRules(journal.filter((r) => r.kind === 'rule'));
   await w.doRequests(journal.filter((r) => r.kind === 'request'));
-  // The report lists only the questions this run asked (none, for the pretend runner); open ones stay in questions.json.
-  await w.dropAnswered(new Set(journal.filter((r) => r.kind === 'answer').map((r) => r.questionId ?? '')));
+  // The report lists only the questions this run asked; the open ones stay in questions.json with them.
+  const filedSaltmere = opts.scope === 'all' && piles.some((p) => taken.has(p.id) && /saltmere/i.test(p.text));
+  report.questions = await w.questions(new Set(journal.filter((r) => r.kind === 'answer').map((r) => r.questionId ?? '')), filedSaltmere ? [saltmereQuestion(Date.now())] : []);
   await w.archive(journal);
   if (opts.scope === 'all') await w.hashes();
   return { phase: 'done', report };
@@ -198,11 +199,13 @@ class Writer {
     await this.writeJson(SYSTEM.requests, { v: 1, done: [...done, ...old].slice(0, 20) } satisfies RequestsFile);
   }
 
-  async dropAnswered(answered: ReadonlySet<string>): Promise<Question[]> {
+  /** Drops the answered questions, adds the new ones; answers the new ones (what the report lists). */
+  async questions(answered: ReadonlySet<string>, asked: Question[]): Promise<Question[]> {
     const all = (await this.json<QuestionsFile>(SYSTEM.questions))?.questions ?? [];
-    const left = all.filter((q) => !answered.has(q.id));
-    if (left.length !== all.length) await this.writeJson(SYSTEM.questions, { v: 1, questions: left } satisfies QuestionsFile);
-    return left;
+    const fresh = asked.filter((q) => !all.some((x) => x.id === q.id));
+    const left = [...all.filter((q) => !answered.has(q.id)), ...fresh];
+    if (left.length !== all.length || fresh.length) await this.writeJson(SYSTEM.questions, { v: 1, questions: left } satisfies QuestionsFile);
+    return fresh;
   }
 
   async archive(records: Array<{ fileId: string }>): Promise<void> {

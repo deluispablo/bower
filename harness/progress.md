@@ -84,3 +84,4 @@
 - 2026-10-04: rename-length-create passes — fix(names): the 120-character limit holds for new notes and folders too
 - 2026-10-04: demo-dates-relative passes — docs(demo): the fixture says ages are relative and timeline dates are fixed text
 - 2026-10-04: stale-comments passes — docs(test): the tour test says what the pretend Drive does now
+- 2026-10-04: result-questions-test passes — fix(tidy): both runners ask a new question when they file the Saltmere receipts, so the report can be told apart from the open ones
