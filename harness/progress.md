@@ -97,3 +97,4 @@
 - 2026-10-04: signout-memory passes — fix(session): sign-out also forgets what the screen holds about the person, and the tour mark
 - 2026-10-04: undo-late-pile passes — fix(vault): things still on their way wait with a binned pile and arrive once if Undo brings it back
 - 2026-10-04: stale-check-mtime passes — test(vault): a text change elsewhere does not block a rename; a change of name or place does
+- 2026-10-04: move-enter-multi passes — fix(move): Enter moves only when one folder matches, and says so when several do

@@ -973,7 +973,7 @@
       "Enter"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"Enter moves only when one folder matches\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "loading-claims-more",

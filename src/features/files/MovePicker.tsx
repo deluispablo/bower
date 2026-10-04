@@ -15,6 +15,7 @@ export function MovePicker() {
   const { data: tree } = useTree();
   const act = useFileActions();
   const [q, setQ] = useState('');
+  const [hint, setHint] = useState(false);
   const folders = useMemo(() => {
     const out: string[] = [];
     const walk = (ns: TreeNode[]): void =>
@@ -60,16 +61,26 @@ export function MovePicker() {
           placeholder="Find a folder"
           aria-label="Find a folder"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setHint(false);
+          }}
           onKeyDown={(e) => {
             // Enter takes the first folder that matches; arrows go into the list.
-            if (e.key === 'Enter' && q.trim() && list[0]) {
+            if (e.key === 'Enter' && q.trim()) {
+              // Enter moves only when one folder matches; with more, the arrows pick one.
               e.preventDefault();
-              pick(list[0]);
+              if (list.length === 1 && list[0]) pick(list[0]);
+              else if (list.length > 1) setHint(true);
             } else walk(e, -1);
           }}
         />
       </label>
+      {hint && (
+        <p className="muted" role="status">
+          Several folders match. Pick one with the arrows, or type more.
+        </p>
+      )}
       <ul className={s.pickList} ref={listRef}>
         {list.map((f, i) => (
           <li key={f}>

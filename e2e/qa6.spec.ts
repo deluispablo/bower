@@ -35,3 +35,18 @@ test('Enter in an empty Move to does nothing', async ({ page, isMobile }) => {
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('status').getByText(/Moved Lease draft/)).toHaveCount(0);
 });
+
+test('Enter moves only when one folder matches', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.getByLabel('Find a folder').fill('re');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByText(/Several folders match/)).toBeVisible();
+  await page.getByLabel('Find a folder').fill('Documents');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status').getByText(/Moved Lease draft\.pdf to Areas \/ Documents/)).toBeVisible();
+});
