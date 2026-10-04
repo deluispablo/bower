@@ -123,3 +123,4 @@
 - 2026-10-04: one-entry-per-commit passes — fix(harness): done.sh commits only what is staged
 - 2026-10-04: pwa-worker-routes passes — test(pwa): the Worker-paths verify names its test
 - 2026-10-04: swallow-then-handlers passes — fix(app): rejection handlers in .then() log and say what failed
+- 2026-10-04: swallow-sensor-strong passes — chore(harness): close swallow-sensor-strong
