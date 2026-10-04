@@ -2,7 +2,7 @@
 
 ## Next
 
-- Close weak-tests (qa-7), then run the evaluator and reviewer round again; phase 3 waits until both come back clean.
+- Fix the qa-8 entries (the evaluator round after qa-6), Important bugs first: phone-page-menus, rename-keeps-links, answer-toast-words. Then a fresh evaluator and reviewer round; phase 3 waits until both come back clean.
 
 ## Log
 
