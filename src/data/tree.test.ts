@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTree,
+  checkLength,
   countFiles,
   findNode,
   moveEntry,
@@ -96,6 +97,14 @@ describe('names', () => {
 });
 
 import { sortNodes as sortForPeople } from './tree';
+
+describe('name length', () => {
+  it('folder names keep their dots: the part after one is not an extension', () => {
+    const name = `${'a'.repeat(118)}.v2`;
+    expect(() => checkLength(name, 'folder')).toThrow(/too long/);
+    expect(() => checkLength(name, 'note')).not.toThrow();
+  });
+});
 
 describe('sorting', () => {
   it('sorts names as people read them, without the extension', () => {

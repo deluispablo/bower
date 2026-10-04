@@ -58,9 +58,10 @@ function within(path: string, folder: string): boolean {
 /** Longest name a person can give (Drive takes more, but a copy on a computer would not). */
 export const MAX_NAME = 120;
 
-/** Refuses a name longer than MAX_NAME (the extension does not count). */
-export function checkLength(name: string): void {
-  if (displayName(name).replace(/\.[A-Za-z0-9]{1,5}$/, '').length > MAX_NAME) throw new BowerError('conflict', `That name is too long. Keep it under ${MAX_NAME} characters.`);
+/** Refuses a name longer than MAX_NAME (a file's extension does not count; a folder has none, so its dots do). */
+export function checkLength(name: string, type: 'note' | 'folder'): void {
+  const shown = displayName(name);
+  if ((type === 'folder' ? shown : shown.replace(/\.[A-Za-z0-9]{1,5}$/, '')).length > MAX_NAME) throw new BowerError('conflict', `That name is too long. Keep it under ${MAX_NAME} characters.`);
 }
 
 /** A free name in `folder`: `Name`, then `Name (2)`, `Name (3)`. */

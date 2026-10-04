@@ -182,7 +182,7 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const parent = ix.idOf(folder);
     if (!parent) throw new BowerError('not-found', 'That folder is no longer there.');
-    if (name) checkLength(name);
+    if (name) checkLength(name, type);
     const path = join(folder, freeName(ix.entries(), folder, name ?? (type === 'folder' ? 'New folder' : 'Untitled.md')));
     refuseReserved(path);
     const made = type === 'folder' ? await this.drive.createFolder(parent, nameOf(path)) : await this.drive.createText(parent, nameOf(path), '');

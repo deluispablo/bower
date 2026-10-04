@@ -1243,7 +1243,7 @@
     "what": "The name-length check strips a dot-suffix from folder names too.",
     "steps": [],
     "verify": "pnpm vitest run src/data/tree.test.ts -t \"folder names keep their dots\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "outbox-kept-signout",
