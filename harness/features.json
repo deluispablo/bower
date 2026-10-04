@@ -67,7 +67,7 @@
     "task": 10,
     "what": "Session and runs over the Worker; the whole vault contract on Drive",
     "verify": "pnpm vitest run src/data/live src/data/contract",
-    "passes": false
+    "passes": true
   },
   {
     "id": "source-switch",

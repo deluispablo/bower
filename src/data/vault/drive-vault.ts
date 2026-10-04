@@ -25,7 +25,7 @@ import {
   type TreeNode,
 } from '../types';
 import { Journal, type JournalRecord } from './journal';
-import { PROP, SYSTEM, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
+import { PROP, SYSTEM, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { markSeen } from './seen';
@@ -362,6 +362,11 @@ export class DriveVault implements VaultSource {
     } else if (text && folderId) ix.put(await this.drive.createText(folderId, PILE_NOTE, text));
     this.emit();
     return this.pile(id);
+  }
+
+  /** The last tidy-up's own report, as the runner wrote it. */
+  lastRun(): Promise<LastRunFile | null> {
+    return this.json<LastRunFile>(SYSTEM.lastRun);
   }
 
   /** Waits until every thing being sent to the inbox has arrived or failed. */
