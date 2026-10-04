@@ -1225,7 +1225,7 @@
     "what": "A run cut by a reload during filing says Nothing was moved, which can be false.",
     "steps": [],
     "verify": "pnpm vitest run src/data/fake -t \"reload during filing\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "move-exact-match",

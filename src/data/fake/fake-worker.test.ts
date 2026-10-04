@@ -96,6 +96,26 @@ describe('the fake Worker', () => {
     expect(piles.length).toBeGreaterThan(0);
   });
 
+  it('a reload during filing does not say nothing was moved; before filing it does', async () => {
+    for (const [phase, says] of [
+      ['saving', /some things may be in their new places/i],
+      ['reading', /Nothing was moved/],
+    ] as const) {
+      localStorage.clear();
+      const drive = new FakeDrive();
+      const rootId = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+      const all = await drive.listAll(rootId);
+      const sys = all.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === rootId);
+      const run = { id: 'run-1', scope: 'all', phase, requestedAt: Date.now() - 60_000, phaseAt: Date.now() - 1000 };
+      await drive.createText(sys?.id ?? '', 'last-run.json', JSON.stringify({ v: 1, run }));
+      const after = new FakeWorker({ drive, scenario: 'default', scale: 'instant', rootId, fresh: false });
+      const out = await after.status();
+      expect(out?.phase, phase).toBe('failed');
+      expect(out?.failure, phase).toMatch(says);
+      if (phase === 'saving') expect(out?.failure).not.toMatch(/Nothing was moved/);
+    }
+  });
+
   it('the running situation starts its run only on a fresh pretend Drive, not on a reload', async () => {
     localStorage.clear();
     const drive = new FakeDrive();

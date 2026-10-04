@@ -18,7 +18,7 @@ export function StatusBar() {
   const running = isRunning(run);
   let left: string;
   if (running && run) left = runShort(run);
-  else if (run && stoppedUnseen(run)) left = 'The tidy-up stopped. Nothing was moved. See why';
+  else if (run && stoppedUnseen(run)) left = 'The tidy-up stopped. See why';
   else if (run && replayWaiting(run)) left = `${runShort(run)}. Watch what Bower did`;
   else left = statusLine(run, piles === undefined ? undefined : waiting);
   return (

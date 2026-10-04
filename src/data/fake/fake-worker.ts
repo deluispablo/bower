@@ -187,7 +187,12 @@ export class FakeWorker implements WorkerApi {
         // A run still going in the folder was cut short by a reload: the runner (this page) is gone.
         if (this.run && !['done', 'failed'].includes(this.run.phase)) {
           const now = Date.now();
-          this.run = { ...this.run, phase: 'failed', phaseAt: now, finishedAt: now, failure: 'The tidy-up stopped when the page was reloaded. Nothing was moved; tidy up again.' };
+          // Filing happens while saving: cut there, some things may have moved already.
+          const failure =
+            this.run.phase === 'saving'
+              ? 'The tidy-up stopped when the page was reloaded, while it was putting things away. Some things may be in their new places already; the rest is still in your inbox. Tidy up again.'
+              : 'The tidy-up stopped when the page was reloaded. Nothing was moved; tidy up again.';
+          this.run = { ...this.run, phase: 'failed', phaseAt: now, finishedAt: now, failure };
           await this.writeLastRun(root, this.run);
         }
       } catch (e) {

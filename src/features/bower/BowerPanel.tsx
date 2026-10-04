@@ -32,7 +32,7 @@ export function BowerPanel() {
           <div className={s.panelCard}>
             <button type="button" className={s.panelCardMain} onClick={() => setTidy(true)}>
               <strong>The last tidy-up stopped</strong>
-              <span className="muted">{run.failure ?? 'Nothing was moved.'} Tidy up again when you are ready.</span>
+              <span className="muted">{run.failure ?? 'Nothing was moved. Tidy up again when you are ready.'}</span>
             </button>
             <Button size="sm" variant="ghost" onClick={() => putAway(run.id)}>
               Put it away
