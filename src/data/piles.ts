@@ -40,9 +40,9 @@ export function safeInboxName(item: Pick<PileItem, 'name' | 'kind'>): string {
   return item.kind === 'link' && !/\.[a-z]{2,5}$/i.test(safe) ? `${safe}.url` : safe;
 }
 
-/** Things in a folder for a count: every file, except the pile notes (they belong to their piles). */
+/** Things in a folder for a count: every file, except pile notes and folders' own notes (they describe, they are not things). */
 export function countThings(n: TreeNode): number {
-  if (n.type === 'file') return n.name === PILE_NOTE ? 0 : 1;
+  if (n.type === 'file') return n.name === PILE_NOTE || n.hub ? 0 : 1;
   return (n.children ?? []).reduce((t, c) => t + countThings(c), 0);
 }
 

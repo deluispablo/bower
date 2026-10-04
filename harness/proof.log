@@ -134,3 +134,4 @@ weak-tests	d096aaf5c827be97	2026-10-04	known-green: tests only; each checked red
 phone-page-menus	12490fe9ee3a5f52	2026-10-04	red
 rename-keeps-links	b96f14a6bb6c001c	2026-10-04	red
 answer-toast-words	6139c3ae166e60b7	2026-10-04	red
+bin-count-hub	c4787b4b32c61116	2026-10-04	red

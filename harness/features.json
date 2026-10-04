@@ -1619,8 +1619,8 @@
       "Open http://localhost:5190/?scenario=default&time=instant, right-click Areas / Car in the tree: the row and header say N things.",
       "Move to Bin: the question says the same N."
     ],
-    "verify": "pnpm vitest run src/data/piles.test.ts -t \"a folder.s own note is not counted\"",
-    "passes": false
+    "verify": "pnpm vitest run src/data/piles.test.ts -t \"own note is not counted\"",
+    "passes": true
   },
   {
     "id": "search-saved-links",

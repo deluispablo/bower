@@ -146,3 +146,4 @@
 - 2026-10-04: phone-page-menus passes — fix(app): the page menu on the phone asks for a name to rename or make a note or folder
 - 2026-10-04: rename-keeps-links passes — fix(app): links follow a rename, in the reader now and in the notes at the next tidy-up
 - 2026-10-04: answer-toast-words passes — fix(app): answering a question is confirmed in the words of the choice
+- 2026-10-04: bin-count-hub passes — fix(app): the Bin question does not count a folder's own note
