@@ -678,7 +678,7 @@
     "what": "On the pretend Drive, a reload mid tidy-up leaves the inbox half filed with no run; the running situation starts a new run on every reload.",
     "steps": [],
     "verify": "pnpm vitest run src/data/fake -t \"reload\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "swallow-sensor-strong",

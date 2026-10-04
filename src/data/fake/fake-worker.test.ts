@@ -3,6 +3,7 @@ import { FakeDrive } from '../drive/fake-drive';
 import { SYSTEM } from '../vault/layout';
 import { FakeWorker } from './fake-worker';
 import { seedFakeDrive } from './seed';
+import { DriveVault } from '../vault/drive-vault';
 import type { Scenario } from '../demo/scenario';
 
 afterEach(() => vi.useRealTimers());
@@ -77,5 +78,29 @@ describe('the fake Worker', () => {
   it('comes back with the last run in the back scenario', async () => {
     const { worker } = await world('back');
     expect((await worker.status())?.phase).toBe('done');
+  });
+
+  it('a run cut short by a reload shows as stopped, with the inbox as it was', async () => {
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const rootId = await seedFakeDrive(drive, 'default', Date.now());
+    const before = new FakeWorker({ drive, scenario: 'default', scale: 'demo', rootId });
+    await before.process('all');
+    await new Promise((r) => setTimeout(r, 50));
+    // The page reloads: a new Worker on the same Drive.
+    const after = new FakeWorker({ drive, scenario: 'default', scale: 'demo', rootId, fresh: false });
+    const run = await after.status();
+    expect(run?.phase).toBe('failed');
+    expect(run?.failure).toMatch(/reload/);
+    const piles = await new DriveVault({ drive, rootId: async () => rootId ?? '', runningPiles: () => new Set() }).piles();
+    expect(piles.length).toBeGreaterThan(0);
+  });
+
+  it('the running situation starts its run only on a fresh pretend Drive, not on a reload', async () => {
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const rootId = await seedFakeDrive(drive, 'running', Date.now());
+    const reloaded = new FakeWorker({ drive, scenario: 'running', scale: 'demo', rootId, fresh: false });
+    expect((await reloaded.status())?.phase ?? 'none').not.toMatch(/queued|reading|writing|saving/);
   });
 });

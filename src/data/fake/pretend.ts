@@ -10,7 +10,7 @@ import { seedFakeDrive } from './seed';
 
 const FAKE_KEY = (scenario: Scenario): string => `bower:fake:${scenario}`;
 
-export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDrive; rootId: string | null }> {
+export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDrive; rootId: string | null; fresh: boolean }> {
   let drive: FakeDrive | null = null;
   try {
     const kept = sessionStorage.getItem(FAKE_KEY(scenario));
@@ -19,6 +19,7 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
     console.error(e);
   }
   let rootId: string | null;
+  const fresh = !drive;
   if (drive) {
     rootId = (await drive.listAll('root')).find((f) => f.folder && f.name === BOWER_FOLDER && f.parents[0] === 'root')?.id ?? null;
   } else {
@@ -42,7 +43,7 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
   };
   d.onChange = save;
   save();
-  return { drive: d, rootId };
+  return { drive: d, rootId, fresh };
 }
 
 /** Forgets every pretend Drive of this tab, so the next start is Alex's folder again. */

@@ -23,6 +23,8 @@ export interface FakeWorkerOptions {
   rootId: string | null;
   /** Every call fails as with no network (the offline scenario). */
   offline?: boolean;
+  /** False after a reload, when the pretend Drive was kept: the running situation does not start a new run. */
+  fresh?: boolean;
 }
 
 export class FakeWorker implements WorkerApi {
@@ -45,7 +47,7 @@ export class FakeWorker implements WorkerApi {
     this.failOnce = opts.scenario === 'fail-run';
     this.offline = !!opts.offline;
     // Offline, the folder cannot be read now; every call says so on its own.
-    this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario).catch((e: unknown) => console.error(e));
+    this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario, opts.fresh ?? true).catch((e: unknown) => console.error(e));
   }
 
   /** The piles the tidy-up going now took; empty when none is going. */
@@ -124,10 +126,12 @@ export class FakeWorker implements WorkerApi {
       failOnce,
       took: (ids) => (this.took = new Set(ids)),
       ...(readingFor !== undefined ? { readingFor } : {}),
-      onPhase: (phase, total) => {
+      onPhase: async (phase, total) => {
         run.phase = phase;
         run.phaseAt = Date.now();
         if (total !== undefined) run.total = total;
+        // Each phase is in the folder too, so a reload knows a run was going.
+        await this.writeLastRun(root, run).catch((e: unknown) => console.error(e));
       },
     })
       .then(
@@ -161,7 +165,7 @@ export class FakeWorker implements WorkerApi {
   }
 
   /** The last run, when the folder has one (the "back" scenario). The running scenario starts one. */
-  private async load(scenario: Scenario): Promise<void> {
+  private async load(scenario: Scenario, fresh: boolean): Promise<void> {
     const root = this.rootId;
     if (!root) return;
     const all = await this.drive.listAll(root);
@@ -171,12 +175,18 @@ export class FakeWorker implements WorkerApi {
       try {
         const v = JSON.parse(await this.drive.readText(file.id)) as Partial<LastRunFile>;
         if (v.v === 1 && v.run) this.run = { ...v.run };
+        // A run still going in the folder was cut short by a reload: the runner (this page) is gone.
+        if (this.run && !['done', 'failed'].includes(this.run.phase)) {
+          const now = Date.now();
+          this.run = { ...this.run, phase: 'failed', phaseAt: now, finishedAt: now, failure: 'The tidy-up stopped when the page was reloaded. Nothing was moved; tidy up again.' };
+          await this.writeLastRun(root, this.run);
+        }
       } catch (e) {
         console.error(e);
       }
     }
     // As on the demo: a run asked for 70 s ago, 20 s into reading.
-    if (scenario === 'running') this.start(root, 'all', Date.now() - 70_000, 20_000);
+    if (scenario === 'running' && fresh) this.start(root, 'all', Date.now() - 70_000, 20_000);
   }
 
   private online(): void {
