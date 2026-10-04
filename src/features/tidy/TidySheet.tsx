@@ -9,7 +9,7 @@ import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
 import { Icon } from '@/ui/Icon';
 import { PoseBower } from '@/bird/Bower';
-import { hasReplay, isRunning, runClock, runDetail, runTitle, STEP_LABEL, stepState } from './run-words';
+import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
 import s from './tidy.module.css';
@@ -101,7 +101,7 @@ function RunView({ run }: { run: RunState }) {
   const { runs } = useSources();
   return (
     <div>
-      <TidyScene phase={run.phase} {...(run.report ? { filed: run.report.filed.length } : {})} />
+      <TidyScene phase={run.phase} scope={run.scope} {...(run.report ? { filed: run.report.filed.length } : {})} />
       <div role="status" aria-live="polite">
         <p className={s.title}>{runTitle(run)}</p>
         <p className={s.detail}>{runDetail(run)}</p>
@@ -113,7 +113,7 @@ function RunView({ run }: { run: RunState }) {
             return (
               <li key={step} className={s[st]} aria-current={st === 'now' ? 'step' : undefined}>
                 <span className={s.mark}>{st === 'done' ? <Icon name="check" size={16} stroke={2.6} /> : st === 'failed' ? <Icon name="x" size={14} stroke={2.6} /> : <span />}</span>
-                {step === 'reading' && run.total ? `Reading ${plural(run.total, 'thing')}` : STEP_LABEL[step]}
+                {stepLabel(run, step)}
               </li>
             );
           })}

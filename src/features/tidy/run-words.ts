@@ -14,6 +14,20 @@ export const STEP_LABEL: Record<(typeof RUN_STEPS)[number], string> = {
   saving: 'Putting them away',
 };
 
+/** What a run that only reads your changes (no filing) calls its steps. */
+const CHANGES_LABEL: Record<(typeof RUN_STEPS)[number], string> = {
+  queued: 'Getting ready',
+  reading: 'Reading your changes',
+  writing: 'Writing what you asked',
+  saving: 'Saving it',
+};
+
+/** A step's name for this run: a tidy-up files, a read of your changes does not. */
+export function stepLabel(r: Pick<RunState, 'scope' | 'total'>, step: (typeof RUN_STEPS)[number]): string {
+  if (r.scope === 'instructions') return CHANGES_LABEL[step];
+  return step === 'reading' && r.total ? `Reading ${plural(r.total, 'thing')}` : STEP_LABEL[step];
+}
+
 export const PHASE_POSE: Record<RunPhase, Pose> = {
   queued: 'wait',
   reading: 'read',
@@ -45,13 +59,10 @@ export function stoppedUnseen(r: RunState | null | undefined): boolean {
 export function runTitle(r: RunState): string {
   switch (r.phase) {
     case 'queued':
-      return 'Getting ready';
     case 'reading':
-      return r.total ? `Reading ${plural(r.total, 'thing')}` : 'Reading';
     case 'writing':
-      return 'Writing your notes';
     case 'saving':
-      return 'Putting them away';
+      return stepLabel(r, r.phase);
     case 'done':
       if (r.scope === 'instructions') return 'Done. Bower read your changes';
       return `Done. ${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
@@ -61,6 +72,11 @@ export function runTitle(r: RunState): string {
 }
 
 export function runDetail(r: RunState): string {
+  if (r.scope === 'instructions' && r.phase !== 'done' && r.phase !== 'failed') {
+    if (r.phase === 'reading') return 'Reading the changes you made, the rules you typed and what you asked.';
+    if (r.phase === 'writing') return 'Wording your rules and doing what you asked. Your inbox waits for a tidy-up.';
+    if (r.phase === 'saving') return 'Saving it in your Drive.';
+  }
   switch (r.phase) {
     case 'queued':
       return 'Waiting for a turn on the machine that does the work. Usually under a minute.';
@@ -92,7 +108,7 @@ export function runClock(r: RunState, now: number): string {
     return `${r.phase === 'done' ? 'Finished' : 'Stopped'} ${clock(end)}, after ${elapsed(end - r.requestedAt)}.`;
   }
   const so = elapsed(now - r.requestedAt);
-  const tail = r.phase === 'saving' ? 'Almost there.' : 'Usually about 5.';
+  const tail = r.phase === 'saving' ? 'Almost there.' : r.scope === 'instructions' ? 'Usually under a minute.' : 'Usually about 5.';
   return `Started ${clock(r.requestedAt)}. ${so === 'less than a minute' ? 'Less than a minute' : so} so far. ${tail}`;
 }
 
@@ -100,7 +116,7 @@ export function runClock(r: RunState, now: number): string {
 export function runShort(r: RunState): string {
   if (r.phase === 'done') return r.scope === 'instructions' ? 'Bower read your changes' : `${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
   if (r.phase === 'failed') return 'Tidy-up stopped';
-  return `${STEP_LABEL[r.phase]}…`;
+  return `${stepLabel(r, r.phase)}…`;
 }
 
 export function stepState(r: RunState, step: (typeof RUN_STEPS)[number]): 'done' | 'now' | 'later' {

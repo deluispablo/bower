@@ -290,7 +290,7 @@ function JustFiled({ run }: { run: RunState | null }) {
     <section aria-labelledby="recent">
       <div className={s.recentHead}>
         <h2 id="recent" className={s.h2}>
-          {run?.phase === 'done' ? 'Just filed' : 'Recent'}
+          {hasReplay(run) ? 'Just filed' : 'Recent'}
         </h2>
         {run && hasReplay(run) && run.seen && (
           <button type="button" className={s.watchAgain} onClick={() => useUi.getState().startReplay(run.id)}>

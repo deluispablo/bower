@@ -314,7 +314,7 @@
       "Let Bower read them now"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"reading your changes does not look like filing\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "notify-feedback",

@@ -156,3 +156,21 @@ test('a bookmark to something gone is dropped', async ({ page, isMobile }) => {
   await expect(page.getByText('Gone for good')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('bower:bookmarks'))).not.toContain('Gone for good');
 });
+
+test('reading your changes does not look like filing', async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page, '/bower', 'default', 'demo');
+  await page.getByRole('radio', { name: 'A rule' }).click();
+  await page.getByRole('button', { name: 'anything from the dentist goes in health' }).click();
+  await page.getByRole('button', { name: 'Keep this rule' }).click();
+  await page.getByRole('link', { name: /^Home/ }).first().click();
+  await page.getByRole('button', { name: 'Let Bower read them now' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Reading your changes', { timeout: 12_000 });
+  await expect(dialog).not.toContainText('Putting them away');
+  await expect(dialog).not.toContainText('Usually about 5');
+  await expect(dialog.locator('[data-spot="folder"]')).toHaveCount(0);
+  await expect(dialog.getByText(/Done\. Bower read your changes/).last()).toBeVisible({ timeout: 40_000 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { name: 'Just filed' })).toHaveCount(0);
+});

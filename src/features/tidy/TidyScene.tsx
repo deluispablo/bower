@@ -22,7 +22,18 @@ type Spot = 'inbox' | 'read' | 'note' | 'folder' | 'mid';
  * - putting away: carries papers from the read pile into the folder.
  * Bower always stands on the ground and hops between places.
  */
-export function TidyScene({ phase, filed: total }: { phase: RunPhase; /** How many things the run filed, once it is done. */ filed?: number }) {
+export function TidyScene({
+  phase,
+  scope = 'all',
+  filed: total,
+}: {
+  phase: RunPhase;
+  /** A read of your changes files nothing: only the note is on the stage. */
+  scope?: 'all' | 'instructions';
+  /** How many things the run filed, once it is done. */
+  filed?: number;
+}) {
+  const changes = scope === 'instructions';
   const stage = useRef<HTMLDivElement>(null);
   const bird = useRef<BowerController>(null);
   const [inbox, setInbox] = useState(START);
@@ -61,10 +72,23 @@ export function TidyScene({ phase, filed: total }: { phase: RunPhase; /** How ma
       // A new phase: drop the rest of the last phase's errand.
       b.interrupt();
       if (phase === 'done') {
-        b.hopTo(() => spot('mid')).face(1).showOff();
+        b.hopTo(() => spot('mid'))
+          .face(1)
+          .showOff();
         return;
       }
       while (live) {
+        if (changes) {
+          // Reading your changes: Bower studies, then writes; nothing is carried anywhere.
+          if (phase === 'writing' || phase === 'saving')
+            b.hopTo(standAt('note'))
+              .face(1)
+              .scribble(2.4, () => setLines((n) => (n >= 6 ? 1 : n + 1)), 0.4)
+              .wait(0.5);
+          else b.hopTo(standAt('note')).face(1).study(1.6).wait(0.4);
+          await Promise.all([b.settled(), new Promise((r) => setTimeout(r, 120))]);
+          continue;
+        }
         if (phase === 'queued') b.hopTo(standAt('inbox')).face(1).wait(1.6);
         if (phase === 'reading')
           b.hopTo(standAt('inbox'))
@@ -101,15 +125,19 @@ export function TidyScene({ phase, filed: total }: { phase: RunPhase; /** How ma
     return () => {
       live = false;
     };
-  }, [phase]);
+  }, [phase, changes]);
 
   /** Bower's resting place: the ground by the inbox pile. Actions move it from there. */
   const home = (): { x: number; y: number; perch?: boolean } => {
     const st = stage.current;
     const y = (st?.clientHeight ?? 150) - GROUND;
-    const el = st?.querySelector('[data-spot="inbox"]');
+    const el = st?.querySelector(changes ? '[data-spot="note"]' : '[data-spot="inbox"]');
     if (!st || !el) return { x: 80, y };
-    return { x: el.getBoundingClientRect().left - st.getBoundingClientRect().left + 12 - REACH, y, perch: true };
+    return {
+      x: el.getBoundingClientRect().left - st.getBoundingClientRect().left + 12 - REACH,
+      y,
+      perch: true,
+    };
   };
 
   // Done: the scene agrees with the result, whatever the errands had reached
@@ -122,29 +150,65 @@ export function TidyScene({ phase, filed: total }: { phase: RunPhase; /** How ma
   return (
     <div className={s.stage} ref={stage} aria-hidden="true">
       <div className={s.ground} />
-      <div className={s.stack} data-spot="inbox" data-sheets={inboxShown} data-dim={phase === 'writing'}>
-        {Array.from({ length: inboxShown }, (_, i) => (
-          <span key={i} className={s.sheet} style={{ bottom: i * 5, transform: `translateX(${[0, 2, -2, 3, -1, 1][i] ?? 0}px)` }} />
-        ))}
-        <span className={s.tag}>Inbox</span>
-      </div>
-      <div className={s.stack} data-spot="read" data-sheets={readShown} data-dim={phase === 'writing'}>
-        {Array.from({ length: readShown }, (_, i) => (
-          <span key={i} className={`${s.sheet} ${s.readSheet}`} style={{ bottom: i * 5 }} />
-        ))}
-      </div>
+      {!changes && (
+        <div
+          className={s.stack}
+          data-spot="inbox"
+          data-sheets={inboxShown}
+          data-dim={phase === 'writing'}
+        >
+          {Array.from({ length: inboxShown }, (_, i) => (
+            <span
+              key={i}
+              className={s.sheet}
+              style={{ bottom: i * 5, transform: `translateX(${[0, 2, -2, 3, -1, 1][i] ?? 0}px)` }}
+            />
+          ))}
+          <span className={s.tag}>Inbox</span>
+        </div>
+      )}
+      {!changes && (
+        <div
+          className={s.stack}
+          data-spot="read"
+          data-sheets={readShown}
+          data-dim={phase === 'writing'}
+        >
+          {Array.from({ length: readShown }, (_, i) => (
+            <span key={i} className={`${s.sheet} ${s.readSheet}`} style={{ bottom: i * 5 }} />
+          ))}
+        </div>
+      )}
       <div className={s.note} data-spot="note" data-dim={phase !== 'writing'}>
         {Array.from({ length: 6 }, (_, i) => (
-          <i key={i} className={i < lines ? s.written : ''} style={{ width: `${[86, 70, 92, 60, 80, 50][i]}%` }} />
+          <i
+            key={i}
+            className={i < lines ? s.written : ''}
+            style={{ width: `${[86, 70, 92, 60, 80, 50][i]}%` }}
+          />
         ))}
       </div>
-      <div className={s.folder} data-spot="folder" data-filed={filedShown} data-dim={phase !== 'saving' && phase !== 'done'} key={bump}>
-        <Icon name="folder" size={52} stroke={1.5} />
-        {filedShown > 0 && <span className={s.filed}>{filedShown}</span>}
-      </div>
+      {!changes && (
+        <div
+          className={s.folder}
+          data-spot="folder"
+          data-filed={filedShown}
+          data-dim={phase !== 'saving' && phase !== 'done'}
+          key={bump}
+        >
+          <Icon name="folder" size={52} stroke={1.5} />
+          {filedShown > 0 && <span className={s.filed}>{filedShown}</span>}
+        </div>
+      )}
       <span className={s.mid} data-spot="mid" />
       {moving && phase !== 'failed' ? (
-        <BowerLayer ref={bird} size={SIZE} priority={1} home={home} carry={<span className={s.held} />} />
+        <BowerLayer
+          ref={bird}
+          size={SIZE}
+          priority={1}
+          home={home}
+          carry={<span className={s.held} />}
+        />
       ) : (
         <div className={s.still}>
           <PoseBower pose={PHASE_POSE[phase]} size={96} priority={1} />
