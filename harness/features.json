@@ -476,7 +476,7 @@
       "Open a pile"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the Demo pill never covers a button\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "bin-folder-confirm",

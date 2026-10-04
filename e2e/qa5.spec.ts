@@ -299,3 +299,20 @@ test('one bird on screen when a tidy-up ends', async ({ page }) => {
   });
   expect(above).toBe(0);
 });
+
+test('the Demo pill never covers a button', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'on the desktop the pill sits in the status bar');
+  for (const path of ['/', '/pile/p1', '/add', '/settings', '/bower', '/note/Resources/Cooking/Lemon%20tart.md']) {
+    await open(page, path);
+    const clash = await page.evaluate(() => {
+      const pill = document.querySelector('button[aria-label="Demo situations"]')?.getBoundingClientRect();
+      if (!pill) return 'no pill';
+      const hit = [...document.querySelectorAll('main button, main a, nav button, nav a')]
+        .filter((el) => !el.closest('[aria-label="Demo situations"]'))
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .find(({ r }) => r.width > 0 && r.left < pill.right && r.right > pill.left && r.top < pill.bottom && r.bottom > pill.top);
+      return hit ? (hit.el.textContent ?? '').trim().slice(0, 40) || hit.el.getAttribute('aria-label') : null;
+    });
+    expect(clash, path).toBeNull();
+  }
+});
