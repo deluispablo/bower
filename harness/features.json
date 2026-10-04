@@ -1889,7 +1889,7 @@
       "The inbox shows example.com; its page has Open the web page; search 'example' finds it by its address."
     ],
     "verify": "pnpm vitest run src/data -t \"a link file always ends in .url\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "outbox-dedupe-real",

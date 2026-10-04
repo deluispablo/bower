@@ -167,3 +167,4 @@
 - 2026-10-05: harness-each-pattern passes — fix(harness): every name a verify lists must match a test
 - 2026-10-05: harness-note-committed passes — fix(harness): --known-green needs the entry's note committed before the close
 - 2026-10-05: harness-fixed-in-precise passes — fix(harness): --fixed-in takes back only that commit's change; renames are read by their new name
+- 2026-10-05: link-files-url passes — fix(app): a saved link is always a .url file, whatever its address ends with

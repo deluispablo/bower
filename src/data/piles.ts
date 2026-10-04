@@ -37,7 +37,8 @@ export function pileHasFolder(p: Pile): boolean {
  */
 export function safeInboxName(item: Pick<PileItem, 'name' | 'kind'>): string {
   const safe = item.name.replace(/[/\\]+/g, ' - ').replace(/^[\s.-]+|[\s-]+$/g, '') || 'Untitled';
-  return item.kind === 'link' && !/\.[a-z]{2,5}$/i.test(safe) ? `${safe}.url` : safe;
+  // A saved link is always a .url file, even when its address ends like one (example.com, page.html).
+  return item.kind === 'link' && !/\.url$/i.test(safe) ? `${safe}.url` : safe;
 }
 
 /** Things in a folder for a count: every file, except pile notes and folders' own notes (they describe, they are not things). */
