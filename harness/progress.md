@@ -3,8 +3,8 @@
 ## Next
 
 - Coordinator `p2-orchestrator-2026-10-05-01a10bbd` resumes codex/close-phase-2 under the owner's explicit handoff; adopts main d12c55e / contracts-2 at a clean exclusive checkpoint. Read live ACTIVE for assignments.
-- First O1 audits all C01–C16 and boundary obligations at the combined immutable SHA; O2 specifies bounded R1–R4 probes without P3 implementation. Reuse proof evidence; reproduce historical concerns before registering gaps.
-- 201/209 registered entries pass after four current O1 reproductions; historic baseline was 201/205. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
+- O1 audit and O2 bounded R1–R4 specifications are complete at 143ae2b; read docs/harness/2026-10-05-p2-o1-audit.md and 2026-10-05-p2-r-probe-specs.md. Four rows missing, twelve partial; all real probes NOT RUN. Reuse proof evidence; reproduce historical concerns before registering gaps.
+- 201/210 registered entries pass after five current O1 reproductions; historic baseline was 201/205. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
 - Stabilize contracts before O4–O7 dependent implementation. Finish full frozen evaluation, gates and O8 dossier before owner phase acceptance. P2 is open; P3/P4 do not start.
 - Offline reading and upload-reload policy require specific owner decisions. Real-provider premises require authorized synthetic observations, not fake guarantees. Browser gates and restores remain serialized.
 
@@ -256,3 +256,5 @@
 - 2026-10-05: new owner-appointed coordinator adopts contracts-2 from local main, preserving 201/205 implementation entries/proofs and final-round evidence; prepare immutable O1/O2 packets. No phase acceptance or next-phase implementation.
 
 - 2026-10-05: O1 reproduced all four archived foundation concerns at 143ae2b and registered qa-13 planned regressions; persisted synthetic results/script. Journal worker is assigned in its isolated checkout; no new foundation proof claimed.
+
+- 2026-10-05: O1/O2 delivered at 143ae2b and persisted; reproduced premature done after final report-save failure and registered its planned regression. Journal candidate 244be68 (400 tests) awaits independent review; no acceptance row or service probe declared passed.

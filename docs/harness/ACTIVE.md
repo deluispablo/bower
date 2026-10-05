@@ -109,8 +109,24 @@ Both packets use revision `2026-10-05-contracts-2`, phase P2, immutable adopted 
 - Failure/recovery: matching direct/archive filename contains malformed JSON, another ID or same ID/different text; keep waiting record and visible BowerError. Exact immutable match remains deduplicated after lost upload response. Read candidate contents afresh and validate full record.
 - Required skills/tools: bower-session + bower-implement, Git/shell/Node/pnpm; run exclusive harness/init, named unchanged verify then check; no browser needed.
 - Verify: `pnpm vitest run src/data/vault/journal.test.ts -t "waiting changes require matching valid Drive contents"`.
-- Output: one candidate SHA (assigned files only), assertion-red/green/check logs and result packet. No shared records, done.sh, producer-schema expansion or phase closure. Independent reviewer assigned to immutable candidate before serial integration. State: prepared; dispatch after record commit.
+- Output: one candidate SHA (assigned files only), assertion-red/green/check logs and result packet. No shared records, done.sh, producer-schema expansion or phase closure. Independent reviewer assigned to immutable candidate before serial integration. State: candidate `244be6838ba67bf93aca58e712b1c8198cdaf4a0` returned; worker read-only awaiting review/integration. Assertion red and named green, full check 400 tests recorded in `/private/tmp/bower-journal-ack-{red,green,check}.log`.
 
 ## Current reproduced O1 foundations
 
 Four archived concerns were reproduced on `143ae2b` before registration under qa-13: `partial-pile-readiness`, `protected-current-prose`, `external-change-refresh`, `run-status-monotonic`. Durable synthetic script/results: `evidence/2026-10-05-o1/`. Their named regressions are planned and unexecuted; no passes/proofs changed. O1's wider capability matrix follows; producer/report/browser-independent recovery concerns remain current code reasoning until a named fault reproduction.
+
+## Independent journal review assignment
+
+- Reviewer: Codex `/root/o1_audit`, session `p2-journal-review-2026-10-05`; independent of builder, no delegation.
+- Revision/P2/C11,C14/entry: contracts-2 / `journal-ack-content`.
+- Immutable candidate range: `143ae2b12d5440330bee1a85bd16e90b8dccf746..244be6838ba67bf93aca58e712b1c8198cdaf4a0`, worker `/private/tmp/bower-p2-journal-ack`, `codex/p2-journal-ack`.
+- Allowed scope: read-only candidate diff plus journal/Drive callers, existing immutable-record and recovery contract, assigned named test and red/green/check evidence. No installs/tests/builds/browser/edits.
+- Dependency: O1 prerequisite assessment plus returned candidate; producer schema unchanged. Check complete-record comparison, fresh direct/archive reads, malformed/mismatching duplicates, retained waiting data, exact dedupe and partial acknowledgement failure. Return prioritized findings/line refs/limits and exact verdict; no entry closure.
+
+## O1/O2 completed delivery
+
+- Independent O1 report: `2026-10-05-p2-o1-audit.md`, target `143ae2b`, contracts-2. Full row status: C07/C08/C09/C13 missing, other twelve partial; demonstrated subbehaviors are mapped to named tests. No full acceptance row certified. Historical and current evidence distinguished.
+- O2 specifications: `2026-10-05-p2-r-probe-specs.md`, target `143ae2b`; official-provider basis, hypotheses, methods, observable assertions, bounds, cleanup and required setup. All runtime R1–R4 NOT RUN; resources not established. No P3/model/deployment work.
+- Additional coordinator reproduction on production unchanged from `143ae2b`: final report write fails once, status says done, durable phase remains saving/no report, inbox empty. Registered `run-report-save-barrier` (planned verification), durable evidence under `evidence/2026-10-05-o1`.
+- Remaining acceptance gaps (tracked in O1, not speculative bulk features): persisted source/compiled updates, cross-project results, contradictions, generated/revised documents/answers, simulated web outcomes, manifest Undo, account isolation, versioned preparation/context/corpus and independent service recovery. O3 fixture/schema acceptance precedes dependent writers. Relevant R1–R4 runtime observations and lead contract decisions are still missing.
+- Owner questions submitted for explicit offline-reading policy, upload-reload policy and prepared authorized synthetic Google/Actions resources. No answer or permission inferred from elapsed time. Continue independent foundation repairs.

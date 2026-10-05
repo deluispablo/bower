@@ -108,3 +108,7 @@ Tool-private memory may point at this repository but is not required to start a 
 ## Current execution sequence
 
 Audit C01–C16 and boundary contracts on the adopted immutable SHA; specify R1–R4 probes, reproduce foundations and repair the four qa-12 findings through independent review and done.sh. Accept compatible contracts before dependent vertical slices, preserve all second-brain capabilities and record persisted simulated effects. Finish preparation/corpus and frozen O8 acceptance. Offline-reading and upload-reload rulings remain pending; high-impact provider assumptions require observations before dependent acceptance. No P3/P4 implementation or phase acceptance is authorized. See live ACTIVE and progress Next.
+
+## Resumed O1/O2 delivery
+
+Read 2026-10-05-p2-o1-audit.md (143ae2b, four missing/twelve partial) and 2026-10-05-p2-r-probe-specs.md (all live probes NOT RUN). Five foundations are currently reproduced and registered qa-13 with planned verifies; four qa-12 remain pending. Journal candidate 244be68 has red/green/check (400) and is under independent review. Owner policy/resource questions are pending; do not infer answers. New schemas/slices wait on relevant real premises and technical-lead decisions; independent foundation repairs continue.
