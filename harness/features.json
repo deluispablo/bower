@@ -2353,7 +2353,7 @@
       "Open the corresponding screens.",
       "Each read rejects with a short readable error, without crashing or silently replacing data."
     ],
-    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"runner files with the wrong shape give a readable error\"",
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"runner files with the wrong shape give a readable error\" && pnpm vitest run src/data/runner-errors.test.tsx -t \"unreadable runner data is explained on screen\"",
     "passes": false
   },
   {
@@ -2431,5 +2431,46 @@
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"file names agree in search messages and the change list\"",
     "passes": false
+  },
+  {
+    "id": "home-person",
+    "task": "qa-11",
+    "category": "bug",
+    "what": "Home greets Alex and shows A even when someone else is signed in.",
+    "steps": [
+      "Sign in as a made-up person named Sam.",
+      "Open Home.",
+      "Its greeting and account initial belong to Sam; while loading it does not show Alex."
+    ],
+    "verify": "pnpm vitest run src/features/home/Home.test.tsx -t \"Home greets the person who signed in\"",
+    "passes": false
+  },
+  {
+    "id": "upload-retry-screen",
+    "task": "qa-11",
+    "category": "review",
+    "what": "The failed-upload retry action needs a screen regression, rather than only data-level retry coverage.",
+    "steps": [
+      "Open a pile with one arrived file and one failed upload.",
+      "Choose Try again.",
+      "Only the failed thing is resent, the arrived file remains once, and the warning disappears."
+    ],
+    "verify": "pnpm vitest run src/features/piles/PileScreen.test.tsx -t \"the pile retry button sends only failed uploads\"",
+    "passes": false,
+    "note": "Coverage-only: the current retry implementation is expected correct. Close only after observing the regression fail with its screen callback temporarily disabled, then restoring that callback."
+  },
+  {
+    "id": "task-keeps-seen",
+    "task": "qa-11",
+    "category": "review",
+    "what": "Retaining seen state after the person ticks a task needs a task-specific regression.",
+    "steps": [
+      "Open a new note and mark it seen.",
+      "Tick one task.",
+      "It stays seen, including after a fresh folder listing."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"ticking your own task keeps its note seen\"",
+    "passes": false,
+    "note": "Coverage-only: keepSeen already handles the person’s task write. Close only after observing the regression fail with that preservation temporarily removed, then restoring the implementation."
   }
 ]
