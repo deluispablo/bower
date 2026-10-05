@@ -315,3 +315,5 @@
 - 2026-10-05: private owner credentials match actual existing Google web-client ID; unchanged local v3 validation exits0, no OAuth request/token/secret validity claim. Root serial callback/browser reservation for bounded A authorization; actual new grant awaits action-time tool confirmation. Original unchanged/no values versioned.
 
 - 2026-10-05: first Add candidatee23245a independently requests changes: pending-admission mutation loss source-derived, worker assigned actual red then same-entry correction; not integrated. OAuth local correspondence validated but actual Continue remains on landing, no consent/session. Own tab/listener stopped, cause unestablished; bounded observer review before one repeat.
+
+- 2026-10-05: Add pending-admission loss genuinely reproduced then replacement666074f supplied528check/5regressions/11controls, renewed independent review pending. Native local OAuth policy defect reproduced with Originnull→400/no-referrer and exactOrigin→200/same-origin; guards intact. Sole worker scratchv4 test-first correction next, no credential/provider access. Own tabs/listeners closed.
