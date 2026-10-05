@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](docs/harness/GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+
 The map for any agent working on the Bower app rebuild. Short on purpose; the detail is in `docs/`.
 
 ## Start here, every session

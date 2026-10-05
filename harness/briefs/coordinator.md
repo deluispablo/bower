@@ -1,5 +1,7 @@
 # Brief: coordinator
 
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](../../docs/harness/GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+
 You are the one explicitly assigned integration coordinator for this batch. Follow `docs/harness/STARTUP.md`, `METHOD.md` and `COORDINATION.md`; inspect the integration record before writing it. Either Claude or Codex can hold this role.
 
 - Record integration checkout/branch/base, existing ownership and one assignment per worker in `ACTIVE.md`. Include required skills/capabilities and browser reservations; native task lists are convenience views.

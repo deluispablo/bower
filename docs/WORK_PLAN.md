@@ -1,5 +1,7 @@
 # Work plan for the app first rebuild
 
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](harness/GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+
 Revision: `2026-10-05-contracts-2`. Adopted by the owner's 2026-10-05 request to make the planning permanent on local main. [PRODUCT.md](PRODUCT.md) defines the purpose; [P2_ACCEPTANCE.md](P2_ACCEPTANCE.md) defines what P2 must prove. This plan supersedes conflicting guidance in historical plans and the backend v2 proposal. It does not mark implementation complete.
 
 ## Delivery contract
@@ -24,7 +26,7 @@ Preserve the accepted screens, navigation, brand, responsive behavior and reusab
 | P2-E | Complete vertical journeys on fake/demo | Start with admission → persisted effect/report → reopen/retry; then all capability rows | P2-D; browser-independent admitted work, duplicate/lost response and stale status covered; minimal UI extensions specified first. |
 | P2-F | Incremental preparation and context selection | Background extraction where appropriate, reusable artifacts, ready-input package, retrieval/fallback and clear policies | Safe primitives from P2-C; pure functions shared by compatible runtimes. |
 | P2-G | Capability and efficiency corpus | Measured app preparation and complete synthetic journeys; no semantic-quality shortcuts | P2-E/F; independent expected results and explicit benchmark conditions. |
-| P2-H | Freeze, review, evaluate and close | One acceptance dossier and owner closure decision | All exit conditions in P2_ACCEPTANCE; repeat affected checks after fixes. |
+| P2-H | Freeze, review, evaluate and close | One acceptance dossier and recorded conditional owner acceptance | All exit conditions in P2_ACCEPTANCE; repeat affected checks after fixes. |
 
 Packages define dependency order, not large implementation tickets. Coordinator splits each into small entries with owned paths, exact steps, unchanged verify commands and actual test names. New module stubs precede a failing assertion where required by the existing harness. Do not register fictional test commands as if coverage already exists. No passes/proofs are changed by this planning update.
 
@@ -45,7 +47,7 @@ Bound each experiment to its hypothesis and stop once the decision is supported.
 
 ## Phase 3 minimal real backend
 
-Entry condition: accepted P2 dossier and owner closure. Keep the P2 app behavior stable while changing the service adapters.
+Entry condition: complete accepted P2 dossier and recorded conditional owner acceptance under GOVERNANCE. Keep the P2 app behavior stable while changing the service adapters.
 
 1. Repeat and broaden P2-R evidence against the actual deployed adapter on synthetic data: OAuth/scopes, folder recovery, pagination, resumable upload/reload, changed versions, name/parent conflicts and responses lost after effects. Resolve unproven concurrency guarantees before relying on them.
 2. Implement the small Worker control plane: sessions/encrypted credentials, folder pointer, limits, durable single-active-run admission, dispatch, authenticated callbacks, ordered state, expiration and truthful errors. Select the smallest storage/coordination primitive that passes concurrency/recovery tests. Durable Objects are an option for run control, not an approved expansion into a universal write proxy.

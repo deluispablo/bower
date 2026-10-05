@@ -1,5 +1,7 @@
 # Phase 2 capability and acceptance contract
 
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](harness/GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+
 Revision: `2026-10-05-contracts-2`. Phase 2 delivers the complete app over simulated backend behavior. Its fake stack uses production app data logic and realistic persistence/failure contracts; the demo illustrates the experience. P3 supplies real backend services, and P4 supplies real semantic reasoning and research. A scripted result proves the app can carry and present a capability, not that a model can perform it well.
 
 ## Capability matrix
@@ -73,6 +75,6 @@ Observe contract-threatening real provider/executor assumptions through the boun
 - Independent reviewer and evaluator certify their stated scope on that SHA. Phone/desktop and console/error paths are covered; later relevant changes invalidate the affected evidence.
 - Offline reading, reload durability and other unresolved product policies have actual owner rulings and matching behavior. A PWA shell is not offline notes; fake data is not evidence of real-service behavior.
 - Shared boundary/fault/compatibility suites pass for implemented P2 adapters; R1–R4 results resolve contract-threatening assumptions, with no unsupported data-safety guarantee. Admitted work survives the originating client in the simulation.
-- Specs, schemas, handoff and fixtures match the accepted app. Owner accepts closure after reviewing the evidence summary.
+- Specs, schemas, handoff and fixtures match the accepted app. The coordinator records the complete evidence summary and applies the owner’s conditional acceptance under GOVERNANCE; no additional owner reply is required.
 
 “Without failures” means no known unresolved defects within the accepted scope, completed gates and independent evaluation. It is not a mathematical claim that unseen defects cannot exist. If a relevant defect appears after closure, stop dependent phase work, repair the foundation and revalidate before continuing.
