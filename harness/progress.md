@@ -2,12 +2,12 @@
 
 ## Next
 
-- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd sole integration writer. Current211/215 after add-draft-no-loss registration; production44ee162 unchanged.
-- Both naming entries proof-closed48e6544/f739b5c through real inverse-fix red/check/unchanged verify. Combined check517/demo198/fake198/PWA4 and supplemental root phone/desktop fake/demo retained; independent complete UI evaluation NOT RUN. Own tabs/preview cleaned; no browser reservation.
-- D01/D02 approved. Sole worker reproduces Add missing-byte draft loss atf739b5c in isolated checkout; root registers and assigns minimal no-drop fix only after actual red. Durable retention/hash reselection/shared readiness/offline boot remain separate obligations. Historical omission expectations need explicit policy migration.
-- Google v3 local setup reviewed clean,30 local tests/seven syntax and root actual synthetic CSP red/control. Existing callback already registered; no external change. Original private existing-client export path and interactive consent missing; actual R1–R4 pending. No rotation/revocation or generic repeated policy/resource approval.
-- Final rich-ownership proposal/review/fixtures archived for lead grammar/raw adapter/activation decisions; no implementation/adoption from proposed fixtures. Current-compatible fixtures/corpus and approved-policy work can continue independently.
-- O1 four missing/twelve partial capabilities remain. Accepted O3 compatibility before admitted recovery, persisted semantic simulations/Undo, preparation/measured corpus and complete O8 dossier. P2 open, no P3/P4/main product merge/push/deploy/spend/owner acceptance.
+- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd sole integration writer. Current211/215; productioncbf4e9f Add replacement integrated-open after clean independent review. Rootcheck528/52 and full demo198/56 skips green; fake198/56 green, supplemental native and genuine inverse-fix closure pending.
+- Root alone reserves serial product gates5191/native preview5192 phone390x844/desktop1440x900 fake/demo. No actual OAuth concurrently. Independent complete UI evaluation remains NOT RUN.
+- D01/D02 approved. Current Add guard preserves incomplete/pending draft; durable retention/hash reselection/shared readiness/offline boot remain separate obligations. Historical qa9 omission expectation explicitly migrated with its unchanged named legacy verify retained.
+- Google v4 local2reds/full36/eight syntax supplied, fresh independent review pending; minimum landing Origin policy fix preserves all guards. Owner private existing-client correspondence already validated; interactive real consent and R1–R4 observations pending. No credential rotation/revocation or repeated policy/resource question.
+- Sole worker scratch-only O3 current-v1 last-run public reproduction on identical FakeWorker/DriveVault/WorkerHttp. Weak recovery read is source-derived, not a finding until actual assertion/data effects; no production/contract change authorized yet.
+- Final ownership proposal/review/fixtures require lead grammar/raw adapter/activation adoption. Existing readiness/protected-prose/report-barrier entries and O1 four missing/twelve partial remain; O3 before O4, persisted semantic simulations/Undo, preparation/measured corpus and complete O8 dossier. P2 open; no P3/P4/main product merge/push/deploy/spend/phase acceptance.
 
 ## Log
 

@@ -172,3 +172,12 @@ Owner instruction in Planificador was verified through its latest human turn: re
 The sole Google setup preparer was updated to reuse these resources, including safe non-secret existing local bower config/OAuth inventory and preservation of current redirect URIs/deployment. Its scratch-only ownership and no runtime/provider change remain. Google R1/R2/R4 can start independently from executorR3 once minimal access/resources are established; owner need not build the harness or design contracts.
 
 Independent evaluator performed exactly one fresh documented browser inventory: empty array, no surfaced browser/errors. Report retained evaluation/evaluator-capabilities-recheck-907c9f8.md. Independent live evaluation remains NOT RUN; no lock-causation assumption and no retry/tab/navigation. Root supplemental checks remain separately labeled. Independent code naming review reports no new actionable finding at907/source44; complete exact report/gates/manual/proofs are pending.
+
+
+## Add integrated and Google v4 prepared
+
+Current source cbf4e9f14c1e66f61bbec81b58091d4ec356d96a, clean independent reviewed666074f Add replacement. Entry integrated-open211/215; root check528/52/demo198/56 green, full fake running. Root sole serial browser for affected native390x844/1440x900 fake/demo and subsequent exact inverse-fix proof. Independent native evaluator unavailable, root check supplemental. User-created Bower tab preserved.
+
+Google-v4 local two genuine reds/36green/eight syntax immutable, fresh review pending. Owner restricted Google client already validated; only real interactive consent/provider proof missing. Origin header defect reproduced by native synthetic control, minimum landing-only same-origin fix, guards/no-referrer callback preserved. Actual OAuth waits until Add freeze released. Sole worker now scratch-only current-v1 run public reproduction; source concern not yet registered finding. Consult current ACTIVE for exact assignments; no worker writes shared records.
+
+Root complete fake atcbf4e9f:198passed/56intentional skips, exit0; checkpointcheck528/52 green. Logs archived qa15. Ensuing docs-only clean commit freezes identical source/build for root supplemental phone/desktop fake/demo Add evaluation; no integration/proof restore during freeze.
