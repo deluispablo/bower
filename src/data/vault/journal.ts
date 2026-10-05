@@ -3,7 +3,8 @@
  * `.bower/changes/` for each thing you did in the app, so the next tidy-up
  * knows what happened and where to look. One file per change, so two
  * devices never write the same file; Drive cannot append. Files never
- * change once written, so each is read once and kept.
+ * change once written, so normal reads are kept; acknowledging a waiting
+ * copy always checks Drive afresh.
  */
 import type { DriveApi, DriveFile } from '../drive/drive-api';
 import type { ChangeEntry, ChangeKind } from '../types';
@@ -182,16 +183,32 @@ export class Journal {
     if (!waiting.length) return;
     // A line whose answer was lost may be in Drive already: never write it twice. The folder
     // itself is asked (a cached listing never saw a file whose answer was lost).
-    let there: Set<string>;
+    let there: DriveFile[];
     try {
-      there = new Set((await this.place.files(true, true)).map((f) => f.name));
+      there = await this.place.files(true, true);
     } catch (e) {
       console.error(e);
       if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
       return;
     }
     const sent = new Set<string>();
-    for (const r of waiting) if (there.has(`${r.id}.json`) || (await this.send(r))) sent.add(r.id);
+    for (const r of waiting) {
+      const copies = there.filter((f) => f.name === `${r.id}.json`);
+      for (const f of copies) {
+        try {
+          const v: unknown = JSON.parse(await this.drive.readText(f.id));
+          if (!isJournalRecord(v)) throw new Error(`Unreadable change ${f.id}`);
+          // Compare every stored field, independently of JSON key order and whitespace.
+          const expected = new Map(Object.entries(r).filter(([, value]) => value !== undefined));
+          const actual = Object.entries(v);
+          if (actual.length !== expected.size || !actual.every(([key, value]) => expected.has(key) && expected.get(key) === value)) throw new Error(`Change ${f.id} does not match waiting change ${r.id}`);
+        } catch (e) {
+          console.error(e);
+          throw new BowerError('unknown', 'Bower could not confirm your waiting changes.');
+        }
+      }
+      if (copies.length || (await this.send(r))) sent.add(r.id);
+    }
     // Only what was sent leaves; anything added meanwhile stays.
     this.keep(key, this.waiting(key).filter((r) => !sent.has(r.id)));
     if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');

@@ -53,6 +53,48 @@ describe('the change journal', () => {
 });
 
 describe('when Drive does not answer', () => {
+  it.each(['direct', 'archive'])('waiting changes require matching valid Drive contents (%s)', async (location) => {
+    const archive = (await drive.createFolder(changes, 'archive')).id;
+    const files = vi.fn(async (_fresh?: boolean, archived?: boolean) => (await drive.listAll(changes)).filter((f) => !f.folder && (archived || f.parents.includes(changes))));
+    journal = new Journal(drive, { owner: async () => root, folder: async () => changes, files }, 'device-a');
+    const create = vi.spyOn(drive, 'createText').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const rec = await journal.record('rule', 'Keep receipts together', {
+      path: 'Rules.md', from: 'Inbox', text: 'Keep receipts together', questionId: 'QUESTION_ID', fileId: 'FILE_ID', removes: 'Old rule',
+    });
+    const key = `bower:outbox:${root}`;
+    const waiting = localStorage.getItem(key);
+    const copy = await drive.createText(location === 'direct' ? changes : archive, `${rec.id}.json`, JSON.stringify(rec));
+    // Warm the normal journal read cache: acknowledgement must still read Drive afresh.
+    await journal.list();
+    create.mockClear();
+    const read = vi.spyOn(drive, 'readText');
+    const invalid = [
+      '{broken',
+      JSON.stringify({ ...rec, text: {} }),
+      JSON.stringify({ ...rec, device: undefined }),
+      ...Object.entries({ v: 2, id: 'ANOTHER_ID', device: 'device-b', at: rec.at + 1, kind: 'request', what: 'Other change', path: 'Other.md', from: 'Other', text: 'Changed words', questionId: 'OTHER_QUESTION', fileId: 'OTHER_FILE', removes: 'Other rule' }).map(([field, value]) => JSON.stringify({ ...rec, [field]: value })),
+      JSON.stringify({ ...rec, removes: undefined }),
+    ];
+    for (const text of invalid) {
+      await drive.writeText(copy.id, text, (await drive.get(copy.id)).modifiedTime);
+      read.mockClear();
+      await expect(journal.flush()).rejects.toMatchObject({ name: 'BowerError', code: 'unknown', message: 'Bower could not confirm your waiting changes.' });
+      expect(read).toHaveBeenCalledWith(copy.id);
+      expect(files).toHaveBeenLastCalledWith(true, true);
+      expect(localStorage.getItem(key)).toBe(waiting);
+      expect(await drive.readText(copy.id)).toBe(text);
+      expect(create).not.toHaveBeenCalled();
+    }
+    // Key order and whitespace do not change the immutable record's contents.
+    const exact = JSON.stringify(Object.fromEntries(Object.entries(rec).reverse()), null, 2);
+    await drive.writeText(copy.id, exact, (await drive.get(copy.id)).modifiedTime);
+    await expect(journal.flush()).resolves.toBeUndefined();
+    expect(localStorage.getItem(key)).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+    expect(await drive.readText(copy.id)).toBe(exact);
+    expect((await drive.listAll(changes)).filter((f) => !f.folder)).toHaveLength(1);
+  });
+
   it('a rule is not reported saved when Drive and the outbox both fail', async () => {
     const create = drive.createText.bind(drive);
     drive.createText = async () => { throw new TypeError('Failed to fetch'); };
