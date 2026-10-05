@@ -7,6 +7,7 @@
  */
 import type { DriveApi, DriveFile } from '../drive/drive-api';
 import type { ChangeEntry, ChangeKind } from '../types';
+import { BowerError } from '../types';
 
 export interface JournalExtra {
   path?: string;
@@ -108,7 +109,7 @@ export class Journal {
 
   /** Sends what waits in the outbox (before a tidy-up, back online, at start); what still cannot go stays. */
   flush(): Promise<void> {
-    return this.serial(() => this.acrossTabs(() => this.sendWaiting()));
+    return this.serial(() => this.acrossTabs(() => this.sendWaiting(true)));
   }
 
   /** Two tabs of this browser share one outbox: one sends it at a time (Web Locks, where the browser has them). */
@@ -118,7 +119,7 @@ export class Journal {
     return locks.request(outboxKey(await this.place.owner()), work);
   }
 
-  private async sendWaiting(): Promise<void> {
+  private async sendWaiting(required = false): Promise<void> {
     const key = outboxKey(await this.place.owner());
     const waiting = readOutbox(key);
     if (!waiting.length) return;
@@ -129,12 +130,14 @@ export class Journal {
       there = new Set((await this.drive.listAll(await this.place.folder())).map((f) => f.name));
     } catch (e) {
       console.error(e);
+      if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
       return;
     }
     const sent = new Set<string>();
     for (const r of waiting) if (there.has(`${r.id}.json`) || (await this.send(r))) sent.add(r.id);
     // Only what was sent leaves; anything added meanwhile stays.
     writeOutbox(key, readOutbox(key).filter((r) => !sent.has(r.id)));
+    if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
   }
 
   private async send(rec: JournalRecord): Promise<boolean> {

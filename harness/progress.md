@@ -206,3 +206,4 @@
 - 2026-10-05: qa-11 review found six Important and two Minor issues; registered for test-first fixes before phase 2 closure. Initial demo suite: 187 passed, 53 skipped.
 - 2026-10-05: harness-timeout-red passes — fix(harness): a timeout alone cannot prove an assertion red
 - 2026-10-05: harness-selected-files passes — fix(harness): verify names belong to the selected test files
+- 2026-10-05: journal-before-run passes — fix(data): wait for journal changes before starting a tidy-up

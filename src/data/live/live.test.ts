@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { FakeWorker } from '../fake/fake-worker';
 import { seedFakeDrive } from '../fake/seed';
@@ -32,6 +32,24 @@ async function until(s: LiveSources, done: (r: RunState | null) => boolean): Pro
 }
 
 describe('LiveRuns', () => {
+  it('a tidy-up does not start while journal lines still wait', async () => {
+    const s = await open();
+    const create = s.drive.createText.bind(s.drive);
+    const list = s.drive.listAll.bind(s.drive);
+    const process = vi.spyOn(s.worker, 'process');
+    s.drive.createText = async () => { throw new TypeError('Failed to fetch'); };
+    await s.vault.addRule('Keep receipts together');
+    await expect(s.runs.start('instructions')).rejects.toMatchObject({ code: 'offline', message: expect.stringMatching(/changes.*arrive/i) });
+    expect(process).not.toHaveBeenCalled();
+    s.drive.listAll = async () => { throw new TypeError('Failed to fetch'); };
+    await expect(s.runs.start('instructions')).rejects.toMatchObject({ code: 'offline' });
+    expect(process).not.toHaveBeenCalled();
+    s.drive.createText = create;
+    s.drive.listAll = list;
+    await s.runs.start('instructions');
+    expect(process).toHaveBeenCalledOnce();
+  });
+
   it('a run walks the phases and ends with its report', async () => {
     const s = await open();
     const seen: string[] = [];

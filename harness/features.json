@@ -2315,7 +2315,7 @@
       "The app says the changes must arrive first, and no run is started."
     ],
     "verify": "pnpm vitest run src/data/live/live.test.ts -t \"a tidy-up does not start while journal lines still wait\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "journal-storage-failure",
