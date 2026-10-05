@@ -2686,7 +2686,7 @@
       "Repair the saved update explicitly using the version just read and reopen; valid terminal and legitimate active-reload records retain existing behavior."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"persisted v1 run fixtures agree across current recovery consumers\"",
-    "passes": false,
+    "passes": true,
     "note": "Reproduced at cbf4e9f/identical666074f public APIs:3valid controls,10refusal assertion reds and unknown-phase1durableoverwrite. qa16 retains exact bytes/snapshots/read-version recovery. Existing current-v1 shared validation only; no new schema, report-save barrier, scheduler, readiness or ownership grammar. HTTP validates RunWire alone, not this durable envelope/report."
   }
 ]
