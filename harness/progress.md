@@ -235,3 +235,5 @@
 - 2026-10-05: Composer focus closed; assign coherent names and expand the open naming entry with the reproduced file-page/menu mismatch.
 
 - 2026-10-05: Naming regression exposed further labels in folder/bookmark/rename/move views; reserve them within the existing coherent naming entry and extend its tests.
+
+- 2026-10-05: Full naming gate found four legacy extension-copy expectations; reserve literal updates and add full-file-name search matching coverage before repeating both suites.
