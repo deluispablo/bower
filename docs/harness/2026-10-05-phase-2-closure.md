@@ -60,3 +60,7 @@ Pending owner ruling: keep offline reading, a queue of uploads that survives clo
 ## Closure conditions
 
 All registered findings closed with honest proofs; complete check, demo, fake and production PWA gates green on the final revision; fresh independent reviewer and evaluator report no Critical or Important issues; owner agrees to the remaining product rulings. Only then update the phase status and merge locally to main.
+
+## Owner-requested stopping point
+
+On 2026-10-05 the owner asked to finish this session at a stable clean point and let another session orchestrate remaining P2 and future phases. All earlier 201 entries remain closed; four new qa-12 findings make the current count 201/205. Final independent review and incomplete browser evaluation are recorded in `2026-10-05-phase-2-final-round.md`. The target is not ready for phase closure; no merge was performed. The P3 product/integration ruling is still unanswered.

@@ -4,6 +4,12 @@ For an agent starting a new session with no memory of the last one. Read `AGENTS
 
 Historical phase snapshot below: 2026-10-05, at commit `9dabc23`. Startup/coordination instructions updated on 2026-10-05; current completion counts and next work come from `harness/features.json`, `harness/progress.md` and the current integration `ACTIVE.md`, not the historical counts below. The owner speaks Spanish in chat; everything in the repo is English.
 
+## Current handoff: 2026-10-05
+
+The owner requested a stable clean stopping point and another session to orchestrate/distribute remaining P2 and later work. Branch `codex/close-phase-2`, last frozen reviewed target `4d98eb0`; production fixes committed, no merge or push. **201/205 entries pass**, four qa-12 findings open. This supersedes the historical closure sequence/counts below; a new coordinator must establish its assignments in ACTIVE.md.
+
+Read `2026-10-05-phase-2-final-round.md`: fresh whole-code review found two Important (journal acknowledgment without content validation; pile edits bypassing name/place concurrency) and one Minor (hidden dot-prefixed creation). Incomplete evaluator reproduced dot creation and Timeline source label mismatch. Regression names are registered but those new tests/fixes are not implemented. Resume the explicit remaining evaluator matrix after fixing, obtain fresh affected review and final check/demo/fake/PWA gates. Owner scope/phase closure agreement is still pending. Do not call P2 complete.
+
 ## Session startup and skills
 
 Both tools follow `STARTUP.md`, load `bower-session` and only their assigned role skill, then check actual required tools. Canonical skills live in `.agents/skills/`; committed relative Claude links live in `.claude/skills/`. See `SKILLS.md` for researched optional Codex skills and their availability; use direct file loading if native discovery is missing. Read-only review/evaluation does not run init or rebuild its target. Native discovery/routing needs a fresh-session check; no new implementation batch is assigned by this update.

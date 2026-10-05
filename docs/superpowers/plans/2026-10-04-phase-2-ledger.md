@@ -108,3 +108,9 @@ The record of how phase 2 was built: each task's completion, every ruling (a dec
 - Final: minor (deferred): PWA navigateFallback would catch same-origin Worker routes (now noted in the contract).
 - Final: minor (deferred): small uploads jump from 0 to 99%.
 - Final: Ruling: a move or rename is not a content conflict — it checks the name and place it read (stillAsSeen), not modifiedTime, so a tick on another device does not block a move — cost if wrong: a move after a remote rename-and-edit loses nothing, the text travels with the file.
+
+## 2026-10-05 closure batch handoff
+
+- Earlier registered findings closed through harness proofs, total 201 entries; check 398 unit tests, full demo/fake each 194 passed / 54 intentional skips, production PWA 4 passed.
+- Fresh independent review `4833d3c..4d98eb0`: With fixes, two Important and one Minor. Incomplete native browser evaluation at the same frozen target reproduced two Minor findings. Four unique qa-12 entries remain: journal-ack-content, pile-edit-still-seen, create-leading-dot, timeline-source-names; total now 201/205.
+- Owner requested stable clean handoff to another orchestrating session. Remaining coverage, exact findings and source evidence are in `docs/harness/2026-10-05-phase-2-final-round.md`. No phase closure or merge. Offline reading/durable uploads/real-Drive smoke test ruling remains pending; earlier ledger rulings do not count as the owner's acceptance of this closure proposal.

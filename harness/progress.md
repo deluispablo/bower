@@ -2,10 +2,11 @@
 
 ## Next
 
-- All 201 registered entries are closed. Prepare the final PWA gate and freeze the assignment-record revision for fresh independent code review and browser evaluation; register and fix any findings before phase closure and a local main merge.
-- Await the owner's ruling on offline reading, a durable upload queue and the real-Drive smoke test for phase 3. Phase 2 stays open until the rounds are clean and its remaining rulings are agreed.
-- Both tools start with `docs/harness/STARTUP.md` and `bower-session`, load only the assigned role skill, and check capabilities from `SKILLS.md`; reviewers/evaluators use prepared read-only targets.
-- Follow `docs/harness/COORDINATION.md`: establish one coordinator and explicit assignments in the current integration copy of `ACTIVE.md`; keep writers in separate checkouts. Do not mutate a checkout while its gates, `done.sh` or evaluator run. Browser work remains serialized across worktrees.
+- Owner requested a stable, clean handoff on 2026-10-05; another session will orchestrate and assign remaining P2 work and later phases. This batch has ended. Do not infer an implementation assignment from this log.
+- 201/205 entries pass. Four qa-12 findings remain: journal-ack-content and pile-edit-still-seen (Important), create-leading-dot and timeline-source-names (Minor). Read docs/harness/2026-10-05-phase-2-final-round.md for evidence, exact target and remaining evaluation coverage. Their named regression tests are planned and have not been written or run.
+- Establish a new coordinator and explicit ownership in ACTIVE.md before implementation; fix entries test first, one proof closure and commit at a time. Re-review affected changes independently. Resume the incomplete evaluator matrix and run final check/demo/fake/PWA gates before proposing P2 closure.
+- Await the owner's ruling on offline reading, uploads retained across reload and the real-Drive smoke test for P3; silence is not agreement. P2 stays open, main is unchanged, and no merge or push was performed.
+- Start with STARTUP.md and canonical bower-session plus the assigned role skill. Keep gates, source restores and browser evaluation serialized; freeze exact targets for independent evaluation.
 
 ## Log
 
@@ -243,3 +244,5 @@
 - 2026-10-05: tab-link-name passes — fix(shell): prove plain saved-link tab names
 
 - 2026-10-05: Naming closed at 32bbd24 and 4a17962 with genuine assertion reds; check 398 tests and both complete browser suites 194 passed / 54 intended skips. Assign fresh final independent roles and freeze after production PWA preparation.
+
+- 2026-10-05: Owner requested handoff instead of continuing implementation. Final review at 4d98eb0 found two Important and one Minor; incomplete native-browser evaluation reproduced dot creation and Timeline naming. Registered four qa-12 entries, preserved clean tested production sources and documented remaining coverage. No phase closure or merge.

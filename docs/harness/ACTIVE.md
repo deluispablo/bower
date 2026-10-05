@@ -4,12 +4,12 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: all 201 entries closed; final independent review/evaluation preparation; no implementer active. Integration and browser gates serialized.
-- Coordinator/session: Codex `/root`, continuing the owner's request to finish P2, test the local app fully and audit it before merging to main.
+- State: batch ended at owner-requested stable handoff; 201/205 pass, four qa-12 findings open. No active writer, reviewer or evaluator.
+- Completed coordinator/session: Codex `/root`. The owner requested another session orchestrate and distribute remaining P2 and subsequent work; the next coordinator is unassigned.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: integration checkout only; dev 5190, test server 5191, production preview 5192. Servers were started by this coordinator. Browser gates and source restores are serialized; final evaluation will reserve an immutable SHA.
+- Browser reservation: released. Dev 5190 remains available locally. Test server 5191 is managed by gates; temporary production preview 5192 is being stopped at handoff. Future evaluation needs a fresh build and explicit reservation.
 
 ## Assignments
 
@@ -21,8 +21,8 @@ Only the named coordinator writes this file. Read this integration copy before c
 | search-root-scope | Codex `/root/audit_p2` | Implementer | same isolated checkout; `codex/qa11-search-root` | base `55810f9` | drive-http.ts; drive-http.test.ts | closed; assignment released | revised `a67c632`; integration `759ed24`; closure `0da4746` |
 | task-keeps-seen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `55810f9` | drive-vault.test.ts; temporary task-only red in drive-vault.ts; shared records | closed; production restored exactly after manual assertion red | `4460586` |
 | upload-retry-screen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `4460586` | PileScreen.test.tsx; temporary retry-callback red in PileScreen.tsx; shared records | closed; production restored after assertion red | `866a63c` |
-| Final code review | Codex `/root/final_review_p2` (fresh) | Reviewer | integration checkout | assignment-record SHA resolved in dispatch; production tip `4a17962` | whole P2 diff from `4833d3c`, contracts, proofs; read-only, no gates/browser/edits | assigned; dispatch after this record commits | pending |
-| Final browser evaluation | Codex `/root/final_evaluate_p2` (fresh) | Evaluator | integration checkout | same frozen assignment-record SHA | dev 5190 / production 5192; fake/demo, 1440×900 and 390×844; no edits/builds/git | assigned; dispatch only after PWA preparation | pending |
+| Final code review | Codex `/root/final_review_p2` (fresh) | Reviewer | integration checkout | `4833d3c..4d98eb0` | whole P2 diff, contracts and proofs; read-only | finished; two Important and one Minor | report in final-round document |
+| Final browser evaluation | Codex `/root/final_evaluate_p2` (fresh) | Evaluator | integration checkout | `4d98eb0` | fake/demo, 1440×900 and 390×844, native CUA | stopped at owner request; incomplete, two reproduced Minor findings; tabs closed/viewport reset | coverage in final-round document |
 
 ## Required skills and capabilities
 
@@ -71,3 +71,10 @@ For each assignment, record `bower-session` plus its role skill, the actual tool
 - Manual naming check on fake at 1440×900 / 390×844: PDF page, desktop tab/bookmark, mobile menu and rename field agree; console warnings/errors empty. First direct folder route was invalid; navigation via the visible tree reached the actual `/files/` and `/note/` routes. No file content changed in this check.
 - Final capabilities: canonical bower-session plus review/evaluate role skill loaded by each fresh session; Git/shell available to reviewer, native CUA browser available to evaluator. Reviewer must scrutinize the recorded same-id journal acknowledgment caveat. Evaluator must replay every qa-9/qa-10 bug/polish step and all feature flows, then explore first-use/keyboard/error states; report actual coverage and limits. Neither role may delegate or write repository files.
 - Freeze the resulting assignment-record commit after the coordinator's check and PWA gate. Both fresh roles receive its exact SHA in their dispatch packet. No source/docs/build/harness restores or browser gates while evaluation runs. Earlier full suites certify identical production sources; this record changes documentation only. Owner scope/closure ruling is still pending.
+
+## Stable handoff (owner request)
+
+- Exact reviewed/evaluated target `4d98eb0869b1e7aea388ab6a8a061547be193094`; source remains identical in this documentation/backlog handoff. Reviewer verdict With fixes: two Important, one Minor. Evaluator stopped at owner's new scope; no clean or complete evaluation verdict. Four unique findings registered under qa-12; no new implementations assigned.
+- Full evidence and explicit remaining replay matrix: `2026-10-05-phase-2-final-round.md`. Final check before freeze 398 tests; demo/fake 194 passed / 54 intentional skips each; PWA 4 passed. Backlog/hand-off check is repeated before the final documentation commit.
+- No merge to main, no push, no remote changes. Historical main `5d26800`. Offline reading/durable uploads/real-Drive smoke test owner ruling remains pending. Next session must register its coordinator/assignments before work.
+- Isolated search/Worker worktree was clean at a67c632; recoverable archive requested through the app. Other sessions' worktrees were not touched.

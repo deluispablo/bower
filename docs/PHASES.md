@@ -37,6 +37,8 @@ From `docs/specs/2026-10-04-who-does-what.md`, agreed with the owner:
 
 ## Phase 2: the logic (built; closing)
 
+Current handoff: 201/205 entries pass after the closure batch; four qa-12 findings remain. Fresh review at `4d98eb0` returned two Important and one Minor; browser evaluation was stopped incomplete at the owner's request. See `docs/harness/2026-10-05-phase-2-final-round.md`. Another session will orchestrate remaining work; no P2 closure or main merge.
+
 - **Plan:** `docs/superpowers/plans/2026-10-04-phase-2-app-logic.md`; its execution ledger (rulings and deferred minors): `docs/superpowers/plans/2026-10-04-phase-2-ledger.md`.
 - **Specs it wrote:** `docs/specs/2026-10-04-worker-contract.md` (the app side of the Worker, which phase 3 must answer exactly) and `docs/specs/2026-10-04-who-does-what.md`.
 - **Built:**
