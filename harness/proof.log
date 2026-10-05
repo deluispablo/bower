@@ -209,3 +209,4 @@ pile-context-version	089d84bb866f4e5b	2026-10-05	red (fixed in afa1167d41816fb8d
 run-status-monotonic	e5c5553d9cd724f3	2026-10-05	red (fixed in 2bd3346)
 task-preserves-source-bytes	dfb9121a2d9a4517	2026-10-05	red (fixed in 6dda1a4)
 external-change-refresh	0959fcb33606e908	2026-10-05	red (fixed in 390d305)
+runner-request-preflight	40c149885649f5dc	2026-10-05	red (fixed in cb73061)

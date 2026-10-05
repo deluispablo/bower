@@ -2640,7 +2640,7 @@
       "Validate using the existing v1 guard before the first runner mutation; refuse readably with no data effects and preserve original bytes/pending intent. Repair the input and retry the valid control once."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"malformed request history stops a tidy-up before effects\"",
-    "passes": false,
+    "passes": true,
     "note": "Reproduced by independent current-v1 observation at6305ca9; script/raw snapshots/results under docs/harness/evidence/2026-10-05-o3. Named assertion planned, not run. Existing guard/format only; concurrent external changes, durable checkpoints and final-report barrier remain separate O3/O4/R1 obligations."
   }
 ]

@@ -281,3 +281,4 @@
 - 2026-10-05: external-change-refresh passes — fix(live): prove returning clients discover external changes
 
 - 2026-10-05: foreground candidate1d6fe32 reviewed/integrated390d305/proof-closed64d5e3d; core and pre-wave actual reds retained, check464/16 cases. Assign existing-v1 request preflight to the sole writer;207/213, P2 open.
+- 2026-10-05: runner-request-preflight passes — fix(runner): prove malformed request history preserves pending data
