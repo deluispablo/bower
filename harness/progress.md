@@ -258,3 +258,4 @@
 - 2026-10-05: O1 reproduced all four archived foundation concerns at 143ae2b and registered qa-13 planned regressions; persisted synthetic results/script. Journal worker is assigned in its isolated checkout; no new foundation proof claimed.
 
 - 2026-10-05: O1/O2 delivered at 143ae2b and persisted; reproduced premature done after final report-save failure and registered its planned regression. Journal candidate 244be68 (400 tests) awaits independent review; no acceptance row or service probe declared passed.
+- 2026-10-05: journal-ack-content passes — fix(journal): prove complete acknowledgement before forgetting changes

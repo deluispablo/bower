@@ -203,3 +203,4 @@ open-in-drive	d04cf32e0b228a66	2026-10-05	red
 composer-focus	1e2aa0784de0cf72	2026-10-05	red
 plain-file-names	8d2f020296427370	2026-10-05	red
 tab-link-name	6b653713f8270bc8	2026-10-05	red (fixed in 32bbd24)
+journal-ack-content	2331a0caafc0b5a8	2026-10-05	red (fixed in 7c95fd86a2377bbdb0c786cac4cd03ede178fbaa)
