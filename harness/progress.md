@@ -2,12 +2,11 @@
 
 ## Next
 
-- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd sole integration writer. Current211/215; productioncbf4e9f Add replacement integrated-open after clean independent review. Rootcheck528/52 and full demo198/56 skips green; fake198/56 green, supplemental native and genuine inverse-fix closure pending.
-- Root alone reserves serial product gates5191/native preview5192 phone390x844/desktop1440x900 fake/demo. No actual OAuth concurrently. Independent complete UI evaluation remains NOT RUN.
-- D01/D02 approved. Current Add guard preserves incomplete/pending draft; durable retention/hash reselection/shared readiness/offline boot remain separate obligations. Historical qa9 omission expectation explicitly migrated with its unchanged named legacy verify retained.
-- Google v4 local2reds/full36/eight syntax supplied, fresh independent review pending; minimum landing Origin policy fix preserves all guards. Owner private existing-client correspondence already validated; interactive real consent and R1–R4 observations pending. No credential rotation/revocation or repeated policy/resource question.
-- Sole worker scratch-only O3 current-v1 last-run public reproduction on identical FakeWorker/DriveVault/WorkerHttp. Weak recovery read is source-derived, not a finding until actual assertion/data effects; no production/contract change authorized yet.
-- Final ownership proposal/review/fixtures require lead grammar/raw adapter/activation adoption. Existing readiness/protected-prose/report-barrier entries and O1 four missing/twelve partial remain; O3 before O4, persisted semantic simulations/Undo, preparation/measured corpus and complete O8 dossier. P2 open; no P3/P4/main product merge/push/deploy/spend/phase acceptance.
+- Adopted contracts-2/main d12c55e; root sole integration writer.212/215 after Add proofc1b1975, sourcecbf4e9f. Check528/52/demo198/56/fake198/56 green; root actual native fake/demo390x844/1440x900 at clean5193 retainedqa15, independent full UI NOT RUN.
+- Add freeze released; own tabs closed/viewport reset/previews stopped, user tab preserved. Root next reserves8788 for independently reviewedGooglev4. Existing private client already validated; actual consent/token/provider still missing. No rotation/revocation/repeated generic setup questions.
+- O3 current-v1 consumer corruption actually reproduced:3valid/10assertionreds, unknownphase1durableoverwrite, bytes/journal/input recovery evidenceqa16. Fresh independent prerequisite review before minimal existing-validator entry/worker assignment. No newwire/scheduler/grammar.
+- D01/D02 approved; durable upload retention/hash reselection/shared readiness/offline boot still separate obligations. Final ownership proposal needs lead grammar/rawadapter/activation adoption. Three older open entries readiness/protected-prose/report-barrier remain.
+- O1 fourmissing/twelvepartial full capability obligations remain. AcceptedO3 beforeO4; persisted semantic simulations/Undo, preparation/corpus and completeO8 owner dossier required. P2 open; no P3/P4/main product merge/push/deploy/spend/phase acceptance.
 
 ## Log
 

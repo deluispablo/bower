@@ -4,12 +4,12 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: contracts-2 adopted; O1/O2 delivered. 211/215 entries pass. Add replacement independently reviewed and integrated as cbf4e9f14c1e66f61bbec81b58091d4ec356d96a, entry integrated-open. Root check528/52 and complete demo198/56 skips pass; complete fake198/56 skips passes. Affected supplemental native evaluation and inverse-fix closure pending. Ten foundations previously closed; expanded P2 acceptance remains incomplete.
+- State: contracts-2 adopted; O1/O2 delivered. 212/215 pass after Add c1b1975 genuine inverse-fix red/check/verify closure of integratedcbf4e9f. Rootcheck528/52/demo198/56/fake198/56 and four actual supplemental native cells pass. O3 current-v1 consumer defect reproduced; minimal prerequisite under independent review. Expanded P2 acceptance incomplete.
 - Coordinator/session: Codex `/root`, session `p2-orchestrator-2026-10-05-01a10bbd`, explicitly appointed by the owner after the previous batch ended. Sole integration writer and shared-record owner.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: root only, serial Add gates5191 then native built preview5192 at390x844/1440x900 fake/demo. No OAuth/provider browser until this freeze is released. User-created Bower tab preserved. Isolated worker runs scratch unit reproduction only; no browser grant.
+- Browser reservation: Add freeze released; own tabs closed, viewport reset, owned5192/5193 stopped. User-created Bower tab preserved. Root next reserves callback8788 for reviewed Google-v4 bounded native retry; no concurrent product browser. Sole worker scratch reproduction delivered/read-only.
 
 ## Assignments
 
@@ -483,3 +483,10 @@ Google v4 fresh independent review complete, no unresolved Critical/Important/Mi
 ## Affected Add native freeze prepared
 
 Both complete source gates atcbf4e9f exit0: demo198/56skips and fake198/56skips. Updated checkpoint pnpm check528/52/build/harness211215 exit0. Raw logs retained qa15. No code/config difference between independently reviewed666074f and integratedcbf4e9f. Root freezes the ensuing docs-only checkpoint commit for supplemental native Add, C02/C16/D02, built sourcecbf4e9f on owned5192. Exact fake/demo/default/instant at390x844/1440x900; synthetic receipt fixture outside repository. Reproduce reload missing bytes, context/member preservation and disabled whole-draft admission; recover via explicit reselection/removal, inspect actual saved pile/context/members. Check console and responsive layout. Pending-admission held success/failure effects separately pinned by5named/11component cases; no native held-response claim unless observed. No source/edit/build/proof restore/commit during native freeze. Stop only root preview, close only root tabs, reset viewport before release; user-created Bower tab untouched. Independent affected evaluator remains NOT RUN, root supplemental only.
+
+
+## Add verified closure; current-v1 defect reproduced
+
+Actual Add root supplemental fourcells at frozena7ac04f/sourcecbf4e9f, clean5193 builtindex verified. Initial5192 old PWA bundle excluded/repeated. Missing bytes retain context/members and block admission; explicit reselection1row saves receipt+context, deliberate removal saves remaining link/note. Actual saved screens and consoleempty allfour. Own tabs/preview cleaned before proof. done.sh exact integratedcbf4e9f actual inverse1productionfile assertion red/restoration/check/unchanged5named verify closesc1b1975,212/215; logs/native report/images archivedqa15. No complete independent/O8/provider/reload-byte guarantee.
+
+O3 scratch actual immutable f16beada report/9ded345f manifest: public3valid controls green first,13total3pass10 genuine malformed/unsupported refusal reds, source24modules identical. DriveVault refusesallinvalid/preservesbytes; freshFakeWorker.status swallows/accepts invalid data and unknownphase actually rewriteslast-run with1mutation. Other files/input/current-v1 journal retained; read-version explicit repair reopensboth. Archivedqa16. /root/prerequisites_review read-only prerequisite review assigned before registration/repair, no productionwriter currently. Bounded existing shared validator compatibility, readable status/process refusal/no dispatch/recovery, missing/legitimateactive reload controls; no newschema/scheduler/report-save/readiness/grammar.

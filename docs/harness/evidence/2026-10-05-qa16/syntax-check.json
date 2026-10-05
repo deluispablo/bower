@@ -1,0 +1,14 @@
+[
+  {
+    "file": "load-public.mjs",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "file": "reproduction.test.mjs",
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]
