@@ -78,8 +78,9 @@ export class DriveVault implements VaultSource {
   private sendingPiles = new Set<string>();
   private making = new Map<string, Promise<string>>();
   private sending = new Set<Promise<void>>();
+  private disposed = false;
 
-  constructor(opts: DriveVaultOptions) {
+  constructor(opts: DriveVaultOptions, private readonly lifetime: () => boolean = () => true, journalOwner = opts.rootId, memoryDrive = opts.drive) {
     this.driveLinks = opts.driveLinks ?? false;
     this.drive = opts.drive;
     this.rootId = opts.rootId;
@@ -88,7 +89,7 @@ export class DriveVault implements VaultSource {
       this.drive,
       {
         folder: () => this.systemFolder(SYSTEM.changes),
-        owner: () => this.rootId(),
+        owner: journalOwner,
         files: async (fresh, archived) => {
           if (fresh) {
             const root = await this.rootId();
@@ -96,16 +97,34 @@ export class DriveVault implements VaultSource {
           }
           return (await this.index()).journalFiles(archived);
         },
-        wrote: (f) => void this.ix?.then((ix) => ix.put(f)),
-        removed: (id) => void this.ix?.then((ix) => ix.drop(id)),
+        wrote: (f) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.put(f); }); },
+        removed: (id) => { if (this.current()) void this.ix?.then((ix) => { if (this.current()) ix.drop(id); }); },
         waiting: () => this.emit(),
       },
       opts.device ?? deviceId(),
+      () => this.current(),
+      memoryDrive,
     );
   }
 
   dispose(): void {
+    this.disposed = true;
+    for (const u of this.uploads.values()) for (const e of u.entries) { delete e.body; delete e.url; }
+    this.uploads.clear();
+    this.bin.clear();
+    this.ix = null;
+    this.notes.clear();
+    this.texts.clear();
+    this.making.clear();
+    this.journal.dispose();
     this.listeners.clear();
+  }
+
+  private current(): boolean { return !this.disposed && this.lifetime(); }
+
+  private checkCurrent(): void {
+    if (this.disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
+    if (!this.lifetime()) throw new BowerError('conflict', 'Your session changed; try again.');
   }
 
   /** Sends this device's waiting journal lines (before a tidy-up, back online, at start). */
@@ -297,6 +316,7 @@ export class DriveVault implements VaultSource {
   async markSeen(path: string): Promise<void> {
     const f = (await this.index()).file(path);
     if (!f) return;
+    this.checkCurrent();
     markSeen(f.id, f.modifiedTime);
     this.emit();
   }
@@ -314,7 +334,7 @@ export class DriveVault implements VaultSource {
       throw e;
     }
     ix.put(this.keepSeen(f, written));
-    this.notes.set(f.id, { modified: written.modifiedTime, note: parseNote(path, out.text) });
+    if (this.current()) this.notes.set(f.id, { modified: written.modifiedTime, note: parseNote(path, out.text) });
     await this.journal.record('task', `${out.done ? 'Ticked' : 'Unticked'} "${out.label}" in ${displayName(nameOf(path))}`, { path, fileId: f.id });
     this.emit();
   }
@@ -405,6 +425,7 @@ export class DriveVault implements VaultSource {
     if (!lone) {
       path = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ id, text, createdAt, items: [] })));
       const folder = await this.drive.createFolder(inbox, nameOf(path));
+      this.checkCurrent();
       ix.put(folder);
       id = folder.id;
       parent = folder.id;
@@ -412,6 +433,7 @@ export class DriveVault implements VaultSource {
         try {
           ix.put(await this.drive.createText(folder.id, PILE_NOTE, text));
         } catch (e) {
+          if (!this.current()) throw e;
           // Half a pile helps nobody: its empty folder goes to the Bin, and you can save again.
           await this.drive.trash(folder.id).catch((err: unknown) => console.error(err));
           ix.drop(folder.id);
@@ -601,6 +623,7 @@ export class DriveVault implements VaultSource {
   async dismissSuggestion(id: string, keep: boolean): Promise<() => Promise<void>> {
     const all = (await this.json(SYSTEM.suggestions))?.suggestions ?? [];
     const s = all.find((x) => x.id === id);
+    this.checkCurrent();
     dismiss(id);
     const line = keep && s && !ruleLike(await this.rules(), s.title) ? await this.journal.record('rule', `Kept a suggestion as a rule: "${s.title}"`, { path: 'Rules.md', text: s.title }) : null;
     this.emit();
@@ -613,7 +636,8 @@ export class DriveVault implements VaultSource {
 
   // ---------- plumbing
 
-  protected index(): Promise<VaultIndex> {
+  protected async index(): Promise<VaultIndex> {
+    this.checkCurrent();
     if (!this.ix) {
       const p = (async () => {
         const root = await this.rootId();
@@ -625,10 +649,13 @@ export class DriveVault implements VaultSource {
         if (this.ix === p) this.ix = null;
       });
     }
-    return this.ix;
+    const ix = await this.ix;
+    this.checkCurrent();
+    return ix;
   }
 
   protected emit(): void {
+    if (!this.current()) return;
     this.listeners.forEach((l) => l());
   }
 
@@ -666,6 +693,7 @@ export class DriveVault implements VaultSource {
     const cached = this.texts.get(f.id);
     if (cached && cached.modified === f.modifiedTime) return cached.text;
     const text = await this.drive.readText(f.id);
+    this.checkCurrent();
     this.texts.set(f.id, { modified: f.modifiedTime, text });
     return text;
   }
@@ -689,6 +717,7 @@ export class DriveVault implements VaultSource {
 
   private async sendAll(pileId: string, u: Upload): Promise<void> {
     for (const e of [...u.entries]) {
+      if (!this.current()) return;
       if (this.uploads.get(pileId) !== u) return;
       try {
         const ix = await this.index();
@@ -710,11 +739,13 @@ export class DriveVault implements VaultSource {
         const made = e.url
           ? await this.drive.createText(u.parent, name, `[InternetShortcut]\nURL=${e.url}\n`, props)
           : e.body
-            ? await this.drive.upload(u.parent, name, e.body, (p) => {
+              ? await this.drive.upload(u.parent, name, e.body, (p) => {
+                if (!this.current()) return;
                 e.item.upload = Math.min(p, 0.99);
                 this.emit();
               }, props)
             : await this.drive.createText(u.parent, name, '', props);
+        if (!this.current()) return;
         if (this.uploads.get(pileId) !== u) {
           // The pile was removed while this was on its way: it follows the pile to the Bin,
           // and comes back with it on Undo.
@@ -728,6 +759,7 @@ export class DriveVault implements VaultSource {
         ix.put(made);
         u.entries = u.entries.filter((x) => x !== e);
       } catch (err) {
+        if (!this.current()) return;
         console.error(err);
         e.item.upload = -1;
       }
@@ -748,7 +780,7 @@ export class DriveVault implements VaultSource {
 
   /** Your own write changes the file's time; if you had seen it, it stays seen. */
   protected keepSeen(before: DriveFile, after: DriveFile): DriveFile {
-    if (isSeen(before.id, before.modifiedTime)) markSeen(after.id, after.modifiedTime);
+    if (this.current() && isSeen(before.id, before.modifiedTime)) markSeen(after.id, after.modifiedTime);
     return after;
   }
 
@@ -762,6 +794,7 @@ export class DriveVault implements VaultSource {
     const cached = this.notes.get(f.id);
     if (cached && cached.modified === f.modifiedTime) return { ...cached.note, path, title: displayName(nameOf(path)) };
     const note = parseNote(path, await this.text(f));
+    this.checkCurrent();
     this.notes.set(f.id, { modified: f.modifiedTime, note });
     return note;
   }

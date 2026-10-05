@@ -99,9 +99,21 @@ export class Journal {
     private readonly drive: DriveApi,
     private readonly place: JournalPlace,
     private readonly device: string,
+    private readonly current: () => boolean = () => true,
+    memoryDrive: DriveApi = drive,
   ) {
-    this.volatile = volatile.get(drive) ?? new Map();
-    volatile.set(drive, this.volatile);
+    this.volatile = volatile.get(memoryDrive) ?? new Map();
+    volatile.set(memoryDrive, this.volatile);
+  }
+
+  private checkCurrent(): void {
+    if (!this.current()) throw new BowerError('unknown', 'Bower is no longer open on this page.');
+  }
+
+  dispose(): void {
+    this.read.clear();
+    this.filesOf.clear();
+    // Folder-keyed waiting records survive every session, including storage failures.
   }
 
   private waiting(key: string): JournalRecord[] {
@@ -137,12 +149,23 @@ export class Journal {
     const at = (this.lastAt = Math.max(Date.now(), this.lastAt + 1));
     const id = `${new Date(at).toISOString().replace(/:/g, '-')}-${Math.random().toString(36).slice(2, 8).padEnd(6, '0')}`;
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
+    // Capture the original owner before queue admission, including post-effect bookkeeping.
+    const key = outboxKey(await this.place.owner());
     return this.serial(async () => {
+      if (!this.current()) {
+        if (extra.fileId && kind !== 'rule' && kind !== 'request' && kind !== 'answer') {
+          let previous = this.volatile.get(key) ?? [];
+          let readable = true;
+          try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
+          if (readable) this.keep(key, [...previous, rec]);
+          else this.volatile.set(key, [...previous, rec]);
+        }
+        this.checkCurrent();
+      }
       // Nothing waiting (the usual case): no lock to take, so the change answers at once.
-      const key = outboxKey(await this.place.owner());
       let readable = true;
       try {
-        if (this.waiting(key).length) await this.acrossTabs(() => this.sendWaiting());
+        if (this.waiting(key).length) await this.acrossTabs(key, () => this.sendWaiting(key));
       } catch (e) {
         console.error(e);
         readable = false;
@@ -161,24 +184,27 @@ export class Journal {
           throw new BowerError('unknown', applied ? 'Your change was made; keep this page open so Bower can remember it.' : 'This is not safely saved; keep this page open.', applied ? { path: kind === 'trash' ? null : (extra.path ?? null), changeId: rec.id } : undefined);
         }
       }
+      this.checkCurrent();
       return rec;
     });
   }
 
   /** Sends what waits in the outbox (before a tidy-up, back online, at start); what still cannot go stays. */
-  flush(): Promise<void> {
-    return this.serial(() => this.acrossTabs(() => this.sendWaiting(true)));
+  async flush(): Promise<void> {
+    const key = outboxKey(await this.place.owner());
+    return this.serial(() => this.acrossTabs(key, () => this.sendWaiting(key, true)));
   }
 
   /** Two tabs of this browser share one outbox: one sends it at a time (Web Locks, where the browser has them). */
-  private async acrossTabs<T>(work: () => Promise<T>): Promise<T> {
+  private async acrossTabs<T>(key: string, work: () => Promise<T>): Promise<T> {
+    this.checkCurrent();
     const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
     if (!locks) return work();
-    return locks.request(outboxKey(await this.place.owner()), work);
+    return locks.request(key, () => { this.checkCurrent(); return work(); });
   }
 
-  private async sendWaiting(required = false): Promise<void> {
-    const key = outboxKey(await this.place.owner());
+  private async sendWaiting(key: string, required = false): Promise<void> {
+    this.checkCurrent();
     const waiting = this.waiting(key);
     if (!waiting.length) return;
     // A line whose answer was lost may be in Drive already: never write it twice. The folder
@@ -193,6 +219,7 @@ export class Journal {
     }
     const sent = new Set<string>();
     for (const r of waiting) {
+      this.checkCurrent();
       const copies = there.filter((f) => f.name === `${r.id}.json`);
       for (const f of copies) {
         try {
@@ -210,16 +237,22 @@ export class Journal {
       if (copies.length || (await this.send(r))) sent.add(r.id);
     }
     // Only what was sent leaves; anything added meanwhile stays.
+    this.checkCurrent();
     this.keep(key, this.waiting(key).filter((r) => !sent.has(r.id)));
     if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
   }
 
   private async send(rec: JournalRecord): Promise<boolean> {
     try {
-      const f = await this.drive.createText(await this.place.folder(), `${rec.id}.json`, `${JSON.stringify(rec)}\n`);
-      this.read.set(f.id, rec);
-      this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f.id]);
-      this.place.wrote?.(f);
+      this.checkCurrent();
+      const folder = await this.place.folder();
+      this.checkCurrent();
+      const f = await this.drive.createText(folder, `${rec.id}.json`, `${JSON.stringify(rec)}\n`);
+      if (this.current()) {
+        this.read.set(f.id, rec);
+        this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f.id]);
+        this.place.wrote?.(f);
+      }
       return true;
     } catch (e) {
       console.error(e);
@@ -229,6 +262,8 @@ export class Journal {
 
   /** Every change since the last tidy-up, oldest first, each once (Drive and this device's outbox). */
   async list(): Promise<JournalRecord[]> {
+    this.checkCurrent();
+    const key = outboxKey(await this.place.owner());
     const files = (await this.place.files()).filter((f) => !f.folder && f.name.endsWith('.json'));
     const byId = new Map<string, JournalRecord>();
     const seenFiles = new Map<string, string[]>();
@@ -244,6 +279,7 @@ export class Journal {
           if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
           throw e;
         }
+        this.checkCurrent();
         this.read.set(f.id, rec);
       }
       const rec = this.read.get(f.id);
@@ -252,18 +288,20 @@ export class Journal {
         seenFiles.set(rec.id, [...(seenFiles.get(rec.id) ?? []), f.id]);
       }
     }
+    this.checkCurrent();
     for (const [rid, ids] of seenFiles) this.filesOf.set(rid, ids);
-    for (const r of this.waiting(outboxKey(await this.place.owner()))) if (!byId.has(r.id)) byId.set(r.id, r);
+    for (const r of this.waiting(key)) if (!byId.has(r.id)) byId.set(r.id, r);
     return [...byId.values()].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
 
   /** Takes a change back (an Undo): its file goes to the Bin, or it leaves the outbox. */
-  remove(id: string): Promise<void> {
-    return this.serial(() => this.removeNow(id));
+  async remove(id: string): Promise<void> {
+    const key = outboxKey(await this.place.owner());
+    return this.serial(() => this.removeNow(id, key));
   }
 
-  private async removeNow(id: string): Promise<void> {
-    const key = outboxKey(await this.place.owner());
+  private async removeNow(id: string, key: string): Promise<void> {
+    this.checkCurrent();
     const waiting = this.waiting(key);
     if (waiting.some((r) => r.id === id) && !this.keep(key, waiting.filter((r) => r.id !== id))) {
       this.volatile.set(key, waiting);
@@ -271,6 +309,7 @@ export class Journal {
     }
     if (!this.filesOf.has(id)) await this.list();
     for (const fileId of this.filesOf.get(id) ?? []) {
+      this.checkCurrent();
       await this.drive.trash(fileId);
       this.place.removed?.(fileId);
       this.read.delete(fileId);

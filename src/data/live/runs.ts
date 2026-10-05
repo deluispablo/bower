@@ -53,16 +53,25 @@ export class LiveRuns implements RunSource {
     private readonly vault: DriveVault,
     /** How often to ask while a run is going; the pretend Worker answers at once, so it is asked more often. */
     private readonly fastMs = FAST_MS,
+    /** A replaced session starts idle; its first accepted status tells stable subscribers. */
+    private announceIdle = false,
   ) {
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this.onVisible);
   }
 
-  dispose(): void {
+  dispose(reset = false): void {
     this.disposed = true;
     this.generation++;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.listeners.clear();
+    if (reset) {
+      this.last = null;
+      this.took.clear();
+      this.reports.clear();
+      this.retired.clear();
+      this.loading.clear();
+    }
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.onVisible);
   }
 
@@ -199,13 +208,15 @@ export class LiveRuns implements RunSource {
     if (!wire) {
       this.last = null;
       this.took = new Set();
-      if (before) {
+      if (before || this.announceIdle) {
+        this.announceIdle = false;
         this.schedule();
         this.emit();
       }
       return;
     }
     if (this.retired.has(wire.id)) return;
+    this.announceIdle = false;
     if (before?.id === wire.id) {
       if (finished(before) && wire.phase !== before.phase) {
         if (finished(wire)) console.error(new Error(`Conflicting terminal status for run ${wire.id}`));
@@ -241,7 +252,12 @@ export class LiveRuns implements RunSource {
 
   private async loadReport(wire: RunWire, generation: number): Promise<void> {
     const current = () => !this.disposed && generation === this.generation && this.last?.id === wire.id;
-    await this.refreshFolder();
+    try { await this.refreshFolder(); }
+    catch (e) {
+      // Expected: disposal stops the listing; current() can still return its last no-effect state.
+      if (this.disposed) return;
+      throw e;
+    }
     if (!current()) return;
     const file = await this.vault.lastRun();
     if (!current()) return;

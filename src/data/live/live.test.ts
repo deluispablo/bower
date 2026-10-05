@@ -4,7 +4,7 @@ import { driveError, type DriveApi } from '../drive/drive-api';
 import { FakeWorker } from '../fake/fake-worker';
 import { seedFakeDrive } from '../fake/seed';
 import type { Scenario } from '../demo/scenario';
-import type { RunReport, RunState } from '../types';
+import { BowerError, type RunReport, type RunState } from '../types';
 import type { Me, RunWire } from '../worker/worker-api';
 import { makeLiveSources, type LiveSources } from './index';
 
@@ -12,6 +12,548 @@ let live: LiveSources | null = null;
 afterEach(() => {
   live?.dispose();
   live = null;
+});
+
+describe('session and folder isolation', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((yes) => { resolve = yes; });
+    return { promise, resolve };
+  }
+  const outcome = <T>(p: Promise<T>) => p.then((value) => ({ value }), (error: unknown) => ({ error }));
+  async function drain() { for (let i = 0; i < 30; i++) await Promise.resolve(); }
+
+  async function pair(samePerson: boolean) {
+    localStorage.clear();
+    sessionStorage.clear();
+    const drive = new FakeDrive();
+    async function seed(name: string, text: string) {
+      const root = await drive.createFolder('root', name);
+      for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root.id, name);
+      const system = await drive.createFolder(root.id, '.bower');
+      await drive.createFolder(system.id, 'changes');
+      await drive.createText(root.id, 'Synthetic.md', text);
+      return root;
+    }
+    const a = await seed('Synthetic A', 'Account A content café.');
+    const b = await seed('Synthetic B', 'Account B content café.');
+    const userA = { name: 'Alex', email: 'alex@example.com' };
+    const userB = samePerson ? userA : { name: 'Sam', email: 'sam@example.com' };
+    let context: Me | null = { user: userA, folderId: a.id };
+    let next: Me = { user: userB, folderId: b.id };
+    const worker = new FakeWorker({ drive, rootId: a.id, scenario: 'empty', scale: 'instant' });
+    vi.spyOn(worker, 'me').mockImplementation(async () => context);
+    vi.spyOn(worker, 'signOut').mockImplementation(async () => { context = null; });
+    vi.spyOn(worker, 'signIn').mockImplementation(async () => { context = next; });
+    live = makeLiveSources({ drive, worker });
+    const s = live;
+    await s.vault.flushJournal();
+    await s.vault.tree();
+    expect((await s.vault.note('Synthetic.md')).body).toBe('Account A content café.');
+    const outboxA = localStorage.getItem(`bower:outbox:${a.id}`);
+    const outboxB = localStorage.getItem(`bower:outbox:${b.id}`);
+    async function domain(rootId: string) {
+      const files = await drive.listAll(rootId);
+      return Promise.all(files.map(async (file) => ({ ...file, content: file.folder ? null : await drive.readText(file.id) })));
+    }
+    async function switchToB() {
+      await s.session.signOut();
+      expect(await s.session.current()).toBeNull();
+      expect(await s.session.signIn()).toEqual(userB);
+      expect(await s.session.rootId()).toBe(b.id);
+    }
+    async function returnToA() {
+      next = { user: userA, folderId: a.id };
+      await s.session.signOut();
+      await s.session.signIn();
+      expect(await s.session.rootId()).toBe(a.id);
+    }
+    return { s, drive, worker, a, b, domain, switchToB, returnToA, outboxA, outboxB };
+  }
+
+  for (const samePerson of [false, true]) {
+    const transition = samePerson ? 'same account, new folder' : 'new account and folder';
+    it(`reused sources isolate account and folder changes (${transition}, cached note read)`, async () => {
+      const { s, drive, a, b, switchToB, outboxA, outboxB } = await pair(samePerson);
+      const before = await drive.snapshot();
+      await switchToB();
+      expect((await s.vault.note('Synthetic.md')).body).toBe('Account B content café.');
+      expect(await drive.snapshot()).toBe(before);
+      expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBe(outboxA);
+      expect(localStorage.getItem(`bower:outbox:${b.id}`)).toBe(outboxB);
+    });
+
+    it(`reused sources isolate account and folder changes (${transition}, creation placement)`, async () => {
+      const { s, drive, a, b, domain, switchToB, outboxA } = await pair(samePerson);
+      const beforeA = await domain(a.id);
+      await switchToB();
+      const path = await s.vault.create('', 'note', 'Made after switch');
+      await s.vault.settled();
+      expect(drive.dump(b.id).has(path)).toBe(true);
+      expect(drive.dump(a.id).has(path)).toBe(false);
+      expect(await domain(a.id)).toEqual(beforeA);
+      const records = [...drive.dump(b.id)].filter(([p]) => /^\.bower\/changes\/[^/]+\.json$/.test(p));
+      expect(records).toHaveLength(1);
+      expect(records[0]?.[1]).toContain('Made after switch');
+      expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBe(outboxA);
+    });
+
+    it(`reused sources isolate account and folder changes (${transition}, journal placement)`, async () => {
+      const { s, drive, a, b, domain, switchToB, outboxA } = await pair(samePerson);
+      const beforeA = await domain(a.id);
+      await switchToB();
+      const request = await s.vault.addRequest('A request made only for B');
+      await s.vault.settled();
+      const records = [...drive.dump(b.id)].filter(([p]) => /^\.bower\/changes\/[^/]+\.json$/.test(p));
+      expect(records).toHaveLength(1);
+      expect(records[0]?.[1]).toContain(request.id);
+      expect(records[0]?.[1]).toContain(request.text);
+      expect(await domain(a.id)).toEqual(beforeA);
+      expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBe(outboxA);
+    });
+  }
+
+  it.each(['note', 'create', 'request'] as const)('reused sources isolate account and folder changes (signed-out %s refuses)', async (operation) => {
+    const { s, drive, a, b, outboxA, outboxB } = await pair(false);
+    const before = await drive.snapshot();
+    await s.session.signOut();
+    expect(await s.session.current()).toBeNull();
+    const attempt = operation === 'note' ? s.vault.note('Synthetic.md') : operation === 'create' ? s.vault.create('', 'note', 'Signed-out note') : s.vault.addRequest('Signed-out request');
+    await expect(attempt).rejects.toBeInstanceOf(BowerError);
+    await expect(attempt).rejects.toMatchObject({ code: 'auth' });
+    expect(await drive.snapshot()).toBe(before);
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBe(outboxA);
+    expect(localStorage.getItem(`bower:outbox:${b.id}`)).toBe(outboxB);
+  });
+
+  it.each(['listing', 'text'] as const)('reused sources isolate account and folder changes (old %s cannot publish in B)', async (boundary) => {
+    const { s, drive, a, switchToB } = await pair(false);
+    const captured = deferred<undefined>();
+    const release = deferred<undefined>();
+    if (boundary === 'listing') {
+      const list = drive.listAll.bind(drive);
+      vi.spyOn(drive, 'listAll').mockImplementationOnce(async (id) => { const value = await list(id); captured.resolve(undefined); await release.promise; return value; });
+    } else {
+      const file = (await drive.listAll(a.id)).find((f) => f.name === 'Synthetic.md');
+      if (!file) throw new Error('Expected synthetic A note');
+      await drive.writeText(file.id, 'Delayed A bytes.', file.modifiedTime);
+      const read = drive.readText.bind(drive);
+      vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+        const value = await read(id);
+        if (id === file.id) { captured.resolve(undefined); await release.promise; }
+        return value;
+      });
+    }
+    const old = outcome<unknown>(boundary === 'listing' ? s.vault.refresh() : s.vault.refresh().then(() => s.vault.note('Synthetic.md')));
+    await captured.promise;
+    await switchToB();
+    const changes = vi.fn();
+    s.vault.subscribe(changes);
+    release.resolve(undefined);
+    const result = await old;
+    expect(result).toMatchObject({ error: { name: 'BowerError' } });
+    expect(changes).not.toHaveBeenCalled();
+    expect((await s.vault.note('Synthetic.md')).body).toBe('Account B content café.');
+  });
+
+  it('reused sources isolate account and folder changes (prepared rename stops before dispatch)', async () => {
+    const { s, drive, switchToB } = await pair(false);
+    const get = drive.get.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'get').mockImplementationOnce(async (id) => { const value = await get(id); entered.resolve(undefined); await release.promise; return value; });
+    const old = outcome(s.vault.rename('Synthetic.md', 'Renamed in A'));
+    await entered.promise;
+    const before = await drive.snapshot();
+    await switchToB();
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(await drive.snapshot()).toBe(before);
+  });
+
+  it('reused sources isolate account and folder changes (late create keeps A bookkeeping without B publication)', async () => {
+    const { s, drive, a, b, domain, switchToB, returnToA } = await pair(false);
+    const create = drive.createText.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'createText').mockImplementationOnce(async (...args) => { const value = await create(...args); entered.resolve(undefined); await release.promise; return value; });
+    const old = outcome(s.vault.create('', 'note', 'Applied in A.md'));
+    await entered.promise;
+    const beforeB = await domain(b.id);
+    await switchToB();
+    const changed = vi.fn();
+    s.vault.subscribe(changed);
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(await domain(b.id)).toEqual(beforeB);
+    expect(changed).not.toHaveBeenCalled();
+    expect(drive.dump(a.id).has('Applied in A.md')).toBe(true);
+    const waiting = localStorage.getItem(`bower:outbox:${a.id}`);
+    expect(waiting).toContain('Applied in A');
+    expect(localStorage.getItem(`bower:outbox:${b.id}`)).toBeNull();
+    await returnToA();
+    await s.vault.flushJournal();
+    expect((await s.vault.changes()).filter((r) => r.kind === 'create' && r.path === 'Applied in A.md')).toHaveLength(1);
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBeNull();
+  });
+
+  it('reused sources isolate account and folder changes (disposed late create retains original-owner bookkeeping)', async () => {
+    const { s, drive, a, b, domain } = await pair(false);
+    const create = drive.createText.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'createText').mockImplementationOnce(async (...args) => {
+      const value = await create(...args);
+      entered.resolve(undefined);
+      await release.promise;
+      return value;
+    });
+    const old = outcome(s.vault.create('', 'note', 'Applied before disposal.md'));
+    await entered.promise;
+    const before = await drive.snapshot();
+    const beforeB = await domain(b.id);
+    const changed = vi.fn();
+    s.vault.subscribe(changed);
+    s.dispose();
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(await drive.snapshot()).toBe(before);
+    expect(await domain(b.id)).toEqual(beforeB);
+    expect(changed).not.toHaveBeenCalled();
+    expect(drive.dump(a.id).has('Applied before disposal.md')).toBe(true);
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toContain('Applied before disposal');
+    expect(localStorage.getItem(`bower:outbox:${b.id}`)).toBeNull();
+  });
+
+  it.each([false, true])('reused sources isolate account and folder changes (A outbox returns only to A, blocked storage %s)', async (blocked) => {
+    const { s, drive, a, b, switchToB, returnToA } = await pair(false);
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fail = vi.spyOn(drive, 'createText').mockRejectedValueOnce(driveError('offline'));
+    const storage = blocked ? vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); }) : null;
+    const request = outcome(s.vault.addRequest('Retain only in A'));
+    if (blocked) expect(await request).toMatchObject({ error: { name: 'BowerError' } });
+    else expect(await request).toMatchObject({ value: { text: 'Retain only in A' } });
+    fail.mockRestore();
+    const waiting = localStorage.getItem(`bower:outbox:${a.id}`);
+    expect((await s.vault.requests()).filter((r) => r.text === 'Retain only in A')).toHaveLength(1);
+    await switchToB();
+    await s.vault.flushJournal();
+    expect(await s.vault.requests()).toEqual([]);
+    expect([...drive.dump(b.id).values()].join('')).not.toContain('Retain only in A');
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBe(waiting);
+    storage?.mockRestore();
+    await returnToA();
+    await s.vault.flushJournal();
+    await s.vault.flushJournal();
+    expect((await s.vault.requests()).filter((r) => r.text === 'Retain only in A')).toHaveLength(1);
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBeNull();
+    expect(diagnostic).toHaveBeenCalled();
+  });
+
+  it.each([false, true])('reused sources isolate account and folder changes (queued journal keeps its owner, blocked storage %s)', async (blocked) => {
+    const { s, drive, b, switchToB } = await pair(false);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const storage = blocked ? vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); }) : null;
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    const create = drive.createText.bind(drive);
+    vi.spyOn(drive, 'createText').mockImplementationOnce(async (...args) => { const value = await create(...args); entered.resolve(undefined); await release.promise; return value; });
+    const first = outcome(s.vault.addRequest('First A request'));
+    await entered.promise;
+    const second = outcome(s.vault.addRequest('Queued A request'));
+    await switchToB();
+    const fresh = outcome(s.vault.addRequest('Only B request'));
+    release.resolve(undefined);
+    await Promise.all([first, second, fresh]);
+    const texts = [...drive.dump(b.id)].filter(([p]) => /^\.bower\/changes\/[^/]+\.json$/.test(p)).map(([, text]) => text);
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toContain('Only B request');
+    expect(texts.join('')).not.toContain('A request');
+    storage?.mockRestore();
+  });
+
+  it('reused sources isolate account and folder changes (old Undo and seen cannot act in B)', async () => {
+    const { s, drive, switchToB } = await pair(false);
+    const rule = await s.vault.addRule('Only A rule');
+    const undo = await s.vault.removeRule(rule.id);
+    await switchToB();
+    const before = await drive.snapshot();
+    await expect(undo()).rejects.toBeInstanceOf(BowerError);
+    expect(await drive.snapshot()).toBe(before);
+    const bRule = await s.vault.addRule('Only B rule');
+    const bUndo = await s.vault.removeRule(bRule.id);
+    await bUndo();
+    expect((await s.vault.rules()).map((r) => r.text)).toEqual(['Only B rule']);
+  });
+
+  it('reused sources isolate account and folder changes (late seen cannot repopulate B device state)', async () => {
+    const { s, drive, switchToB } = await pair(false);
+    const list = drive.listAll.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'listAll').mockImplementationOnce(async (id) => { const value = await list(id); entered.resolve(undefined); await release.promise; return value; });
+    const listing = outcome(s.vault.refresh());
+    await entered.promise;
+    const seen = outcome(s.vault.markSeen('Synthetic.md'));
+    await switchToB();
+    release.resolve(undefined);
+    await listing;
+    expect(await seen).toMatchObject({ error: { name: 'BowerError' } });
+    expect(localStorage.getItem('bower:seen')).toBeNull();
+    await s.vault.markSeen('Synthetic.md');
+    expect(localStorage.getItem('bower:seen')).not.toBeNull();
+  });
+
+  it('reused sources isolate account and folder changes (disposed pending listing cannot mark seen)', async () => {
+    const { s, drive, a, b, outboxA, outboxB } = await pair(false);
+    const before = await drive.snapshot();
+    const list = drive.listAll.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'listAll').mockImplementationOnce(async (id) => {
+      const value = await list(id);
+      entered.resolve(undefined);
+      await release.promise;
+      return value;
+    });
+    const changed = vi.fn();
+    s.vault.subscribe(changed);
+    const listing = outcome(s.vault.refresh());
+    await entered.promise;
+    const seen = outcome(s.vault.markSeen('Synthetic.md'));
+    s.dispose();
+    release.resolve(undefined);
+    const results = await Promise.all([listing, seen]);
+    expect(localStorage.getItem('bower:seen')).toBeNull();
+    expect(results).toEqual([
+      { error: expect.any(BowerError) },
+      { error: expect.any(BowerError) },
+    ]);
+    expect(changed).not.toHaveBeenCalled();
+    expect(await drive.snapshot()).toBe(before);
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toBe(outboxA);
+    expect(localStorage.getItem(`bower:outbox:${b.id}`)).toBe(outboxB);
+  });
+
+  it('reused sources isolate account and folder changes (stable subscriptions follow fresh B work)', async () => {
+    const { s, switchToB } = await pair(false);
+    const changed = vi.fn();
+    const unsubscribe = s.vault.subscribe(changed);
+    await switchToB();
+    changed.mockClear();
+    await s.vault.addRequest('Fresh B notification');
+    expect(changed).toHaveBeenCalledOnce();
+    unsubscribe();
+    await s.vault.addRequest('No listener now');
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it('reused sources isolate account and folder changes (late upload cannot trash or continue after transition)', async () => {
+    const { s, drive, a, switchToB } = await pair(false);
+    const upload = drive.upload.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    const sending = vi.spyOn(drive, 'upload').mockImplementationOnce(async (...args) => { const value = await upload(...args); entered.resolve(undefined); await release.promise; return value; });
+    const trash = vi.spyOn(drive, 'trash');
+    await s.vault.addPile({ text: 'Two A files', items: ['first.pdf', 'second.pdf'].map((name) => ({ name, kind: 'pdf', origin: 'Picked', body: new Blob([name]) })) });
+    await entered.promise;
+    await switchToB();
+    release.resolve(undefined);
+    await drain();
+    expect(sending).toHaveBeenCalledOnce();
+    expect(trash).not.toHaveBeenCalled();
+    expect((await drive.listAll(a.id)).filter((f) => f.name.endsWith('.pdf')).map((f) => f.name)).toEqual(['first.pdf']);
+    expect(await s.vault.piles()).toEqual([]);
+    await s.vault.addPile({ text: 'Fresh B pile', items: [] });
+    expect((await s.vault.piles()).map((p) => p.text)).toEqual(['Fresh B pile']);
+  });
+
+  it('reused sources isolate account and folder changes (transition before upload prevents dispatch)', async () => {
+    const { s, drive, switchToB } = await pair(false);
+    const create = drive.createFolder.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'createFolder').mockImplementationOnce(async (...args) => { const value = await create(...args); entered.resolve(undefined); await release.promise; return value; });
+    const upload = vi.spyOn(drive, 'upload');
+    const old = outcome(s.vault.addPile({ text: 'A file', items: [{ name: 'first.pdf', kind: 'pdf', origin: 'Picked', body: new Blob(['A bytes']) }] }));
+    await entered.promise;
+    await switchToB();
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    await drain();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it.each(['flushJournal', 'process'] as const)('reused sources isolate account and folder changes (queued admissions cannot block or dispatch in B, %s)', async (boundary) => {
+    const { s, worker, switchToB } = await pair(false);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    const wire: RunWire = { id: 'B', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 };
+    const process = vi.spyOn(worker, 'process').mockResolvedValue(wire);
+    if (boundary === 'process') process.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { ...wire, id: 'A' }; });
+    else {
+      const flush = s.vault.flushJournal.bind(s.vault);
+      vi.spyOn(s.vault, 'flushJournal').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return flush(); });
+    }
+    const first = outcome(s.runs.start('all'));
+    await entered.promise;
+    const second = outcome(s.runs.start('all'));
+    await switchToB();
+    const fresh = outcome(s.runs.start('all'));
+    try {
+      await drain();
+      expect(process).toHaveBeenCalledTimes(boundary === 'process' ? 2 : 1);
+    } finally { release.resolve(undefined); }
+    expect(await fresh).toMatchObject({ value: { id: 'B' } });
+    expect(await first).toMatchObject({ error: { name: 'BowerError' } });
+    expect(await second).toMatchObject({ error: { name: 'BowerError' } });
+    expect([...s.runs.runningPiles()]).toEqual(['*']);
+  });
+
+  it('reused sources isolate account and folder changes (old terminal hydration cannot publish in B)', async () => {
+    const { s, worker, switchToB } = await pair(false);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    const wire: RunWire = { id: 'A', scope: 'all', phase: 'done', requestedAt: 1, phaseAt: 1 };
+    const status = vi.spyOn(worker, 'status').mockResolvedValue(wire);
+    vi.spyOn(s.vault, 'lastRun').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } }; });
+    const old = outcome(s.runs.current());
+    await entered.promise;
+    await switchToB();
+    status.mockResolvedValue(null);
+    expect(await s.runs.current()).toBeNull();
+    const changed = vi.fn();
+    s.runs.subscribe(changed);
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(changed).not.toHaveBeenCalled();
+    expect(await s.runs.current()).toBeNull();
+    expect([...s.runs.runningPiles()]).toEqual([]);
+  });
+
+  it('reused sources isolate account and folder changes (old auth reply does not expire B)', async () => {
+    const { s, drive, switchToB } = await pair(false);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'listAll').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; throw driveError('auth'); });
+    const old = outcome(s.vault.refresh());
+    await entered.promise;
+    await switchToB();
+    const changed = vi.fn();
+    s.session.subscribe(changed);
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(changed).not.toHaveBeenCalled();
+    expect((await s.session.current())?.name).toBe('Sam');
+  });
+
+  it('reused sources isolate account and folder changes (same-folder sign-in does not reactivate an old read)', async () => {
+    const { s, drive, a, returnToA } = await pair(false);
+    const list = drive.listAll.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'listAll').mockImplementationOnce(async (id) => { const value = await list(id); entered.resolve(undefined); await release.promise; return value; });
+    const old = outcome(s.vault.refresh());
+    await entered.promise;
+    const file = (await list(a.id)).find((f) => f.name === 'Synthetic.md');
+    if (!file) throw new Error('Expected the A note');
+    await drive.writeText(file.id, 'Fresh A lifetime.', file.modifiedTime);
+    await returnToA();
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect((await s.vault.note('Synthetic.md')).body).toBe('Fresh A lifetime.');
+  });
+
+  it('reused sources isolate account and folder changes (old me reply cannot reveal A after B confirmation)', async () => {
+    const { s, worker, a, switchToB } = await pair(false);
+    const release = deferred<Me | null>();
+    s.session.expire();
+    vi.spyOn(worker, 'me').mockImplementationOnce(() => release.promise);
+    const old = outcome(s.session.current());
+    await switchToB();
+    release.resolve({ user: { name: 'Alex', email: 'alex@example.com' }, folderId: a.id });
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect((await s.session.current())?.name).toBe('Sam');
+  });
+
+  it('reused sources isolate account and folder changes (old folder reply cannot publish A steps)', async () => {
+    const { s, worker, a, switchToB } = await pair(false);
+    const entered = deferred<undefined>();
+    const release = deferred<{ id: string; found: boolean }>();
+    vi.spyOn(worker, 'createFolder').mockImplementationOnce(() => { entered.resolve(undefined); return release.promise; });
+    const steps = vi.fn(() => { throw new Error('Stale progress must not be published'); });
+    const old = outcome(s.session.createFolder(steps));
+    await entered.promise;
+    await switchToB();
+    release.resolve({ id: a.id, found: true });
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(steps).not.toHaveBeenCalled();
+    expect((await s.session.current())?.name).toBe('Sam');
+  });
+
+  it.each(['locks', 'seen'] as const)('reused sources isolate account and folder changes (signed-out run %s does not retain A)', async (boundary) => {
+    const { s, worker } = await pair(false);
+    vi.spyOn(worker, 'status').mockResolvedValue({ id: 'A', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 1 });
+    await s.runs.current();
+    expect([...s.runs.runningPiles()]).toEqual(['*']);
+    await s.session.signOut();
+    if (boundary === 'locks') expect([...s.runs.runningPiles()]).toEqual([]);
+    else {
+      await expect(s.runs.markSeen('A')).rejects.toMatchObject({ code: 'auth' });
+      expect(localStorage.getItem('bower:run-seen')).toBeNull();
+    }
+  });
+
+  it('reused sources isolate account and folder changes (late versioned task effect has only A outbox bookkeeping)', async () => {
+    const { s, drive, a, b, switchToB } = await pair(false);
+    const file = (await drive.listAll(a.id)).find((f) => f.name === 'Synthetic.md');
+    if (!file) throw new Error('Expected an A note');
+    await drive.writeText(file.id, '- [ ] A task café.\r\n', file.modifiedTime);
+    await s.vault.refresh();
+    const write = drive.writeText.bind(drive);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(drive, 'writeText').mockImplementationOnce(async (...args) => { const result = await write(...args); entered.resolve(undefined); await release.promise; return result; });
+    const old = outcome(s.vault.toggleTask('Synthetic.md', 0));
+    await entered.promise;
+    await switchToB();
+    const beforeB = Object.fromEntries(drive.dump(b.id));
+    drive.failNext('offline'); // The baseline next journal send fails after the already observed A effect.
+    release.resolve(undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(drive.dump(a.id).get('Synthetic.md')).toBe('- [x] A task café.\r\n');
+    expect(Object.fromEntries(drive.dump(b.id))).toEqual(beforeB);
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toContain(file.id);
+    expect(localStorage.getItem(`bower:outbox:${a.id}`)).toContain('"kind":"task"');
+    expect(localStorage.getItem(`bower:outbox:${b.id}`)).toBeNull();
+    expect(localStorage.getItem('bower:seen')).toBeNull();
+  });
+
+  it('reused sources isolate account and folder changes (dispose during sign-in prevents late identity publication)', async () => {
+    const { s, worker } = await pair(false);
+    const entered = deferred<undefined>();
+    const release = deferred<undefined>();
+    vi.spyOn(worker, 'signIn').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; });
+    const changed = vi.fn();
+    s.session.subscribe(changed);
+    const old = outcome(s.session.signIn());
+    await entered.promise;
+    s.dispose();
+    release.resolve(undefined);
+    expect(await old).toMatchObject({ error: { name: 'BowerError' } });
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('reused sources isolate account and folder changes (failed sign-out permits a fresh lifecycle retry)', async () => {
+    const { s, worker, switchToB } = await pair(false);
+    vi.spyOn(worker, 'signOut').mockRejectedValueOnce(new Error('Synthetic logout unavailable'));
+    await expect(s.session.signOut()).rejects.toThrow('Synthetic logout unavailable');
+    await switchToB();
+    expect((await s.vault.note('Synthetic.md')).body).toBe('Account B content café.');
+  });
 });
 
 async function open(scenario: Scenario = 'default'): Promise<LiveSources> {
@@ -481,6 +1023,7 @@ describe('an ended session', () => {
 describe('asking the Worker', () => {
   it('a run already going when the app opens is followed at the fast pace', async () => {
     localStorage.clear();
+    sessionStorage.clear();
     const drive = new FakeDrive();
     const rootId = await seedFakeDrive(drive, 'running', Date.now());
     const worker = new FakeWorker({ drive, scenario: 'running', scale: 'demo', rootId });
