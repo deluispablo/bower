@@ -2182,7 +2182,7 @@
       "The inbox thing is found."
     ],
     "verify": "pnpm vitest run src/data -t \"search finds what waits in the inbox\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "remove-pile-during-run",

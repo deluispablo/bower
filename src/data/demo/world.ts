@@ -765,9 +765,14 @@ export class DemoWorld {
           if (!words.length) return [];
           const hits: Array<SearchHit & { score: number }> = [];
           for (const e of this.entries.values()) {
-            if (e.type !== 'file' || e.path.startsWith('Inbox/')) continue;
+            if (e.type !== 'file') continue;
             const title = displayName(nameOf(e.path));
             const t = title.toLowerCase();
+            // What waits in the inbox is found by its name, not by what it says.
+            if (e.path.startsWith('Inbox/')) {
+              if (words.every((w) => t.includes(w))) hits.push({ path: e.path, title, snippet: 'Waiting in the inbox', score: 3 });
+              continue;
+            }
             let score = 0;
             let snippet = placeOf(e.path.slice(0, Math.max(0, e.path.lastIndexOf('/'))));
             if (words.every((w) => t.includes(w))) score = 3;

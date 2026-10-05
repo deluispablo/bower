@@ -295,11 +295,12 @@ export class DriveVault implements VaultSource {
     const hits: Array<SearchHit & { score: number }> = [];
     const named = new Set<string>();
     for (const e of ix.entries().values()) {
-      if (e.type !== 'file' || inInbox(e.path)) continue;
+      // What waits in the inbox is found by its name too (a pile's own note is not a thing).
+      if (e.type !== 'file' || nameOf(e.path) === PILE_NOTE) continue;
       const title = displayName(nameOf(e.path));
       if (!words.every((w) => title.toLowerCase().includes(w))) continue;
       named.add(e.path);
-      hits.push({ path: e.path, title, snippet: placeOf(parentOf(e.path)), score: 3 });
+      hits.push({ path: e.path, title, snippet: inInbox(e.path) ? 'Waiting in the inbox' : placeOf(parentOf(e.path)), score: 3 });
     }
     const entries = ix.entries();
     // Drive's full text has no "#": a tag is found by its word, then matched as #tag below.

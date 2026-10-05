@@ -330,6 +330,12 @@ export function describeVaultContract(name: string, make: () => Promise<Contract
     });
 
     describe('search', () => {
+      it('search finds what waits in the inbox, by its name', async () => {
+        const { vault } = await open();
+        const hits = await vault.search('dentist reminder');
+        expect(hits.some((h) => h.path.startsWith('Inbox/'))).toBe(true);
+      });
+
       it("search finds words in a note's Timeline and its tags", async () => {
         const { vault } = await open();
         expect((await vault.search('Tally')).map((h) => h.title)).toContain('CV insights');

@@ -186,3 +186,4 @@
 - 2026-10-05: focus-after-close passes — fix(app): the keyboard stays in the page after a sheet closes, an answer, a removed rule or No thanks
 - 2026-10-05: undo-says-back passes — fix(app): every Undo says what came back; No thanks can be taken back
 - 2026-10-05: suggestion-no-thanks passes — chore(harness): close suggestion-no-thanks
+- 2026-10-05: palette-inbox passes — fix(app): search finds what waits in the inbox, by its name
