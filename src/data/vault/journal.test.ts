@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { Journal } from './journal';
+import { runFake } from '../fake/fake-runner';
 
 let drive: FakeDrive;
 let root: string;
@@ -52,6 +53,44 @@ describe('the change journal', () => {
 });
 
 describe('when Drive does not answer', () => {
+  it('a rule is not reported saved when Drive and the outbox both fail', async () => {
+    const create = drive.createText.bind(drive);
+    drive.createText = async () => { throw new TypeError('Failed to fetch'); };
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
+    await expect(journal.record('rule', 'Keep receipts together', { text: 'Keep receipts together' })).rejects.toMatchObject({ code: 'unknown', message: expect.stringMatching(/not safely saved.*keep this page open/i) });
+    expect((await journal.list()).map((r) => r.what)).toContain('Keep receipts together');
+    set.mockRestore();
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new DOMException('Blocked', 'SecurityError'); });
+    await expect(journal.record('request', 'Find loose notes')).rejects.toMatchObject({ code: 'unknown' });
+    await expect(journal.flush()).rejects.toMatchObject({ code: 'unknown' });
+    get.mockRestore();
+    const key = `bower:outbox:${root}`;
+    localStorage.setItem(key, '{broken');
+    await expect(journal.record('rule', 'Keep original files')).rejects.toMatchObject({ code: 'unknown' });
+    expect(localStorage.getItem(key)).toBe('{broken');
+    await expect(journal.flush()).rejects.toMatchObject({ code: 'unknown' });
+    const malformed = JSON.stringify([{ v: 1, id: 'BAD_ID', device: 'device-a', at: Date.now(), what: 'Old rule', kind: 'rule', text: {} }]);
+    localStorage.setItem(key, malformed);
+    await expect(journal.record('rule', 'Keep tasks separate')).rejects.toMatchObject({ code: 'unknown' });
+    expect(localStorage.getItem(key)).toBe(malformed);
+    localStorage.removeItem(key);
+    await expect(journal.record('move', 'Moved a note', { path: 'Areas/Note.md', fileId: 'NOTE_ID' })).resolves.toMatchObject({ kind: 'move' });
+    drive.createText = create;
+    await journal.flush();
+    expect((await journal.list()).map((r) => r.what)).toEqual(['Keep receipts together', 'Find loose notes', 'Keep original files', 'Keep tasks separate', 'Moved a note']);
+  });
+
+  it('unreadable journal files keep their bytes and stop a fake tidy-up', async () => {
+    for (const text of ['{broken', JSON.stringify({ v: 1, id: 'BAD_ID', device: 'device-a', at: Date.now(), what: 'Old rule', kind: 'rule', text: {} })]) {
+      const file = await drive.createText(changes, 'bad.json', text);
+      await expect(journal.list()).rejects.toMatchObject({ code: 'unknown', message: 'Bower could not read your changes.' });
+      await expect(runFake(drive, root, { scope: 'instructions', scale: 'instant', failOnce: false, onPhase: () => undefined })).rejects.toMatchObject({ code: 'unknown' });
+      expect(await drive.readText(file.id)).toBe(text);
+      expect((await drive.get(file.id)).parents).toEqual([changes]);
+      await drive.trash(file.id);
+    }
+  });
+
   it('outbox: a line that cannot be written now is kept and sent with the next one', async () => {
     const real = drive.createText.bind(drive);
     let down = true;

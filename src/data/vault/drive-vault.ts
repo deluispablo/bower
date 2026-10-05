@@ -89,6 +89,7 @@ export class DriveVault implements VaultSource {
         files: async () => (await this.index()).filesIn(SYSTEM.changes),
         wrote: (f) => void this.ix?.then((ix) => ix.put(f)),
         removed: (id) => void this.ix?.then((ix) => ix.drop(id)),
+        waiting: () => this.emit(),
       },
       opts.device ?? deviceId(),
     );
@@ -162,12 +163,15 @@ export class DriveVault implements VaultSource {
     refuseReserved(out);
     const to = ix.idOf(toFolder);
     if (!to) throw new BowerError('not-found', 'That folder is no longer there.');
+    const last = opts?.undo ? [...(await this.journal.list())].reverse().find((c) => c.kind === 'move' && c.path === path) : undefined;
     await this.stillAsSeen(f);
     const name = nameOf(out);
     ix.put(this.keepSeen(f, await this.drive.update(f.id, { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) })));
-    const last = opts?.undo ? [...(await this.journal.list())].reverse().find((c) => c.kind === 'move' && c.path === path) : undefined;
-    if (last) await this.journal.remove(last.id);
-    else await this.journal.record('move', `Moved ${displayName(nameOf(path))} to ${where(toFolder)}`, { path: out, from: path, fileId: f.id });
+    let removed = false;
+    if (last) {
+      try { await this.journal.remove(last.id); removed = true; } catch (e) { console.error(e); }
+    }
+    if (!removed) await this.journal.record('move', `Moved ${displayName(nameOf(path))} to ${where(toFolder)}`, { path: out, from: path, fileId: f.id });
     this.emit();
     return out;
   }
@@ -178,12 +182,16 @@ export class DriveVault implements VaultSource {
     const out = renameEntry(ix.entries(), path, name, Date.now());
     if (out === path) return path;
     refuseReserved(out);
+    // Read before the mutation: unreadable device storage must not leave an unjournaled rename.
+    const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
     await this.stillAsSeen(f);
     ix.put(this.keepSeen(f, await this.drive.update(f.id, { name: nameOf(out) })));
     // A thing made since the last tidy-up and named now is one change: its making, under its name.
-    const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
+    let removed = false;
     if (made) {
-      await this.journal.remove(made.id);
+      try { await this.journal.remove(made.id); removed = true; } catch (e) { console.error(e); }
+    }
+    if (removed) {
       await this.journal.record('create', `New ${f.folder ? 'folder' : 'note'} "${displayName(nameOf(out))}" in ${where(parentOf(out))}`, { path: out, fileId: f.id });
     } else await this.journal.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, { path: out, from: path, fileId: f.id });
     this.emit();
@@ -224,13 +232,24 @@ export class DriveVault implements VaultSource {
     }
     const f = this.mustFile(ix, path);
     removeEntry(ix.entries(), path);
+    const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
     await this.drive.trash(f.id);
     ix.drop(f.id);
+    this.bin.set(path, { id: f.id, change: null });
     // Something made and binned before any tidy-up saw it leaves no trace.
-    const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
     let change: string | null = null;
-    if (made) await this.journal.remove(made.id);
-    else change = (await this.journal.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, { path, fileId: f.id })).id;
+    let removed = false;
+    if (made) {
+      try { await this.journal.remove(made.id); removed = true; } catch (e) { console.error(e); }
+    }
+    if (!removed) {
+      try {
+        change = (await this.journal.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, { path, fileId: f.id })).id;
+      } catch (e) {
+        if (e instanceof BowerError && e.applied) this.bin.set(path, { id: f.id, change: e.applied.changeId });
+        throw e;
+      }
+    }
     this.bin.set(path, { id: f.id, change });
     this.emit();
   }

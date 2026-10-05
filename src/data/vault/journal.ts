@@ -34,14 +34,16 @@ export interface JournalPlace {
   /** Told about each file the journal writes or bins, so a listing cache stays true. */
   wrote?: (f: DriveFile) => void;
   removed?: (id: string) => void;
+  /** A change is kept only on this page; refresh the screen before reporting it. */
+  waiting?: () => void;
 }
 
 const KINDS: readonly ChangeKind[] = ['rule', 'request', 'move', 'rename', 'create', 'trash', 'task', 'answer'];
 
-function isRecord(v: unknown): v is JournalRecord {
+export function isJournalRecord(v: unknown): v is JournalRecord {
   if (!v || typeof v !== 'object') return false;
   const r = v as Record<string, unknown>;
-  return r.v === 1 && typeof r.id === 'string' && typeof r.at === 'number' && typeof r.what === 'string' && KINDS.includes(r.kind as ChangeKind);
+  return r.v === 1 && typeof r.id === 'string' && !!r.id && typeof r.device === 'string' && !!r.device && typeof r.at === 'number' && Number.isFinite(r.at) && typeof r.what === 'string' && KINDS.includes(r.kind as ChangeKind) && ['path', 'from', 'text', 'questionId', 'fileId', 'removes'].every((key) => r[key] === undefined || typeof r[key] === 'string');
 }
 
 /** This device's unsent lines, per Bower folder, so one person's never reach another's. */
@@ -50,23 +52,30 @@ const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
 function readOutbox(key: string): JournalRecord[] {
   try {
     const v: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
-    return Array.isArray(v) ? v.filter(isRecord) : [];
-  } catch {
-    // expected: no storage, or an old shape; nothing waits to be sent.
-    return [];
+    if (!Array.isArray(v) || !v.every(isJournalRecord)) throw new Error('Unreadable change outbox');
+    return v;
+  } catch (e) {
+    console.error(e);
+    throw new BowerError('unknown', 'Bower cannot read your waiting changes; keep this page open.');
   }
 }
 
-function writeOutbox(key: string, recs: JournalRecord[]): void {
+function writeOutbox(key: string, recs: JournalRecord[]): boolean {
   try {
     if (recs.length) localStorage.setItem(key, JSON.stringify(recs));
     else localStorage.removeItem(key);
+    return true;
   } catch (e) {
     console.error(e);
+    return false;
   }
 }
 
+/** Isolated by Drive as well as folder: simulated Drives may reuse ids after a reset. */
+const volatile = new WeakMap<DriveApi, Map<string, JournalRecord[]>>();
+
 export class Journal {
+  private readonly volatile: Map<string, JournalRecord[]>;
   private read = new Map<string, JournalRecord | null>();
   /** Drive file ids per record id (a line written twice has two), for remove. */
   private filesOf = new Map<string, string[]>();
@@ -87,12 +96,39 @@ export class Journal {
     private readonly drive: DriveApi,
     private readonly place: JournalPlace,
     private readonly device: string,
-  ) {}
+  ) {
+    this.volatile = volatile.get(drive) ?? new Map();
+    volatile.set(drive, this.volatile);
+  }
+
+  private waiting(key: string): JournalRecord[] {
+    const byId = new Map(readOutbox(key).map((r) => [r.id, r]));
+    for (const r of this.volatile.get(key) ?? []) byId.set(r.id, r);
+    return [...byId.values()];
+  }
+
+  private keep(key: string, records: JournalRecord[]): boolean {
+    // Memory is kept first: quota or blocked storage must never discard the current line.
+    const previous = this.volatile.get(key) ?? [];
+    this.volatile.set(key, records);
+    if (!writeOutbox(key, records)) {
+      // A failed removal did not take the change back; keep its memory copy too.
+      const retained = new Map(previous.map((r) => [r.id, r]));
+      for (const r of records) retained.set(r.id, r);
+      this.volatile.set(key, [...retained.values()]);
+      return false;
+    }
+    this.volatile.delete(key);
+    return true;
+  }
 
   /**
    * Writes the line of a change already done in Drive. When Drive does not
    * answer, the line waits in this device's outbox and goes with the next
-   * one; the change is never reported as failed for its line alone.
+   * one. If device storage also refuses it, its line is kept only on this
+   * page's Drive instance: the caller gets an honest warning, with the
+   * applied destination when the content change already happened. Closing
+   * or resetting the page can lose such a line; it is never called saved.
    */
   async record(kind: ChangeKind, what: string, extra: JournalExtra = {}): Promise<JournalRecord> {
     const at = (this.lastAt = Math.max(Date.now(), this.lastAt + 1));
@@ -100,9 +136,28 @@ export class Journal {
     const rec: JournalRecord = { v: 1, id, at, kind, what, device: this.device, ...extra };
     return this.serial(async () => {
       // Nothing waiting (the usual case): no lock to take, so the change answers at once.
-      if (readOutbox(outboxKey(await this.place.owner())).length) await this.acrossTabs(() => this.sendWaiting());
       const key = outboxKey(await this.place.owner());
-      if (!(await this.send(rec))) writeOutbox(key, [...readOutbox(key), rec]);
+      let readable = true;
+      try {
+        if (this.waiting(key).length) await this.acrossTabs(() => this.sendWaiting());
+      } catch (e) {
+        console.error(e);
+        readable = false;
+      }
+      if (!(await this.send(rec))) {
+        let previous = this.volatile.get(key) ?? [];
+        if (readable) {
+          try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
+        }
+        const records = [...previous, rec];
+        const saved = readable ? this.keep(key, records) : false;
+        if (!readable) this.volatile.set(key, records);
+        if (!saved) {
+          this.place.waiting?.();
+          const applied = !!extra.fileId && kind !== 'rule' && kind !== 'request' && kind !== 'answer';
+          throw new BowerError('unknown', applied ? 'Your change was made; keep this page open so Bower can remember it.' : 'This is not safely saved; keep this page open.', applied ? { path: kind === 'trash' ? null : (extra.path ?? null), changeId: rec.id } : undefined);
+        }
+      }
       return rec;
     });
   }
@@ -121,7 +176,7 @@ export class Journal {
 
   private async sendWaiting(required = false): Promise<void> {
     const key = outboxKey(await this.place.owner());
-    const waiting = readOutbox(key);
+    const waiting = this.waiting(key);
     if (!waiting.length) return;
     // A line whose answer was lost may be in Drive already: never write it twice. The folder
     // itself is asked (a cached listing never saw a file whose answer was lost).
@@ -136,7 +191,7 @@ export class Journal {
     const sent = new Set<string>();
     for (const r of waiting) if (there.has(`${r.id}.json`) || (await this.send(r))) sent.add(r.id);
     // Only what was sent leaves; anything added meanwhile stays.
-    writeOutbox(key, readOutbox(key).filter((r) => !sent.has(r.id)));
+    this.keep(key, this.waiting(key).filter((r) => !sent.has(r.id)));
     if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
   }
 
@@ -160,12 +215,15 @@ export class Journal {
     const seenFiles = new Map<string, string[]>();
     for (const f of files) {
       if (!this.read.has(f.id)) {
-        let rec: JournalRecord | null = null;
+        let rec: JournalRecord;
         try {
           const v: unknown = JSON.parse(await this.drive.readText(f.id));
-          rec = isRecord(v) ? v : null;
+          if (!isJournalRecord(v)) throw new BowerError('unknown', 'Bower could not read your changes.');
+          rec = v;
         } catch (e) {
-          if (!(e instanceof SyntaxError)) throw e;
+          console.error(e);
+          if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
+          throw e;
         }
         this.read.set(f.id, rec);
       }
@@ -176,7 +234,7 @@ export class Journal {
       }
     }
     for (const [rid, ids] of seenFiles) this.filesOf.set(rid, ids);
-    for (const r of readOutbox(outboxKey(await this.place.owner()))) if (!byId.has(r.id)) byId.set(r.id, r);
+    for (const r of this.waiting(outboxKey(await this.place.owner()))) if (!byId.has(r.id)) byId.set(r.id, r);
     return [...byId.values()].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
 
@@ -187,8 +245,11 @@ export class Journal {
 
   private async removeNow(id: string): Promise<void> {
     const key = outboxKey(await this.place.owner());
-    const waiting = readOutbox(key);
-    if (waiting.some((r) => r.id === id)) writeOutbox(key, waiting.filter((r) => r.id !== id));
+    const waiting = this.waiting(key);
+    if (waiting.some((r) => r.id === id) && !this.keep(key, waiting.filter((r) => r.id !== id))) {
+      this.volatile.set(key, waiting);
+      throw new BowerError('unknown', 'Bower could not take that change back; keep this page open.');
+    }
     if (!this.filesOf.has(id)) await this.list();
     for (const fileId of this.filesOf.get(id) ?? []) {
       await this.drive.trash(fileId);

@@ -208,6 +208,8 @@ export class BowerError extends Error {
   constructor(
     public readonly code: ErrorCode,
     message: string,
+    /** A Drive change succeeded, but its journal could only be kept on this page. */
+    public readonly applied?: { path: string | null; changeId: string },
   ) {
     super(message);
     this.name = 'BowerError';

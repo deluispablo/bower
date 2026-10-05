@@ -207,3 +207,4 @@
 - 2026-10-05: harness-timeout-red passes — fix(harness): a timeout alone cannot prove an assertion red
 - 2026-10-05: harness-selected-files passes — fix(harness): verify names belong to the selected test files
 - 2026-10-05: journal-before-run passes — fix(data): wait for journal changes before starting a tidy-up
+- 2026-10-05: journal-storage-failure passes — fix(data): preserve unsafe journal saves and explain applied changes

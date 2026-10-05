@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { seedFakeDrive } from '../fake/seed';
 import { findNode } from '../tree';
@@ -24,6 +24,34 @@ const idOf = async (path: string): Promise<string> => {
 };
 
 describe('DriveVault files', () => {
+  it('an applied change kept only on this page remains visible and can leave the Bin', async () => {
+    await vault.tree();
+    const create = drive.createText.bind(drive);
+    drive.createText = async () => { throw new TypeError('Failed to fetch'); };
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
+    let heard = 0;
+    vault.subscribe(() => heard++);
+    const path = 'Resources/Cooking/Lemon tart.md';
+    await expect(vault.move(path, 'Areas')).rejects.toMatchObject({ applied: { path: 'Areas/Lemon tart.md' }, message: expect.stringMatching(/change was made.*keep this page open/i) });
+    expect(findNode(await vault.tree(), 'Areas/Lemon tart.md')).not.toBeNull();
+    await expect(vault.rename('Areas/Lemon tart.md', 'Lemon cake')).rejects.toMatchObject({ applied: { path: 'Areas/Lemon cake.md' } });
+    expect(findNode(await vault.tree(), 'Areas/Lemon cake.md')).not.toBeNull();
+    await expect(vault.trash('Areas/Lemon cake.md')).rejects.toMatchObject({ applied: { path: null } });
+    expect(findNode(await vault.tree(), 'Areas/Lemon cake.md')).toBeNull();
+    expect(heard).toBeGreaterThanOrEqual(3);
+    set.mockRestore();
+    drive.createText = create;
+    await vault.restore('Areas/Lemon cake.md');
+    expect(findNode(await vault.tree(), 'Areas/Lemon cake.md')).not.toBeNull();
+    await vault.flushJournal();
+    expect((await vault.changes()).some((r) => r.kind === 'trash')).toBe(false);
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new DOMException('Blocked', 'SecurityError'); });
+    await expect(vault.rename('Areas/Lemon cake.md', 'Another')).rejects.toMatchObject({ code: 'unknown' });
+    await expect(vault.trash('Areas/Lemon cake.md')).rejects.toMatchObject({ code: 'unknown' });
+    get.mockRestore();
+    expect(findNode(await vault.tree(), 'Areas/Lemon cake.md')).not.toBeNull();
+  });
+
   it('toggleTask rejects on a stale modifiedTime', async () => {
     await vault.note(PASSPORT);
     drive.touch(await idOf(PASSPORT));

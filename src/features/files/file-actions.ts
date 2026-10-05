@@ -5,7 +5,7 @@ import { useSources } from '@/data/provider';
 import { crumbs, decodeSplat, folderRoute, routeFor } from '@/app/paths';
 import { ancestors, useUi } from '@/app/ui-store';
 import { useTabs } from '@/app/tabs-store';
-import type { TreeNode } from '@/data/types';
+import { BowerError, type TreeNode } from '@/data/types';
 import { displayName, nameOf, parentOf } from '@/data/tree';
 import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
@@ -68,12 +68,17 @@ export function useFileActions() {
           });
           return moved;
         } catch (e) {
+          if (e instanceof BowerError && e.applied?.path) {
+            follow(path, e.applied.path);
+            useUi.getState().relocate(path, e.applied.path);
+            useUi.getState().openAll(ancestors(e.applied.path));
+          }
           report(e, 'That did not work. Try again.');
-          return null;
+          return e instanceof BowerError ? (e.applied?.path ?? null) : null;
         }
       },
       /** `quiet`: a thing just made gets its own word ("New note in …"), not a rename one. */
-      async rename(path: string, name: string, opts: { quiet?: boolean } = {}): Promise<string | null> {
+      async rename(path: string, name: string, opts: { quiet?: boolean; onPartial?: () => void } = {}): Promise<string | null> {
         try {
           const to = await vault.rename(path, name);
           useUi.getState().relocate(path, to);
@@ -83,8 +88,13 @@ export function useFileActions() {
           else if (slash) toast(slash.trim());
           return to;
         } catch (e) {
+          if (e instanceof BowerError && e.applied?.path) {
+            useUi.getState().relocate(path, e.applied.path);
+            follow(path, e.applied.path);
+            opts.onPartial?.();
+          }
           report(e, 'That did not work. Try again.');
-          return null;
+          return e instanceof BowerError ? (e.applied?.path ?? null) : null;
         }
       },
       async trash(path: string): Promise<void> {
@@ -103,6 +113,10 @@ export function useFileActions() {
               }, (e: unknown) => report(e, 'That did not work. Try again.')),
           });
         } catch (e) {
+          if (e instanceof BowerError && e.applied?.path === null) {
+            follow(path, null);
+            useUi.getState().relocate(path, null);
+          }
           report(e, 'That did not work. Try again.');
         }
       },
@@ -114,6 +128,11 @@ export function useFileActions() {
           useUi.getState().setJustMade(path);
           useUi.getState().setRenaming(path);
         } catch (e) {
+          if (e instanceof BowerError && e.applied?.path) {
+            useUi.getState().openAll([...ancestors(e.applied.path)]);
+            useUi.getState().setJustMade(e.applied.path);
+            useUi.getState().setRenaming(e.applied.path);
+          }
           report(e, 'That did not work. Try again.');
         }
       },

@@ -2328,7 +2328,7 @@
       "The app gives a readable error rather than claiming it is safely saved."
     ],
     "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"a rule is not reported saved when Drive and the outbox both fail\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "journal-separate-clients",

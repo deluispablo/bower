@@ -14,9 +14,9 @@ import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { thingsIn } from '../piles';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import type { FiledItem, Pile, Question, Request, Rule, RunPhase, RunReport } from '../types';
+import { BowerError, type FiledItem, type Pile, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
-import type { JournalRecord } from '../vault/journal';
+import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
@@ -116,13 +116,16 @@ class Writer {
     for (const f of this.ix.filesIn(SYSTEM.changes)) {
       if (f.folder || !f.name.endsWith('.json')) continue;
       try {
-        const rec = JSON.parse(await this.drive.readText(f.id)) as JournalRecord;
+        const rec: unknown = JSON.parse(await this.drive.readText(f.id));
+        if (!isJournalRecord(rec)) throw new BowerError('unknown', 'Bower could not read your changes.');
         const had = byId.get(rec.id);
         if (had) had.fileIds.push(f.id);
         else byId.set(rec.id, { ...rec, fileIds: [f.id] });
       } catch (e) {
-        // A file that is not a journal record is left where it is; a Drive failure stops the run.
-        if (!(e instanceof SyntaxError)) throw e;
+        console.error(e);
+        // Keep unreadable lines in place and stop before any writes: nothing may be skipped.
+        if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
+        throw e;
       }
     }
     return [...byId.values()].sort((a, b) => a.at - b.at);
@@ -300,4 +303,3 @@ class Writer {
     else this.ix.put(await this.drive.createText(await this.folder(parentOf(path)), nameOf(path), text));
   }
 }
-

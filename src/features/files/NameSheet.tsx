@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSources } from '@/data/provider';
+import { BowerError } from '@/data/types';
 import { displayName, nameOf, parentOf } from '@/data/tree';
 import { crumbs } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
@@ -39,6 +40,7 @@ export function NameSheet() {
       const path = await vault.create(making.folder, making.type, making.type === 'note' ? `${safe.replace(/\.md$/i, '')}.md` : safe);
       act.open({ path, type: making.type === 'note' ? 'file' : 'folder' });
     } catch (e) {
+      if (e instanceof BowerError && e.applied?.path) act.open({ path: e.applied.path, type: making.type === 'note' ? 'file' : 'folder' });
       report(e, making.type === 'note' ? 'The note was not made. Try again.' : 'The folder was not made. Try again.');
     }
   };

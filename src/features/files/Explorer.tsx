@@ -414,12 +414,14 @@ export function Explorer({ variant }: Props) {
                 setDraft(null);
                 if (made && typed !== null) welcomeNew(node.path, node.type);
               } else {
-                const to = await act.rename(node.path, name, { quiet: made });
+                let partial = false;
+                const to = await act.rename(node.path, name, { quiet: made, onPartial: () => { partial = true; } });
                 if (to) {
                   setFocus(to);
                   ui.setJustMade(null);
                   setDraft(null);
-                  if (made) welcomeNew(to, node.type);
+                  if (made && !partial) welcomeNew(to, node.type);
+                  else if (made && node.type === 'file') goTo(routeFor({ path: to, type: node.type }));
                 } else if (how === 'enter') {
                   // Refused on Enter: back in the box with what you typed.
                   setDraft(name);
