@@ -4,7 +4,7 @@
 
 - Close the qa-11 findings from the independent review, harness findings first. The evaluator is exploring demo and fake; register its findings before fixing them. Repeat both independent rounds after the fixes, then run every gate before merging locally to main.
 - Await the owner's ruling on offline reading, a durable upload queue and the real-Drive smoke test for phase 3. Phase 2 stays open until the rounds are clean and its remaining rulings are agreed.
-- Never edit `src/` while e2e, `done.sh` or an evaluator runs.
+- Follow `docs/harness/COORDINATION.md`: establish one coordinator and explicit assignments in the current integration copy of `ACTIVE.md`; keep writers in separate checkouts. Do not mutate a checkout while its gates, `done.sh` or evaluator run. Browser work remains serialized across worktrees.
 
 ## Log
 
@@ -208,3 +208,4 @@
 - 2026-10-05: harness-selected-files passes — fix(harness): verify names belong to the selected test files
 - 2026-10-05: journal-before-run passes — fix(data): wait for journal changes before starting a tidy-up
 - 2026-10-05: journal-storage-failure passes — fix(data): preserve unsafe journal saves and explain applied changes
+- 2026-10-05: researched Claude/Codex coordination and updated the method/briefs: explicit ownership, isolated workers, cross-tool review and serialized integration/browser checks. No implementation batch started; pnpm check and git diff --check passed for this documentation update (the init install hit registry DNS failures).

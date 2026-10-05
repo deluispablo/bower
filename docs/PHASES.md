@@ -64,7 +64,7 @@ From `docs/specs/2026-10-04-who-does-what.md`, agreed with the owner:
 - **The contract is written:** `docs/specs/2026-10-04-worker-contract.md`. Where the fake Worker and the contract disagree, the contract wins. It includes what phase 2 added: `POST /vault` answers `{ folderId, found }`; `DELETE /me` also forgets the folder pointer.
 - **Must get right** (contract, "Two things the deployment must get right"): one Google OAuth client for the app and the runner with the full `drive` scope (Bower's `appProperties` are visible only to the client that wrote them); the Worker on the app's own site (the session cookie must not be third-party, or Safari on iPhone breaks).
 - **Owes:** a real-Drive smoke test (full-text tokenising, resumable-upload resume, rename and modifiedTime behaviour); a product decision on a durable upload queue (failed uploads are forgotten after a reload today) and on offline reading.
-- **How to start:** brainstorm with the owner (superpowers brainstorming), write the spec and the plan as phase 2 did, add the phase's entries to `harness/features.json`, then build test first. The old Worker (`/Users/deluisp/Projects/bower/api/`) is a reference for behaviour only.
+- **How to start:** discuss requirements and design with the owner (superpowers brainstorming is optional if available), write the spec and the plan as phase 2 did, add the phase's entries to `harness/features.json`, then build test first. The old Worker (`/Users/deluisp/Projects/bower/api/`) is a reference for behaviour only.
 
 ## Phase 4: the agent (not started)
 
