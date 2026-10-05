@@ -4,12 +4,12 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: contracts-2 adopted; O1/O2 delivered. 212/216 after registering last-run-recovery-validation; Add passed c1b1975 genuine inverse-fix red/check/verify closure of integratedcbf4e9f. Rootcheck528/52/demo198/56/fake198/56 and four actual supplemental native cells pass. O3 current-v1 consumer defect reproduced and prerequisite independently reviewed; clean17bbee4 independently reviewed/integrated1c1e60c, rootcheck549/52 green; fullfake running, closure pending. Expanded P2 acceptance incomplete.
+- State: contracts-2 adopted; O1/O2 delivered. 212/216 after registering last-run-recovery-validation; Add passed c1b1975 genuine inverse-fix red/check/verify closure of integratedcbf4e9f. Rootcheck528/52/demo198/56/fake198/56 and four actual supplemental native cells pass. O3 current-v1 consumer defect reproduced and prerequisite independently reviewed; clean17bbee4 independently reviewed/integrated1c1e60c, rootcheck549/52 green; first fullfake197/56 plus one Settings navigation timeout before assertions; isolated scenario passes, one unchanged full retry running, closure pending. Expanded P2 acceptance incomplete.
 - Coordinator/session: Codex `/root`, session `p2-orchestrator-2026-10-05-01a10bbd`, explicitly appointed by the owner after the previous batch ended. Sole integration writer and shared-record owner.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: none. Own Add previews/tabs and Google callback/tab stopped; viewport reset; user-created Bower tab preserved. Sole worker unit/check only; no provider/browser permission.
+- Browser reservation: root serial fullfake on5191 (retry after one pre-assertion navigation timeout); no native/provider browser concurrently. Own Add previews/tabs and Google callback/tab stopped; viewport reset; user-created Bower tab preserved. Sole scratch preparer has no provider/browser permission.
 
 ## Current reservations
 
@@ -527,3 +527,8 @@ Actual human Planificador turn01a10d60-b9e9-7671-ae3c-db68c01bbb0c authorizes de
 Candidate17bbee4 originalaaf independently reviewed noC/I/M, exact15packet/source/log hashes. Root cherry-pick1c1e60c0c6dee4b610cd845ee0a3c393f265370f changesonlyfake-worker.ts/test.ts. Rootfullcheck549/52/build/212216 exits0, completefake gate running serial5191, no browser/manualfreeze. Exact unchangedverify/inverse-fix closure pending; no passes flipped. Immutablecandidate/review/red/green/earlierteardownexit1/retryevidence archivedqa16/implementation; earlierfailure not asserted repaired.
 
 Sole writer releasedsource17 checkoutread-only, next NEWscratchR1contentprobe assignment dispatched afterb970 with31ee/v2cc041 micropacket. One root/file, strictboundedtransport/privateIDmanifest/Abarrier/Bconfirmed/Arelease/read/Bincleanup; localinjectedmocks first, no actualprovider/credentials/browser. Fresh immutablecode review before root execution. No secondwriter/sharedschema/P3. Independent reviewer available after current-v1 delivery.
+
+
+## Current-v1 browser gate diagnosis
+
+First integrated1c1e60c fullfake exits1:197passed/56intentional skips, one phone qa5 notifications page.goto timeout waiting for load before any scenario assertion. Exact isolated scenario unchanged passes1 in3.2s. Initial overanchored grep selected no tests; retained separately, never counted as evidence. One full unchanged retry now runs serial5191; no source/config/timeout edit. All first and isolated logs retainedqa16/implementation; do not infer a product fix or classify the unexplained timing as resolved before full retry. Proof remains pending212216.
