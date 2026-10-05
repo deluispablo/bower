@@ -16,9 +16,10 @@ Only the named coordinator writes this file. Read this integration copy before c
 | Entry or scope | Tool/session | Role | Checkout / branch | Base / target SHA | Reserved files / contracts | State | Candidate / closure SHA |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | journal-separate-clients | Codex `/root/journal_fixes` → `/root` | Sole implementer; handoff to coordinator | integration checkout | `37b6abb`; target work on `1a79dfd` | worker-contract.md; fake-runner.ts; drive-vault.test.ts; drive-vault.ts; journal.ts; vault-index.ts | closed; worker read-only | `d423225` |
-| worker-response-shapes | Codex `/root/audit_p2` | Implementer | `/Users/deluisp/.codex/worktrees/qa11-worker-search/bower-app`; `codex/qa11-worker-search` | base `d423225` | worker-api.ts; worker-http.ts; worker-http.test.ts | integrated; entry still open | candidate `3cba3ba`; integration `0e978af` |
+| worker-response-shapes | Codex `/root/audit_p2` | Implementer | `/Users/deluisp/.codex/worktrees/qa11-worker-search/bower-app`; `codex/qa11-worker-search` | base `d423225` | worker-api.ts; worker-http.ts; worker-http.test.ts | closed; assignment released | candidate `3cba3ba`; integration `0e978af`; closure `55810f9` |
 | home-person | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `d423225` | Home.tsx; Home.test.tsx; shared records | closed | `cc131fe` |
-| search-root-scope | Codex `/root/audit_p2` | Prepared; not yet assigned | same isolated worktree | after Worker integration | drive-http.ts; drive-http.test.ts | waiting for assignment | none |
+| search-root-scope | Codex `/root/audit_p2` | Implementer | same isolated checkout; `codex/qa11-search-root` | base `55810f9` | drive-http.ts; drive-http.test.ts | assigned; candidate only; no browsers | pending |
+| task-keeps-seen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `55810f9` | drive-vault.test.ts; temporary task-only red in drive-vault.ts; shared records | assigned; test-only coverage | pending |
 | Final review and evaluation | fresh sessions, pending | Reviewer / evaluator | integration checkout | final immutable SHA pending | read-only; no source/build changes during evaluation | unassigned | none |
 
 ## Required skills and capabilities
@@ -35,3 +36,5 @@ For each assignment, record `bower-session` plus its role skill, the actual tool
 
 - Worker candidate `d423225..3cba3ba` reviewed independently by `/root/review_worker_candidate`: no Critical, Important or Minor findings; no tests run by the reviewer, supplied red/green/check evidence inspected. Cherry-picked without conflict as `0e978af`; coordinator closure pending.
 - Home identity closed at `cc131fe`; named assertion red/green, check, full demo/fake each 187 passed / 53 intentional skips. Visual check at 1440×900 and 390×844 on fake: correct account initial, intact layout, no console warnings/errors. First assignment delivery took about 10 minutes; most time was the two full browser suites.
+
+- Worker proof closure `55810f9`: red/check/verify green; 193/201 entries pass. Next: isolated search candidate; coordinator coverage for own-task seen state. Production/source restores stay confined to their respective checkouts.

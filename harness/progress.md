@@ -217,3 +217,4 @@
 - 2026-10-05: home-person passes — fix(home): greet the person who signed in
 - 2026-10-05: independently reviewed Worker candidate 3cba3ba with no findings, integrated as 0e978af without conflict. Combined pnpm check green (375 unit tests); its entry remains open until coordinator proof closure. Home full demo/fake suites and manual phone/desktop review are recorded in ACTIVE.md.
 - 2026-10-05: worker-response-shapes passes — fix(worker): prove malformed replies are rejected after integration
+- 2026-10-05: released the closed Worker assignment and assigned scoped search at base55810f9 in the isolated checkout. Coordinator task-seen coverage is independent; browsers remain reserved for integration. pnpm check green before assignment record.
