@@ -4,21 +4,23 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: contracts-2 adopted; O1/O2 delivered. 212/216 after registering last-run-recovery-validation; Add passed c1b1975 genuine inverse-fix red/check/verify closure of integratedcbf4e9f. Rootcheck528/52/demo198/56/fake198/56 and four actual supplemental native cells pass. O3 current-v1 consumer defect reproduced and prerequisite independently reviewed; clean17bbee4 independently reviewed/integrated1c1e60c, rootcheck549/52 green; first fullfake197/56 plus one Settings navigation timeout before assertions; isolated scenario passes, one unchanged full retry running, closure pending. Expanded P2 acceptance incomplete.
+- State: contracts-2 adopted; O1/O2 delivered. 213/216 after current-v1 recovery proof e5cb57d of independently reviewed candidate17/integrated1c1e60c. Rootcheck549/52 and fullfake retry198/56 green; first pre-assertion Settings timeout and isolated green retained. Add closed c1b1975 with real supplemental native evidence. Expanded P2 acceptance incomplete.
 - Coordinator/session: Codex `/root`, session `p2-orchestrator-2026-10-05-01a10bbd`, explicitly appointed by the owner after the previous batch ended. Sole integration writer and shared-record owner.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: root serial fullfake on5191 (retry after one pre-assertion navigation timeout); no native/provider browser concurrently. Own Add previews/tabs and Google callback/tab stopped; viewport reset; user-created Bower tab preserved. Sole scratch preparer has no provider/browser permission.
+- Browser reservation: none. Fullfake5191 completed; own Add/Google listeners and tabs released. User-created Bower tab preserved. Sole R1 scratch preparer and S02 read-only auditor have no provider/browser permission.
 
 ## Current reservations
 
 | Scope | Agent / role | Checkout or allowed output | Immutable base / contract | State |
 | --- | --- | --- | --- | --- |
-| Integration and shared records | Root coordinator | bower-app/codex/close-phase-2 | 1c1e60c; contracts-2/main53034a9 | sole writer; serial gates/proof pending |
-| last-run-recovery-validation | /root/google_setup_rework, sole implementer | /private/tmp/bower-p2-journal-ack/codex/p2-run-v1-recovery; fake-worker.ts and fake-worker.test.ts only | aaf76ff5036d89662ee79d9bfe05e75bf5e2c981; current LastRunFilev1 | candidate17bbee4 reviewed clean/integrated1c1e60c; workercheckout immutable/read-only |
+| Integration and shared records | Root coordinator | bower-app/codex/close-phase-2 | 1c1e60c; contracts-2/main53034a9 | sole writer; current-v1 closed e5cb57d, R1 execution pending independent review |
+| last-run-recovery-validation | /root/google_setup_rework, sole implementer | /private/tmp/bower-p2-journal-ack/codex/p2-run-v1-recovery; fake-worker.ts and fake-worker.test.ts only | aaf76ff5036d89662ee79d9bfe05e75bf5e2c981; current LastRunFilev1 | candidate17bbee4 reviewed clean/integrated1c1e60c/closed e5cb57d; workercheckout immutable/read-only |
 | Current O1 delta | /root/prerequisites_review, independent reviewer | scratch bower-o1-current-delta.md only; integration read-only | exactaaf76ff/sourcecbf4e9f | delivered immutable2181351d O1 delta; candidate review gets separate assignment |
 | R1 first-case micropacket | /root/approved_policy_slices, read-only spec author | scratch bower-r1-execution-micropacket.md only | exactaaf76ff/sourcecbf4e9f/currentDriveHttp | v2 clarified; sole preparer now implements NEW scratch R1 packet only, no provider/credentials/browser |
+
+| S02 pending-byte lifecycle reproduction | /root/approved_policy_slices, read-only auditor | NEW /private/tmp/bower-draft-lifecycle-reproduction and report only | exact e5cb57d/source1c1e60c; C01/C02/D02, no new schema | reproduction only; no product writer or provider/browser |
 
 ## Historical assignments
 
@@ -532,3 +534,10 @@ Sole writer releasedsource17 checkoutread-only, next NEWscratchR1contentprobe as
 ## Current-v1 browser gate diagnosis
 
 First integrated1c1e60c fullfake exits1:197passed/56intentional skips, one phone qa5 notifications page.goto timeout waiting for load before any scenario assertion. Exact isolated scenario unchanged passes1 in3.2s. Initial overanchored grep selected no tests; retained separately, never counted as evidence. One full unchanged retry now runs serial5191; no source/config/timeout edit. All first and isolated logs retainedqa16/implementation; do not infer a product fix or classify the unexplained timing as resolved before full retry. Proof remains pending212216.
+
+
+## Verified current-v1 closure and next independent audit
+
+Integrated1c1e60c check549/52 and one unchanged fullfake retry198/56 exit0. First fake197/56 plus Settings page.goto timeout before assertions, initial no-test filter and unchanged isolated1green retained separately. done.sh exact fixed-in1c reverses one production file and requires genuine assertion red, restores/passes check and unchanged21selected verify, closes e5cb57d/213216. All raw coordinator evidence and coherent result archivedqa16/implementation. No native malformed-run or broader recovery acceptance. Three earlier registered defects remain; no owner P2 decision or P3/P4.
+
+S02 auditor assignment: plancontracts-2 O1 prerequisite/C01 C02 D02; exact e5cb57d/source1c1e60c; integration read-only, NEW scratch/private/tmp/bower-draft-lifecycle-reproduction directory and report only. Follow bower-session and read-only audit/review role requirements; Git/shell/Node/TypeScript public API execution available, no init/build/fullgate/source/Git/shared-record/browser/provider/credential/delegation/closure. Read approved-policy slices and actual draft-files.ts/device.ts/LiveSession sign-out call chain. Reproduce only suspected in-memory pending-byte retention at sign-out via unmodified public APIs and synthetic literal expectations: positive same-visit keep/get, person metadata forgotten, retained original-folder outbox control, expected Blob forgotten after actual forgetThisPerson. Local storage stand-ins may implement storage only; never mock the production cleanup/Map or derive expected outcome from current output. Use exact source bytes/hashes and in-memory transpilation if needed, not repository test edits. Do not claim visible B UI exposure, uploads or durable account binding from an in-memory retained Blob. Return actual genuine assertion red versus setup failure, scope/limitations, minimal proposed path/verify and failure/recovery, immutable logs/report/hashes. No repair or registration until coordinator inspects actual reproduction. Root current repair is closed; sole product implementer remains released/read-only, R1 scratch preparer only.
