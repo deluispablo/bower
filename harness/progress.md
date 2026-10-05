@@ -4,8 +4,8 @@
 
 - Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns `codex/close-phase-2`. Main d12c55e / contracts-2 adopted at143ae2b; refresh main and ACTIVE before mutations.
 - O1 full rows remain four missing/twelve partial. O2 specifications complete; all real R1–R4 runtime probes NOT RUN. No O3 adoption or P2 acceptance from proposals/counts.
-- Count208/214: seven bounded foundations independently reviewed and proof-closed. Source cb73061, latest proof16ab28c. Combined e15 check481/51 and demo198/56 intentional skips passed; fake/PWA/native NOT RUN there after the new Important isolation defect.
-- `session-folder-isolation`: replacement2244218 on base7c48f4d, disposal rework red1/35, named36/50 excluded, worker check517/51. Root all three public probes pass exact replacement. Renewed independent review assigned; integration/proof closure pending. Rejected8bd67cd and changes-requested report retained qa14.
+- Count209/214: eight bounded foundations independently reviewed/proof-closed. Latest source44ee162 and isolation proof20864d4. Worker final named36/full517 green and three root probes pass; root inverse-fix assertion red/check/verify passed. Fresh full browser/PWA/native checks on this source remain pending; e15 check/demo are earlier evidence.
+- `session-folder-isolation` closed: candidate2244218 independently reviewed clean, integration44ee162, proof20864d4. Rejected8bd67cd disposed-seen finding actually reproduced and corrected; all logs/reports retained qa14. Sole worker released/read-only; no browser/provider claim.
 - Leading-dot28d2ce2 and revised Timeline6305ca9 remain integrated-open; final combined gates and actual phone/desktop checks pending. Independent evaluator lacks browser surfaces and reports locked Mac; owner availability query pending. Root IAB available for supplemental checks only, no independent certificate.
 - After isolation fix/review/closure, freeze a fresh target for check/demo/fake/PWA, independent global review and serialized prepared evaluation. Retained replay plan/fixtures do not certify results.
 - Protected ownership needs lead format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline/reload policies and synthetic provider resources remain owner inputs. Continue independent authorized work; no P3/P4, product merge, push or deployment.
@@ -300,3 +300,5 @@
 
 - 2026-10-05: isolation replacement2244218 received; disposal red1/35, named36/full517 green. All three root public probes pass exact replacement, evidence retained. Renewed independent review dispatched; rejected8bd67cd report retained. No integration/closure/native/provider claim.
 - 2026-10-05: session-folder-isolation passes — fix(session): proof-close account and folder lifetime isolation
+
+- 2026-10-05: session-folder-isolation integrated44ee162 and proof-closed20864d4 after clean renewed independent review, three passing exact-target public probes and root inverse-fix assertion red/check/verify. Count209/214, eight bounded foundations. Five registered entries and broader full capability gaps remain open; fresh combined gates/evaluation and O3 inputs pending, no phase acceptance.
