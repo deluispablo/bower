@@ -63,5 +63,10 @@ describe('how long a run takes', () => {
     expect(one).toContain('1 rule worded');
     expect(runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['a', 'b'] } })).toContain('2 things you asked done');
   });
+  it('the report counts each change once: what it names is not counted again', () => {
+    const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+    const d = runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['Put my visa papers together'], rulesWorded: 1, yourChanges: 5 } });
+    expect(d).toBe('"Put my visa papers together" done, 1 rule worded and 5 other changes of yours read.');
+  });
 });
 

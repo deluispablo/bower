@@ -97,7 +97,9 @@ export function runDetail(r: RunState): string {
       if (asked.length === 1) parts.push(`"${asked[0] ?? ''}" done`);
       else if (asked.length) parts.push(`${plural(asked.length, 'thing')} you asked done`);
       if (rep.rulesWorded) parts.push(`${plural(rep.rulesWorded, 'rule')} worded`);
-      if (rep.yourChanges) parts.push(`${plural(rep.yourChanges, 'change')} of yours read`);
+      // The changes it names above are not counted again here.
+      const other = asked.length || rep.rulesWorded ? 'other ' : '';
+      if (rep.yourChanges) parts.push(`${rep.yourChanges} ${other}${rep.yourChanges === 1 ? 'change' : 'changes'} of yours read`);
       return parts.length ? `${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : 'Everything has its place.';
     }
     case 'failed':

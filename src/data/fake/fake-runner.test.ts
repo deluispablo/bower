@@ -98,7 +98,8 @@ describe('the fake runner', () => {
     const changesDir = (await drive.listAll(parent?.id ?? '')).find((f) => f.name === 'changes');
     await drive.createText(changesDir?.id ?? '', path.split('/').pop() ?? '', String(text));
     const out = await runFake(drive, root, opts({ scope: 'instructions' }));
-    expect(out.phase === 'done' && out.report.yourChanges).toBe(1);
+    expect(out.phase === 'done' && out.report.rulesWorded).toBe(1);
+    expect(out.phase === 'done' && out.report.yourChanges).toBe(0);
     expect([...drive.dump(root).keys()].filter((p) => /^\.bower\/changes\/[^/]+\.json$/.test(p))).toEqual([]);
   });
 
@@ -132,6 +133,14 @@ describe('the fake runner', () => {
     const out = await runFake(drive, root, opts({ scope: 'instructions' }));
     expect(out.phase === 'done' && out.report.requests).toEqual(['Put my visa papers together']);
     expect(out.phase === 'done' && out.report.rulesWorded).toBe(1);
+  });
+
+  it('the report counts each change once: a request and a rule are not among your other changes', async () => {
+    await vault.addRequest('Put my visa papers together');
+    await vault.addRule('anything from the dentist goes in health');
+    await vault.rename('Resources/Cooking/Lemon tart.md', 'Lemon tart, best');
+    const out = await runFake(drive, root, opts({ scope: 'instructions' }));
+    expect(out.phase === 'done' && out.report.yourChanges).toBe(1);
   });
 
   it('pending rules are worded with your words kept', async () => {

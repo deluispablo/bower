@@ -92,6 +92,8 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
   const worded = journal.filter((r) => r.kind === 'rule' && !r.removes).length;
   if (asked.length) report.requests = asked;
   if (worded) report.rulesWorded = worded;
+  // Each change counts once: the requests and rules the report names are not among the rest.
+  report.yourChanges = journal.length - asked.length - worded;
   // The report lists only the questions this run asked; the open ones stay in questions.json with them.
   const filedSaltmere = opts.scope === 'all' && piles.some((p) => taken.has(p.id) && /saltmere/i.test(p.text));
   report.questions = await w.questions(new Set(journal.filter((r) => r.kind === 'answer').map((r) => r.questionId ?? '')), filedSaltmere ? [saltmereQuestion(Date.now())] : []);

@@ -422,6 +422,8 @@ export class DemoWorld {
         const worded = this.rules.filter((x) => x.pending).length;
         if (asked.length) r.report.requests = asked;
         if (worded) r.report.rulesWorded = worded;
+        // Each change counts once: the requests and rules the report names are not among the rest.
+        r.report.yourChanges = yourChanges - asked.length - worded;
         this.rules = this.rules.map((x) => (x.pending ? { ...x, text: wordRule(x.yourWords ?? x.text), pending: false } : x));
         this.requests = this.requests.map((q) => (q.done ? q : { ...q, done: 'Done. See what changed in your folders.' }));
         this.journal = [];

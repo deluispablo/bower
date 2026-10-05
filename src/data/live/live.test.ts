@@ -153,7 +153,7 @@ describe('the outbox', () => {
     s.drive.createText = real;
     await s.runs.start('instructions');
     const r = await until(s, (x) => x?.phase === 'done' || x?.phase === 'failed');
-    expect(r?.report?.yourChanges).toBe(1);
+    expect(r?.report?.rulesWorded).toBe(1);
   });
 
   it('outbox: a waiting line goes when the device is back online', async () => {

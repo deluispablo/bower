@@ -2230,7 +2230,7 @@
       "The result names them once and counts only the other changes."
     ],
     "verify": "pnpm vitest run src/features/tidy src/data -t \"the report counts each change once\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "invalid-link-says",

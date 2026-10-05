@@ -116,10 +116,13 @@ function RunView({ run }: { run: RunState }) {
   return (
     <div>
       <TidyScene phase={run.phase} scope={run.scope} {...(run.report ? { filed: run.report.filed.length } : {})} />
-      <div role="status" aria-live="polite">
-        <p className={s.title}>{runTitle(run)}</p>
-        <p className={s.detail}>{runDetail(run)}</p>
-      </div>
+      {/* The sheet is named by the title already; the live region says what changed. */}
+      <p className={s.title} aria-hidden="true">
+        {runTitle(run)}
+      </p>
+      <p className={s.detail} role="status" aria-live="polite">
+        {runDetail(run)}
+      </p>
       {run.phase !== 'done' && (
         <ol className={s.steps}>
           {RUN_STEPS.map((step) => {
