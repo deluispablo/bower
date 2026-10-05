@@ -2,7 +2,7 @@
 
 ## Next
 
-- Root sole integration/shared-record/provider coordinator, contracts-2/main3136adc. Product pureparserfix257f904/proof5242808 adds only unused raw-byte parser; Drive sourcepins unchanged. Registered215/218, threefalsepartial-pile-readiness/protected-current-prose/run-report-save-barrier. Count is not capability or phase acceptance.
+- Root sole integration/shared-record/provider coordinator, contracts-2/main3136adc. Product pureparserfix257f904/proof5242808 adds only unused raw-byte parser; Drive sourcepins unchanged. Registered215/219; new drive-raw-byte-read false, threefalsepartial-pile-readiness/protected-current-prose/run-report-save-barrier. Count is not capability or phase acceptance.
 - Parser worker e3ee111 revieweda745: no C/I/source-test Minor; setup-prose discrepancy explicitly clarified without altering frozen819/d308. Stub19682/fix257f904 integrated separately, genuine inverse assertion red/full rootcheck/unchanged47verify green, qa18/root-closure. Consumer alignment/other splices/rawadapter/producer compatibility still pending.
 - ONE final R1-D03 actualcase reserved in ACTIVE after clean review27f24d41 ofeee1/339ed. NEWowner-only privatepacketdisabled/expired and manifestabsent afterpreflight; root renews600s only atdispatch. SameAgrant/resourcescope, original60/600s/64KiB/reserves, max3BASEtriplets; actualprovider/integration/browser serialized. Ifinconclusive/refuted/end3attempts, endline/nofourthvariant. No providerresult yet.
 - FirstactualR1 refutedtimestampread-before-write: B overwrittenbydelayedA200; ImportantR1-OBS01 open. D02inconclusive16HTTP/1refresh/6282B/sameETagchangedversion withnoconditionalwrites. Both priorcases rawownedBinverified/noresidual, authoritydisabled/manifestretained; preserve actualevidence.
@@ -348,3 +348,5 @@
 
 - 2026-10-05: frozen parser reviewa745 clean source with setup-prose Minor explicitly resolved without altering819/d308. Final R1-D03 independent27f24d41 clean, actual case awaits sole root preflight. Combined B ten-file manifest3b954ed6 archived and independent schema review assigned; no source/pass/provider/phase change.
 - 2026-10-05: ownership-byte-parser passes — fix: proof-close raw byte ownership parser foundation
+
+- 2026-10-05: actual finalD03dc446c7 inconclusive23HTTP/0refresh/5454B; BASEretryboundworked butCONTROLversionmismatch stopsbeforeB/staleA. All23eventscomplete/rawownedBin200/noresidual/authoritydisabled; probe line ended. B Important schema-patternreview6535422d archived/narrowv2correction assigned; additive rawreadqa19 isolatedstub-first writer assigned.

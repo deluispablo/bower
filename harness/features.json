@@ -2717,5 +2717,19 @@
     "verify": "pnpm vitest run src/data/vault/ownership-format.test.ts -t \"ownership/2 raw byte authority\"",
     "passes": true,
     "note": "New bounded parser foundation authorized by TL-P2-2026-10-05-03; named verify planned, not yet implemented/executed. Does not close protected-current-prose, raw adapter/real activation/recovery UI or full C03 acceptance. Test-first loaded module stub required."
+  },
+  {
+    "id": "drive-raw-byte-read",
+    "task": "qa-19",
+    "category": "data",
+    "what": "Drive clients expose exact available source bytes without certifying restored placeholders as original content.",
+    "steps": [
+      "Read independent literal binary, invalid UTF-8 and byte-preserving text fixtures through real HTTP transport stubs and actual fake storage; compare every byte and independent returned copies.",
+      "Preserve existing text/error/auth behavior and exact bytes across supported small snapshots; refuse unavailable restored big-file bytes while keeping metadata and Bin usable.",
+      "Replace unavailable content only by an actual content write and keep the same raw source authority; no write token or atomicity claim."
+    ],
+    "verify": "pnpm vitest run src/data/drive/raw-bytes.test.ts -t \"drive raw bytes preserve source authority\"",
+    "passes": false,
+    "note": "Additive readBytes(id):Promise<Uint8Array> authorized under TL-P2-03, exact raw transport/storage only. New named tests planned; loadable class stubs must precede assertions. No CAS/producer activation/durable retention or whole capability acceptance."
   }
 ]
