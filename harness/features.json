@@ -2418,5 +2418,18 @@
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"sending a request or rule keeps the composer keyboard\"",
     "passes": false
+  },
+  {
+    "id": "plain-file-names",
+    "task": "qa-11",
+    "category": "polish",
+    "what": "Search, file-action messages and the change list still expose extensions instead of the same plain name used on the page.",
+    "steps": [
+      "Search for Dentist reminder in the side panel.",
+      "Move or put Lease draft in the Bin and inspect its message and Since the last tidy-up.",
+      "On demo and fake, names agree with the tree and page without file extensions."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"file names agree in search messages and the change list\"",
+    "passes": false
   }
 ]
