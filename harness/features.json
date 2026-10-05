@@ -2641,6 +2641,6 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"malformed request history stops a tidy-up before effects\"",
     "passes": true,
-    "note": "Reproduced by independent current-v1 observation at6305ca9; script/raw snapshots/results under docs/harness/evidence/2026-10-05-o3. Named assertion planned, not run. Existing guard/format only; concurrent external changes, durable checkpoints and final-report barrier remain separate O3/O4/R1 obligations."
+    "note": "Independent malformed request effects reproduced6305ca9. Candidate00a17ff independently reviewed, integratedcb73061 and proof-closed16ab28c with real assertion-red/check481/namedverify17. Existing v1 guard before first direct runner mutation; byte/domain preservation and versioned repair/retry proven. Raw evidence2026-10-05-qa13. Service telemetry, mid-run corruption, report durability and atomic recovery remain unproven."
   }
 ]

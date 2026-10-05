@@ -4,9 +4,9 @@
 
 - Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns `codex/close-phase-2` under explicit owner handoff. Main `d12c55e` / `2026-10-05-contracts-2` was adopted at `143ae2b`; refresh main and live ACTIVE before mutations.
 - O1/O2 evidence is retained at the immutable adoption SHA. Full capability rows: four missing, twelve partial. All R1–R4 runtime probes are NOT RUN; specifications and proposed fixtures do not certify provider behavior or O3 acceptance.
-- Current count: 207/213. Journal acknowledgement, pile metadata/context prechecks, local run-order guards and legacy task byte preservation are independently reviewed and proof-closed. Latest closed source is `390d305`, foreground proof `64d5e3d`; check464 and sixteen foreground cases passed.
+- Current count: 208/213. Journal acknowledgement, pile metadata/context prechecks, local run-order guards and legacy task byte preservation are independently reviewed and proof-closed. Latest closed source is `cb73061`, request proof `16ab28c`; check481 and seventeen request cases passed.
 - Leading-dot `28d2ce2` and revised Timeline `6305ca9` are integrated-open. Earlier complete suites cover source28d2ce2 (196 passed/56 intentional skips each); final combined affected suites and manual evaluation remain pending. Chrome evaluation at `d086d6c` was NOT RUN. IAB has since been recovered through actual tab creation/closure; no app evaluation has yet occurred there.
-- Sole isolated implementer owns `runner-request-preflight`, base `64d5e3d`. Existing-v1 malformed request effects are reproduced and a read-only prerequisite is retained. Foreground candidate `1d6fe32` was independently reviewed and proof-closed after correcting the Important pre-wave race. No worker browser grant or second implementer.
+- Sole isolated implementer is read-only/released after `runner-request-preflight` closure `16ab28c`. Coordinator prepares combined exact-SHA check/demo/fake/PWA gates and independent global review. Independent live evaluator has no browser in its session and reports a locked Mac; availability query pending. Root supplemental IAB checks will remain separately labeled.
 - After the independent unit fixes, coordinator runs combined check/demo/fake/PWA gates, prepares a frozen production build and grants serialized IAB evaluation using the retained replay plan/fixtures. Fix new findings before closure. Keep actual uncovered controls/journeys explicit.
 - Protected ownership requires the lead's format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline reading and upload-reload policy remain owner decisions. Broader O1 capability gaps do not disappear behind the harness count.
 - Stabilize and independently review contracts before O4–O7 implementation. O8/full P2 acceptance remains open; no P3/P4, merge, push or deployment is authorized by these fixes.
@@ -282,3 +282,5 @@
 
 - 2026-10-05: foreground candidate1d6fe32 reviewed/integrated390d305/proof-closed64d5e3d; core and pre-wave actual reds retained, check464/16 cases. Assign existing-v1 request preflight to the sole writer;207/213, P2 open.
 - 2026-10-05: runner-request-preflight passes — fix(runner): prove malformed request history preserves pending data
+
+- 2026-10-05: request candidate00a17ff reviewed/integratedcb73061/proof-closed16ab28c, check481/17 cases after13 actual reds. Release sole writer and prepare frozen combined verification;208/213, P2 remains open.
