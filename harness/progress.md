@@ -8,7 +8,7 @@
 - `session-folder-isolation` closed: candidate2244218 independently reviewed clean, integration44ee162, proof20864d4. Rejected8bd67cd disposed-seen finding actually reproduced and corrected; all logs/reports retained qa14. Sole worker released/read-only; no browser/provider claim.
 - Leading-dot28d2ce2 and revised Timeline6305ca9 remain integrated-open; final combined gates and actual phone/desktop checks pending. Independent evaluator lacks browser surfaces and reports locked Mac; owner availability query pending. Root IAB available for supplemental checks only, no independent certificate.
 - After isolation fix/review/closure, freeze a fresh target for check/demo/fake/PWA, independent global review and serialized prepared evaluation. Retained replay plan/fixtures do not certify results.
-- Protected ownership needs lead format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline/reload policies and synthetic provider resources remain owner inputs. Continue independent authorized work; no P3/P4, product merge, push or deployment.
+- Protected ownership needs lead format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline/reload policies remain owner inputs; existing bower-home/Google project use is owner-authorized, project ID and safe access/setup pending. Continue independent authorized work; no P3/P4, product merge, push or deployment.
 
 ## Log
 
@@ -302,3 +302,7 @@
 - 2026-10-05: session-folder-isolation passes — fix(session): proof-close account and folder lifetime isolation
 
 - 2026-10-05: session-folder-isolation integrated44ee162 and proof-closed20864d4 after clean renewed independent review, three passing exact-target public probes and root inverse-fix assertion red/check/verify. Count209/214, eight bounded foundations. Five registered entries and broader full capability gaps remain open; fresh combined gates/evaluation and O3 inputs pending, no phase acceptance.
+
+- 2026-10-05: resumed authorized independent work at907c9f8/source44ee162: root reserves fresh serial full gates and supplemental naming evaluation; independent code reviewer907/source-equivalent reservation target. Scratch-only Google OAuth/R1R2R4 setup and protected ownership version/fixture proposals assigned; evaluator one capability recheck. No external authorization/policies/new grammar presumed.
+
+- 2026-10-05: verified actual owner instruction permits reusing existing bower-home/Google Cloud project for isolated probes; setup preparer updated, no external change. Project ID/access pending, policies unanswered. One evaluator inventory remains empty: actual independent UI NOTRUN retained, root supplemental only.
