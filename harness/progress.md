@@ -13,6 +13,8 @@
 
 - Apply owner/lead production-plausibility filter before new repairs: trigger, shared/fake route, evidence and minimal discriminator. Actual bounded Drive premise takes priority; preserve valid shared isolation controls. S02 is shared Add/device memory cleanup, not a fake-only timing case.
 
+- Three-old-entry applicability report73f11992 archived: shared readiness highest next risk, rich prose needs lead-owned grammar adoption, report fault currently fake-only observation/real-plausible boundary requiring O3/O4 recovery. Historical evidence kept under originalSHA, no fresh replay or closure.
+
 ## Log
 
 - 2026-10-04: harness set up for phase 2 (plan `docs/superpowers/plans/2026-10-04-phase-2-app-logic.md`); contract suite green on the demo.
