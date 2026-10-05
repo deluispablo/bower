@@ -2392,7 +2392,7 @@
       "The client rejects each with a readable error; expected empty sign-out responses still work."
     ],
     "verify": "pnpm vitest run src/data/worker/worker-http.test.ts -t \"malformed successful Worker responses give a readable error\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "tab-link-name",
