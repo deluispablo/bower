@@ -86,3 +86,27 @@ For each assignment, record `bower-session` plus its role skill, the actual tool
 - Adopt local main `d12c55e`, revision `2026-10-05-contracts-2`, into clean `5798ace`; merge reconciles instructions while preserving live reservations, full progress, proofs and final-round evidence. Combined committed SHA will be recorded in the O1 packet.
 - Capabilities checked: Git/shell, Node 26.10.0, pnpm 12.8.1, native CUA and Codex subagents available. Claude Code 2.1.289 installed but `claude auth status` reports not logged in; no Claude delegation claimed. Process inventory via ps is sandbox-denied; lsof verifies the existing dev cwd and port ownership.
 - First deliverables: immutable C01–C16/boundary audit O1 and read-only bounded R1–R4 probe specifications O2. No production writer starts before its assignment. Real-service access has not been established. Offline reading and upload-reload policies remain owner decisions.
+
+## Current O1/O2 assignments (2026-10-05)
+
+Both packets use revision `2026-10-05-contracts-2`, phase P2, immutable adopted target `143ae2b12d5440330bee1a85bd16e90b8dccf746` and the live integration record at this path. No browser reservation, no repository edits, no recursive delegation.
+
+| Scope | Session / role | Checkout / permitted paths | Dependencies / boundary / failure scenario | Required evidence / state |
+| --- | --- | --- | --- | --- |
+| O1 C01–C16 and contracts | Codex `/root/o1_audit`, `p2-o1-2026-10-05`, independent reviewer | integration read-only; docs/harness/src/e2e | adopted plan + green combined check; Sources/Worker/Drive/semantic baseline; incomplete inputs, ownership, stale replies, lost effects and recovery | compact demonstrated/partial/missing matrix with actual named tests/code/SHA; current reasoning distinct from reproductions; running |
+| O2 R1–R4 specifications | Codex `/root/o2_probe_specs`, `p2-o2-2026-10-05`, read-only research | integration docs/src/harness read-only; optional draft in private tmp | adoption; official provider docs; no credentials/resources established; conflict, scope, lost dispatch and resumable recovery | hypothesis/method/stop/results/cleanup, exact access gaps and sources; no service execution or P3; running |
+
+- Adoption init first failed to fetch dependencies under sandbox DNS and was stopped; rerun with authorized network completed installation and full check (398 tests), `/private/tmp/bower-orchestrator-adoption-init-network.log`. Merge `143ae2b` contains no production changes or proof/status changes.
+- Coordinator reproduces the four archived probes using synthetic clients against `143ae2b` before gap registration. Existing 5190 listener remains untouched; no browser gates/evaluation run.
+
+## First implementation assignment
+
+- Session: Codex `/root/p2_implementer`, `p2-implementer-2026-10-05`; sole implementation worker, no delegation.
+- Revision/phase/capability/entry: contracts-2 / P2 / C11,C14 / `journal-ack-content`.
+- Integration: `/Users/deluisp/Projects/bower-app`, `codex/close-phase-2`; base `143ae2b12d5440330bee1a85bd16e90b8dccf746`.
+- Worker: `/private/tmp/bower-p2-journal-ack`, `codex/p2-journal-ack`, same immutable base. Permitted writes: only `src/data/vault/journal.ts` and `src/data/vault/journal.test.ts`.
+- Prerequisites: O1 preliminary current-code assessment supports the existing qa-12 defect; no new wire/ownership contract. Journal immutable-record contract stays compatible. Initial reproduction is the worker's named failed assertion before fixing.
+- Failure/recovery: matching direct/archive filename contains malformed JSON, another ID or same ID/different text; keep waiting record and visible BowerError. Exact immutable match remains deduplicated after lost upload response. Read candidate contents afresh and validate full record.
+- Required skills/tools: bower-session + bower-implement, Git/shell/Node/pnpm; run exclusive harness/init, named unchanged verify then check; no browser needed.
+- Verify: `pnpm vitest run src/data/vault/journal.test.ts -t "waiting changes require matching valid Drive contents"`.
+- Output: one candidate SHA (assigned files only), assertion-red/green/check logs and result packet. No shared records, done.sh, producer-schema expansion or phase closure. Independent reviewer assigned to immutable candidate before serial integration. State: prepared; dispatch after record commit.
