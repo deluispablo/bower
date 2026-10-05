@@ -24,7 +24,7 @@ export function TidyButton() {
   if (run && stoppedUnseen(run))
     return (
       <button type="button" className={`${s.tidyBtn} ${s.tidyStopped}`} onClick={() => setTidy(true)}>
-        Tidy-up stopped. See why
+        The tidy-up stopped. See why
       </button>
     );
   if (run && replayWaiting(run))

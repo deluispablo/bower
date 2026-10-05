@@ -72,12 +72,15 @@ export function useFileActions() {
           return null;
         }
       },
-      async rename(path: string, name: string): Promise<string | null> {
+      /** `quiet`: a thing just made gets its own word ("New note in …"), not a rename one. */
+      async rename(path: string, name: string, opts: { quiet?: boolean } = {}): Promise<string | null> {
         try {
-          if (/[/\\]/.test(name)) toast('Names cannot have slashes; Bower used a dash.');
           const to = await vault.rename(path, name);
           useUi.getState().relocate(path, to);
           follow(path, to);
+          const slash = /[/\\]/.test(name) ? ' Names cannot have slashes; Bower used a dash.' : '';
+          if (!opts.quiet && to !== path) toast(`Renamed to ${displayName(nameOf(to))}.${slash}`);
+          else if (slash) toast(slash.trim());
           return to;
         } catch (e) {
           report(e, 'That did not work. Try again.');

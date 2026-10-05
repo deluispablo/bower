@@ -121,7 +121,7 @@ export function runClock(r: RunState, now: number): string {
 /** The short line of the chip and the status bar. */
 export function runShort(r: RunState): string {
   if (r.phase === 'done') return r.scope === 'instructions' ? 'Bower read your changes' : `${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
-  if (r.phase === 'failed') return 'Tidy-up stopped';
+  if (r.phase === 'failed') return 'The tidy-up stopped';
   return `${stepLabel(r, r.phase)}…`;
 }
 

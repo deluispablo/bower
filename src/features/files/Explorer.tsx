@@ -414,7 +414,7 @@ export function Explorer({ variant }: Props) {
                 setDraft(null);
                 if (made && typed !== null) welcomeNew(node.path, node.type);
               } else {
-                const to = await act.rename(node.path, name);
+                const to = await act.rename(node.path, name, { quiet: made });
                 if (to) {
                   setFocus(to);
                   ui.setJustMade(null);

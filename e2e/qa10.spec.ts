@@ -182,3 +182,30 @@ test('a link that is not one is said so, next to the box', async ({ page }) => {
   await box.fill('example.com');
   await expect(box).not.toHaveAttribute('aria-invalid', 'true');
 });
+
+test('words agree: a stopped run is "The tidy-up stopped" everywhere', async ({ page }) => {
+  await open(page, '/', 'fail-run');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  await expect(page.getByRole('dialog').getByText('The tidy-up stopped').first()).toBeVisible({ timeout: 8000 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByText(/Tidy-up stopped/)).toHaveCount(0);
+});
+
+test('words agree: the tour says Press, which fits a click and a tap', async ({ page }) => {
+  await open(page, '/', 'first');
+  await page.getByRole('button', { name: 'Show me around' }).click({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByRole('heading', { name: 'Press Tidy up' })).toBeVisible();
+});
+
+test('words agree: a rename says so, and says why a slash became a dash', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/note/Resources/Cooking/Lemon%20tart.md');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.focus();
+  await page.keyboard.press('F2');
+  await page.getByLabel(/New name for Lemon tart/).fill('Lemon tart/best');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status').getByText('Renamed to Lemon tart-best. Names cannot have slashes; Bower used a dash.')).toBeVisible();
+});

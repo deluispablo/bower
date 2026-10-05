@@ -2254,7 +2254,7 @@
       "After a stopped run the footer says one thing."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"words agree:\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "offline-footer",
