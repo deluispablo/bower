@@ -32,9 +32,13 @@ The short-lived batch record is `docs/harness/ACTIVE.md` in the integration chec
 
 Native Claude/Codex tasks and chat memory are convenience views. Assignment packets and the repository records carry the authority. Exchange packets through the owner or an explicitly authorized messaging route. Do not assume either tool can see the other's chats or that a pending message was received.
 
+## Skills and startup
+
+Every session follows `STARTUP.md` through the canonical `bower-session` skill; only the assigned role skill loads next. Selection and optional Codex capabilities are recorded in `SKILLS.md`. Native discovery is convenient, not mandatory: direct SKILL.md loading preserves the method. Skills do not assign ownership, install tools or grant delegation.
+
 ## Starting a batch
 
-1. Read the usual startup documents; inspect `pwd`, `git status --short`, branch, `git worktree list` and recent commits. Record existing dirty paths and their owner. Do not stash, reset, stage or delete another session's work. A dirty integration checkout cannot be used for integration or `done.sh`.
+1. Follow `STARTUP.md` and check role-specific capabilities; read the usual startup documents; inspect `pwd`, `git status --short`, branch, `git worktree list` and recent commits. Record existing dirty paths and their owner. Do not stash, reset, stage or delete another session's work. A dirty integration checkout cannot be used for integration or `done.sh`.
 2. Name the coordinator, integration path/branch and batch base commit in `ACTIVE.md`. Existing uncommitted work needs its owner's handoff; meanwhile other agents can investigate or review committed code.
 3. Run `bash harness/init.sh` in each writable checkout before implementation. Record the exact checkout/commit and failures. If installation or a gate is unavailable, report it as blocked evidence; do not call that checkout green or repair someone else's failing work without assignment.
 4. Coordinator selects one open entry per worker, checks dependencies and reserves its production and test files. Independent source files are not sufficient if both tasks change one contract or fixture. Overlap means sequence the work or re-split it.
@@ -63,7 +67,8 @@ Base SHA / target SHA: immutable commits, not HEAD
 Allowed production and test paths:
 Dependencies and reserved contracts:
 Acceptance: entry what, steps and unchanged verify
-Commands: targeted verify, pnpm check; screen gates when applicable
+Skills / required capabilities: bower-session + assigned role; tools checked live
+Commands: writer verify/check and applicable screen gates; read-only roles use prepared evidence
 Browser reservation: none, or path + SHA + URL + source + scenario + sizes
 Deliverable: candidate SHA, evidence and unresolved findings
 Restrictions: local only; no shared-record edits; no done.sh as a worker

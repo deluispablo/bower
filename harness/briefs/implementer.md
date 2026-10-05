@@ -1,5 +1,7 @@
 # Brief: implementer
 
+Start with `docs/harness/STARTUP.md` (`bower-session`), then load only `bower-implement`. Check the assigned role's actual capabilities; `docs/harness/SKILLS.md` lists optional aids.
+
 You build one entry of `harness/features.json` in the checkout explicitly assigned to you.
 
 Read first: `AGENTS.md`, `docs/harness/METHOD.md`, `docs/harness/COORDINATION.md`, the current integration copy of `docs/harness/ACTIVE.md`, your assignment packet, the entry itself, and the files it names.

@@ -4,9 +4,9 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 
 ## Start here, every session
 
-1. Read `docs/harness/METHOD.md` (how work is done) once, then `docs/PHASES.md` (all four phases: why, what was built, what each owes the next), `docs/harness/HANDOFF.md` (where the work stands, the plan, the traps of this machine), the `## Next` of `harness/progress.md` and `git log --oneline -15`.
-2. Read the current integration copy of `docs/harness/ACTIVE.md`; follow `docs/harness/COORDINATION.md` for Claude/Codex assignments. One writer per checkout; only the named coordinator writes shared harness records. Unassigned sessions stay read-only until assigned.
-3. `bash harness/init.sh`: installs, runs every gate, prints the next open entry of `harness/features.json`.
+1. Follow `docs/harness/STARTUP.md` and load `.agents/skills/bower-session/SKILL.md` once. Read `docs/harness/METHOD.md`, `docs/PHASES.md`, `docs/harness/HANDOFF.md`, the `## Next` of `harness/progress.md` and `git log --oneline -15` as startup specifies.
+2. Read the current integration copy of `docs/harness/ACTIVE.md`; follow `docs/harness/COORDINATION.md` for assignments. One writer per checkout; only the named coordinator writes shared records. Preserve others' dirty work; unassigned sessions stay read-only.
+3. Load only the assigned role skill/brief; check actual tools using `docs/harness/SKILLS.md`. Assigned writers run `bash harness/init.sh` with exclusive checkout use; reviewers/evaluators remain read-only and use a prepared target.
 4. One assigned entry at a time, test first; flip `passes` only after its `verify` is green; the coordinator records progress; one entry per commit (parallel candidate/closure flow: `COORDINATION.md`).
 
 ## Where things are
@@ -16,7 +16,8 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 - Screens: `src/features/`, shell `src/app/`, parts `src/ui/`, Bower the bird `src/bird/`.
 - Data: screens only use `src/data/sources.ts` through `provider.tsx`. Sources: `demo/` (in memory), `vault/` + `drive/` + `live/` + `worker/` (real), `fake/` (pretend Drive and Worker). `choose.ts` picks one (`?source=demo|fake|real`).
 - Coordination: `docs/harness/COORDINATION.md` (worktrees, ownership, serialized integration and browser gates).
-- Subagent briefs: `harness/briefs/` (implementer, evaluator, reviewer).
+- Skills: `.agents/skills/` is canonical; `.claude/skills/` links to it. Startup applies even without native skill discovery; read the SKILL.md directly as fallback.
+- Role briefs: `harness/briefs/` (coordinator, implementer, evaluator, reviewer).
 
 ## Hard rules
 

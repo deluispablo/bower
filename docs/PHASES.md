@@ -1,6 +1,6 @@
 # The phases of the Bower app rebuild
 
-Every phase of the project in one place: why it exists, what it built, how it was checked, where it stands and what it owes the next one. For how work is done see `docs/harness/METHOD.md`; for the state of the current session's work and the next steps see `docs/harness/HANDOFF.md`. Keep this file true when a phase changes state.
+Every phase of the project in one place: why it exists, what it built, how it was checked, where it stands and what it owes the next one. For how work is done see `docs/harness/METHOD.md`; for the state of the current session's work and the next steps see `docs/harness/HANDOFF.md`. Keep this file true when a phase changes state. Claude and Codex share `docs/harness/STARTUP.md` and the role skills described in `docs/harness/SKILLS.md`; optional tools never change phase acceptance criteria.
 
 Last updated: 2026-10-05.
 
@@ -56,7 +56,7 @@ From `docs/specs/2026-10-04-who-does-what.md`, agreed with the owner:
   | qa-10 | evaluator | 19 |
 
 - **Decisions taken** (with where they are written): `docs/harness/HANDOFF.md`, "Decisions taken in phase 2".
-- **To close it:** the plan in `docs/harness/HANDOFF.md`: one open entry, a triage of the ledger's deferred minors with the owner, then a reviewer and an evaluator round until both come back clean.
+- **To close it:** follow the current `## Next` and open entries in `harness/features.json`, the closure plan and owner rulings, then independent review and evaluation until both come back clean. Historical counts are not the current backlog.
 
 ## Phase 3: the Worker (not started)
 

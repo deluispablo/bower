@@ -4,6 +4,7 @@
 
 - Close the qa-11 findings from the independent review, harness findings first. The evaluator is exploring demo and fake; register its findings before fixing them. Repeat both independent rounds after the fixes, then run every gate before merging locally to main.
 - Await the owner's ruling on offline reading, a durable upload queue and the real-Drive smoke test for phase 3. Phase 2 stays open until the rounds are clean and its remaining rulings are agreed.
+- Both tools start with `docs/harness/STARTUP.md` and `bower-session`, load only the assigned role skill, and check capabilities from `SKILLS.md`; reviewers/evaluators use prepared read-only targets.
 - Follow `docs/harness/COORDINATION.md`: establish one coordinator and explicit assignments in the current integration copy of `ACTIVE.md`; keep writers in separate checkouts. Do not mutate a checkout while its gates, `done.sh` or evaluator run. Browser work remains serialized across worktrees.
 
 ## Log
@@ -212,3 +213,4 @@
 - 2026-10-05: registered the continuing P2 closure batch in ACTIVE.md; Codex /root coordinates integration and shared records, with the completed separate-client implementation handed back for closure. No feature status changed; pnpm check green (373 unit tests).
 - 2026-10-05: journal-separate-clients passes — fix(data): keep changes from concurrent clients and acknowledge archived copies
 - 2026-10-05: assigned Worker response guards to an isolated implementer checkout at d423225, candidate-only; the coordinator owns Home identity in integration. Browser resources remain serialized. pnpm check green before the assignment record commit.
+- 2026-10-05: researched Codex skills; added four shared project skills and Claude discovery links, common role-aware startup and capability matrix; updated the map, method, handoff and all role briefs. pnpm check passed; optional upstream skills were not installed; native cross-tool discovery still needs a fresh-session check.

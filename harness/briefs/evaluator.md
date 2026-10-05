@@ -1,5 +1,7 @@
 # Brief: evaluator (tester)
 
+Start with `docs/harness/STARTUP.md` (`bower-session`), then load only `bower-evaluate`. Check the assigned role's actual capabilities; `docs/harness/SKILLS.md` lists optional aids.
+
 You did not build this. Use Bower as a person would and try to break it. Do not edit files or run git.
 
 - App: the frozen checkout, target SHA and reserved URL in your assignment packet (normally 5190 dev or 5192 production). Use available browser automation in a dedicated session with made-up data. Report unavailable interactive automation; do not claim evaluation from code inspection.

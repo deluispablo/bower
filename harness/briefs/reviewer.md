@@ -1,5 +1,7 @@
 # Brief: reviewer
 
+Start with `docs/harness/STARTUP.md` (`bower-session`), then load only `bower-review`. Check the assigned role's actual capabilities; `docs/harness/SKILLS.md` lists optional aids.
+
 Read-only review of an immutable git range in the assigned checkout against its plan and specs (`docs/superpowers/plans/`, `docs/specs/`), in a fresh independent session (prefer the other tool when available).
 
 Check: the plan and the feature list are met; errors are never swallowed (a BowerError with one short sentence, details to console); no hard deletes (Drive Bin only); the app never writes `index.md`, `hot.md`, `log.md` or Bower's sections of a note; every content write passes the modifiedTime it read (a move or rename checks name and place); strict types, no `any`; no real names in data or copy; UI copy plain English.

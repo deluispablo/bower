@@ -2,6 +2,8 @@
 
 The owner asked to finish phase 2, audit the code and test the whole local app before merging to main. Work is on `codex/close-phase-2`; all commits and the eventual merge stay local.
 
+Session startup for subsequent rounds follows `STARTUP.md`; use the assigned `bower-review`/`bower-evaluate` skill and frozen targets from `COORDINATION.md`. This is a historical round ledger, not a current assignment or live capability inventory.
+
 ## Independent review
 
 Review range: `4833d3c..5d26800`, plus the phase 2 data paths and deferred ledger. No Critical findings; six Important and two Minor findings. All eight are registered under `qa-11` in `harness/features.json` and stay open until their named regressions fail before the fix and pass afterward.

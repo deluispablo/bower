@@ -37,4 +37,6 @@ Bower in motion: `/_bird` shows every pose and flight.
 
 Phase work follows the harness in `harness/`: one feature at a time, each proven by its own command.
 
+Claude and Codex use the same startup: `AGENTS.md` → `docs/harness/STARTUP.md`. The four project skills are versioned in `.agents/skills/`, with Claude discovery links in `.claude/skills/`. Load session guidance first, then only the assigned role; check actual optional capabilities in `docs/harness/SKILLS.md`. Worktree assignments and serialized integration follow `docs/harness/COORDINATION.md`.
+
 Local only for now: no remote.

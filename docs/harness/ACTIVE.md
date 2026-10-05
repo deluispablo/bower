@@ -21,6 +21,10 @@ Only the named coordinator writes this file. Read this integration copy before c
 | search-root-scope | Codex `/root/audit_p2` | Prepared; not yet assigned | same isolated worktree | after Worker integration | drive-http.ts; drive-http.test.ts | waiting for assignment | none |
 | Final review and evaluation | fresh sessions, pending | Reviewer / evaluator | integration checkout | final immutable SHA pending | read-only; no source/build changes during evaluation | unassigned | none |
 
+## Required skills and capabilities
+
+For each assignment, record `bower-session` plus its role skill, the actual tools available, required missing capabilities and gate evidence. Use `STARTUP.md` and `SKILLS.md`; optional skills do not imply installed tools. Documentation maintenance by Codex is limited to the shared startup/skills documents and definitions; it assigns no implementation entry and preserves existing dirty code.
+
 ## Evidence and next actions
 
 - `journal-separate-clients`: failed assertion against the old behavior in `/private/tmp/bower-journal-clients-red.log`; confirmed named verify green in `-green.log`; related five unit files: 92 passed in `-unit.log`; full check: 373 tests plus build and sensors in `-check.log`. Earlier dependency failures were replaced by actual test executions after installation recovery.

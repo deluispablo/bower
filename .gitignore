@@ -9,4 +9,11 @@ test-results
 .playwright-mcp
 e2e/_explore-*
 .superpowers
-.claude/
+# Keep local Claude configuration private; share only the four project skill links.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/bower-session
+!.claude/skills/bower-implement
+!.claude/skills/bower-review
+!.claude/skills/bower-evaluate

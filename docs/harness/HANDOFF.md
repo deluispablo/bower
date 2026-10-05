@@ -2,7 +2,11 @@
 
 For an agent starting a new session with no memory of the last one. Read `AGENTS.md`, `docs/harness/METHOD.md` and `docs/PHASES.md` (all four phases) first; this file is the state of play and the plan. Keep it true: when a step below is done, say so here and in `harness/progress.md` (`## Next`) in the same commit.
 
-Last updated: 2026-10-05, at commit `9dabc23` (237 commits). The owner speaks Spanish in chat; everything in the repo is English.
+Historical phase snapshot below: 2026-10-05, at commit `9dabc23`. Startup/coordination instructions updated on 2026-10-05; current completion counts and next work come from `harness/features.json`, `harness/progress.md` and the current integration `ACTIVE.md`, not the historical counts below. The owner speaks Spanish in chat; everything in the repo is English.
+
+## Session startup and skills
+
+Both tools follow `STARTUP.md`, load `bower-session` and only their assigned role skill, then check actual required tools. Canonical skills live in `.agents/skills/`; committed relative Claude links live in `.claude/skills/`. See `SKILLS.md` for researched optional Codex skills and their availability; use direct file loading if native discovery is missing. Read-only review/evaluation does not run init or rebuild its target. Native discovery/routing needs a fresh-session check; no new implementation batch is assigned by this update.
 
 ## Where things stand
 
@@ -87,4 +91,4 @@ Rounds are independent sessions with fresh context, either standalone Claude/Cod
 
 ## Memory outside the repo
 
-The agent's own memory (`~/.claude/projects/-Users-deluisp-Projects-bower/memory/`) holds the owner's preferences: the quality gate, the harness method, the GitHub link exception, design freedom, and the display trap above. The repo is the record; memory only points at it.
+Tool-private memory may point at this repository but is not required to start a session. Durable project requirements and preferences belong in the map/specs/handoff; assignments live in the integration record. Never depend on a Claude memory path being available to Codex or a Codex chat being visible to Claude.

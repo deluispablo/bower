@@ -8,10 +8,13 @@ It follows two published methods:
 
 Claude and Codex share this method. For simultaneous sessions, follow [the coordination protocol](COORDINATION.md) and read the current integration copy of [the batch record](ACTIVE.md). One writer per checkout, explicit entry assignments and one coordinator for shared records. Native task lists do not replace repository state.
 
+Startup and capability selection are shared: [STARTUP.md](STARTUP.md) and [SKILLS.md](SKILLS.md). Load `bower-session` once, then only the assigned role skill. Skills guide work; existing gates still prove it.
+
 ## The parts
 
 | Part | Where | What it is for |
 | --- | --- | --- |
+| Skills | `.agents/skills/` (Claude links in `.claude/skills/`) | Shared startup and conditional implement/review/evaluate entry points. |
 | Map | `AGENTS.md` (loaded by `CLAUDE.md`) | The short list every agent reads first: where things are, the hard rules, the routine. |
 | System of record | `docs/specs/`, `docs/superpowers/plans/`, `docs/harness/` | Why and what: specs, plans with their ledgers (rulings and deferred findings), this method. |
 | Feature list | `harness/features.json` | Everything that must work or be fixed, each with how to check it and `passes`. The backlog of findings lives here too. |
@@ -38,8 +41,10 @@ Each entry in `harness/features.json`:
 
 ## A session, in order
 
-1. `pwd`, then read `AGENTS.md`, the last lines of `harness/progress.md` and `git log --oneline -15`.
-2. `bash harness/init.sh`. If a gate is red, fixing it is this session's first feature.
+Steps 3–6 describe implementation. Reviewers/evaluators follow their assigned read-only brief after startup; documentation/planning follows the owner's stated scope.
+
+1. Follow `STARTUP.md`: orient, establish assignment/ownership and check relevant capabilities; read the required startup docs once.
+2. Assigned writers run `bash harness/init.sh` only with exclusive checkout use. Reviewers/evaluators use a prepared immutable target and do not install or run mutating gates. A failed baseline becomes an explicitly assigned repair; never take over another session's dirty work.
 3. The coordinator assigns the first eligible entry with `"passes": false` (or the one the human named); workers take only their assigned entry. Check dependencies and file reservations first.
 4. Write the test that shows it (it fails), make it pass, run the whole of `pnpm check`. For anything a person sees, run its e2e on `demo` and on `fake`.
 5. Check it as a person would, in a browser, at phone and desktop size, when it touches a screen.
@@ -55,6 +60,7 @@ Each entry in `harness/features.json`:
 
 Either tool can hold any role. Prefer cross-tool review when available. Only one coordinator integrates candidates and writes shared records; no session may assign itself work already reserved by another. A reviewer can inspect an immutable commit while an implementer works in a separate checkout.
 
+- **Coordinator**: one named session owns assignments, integration and shared records. Brief: `harness/briefs/coordinator.md`.
 - **Planner** (with the human): turns a request into a spec and a plan; findings become entries in the feature list.
 - **Implementer**: one entry at a time, test first. Brief: `harness/briefs/implementer.md`.
 - **Evaluator**: a fresh agent that did not build it uses the app as a person would and tries to break it. Its findings go into the feature list. Brief: `harness/briefs/evaluator.md`.
