@@ -4,7 +4,7 @@
 
 The owner asked to finish this session at a stable, clean stopping point; another session will orchestrate and distribute remaining P2 work and subsequent phases. This document records actual evidence, not phase acceptance.
 
-- Branch: `codex/close-phase-2`; main remains `5d26800`. No merge, push or remote changes.
+- Branch: `codex/close-phase-2`; historical batch base `5d26800`. Final inspection found local main at `d12c55e`: another session fast-forwarded planning commits `616768a` and `d12c55e`. This session performed no main merge, push or remote changes. Those planning changes are not integrated into this branch.
 - Immutable reviewed/evaluated target: `4d98eb0869b1e7aea388ab6a8a061547be193094`.
 - Current production sources are unchanged from that target; handoff changes only documentation and the backlog.
 - 201 earlier entries closed with proofs; four new qa-12 entries are open: **201/205 pass**. Their named regression tests are planned, not implemented or executed.
@@ -150,8 +150,8 @@ Production shell/PWA inspection; byte uploads/reload/duplicates; prepared partia
 
 ## Next session
 
-1. Read normal startup docs and establish a new coordinator/assignments. Source checkout is clean and fixes committed; do not inherit a stale browser reservation.
+1. Read normal startup docs and reconcile this clean checkpoint with local main planning revision `2026-10-05-contracts-2` (`d12c55e`) before new implementation assignments. Read main PRODUCT/ARCHITECTURE/WORK_PLAN/P2_ACCEPTANCE and harness ORCHESTRATOR_START/GOVERNANCE/PLANNING_HANDOFF. Its complete simulated P2 contract and C01–C16 acceptance audit supersede historical phase scope here; four qa-12 findings are not the complete remaining P2 workload. Preserve this branch’s proofs and findings during integration. Establish a new coordinator/assignments; do not inherit a stale browser reservation.
 2. Fix the two Important entries first, then both Minor entries, test first and one proof/commit per entry. Their verify commands are future test names, not existing evidence.
 3. Fresh independent review of affected changes; resume remaining evaluator coverage on a new immutable target. Fix any new findings and repeat relevant rounds.
 4. Final check/demo/fake/PWA gates, actual owner rulings, then owner phase acceptance and local merge. No next phase while findings remain.
-5. Offline reading, uploads surviving reload and real-Drive smoke tests were proposed for P3; owner has not agreed to that proposal. Ask when presenting a concrete closure decision, not as a substitute for completing known work.
+5. The older P3 proposal for offline reading, upload persistence and real-Drive smoke testing was never accepted in this session. Main’s new planning includes P2-R integration-premise probes and unresolved offline/reload product decisions; adopt its decision register rather than inheriting the old deferral proposal as a ruling.

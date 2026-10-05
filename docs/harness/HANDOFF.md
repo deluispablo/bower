@@ -8,6 +8,8 @@ Historical phase snapshot below: 2026-10-05, at commit `9dabc23`. Startup/coordi
 
 The owner requested a stable clean stopping point and another session to orchestrate/distribute remaining P2 and later work. Branch `codex/close-phase-2`, last frozen reviewed target `4d98eb0`; production fixes committed, no merge or push. **201/205 entries pass**, four qa-12 findings open. This supersedes the historical closure sequence/counts below; a new coordinator must establish its assignments in ACTIVE.md.
 
+Final inspection found main independently advanced to `d12c55e` (planning revision `2026-10-05-contracts-2`). These planning commits are not integrated here. Next session must adopt/reconcile PRODUCT, ARCHITECTURE, WORK_PLAN, P2_ACCEPTANCE and ORCHESTRATOR_START from main before assigning work. Its complete simulated P2 contract supersedes historical scope below; the four findings here are not the complete acceptance backlog.
+
 Read `2026-10-05-phase-2-final-round.md`: fresh whole-code review found two Important (journal acknowledgment without content validation; pile edits bypassing name/place concurrency) and one Minor (hidden dot-prefixed creation). Incomplete evaluator reproduced dot creation and Timeline source label mismatch. Regression names are registered but those new tests/fixes are not implemented. Resume the explicit remaining evaluator matrix after fixing, obtain fresh affected review and final check/demo/fake/PWA gates. Owner scope/phase closure agreement is still pending. Do not call P2 complete.
 
 ## Session startup and skills

@@ -9,7 +9,7 @@ Only the named coordinator writes this file. Read this integration copy before c
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: released. Dev 5190 remains available locally. Test server 5191 is managed by gates; temporary production preview 5192 is being stopped at handoff. Future evaluation needs a fresh build and explicit reservation.
+- Browser reservation: released. Dev 5190 remains available locally. Test server 5191 is managed by gates; temporary production preview 5192 has been stopped at handoff. Future evaluation needs a fresh build and explicit reservation.
 
 ## Assignments
 
@@ -76,5 +76,7 @@ For each assignment, record `bower-session` plus its role skill, the actual tool
 
 - Exact reviewed/evaluated target `4d98eb0869b1e7aea388ab6a8a061547be193094`; source remains identical in this documentation/backlog handoff. Reviewer verdict With fixes: two Important, one Minor. Evaluator stopped at owner's new scope; no clean or complete evaluation verdict. Four unique findings registered under qa-12; no new implementations assigned.
 - Full evidence and explicit remaining replay matrix: `2026-10-05-phase-2-final-round.md`. Final check before freeze 398 tests; demo/fake 194 passed / 54 intentional skips each; PWA 4 passed. Backlog/hand-off check is repeated before the final documentation commit.
-- No merge to main, no push, no remote changes. Historical main `5d26800`. Offline reading/durable uploads/real-Drive smoke test owner ruling remains pending. Next session must register its coordinator/assignments before work.
-- Isolated search/Worker worktree was clean at a67c632; recoverable archive requested through the app. Other sessions' worktrees were not touched.
+- No merge to main, push or remote changes by this session. Historical batch base `5d26800`; final main observed `d12c55e` after another session’s planning merges. Adoption into this branch is pending. Offline reading/durable uploads/real-Drive smoke test owner ruling remains pending. Next session must register its coordinator/assignments before work.
+- Isolated search/Worker worktree was clean at a67c632; recoverable archive confirmed through the app (archived_worktree attachment). Other sessions' worktrees were not touched.
+
+- Main now carries planning revision `2026-10-05-contracts-2`, complete simulated P2 and orchestrator launch documents. Next session must reconcile/adopt that planning before distributing work; this branch’s historical phase/ruling sections do not supersede the new contract. Four qa-12 entries are known findings, not a complete C01–C16 acceptance audit.
