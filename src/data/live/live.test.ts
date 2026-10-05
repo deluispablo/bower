@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
+import { driveError, type DriveApi } from '../drive/drive-api';
 import { FakeWorker } from '../fake/fake-worker';
 import { seedFakeDrive } from '../fake/seed';
 import type { Scenario } from '../demo/scenario';
@@ -563,5 +564,345 @@ describe('the web', () => {
     const s = await open();
     await s.runs.start('all', { allowWeb: true });
     expect((s.worker as FakeWorker).lastAllowWeb).toBe(true);
+  });
+});
+
+describe('foreground discovery', () => {
+  let second: LiveSources | null = null;
+  afterEach(() => {
+    second?.dispose();
+    second = null;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((yes) => { resolve = yes; });
+    return { promise, resolve };
+  }
+
+  function client(backend: FakeDrive): DriveApi {
+    return {
+      listAll: (root) => backend.listAll(root), get: (id) => backend.get(id), readText: (id) => backend.readText(id),
+      createFolder: (parent, name, props) => backend.createFolder(parent, name, props),
+      createText: (parent, name, text, props) => backend.createText(parent, name, text, props),
+      upload: (parent, name, body, progress, props) => backend.upload(parent, name, body, progress, props),
+      writeText: (id, text, version) => backend.writeText(id, text, version), update: (id, patch) => backend.update(id, patch),
+      trash: (id) => backend.trash(id), untrash: (id) => backend.untrash(id), fullText: (root, query) => backend.fullText(root, query),
+    };
+  }
+
+  const prefix = '---\r\nsummary: Synthetic\r\nby: bower\r\n---\r\n\r\n## Current state\r\n- Protected current state.\r\n\r\n';
+  const suffix = '\r\n## Timeline\r\n- Today · Protected history.\r\n\r\n## Bower\'s note\r\nProtected wording.\r\n';
+  const oldText = `${prefix}- [ ] Old text café.\r\n${suffix}`;
+  const freshText = oldText.replace('Old text', 'Remote text');
+
+  async function pair() {
+    localStorage.clear();
+    sessionStorage.clear();
+    const backend = new FakeDrive();
+    const root = await seedFakeDrive(backend, 'default', Date.now());
+    if (!root) throw new Error('The synthetic folder is missing');
+    const file = await backend.createText(root, 'External.md', oldText);
+    const a = makeLiveSources({ drive: client(backend), worker: new FakeWorker({ drive: backend, rootId: root, scenario: 'default', scale: 'instant' }) });
+    const b = makeLiveSources({ drive: client(backend), worker: new FakeWorker({ drive: backend, rootId: root, scenario: 'default', scale: 'instant' }) });
+    live = a;
+    second = b;
+    // B represents another device: its run observer does not receive A's document events.
+    b.runs.dispose();
+    await Promise.all([a.vault.note('External.md'), a.vault.tree(), b.vault.note('External.md'), b.vault.tree(), a.vault.flushJournal(), b.vault.flushJournal()]);
+    const list = a.drive.listAll.bind(a.drive);
+    const listing = vi.spyOn(a.drive, 'listAll');
+    const status = vi.spyOn(a.worker, 'status');
+    const process = vi.spyOn(a.worker, 'process');
+    vi.useFakeTimers();
+    return { a, b, backend, root, file, list, listing, status, process };
+  }
+
+  function visibility(value: DocumentVisibilityState): void {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(value);
+    document.dispatchEvent(new Event('visibilitychange'));
+  }
+
+  function back(): void {
+    visibility('hidden');
+    visibility('visible');
+  }
+
+  it('returning to an idle folder refreshes external changes (two clients share one backend)', async () => {
+    const { a, b, backend, root, file, listing, status, process } = await pair();
+    const version = await b.drive.get(file.id);
+    await b.drive.writeText(file.id, freshText, version.modifiedTime);
+    await b.drive.createText(root, 'Remote.md', 'A new remote note.');
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Old text café.');
+    expect((await a.vault.tree()).some((n) => n.path === 'Remote.md')).toBe(false);
+    const snapshot = await backend.snapshot();
+    const reloads: Array<Promise<string>> = [];
+    a.vault.subscribe(() => reloads.push(a.vault.note('External.md').then((n) => n.body)));
+    back();
+    // Drain this event's promise jobs under a controlled clock; no background interval is advanced.
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Remote text café.');
+    expect((await a.vault.tree()).some((n) => n.path === 'Remote.md')).toBe(true);
+    expect(await Promise.all(reloads)).toEqual(['- [ ] Remote text café.']);
+    expect(await b.drive.readText(file.id)).toBe(freshText);
+    expect(await backend.snapshot()).toBe(snapshot);
+    expect(listing).toHaveBeenCalledOnce();
+    expect(status).toHaveBeenCalledOnce();
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it('returning to an idle folder refreshes external changes (ordinary status and timer polls stay status-only)', async () => {
+    const { a, listing, status } = await pair();
+    a.runs.subscribe(() => undefined);
+    await a.runs.current();
+    await a.runs.current();
+    visibility('hidden');
+    expect(status).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(status).toHaveBeenCalledTimes(3);
+    expect(listing).not.toHaveBeenCalled();
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+    await a.runs.current();
+    expect(listing).toHaveBeenCalledOnce();
+  });
+
+  it('returning to an idle folder refreshes external changes (visible events share one pending wave and later returns retry)', async () => {
+    const { a, b, file, list, listing, status } = await pair();
+    const release = deferred<undefined>();
+    listing.mockImplementationOnce(async (root) => { await release.promise; return list(root); });
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+    visibility('visible');
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(status).toHaveBeenCalledOnce();
+    expect(listing).toHaveBeenCalledOnce();
+    release.resolve(undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    const version = await b.drive.get(file.id);
+    await b.drive.writeText(file.id, freshText, version.modifiedTime);
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledTimes(2);
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Remote text café.');
+  });
+
+  it('returning to an idle folder refreshes external changes (waiting journal, upload and Undo survive discovery)', async () => {
+    const { a, b, root, listing } = await pair();
+    await a.vault.trash('External.md');
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(a.drive, 'createText').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const rule = await a.vault.addRule('Keep receipts together');
+    const key = `bower:outbox:${root}`;
+    const waiting = localStorage.getItem(key);
+    expect(waiting).not.toBeNull();
+    const upload = a.drive.upload.bind(a.drive);
+    const release = deferred<undefined>();
+    vi.spyOn(a.drive, 'upload').mockImplementationOnce(async (...args) => { await release.promise; return upload(...args); });
+    const pile = await a.vault.addPile({ text: '', items: [{ name: 'New image.png', kind: 'image', origin: 'computer', body: new Blob(['synthetic image']) }] });
+    await b.drive.createText(root, 'Remote.md', 'A new remote note.');
+    listing.mockClear();
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(key)).toBe(waiting);
+    expect((await a.vault.changes()).filter((c) => c.id === rule.id)).toHaveLength(1);
+    expect((await a.vault.piles()).find((p) => p.id === pile.id)?.items).toMatchObject([{ name: 'New image.png', upload: 0 }]);
+    await a.vault.restore('External.md');
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Old text café.');
+    expect(localStorage.getItem(key)).toBe(waiting);
+    release.resolve(undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(diagnostic).toHaveBeenCalledOnce(); // The deliberate failed journal send only.
+  });
+
+  it.each(['offline', 'auth'] as const)('returning to an idle folder refreshes external changes (%s listing failure logs once and retries)', async (failure) => {
+    const { a, b, root, file, listing } = await pair();
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reload = vi.fn();
+    const sessions = vi.fn();
+    a.vault.subscribe(reload);
+    a.session.subscribe(sessions);
+    if (failure === 'auth') await a.worker.signOut();
+    const version = await b.drive.get(file.id);
+    await b.drive.writeText(file.id, freshText, version.modifiedTime);
+    const key = `bower:outbox:${root}`;
+    const bytes = '[{"v":1,"id":"waiting","at":1,"kind":"rule","what":"Synthetic rule","device":"test"}]';
+    localStorage.setItem(key, bytes);
+    listing.mockRejectedValueOnce(driveError(failure));
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(diagnostic).toHaveBeenCalledOnce();
+    expect(diagnostic).toHaveBeenCalledWith(expect.objectContaining({ code: failure, message: expect.any(String) }));
+    expect(reload).not.toHaveBeenCalled();
+    expect(localStorage.getItem(key)).toBe(bytes);
+    if (failure === 'auth') {
+      expect(sessions).toHaveBeenCalledOnce();
+      expect(await a.session.current()).toBeNull();
+      await a.session.signIn();
+    }
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledTimes(2);
+    expect(reload).toHaveBeenCalledOnce();
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Remote text café.');
+    expect(localStorage.getItem(key)).toBe(bytes);
+  });
+
+  it('returning to an idle folder refreshes external changes (new admission during status wait keeps its locks and skips discovery)', async () => {
+    const { a, status, process, listing } = await pair();
+    const reply = deferred<RunWire | null>();
+    status.mockImplementationOnce(() => reply.promise);
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    process.mockResolvedValue({ id: 'NEW', phase: 'queued', scope: 'all', requestedAt: 1, phaseAt: 1 });
+    const piles = (await a.vault.piles()).map((p) => p.id);
+    await a.runs.start('all');
+    reply.resolve(null);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).not.toHaveBeenCalled();
+    expect([...a.runs.runningPiles()]).toEqual(piles);
+    status.mockResolvedValue({ id: 'NEW', phase: 'queued', scope: 'all', requestedAt: 1, phaseAt: 1 });
+    expect(await a.runs.current()).toMatchObject({ id: 'NEW', phase: 'queued' });
+  });
+
+  it.each(['status', 'listing'] as const)('returning to an idle folder refreshes external changes (dispose during %s stops continuation)', async (boundary) => {
+    const { a, status, list, listing } = await pair();
+    const release = deferred<undefined>();
+    if (boundary === 'status') status.mockImplementationOnce(async () => { await release.promise; return null; });
+    else {
+      listing.mockImplementationOnce(async (root) => { await release.promise; return list(root); });
+    }
+    const changed = vi.fn();
+    a.vault.subscribe(changed);
+    a.runs.subscribe(changed);
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledTimes(boundary === 'status' ? 0 : 1);
+    a.dispose();
+    release.resolve(undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    back();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(status).toHaveBeenCalledOnce();
+    expect(listing).toHaveBeenCalledTimes(boundary === 'status' ? 0 : 1);
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('returning to an idle folder refreshes external changes (completion shares discovery and cached status does not relist)', async () => {
+    const { a, status, listing } = await pair();
+    const wire: RunWire = { id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 };
+    const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+    status.mockResolvedValue(wire);
+    vi.spyOn(a.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire, report } });
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await a.runs.current()).toMatchObject({ phase: 'done', report });
+    expect(listing).toHaveBeenCalledOnce();
+    await a.runs.current();
+    expect(listing).toHaveBeenCalledOnce();
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledTimes(2);
+  });
+
+  it('returning to an idle folder refreshes external changes (completion joins an already pending discovery)', async () => {
+    const { a, status, list, listing } = await pair();
+    const release = deferred<undefined>();
+    listing.mockImplementationOnce(async (root) => { await release.promise; return list(root); });
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+    const wire: RunWire = { id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 };
+    status.mockResolvedValue(wire);
+    vi.spyOn(a.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } });
+    const terminal = a.runs.current();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+    release.resolve(undefined);
+    expect((await terminal)?.phase).toBe('done');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+  });
+
+  it('returning to an idle folder refreshes external changes (a later external write still refuses a stale checkbox edit)', async () => {
+    const { a, b, file } = await pair();
+    const version = await b.drive.get(file.id);
+    await b.drive.writeText(file.id, freshText, version.modifiedTime);
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Remote text café.');
+    const now = await b.drive.get(file.id);
+    const newer = freshText.replace('Remote text', 'Newest text');
+    await b.drive.writeText(file.id, newer, now.modifiedTime);
+    await expect(a.vault.toggleTask('External.md', 0)).rejects.toMatchObject({ code: 'conflict' });
+    expect(await b.drive.readText(file.id)).toBe(newer);
+  });
+
+  it.each(['terminal', 'idle'] as const)('returning to an idle folder refreshes external changes (pre-return snapshot cannot satisfy %s discovery)', async (outcome) => {
+    const { a, b, root, file, list, listing, status } = await pair();
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Old text café.');
+    const captured = deferred<undefined>();
+    const release = deferred<undefined>();
+    listing.mockImplementationOnce(async (folder) => {
+      const snapshot = await list(folder);
+      captured.resolve(undefined);
+      await release.promise;
+      return snapshot;
+    });
+    const wire: RunWire = { id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 };
+    status.mockResolvedValue(wire);
+    vi.spyOn(a.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } });
+    const old = a.runs.current();
+    await captured.promise;
+    const version = await b.drive.get(file.id);
+    await b.drive.writeText(file.id, freshText, version.modifiedTime);
+    await b.drive.createText(root, 'Remote.md', 'A new remote note.');
+    if (outcome === 'idle') status.mockResolvedValue(null);
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+    release.resolve(undefined);
+    await old;
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await a.vault.note('External.md')).body).toBe('- [ ] Remote text café.');
+    expect((await a.vault.tree()).some((n) => n.path === 'Remote.md')).toBe(true);
+    expect(listing).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['active', 'disposed'] as const)('returning to an idle folder refreshes external changes (pre-return listing wait rechecks %s before starting discovery)', async (change) => {
+    const { a, list, listing, status, process } = await pair();
+    const captured = deferred<undefined>();
+    const release = deferred<undefined>();
+    listing.mockImplementationOnce(async (folder) => {
+      const snapshot = await list(folder);
+      captured.resolve(undefined);
+      await release.promise;
+      return snapshot;
+    });
+    status.mockResolvedValue({ id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 });
+    const old = a.runs.current();
+    await captured.promise;
+    status.mockResolvedValue(null);
+    back();
+    await vi.advanceTimersByTimeAsync(0);
+    if (change === 'disposed') a.dispose();
+    else {
+      const wire: RunWire = { id: 'NEW', phase: 'queued', scope: 'instructions', requestedAt: 1, phaseAt: 1 };
+      process.mockResolvedValue(wire);
+      await a.runs.start('instructions');
+      status.mockResolvedValue(wire);
+      expect([...a.runs.runningPiles()]).toEqual(['*']);
+    }
+    release.resolve(undefined);
+    await old;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listing).toHaveBeenCalledOnce();
+    if (change === 'active') expect(await a.runs.current()).toMatchObject({ id: 'NEW', phase: 'queued' });
   });
 });

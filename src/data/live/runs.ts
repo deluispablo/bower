@@ -37,11 +37,15 @@ export class LiveRuns implements RunSource {
   private issued = 0;
   private accepted = 0;
   private starts: Promise<unknown> = Promise.resolve();
+  private foreground: Promise<void> | null = null;
+  private refreshing: Promise<void> | null = null;
+  private refreshIssued = 0;
+  private refreshed = 0;
   private disposed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private took = new Set<string>();
   private readonly onVisible = (): void => {
-    if (document.visibilityState === 'visible') void this.poll();
+    if (document.visibilityState === 'visible') void this.returnToForeground();
   };
 
   constructor(
@@ -145,6 +149,43 @@ export class LiveRuns implements RunSource {
     this.schedule();
   }
 
+  /** A visible return discovers idle external changes; ordinary status polling stays lightweight. */
+  private returnToForeground(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    if (this.foreground) return this.foreground;
+    const before = this.refreshIssued;
+    const work = (async () => {
+      try {
+        await this.current();
+        // A pre-return listing may settle during this wave, but only one begun in it discovers this return's changes.
+        while (this.refreshed <= before) {
+          if (this.disposed || (this.last && !finished(this.last))) return;
+          await this.refreshFolder();
+        }
+      } catch (e) {
+        // This event has no awaiting caller; keep the failure visible and allow the next return to retry.
+        console.error(e);
+      }
+    })();
+    this.foreground = work.finally(() => {
+      this.foreground = null;
+      this.schedule();
+    });
+    return this.foreground;
+  }
+
+  /** Coalesce foreground and completion listings without replacing local pending work. */
+  private refreshFolder(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    if (!this.refreshing) {
+      const ticket = ++this.refreshIssued;
+      this.refreshing = this.vault.refresh().then(() => {
+        if (!this.disposed) this.refreshed = ticket;
+      }).finally(() => { this.refreshing = null; });
+    }
+    return this.refreshing;
+  }
+
   private schedule(): void {
     if (this.disposed || !this.listeners.size) return;
     if (this.timer) clearTimeout(this.timer);
@@ -200,7 +241,7 @@ export class LiveRuns implements RunSource {
 
   private async loadReport(wire: RunWire, generation: number): Promise<void> {
     const current = () => !this.disposed && generation === this.generation && this.last?.id === wire.id;
-    await this.vault.refresh();
+    await this.refreshFolder();
     if (!current()) return;
     const file = await this.vault.lastRun();
     if (!current()) return;
