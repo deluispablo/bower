@@ -73,3 +73,19 @@ test('No thanks can be taken back', async ({ page }) => {
   await page.getByRole('status').getByRole('button', { name: 'Undo' }).last().click();
   await expect(page.getByText(title).first()).toBeVisible();
 });
+
+const unnamedButtons = (page: Page): Promise<string[]> =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('button')]
+      .filter((b) => !(b.getAttribute('aria-label') || b.getAttribute('aria-labelledby') || b.getAttribute('title') || b.textContent?.trim()))
+      .map((b) => b.className),
+  );
+
+test('no unnamed buttons: the tidy-up sheet and Add', async ({ page }) => {
+  await open(page, '/');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(await unnamedButtons(page)).toEqual([]);
+  await open(page, '/add');
+  expect(await unnamedButtons(page)).toEqual([]);
+});

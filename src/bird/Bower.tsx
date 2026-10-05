@@ -217,6 +217,7 @@ export const BowerLayer = forwardRef<BowerController, LayerProps>(function Bower
         ref={bird}
         type="button"
         tabIndex={-1}
+        aria-label="Bower"
         className="bird bower-flyer"
         onClick={() => engine.current?.poke()}
       >

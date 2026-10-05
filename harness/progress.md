@@ -192,3 +192,4 @@
 - 2026-10-05: run-result-counts passes — fix(app): a tidy-up's result counts each change once; its live line is the detail, not the title again
 - 2026-10-05: runner-link-names passes — fix(app): the pretend tidy-up names a saved link from its address; the palette names things as the tree does
 - 2026-10-05: landing-jargon passes — fix(landing): the tidy-up section says how it files in plain words
+- 2026-10-05: bird-not-a-button passes — fix(app): Bower's bird is a named button

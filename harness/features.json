@@ -2110,7 +2110,7 @@
       "Open http://localhost:5190/?scenario=default&time=instant, open the tidy-up sheet; with a screen reader, Bower is not an unnamed button."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"no unnamed buttons\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "side-tabs-a11y",
