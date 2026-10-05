@@ -240,3 +240,4 @@
 
 - 2026-10-05: Naming gates green on both sources; reserve final inline-stem and linked-label regressions before closure.
 - 2026-10-05: plain-file-names passes — fix(files): keep one plain name across views and actions
+- 2026-10-05: tab-link-name passes — fix(shell): prove plain saved-link tab names

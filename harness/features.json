@@ -2404,7 +2404,7 @@
       "The tab has the same plain name as its page and the tree."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"a saved link has the same name in its desktop tab\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "composer-focus",
