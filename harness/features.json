@@ -2302,7 +2302,7 @@
       "The harness refuses the proof even though the first test ran."
     ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"every verify name runs in the files that verify selects\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "journal-before-run",

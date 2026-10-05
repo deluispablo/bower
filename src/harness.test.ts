@@ -129,4 +129,34 @@ describe('the harness', () => {
     // A source excerpt with assertion text is not the reporter's error diagnostic.
     expect(redKind('Error: page.goto failed\n  42 | throw new Error("AssertionError: expected a value")' + failed)).toBe('none');
   });
+
+  it('every verify name runs in the files that verify selects', () => {
+    // String coercion also exercises the old global-name matcher: the regression
+    // must fail because of scope, rather than merely because metadata is new.
+    const named = (name: string, file: string, extra: { config?: string; project?: string } = {}) => ({ name, file, ...extra, toString: () => name });
+    const tests = {
+      unit: [
+        named('selected first behavior', 'src/a.test.ts'),
+        named('selected second behavior', 'src/b.test.ts'),
+      ],
+      e2e: [
+        named('selected first behavior', 'e2e/a.spec.ts', { config: 'playwright.config.ts', project: 'phone' }),
+        named('selected second behavior', 'e2e/b.spec.ts', { config: 'playwright.config.ts', project: 'desktop' }),
+        named('selected production behavior', 'e2e/pwa.spec.ts', { config: 'e2e/pwa.config.ts', project: '' }),
+      ],
+    };
+    const check = (verify: string): string[] => {
+      const entry = { id: 'selected', task: 'qa-11', steps: S, verify, passes: true };
+      return problems([entry], proofOf(entry), tests) as string[];
+    };
+    expect(check('pnpm vitest run src/a.test.ts -t "selected first|selected second"')).toContainEqual(expect.stringMatching(/selected second.*matches no test/));
+    expect(check('pnpm vitest run src/a.test.ts src/b.test.ts -t "selected first|selected second"')).toEqual([]);
+    expect(check('pnpm vitest run src -t "selected first|selected second"')).toEqual([]);
+    expect(check('bash scripts/e2e-both.sh e2e/a.spec.ts -g "selected first|selected second"')).toContainEqual(expect.stringMatching(/selected second.*matches no test/));
+    expect(check('bash scripts/e2e-both.sh e2e/a.spec.ts e2e/b.spec.ts -g "selected first|selected second"')).toEqual([]);
+    expect(check('pnpm exec playwright test -c e2e/pwa.config.ts -g "selected first"')).toContainEqual(expect.stringMatching(/selected first.*matches no test/));
+    expect(check('pnpm exec playwright test -c e2e/pwa.config.ts -g "selected production"')).toEqual([]);
+    expect(check('pnpm exec playwright test --project=phone -g "selected second"')).toContainEqual(expect.stringMatching(/selected second.*matches no test/));
+    expect(check('pnpm exec playwright test --project desktop -g "selected second"')).toEqual([]);
+  });
 });

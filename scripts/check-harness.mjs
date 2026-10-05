@@ -3,6 +3,7 @@
 // pattern a verify names still matches a test that exists.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 import { hashOf, LEGACY_HASH, nextProblems, problems, readProofs } from './harness-rules.mjs';
 
 const root = new URL('..', import.meta.url);
@@ -11,18 +12,19 @@ const proofFile = new URL('harness/proof.log', root);
 const proofs = readProofs(existsSync(proofFile) ? readFileSync(proofFile, 'utf8') : '');
 
 const unitFile = new URL('test-results/unit.json', root);
-const unit = existsSync(unitFile) ? JSON.parse(readFileSync(unitFile, 'utf8')).testResults.flatMap((r) => r.assertionResults.map((a) => a.fullName)) : [];
-const e2eTitles = (config) => {
-  const out = execSync(`pnpm exec playwright test --list --reporter=json ${config}`, { cwd: new URL('.', root), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+const unit = existsSync(unitFile) ? JSON.parse(readFileSync(unitFile, 'utf8')).testResults.flatMap((r) => r.assertionResults.map((a) => ({ name: a.fullName, file: relative(process.cwd(), r.name), config: 'vite.config.ts', project: r.projectName ?? '' }))) : [];
+const e2eTitles = (config = 'playwright.config.ts') => {
+  const out = execSync(`pnpm exec playwright test --list --reporter=json -c ${config}`, { cwd: new URL('.', root), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+  const listed = JSON.parse(out);
   const titles = [];
   const walk = (s) => {
-    for (const spec of s.specs ?? []) titles.push(spec.title);
+    for (const spec of s.specs ?? []) for (const test of spec.tests ?? []) titles.push({ name: spec.title, file: relative(process.cwd(), resolve(listed.config.rootDir, spec.file)), config, project: test.projectName ?? '' });
     for (const sub of s.suites ?? []) walk(sub);
   };
-  for (const s of JSON.parse(out).suites ?? []) walk(s);
+  for (const s of listed.suites ?? []) walk(s);
   return titles;
 };
-const e2e = [...e2eTitles(''), ...e2eTitles('-c e2e/pwa.config.ts')];
+const e2e = [...e2eTitles(), ...e2eTitles('e2e/pwa.config.ts')];
 
 const legacyText = readFileSync(new URL('harness/proof-legacy.txt', root), 'utf8');
 const legacy = new Set(legacyText.split('\n').filter(Boolean));

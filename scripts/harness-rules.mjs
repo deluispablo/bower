@@ -1,6 +1,7 @@
 // The harness's rules, pure, so they are tested (src/harness.test.ts) and used by
 // scripts/check-harness.mjs and harness/done.sh alike.
 import { createHash } from 'node:crypto';
+import { relative, resolve } from 'node:path';
 
 /** The hash a proof line keeps for a verify command. */
 export const hashOf = (verify) => createHash('sha256').update(verify).digest('hex').slice(0, 16);
@@ -40,6 +41,41 @@ function topLevelParts(pattern) {
   return out.filter((p) => p.trim());
 }
 
+/** The files/config/projects a named verify actually selects, before its name filter. */
+function selectedTests(command, kind, tests) {
+  const words = [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
+  const start = kind === 'unit' ? words.indexOf('run') : words.findIndex((w) => w.endsWith('e2e-both.sh'));
+  const at = start >= 0 ? start : words.indexOf('test');
+  const filters = [];
+  const projects = [];
+  let config = kind === 'e2e' ? 'playwright.config.ts' : null;
+  const takesValue = new Set(['-t', '-g', '-c', '--config', '--project', '--grep', '--grep-invert', '--testNamePattern', '--reporter', '--outputFile', '--output', '--workers', '--timeout', '--retries', '--repeat-each', '--shard', '--maxWorkers', '--minWorkers', '--pool', '--environment']);
+  for (let i = at + 1; i < words.length; i++) {
+    const word = words[i];
+    const equal = word.indexOf('=');
+    const option = equal > 0 ? word.slice(0, equal) : word;
+    if (takesValue.has(option)) {
+      const value = equal > 0 ? word.slice(equal + 1) : words[++i];
+      if (option === '-c' || option === '--config') config = value;
+      if (option === '--project') projects.push(value);
+    } else if (!word.startsWith('-')) filters.push(word);
+  }
+  const localPath = (p) => relative(process.cwd(), resolve(p)).replaceAll('\\', '/');
+  const expectedConfig = config ? localPath(config) : null;
+  return tests.filter((test) => {
+    // Older pure callers supplied names only. The production sensor supplies
+    // file/config/project metadata, so its proofs always receive scoped checks.
+    if (typeof test === 'string') return true;
+    if (expectedConfig && test.config && localPath(test.config) !== expectedConfig) return false;
+    if (projects.length && !projects.some((p) => {
+      const pattern = p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*');
+      return new RegExp(`^${pattern}$`).test(test.project ?? '');
+    })) return false;
+    const file = test.file.replaceAll('\\', '/');
+    return !filters.length || filters.some((filter) => kind === 'unit' ? file.includes(filter.replace(/^\.\//, '')) : new RegExp(filter).test(file));
+  });
+}
+
 /**
  * Everything that makes the feature list dishonest, one sentence each.
  * `tests` (the names of the unit and e2e tests that exist) lets it check that
@@ -69,6 +105,7 @@ export function problems(features, proofs, tests, legacy = new Set()) {
         continue;
       }
       if (tests && f.passes) {
+        const selected = selectedTests(p, pat.kind, tests[pat.kind]);
         // Each name the pattern lists (a|b|c at the top level) must match a test of its own.
         for (const part of topLevelParts(pat.pattern)) {
           let re;
@@ -78,7 +115,7 @@ export function problems(features, proofs, tests, legacy = new Set()) {
             bad.push(`${f.id}: pattern "${part}" is not a valid pattern`);
             continue;
           }
-          if (!tests[pat.kind].some((name) => re.test(name))) bad.push(`${f.id}: "${part}" matches no test (${pat.kind})`);
+          if (!selected.some((test) => re.test(typeof test === 'string' ? test : test.name))) bad.push(`${f.id}: "${part}" matches no test (${pat.kind}, selected files/config/projects)`);
         }
       }
     }
