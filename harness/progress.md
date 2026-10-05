@@ -211,3 +211,4 @@
 - 2026-10-05: researched Claude/Codex coordination and updated the method/briefs: explicit ownership, isolated workers, cross-tool review and serialized integration/browser checks. No implementation batch started; pnpm check and git diff --check passed for this documentation update (the init install hit registry DNS failures).
 - 2026-10-05: registered the continuing P2 closure batch in ACTIVE.md; Codex /root coordinates integration and shared records, with the completed separate-client implementation handed back for closure. No feature status changed; pnpm check green (373 unit tests).
 - 2026-10-05: journal-separate-clients passes — fix(data): keep changes from concurrent clients and acknowledge archived copies
+- 2026-10-05: assigned Worker response guards to an isolated implementer checkout at d423225, candidate-only; the coordinator owns Home identity in integration. Browser resources remain serialized. pnpm check green before the assignment record commit.
