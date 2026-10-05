@@ -2715,7 +2715,7 @@
       "Preserve canonical legacy/no-frontmatter behavior, BOM and valid Unicode/line endings; refuse unsupported/damaged/invalid-encoding content without performing I/O or affecting independent metadata operations."
     ],
     "verify": "pnpm vitest run src/data/vault/ownership-format.test.ts -t \"ownership/2 raw byte authority\"",
-    "passes": false,
+    "passes": true,
     "note": "New bounded parser foundation authorized by TL-P2-2026-10-05-03; named verify planned, not yet implemented/executed. Does not close protected-current-prose, raw adapter/real activation/recovery UI or full C03 acceptance. Test-first loaded module stub required."
   }
 ]
