@@ -2627,5 +2627,20 @@
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"toggling a personal task preserves every other source byte\"",
     "passes": false,
     "note": "Observed at6305ca9: canonical protected prefix/suffix changed, CRLF count12 to0. Reproducible synthetic script/results under docs/harness/evidence/2026-10-05-o1/protected-crlf-*. Named assertion is planned, not executed. Existing grammar only; rich ownership decision remains separate."
+  },
+  {
+    "id": "runner-request-preflight",
+    "task": "qa-13",
+    "category": "review",
+    "what": "Malformed existing request history refuses a fake tidy-up before applying effects or replacing its bytes.",
+    "steps": [
+      "Prepare a synthetic text pile and pending request over the same public fake Drive; retain exact before bytes/tree/journal.",
+      "Corrupt existing v1 request history with invalid JSON, nested fields or a non-array done container; the app already rejects these.",
+      "Currently the runner overwrites or preserves invalid history with done, or throws only after filing and binning the pile.",
+      "Validate using the existing v1 guard before the first runner mutation; refuse readably with no data effects and preserve original bytes/pending intent. Repair the input and retry the valid control once."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"malformed request history stops a tidy-up before effects\"",
+    "passes": false,
+    "note": "Reproduced by independent current-v1 observation at6305ca9; script/raw snapshots/results under docs/harness/evidence/2026-10-05-o3. Named assertion planned, not run. Existing guard/format only; concurrent external changes, durable checkpoints and final-report barrier remain separate O3/O4/R1 obligations."
   }
 ]
