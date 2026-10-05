@@ -4,14 +4,14 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 
 ## Start here, every session
 
-1. Read `docs/harness/METHOD.md` (how work is done) once, then the last lines of `harness/progress.md` and `git log --oneline -15`.
+1. Read `docs/harness/METHOD.md` (how work is done) once, then `docs/PHASES.md` (all four phases: why, what was built, what each owes the next), `docs/harness/HANDOFF.md` (where the work stands, the plan, the traps of this machine), the `## Next` of `harness/progress.md` and `git log --oneline -15`.
 2. `bash harness/init.sh`: installs, runs every gate, prints the next open entry of `harness/features.json`.
 3. One entry at a time, test first; flip `passes` only after its `verify` is green; one line in `progress.md`; one commit.
 
 ## Where things are
 
 - Specs: `docs/specs/` (UI, who does what, the Worker contract). Plans and their ledgers: `docs/superpowers/plans/`.
-- Phases: 1 UI on demo data (done), 2 logic over Drive and the Worker (done, fixing findings), 3 the Worker, 4 the agent. No next phase while an entry is open.
+- Phases (`docs/PHASES.md`): 1 UI on demo data (done), 2 logic over Drive and the Worker (built, closing), 3 the Worker, 4 the agent. No next phase while an entry is open.
 - Screens: `src/features/`, shell `src/app/`, parts `src/ui/`, Bower the bird `src/bird/`.
 - Data: screens only use `src/data/sources.ts` through `provider.tsx`. Sources: `demo/` (in memory), `vault/` + `drive/` + `live/` + `worker/` (real), `fake/` (pretend Drive and Worker). `choose.ts` picks one (`?source=demo|fake|real`).
 - Subagent briefs: `harness/briefs/` (implementer, evaluator, reviewer).

@@ -54,5 +54,14 @@ describe('what the repository promises', () => {
     expect(html).not.toMatch(/using PARA unless your rules say otherwise/);
     expect(html).toMatch(/in folders by how soon you need things/);
   });
+
+  it('a new agent is sent to the handoff, and the handoff has the plan and the traps', () => {
+    expect(read('AGENTS.md')).toMatch(/docs\/harness\/HANDOFF\.md/);
+    expect(read('AGENTS.md')).toMatch(/docs\/PHASES\.md/);
+    const phases = read('docs/PHASES.md');
+    for (const n of [1, 2, 3, 4]) expect(phases, `phase ${n}`).toMatch(new RegExp(`## Phase ${n}:`));
+    const handoff = read('docs/harness/HANDOFF.md');
+    for (const part of ['## Where things stand', '## The plan, in order', '## How to run a round', '## Traps on this machine', '## Decisions taken in phase 2']) expect(handoff, part).toContain(part);
+  });
 });
 

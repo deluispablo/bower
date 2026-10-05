@@ -2,9 +2,8 @@
 
 ## Next
 
-- 9 qa-10 entries left, all verified by e2e: bird-not-a-button (its fix and test are in `git stash`, "bird-not-a-button": pop, then close with done.sh), side-tabs-a11y (a Tabs component is drafted, not in the repo yet), tree-typeahead, one-naming, remove-pile-during-run, welcome-back, invalid-link-says, small-wording, offline-footer.
-- Run e2e only while the Mac's display is awake (`system_profiler SPDisplaysDataType | grep "Display Asleep"` says No): headless Chrome stalls otherwise. Never edit src/ while e2e or done.sh runs.
-- Then a fresh reviewer and evaluator round; phase 3 waits until both come back clean.
+- Follow the plan in `docs/harness/HANDOFF.md`: close `phone-more-faint`, triage the phase 2 ledger's deferred minors with the owner, then a reviewer round over `4833d3c..HEAD` and an evaluator round (qa-11), fix their findings, repeat until clean. Phase 3 waits for that.
+- Run e2e only while the Mac's display is awake; never edit `src/` while e2e, `done.sh` or an evaluator runs.
 
 ## Log
 
@@ -201,3 +200,4 @@
 - 2026-10-05: invalid-link-says passes — fix(app): a link that is not one is said so next to the box
 - 2026-10-05: small-wording passes — fix(app): words agree: one way to say a run stopped, Press in the tour, and a rename says so
 - 2026-10-05: offline-footer passes — fix(app): offline, the footer says your changes wait here
+- 2026-10-05: qa-10 closed (185/185). `docs/harness/HANDOFF.md` written: the state, the plan to close phase 2 and start phase 3, how to run a round, the traps of this machine.

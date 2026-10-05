@@ -1,6 +1,6 @@
 # The harness
 
-How work is done here: `docs/harness/METHOD.md`. The map: `AGENTS.md`.
+How work is done here: `docs/harness/METHOD.md`. Where it stands and what comes next: `docs/harness/HANDOFF.md`. The map: `AGENTS.md`.
 
 - `features.json`: everything that must work or be fixed, each with its `verify` command and `passes`.
 - `progress.md`: one dated line per session or feature.

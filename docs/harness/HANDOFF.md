@@ -1,0 +1,88 @@
+# Handoff: where the work stands and what comes next
+
+For an agent starting a new session with no memory of the last one. Read `AGENTS.md`, `docs/harness/METHOD.md` and `docs/PHASES.md` (all four phases) first; this file is the state of play and the plan. Keep it true: when a step below is done, say so here and in `harness/progress.md` (`## Next`) in the same commit.
+
+Last updated: 2026-10-05, at commit `9dabc23` (237 commits). The owner speaks Spanish in chat; everything in the repo is English.
+
+## Where things stand
+
+- **Phase 1** (the UI on demo data): done.
+- **Phase 2** (app logic over Google Drive and the Worker, with a pretend Drive and Worker behind `?source=fake`): built, then hardened by rounds of evaluation and review. It is **not closed yet**: the owner's rule is no next phase until a round comes back clean.
+- **Rounds so far** (each round's findings became entries in `harness/features.json` with that `task`):
+
+  | Round | Source | Entries | State |
+  | --- | --- | --- | --- |
+  | qa-5 | evaluator | 48 | closed |
+  | qa-6 | evaluator | 50 | closed |
+  | qa-7 | reviewer of qa-6 | 17 | closed |
+  | qa-8 | evaluator after qa-6 | 20 | closed |
+  | qa-9 | reviewer of qa-7/8 (range `57ab04d^..4833d3c`) | 18 | closed |
+  | qa-10 | evaluator after qa-8 | 18 | closed |
+
+- **Harness:** 185/185 entries pass, each with a proof in `harness/proof.log`; one open entry was added with this handoff (`phone-more-faint`, below).
+- **Last gates, all green at `9dabc23`:** `pnpm check`; the whole e2e suite on demo and on fake (186 passed, 52 skipped on each; the skips are tests for one screen size or one source only); `pnpm e2e:pwa` (4 passed).
+
+## The plan, in order
+
+1. **Close the one open entry**, `phone-more-faint`: the ⋯ (More) button on phone note pages is very faint. Test first, then `harness/done.sh`.
+2. **Triage the deferred minors** in `docs/superpowers/plans/2026-10-04-phase-2-ledger.md` (the `Final: minor (deferred)` lines and the two `Ruling` lines that say "in phase 3"). Each one either becomes an entry in `features.json` (task `qa-11`, with `steps` and a `verify`) and gets fixed, or gets a written ruling the owner agrees to. Ask the owner which, in one short message, before deciding for them.
+3. **Review round** (qa-11): a fresh reviewer over the range `4833d3c..HEAD`. See "How to run a round".
+4. **Evaluator round** (qa-11 or qa-12): a fresh evaluator replays every qa-9/qa-10 bug and polish entry and explores the whole app. See "How to run a round".
+5. **Fix every finding** as entries, one per commit, through `done.sh`. Then repeat 3 and 4 on what changed.
+6. **Phase 2 is closed** when a reviewer and an evaluator both report nothing Critical or Important and the owner agrees. Write that in `progress.md` and here, and update `AGENTS.md` (phases line).
+7. **Phase 3, the Worker** (Cloudflare Worker: sign-in, tokens, the run dispatch). Start with `superpowers:brainstorming` with the owner, then a spec in `docs/specs/` and a plan in `docs/superpowers/plans/` (as phase 2 did), then a fresh feature list section in `features.json`. The contract is already written: `docs/specs/2026-10-04-worker-contract.md` (where the fake and the contract disagree, the contract wins). The real Worker must also honour what phase 2 added to the contract:
+   - `POST /vault` answers `{ folderId, found }` (`found: true` when the person's earlier folder is still in their Drive, so the app says welcome back).
+   - `DELETE /me` forgets the folder pointer too.
+   - The runner (phase 4) writes `requests` and `rulesWorded` in the report, takes out rules a journal line `removes`, rewrites `[[links]]` after `rename`/`move` lines, and keeps one journal record per `id` (archiving every copy).
+   - Phase 3 also owes a real-Drive smoke test (ledger: full-text tokenising, resumable-upload resume, rename and modifiedTime behaviour).
+8. **Phase 4, the agent** (the runner on GitHub Actions in the operator's private instance repo). Not planned yet.
+
+## How to run a round
+
+Rounds are subagents with fresh context. The one who builds never grades.
+
+- **Reviewer** (most capable model; read-only). Prompt: "Follow the brief in `harness/briefs/reviewer.md` exactly. Review the git range `<base>..HEAD` in /Users/deluisp/Projects/bower-app." Add what to look at specifically: every entry of the round (does the fix do what its `what` says for a person, and would its named test fail without it?), harness honesty (can an entry pass without a real red then green?), and the new data paths of the range. Ask for Critical / Important / Minor with `file:line`, effect on a person and a fix, what it set aside and why, and a one-line verdict.
+- **Evaluator** (general-purpose; uses the Playwright MCP browser tools, loaded with ToolSearch "playwright"). Prompt: "Follow the brief in `harness/briefs/evaluator.md` exactly." It uses the dev server on 5190 and the production build on 5192, uploads files only from `/Users/deluisp/Projects/bower/.playwright-mcp/`, and must not edit files or run git. Part 1: replay every bug/polish entry of the last rounds by its `steps`, on fake and demo, desktop and phone (390×844). Part 2: a fresh exploratory pass as a first-time user and as a keyboard-only user.
+- **Do not edit `src/` while the evaluator runs**: the dev server hot-reloads under it, and its report fills with reloads that are not bugs.
+- **Findings become entries** in `features.json` (next `task` number), each with `what`, `steps` an evaluator can replay, and a `verify` naming the test that will pin it. Commit them in one `chore(harness): qa-N entries …` commit, update `## Next`, then fix them one per commit.
+- **Run the reviewer and the evaluator at the same time** (two background agents). Fix the reviewer's harness findings first: they change how every later entry is closed.
+
+## Closing entries: what the tools expect
+
+- Stage the entry's change (`git add`), then `bash harness/done.sh <id> "<message>"`. It refuses anything unstaged (outside `harness/`), another entry's `passes` changing, a red that is not a failed assertion, and a verify whose test names do not all match real tests.
+- `--fixed-in <sha>` when the fix is already committed; `--known-green "<why>"` only when the entry's `note` (committed before) says why there can be no red, e.g. a tests-only entry checked red by hand.
+- Two entries fixed by one change: close the first normally, the second with `--fixed-in <sha of the first>`.
+- A new module: commit a stub first, or the red is a load error, which `done.sh` refuses.
+- Times on this Mac: a unit-test entry closes in about 3 minutes; an e2e entry in 10 to 15 (the red step and the verify each run Playwright on demo and on fake). Run long closes in the background and wait for the notification.
+
+## Traps on this machine
+
+- **Playwright needs the display awake.** Headless Chrome (system Chrome, `channel: 'chrome'`) stalls when the Mac's display sleeps: a test hangs for ~15 minutes, often with the boot screen still up, and Chrome logs `CVDisplayLinkCreateWithCGDisplay failed`. Check first: `system_profiler SPDisplaysDataType | grep "Display Asleep"` (no output means awake). If asleep, do unit-test work and ask the owner to wake it. `caffeinate`, GPU flags and `--global-timeout` do not help.
+- **macOS has no `timeout` command.** A script that relies on it never runs what it wraps (a bisect "proved" a docs commit guilty this way).
+- **Servers:** dev on 5190 and the build preview on 5192 (`.claude/launch.json`); Playwright starts its own dev server on 5191 (`reuseExistingServer`). The preview needs `pnpm build` to show new code.
+- **Dates in tests:** never hard-code today's date (a journal test broke at midnight).
+- **Shared state between component tests:** unmount (`cleanup()`) and reset the UI store in `afterEach`, or one test's dialog closes the next.
+- **Prettier** reformats whole files; do not run it over a file you only touched in places.
+- **Commands chained with `;`** go on after a failure; use `&&` around gates.
+
+## Decisions taken in phase 2 (and where they are written)
+
+- A move or rename checks name and place, not modifiedTime (`AGENTS.md`, ledger).
+- The journal outbox stays at sign-out; it is keyed by folder (`AGENTS.md`, `src/data/device.ts`).
+- The outbox asks Drive itself before sending a waiting line, one browser tab at a time (Web Locks); it takes no lock when nothing waits (`src/data/vault/journal.ts`).
+- Links follow renames: the app finds notes by former names until the next tidy-up; the runner rewrites the links (`src/data/links.ts`, Worker contract).
+- Rules are kept once and can be removed with Undo; removal is a journal line the runner applies (`src/data/rules.ts`, contract).
+- Saved links are always `.url` files and are searched and opened by their address (`src/data/piles.ts`, `src/data/search-text.ts`).
+- One name per thing everywhere: no extension, its kind beside it (`thingName`, `pileName`).
+- Tabs and open folders belong to who is signed in; a situation opened by its address starts clean (`src/app/tabs-store.ts`, `src/clean-start.ts`).
+- The boot screen length is the owner's choice and stays.
+- The owner's GitHub links are the one personal-data exception (the landing is a portfolio).
+
+## Open questions for the owner
+
+- The `offline` situation shows "Bower opens when you're back online" for the whole app, although the production build's service worker could open notes the device already has. Offline reading is a product decision (phase 3 or later).
+- Failed uploads are forgotten after a page reload (ledger ruling): a durable upload queue is a phase 3 decision.
+
+## Memory outside the repo
+
+The agent's own memory (`~/.claude/projects/-Users-deluisp-Projects-bower/memory/`) holds the owner's preferences: the quality gate, the harness method, the GitHub link exception, design freedom, and the display trap above. The repo is the record; memory only points at it.
