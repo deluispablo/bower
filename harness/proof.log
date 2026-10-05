@@ -217,3 +217,4 @@ add-draft-no-loss	cbcfe65144ab3fbc	2026-10-05	red (fixed in cbf4e9f14c1e66f61bbe
 last-run-recovery-validation	a1fbbb26a93a28a9	2026-10-05	red (fixed in 1c1e60c0c6dee4b610cd845ee0a3c393f265370f)
 pending-draft-bytes-cleanup	1f136a26d5e07981	2026-10-05	red (fixed in 1dc7f64)
 ownership-byte-parser	f3e37b42d503f0b2	2026-10-05	red (fixed in 257f9049411b366359c1393649937f28d2b5431b)
+drive-raw-byte-read	684e09d18783aac0	2026-10-05	red (fixed in ec8eef79751e42fc0170ce25c7c475628f31ef27)

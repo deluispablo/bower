@@ -2729,7 +2729,7 @@
       "Replace unavailable content only by an actual content write and keep the same raw source authority; no write token or atomicity claim."
     ],
     "verify": "pnpm vitest run src/data/drive/raw-bytes.test.ts -t \"drive raw bytes preserve source authority\"",
-    "passes": false,
+    "passes": true,
     "note": "Additive readBytes(id):Promise<Uint8Array> authorized under TL-P2-03, exact raw transport/storage only. New named tests planned; loadable class stubs must precede assertions. No CAS/producer activation/durable retention or whole capability acceptance."
   },
   {

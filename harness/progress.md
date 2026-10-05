@@ -358,3 +358,4 @@
 - 2026-10-05: raw-read qa19 candidate32b2a19/stub821757f frozen; all22 evidence files/report70d/manifest9358 and exact five paths verified. Worker24verify/631check includes genuine historical placeholder red; fresh independent review assigned before integration. qa20 canonical worker remains exclusive, no real provider or phase change.
 
 - 2026-10-05: raw-read independent007632b2 reports zero C/I/M; all22 prepared artifacts and exact five source paths verified. Root reserves separate stub/fix integration and final-fix-only inverse proof; qa20 pure JSON continues in disjoint checkout. No provider or phase acceptance.
+- 2026-10-05: drive-raw-byte-read passes — fix: proof-close available raw Drive byte authority
