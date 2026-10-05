@@ -28,6 +28,7 @@ export function BowerScreen() {
   const runState = useRun();
   const { data: run } = runState;
   const [text, setText] = useState('');
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<'request' | 'rule'>('request');
   const requestsState = useRequests();
   const { data: requests } = requestsState;
@@ -45,6 +46,7 @@ export function BowerScreen() {
         toast('Saved as you wrote it. Bower words it clearly in the next tidy-up.');
       } else await vault.addRequest(t);
       setText('');
+      composerRef.current?.focus();
     } catch (e) {
       report(e, 'That did not send. Try again.');
     }
@@ -86,6 +88,7 @@ export function BowerScreen() {
           </button>
         </div>
         <textarea
+          ref={composerRef}
           rows={3}
           aria-label={kind === 'rule' ? 'The rule' : 'Your request'}
           placeholder={kind === 'rule' ? 'Receipts go to Money, by month' : 'Put my visa papers together and tell me what is missing'}

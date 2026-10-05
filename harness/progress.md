@@ -230,3 +230,4 @@
 - 2026-10-05: open-in-drive passes — fix(files): open the selected folder or file in Google Drive
 
 - 2026-10-05: Drive links closed with full screen gates; assign composer keyboard recovery.
+- 2026-10-05: composer-focus passes — fix(bower): keep the composer keyboard after sending

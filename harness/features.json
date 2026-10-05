@@ -2417,7 +2417,7 @@
       "Focus returns to the composer so another message can be written."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"sending a request or rule keeps the composer keyboard\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "plain-file-names",

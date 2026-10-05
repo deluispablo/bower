@@ -24,3 +24,19 @@ test('Open in Drive explains the pretend source', async ({ page, isMobile }) => 
   await expect(page.getByRole('status').getByText('This demo has no folder in Google Drive.')).toBeVisible();
   expect(page.context().pages()).toHaveLength(pages);
 });
+
+test('sending a request or rule keeps the composer keyboard', async ({ page }) => {
+  await open(page, '/bower');
+  const request = page.getByRole('textbox', { name: 'Your request' });
+  await request.fill('Keep garden notes together');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(request).toHaveValue('');
+  await expect(request).toBeFocused();
+  await page.getByRole('radio', { name: 'A rule', exact: true }).click();
+  const rule = page.getByRole('textbox', { name: 'The rule' });
+  await rule.fill('Garden notes go together');
+  await page.getByRole('button', { name: 'Keep this rule', exact: true }).click();
+  await expect(rule).toHaveValue('');
+  await expect(rule).toBeFocused();
+});
+
