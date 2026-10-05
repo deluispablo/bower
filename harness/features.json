@@ -2568,7 +2568,7 @@
     ],
     "verify": "pnpm vitest run src/data/live/live.test.ts -t \"returning to an idle folder refreshes external changes\"",
     "task": "qa-13",
-    "passes": false,
+    "passes": true,
     "note": "Reproduced on 143ae2b by the O1 synthetic probe; named regression is planned, not implemented or executed. See docs/harness/evidence/2026-10-05-o1."
   },
   {

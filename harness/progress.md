@@ -278,3 +278,4 @@
 - 2026-10-05: task-preserves-source-bytes passes — fix(notes): prove task toggles preserve every other byte
 
 - 2026-10-05: task-byte candidate71e9707 reviewed/integrated6dda1a4/proof-closedaf90266; legacy source preserved with5 actual assertion reds. Sole isolated writer assigned foreground refresh;206/213 and P2 remains open.
+- 2026-10-05: external-change-refresh passes — fix(live): prove returning clients discover external changes
