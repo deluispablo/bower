@@ -1,5 +1,7 @@
 # The phases of the Bower app rebuild
 
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](harness/GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+
 Current planning revision: `2026-10-05-contracts-2`. Read [PRODUCT.md](PRODUCT.md), [WORK_PLAN.md](WORK_PLAN.md) and [P2_ACCEPTANCE.md](P2_ACCEPTANCE.md) for the adopted purpose, sequence and closure contract. [METHOD.md](harness/METHOD.md) governs execution. Phase state and evidence must always name a committed target; main receiving planning is not a phase-completion event.
 
 ## Why a rebuild

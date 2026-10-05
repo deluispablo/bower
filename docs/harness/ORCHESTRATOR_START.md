@@ -1,5 +1,7 @@
 # Orchestrator launch packet
 
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+
 Planning revision: `2026-10-05-contracts-2`. Ready for assignment preparation, not a declaration that P2 has passed. Use [PLANNING_HANDOFF](PLANNING_HANDOFF.md) to adopt local main first. The existing named integration coordinator retains authority; a new session needs an explicit handoff before taking its role. This packet neither launches agents nor messages another chat.
 
 ## First actions

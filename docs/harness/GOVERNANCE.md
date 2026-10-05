@@ -2,6 +2,16 @@
 
 Owner instruction dated 2026-10-05 appoints this Codex planning session as technical lead, currently limited to improving planning and the work method. This is a durable role assignment, not permission to implement product features, take another session's checkout or close a phase.
 
+## Owner authorization for unattended continuation (2026-10-05)
+
+The owner explicitly authorized autonomous work during their absence, continuation from P2 into P3 when P2 is complete, and periodic private GitHub backups. This supersedes earlier requirements to wait for another owner reply solely to accept P2 or begin P3. It does not waive any capability, provider-premise, automated gate, independent review or evaluation requirement.
+
+The named coordinator may close P2 on a frozen, fully evidenced target after independent review and evaluation, record that the owner's conditional authorization was applied (not that a live human evaluation occurred), integrate the validated release into local main, and begin the adopted P3 plan without another permission request. Register the P3 acceptance checklist and assignments before implementation. P4 remains outside this continuation authorization.
+
+Use judgment for routine implementation and reversible technical decisions within the adopted scope. Preserve capabilities, data and existing production service. An unavailable credential or required product choice blocks only dependent work; record it and continue independent work. Do not replace missing evidence with approval, silently weaken requirements, introduce spending or overwrite production under this instruction.
+
+Back up validated main after each integration and check for pending backups hourly while work is active, following [BACKUP.md](BACKUP.md). Never merge unfinished work solely for backup. Only the designated main integrator pushes, with explicit ref and verified destination; workers never push. Keep an exact local/remote SHA in the handoff, and report failures honestly.
+
 ## Responsibilities
 
 | Role | Authority | Does not own by default |
@@ -47,3 +57,5 @@ On context compaction/resume, refresh main's plan revision and the live ACTIVE r
 - 2026-10-05: owner authorized a private GitHub backup of accepted main only, while all development remains local. BACKUP.md is the narrow exception to historical no-push rules; feature branches, deployment and production remain outside this authorization.
 
 - 2026-10-05: owner authorized coordinator-managed parallel work. One active entry applies per worker, not project-wide; isolated ownership, accepted dependencies, independent review and serialized integration/browser gates remain. This method-only update preserves contracts-2 product requirements, current reservations and phase boundaries.
+
+- 2026-10-05: owner authorized unattended completion of P2, conditional acceptance and progression into P3, plus periodic private main backups. The conditions above supersede historical wait-for-owner wording without waiving evidence or authorizing P4.

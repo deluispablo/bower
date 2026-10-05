@@ -1,5 +1,7 @@
 # How this project is built: the harness
 
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+
 Bower is built by AI agents working in sessions that forget everything between them. The harness is what lets them pick up the work and finish it well: files in the repository that carry the plan, the state and the checks, so no agent depends on memory. A human steers (decides what and why); agents execute (plan, build, check). The adopted product and phase contract live in `docs/PRODUCT.md`, `docs/WORK_PLAN.md` and `docs/P2_ACCEPTANCE.md`; `GOVERNANCE.md` separates the planning-only technical lead from the implementation coordinator.
 
 It follows two published methods:
