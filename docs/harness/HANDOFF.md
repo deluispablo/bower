@@ -1,3 +1,13 @@
+# Current handoff supplement: parser closed, final bounded premise reserved
+
+2026-10-05, root coordinator session p2-orchestrator-2026-10-05-01a10bbd, contracts-2/main3136adc. Current integration codex/close-phase-2: parser stub19682c1/fix257f904/proof5242808;215/218. Only unused two-file raw-byte ownership foundation added. Clean independentreviewa745, factual setup clarification, true inverse assertion red/fullrootcheck/47verify green archivedqa18/root-closure. Three original entries remainopen; no capability or P2 acceptance.
+
+ONE final reviewed R1-D03 provider case is reserved in current ACTIVE. NEWprivate700/600 packet/config disabled before dispatch, NEWmanifestabsent; samegrant/client/session/scope. Root alone may renew600s and invoke frozenv3 CLI after ensuing clean checkpoint. No sourceintegration/browser/provider concurrency. Review27f24d41 clean; max3BASEtriplets/originalbudgets/reserves/ownedrawBincleanup/retainmanifest; thirdfailure orrefuted/inconclusive endsline. EarlieractualR1lostupdate Importantopen and D02inconclusive preserved. Do not rerun/relaxguard/reuseoldmanifest.
+
+Combined B schemaaede6ef2/tenfilemanifest3b954ed6 is frozen, archived, under independent run_contract_review; notratified. Authorprerequisites_review released and maynotself-review. Wait immutable findings, narrow correction/newreview ifneeded, thenONEexactpacket/review toowner-authorizedPlanificador. Rootalone writesrecords/integrates. No workersource/provider/browserpermission. O3–O8/fullcapability/owneracceptance remain. D01D02policies approved; norepeatquestions. No push/mainproductmerge/deploy/P3P4.
+
+The historical handoff below is preserved as provenance; current ACTIVE and Next supersede its stale reservations/counts.
+
 # Handoff: where the work stands and what comes next
 
 For an agent starting a new session with no memory of the last one. Read `AGENTS.md`, `docs/harness/METHOD.md` and `docs/PHASES.md` (all four phases) first; this file is the state of play and the plan. Keep it true: when a step below is done, say so here and in `harness/progress.md` (`## Next`) in the same commit.
