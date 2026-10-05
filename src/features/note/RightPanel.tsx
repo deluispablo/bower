@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router';
 import { useNote } from '@/data/provider';
-import { displayName, nameOf, parentOf } from '@/data/tree';
+import { thingName, nameOf, parentOf } from '@/data/tree';
 import type { Note } from '@/data/types';
 import { crumbs, decodeSplat, noteRoute } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
@@ -98,7 +98,7 @@ export function LinkedList({ note }: { note: Note }) {
   const row = (p: string) => (
     <li key={p}>
       <Link to={noteRoute(p)} className={s.link}>
-        <span className={s.linkTitle}>{displayName(nameOf(p))}</span>
+        <span className={s.linkTitle}>{thingName(nameOf(p))}</span>
         <span className={s.linkPath}>{crumbs(parentOf(p))}</span>
       </Link>
     </li>

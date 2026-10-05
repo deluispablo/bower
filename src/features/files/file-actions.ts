@@ -6,7 +6,7 @@ import { crumbs, decodeSplat, folderRoute, routeFor } from '@/app/paths';
 import { ancestors, useUi } from '@/app/ui-store';
 import { useTabs } from '@/app/tabs-store';
 import { BowerError, type TreeNode } from '@/data/types';
-import { displayName, nameOf, parentOf } from '@/data/tree';
+import { findNode, thingName, nameOf, parentOf } from '@/data/tree';
 import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
 
@@ -52,18 +52,20 @@ export function useFileActions() {
       async move(path: string, to: string): Promise<string | null> {
         const from = parentOf(path);
         try {
+          const folder = findNode(await vault.tree(), path)?.type === 'folder';
+          const label = (p: string): string => folder ? nameOf(p) : thingName(nameOf(p));
           const moved = await vault.move(path, to);
           if (moved === path) return path;
           follow(path, moved);
           useUi.getState().relocate(path, moved);
           useUi.getState().openAll(ancestors(moved));
-          toast(`Moved ${displayName(nameOf(path))} to ${crumbs(to)}`, {
+          toast(`Moved ${label(path)} to ${crumbs(to)}`, {
             label: 'Undo',
             run: () =>
               void vault.move(moved, from, { undo: true }).then((back) => {
                 follow(moved, back);
                 useUi.getState().relocate(moved, back);
-                toast(`${displayName(nameOf(back))} is back in ${crumbs(from) || 'your Bower folder'}`);
+                toast(`${label(back)} is back in ${crumbs(from) || 'your Bower folder'}`);
               }, (e: unknown) => report(e, 'That did not work. Try again.')),
           });
           return moved;
@@ -80,11 +82,13 @@ export function useFileActions() {
       /** `quiet`: a thing just made gets its own word ("New note in …"), not a rename one. */
       async rename(path: string, name: string, opts: { quiet?: boolean; onPartial?: () => void } = {}): Promise<string | null> {
         try {
+          const folder = findNode(await vault.tree(), path)?.type === 'folder';
+          const label = (p: string): string => folder ? nameOf(p) : thingName(nameOf(p));
           const to = await vault.rename(path, name);
           useUi.getState().relocate(path, to);
           follow(path, to);
           const slash = /[/\\]/.test(name) ? ' Names cannot have slashes; Bower used a dash.' : '';
-          if (!opts.quiet && to !== path) toast(`Renamed to ${displayName(nameOf(to))}.${slash}`);
+          if (!opts.quiet && to !== path) toast(`Renamed to ${label(to)}.${slash}`);
           else if (slash) toast(slash.trim());
           return to;
         } catch (e) {
@@ -99,16 +103,18 @@ export function useFileActions() {
       },
       async trash(path: string): Promise<void> {
         try {
+          const folder = findNode(await vault.tree(), path)?.type === 'folder';
+          const label = (p: string): string => folder ? nameOf(p) : thingName(nameOf(p));
           await vault.trash(path);
           follow(path, null);
           const marks = useUi.getState().bookmarks;
           useUi.getState().relocate(path, null);
-          toast(path.startsWith('Inbox/') ? 'The pile is in the Bin of your Drive' : `${displayName(nameOf(path))} is in the Bin of your Drive`, {
+          toast(path.startsWith('Inbox/') ? 'The pile is in the Bin of your Drive' : `${label(path)} is in the Bin of your Drive`, {
             label: 'Undo',
             run: () =>
               void vault.restore(path).then(() => {
                 useUi.getState().setRestored(path);
-                toast(path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${displayName(nameOf(path))} is back`);
+                toast(path.startsWith('Inbox/') ? 'The pile is back in the inbox' : `${label(path)} is back`);
                 marks.filter((b) => b === path || b.startsWith(`${path}/`)).forEach((b) => !useUi.getState().bookmarks.includes(b) && useUi.getState().toggleBookmark(b));
               }, (e: unknown) => report(e, 'That did not work. Try again.')),
           });

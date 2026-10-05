@@ -614,3 +614,17 @@ it('Open in Drive resolves the selected folder or file', async () => {
   expect(await vault.driveLink(PASSPORT)).toBeNull();
   real.dispose();
 });
+
+it('plain action names preserve dots in folder names', async () => {
+  const folder = await vault.create('Projects', 'folder', 'Garden.md');
+  expect((await vault.changes()).some((c) => c.what === 'New folder "Garden.md" in Projects')).toBe(true);
+  await vault.move(folder, 'Areas');
+  expect((await vault.changes()).some((c) => c.what === 'Moved Garden.md to Areas')).toBe(true);
+  await vault.rename('Areas/Garden.md', 'Garden.2026');
+  expect((await vault.changes()).some((c) => c.what === 'Renamed Garden.md to Garden.2026')).toBe(true);
+});
+
+it('search finds a full file name while showing its plain name', async () => {
+  const hits = await vault.search('Lease draft.pdf');
+  expect(hits.find((h) => h.path === 'Projects/Flat hunt/Lease draft.pdf')?.title).toBe('Lease draft');
+});

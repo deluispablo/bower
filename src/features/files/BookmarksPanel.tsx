@@ -1,5 +1,7 @@
+import { LoadError } from '@/ui/LoadError';
 import { useUi } from '@/app/ui-store';
-import { displayName, nameOf } from '@/data/tree';
+import { findNode, thingName } from '@/data/tree';
+import { useTree } from '@/data/provider';
 import { crumbs } from '@/app/paths';
 import { Icon } from '@/ui/Icon';
 import { useFileActions } from './file-actions';
@@ -9,7 +11,11 @@ import s from './files.module.css';
 export function BookmarksPanel() {
   const { toggleBookmark } = useUi();
   const bookmarks = useBookmarks();
+  const treeState = useTree();
+  const { data: tree } = treeState;
   const act = useFileActions();
+  if (treeState.error) return <LoadError state={treeState} />;
+  if (!tree) return <div className={s.panel}><p className={s.hint}>Looking…</p></div>;
   if (!bookmarks.length)
     return (
       <div className={s.panel}>
@@ -20,16 +26,19 @@ export function BookmarksPanel() {
     <div className={s.panel}>
       <ul className={s.results}>
         {bookmarks.map((b) => {
-          const folder = !/\.[A-Za-z0-9]{1,5}$/.test(b);
+          const node = findNode(tree, b);
+          if (!node) return null;
+          const folder = node.type === 'folder';
+          const name = folder ? node.name : thingName(node.name);
           return (
             <li key={b} className={s.bmRow}>
-              <button type="button" onClick={() => act.open({ path: b, type: folder ? 'folder' : 'file' })}>
+              <button type="button" onClick={() => act.open(node)}>
                 <span className={s.resTitle}>
-                  <Icon name={folder ? 'folder' : 'file'} size={15} /> {displayName(nameOf(b))}
+                  <Icon name={folder ? 'folder' : 'file'} size={15} /> {name}
                 </span>
                 <span className={s.resPath}>{b.includes('/') ? crumbs(b.slice(0, b.lastIndexOf('/'))) : 'Your Bower folder'}</span>
               </button>
-              <button type="button" className={s.unmark} aria-label={`Remove bookmark ${displayName(nameOf(b))}`} onClick={() => toggleBookmark(b)}>
+              <button type="button" className={s.unmark} aria-label={`Remove bookmark ${name}`} onClick={() => toggleBookmark(b)}>
                 <Icon name="x" size={14} />
               </button>
             </li>

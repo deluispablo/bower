@@ -239,3 +239,4 @@
 - 2026-10-05: Full naming gate found four legacy extension-copy expectations; reserve literal updates and add full-file-name search matching coverage before repeating both suites.
 
 - 2026-10-05: Naming gates green on both sources; reserve final inline-stem and linked-label regressions before closure.
+- 2026-10-05: plain-file-names passes — fix(files): keep one plain name across views and actions

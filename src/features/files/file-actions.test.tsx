@@ -37,7 +37,7 @@ it('a change kept only on this page follows its applied path without a saved or 
     const reject = async (): Promise<never> => { throw failure; };
     history.replaceState(null, '', '/note/Projects/Note.md');
     useUi.getState().select('Projects/Note.md');
-    render(<BrowserRouter><DataProvider sources={{ ...base, vault: { ...base.vault, move: reject, rename: reject, trash: reject } }}><Actions /></DataProvider></BrowserRouter>);
+    render(<BrowserRouter><DataProvider sources={{ ...base, vault: { ...base.vault, tree: async () => [{ path: 'Projects/Note.md', name: 'Note.md', type: 'file', kind: 'note', modified: 0, created: 0 }], move: reject, rename: reject, trash: reject } }}><Actions /></DataProvider></BrowserRouter>);
     fireEvent.click(screen.getByRole('button', { name: action }));
     await vi.waitFor(() => expect(screen.getByLabelText('Page').textContent).toBe(path === null ? '/files/Projects' : `/note/${path}`));
     if (path) expect(screen.getByLabelText('Result').textContent).toBe(path);
@@ -55,7 +55,7 @@ it('a named thing made before its journal warning opens once without a retry pro
   const create = vi.fn(async (): Promise<never> => { throw failure; });
   history.replaceState(null, '', '/files/Projects');
   useUi.getState().setNaming({ folder: 'Projects', type: 'note' });
-  render(<BrowserRouter><DataProvider sources={{ ...base, vault: { ...base.vault, create, markSeen: async () => undefined } }}><Actions /><NameSheet /></DataProvider></BrowserRouter>);
+  render(<BrowserRouter><DataProvider sources={{ ...base, vault: { ...base.vault, tree: async () => [], subscribe: () => () => undefined, create, markSeen: async () => undefined } }}><Actions /><NameSheet /></DataProvider></BrowserRouter>);
   fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'New note' } });
   fireEvent.click(screen.getByRole('button', { name: 'Make the note' }));
   await vi.waitFor(() => expect(screen.getByLabelText('Page').textContent).toBe('/note/Projects/New%20note.md'));

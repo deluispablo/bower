@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useTree } from '@/data/provider';
-import { displayName, nameOf, parentOf } from '@/data/tree';
+import { findNode, thingName, nameOf, parentOf } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { crumbs, paraColor } from '@/app/paths';
@@ -29,6 +29,8 @@ export function MovePicker() {
     return out;
   }, [tree]);
   const from = moveFor ? parentOf(moveFor) : '';
+  const moving = moveFor ? findNode(tree ?? [], moveFor) : null;
+  const movingName = moving ? (moving.type === 'folder' ? moving.name : thingName(moving.name)) : moveFor ? nameOf(moveFor) : '';
   const list = folders
     .filter((f) => moveFor && f !== from && f !== moveFor && !f.startsWith(`${moveFor}/`) && f !== 'Inbox' && !f.startsWith('Inbox/'))
     .filter((f) => f.toLowerCase().includes(q.trim().toLowerCase()));
@@ -52,7 +54,7 @@ export function MovePicker() {
     e.preventDefault();
   };
   return (
-    <Sheet open={!!moveFor} onOpenChange={(o) => !o && close()} title={moveFor ? `Move ${displayName(nameOf(moveFor))}` : 'Move'} description={from ? `Now in ${crumbs(from)}` : undefined}>
+    <Sheet open={!!moveFor} onOpenChange={(o) => !o && close()} title={moveFor ? `Move ${movingName}` : 'Move'} description={from ? `Now in ${crumbs(from)}` : undefined}>
       <label className={s.search}>
         <Icon name="search" size={18} />
         <input

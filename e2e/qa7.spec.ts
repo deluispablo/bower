@@ -47,7 +47,7 @@ test('Move to: an exact folder name is picked with Enter, even when others match
   await page.getByRole('menuitem', { name: 'Move to…' }).click();
   await page.getByLabel('Find a folder').fill('areas');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status').getByText(/Moved Lease draft\.pdf to Areas$/)).toBeVisible();
+  await expect(page.getByRole('status').getByText(/Moved Lease draft to Areas$/)).toBeVisible();
 });
 
 test('Move to: Enter in an empty box says what to do', async ({ page, isMobile }) => {

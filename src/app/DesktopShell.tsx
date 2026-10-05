@@ -7,7 +7,7 @@ import { useUi } from './ui-store';
 import { useTabs } from './tabs-store';
 import { Tabs, tabPanel } from '@/ui/Tabs';
 import { decodeSplat } from './paths';
-import { displayName, nameOf } from '@/data/tree';
+import { thingName, nameOf } from '@/data/tree';
 import { Explorer } from '@/features/files/Explorer';
 import { SearchPanel } from '@/features/files/SearchPanel';
 import { BookmarksPanel } from '@/features/files/BookmarksPanel';
@@ -25,7 +25,7 @@ export function tabTitle(route: string): string {
   if (path === '/files') return 'Your Bower folder';
   if (path.startsWith('/pile/')) return 'A pile';
   if (path.startsWith('/files/')) return nameOf(decodeSplat(path.slice(7)));
-  if (path.startsWith('/note/')) return displayName(nameOf(decodeSplat(path.slice(6))));
+  if (path.startsWith('/note/')) return thingName(nameOf(decodeSplat(path.slice(6))));
   return 'Bower';
 }
 

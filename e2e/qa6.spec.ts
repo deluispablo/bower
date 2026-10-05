@@ -48,7 +48,7 @@ test('Enter moves only when one folder matches', async ({ page, isMobile }) => {
   await expect(page.getByText(/Several folders match/)).toBeVisible();
   await page.getByLabel('Find a folder').fill('Documents');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status').getByText(/Moved Lease draft\.pdf to Areas \/ Documents/)).toBeVisible();
+  await expect(page.getByRole('status').getByText(/Moved Lease draft to Areas \/ Documents/)).toBeVisible();
 });
 
 test('after a move or a Bin the tree keeps the keyboard', async ({ page, isMobile }) => {

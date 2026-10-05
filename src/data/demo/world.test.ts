@@ -298,3 +298,25 @@ describe('the demo questions', () => {
   });
 
 });
+
+it('plain action names preserve dots in folder names', async () => {
+  const world = new DemoWorld({ scenario: 'default', scale: 'instant' });
+  const { vault } = world.sources();
+  try {
+    const folder = await vault.create('Projects', 'folder', 'Garden.md');
+    expect((await vault.changes()).some((c) => c.what === 'New folder "Garden.md" in Projects')).toBe(true);
+    await vault.move(folder, 'Areas');
+    expect((await vault.changes()).some((c) => c.what === 'Moved Garden.md to Areas')).toBe(true);
+    await vault.rename('Areas/Garden.md', 'Garden.2026');
+    expect((await vault.changes()).some((c) => c.what === 'Renamed Garden.md to Garden.2026')).toBe(true);
+  } finally { world.dispose(); }
+});
+
+it('search finds a full file name while showing its plain name', async () => {
+  const world = new DemoWorld({ scenario: 'default', scale: 'instant' });
+  const { vault } = world.sources();
+  try {
+    const hits = await vault.search('Lease draft.pdf');
+    expect(hits.find((h) => h.path === 'Projects/Flat hunt/Lease draft.pdf')?.title).toBe('Lease draft');
+  } finally { world.dispose(); }
+});

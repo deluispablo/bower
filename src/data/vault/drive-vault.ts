@@ -8,7 +8,7 @@
 import type { DriveApi, DriveFile } from '../drive/drive-api';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
-import { buildTree, checkLength, displayName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
+import { buildTree, checkLength, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
 import {
   BowerError,
   type ChangeEntry,
@@ -189,7 +189,7 @@ export class DriveVault implements VaultSource {
     if (last) {
       try { await this.journal.remove(last.id); removed = true; } catch (e) { console.error(e); }
     }
-    if (!removed) await this.journal.record('move', `Moved ${displayName(nameOf(path))} to ${where(toFolder)}`, { path: out, from: path, fileId: f.id });
+    if (!removed) await this.journal.record('move', `Moved ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} to ${where(toFolder)}`, { path: out, from: path, fileId: f.id });
     this.emit();
     return out;
   }
@@ -210,8 +210,8 @@ export class DriveVault implements VaultSource {
       try { await this.journal.remove(made.id); removed = true; } catch (e) { console.error(e); }
     }
     if (removed) {
-      await this.journal.record('create', `New ${f.folder ? 'folder' : 'note'} "${displayName(nameOf(out))}" in ${where(parentOf(out))}`, { path: out, fileId: f.id });
-    } else await this.journal.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, { path: out, from: path, fileId: f.id });
+      await this.journal.record('create', `New ${f.folder ? 'folder' : 'note'} "${(f.folder ? nameOf(out) : thingName(nameOf(out)))}" in ${where(parentOf(out))}`, { path: out, fileId: f.id });
+    } else await this.journal.record('rename', `Renamed ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} to ${(f.folder ? nameOf(out) : thingName(nameOf(out)))}`, { path: out, from: path, fileId: f.id });
     this.emit();
     return out;
   }
@@ -225,7 +225,7 @@ export class DriveVault implements VaultSource {
     refuseReserved(path);
     const made = type === 'folder' ? await this.drive.createFolder(parent, nameOf(path)) : await this.drive.createText(parent, nameOf(path), '');
     ix.put(made);
-    await this.journal.record('create', `New ${type} "${displayName(nameOf(path))}" in ${where(folder)}`, { path, fileId: made.id });
+    await this.journal.record('create', `New ${type} "${(type === 'folder' ? nameOf(path) : thingName(nameOf(path)))}" in ${where(folder)}`, { path, fileId: made.id });
     this.emit();
     return path;
   }
@@ -262,7 +262,7 @@ export class DriveVault implements VaultSource {
     }
     if (!removed) {
       try {
-        change = (await this.journal.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, { path, fileId: f.id })).id;
+        change = (await this.journal.record('trash', `Put ${(f.folder ? nameOf(path) : thingName(nameOf(path)))} in the Bin`, { path, fileId: f.id })).id;
       } catch (e) {
         if (e instanceof BowerError && e.applied) this.bin.set(path, { id: f.id, change: e.applied.changeId });
         throw e;
@@ -334,8 +334,9 @@ export class DriveVault implements VaultSource {
     for (const e of ix.entries().values()) {
       // What waits in the inbox is found by its name too (a pile's own note is not a thing).
       if (e.type !== 'file' || nameOf(e.path) === PILE_NOTE) continue;
-      const title = displayName(nameOf(e.path));
-      if (!words.every((w) => title.toLowerCase().includes(w))) continue;
+      const title = thingName(nameOf(e.path));
+      const searchable = displayName(nameOf(e.path)).toLowerCase();
+      if (!words.every((w) => searchable.includes(w))) continue;
       named.add(e.path);
       hits.push({ path: e.path, title, snippet: inInbox(e.path) ? 'Waiting in the inbox' : placeOf(parentOf(e.path)), score: 3 });
     }
@@ -349,7 +350,7 @@ export class DriveVault implements VaultSource {
       // A saved link is found by its web address, never by its file's syntax.
       if (path.endsWith('.url')) {
         const address = savedLinkAddress(await this.drive.readText(h.id));
-        return address && words.every((w) => address.toLowerCase().includes(w)) ? { path, title: displayName(nameOf(path)), snippet: address, score: 1 } : null;
+        return address && words.every((w) => address.toLowerCase().includes(w)) ? { path, title: thingName(nameOf(path)), snippet: address, score: 1 } : null;
       }
       const n = await this.parsed(h, path);
       const line = searchLines(n).map(plainText).find((l) => words.every((w) => l.toLowerCase().includes(w)));

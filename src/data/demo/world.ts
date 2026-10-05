@@ -591,6 +591,7 @@ export class DemoWorld {
       note: (path) => this.wait(() => ({ ...this.noteFor(path), backlinks: this.backlinksOf(path) })),
       move: (path, to, opts) =>
         change(() => {
+          const folder = this.entries.get(path)?.type === 'folder';
           const before = new Map(this.entries);
           const out = moveEntry(before, path, to, Date.now());
           this.carryNotes(path, out);
@@ -598,12 +599,13 @@ export class DemoWorld {
           if (out !== path) {
             const last = [...this.journal].reverse().find((c) => c.kind === 'move' && c.path === path);
             if (opts?.undo && last) this.unrecord(last.id);
-            else this.record('move', `Moved ${displayName(nameOf(path))} to ${to.replaceAll('/', ' / ') || 'your Bower folder'}`, out, path);
+            else this.record('move', `Moved ${(folder ? nameOf(path) : thingName(nameOf(path)))} to ${to.replaceAll('/', ' / ') || 'your Bower folder'}`, out, path);
           }
           return out;
         }),
       rename: (path, name) =>
         change(() => {
+          const folder = this.entries.get(path)?.type === 'folder';
           const next = new Map(this.entries);
           const out = renameEntry(next, path, name, Date.now());
           this.carryNotes(path, out);
@@ -614,8 +616,8 @@ export class DemoWorld {
             if (made) {
               this.unrecord(made.id);
               const type = this.entries.get(out)?.type === 'folder' ? 'folder' : 'note';
-              this.record('create', `New ${type} "${displayName(nameOf(out))}" in ${parentOf(out).replaceAll('/', ' / ') || 'your Bower folder'}`, out);
-            } else this.record('rename', `Renamed ${displayName(nameOf(path))} to ${displayName(nameOf(out))}`, out, path);
+              this.record('create', `New ${type} "${(folder ? nameOf(out) : thingName(nameOf(out)))}" in ${parentOf(out).replaceAll('/', ' / ') || 'your Bower folder'}`, out);
+            } else this.record('rename', `Renamed ${(folder ? nameOf(path) : thingName(nameOf(path)))} to ${(folder ? nameOf(out) : thingName(nameOf(out)))}`, out, path);
           }
           return out;
         }),
@@ -626,7 +628,7 @@ export class DemoWorld {
           checkLength(base, type);
           const path = join(folder, freeName(this.entries, folder, base));
           this.entries.set(path, type === 'folder' ? { path, type, modified: now, created: now } : { path, type: 'file', kind: 'note', modified: now, created: now });
-          this.record('create', `New ${type} "${displayName(nameOf(path))}" in ${folder.replaceAll('/', ' / ') || 'your Bower folder'}`, path);
+          this.record('create', `New ${type} "${(type === 'folder' ? nameOf(path) : thingName(nameOf(path)))}" in ${folder.replaceAll('/', ' / ') || 'your Bower folder'}`, path);
           return path;
         }),
       trash: (path) =>
@@ -654,7 +656,8 @@ export class DemoWorld {
             this.trash.set(path, { entries, pile: null, change: null });
             return;
           }
-          const id = this.record('trash', `Put ${displayName(nameOf(path))} in the Bin`, path);
+          const folder = entries.find((e) => e.path === path)?.type === 'folder';
+          const id = this.record('trash', `Put ${(folder ? nameOf(path) : thingName(nameOf(path)))} in the Bin`, path);
           this.trash.set(path, { entries, pile: null, change: id });
         }),
       restore: (path) =>
@@ -774,8 +777,8 @@ export class DemoWorld {
           const hits: Array<SearchHit & { score: number }> = [];
           for (const e of this.entries.values()) {
             if (e.type !== 'file') continue;
-            const title = displayName(nameOf(e.path));
-            const t = title.toLowerCase();
+            const title = thingName(nameOf(e.path));
+            const t = displayName(nameOf(e.path)).toLowerCase();
             // What waits in the inbox is found by its name, not by what it says.
             if (e.path.startsWith('Inbox/')) {
               if (words.every((w) => t.includes(w))) hits.push({ path: e.path, title, snippet: 'Waiting in the inbox', score: 3 });

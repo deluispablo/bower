@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useNote, useSources, useTree } from '@/data/provider';
-import { displayName, findNode, nameOf, parentOf } from '@/data/tree';
+import { thingName, findNode, nameOf, parentOf } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
 import { NodeMenuButton } from '@/features/files/Explorer';
@@ -191,7 +191,7 @@ function Properties({ note }: { note: Note }) {
   const props = [...note.properties];
   if (note.status) props.splice(1, 0, { key: 'status', label: 'Status', value: note.status });
   if (note.tags.length) props.push({ key: 'tags', label: 'Tags', value: note.tags.map((t) => `#${t}`).join(' ') });
-  if (note.original) props.push({ key: 'original', label: 'Original', value: displayName(nameOf(note.original)), link: note.original });
+  if (note.original) props.push({ key: 'original', label: 'Original', value: thingName(nameOf(note.original)), link: note.original });
   if (!props.length) return null;
   return (
     <section className={s.props}>
@@ -247,7 +247,7 @@ function FileView({ node }: { node: TreeNode }) {
           <Link to={folderRoute(folder)}>{crumbs(folder)}</Link>
         </p>
       )}
-      <h1 className={`${s.title} ${s.fileTitle}`}>{node.kind === 'link' ? node.name.replace(/\.url$/, '') : node.name}</h1>
+      <h1 className={`${s.title} ${s.fileTitle}`}>{thingName(node.name)}</h1>
       <div className={`${s.preview} ${node.kind === 'image' ? s.previewImage : ''}`} aria-hidden="true">
         <Icon name={node.kind === 'image' ? 'image' : node.kind === 'link' ? 'link' : 'pdf'} size={44} stroke={1.4} />
       </div>

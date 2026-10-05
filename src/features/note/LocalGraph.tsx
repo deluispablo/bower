@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { displayName, nameOf } from '@/data/tree';
+import { thingName, nameOf } from '@/data/tree';
 import type { Note } from '@/data/types';
 import { noteRoute } from '@/app/paths';
 import s from './panel.module.css';
@@ -27,10 +27,10 @@ export function LocalGraph({ note }: { note: Note }) {
           <line key={`l${n.p}`} x1={cx} y1={cy} x2={n.x} y2={n.y} stroke={n.dir === 'out' ? 'var(--brand)' : 'var(--para-resources)'} strokeOpacity=".45" strokeWidth="1.4" />
         ))}
         {nodes.map((n) => (
-          <g key={n.p} className={s.gnode} onClick={() => nav(noteRoute(n.p))} tabIndex={0} role="link" aria-label={displayName(nameOf(n.p))} onKeyDown={(e) => e.key === 'Enter' && nav(noteRoute(n.p))}>
+          <g key={n.p} className={s.gnode} onClick={() => nav(noteRoute(n.p))} tabIndex={0} role="link" aria-label={thingName(nameOf(n.p))} onKeyDown={(e) => e.key === 'Enter' && nav(noteRoute(n.p))}>
             <circle cx={n.x} cy={n.y} r="6" fill={n.dir === 'out' ? 'var(--brand)' : 'var(--para-resources)'} />
             <text x={Math.max(48, Math.min(W - 48, n.x))} y={n.y + (n.y < cy ? -11 : 19)} textAnchor="middle">
-              {short(displayName(nameOf(n.p)))}
+              {short(thingName(nameOf(n.p)))}
             </text>
           </g>
         ))}

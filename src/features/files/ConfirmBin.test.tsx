@@ -14,7 +14,7 @@ afterEach(() => {
 
 function show(trash: (path: string) => Promise<unknown>): void {
   const base = loadingSources();
-  const sources = { ...base, vault: { ...base.vault, trash } } as Sources;
+  const sources = { ...base, vault: { ...base.vault, tree: async () => [{ path: 'Projects/Flat hunt', name: 'Flat hunt', type: 'folder', modified: 0, created: 0 }], trash } } as Sources;
   render(
     <MemoryRouter>
       <DataProvider sources={sources}>

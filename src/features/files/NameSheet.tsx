@@ -1,7 +1,8 @@
+import { LoadError } from '@/ui/LoadError';
 import { useState } from 'react';
-import { useSources } from '@/data/provider';
+import { useSources, useTree } from '@/data/provider';
 import { BowerError } from '@/data/types';
-import { displayName, nameOf, parentOf } from '@/data/tree';
+import { findNode, thingName, nameOf, parentOf } from '@/data/tree';
 import { crumbs } from '@/app/paths';
 import { useUi } from '@/app/ui-store';
 import { Button } from '@/ui/Button';
@@ -16,9 +17,13 @@ import s from './files.module.css';
 export function NameSheet() {
   const { naming, setNaming } = useUi();
   const { vault } = useSources();
+  const treeState = useTree();
+  const { data: tree } = treeState;
   const act = useFileActions();
   const renaming = naming && 'rename' in naming ? naming.rename : null;
   const making = naming && 'folder' in naming ? naming : null;
+  const node = renaming ? findNode(tree ?? [], renaming) : null;
+  const start = renaming ? (node?.type === 'folder' ? nameOf(renaming) : thingName(nameOf(renaming))) : '';
   const what = renaming ? 'Rename' : making?.type === 'folder' ? 'New folder' : 'New note';
   const where = renaming ? parentOf(renaming) : (making?.folder ?? '');
   const save = async (name: string): Promise<void> => {
@@ -46,7 +51,9 @@ export function NameSheet() {
   };
   return (
     <Sheet open={!!naming} onOpenChange={(o) => !o && setNaming(null)} title={what} description={`In ${crumbs(where)}`}>
-      {naming && <NameForm key={JSON.stringify(naming)} start={renaming ? displayName(nameOf(renaming)) : ''} label={renaming ? 'Rename' : making?.type === 'folder' ? 'Make the folder' : 'Make the note'} onSave={(n) => void save(n)} />}
+      {renaming && <LoadError state={treeState} />}
+      {renaming && tree === undefined && !treeState.error && <p className="muted">Looking…</p>}
+      {naming && (!renaming || (tree !== undefined && !treeState.error)) && <NameForm key={JSON.stringify(naming)} start={start} label={renaming ? 'Rename' : making?.type === 'folder' ? 'Make the folder' : 'Make the note'} onSave={(n) => void save(n)} />}
     </Sheet>
   );
 }

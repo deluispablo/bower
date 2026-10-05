@@ -552,7 +552,7 @@ export function Explorer({ variant }: Props) {
       ) : (
         treeEl
       )}
-      <Sheet open={!!sheetNode} onOpenChange={(o) => !o && setSheetNode(null)} title={sheetNode ? displayName(sheetNode.name) : ''} description={sheetNode ? parentOf(sheetNode.path).split('/').join(' / ') || 'Your Bower folder' : ''}>
+      <Sheet open={!!sheetNode} onOpenChange={(o) => !o && setSheetNode(null)} title={sheetNode ? (sheetNode.type === 'folder' ? sheetNode.name : thingName(sheetNode.name)) : ''} description={sheetNode ? parentOf(sheetNode.path).split('/').join(' / ') || 'Your Bower folder' : ''}>
         {sheetNode && <NodeSheetActions node={sheetNode} done={() => setSheetNode(null)} />}
       </Sheet>
     </div>
@@ -560,7 +560,7 @@ export function Explorer({ variant }: Props) {
 }
 
 function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | null; onDone: (name: string | null, typed: string | null, how: 'enter' | 'blur' | 'escape') => void }) {
-  const initial = node.type === 'folder' ? node.name : displayName(node.name).replace(/\.[A-Za-z0-9]{1,5}$/, '');
+  const initial = node.type === 'folder' ? node.name : thingName(node.name);
   const [v, setV] = useState(draft ?? initial);
   const done = useRef(false);
   /** `typed` is null when the person pressed Escape. */
@@ -572,7 +572,7 @@ function RenameInput({ node, draft, onDone }: { node: TreeNode; draft: string | 
   return (
     <input
       className={s.rename}
-      aria-label={`New name for ${displayName(node.name)}`}
+      aria-label={`New name for ${node.type === 'folder' ? node.name : thingName(node.name)}`}
       value={v}
       autoFocus
       onFocus={(e) => e.currentTarget.select()}
@@ -668,7 +668,7 @@ function NodeMenuItems({ node, Item, Separator }: { node: TreeNode; Item: ItemCo
 /** A thing's menu as a sheet, for the phone's note and folder pages (the tree opens it on a long press). */
 export function NodeMenuButton({ node }: { node: TreeNode }) {
   const [open, setOpen] = useState(false);
-  const name = node.type === 'folder' ? node.name : displayName(node.name);
+  const name = node.type === 'folder' ? node.name : thingName(node.name);
   return (
     <>
       <IconButton className={s.pageMore} label={`More for ${name}`} onClick={() => setOpen(true)}>

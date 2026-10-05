@@ -1,4 +1,4 @@
-import { displayName, nameOf } from '@/data/tree';
+import { nameOf } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { goWithIt } from '@/app/words';
 import { Button } from '@/ui/Button';
@@ -10,7 +10,7 @@ import s from './files.module.css';
 export function ConfirmBin() {
   const { confirmBin, setConfirmBin } = useUi();
   const act = useFileActions();
-  const name = confirmBin ? displayName(nameOf(confirmBin.path)) : '';
+  const name = confirmBin ? nameOf(confirmBin.path) : '';
   return (
     <Sheet open={!!confirmBin} onOpenChange={(o) => !o && setConfirmBin(null)} title={`Put ${name} in the Bin?`}>
       <p className="muted">{confirmBin ? goWithIt(confirmBin.count, confirmBin.nested) : ''}</p>
