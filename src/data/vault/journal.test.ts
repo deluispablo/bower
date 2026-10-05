@@ -23,7 +23,7 @@ describe('the change journal', () => {
     await journal.record('rule', 'New rule: "dentist goes in health"', { path: 'Rules.md', text: 'dentist goes in health' });
     const files = [...drive.dump(root).entries()].filter(([p]) => p.startsWith('.bower/changes/'));
     expect(files).toHaveLength(2);
-    expect(files[0]?.[0]).toMatch(/^\.bower\/changes\/2026-10-04T\d\d-\d\d-\d\d\.\d{3}Z-[a-z0-9]{6}\.json$/);
+    expect(files[0]?.[0]).toMatch(/^\.bower\/changes\/\d{4}-\d{2}-\d{2}T\d\d-\d\d-\d\d\.\d{3}Z-[a-z0-9]{6}\.json$/);
     const rec = JSON.parse(files[1]?.[1] ?? '{}') as Record<string, unknown>;
     expect(rec).toMatchObject({ v: 1, kind: 'rule', text: 'dentist goes in health', device: 'device-a', path: 'Rules.md' });
   });
