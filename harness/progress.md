@@ -2,7 +2,7 @@
 
 ## Next
 
-- Root is the sole integration, shared-record and provider coordinator. Adopted revision is contracts-2 / main3136adc. Product parser fix257f904 is proof-closed5242808. Registered215/220: the three original defects and two new foundations remain false. Counts do not accept a capability or phase.
+- Root is the sole integration, shared-record and provider coordinator. Adopted revision is contracts-2 / main3136adc. Product parser fix257f904 is proof-closed5242808. Registered216/220: the three original defects and two new foundations remain false. Counts do not accept a capability or phase.
 - Two independent workers: raw byte read qa19 in /private/tmp/bower-p2-raw-read at e3ddfd2; strict record JSON qa20 in NEW /private/tmp/bower-p2-record-json at the TL04 checkpoint. Exclusive disjoint paths and stub-first proof packets are in ACTIVE. Each candidate requires fresh independent review and root integration/inverse proof. No consumers or browser permission.
 - TL-P2-04 ratifies exact joint B aede6ef2 / original ten-file manifest3b954ed6 after corrected review7d5e8982. The initial false escaping finding653 is preserved and withdrawn; no v2 was needed. Canonical JSON/hash comes first, then structural guards/references/report materialization, then shared consumers. Integer-like keys must be emitted in UTF-16 order. Public done must wait for every publication barrier, including the active legacy view. Fixtures are still NOT EXECUTED.
 - Final actual R1-D03 at dc446c7 was INCONCLUSIVE:23HTTP, zero refresh,5454B,14.503s. Second BASE bound after one pause; matching PUT200, then CONTROL version mismatch prevented B/stale A. All23 events complete. Owned file/root raw Bin200/true, empty inventory, no residual; authority disabled and private manifest retained. The ETag line is ENDED; no fourth variant or new provider authority.
@@ -359,3 +359,5 @@
 
 - 2026-10-05: raw-read independent007632b2 reports zero C/I/M; all22 prepared artifacts and exact five source paths verified. Root reserves separate stub/fix integration and final-fix-only inverse proof; qa20 pure JSON continues in disjoint checkout. No provider or phase acceptance.
 - 2026-10-05: drive-raw-byte-read passes — fix: proof-close available raw Drive byte authority
+
+- 2026-10-05: raw-read candidate reviewed007632b2, stub c5c1989/fix ec8eef7 integrated and genuine inverse/check/24verify proof d1361fa closes qa19,216/220. JSON candidate5e3/stub84ed frozen and16 artifacts archived for fresh independent review. Direct human autonomy/conditional P3/main-backup authorization verified in Planificador; no early phase transition or backup claim.

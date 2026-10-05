@@ -1,3 +1,13 @@
+# Current handoff: raw read closed; record JSON awaiting independent review
+
+Root remains sole integration coordinator, session p2-orchestrator-2026-10-05-01a10bbd, contracts-2. Integration d1361fa has 216/220 proof-closed entries: raw stub c5c1989, fix ec8eef7 and genuine inverse closure d1361fa; parser fix257f904/proof5242808. Current check631/54 is green. Three original defects and record-json-authority remain open; no complete capability or P2 acceptance is claimed.
+
+Record JSON candidate5e3afa6, separate stub84edfd8/base8a478f4, is frozen in /private/tmp/bower-p2-record-json. Reportd79fe4ea and sixteen independently checked artifacts are archived under qa20. Fresh record_json_review packet is in ACTIVE; author is released/read-only. Independent review precedes separate integration and final-fix-only inverse proof. Shared structural guards/references/report materialization follows the accepted canonical helper; consumers wait for reviewed shared schema.
+
+Direct owner authorization in Planificador human turn01a10e13-963e-7870-8111-9a2bb59a3f45 permits unattended work, P3 only after complete objective P2 acceptance, and periodic private validated-main backups. No P4/spend/production overwrite or fourth ETag variant. Latest main10ca886 adoption is pending a clean exclusive checkpoint; current adopted main3136adc. Root is designated sole main backup integrator; no new push or remote SHA is claimed yet. Verify private destination/history/workflows and explicit main ref under BACKUP, then record the actual result.
+
+No provider/browser reservation. Actual R1-D03 line ended inconclusive; all owned resources raw-Binned, authority disabled and private manifests retained. R1-OBS01 remains Important. Full O3–O8, original three defects, realistic browser-independent recovery, semantic effects/Undo, D01/D02, measurements and fresh final review/evaluation remain. Older handoffs below preserve history; this current section and ACTIVE supersede stale reservations and counts.
+
 # Latest handoff: exact B contract adopted, two independent workers
 
 Root is sole coordinator for integration codex/close-phase-2, revision contracts-2 / main3136adc. Parser257f904/proof5242808 is closed; registered215/220 includes three open original defects and two pending foundations. Current root check607/53 is green.
