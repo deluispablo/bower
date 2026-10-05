@@ -207,3 +207,4 @@ journal-ack-content	2331a0caafc0b5a8	2026-10-05	red (fixed in 7c95fd86a2377bbdb0
 pile-edit-still-seen	c74a19c3a235533f	2026-10-05	red (fixed in cecffcab5706db855914f9e028322bb173c69541)
 pile-context-version	089d84bb866f4e5b	2026-10-05	red (fixed in afa1167d41816fb8db4f4295df6789c7d3c92407)
 run-status-monotonic	e5c5553d9cd724f3	2026-10-05	red (fixed in 2bd3346)
+task-preserves-source-bytes	dfb9121a2d9a4517	2026-10-05	red (fixed in 6dda1a4)

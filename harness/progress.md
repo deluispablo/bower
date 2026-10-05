@@ -273,3 +273,4 @@
 - 2026-10-05: run-status-monotonic passes — fix(runs): prove delayed replies preserve accepted state
 
 - 2026-10-05: run-status-monotonic independently reviewed after actual null/disposal/admission-result rework reds, integrated2bd3346 and proof-closed7f49572. Register narrow legacy task-byte preservation before foreground refresh;205/213, P2 open.
+- 2026-10-05: task-preserves-source-bytes passes — fix(notes): prove task toggles preserve every other byte

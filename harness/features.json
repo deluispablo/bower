@@ -2625,7 +2625,7 @@
       "Preserve the original whole source except that checkbox character; cover LF, CRLF and mixed endings without changing the legacy ownership grammar."
     ],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"toggling a personal task preserves every other source byte\"",
-    "passes": false,
+    "passes": true,
     "note": "Observed at6305ca9: canonical protected prefix/suffix changed, CRLF count12 to0. Reproducible synthetic script/results under docs/harness/evidence/2026-10-05-o1/protected-crlf-*. Named assertion is planned, not executed. Existing grammar only; rich ownership decision remains separate."
   },
   {
