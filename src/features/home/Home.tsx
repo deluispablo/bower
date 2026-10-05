@@ -1,3 +1,4 @@
+import { LoadError } from '@/ui/LoadError';
 import { useMemo } from 'react';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
@@ -22,7 +23,8 @@ import s from './home.module.css';
 export function Home() {
   const { data: user } = useUser();
   const name = user?.name.trim() ?? '';
-  const { data: run } = useRun();
+  const runState = useRun();
+  const { data: run } = runState;
   const { data: piles } = usePiles();
   const waiting = waitingIn(piles);
   const away = replayWaiting(run);
@@ -40,6 +42,7 @@ export function Home() {
       </header>
       <div className={s.grid}>
         <div className={s.colMain}>
+          <LoadError state={runState} />
           {away && run && <AwayCard run={run} bird={birdOn === 'away'} />}
           {stopped && run && <StoppedCard run={run} />}
           {running && run && <RunningCard run={run} />}
@@ -182,8 +185,10 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
 
 /** The change journal, shown so people know Bower will see what they did. */
 function YourChanges({ running }: { running: boolean }) {
-  const { data: list } = useChanges();
+  const changesState = useChanges();
+  const { data: list } = changesState;
   const { runs } = useSources();
+  if (changesState.error) return <LoadError state={changesState} />;
   if (!list?.length) return null;
   return (
     <section aria-labelledby="yours" className={s.yours}>
@@ -220,8 +225,10 @@ function SearchField() {
 }
 
 function Questions() {
-  const { data: qs } = useQuestions();
+  const questionsState = useQuestions();
+  const { data: qs } = questionsState;
   const { vault } = useSources();
+  if (questionsState.error) return <LoadError state={questionsState} />;
   if (!qs?.length) return null;
   const answer = (id: string, yes: boolean, label: string): void => {
     vault.answer(id, yes).then(
@@ -257,8 +264,10 @@ function Questions() {
 }
 
 function Suggestions() {
-  const { data: list } = useSuggestions();
+  const suggestionsState = useSuggestions();
+  const { data: list } = suggestionsState;
   const { vault } = useSources();
+  if (suggestionsState.error) return <LoadError state={suggestionsState} />;
   if (!list?.length) return null;
   return (
     <section aria-label="Bower suggests">

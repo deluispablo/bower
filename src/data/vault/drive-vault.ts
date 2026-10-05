@@ -27,7 +27,7 @@ import {
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
-import { HIDDEN_AT_ROOT, PROP, SYSTEM, type HashesFile, type LastRunFile, type QuestionsFile, type RequestsFile, type SuggestionsFile } from './layout';
+import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, type RunnerFiles, type LastRunFile } from './layout';
 import { sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
@@ -476,7 +476,7 @@ export class DriveVault implements VaultSource {
   }
 
   async duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>> {
-    const known = (await this.json<HashesFile>(SYSTEM.hashes))?.hashes ?? {};
+    const known = (await this.json(SYSTEM.hashes))?.hashes ?? {};
     const ix = await this.index();
     return Promise.all(
       files.map(async (f) => {
@@ -489,7 +489,7 @@ export class DriveVault implements VaultSource {
 
   /** The last tidy-up's own report, as the runner wrote it. */
   lastRun(): Promise<LastRunFile | null> {
-    return this.json<LastRunFile>(SYSTEM.lastRun);
+    return this.json(SYSTEM.lastRun);
   }
 
   /** Waits until every thing being sent to the inbox has arrived or failed. */
@@ -545,7 +545,7 @@ export class DriveVault implements VaultSource {
       .filter((r) => r.kind === 'request')
       .reverse()
       .map((r): Request => ({ id: r.id, text: r.text ?? r.what, at: r.at }));
-    const done = (await this.json<RequestsFile>(SYSTEM.requests))?.done ?? [];
+    const done = (await this.json(SYSTEM.requests))?.done ?? [];
     return [...waiting, ...done];
   }
 
@@ -558,7 +558,7 @@ export class DriveVault implements VaultSource {
   }
 
   async questions(): Promise<Question[]> {
-    const all = (await this.json<QuestionsFile>(SYSTEM.questions))?.questions ?? [];
+    const all = (await this.json(SYSTEM.questions))?.questions ?? [];
     const answered = new Set((await this.journal.list()).filter((r) => r.kind === 'answer').map((r) => r.questionId));
     return all.filter((q) => !answered.has(q.id));
   }
@@ -571,7 +571,7 @@ export class DriveVault implements VaultSource {
   }
 
   async suggestions(): Promise<Suggestion[]> {
-    const all = (await this.json<SuggestionsFile>(SYSTEM.suggestions))?.suggestions ?? [];
+    const all = (await this.json(SYSTEM.suggestions))?.suggestions ?? [];
     const dropped = dismissed();
     const rules = await this.rules();
     // A suggestion you already have as a rule is not offered again.
@@ -579,7 +579,7 @@ export class DriveVault implements VaultSource {
   }
 
   async dismissSuggestion(id: string, keep: boolean): Promise<() => Promise<void>> {
-    const all = (await this.json<SuggestionsFile>(SYSTEM.suggestions))?.suggestions ?? [];
+    const all = (await this.json(SYSTEM.suggestions))?.suggestions ?? [];
     const s = all.find((x) => x.id === id);
     dismiss(id);
     const line = keep && s && !ruleLike(await this.rules(), s.title) ? await this.journal.record('rule', `Kept a suggestion as a rule: "${s.title}"`, { path: 'Rules.md', text: s.title }) : null;
@@ -623,20 +623,23 @@ export class DriveVault implements VaultSource {
     if (this.runningPiles().size) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
   }
 
-  /** One of Bower's JSON files, or null when it is not there or not readable. */
-  protected async json<T>(path: string): Promise<T | null> {
+  /** A missing runner file is normal; an unreadable existing file needs attention. */
+  protected async json<K extends keyof RunnerFiles>(path: K): Promise<RunnerFiles[K] | null> {
     const id = (await this.index()).systemId(path);
     if (!id) return null;
+    let value: unknown;
     try {
-      const v: unknown = JSON.parse(await this.drive.readText(id));
-      return v && typeof v === 'object' && (v as { v?: unknown }).v === 1 ? (v as T) : null;
+      value = JSON.parse(await this.drive.readText(id));
     } catch (e) {
-      if (e instanceof SyntaxError) {
-        console.error(`${path} is not valid JSON`);
-        return null;
-      }
-      throw e;
+      if (!(e instanceof SyntaxError)) throw e;
+      console.error(`${path} is not valid JSON`);
+      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
     }
+    if (!isRunnerFile(path, value)) {
+      console.error(`${path} has an unsupported shape`);
+      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
+    }
+    return value;
   }
 
   protected async text(f: DriveFile): Promise<string> {

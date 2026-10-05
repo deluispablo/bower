@@ -1,3 +1,4 @@
+import { LoadError } from '@/ui/LoadError';
 import { useRef, useState } from 'react';
 import { shortDay } from '@/app/words';
 import { report } from '@/ui/report';
@@ -22,11 +23,14 @@ import s from './bower.module.css';
  */
 export function BowerScreen() {
   const { vault, runs } = useSources();
-  const { data: rules } = useRules();
-  const { data: run } = useRun();
+  const rulesState = useRules();
+  const { data: rules } = rulesState;
+  const runState = useRun();
+  const { data: run } = runState;
   const [text, setText] = useState('');
   const [kind, setKind] = useState<'request' | 'rule'>('request');
-  const { data: requests } = useRequests();
+  const requestsState = useRequests();
+  const { data: requests } = requestsState;
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
@@ -65,6 +69,7 @@ export function BowerScreen() {
           <p className="muted">Ask for something in the next tidy-up, or give it a rule to keep.</p>
         </div>
       </div>
+      <LoadError state={runState} />
       <form
         className={s.composer}
         onSubmit={(e) => {
@@ -136,6 +141,7 @@ export function BowerScreen() {
         </div>
       </form>
 
+      <LoadError state={requestsState} />
       {(requests ?? []).length > 0 && (
         <section className={s.sent} aria-labelledby="asked">
           <h2 id="asked" className={s.h2}>
@@ -171,6 +177,7 @@ export function BowerScreen() {
         <p className="muted" style={{ fontSize: 15, marginBottom: 6 }}>
           Bower follows these in every tidy-up. They are kept with your notes, in your Bower folder.
         </p>
+        <LoadError state={rulesState} />
         <ul>
           {(rules ?? []).map((r) => (
             <li key={r.id} className={r.pending ? s.pending : undefined}>

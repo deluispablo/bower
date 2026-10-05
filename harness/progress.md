@@ -224,3 +224,4 @@
 - 2026-10-05: search-root-scope passes — fix(drive): prove selected-folder search after integration
 
 - 2026-10-05: Search integration reviewed and closed; assign runner read errors and add its helper stub before assertion red.
+- 2026-10-05: runner-json-shapes passes — fix(data): explain unreadable runner updates and offer retry

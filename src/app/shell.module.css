@@ -3,7 +3,7 @@
   height: 100dvh;
   display: grid;
   grid-template-columns: 52px var(--lw) minmax(0, 1fr) var(--rw);
-  grid-template-rows: minmax(0, 1fr) 30px;
+  grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: 'ribbon left center right' 'status status status status';
   background: var(--bg);
 }

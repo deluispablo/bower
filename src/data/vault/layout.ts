@@ -12,6 +12,7 @@
  * Owned by the app: `changes/`, one JSON file per change (the journal);
  * the runner moves them to `changes/archive/` after reading them.
  */
+import { isRunWire } from '../worker/worker-api';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
 export const BOWER_FOLDER = 'Bower';
@@ -71,3 +72,41 @@ export const PROP = {
   /** On a thing sent to the inbox: a key made before sending, so a retry never sends it twice. */
   item: 'bowerItem',
 } as const;
+
+/** Runtime checks for the runner's data: a version alone does not prove its shape. */
+type JsonObject = Record<string, unknown>;
+const object = (v: unknown): v is JsonObject => !!v && typeof v === 'object' && !Array.isArray(v);
+const text = (v: unknown): v is string => typeof v === 'string';
+const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const optional = (v: unknown, check: (x: unknown) => boolean): boolean => v === undefined || check(v);
+const list = (v: unknown, check: (x: unknown) => boolean): boolean => Array.isArray(v) && v.every(check);
+const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text);
+const suggestion = (v: unknown): boolean => object(v) && text(v.id) && text(v.title) && text(v.why);
+const request = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && number(v.at) && optional(v.done, text);
+const pathChange = (v: unknown): boolean => object(v) && text(v.path) && text(v.what);
+const setAside = (v: unknown): boolean => object(v) && text(v.name) && text(v.why);
+const kinds = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'];
+const filed = (v: unknown): boolean => object(v) && text(v.name) && text(v.title) && text(v.to) && text(v.kind) && kinds.includes(v.kind) && optional(v.note, text);
+const count = (v: unknown): boolean => number(v) && Number.isInteger(v) && v >= 0;
+const report = (v: unknown): boolean => object(v) && list(v.filed, filed) && list(v.created, pathChange) && list(v.updated, pathChange) && list(v.setAside, setAside) && list(v.questions, question) && optional(v.yourChanges, count) && optional(v.rulesWorded, count) && optional(v.requests, (x) => list(x, text));
+const run = (v: unknown): boolean => isRunWire(v) && object(v) && optional(v.report, report);
+
+export interface RunnerFiles {
+  '.bower/questions.json': QuestionsFile;
+  '.bower/suggestions.json': SuggestionsFile;
+  '.bower/requests.json': RequestsFile;
+  '.bower/last-run.json': LastRunFile;
+  '.bower/hashes.json': HashesFile;
+}
+
+export function isRunnerFile<K extends keyof RunnerFiles>(path: K, v: unknown): v is RunnerFiles[K] {
+  if (!object(v) || v.v !== 1) return false;
+  switch (path) {
+    case SYSTEM.questions: return list(v.questions, question);
+    case SYSTEM.suggestions: return list(v.suggestions, suggestion);
+    case SYSTEM.requests: return list(v.done, request);
+    case SYSTEM.lastRun: return run(v.run);
+    case SYSTEM.hashes: return object(v.hashes) && Object.entries(v.hashes).every(([hash, value]) => /^[a-f\d]{64}$/i.test(hash) && text(value));
+  }
+  return false;
+}

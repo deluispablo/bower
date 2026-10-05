@@ -1,3 +1,4 @@
+import { LoadError } from '@/ui/LoadError';
 import { useState } from 'react';
 import { report } from '@/ui/report';
 import { startRun } from './start-run';
@@ -18,7 +19,8 @@ import s from './tidy.module.css';
 /** The tidy-up: confirm, then the real phases, then the result. One sheet. */
 export function TidySheet() {
   const { tidyOpen, setTidy } = useUi();
-  const { data: run } = useRun();
+  const runState = useRun();
+  const { data: run } = runState;
   const running = isRunning(run);
   const showRun = !!run && (running || !run.seen);
   const { runs } = useSources();
@@ -33,8 +35,8 @@ export function TidySheet() {
     setTidy(open);
   };
   return (
-    <Sheet open={tidyOpen} onOpenChange={onOpenChange} title={showRun && run ? runTitle(run) : ask} hideTitle className={s.sheet}>
-      {showRun && run ? <RunView run={run} /> : <Confirm />}
+    <Sheet open={tidyOpen} onOpenChange={onOpenChange} title={runState.error ? 'Latest update unavailable' : showRun && run ? runTitle(run) : ask} hideTitle className={s.sheet}>
+      {runState.error ? <LoadError state={runState} /> : showRun && run ? <RunView run={run} /> : <Confirm />}
     </Sheet>
   );
 }

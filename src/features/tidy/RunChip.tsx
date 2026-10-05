@@ -1,3 +1,4 @@
+import { LoadError } from '@/ui/LoadError';
 import { useRun } from '@/data/provider';
 import { useUi } from '@/app/ui-store';
 import { PoseBower } from '@/bird/Bower';
@@ -6,9 +7,12 @@ import s from './tidy.module.css';
 
 /** On a phone, a hidden run lives in a chip above the tab bar. */
 export function RunChip() {
-  const { data: run } = useRun();
+  const runState = useRun();
+  const { data: run } = runState;
   const { tidyOpen, setTidy, startReplay, replayRunId } = useUi();
-  if (!run || tidyOpen || replayRunId) return null;
+  if (tidyOpen || replayRunId) return null;
+  if (runState.error) return <div className={`${s.chip} ${s.chipError}`}><LoadError state={runState} /></div>;
+  if (!run) return null;
   const running = isRunning(run);
   const unseen = replayWaiting(run);
   const stopped = stoppedUnseen(run);

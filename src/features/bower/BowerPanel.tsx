@@ -1,3 +1,4 @@
+import { LoadError } from '@/ui/LoadError';
 import { Link, useNavigate } from 'react-router';
 import { useQuestions, useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { report } from '@/ui/report';
@@ -10,10 +11,14 @@ import s from './bower.module.css';
 
 /** Bower in the desktop's right panel: what it is doing and what it asks. */
 export function BowerPanel() {
-  const { data: run, loading: runLoading } = useRun();
-  const { data: qs } = useQuestions();
-  const { data: rules } = useRules();
-  const { data: requests } = useRequests();
+  const runState = useRun();
+  const { data: run, loading: runLoading } = runState;
+  const questionsState = useQuestions();
+  const { data: qs } = questionsState;
+  const rulesState = useRules();
+  const { data: rules } = rulesState;
+  const requestsState = useRequests();
+  const { data: requests } = requestsState;
   const asked = (requests ?? []).filter((r) => !r.done);
   const { setTidy } = useUi();
   const { runs } = useSources();
@@ -24,7 +29,7 @@ export function BowerPanel() {
     <div className={s.panel}>
       <section>
         <h3 className={s.ph}>Now</h3>
-        {run && (isRunning(run) || (!run.seen && run.phase !== 'failed')) ? (
+        {runState.error ? <LoadError state={runState} /> : run && (isRunning(run) || (!run.seen && run.phase !== 'failed')) ? (
           <button type="button" className={s.panelCard} onClick={() => setTidy(true)}>
             <strong>{runTitle(run)}</strong>
             <span className="muted">{runDetail(run)}</span>
@@ -45,6 +50,7 @@ export function BowerPanel() {
           <p className="muted">Resting. Tidy up when the inbox has what you want filed.</p>
         )}
       </section>
+      <LoadError state={questionsState} />
       {!!qs?.length && (
         <section>
           <h3 className={s.ph}>{plural(qs.length, 'question')} for you</h3>
@@ -58,6 +64,7 @@ export function BowerPanel() {
       )}
       <section>
         <h3 className={s.ph}>{countOr(rules?.length, 'rule', 'Rules')}</h3>
+        <LoadError state={rulesState} />
         <ul className={s.panelRules}>
           {(rules ?? []).slice(0, 5).map((r) => (
             <li key={r.id}>
@@ -67,6 +74,7 @@ export function BowerPanel() {
           ))}
         </ul>
       </section>
+      <LoadError state={requestsState} />
       {asked.length > 0 && (
         <section>
           <h3 className={s.ph}>You asked</h3>

@@ -2354,7 +2354,7 @@
       "Each read rejects with a short readable error, without crashing or silently replacing data."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"runner files with the wrong shape give a readable error\" && pnpm vitest run src/data/runner-errors.test.tsx -t \"unreadable runner data is explained on screen\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "open-in-drive",

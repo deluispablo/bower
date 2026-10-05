@@ -573,3 +573,32 @@ it('ticking your own task keeps its note seen', async () => {
   await vault.refresh();
   expect(findNode(await vault.tree(), PASSPORT)?.isNew).toBeFalsy();
 });
+
+it('runner files with the wrong shape give a readable error', async () => {
+  const sys = await idOf('.bower');
+  const cases: Array<{ name: string; read: () => Promise<unknown>; bad: unknown[] }> = [
+    { name: 'questions.json', read: () => vault.questions(), bad: [{ v: 1 }, { v: 1, questions: {} }, { v: 1, questions: [{ id: 'q', text: 42, yes: 'Yes', no: 'No', askedAt: 1 }] }] },
+    { name: 'suggestions.json', read: () => vault.suggestions(), bad: [{ v: 1 }, { v: 1, suggestions: [null] }, { v: 1, suggestions: [{ id: 's', title: 'Keep it', why: [] }] }] },
+    { name: 'requests.json', read: () => vault.requests(), bad: [{ v: 1 }, { v: 1, done: [{ id: 'r', text: 'File it', at: 'later' }] }, { v: 1, done: [{ id: 'r', text: 'File it', at: 1, done: false }] }] },
+    { name: 'hashes.json', read: () => vault.duplicates([{ name: 'one.txt', body: new Blob(['one']) }]), bad: [{ v: 1 }, { v: 1, hashes: [] }, { v: 1, hashes: { ['a'.repeat(64)]: 42 } }] },
+    { name: 'last-run.json', read: () => vault.lastRun(), bad: [{ v: 1 }, { v: 1, run: { id: 'r' } }, { v: 1, run: { id: 'r', scope: 'all', phase: 'done', requestedAt: 1, phaseAt: 2, report: { filed: [], created: [], updated: [], setAside: [], questions: [{}] } } }] },
+  ];
+  for (const c of cases) {
+    let f = (await drive.listAll(root)).find((x) => x.parents[0] === sys && x.name === c.name);
+    if (!f) f = await drive.createText(sys, c.name, '{}');
+    const original = await drive.readText(f.id);
+    for (const bad of [...c.bad, { v: 2 }]) {
+      const now = await drive.get(f.id);
+      await drive.writeText(f.id, JSON.stringify(bad), now.modifiedTime);
+      await vault.refresh();
+      await expect(c.read(), c.name).rejects.toMatchObject({ name: 'BowerError', code: 'unknown', message: expect.stringMatching(/could not read|could not check/) });
+    }
+    const now = await drive.get(f.id);
+    await drive.writeText(f.id, '{', now.modifiedTime);
+    await vault.refresh();
+    await expect(c.read(), `${c.name}: invalid JSON`).rejects.toMatchObject({ name: 'BowerError', code: 'unknown' });
+    const latest = await drive.get(f.id);
+    await drive.writeText(f.id, original, latest.modifiedTime);
+  }
+  await vault.refresh();
+});

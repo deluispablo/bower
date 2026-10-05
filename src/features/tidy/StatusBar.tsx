@@ -1,3 +1,4 @@
+import { LoadError } from '@/ui/LoadError';
 import { usePiles, useRun, useTree } from '@/data/provider';
 import { waitingIn } from '@/data/piles';
 import { countFiles } from '@/data/tree';
@@ -10,7 +11,8 @@ import s from './tidy.module.css';
 
 /** The desktop's bottom line: the tidy-up, what waits, how much there is. */
 export function StatusBar() {
-  const { data: run } = useRun();
+  const runState = useRun();
+  const { data: run } = runState;
   const { data: piles } = usePiles();
   const { data: tree } = useTree();
   const { setTidy, startReplay } = useUi();
@@ -25,17 +27,17 @@ export function StatusBar() {
   else left = statusLine(run, piles === undefined ? undefined : waiting);
   return (
     <footer className={s.status}>
-      <button type="button" className={s.statusBtn} onClick={() => (run && replayWaiting(run) ? startReplay(run.id) : setTidy(true))}>
+      {runState.error ? <LoadError state={runState} /> : <button type="button" className={s.statusBtn} onClick={() => (run && replayWaiting(run) ? startReplay(run.id) : setTidy(true))}>
         {running ? <span className={s.live} /> : stoppedUnseen(run) ? <span className={s.stopDot} /> : <BowerHead size={16} />}
         {left}
-      </button>
+      </button>}
       <span className={s.statusRight}>
         {tree === undefined ? (
           <span>Opening your Bower folder…</span>
         ) : (
           <>
             <span>{plural(total, 'thing')}</span>
-            <span>{online ? 'Synced with your Drive' : 'Offline. Your changes wait here until you are back.'}</span>
+            <span>{runState.error ? 'Latest update unavailable' : online ? 'Synced with your Drive' : 'Offline. Your changes wait here until you are back.'}</span>
           </>
         )}
       </span>
