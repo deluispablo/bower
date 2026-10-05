@@ -237,3 +237,5 @@
 - 2026-10-05: Naming regression exposed further labels in folder/bookmark/rename/move views; reserve them within the existing coherent naming entry and extend its tests.
 
 - 2026-10-05: Full naming gate found four legacy extension-copy expectations; reserve literal updates and add full-file-name search matching coverage before repeating both suites.
+
+- 2026-10-05: Naming gates green on both sources; reserve final inline-stem and linked-label regressions before closure.
