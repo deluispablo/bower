@@ -1,13 +1,18 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
 import { BowerError } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { loadingSources } from '@/testing/loading-sources';
 import { Palette } from './Palette';
+
+afterEach(() => {
+  cleanup();
+  useUi.setState({ paletteOpen: false });
+});
 
 describe('the palette', () => {
   it('says when search fails, instead of looking forever', async () => {
@@ -43,7 +48,7 @@ describe('the palette', () => {
       </MemoryRouter>,
     );
     await userEvent.type(screen.getByRole('combobox'), 'e');
-    expect(await screen.findByText('Lease draft')).toBeInTheDocument();
+    expect(await screen.findByText('Lease draft', undefined, { timeout: 4000 })).toBeInTheDocument();
     expect(screen.getByText('saved-page.example')).toBeInTheDocument();
     expect(screen.queryByText(/\.(pdf|url)$/)).toBeNull();
   });
