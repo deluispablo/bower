@@ -2583,7 +2583,7 @@
     "verify": "pnpm vitest run src/data/live/live.test.ts -t \"older run responses cannot replace newer observed state\"",
     "task": "qa-13",
     "passes": true,
-    "note": "Reproduced on 143ae2b by the O1 synthetic probe; named regression is planned, not implemented or executed. See docs/harness/evidence/2026-10-05-o1."
+    "note": "O1 reproduction143ae2b; candidate71ef6be independently reviewed after actual null/result/disposal rework reds. Integrated2bd3346 and closed7f49572 with assertion-red/check/verify. 19 named cases/fullcheck439. Raw evidence2026-10-05-qa13. Local tickets/generation/phase guards only; unknown service attempts/IDs and account-cache isolation remain unproven O3/R3."
   },
   {
     "id": "run-report-save-barrier",
