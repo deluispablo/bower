@@ -1,5 +1,7 @@
 # Phase 2: the execution ledger
 
+Historical decisions and findings; current scope/phase acceptance follows [WORK_PLAN](../../WORK_PLAN.md). Earlier deferral labels do not override the owner's complete simulated P2 requirement. Preserve this history and record new rulings explicitly.
+
 The record of how phase 2 was built: each task's completion, every ruling (a decision taken where the plan was silent or wrong, with what it costs if wrong) and the final review's findings. Kept from the executor's working notes.
 
 - Setup: Ruling: work on branch feat/phase-2-app-logic in the existing checkout, not a separate worktree — repo is local-only, node_modules and the dev server live here — cost if wrong: none, main untouched until merge.

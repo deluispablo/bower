@@ -1,59 +1,27 @@
-# Handoff: where the work stands and what comes next
+# Handoff for planning and phased delivery
 
-For an agent starting a new session with no memory of the last one. Read `AGENTS.md`, `docs/harness/METHOD.md` and `docs/PHASES.md` (all four phases) first; this file is the state of play and the plan. Keep it true: when a step below is done, say so here and in `harness/progress.md` (`## Next`) in the same commit.
-
-Last updated: 2026-10-05, at commit `9dabc23` (237 commits). The owner speaks Spanish in chat; everything in the repo is English.
+Planning revision: `2026-10-05-app-first-1`. Read PRODUCT, WORK_PLAN, P2_ACCEPTANCE, GOVERNANCE and shared STARTUP. The owner appointed the current Codex lead for planning/method only. Preserve the separately owned implementation batch.
 
 ## Where things stand
 
-- **Phase 1** (the UI on demo data): done.
-- **Phase 2** (app logic over Google Drive and the Worker, with a pretend Drive and Worker behind `?source=fake`): built, then hardened by rounds of evaluation and review. It is **not closed yet**: the owner's rule is no next phase until a round comes back clean.
-- **Rounds so far** (each round's findings became entries in `harness/features.json` with that `task`):
+P1 is the accepted UI baseline. P2 is built in substantial part and still open: the existing coordinator is fixing naming-related regressions in `codex/close-phase-2`, while the adopted plan also requires an explicit full capability audit. P3 and P4 implementation have not been authorized to start.
 
-  | Round | Source | Entries | State |
-  | --- | --- | --- | --- |
-  | qa-5 | evaluator | 48 | closed |
-  | qa-6 | evaluator | 50 | closed |
-  | qa-7 | reviewer of qa-6 | 17 | closed |
-  | qa-8 | evaluator after qa-6 | 20 | closed |
-  | qa-9 | reviewer of qa-7/8 (range `57ab04d^..4833d3c`) | 18 | closed |
-  | qa-10 | evaluator after qa-8 | 18 | closed |
-
-- **Harness:** 185/185 entries pass, each with a proof in `harness/proof.log`; one open entry was added with this handoff (`phone-more-faint`, below).
-- **Last gates, all green at `9dabc23`:** `pnpm check`; the whole e2e suite on demo and on fake (186 passed, 52 skipped on each; the skips are tests for one screen size or one source only); `pnpm e2e:pwa` (4 passed).
+This main update is documentation/method only, based on main's existing product code. Do not confuse main's older feature counts with the implementation branch's evidence. Consult that branch's live ACTIVE file and exact SHA for assignments and code status; copied historical counts never certify closure.
 
 ## The plan, in order
 
-1. **Close the one open entry**, `phone-more-faint`: the ⋯ (More) button on phone note pages is very faint. Test first, then `harness/done.sh`.
-2. **Triage the deferred minors** in `docs/superpowers/plans/2026-10-04-phase-2-ledger.md` (the `Final: minor (deferred)` lines and the two `Ruling` lines that say "in phase 3"). Each one either becomes an entry in `features.json` (task `qa-11`, with `steps` and a `verify`) and gets fixed, or gets a written ruling the owner agrees to. Ask the owner which, in one short message, before deciding for them.
-3. **Review round** (qa-11): a fresh reviewer over the range `4833d3c..HEAD`. See "How to run a round".
-4. **Evaluator round** (qa-11 or qa-12): a fresh evaluator replays every qa-9/qa-10 bug and polish entry and explores the whole app. See "How to run a round".
-5. **Fix every finding** as entries, one per commit, through `done.sh`. Then repeat 3 and 4 on what changed.
-6. **Phase 2 is closed** when a reviewer and an evaluator both report nothing Critical or Important and the owner agrees. Write that in `progress.md` and here, and update `AGENTS.md` (phases line).
-7. **Phase 3, the Worker** (Cloudflare Worker: sign-in, tokens, the run dispatch). Start with `superpowers:brainstorming` with the owner, then a spec in `docs/specs/` and a plan in `docs/superpowers/plans/` (as phase 2 did), then a fresh feature list section in `features.json`. The contract is already written: `docs/specs/2026-10-04-worker-contract.md` (where the fake and the contract disagree, the contract wins). The real Worker must also honour what phase 2 added to the contract:
-   - `POST /vault` answers `{ folderId, found }` (`found: true` when the person's earlier folder is still in their Drive, so the app says welcome back).
-   - `DELETE /me` forgets the folder pointer too.
-   - The runner (phase 4) writes `requests` and `rulesWorded` in the report, takes out rules a journal line `removes`, rewrites `[[links]]` after `rename`/`move` lines, and keeps one journal record per `id` (archiving every copy).
-   - Phase 3 also owes a real-Drive smoke test (ledger: full-text tokenising, resumable-upload resume, rename and modifiedTime behaviour).
-8. **Phase 4, the agent** (the runner on GitHub Actions in the operator's private instance repo). Not planned yet.
+1. Existing coordinator completes or preserves its current reserved atomic entry, reaches a clean checkpoint and adopts the docs-only main planning update. Never merge over another session's dirty files.
+2. Audit C01–C16 against the current immutable implementation target. Register missing capabilities, contracts and the four reproduced review concerns (incomplete uploads, protected sections, refresh, stale status). Do not infer closure from the old ledger count.
+3. Execute P2-A through P2-H in WORK_PLAN: foundations, complete simulated flows, deterministic preparation, quality/efficiency corpus and final acceptance. One assigned entry at a time, with honest proofs.
+4. Resolve offline-reading/upload-reload policy with actual owner rulings. Record supported behavior without silently deferring same-session correctness or core second-brain capabilities.
+5. Freeze one SHA; run all gates and independent reviewer/evaluator rounds. Fix every known unresolved defect and uncovered acceptance obligation, rerun affected evidence, then obtain owner acceptance.
+6. Only after P2 closure start the minimal real Worker/service plan. Only after P3 closure implement the real runner/model/research. See PHASES and WORK_PLAN.
 
 ## How to run a round
 
-Rounds are subagents with fresh context. The one who builds never grades.
+Use COORDINATION and the assigned reviewer/evaluator briefs, current planning revision, capability IDs and immutable code SHA. Reviewer and evaluator are independent of the builder. Browser work is reserved and serialized. An evaluator checks full synthetic user journeys, not only already registered findings; a reviewer checks behavior, contracts and proof honesty. No source/build changes under an active evaluation.
 
-- **Reviewer** (most capable model; read-only). Prompt: "Follow the brief in `harness/briefs/reviewer.md` exactly. Review the git range `<base>..HEAD` in /Users/deluisp/Projects/bower-app." Add what to look at specifically: every entry of the round (does the fix do what its `what` says for a person, and would its named test fail without it?), harness honesty (can an entry pass without a real red then green?), and the new data paths of the range. Ask for Critical / Important / Minor with `file:line`, effect on a person and a fix, what it set aside and why, and a one-line verdict.
-- **Evaluator** (general-purpose; uses the Playwright MCP browser tools, loaded with ToolSearch "playwright"). Prompt: "Follow the brief in `harness/briefs/evaluator.md` exactly." It uses the dev server on 5190 and the production build on 5192, uploads files only from `/Users/deluisp/Projects/bower/.playwright-mcp/`, and must not edit files or run git. Part 1: replay every bug/polish entry of the last rounds by its `steps`, on fake and demo, desktop and phone (390×844). Part 2: a fresh exploratory pass as a first-time user and as a keyboard-only user.
-- **Do not edit `src/` while the evaluator runs**: the dev server hot-reloads under it, and its report fills with reloads that are not bugs.
-- **Findings become entries** in `features.json` (next `task` number), each with `what`, `steps` an evaluator can replay, and a `verify` naming the test that will pin it. Commit them in one `chore(harness): qa-N entries …` commit, update `## Next`, then fix them one per commit.
-- **Run the reviewer and the evaluator at the same time** (two background agents). Fix the reviewer's harness findings first: they change how every later entry is closed.
-
-## Closing entries: what the tools expect
-
-- Stage the entry's change (`git add`), then `bash harness/done.sh <id> "<message>"`. It refuses anything unstaged (outside `harness/`), another entry's `passes` changing, a red that is not a failed assertion, and a verify whose test names do not all match real tests.
-- `--fixed-in <sha>` when the fix is already committed; `--known-green "<why>"` only when the entry's `note` (committed before) says why there can be no red, e.g. a tests-only entry checked red by hand.
-- Two entries fixed by one change: close the first normally, the second with `--fixed-in <sha of the first>`.
-- A new module: commit a stub first, or the red is a load error, which `done.sh` refuses.
-- Times on this Mac: a unit-test entry closes in about 3 minutes; an e2e entry in 10 to 15 (the red step and the verify each run Playwright on demo and on fake). Run long closes in the background and wait for the notification.
+Findings return to the integration coordinator for registration. A candidate, a passing unit suite and an old phase review are each insufficient to close P2. No known unresolved defect or required capability gap may be hidden by a scope label; the owner controls actual scope changes.
 
 ## Traps on this machine
 
@@ -65,24 +33,12 @@ Rounds are subagents with fresh context. The one who builds never grades.
 - **Prettier** reformats whole files; do not run it over a file you only touched in places.
 - **Commands chained with `;`** go on after a failure; use `&&` around gates.
 
-## Decisions taken in phase 2 (and where they are written)
+## Decisions taken in phase 2
 
-- A move or rename checks name and place, not modifiedTime (`AGENTS.md`, ledger).
-- The journal outbox stays at sign-out; it is keyed by folder (`AGENTS.md`, `src/data/device.ts`).
-- The outbox asks Drive itself before sending a waiting line, one browser tab at a time (Web Locks); it takes no lock when nothing waits (`src/data/vault/journal.ts`).
-- Links follow renames: the app finds notes by former names until the next tidy-up; the runner rewrites the links (`src/data/links.ts`, Worker contract).
-- Rules are kept once and can be removed with Undo; removal is a journal line the runner applies (`src/data/rules.ts`, contract).
-- Saved links are always `.url` files and are searched and opened by their address (`src/data/piles.ts`, `src/data/search-text.ts`).
-- One name per thing everywhere: no extension, its kind beside it (`thingName`, `pileName`).
-- Tabs and open folders belong to who is signed in; a situation opened by its address starts clean (`src/app/tabs-store.ts`, `src/clean-start.ts`).
-- The boot screen length is the owner's choice and stays.
-- The owner's GitHub links are the one personal-data exception (the landing is a portfolio).
+Current hard rules remain in AGENTS and accepted specs: content writes check their read version, moves/renames check name/place, app-owned text and runner-owned sections remain separate, no hard deletes and no app writes to index/hot/log. The folder-keyed journal outbox exception at sign-out remains. Exact implementation rulings/evidence belong to the integration ledger, not this main planning snapshot.
 
-## Open questions for the owner
+The owner adopted app-first development with a complete simulated P2 and a minimal backend, preserving generation, modification, connections and permitted web research. The centralized-write default in backend proposal v2 is superseded. Specific offline/read-reload decisions and actual provider guarantees remain unresolved; see WORK_PLAN's decision register.
 
-- The `offline` situation shows "Bower opens when you're back online" for the whole app, although the production build's service worker could open notes the device already has. Offline reading is a product decision (phase 3 or later).
-- Failed uploads are forgotten after a page reload (ledger ruling): a durable upload queue is a phase 3 decision.
+## Cross-session continuation
 
-## Memory outside the repo
-
-The agent's own memory (`~/.claude/projects/-Users-deluisp-Projects-bower/memory/`) holds the owner's preferences: the quality gate, the harness method, the GitHub link exception, design freedom, and the display trap above. The repo is the record; memory only points at it.
+Compare PLAN_REVISION with local main on startup/resume. Use unique session IDs, explicit file ownership and shared packet records. Optional skills/plugins do not confer delegation or messaging permission. The planning lead updates purpose/method; the existing implementation coordinator keeps live assignments and proof closure. See GOVERNANCE and the planning adoption handoff.

@@ -2,8 +2,10 @@
 
 ## Next
 
-- Follow the plan in `docs/harness/HANDOFF.md`: close `phone-more-faint`, triage the phase 2 ledger's deferred minors with the owner, then a reviewer round over `4833d3c..HEAD` and an evaluator round (qa-11), fix their findings, repeat until clean. Phase 3 waits for that.
-- Run e2e only while the Mac's display is awake; never edit `src/` while e2e, `done.sh` or an evaluator runs.
+- Adopt `docs/WORK_PLAN.md` and `docs/P2_ACCEPTANCE.md`, revision `2026-10-05-app-first-1`, in the active implementation branch at an owned clean checkpoint. Complete its reserved atomic task first; do not overwrite dirty work.
+- The implementation coordinator maps C01–C16 to evidence and registers gaps plus current review findings, then executes one assigned entry at a time. P2 remains open until full simulated-app acceptance, independent review/evaluation and owner rulings.
+- Local main receives planning/method only in this update. Its feature/proof history is not the newer implementation branch's status. Read the live integration ACTIVE record; do not restart main's historical first open entry.
+- P3/P4 implementation remains gated. Technical lead currently owns planning/method only; see GOVERNANCE. Browser resources remain serialized and code must stay frozen during their use.
 
 ## Log
 
@@ -201,3 +203,5 @@
 - 2026-10-05: small-wording passes — fix(app): words agree: one way to say a run stopped, Press in the tour, and a rename says so
 - 2026-10-05: offline-footer passes — fix(app): offline, the footer says your changes wait here
 - 2026-10-05: qa-10 closed (185/185). `docs/harness/HANDOFF.md` written: the state, the plan to close phase 2 and start phase 3, how to run a round, the traps of this machine.
+
+- 2026-10-05: owner-authorized planning-only main update adopts full second-brain purpose, complete simulated P2 acceptance, minimal backend and shared technical-lead/coordinator authority. No feature status or proof changed; integration branch must adopt the plan at a safe checkpoint.
