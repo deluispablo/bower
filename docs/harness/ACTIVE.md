@@ -18,8 +18,9 @@ Only the named coordinator writes this file. Read this integration copy before c
 | journal-separate-clients | Codex `/root/journal_fixes` → `/root` | Sole implementer; handoff to coordinator | integration checkout | `37b6abb`; target work on `1a79dfd` | worker-contract.md; fake-runner.ts; drive-vault.test.ts; drive-vault.ts; journal.ts; vault-index.ts | closed; worker read-only | `d423225` |
 | worker-response-shapes | Codex `/root/audit_p2` | Implementer | `/Users/deluisp/.codex/worktrees/qa11-worker-search/bower-app`; `codex/qa11-worker-search` | base `d423225` | worker-api.ts; worker-http.ts; worker-http.test.ts | closed; assignment released | candidate `3cba3ba`; integration `0e978af`; closure `55810f9` |
 | home-person | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `d423225` | Home.tsx; Home.test.tsx; shared records | closed | `cc131fe` |
-| search-root-scope | Codex `/root/audit_p2` | Implementer | same isolated checkout; `codex/qa11-search-root` | base `55810f9` | drive-http.ts; drive-http.test.ts | assigned; candidate only; no browsers | pending |
-| task-keeps-seen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `55810f9` | drive-vault.test.ts; temporary task-only red in drive-vault.ts; shared records | assigned; test-only coverage | pending |
+| search-root-scope | Codex `/root/audit_p2` | Implementer | same isolated checkout; `codex/qa11-search-root` | base `55810f9` | drive-http.ts; drive-http.test.ts | changes requested; no integration or browsers | first candidate `b1682a` |
+| task-keeps-seen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `55810f9` | drive-vault.test.ts; temporary task-only red in drive-vault.ts; shared records | closed; production restored exactly after manual assertion red | `4460586` |
+| upload-retry-screen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `4460586` | PileScreen.test.tsx; temporary retry-callback red in PileScreen.tsx; shared records | assigned; test-only coverage | pending |
 | Final review and evaluation | fresh sessions, pending | Reviewer / evaluator | integration checkout | final immutable SHA pending | read-only; no source/build changes during evaluation | unassigned | none |
 
 ## Required skills and capabilities
@@ -38,3 +39,9 @@ For each assignment, record `bower-session` plus its role skill, the actual tool
 - Home identity closed at `cc131fe`; named assertion red/green, check, full demo/fake each 187 passed / 53 intentional skips. Visual check at 1440×900 and 390×844 on fake: correct account initial, intact layout, no console warnings/errors. First assignment delivery took about 10 minutes; most time was the two full browser suites.
 
 - Worker proof closure `55810f9`: red/check/verify green; 193/201 entries pass. Next: isolated search candidate; coordinator coverage for own-task seen state. Production/source restores stay confined to their respective checkouts.
+
+- Coordinator startup refresh after methodology/skills update `4c189ba`: `bower-session` and `bower-implement` loaded directly from canonical repository files (not present in this host catalog); Git/shell/Node/pnpm and native CUA browser available. Integration branch unchanged, owned tree clean. Initial harness/init and later checks already passed; no duplicate installation over another session. Next assignment: pile screen retry coverage.
+- Task-seen coverage closed `4460586`: temporarily removed only task keepSeen, observed assertion failure, restored exact production and closed the test-only entry under its precommitted note. Evidence `/private/tmp/bower-task-keeps-seen-{red,green,close}.log`; 194/201 entries pass.
+- Search candidate `55810f9..b1682a` returned by isolated implementer; fresh review `/root/review_search_candidate` pending. No browser or shared-record writes from the worker.
+
+- Fresh search review of `55810f9..b1682a`: Important stale-parent regression after creating a folder and moving an existing note into it. No integration; same assignment returned for a mutation/cache regression and corrected single candidate. Original reviewed SHA is retained for comparison.

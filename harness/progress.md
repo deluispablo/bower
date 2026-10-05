@@ -219,3 +219,4 @@
 - 2026-10-05: worker-response-shapes passes — fix(worker): prove malformed replies are rejected after integration
 - 2026-10-05: released the closed Worker assignment and assigned scoped search at base55810f9 in the isolated checkout. Coordinator task-seen coverage is independent; browsers remain reserved for integration. pnpm check green before assignment record.
 - 2026-10-05: task-keeps-seen passes — test(data): retain seen state after ticking an own task
+- 2026-10-05: task-seen regression closed with manually observed assertion red and exact production restoration; assigned pile retry coverage. Fresh search review requested a stale-parent cache correction before integration; the candidate remains open. Coordinator skills loaded from canonical project files; check green before this record.
