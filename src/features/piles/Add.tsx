@@ -129,10 +129,11 @@ export function Add() {
     }, 60);
   };
   const fromFiles = (fl: FileList | null, origin: string): void => add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin, file: f })));
+  const [badLink, setBadLink] = useState(false);
   const addLink = (): void => {
     const v = normaliseLink(link);
     if (!v) {
-      toast('That does not look like a link.');
+      setBadLink(true);
       return;
     }
     add([{ name: v.replace(/^https?:\/\//, '').replace(/\/$/, ''), kind: 'link', origin: 'A link you pasted', url: v }]);
@@ -215,11 +216,31 @@ export function Add() {
           }}
         >
           <Icon name="link" size={18} />
-          <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="Paste a link" aria-label="Paste a link" value={link} onChange={(e) => setLink(e.target.value)} />
+          <input
+            type="text"
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="Paste a link"
+            aria-label="Paste a link"
+            aria-invalid={badLink || undefined}
+            aria-describedby={badLink ? 'bad-link' : undefined}
+            value={link}
+            onChange={(e) => {
+              setLink(e.target.value);
+              setBadLink(false);
+            }}
+          />
           <Button size="sm" variant="ghost" type="submit" disabled={!link.trim()}>
             Add link
           </Button>
         </form>
+        {badLink && (
+          <p id="bad-link" className={s.badLink} role="alert">
+            That is not a web address. Check it and try again.
+          </p>
+        )}
       </div>
 
       {items.length > 0 && (

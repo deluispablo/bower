@@ -2242,7 +2242,7 @@
       "A line says that is not a web address; the box is marked invalid."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"a link that is not one is said so\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "small-wording",

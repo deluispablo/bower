@@ -198,3 +198,4 @@
 - 2026-10-05: one-naming passes — fix(app): one thing has one name everywhere: Home, the tree, the tidy-up sheet and the report
 - 2026-10-05: remove-pile-during-run passes — fix(app): the tree's Remove the pile waits for a running tidy-up, as the pile page does
 - 2026-10-05: welcome-back passes — fix(app): coming back after deleting the account says welcome back, the folder still there
+- 2026-10-05: invalid-link-says passes — fix(app): a link that is not one is said so next to the box

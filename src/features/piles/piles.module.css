@@ -33,3 +33,5 @@
 
 .dupActions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .retry { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 0; color: var(--danger); }
+
+.badLink { margin: 6px 0 0; color: var(--danger); font-size: 15px; }

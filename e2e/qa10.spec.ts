@@ -171,3 +171,14 @@ test('coming back says welcome back: the folder is still there', async ({ page }
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/Your Bower folder is still in your Drive/)).toBeVisible();
 });
+
+test('a link that is not one is said so, next to the box', async ({ page }) => {
+  await open(page, '/add');
+  const box = page.getByLabel('Paste a link');
+  await box.fill('not a link');
+  await page.getByRole('button', { name: 'Add link' }).click();
+  await expect(page.getByText("That is not a web address. Check it and try again.")).toBeVisible();
+  await expect(box).toHaveAttribute('aria-invalid', 'true');
+  await box.fill('example.com');
+  await expect(box).not.toHaveAttribute('aria-invalid', 'true');
+});
