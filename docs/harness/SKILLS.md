@@ -43,3 +43,9 @@ Validate new/changed skill frontmatter with the available skill-creator `quick_v
 Exercise startup with representative prompts: resume this project (session only initially), fix an assigned entry (session + implement), review a pinned range (session + review, no init), evaluate a frozen build (session + evaluate, no rebuild), update a spec (session + relevant docs, no browser/security skill). Inspect the loaded skill and role, not merely the response wording. This update validates files and links; native discovery and model routing need fresh live Claude/Codex sessions. Record observed misrouting before changing descriptions.
 
 Measure verified integration time, rework and missing evidence in `ACTIVE.md` for actual batches. Do not call this pairing optimal from source recommendations alone. Keep descriptions narrow, retain automatic discovery and refine after demonstrated failures; do not grow the always-loaded map with copied manuals.
+
+## Planning revision and role boundaries
+
+The four shared skills remain the entry points; no large always-loaded planner skill is needed. bower-session routes the owner-appointed planning/method lead to GOVERNANCE and the technical-lead brief. Implementers, reviewers and evaluators name the adopted plan revision, phase and capability IDs. P2 evaluation checks the entire acceptance matrix, not only registered historical entries. Native discovery and a live Claude/Codex handoff still need actual session evidence; files passing validation alone do not prove orchestration.
+
+Architecture revision contracts-2 keeps the four skill definitions unchanged: routing through STARTUP and role briefs loads ARCHITECTURE only for relevant boundary work and ORCHESTRATOR_START for coordinators. No new global skill, plugin or duplicated rulebook is introduced.

@@ -1,5 +1,11 @@
 # Who does what: the app, the runner and Claude — design
 
+
+Architecture revision `2026-10-05-contracts-2`: [ARCHITECTURE](../ARCHITECTURE.md) governs stable boundaries, compatible evolution, durable execution and early premise probes. Shapes and operation lists below are a historical implementation baseline, not the final capability ceiling; change them only with assigned migration/compatibility evidence.
+Planning update 2026-10-05: read [PRODUCT](../PRODUCT.md), [WORK_PLAN](../WORK_PLAN.md) and [P2_ACCEPTANCE](../P2_ACCEPTANCE.md). The app-first, full second-brain capability contract governs delivery. Existing shapes below describe the current baseline; extensions must be versioned and implemented through assigned entries, not assumed present.
+
+“One or two calls” is a target for simple ingestion, not a universal limit. Preserve rich document generation/revision, questions over existing material, cross-project connections, contradictions and permission-aware web enrichment. Claude may request bounded additional context; necessary new prose is valid output. P2 proves these flows with scripted persisted effects, P4 proves semantic quality.
+
 Date: 2026-10-04. Status: direction agreed with the owner; details settle in the phase 2 to 4 specs.
 
 Bower replaces the owner's local second brain (an Obsidian vault kept by Claude Code). That vault works well because Claude does only what needs thinking and everything else is done by scripts at zero tokens. Bower today is slow (about 5 minutes per tidy-up): a 53 KB rulebook loaded every run, a tool loop where every read and write is a model round trip, whole notes rewritten as output, and the whole Drive folder downloaded first. This spec splits the work in three so a tidy-up gets fast and Claude's reach stays narrow.
@@ -28,7 +34,7 @@ Claude never edits files. It answers with a closed list of operations that the r
 | `question` | A yes/no question for the report |
 | `contradiction` | A callout when two sources disagree |
 
-This list is also the perimeter: nothing outside it, never your own text, never a delete. A tidy-up becomes one or two calls instead of a tool loop: classify from the previews, then compile with only the notes asked for. Long texts are summarised first by a cheap model in parallel.
+This baseline list bounds the current implementation; adopted generation/research capabilities require explicit validated extensions. Never infer permission to overwrite protected user text or hard-delete content. A simple tidy-up aims for one or two calls: classify from the previews, then compile with only the notes asked for. Complex synthesis, document creation and research may request bounded additional context and necessary output. Prefer cached extraction and task-relevant excerpts; model summarization is justified by measured need and retains access to the source.
 
 ## The change journal
 

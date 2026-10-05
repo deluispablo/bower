@@ -12,3 +12,5 @@ Read the current integration copy of `docs/harness/ACTIVE.md` before selecting w
 Load only the skill for the assigned role after orientation: `bower-implement`, `bower-review` or `bower-evaluate`. A documentation/planning assignment uses the relevant repository documents without loading all role skills. Report required capabilities as available, unavailable or not needed; never infer tools from skill names. Run installation/gates only in an assigned writable checkout with no conflicting process. A read-only reviewer does not run init.
 
 Skills route to the maintained documents, not copies of their rules. If native discovery is unavailable, read the same SKILL.md by its repository path. No delegation, messaging or permission expansion is implied by loading this skill.
+
+Read the adopted plan revision and current phase acceptance through STARTUP; include them with capability IDs in the assignment/result. Planning/method work uses `docs/harness/GOVERNANCE.md` and `harness/briefs/technical-lead.md`; it does not take over an implementation batch.

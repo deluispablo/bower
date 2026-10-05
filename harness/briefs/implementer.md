@@ -18,3 +18,7 @@ Do:
 Never: edit `verify` to pass, skip a failing test, push, add a remote, put real names or places in data or copy, write "vault" in UI copy.
 
 Report: what changed (files), the test, the command output that proves it, anything you decided that the entry did not say.
+
+Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase acceptance before acting. Record plan revision and capability IDs with the code SHA. Implement only the assigned phase/entry; missing contract or capability scope returns to the coordinator/technical lead, not an improvised backend expansion.
+
+Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.

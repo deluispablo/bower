@@ -1,6 +1,12 @@
 # The Worker contract (app side) — design
 
-Date: 2026-10-04. Status: written in phase 2 with the fake Worker that the app uses today (`src/data/fake/fake-worker.ts`). Phase 3 builds a Worker that answers exactly this. Where the two disagree, this document wins and the fake is fixed.
+
+Architecture revision `2026-10-05-contracts-2`: [ARCHITECTURE](../ARCHITECTURE.md) governs stable boundaries, compatible evolution, durable execution and early premise probes. Shapes and operation lists below are a historical implementation baseline, not the final capability ceiling; change them only with assigned migration/compatibility evidence.
+Planning update 2026-10-05: read [PRODUCT](../PRODUCT.md), [WORK_PLAN](../WORK_PLAN.md) and [P2_ACCEPTANCE](../P2_ACCEPTANCE.md). The app-first, full second-brain capability contract governs delivery. Existing shapes below describe the current baseline; extensions must be versioned and implemented through assigned entries, not assumed present.
+
+Keep the Worker minimal. P2 simulates complete generated-document, research, context-expansion, report/recovery and undo flows; the current API below does not yet cover all of them. Define/test those extensions in P2 before P3 real service implementation. App-side preparation is revalidated by the runner. No centralized all-write backend is adopted.
+
+Date: 2026-10-04. Status: written in phase 2 with the fake Worker that the app uses today (`src/data/fake/fake-worker.ts`). Phase 3 implements the accepted versioned contract after P2 boundary work. Until a migration is accepted, this baseline guides existing clients; newer adopted architecture and capability requirements govern planned extensions.
 
 The Worker keeps credentials and pointers, never content: the person's Google refresh token (encrypted), their Bower folder id and the state of their runs. The app reads and writes the Bower folder in Google Drive itself, with a short-lived access token from the Worker. The runner (GitHub Actions) does the tidy-up and writes its result to the folder.
 

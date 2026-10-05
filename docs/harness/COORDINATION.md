@@ -1,6 +1,6 @@
 # Claude and Codex on one project
 
-Researched and adopted for the workflow documentation on 2026-10-05. This is a repository protocol, usable from either tool. It does not install an orchestrator or make their private task lists communicate. No parallel implementation session has been validated yet.
+Researched and adopted for the workflow documentation on 2026-10-05. This is a repository protocol, usable from either tool. It does not install an orchestrator or make their private task lists communicate. Cross-vendor orchestration needs recorded live-session evidence; this documentation alone does not validate it.
 
 ## Recommendation and evidence
 
@@ -24,9 +24,9 @@ The following are primary sources, checked on the date above. Their recommendati
 
 ## Roles and authority
 
-The owner decides product scope and phase closure. One named coordinator, Claude or Codex, owns the integration checkout for each batch. Do not appoint both agents as coordinator. A coordinator can implement, but another fresh session reviews that implementation. Prefer cross-tool review when both tools are available; independence and evidence matter more than vendor identity. Neither tool has a permanent planner, coder or reviewer role.
+The owner decides product scope and phase closure. One named coordinator, Claude or Codex, owns the integration checkout for each batch. Do not appoint both agents as coordinator. A coordinator can implement, but another fresh session reviews that implementation. Prefer cross-tool review when both tools are available; independence and evidence matter more than vendor identity. Roles are explicit per assignment. The owner has currently appointed a Codex technical lead for planning/method only; see `GOVERNANCE.md`. This does not replace the active implementation coordinator.
 
-Only the coordinator writes shared records: `harness/features.json`, `harness/proof.log`, `harness/progress.md`, `docs/harness/HANDOFF.md`, `docs/harness/ACTIVE.md`, phase state and plan ledgers. Workers report proposals and findings for the coordinator to register. Changes to shared contracts, instructions, dependencies or test configuration are separate, serialized assignments.
+The technical lead owns adopted purpose, phase definitions, planning and method on main. The integration coordinator owns implementation status/evidence in the live branch and alone writes its shared operational records: `harness/features.json`, `harness/proof.log`, `harness/progress.md`, `docs/harness/HANDOFF.md`, `docs/harness/ACTIVE.md`, phase completion evidence and execution ledgers. Product/phase definition changes follow the lead and owner decisions; neither role changes the other's live files without an explicit handoff. Workers report proposals and findings for the coordinator to register. Changes to shared contracts, instructions, dependencies or test configuration are separate, serialized assignments.
 
 The short-lived batch record is `docs/harness/ACTIVE.md` in the integration checkout. Only the coordinator edits it. A worker's copy in a worktree is a snapshot: the assignment must include the integration path and the worker must read the current record there at startup, before committing and before returning a result. This is a manual single-writer protocol, not an atomic lock implemented by a script. If no coordinator is named, do not claim the first open entry automatically: remain read-only until the owner or active coordinator assigns the role.
 
@@ -57,15 +57,17 @@ Claude Code can be started in that checkout; Codex can use a managed worktree. I
 The coordinator copies this packet to the worker's session and records the assignment in `ACTIVE.md`. No tool-specific skill is required.
 
 ```text
-Role: implementer | reviewer | evaluator
-Tool/session: Claude or Codex, with a unique session label
+Role: technical lead | implementer | reviewer | evaluator
+Tool/session: Claude or Codex, with a unique session/thread label (not only /root)
+Planning revision / phase / capability IDs: adopted version and acceptance mapping
 Entry: exact ID (or explicit documentation/research scope)
 Integration checkout and branch:
 Current coordination record: <integration-path>/docs/harness/ACTIVE.md
 Worker checkout and branch:
 Base SHA / target SHA: immutable commits, not HEAD
 Allowed production and test paths:
-Dependencies and reserved contracts:
+Dependencies and reserved contracts / versions:
+Compatibility fixtures and failure/recovery scenario:
 Acceptance: entry what, steps and unchanged verify
 Skills / required capabilities: bower-session + assigned role; tools checked live
 Commands: writer verify/check and applicable screen gates; read-only roles use prepared evidence
@@ -93,7 +95,7 @@ The coordinator integrates one entry at a time:
 
 Each candidate commit and each closure commit belongs to one entry. Parallel mode deliberately has a candidate commit followed by a proof/closure commit, matching the existing `--fixed-in` path. Do not combine several entries into a single candidate. Failed closure leaves the candidate committed but the entry open; record that state before starting another integration.
 
-Documentation/research maintenance requested by the owner can be a documentation commit with a progress line; do not invent a fake failing behavioral test or alter `passes` for it. Changes to harness executable behavior still need a real entry and test-first proof. All commits still require `pnpm check`.
+Documentation/research maintenance requested by the owner can be a documentation commit with a planning-log line in GOVERNANCE (or coordinator-owned progress when assigned); do not invent a fake failing behavioral test or alter `passes` for it. Changes to harness executable behavior still need a real entry and test-first proof. All commits still require `pnpm check`.
 
 ## Browsers and other shared resources
 
@@ -111,10 +113,18 @@ Return: entry/role, base and target SHA, candidate SHA, changed paths, checks (p
 
 If a session stops responding, retain its assignment and checkout. The coordinator checks its Git status and latest commits, contacts the owner/session, then explicitly marks it stopped or hands it over. Time passing does not release ownership. Never delete a dirty worktree; preserve needed work before cleanup. Reassign using a new packet with the exact latest committed base and unresolved checks.
 
-`HANDOFF.md` is durable phase state; `ACTIVE.md` is the current batch; `progress.md` is the historical log; `features.json` is completion truth. Keep those meanings separate. A batch record in an old worktree cannot override the integration record.
+`HANDOFF.md` is durable phase state; `ACTIVE.md` is the current batch; `progress.md` is the historical log; `features.json` records registered entry completion; P2_ACCEPTANCE is phase completion truth. Keep those meanings separate. A batch record in an old worktree cannot override the integration record.
 
 ## First rollout and measurement
 
-For the remaining phase 2 work, start with Claude implementing one assigned entry and Codex reviewing its immutable candidate, or reverse the tools. Next try two independent unit-test entries in separate worktrees. Keep browser work serialized. Phase closure criteria stay unchanged.
+For the remaining phase 2 work, start with Claude implementing one assigned entry and Codex reviewing its immutable candidate, or reverse the tools. Next try two independent unit-test entries in separate worktrees. Keep browser work serialized. Use the current adopted phase closure criteria, including the expanded capability and boundary evidence.
 
 For the first three completed entries, record elapsed time to verified integration, review findings requiring rework, conflicts, repeated gate time and missing evidence. Compare with the existing roughly 3-minute unit closure and 10–15-minute browser closure observations (these are not a controlled benchmark). Continue parallel implementation only if it reduces elapsed delivery time without more regressions, conflicting edits or unverifiable closures. Otherwise keep the writer/reviewer pairing. No automated scheduler, lock enforcement or cross-vendor messaging was added here.
+
+## Adopted phase acceptance and planning updates
+
+Read PRODUCT, WORK_PLAN, P2_ACCEPTANCE and ORCHESTRATOR_START before assigning new scope. Boundary work follows ARCHITECTURE. Serialize shared schema changes before downstream writers; require compatibility and recovery evidence, not just type checking. A phase is blocked by uncovered capability obligations even if the old feature list is entirely green. The coordinator registers gaps, while the technical lead resolves planning/contracts and the owner resolves product tradeoffs. Keep one defect/delivery entry at a time and use the smallest test that demonstrates its effect. Independent review must check interactions as well as each local fix.
+
+Planning can land on main independently of product code. Compare PLAN_REVISION on startup and resume. Finish or preserve a reserved atomic entry, then integrate the docs-only main update in an exclusively owned clean checkout; reconcile conflicts by purpose, preserving newer implementation evidence. Record the adopted revision before further assignments. Do not merge an old proposal branch just to acquire its prose, because it may carry unfinished product commits.
+
+Prefer a writer/reviewer pair. Additional subagents are justified only by independently owned deliverables, and require explicit delegation. Use bounded packets rather than copying whole chat histories. Return assumptions and missing evidence in the result, and recheck reservations before integration. Optional bridges carry packets; they do not grant authority or certify work.

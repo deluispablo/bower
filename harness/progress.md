@@ -2,11 +2,11 @@
 
 ## Next
 
-- Owner requested a stable, clean handoff on 2026-10-05; another session will orchestrate and assign remaining P2 work and later phases. This batch has ended. Do not infer an implementation assignment from this log.
-- 201/205 entries pass. Four qa-12 findings remain: journal-ack-content and pile-edit-still-seen (Important), create-leading-dot and timeline-source-names (Minor). Read docs/harness/2026-10-05-phase-2-final-round.md for evidence, exact target and remaining evaluation coverage. Their named regression tests are planned and have not been written or run.
-- First reconcile the clean checkpoint with main planning revision 2026-10-05-contracts-2 at d12c55e, including P2_ACCEPTANCE C01–C16 and ORCHESTRATOR_START; the four registered findings are not the complete new P2 acceptance backlog. Establish a new coordinator and explicit ownership in ACTIVE.md before implementation; fix entries test first, one proof closure and commit at a time. Re-review affected changes independently. Resume the incomplete evaluator matrix and run final check/demo/fake/PWA gates before proposing P2 closure.
-- Await the owner's ruling on offline reading, uploads retained across reload and the real-Drive smoke test for P3; silence is not agreement. P2 stays open; this session performed no merge or push. Main advanced through another session’s planning commits to d12c55e, not integrated here.
-- Start with STARTUP.md and canonical bower-session plus the assigned role skill. Keep gates, source restores and browser evaluation serialized; freeze exact targets for independent evaluation.
+- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` resumes codex/close-phase-2 under the owner's explicit handoff; adopts main d12c55e / contracts-2 at a clean exclusive checkpoint. Read live ACTIVE for assignments.
+- First O1 audits all C01–C16 and boundary obligations at the combined immutable SHA; O2 specifies bounded R1–R4 probes without P3 implementation. Reuse proof evidence; reproduce historical concerns before registering gaps.
+- 201/205 historical entries pass. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
+- Stabilize contracts before O4–O7 dependent implementation. Finish full frozen evaluation, gates and O8 dossier before owner phase acceptance. P2 is open; P3/P4 do not start.
+- Offline reading and upload-reload policy require specific owner decisions. Real-provider premises require authorized synthetic observations, not fake guarantees. Browser gates and restores remain serialized.
 
 ## Log
 
@@ -248,3 +248,9 @@
 - 2026-10-05: Owner requested handoff instead of continuing implementation. Final review at 4d98eb0 found two Important and one Minor; incomplete native-browser evaluation reproduced dot creation and Timeline naming. Registered four qa-12 entries, preserved clean tested production sources and documented remaining coverage. No phase closure or merge.
 
 - 2026-10-05: Final inspection found main advanced independently to d12c55e via planning branch. Record pending adoption of its complete simulated P2 contracts; no integration attempted in this stopping session. Auxiliary worktree archive confirmed and temporary preview stopped.
+
+- 2026-10-05: owner-authorized planning-only main update adopts full second-brain purpose, complete simulated P2 acceptance, minimal backend and shared technical-lead/coordinator authority. No feature status or proof changed; integration branch must adopt the plan at a safe checkpoint.
+
+- 2026-10-05: planning revision contracts-2 adopts stable boundaries, durable browser-independent execution, bounded P2 premise probes and orchestrator assignment queue; documentation only, no entry/proof closure.
+
+- 2026-10-05: new owner-appointed coordinator adopts contracts-2 from local main, preserving 201/205 implementation entries/proofs and final-round evidence; prepare immutable O1/O2 packets. No phase acceptance or next-phase implementation.

@@ -1,6 +1,8 @@
 # Phase 2: App logic Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Work inside the harness (Task 0): one feature at a time, a feature flips to `"passes": true` in `harness/features.json` only when its `verify` command is green, and every session ends with a line in `harness/progress.md` and a commit.
+> Historical implementation recipe. Current planning is [WORK_PLAN](../../WORK_PLAN.md) and [P2_ACCEPTANCE](../../P2_ACCEPTANCE.md). Its checkboxes/counts are not current completion state. Follow shared startup, explicit assignments and optional skills; obsolete plugin/first-feature instructions below are not binding. P2 now requires the complete simulated-app capability matrix, including app-side undo/research/document flows; real execution stays in P3/P4.
+
+> **For agentic workers (historical):** Superpowers workflows were optional implementation aids; use the current shared Harness and assigned role skills. Steps use checkbox (`- [ ]`) syntax for tracking. Work inside the harness (Task 0): one feature at a time, a feature flips to `"passes": true` in `harness/features.json` only when its `verify` command is green, and every session ends with a line in `harness/progress.md` and a commit.
 
 **Goal:** Put real logic (Google Drive as the only state, a Worker for session and runs) behind the doors the demo already uses (`src/data/sources.ts`), so the same screens run on Drive without changing.
 
@@ -11,7 +13,7 @@
 **Spec:**
 - `docs/specs/2026-10-04-who-does-what.md`: the three layers, the journal, piles, ownership.
 - `docs/specs/2026-10-04-app-ui-design.md`: phase list, stack.
-- The demo, `src/data/demo/world.ts`, is the behavioural contract. Where this plan and the demo disagree, the demo wins.
+- The demo, `src/data/demo/world.ts`, is the behavioural contract. Historical parity target; adopted product contracts take precedence when the demo needs correction.
 
 ## Global Constraints
 
@@ -422,7 +424,7 @@ export function runFake(drive: FakeDrive, rootId: string, opts: { failOnce: bool
 - the status codes;
 - whether a same-origin check applies.
 
-It also records the dispatch payload to the runner and states that the runner writes `.bower/last-run.json`. Phase 3 builds exactly this.
+It also records the dispatch payload to the runner and states that the runner writes `.bower/last-run.json`. This was the original baseline; P3 implements the versioned contract accepted through current WORK_PLAN and ARCHITECTURE.
 
 **What the fake runner does,** in order, with phases timed by `PHASE_MS[scale]`:
 1. It snapshots the inbox piles as `runPiles`.

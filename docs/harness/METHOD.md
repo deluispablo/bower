@@ -1,6 +1,6 @@
 # How this project is built: the harness
 
-Bower is built by AI agents working in sessions that forget everything between them. The harness is what lets them pick up the work and finish it well: files in the repository that carry the plan, the state and the checks, so no agent depends on memory. A human steers (decides what and why); agents execute (plan, build, check).
+Bower is built by AI agents working in sessions that forget everything between them. The harness is what lets them pick up the work and finish it well: files in the repository that carry the plan, the state and the checks, so no agent depends on memory. A human steers (decides what and why); agents execute (plan, build, check). The adopted product and phase contract live in `docs/PRODUCT.md`, `docs/WORK_PLAN.md` and `docs/P2_ACCEPTANCE.md`; `GOVERNANCE.md` separates the planning-only technical lead from the implementation coordinator.
 
 It follows two published methods:
 - Anthropic, [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents): a feature list, a progress log, an init script, one feature per session, and a feature counts as done only after it is tested as a person would use it.
@@ -24,6 +24,10 @@ Startup and capability selection are shared: [STARTUP.md](STARTUP.md) and [SKILL
 | Proofs | `harness/proof.log` | One line per closed entry, written by `harness/done.sh`: the hash of the `verify` that passed, and whether it was red first. `pnpm check` refuses an entry that passes without one. |
 | Sensors | `pnpm check`, `pnpm e2e`, `pnpm e2e:fake`, `pnpm e2e:pwa`, `src/architecture.test.ts` | Machines that say when something is wrong, and how to fix it. |
 | Briefs | `harness/briefs/` | What to hand a subagent: implementer, evaluator (tester), reviewer. |
+
+## Phase acceptance before feature counts
+
+P2 must deliver a complete app on realistic simulated services, including generation, connections, knowledge updates and web-result flows. The capability matrix is a separate coverage obligation from the historical feature ledger. Audit gaps, register them through the coordinator and preserve honest red/green proofs. No known unresolved defect or required capability gap may be hidden by a green count. P3/P4 implementation waits for the preceding phase's complete evidence and owner acceptance. Bounded P2 premise probes in WORK_PLAN retire integration risks without beginning P3 implementation. ARCHITECTURE defines shared boundary/compatibility tests and durable execution. Tests cannot prove that unseen bugs do not exist.
 
 ## The feature list
 
@@ -61,7 +65,7 @@ Steps 3–6 describe implementation. Reviewers/evaluators follow their assigned 
 Either tool can hold any role. Prefer cross-tool review when available. Only one coordinator integrates candidates and writes shared records; no session may assign itself work already reserved by another. A reviewer can inspect an immutable commit while an implementer works in a separate checkout.
 
 - **Coordinator**: one named session owns assignments, integration and shared records. Brief: `harness/briefs/coordinator.md`.
-- **Planner** (with the human): turns a request into a spec and a plan; findings become entries in the feature list.
+- **Technical lead / planner** (owner-appointed, currently planning/method only): maintains purpose, dependencies, contracts and acceptance with the human; implementation coordinator registers findings/gaps as entries. Brief: `harness/briefs/technical-lead.md`.
 - **Implementer**: one entry at a time, test first. Brief: `harness/briefs/implementer.md`.
 - **Evaluator**: a fresh agent that did not build it uses the app as a person would and tries to break it. Its findings go into the feature list. Brief: `harness/briefs/evaluator.md`.
 - **Reviewer**: a fresh independent session with sufficient review capability reads the whole diff against the plan. Brief: `harness/briefs/reviewer.md`.

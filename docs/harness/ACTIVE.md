@@ -4,12 +4,12 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: batch ended at owner-requested stable handoff; 201/205 pass, four qa-12 findings open. No active writer, reviewer or evaluator.
-- Completed coordinator/session: Codex `/root`. The owner requested another session orchestrate and distribute remaining P2 and subsequent work; the next coordinator is unassigned.
+- State: resumed by explicit owner handoff; planning adoption and O1/O2 assignment preparation. 201/205 historical entries pass; P2 acceptance remains open.
+- Coordinator/session: Codex `/root`, session `p2-orchestrator-2026-10-05-01a10bbd`, explicitly appointed by the owner after the previous batch ended. Sole integration writer and shared-record owner.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: released. Dev 5190 remains available locally. Test server 5191 is managed by gates; temporary production preview 5192 has been stopped at handoff. Future evaluation needs a fresh build and explicit reservation.
+- Browser reservation: no evaluator active. Existing dev listener 5190 (PID 61369, integration cwd verified) preserved. Ports 5191/5192 have no listeners at startup; gates/evaluation will be serialized with explicit reservations.
 
 ## Assignments
 
@@ -80,3 +80,9 @@ For each assignment, record `bower-session` plus its role skill, the actual tool
 - Isolated search/Worker worktree was clean at a67c632; recoverable archive confirmed through the app (archived_worktree attachment). Other sessions' worktrees were not touched.
 
 - Main now carries planning revision `2026-10-05-contracts-2`, complete simulated P2 and orchestrator launch documents. Next session must reconcile/adopt that planning before distributing work; this branch’s historical phase/ruling sections do not supersede the new contract. Four qa-12 entries are known findings, not a complete C01–C16 acceptance audit.
+
+## Resumed planning adoption
+
+- Adopt local main `d12c55e`, revision `2026-10-05-contracts-2`, into clean `5798ace`; merge reconciles instructions while preserving live reservations, full progress, proofs and final-round evidence. Combined committed SHA will be recorded in the O1 packet.
+- Capabilities checked: Git/shell, Node 26.10.0, pnpm 12.8.1, native CUA and Codex subagents available. Claude Code 2.1.289 installed but `claude auth status` reports not logged in; no Claude delegation claimed. Process inventory via ps is sandbox-denied; lsof verifies the existing dev cwd and port ownership.
+- First deliverables: immutable C01–C16/boundary audit O1 and read-only bounded R1–R4 probe specifications O2. No production writer starts before its assignment. Real-service access has not been established. Offline reading and upload-reload policies remain owner decisions.

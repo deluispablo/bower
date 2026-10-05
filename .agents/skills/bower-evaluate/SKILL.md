@@ -12,3 +12,5 @@ Use the browser automation available in this session. Follow its actual document
 Replay assigned regression steps, then explore the specified user and keyboard flows on demo/fake and phone/desktop. Check visible outcomes and console errors. Use synthetic fixtures only. Stop certifying the run if the checkout/build changes; name the invalidated target and steps to repeat.
 
 Return exact SHA, flows covered and findings with source, scenario, size, steps, actual/expected result and console evidence. If interactive automation is unavailable, report evaluation as not run and suggest the remaining check; code reading is not user evaluation. Do not edit the backlog or run Git mutations.
+
+Read the adopted plan revision and current phase acceptance through STARTUP; include them with capability IDs in the assignment/result. Use `docs/P2_ACCEPTANCE.md` for P2 obligations; a green historical entry count does not prove complete capability coverage.

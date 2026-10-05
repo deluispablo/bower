@@ -2,8 +2,14 @@
 
 The Bower app, started again from zero.
 
-- Phase 1: the whole UI on demo data (Alex's made-up folder). See `docs/specs/2026-10-04-app-ui-design.md`.
-- Phase 2: the app's logic. The Bower folder lives in Google Drive and a Worker handles the session and the tidy-ups. Both sit behind the same doors (`src/data/sources.ts`). See `docs/specs/2026-10-04-who-does-what.md` and `docs/specs/2026-10-04-worker-contract.md`.
+The adopted plan is [WORK_PLAN](docs/WORK_PLAN.md), with [product scope](docs/PRODUCT.md), [boundary architecture](docs/ARCHITECTURE.md) and [P2 acceptance](docs/P2_ACCEPTANCE.md).
+
+- P1: accepted UI baseline on synthetic demo data.
+- P2: complete app over realistic simulated services, with bounded integration-premise probes.
+- P3: minimal real backend and recoverable deterministic execution, using a scripted semantic provider.
+- P4: full second-brain reasoning and research through the same accepted boundaries.
+
+Implementation advances only after the current phase is accepted. An assigned coordinator starts with [the launch packet](docs/harness/ORCHESTRATOR_START.md); every Claude/Codex session follows AGENTS.md and shared startup.
 
 ```bash
 pnpm install

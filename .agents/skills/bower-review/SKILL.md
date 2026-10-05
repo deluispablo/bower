@@ -10,3 +10,5 @@ Complete startup orientation without installing dependencies or running mutating
 Compare the assigned diff with its entry's what/steps/verify and relevant contracts. Trace whether the named test would fail for the intended behavior without the fix; inspect error paths and interactions with adjacent code, rather than treating green output as proof of correctness. Verify file ownership and any shared-record or contract changes.
 
 Return Critical/Important/Minor findings with file:line, triggering steps, effect, evidence and a suggested fix; name the exact reviewed SHAs, coverage and things set aside. Distinguish reproduced failures from reasoned concerns. Do not invent test runs, mutate records, spawn agents or approve your own implementation. Later behavior changes need renewed review. Follow COORDINATION.md's return packet.
+
+Read the adopted plan revision and current phase acceptance through STARTUP; include them with capability IDs in the assignment/result. Use `docs/P2_ACCEPTANCE.md` for P2 obligations; a green historical entry count does not prove complete capability coverage.

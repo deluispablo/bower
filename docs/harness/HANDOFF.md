@@ -4,11 +4,15 @@ For an agent starting a new session with no memory of the last one. Read `AGENTS
 
 Historical phase snapshot below: 2026-10-05, at commit `9dabc23`. Startup/coordination instructions updated on 2026-10-05; current completion counts and next work come from `harness/features.json`, `harness/progress.md` and the current integration `ACTIVE.md`, not the historical counts below. The owner speaks Spanish in chat; everything in the repo is English.
 
-## Current handoff: 2026-10-05
+## Resumed handoff: 2026-10-05
+
+Coordinator `p2-orchestrator-2026-10-05-01a10bbd` is explicitly appointed by the owner. Adopted planning revision: `2026-10-05-contracts-2` from main `d12c55e`. PRODUCT, ARCHITECTURE, WORK_PLAN, P2_ACCEPTANCE and GOVERNANCE govern current scope; ORCHESTRATOR_START O1–O8 governs assignments. Historical counts and later-phase deferrals below do not supersede full acceptance or bounded P2-R requirements. Preserve the following final-round evidence as history.
+
+## Previous stable handoff: 2026-10-05
 
 The owner requested a stable clean stopping point and another session to orchestrate/distribute remaining P2 and later work. Branch `codex/close-phase-2`, last frozen reviewed target `4d98eb0`; production fixes committed, no merge or push. **201/205 entries pass**, four qa-12 findings open. This supersedes the historical closure sequence/counts below; a new coordinator must establish its assignments in ACTIVE.md.
 
-Final inspection found main independently advanced to `d12c55e` (planning revision `2026-10-05-contracts-2`). These planning commits are not integrated here. Next session must adopt/reconcile PRODUCT, ARCHITECTURE, WORK_PLAN, P2_ACCEPTANCE and ORCHESTRATOR_START from main before assigning work. Its complete simulated P2 contract supersedes historical scope below; the four findings here are not the complete acceptance backlog.
+Final inspection found main independently advanced to `d12c55e` (planning revision `2026-10-05-contracts-2`). At that stopping point the planning commits were not integrated. The resumed coordinator now adopts/reconciles PRODUCT, ARCHITECTURE, WORK_PLAN, P2_ACCEPTANCE and ORCHESTRATOR_START before assigning work. Its complete simulated P2 contract supersedes historical scope below; the four findings here are not the complete acceptance backlog.
 
 Read `2026-10-05-phase-2-final-round.md`: fresh whole-code review found two Important (journal acknowledgment without content validation; pile edits bypassing name/place concurrency) and one Minor (hidden dot-prefixed creation). Incomplete evaluator reproduced dot creation and Timeline source label mismatch. Regression names are registered but those new tests/fixes are not implemented. Resume the explicit remaining evaluator matrix after fixing, obtain fresh affected review and final check/demo/fake/PWA gates. Owner scope/phase closure agreement is still pending. Do not call P2 complete.
 
@@ -100,3 +104,7 @@ Rounds are independent sessions with fresh context, either standalone Claude/Cod
 ## Memory outside the repo
 
 Tool-private memory may point at this repository but is not required to start a session. Durable project requirements and preferences belong in the map/specs/handoff; assignments live in the integration record. Never depend on a Claude memory path being available to Codex or a Codex chat being visible to Claude.
+
+## Current execution sequence
+
+Audit C01–C16 and boundary contracts on the adopted immutable SHA; specify R1–R4 probes, reproduce foundations and repair the four qa-12 findings through independent review and done.sh. Accept compatible contracts before dependent vertical slices, preserve all second-brain capabilities and record persisted simulated effects. Finish preparation/corpus and frozen O8 acceptance. Offline-reading and upload-reload rulings remain pending; high-impact provider assumptions require observations before dependent acceptance. No P3/P4 implementation or phase acceptance is authorized. See live ACTIVE and progress Next.
