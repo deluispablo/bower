@@ -17,6 +17,8 @@
 
 ## Log
 
+- 2026-10-05: R1v2 fresh read-only review and same-entry S02 resume dispatched6b3ee992. Root52-file/source-pin/private-permission preflight passes with authoritydisabled/manifestabsent/network0; fullcheck549/52/213217 green. S02 worker reports genuine first11assertionreds before production changes; candidate and actual R1 still pending. No repeat consent/init, browser/provider claim or phase closure.
+
 - 2026-10-04: harness set up for phase 2 (plan `docs/superpowers/plans/2026-10-04-phase-2-app-logic.md`); contract suite green on the demo.
 - 2026-10-04: note-format passes: notes round-trip through Markdown with Bower's sections kept apart.
 - 2026-10-04: drive-fake passes: FakeDrive meets the Drive contract (Bin, conflicts, same names, full text).
