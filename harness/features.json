@@ -2612,6 +2612,20 @@
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"stale pile context refuses every effect before write or removal\"",
     "passes": true,
-    "note": "Both branches reproduced at afb4b36 after the name/place fix closed. See docs/harness/evidence/2026-10-05-o1/pile-context-results-afb4b36.txt. Named assertion regression is planned, not executed."
+    "note": "Both branches reproduced at afb4b36 after the name/place fix closed. Candidate dc45b03 independently reviewed, integrated afa1167 and closed f9f0bf7 with actual assertion reds/check/verify. See docs/harness/evidence/2026-10-05-o1/pile-context-results-afb4b36.txt and 2026-10-05-qa12 raw evidence. Provider atomicity remains unproven R1."
+  },
+  {
+    "id": "task-preserves-source-bytes",
+    "task": "qa-13",
+    "category": "bug",
+    "what": "Toggling a personal task preserves every other source byte, including protected section line endings.",
+    "steps": [
+      "Read a canonical legacy synthetic note using CRLF with Current state, a personal task and Timeline.",
+      "Toggle only the personal task; currently every CRLF becomes LF, including protected ranges.",
+      "Preserve the original whole source except that checkbox character; cover LF, CRLF and mixed endings without changing the legacy ownership grammar."
+    ],
+    "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"toggling a personal task preserves every other source byte\"",
+    "passes": false,
+    "note": "Observed at6305ca9: canonical protected prefix/suffix changed, CRLF count12 to0. Reproducible synthetic script/results under docs/harness/evidence/2026-10-05-o1/protected-crlf-*. Named assertion is planned, not executed. Existing grammar only; rich ownership decision remains separate."
   }
 ]
