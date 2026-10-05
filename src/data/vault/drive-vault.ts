@@ -454,6 +454,7 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const f = pile.path ? ix.file(pile.path) : undefined;
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
+    await this.stillAsSeen(f);
     let folderPath = pile.path;
     if (!f.folder) {
       // A lone thing that gets a note becomes a pile folder; the pile keeps its id.

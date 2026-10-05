@@ -109,6 +109,60 @@ describe('DriveVault files', () => {
 });
 
 describe('DriveVault inbox and Bower', () => {
+  async function contextPile(folder: boolean) {
+    const inbox = await idOf('Inbox');
+    const f = folder ? await drive.createFolder(inbox, 'Context pile') : await drive.createText(inbox, 'Input.pdf', 'Original file bytes');
+    if (folder) {
+      await drive.createText(f.id, 'Input.pdf', 'Original file bytes');
+      await drive.createText(f.id, 'Pile note.md', 'Original context');
+    }
+    const pile = (await vault.piles()).find((p) => p.id === f.id);
+    if (!pile) throw new Error('no context pile');
+    return { f, pile, inbox };
+  }
+
+  it.each([
+    ['lone', 'name', 'Edited context'], ['lone', 'parent', 'Edited context'],
+    ['folder', 'name', 'Edited context'], ['folder', 'parent', 'Edited context'],
+    ['folder', 'name', ''], ['folder', 'parent', ''],
+  ])('editing a pile refuses external name or place changes (%s, %s, "%s")', async (shape, change, text) => {
+    const { f, pile, inbox } = await contextPile(shape === 'folder');
+    // Another Drive client changes the metadata after this app has cached the pile.
+    await drive.update(f.id, change === 'name' ? { name: 'Changed elsewhere' } : { addParent: await idOf('Areas'), removeParent: inbox });
+    const before = await drive.snapshot();
+    const createFolder = vi.spyOn(drive, 'createFolder');
+    await expect(vault.updatePile(pile.id, text)).rejects.toMatchObject({ code: 'conflict', message: 'This changed somewhere else. Look again and try once more.' });
+    expect(await drive.snapshot()).toBe(before);
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
+  it.each(['lone', 'folder'])('editing a pile accepts unchanged name and place (%s)', async (shape) => {
+    const { f, pile } = await contextPile(shape === 'folder');
+    // Content-only edits must travel with the file, without blocking a structural edit.
+    const item = shape === 'folder' ? await idOf(`${pile.path}/Input.pdf`) : f.id;
+    await drive.writeText(item, 'New remote file bytes', (await drive.get(item)).modifiedTime);
+    drive.touch(f.id);
+    const changed = await vault.updatePile(pile.id, 'Edited context');
+    expect(changed.text).toBe('Edited context');
+    expect(changed.items).toHaveLength(1);
+    expect(await drive.readText(item)).toBe('New remote file bytes');
+    expect(drive.dump(root).get(`${changed.path}/Pile note.md`)).toBe('Edited context');
+    const cleared = await vault.updatePile(pile.id, '');
+    expect(cleared.text).toBe('');
+    expect(cleared.items).toHaveLength(1);
+    expect(await drive.readText(item)).toBe('New remote file bytes');
+  });
+
+  it('editing a pile keeps the context content version check', async () => {
+    const { pile } = await contextPile(true);
+    // First give the pile the ordinary derived name, then cache its context version.
+    const named = await vault.updatePile(pile.id, 'Original context');
+    const note = await idOf(`${named.path}/Pile note.md`);
+    await drive.writeText(note, 'New remote context', (await drive.get(note)).modifiedTime);
+    await expect(vault.updatePile(pile.id, 'Original context')).rejects.toMatchObject({ code: 'conflict' });
+    expect(await drive.readText(note)).toBe('New remote context');
+  });
+
   it('piles keep the names their things were added under', async () => {
     const piles = await vault.piles();
     const job = piles.find((p) => p.text.startsWith('Job offer and a flat'));
