@@ -114,3 +114,5 @@ Audit C01â€“C16 and boundary contracts on the adopted immutable SHA; specify R1â
 Read 2026-10-05-p2-o1-audit.md (143ae2b, four missing/twelve partial) and 2026-10-05-p2-r-probe-specs.md (all live probes NOT RUN). Five foundations are currently reproduced and registered qa-13 with planned verifies; four qa-12 remain pending. Journal candidate 244be68 has red/green/check (400) and is under independent review. Owner policy/resource questions are pending; do not infer answers. New schemas/slices wait on relevant real premises and technical-lead decisions; independent foundation repairs continue.
 
 Journal delivery: candidate 244be68 independently reviewed, integration 7c95fd8, coordinator red/check/verify closure 7869489. Current 202/210; pile-edit-still-seen is the next sole-writer assignment. See live ACTIVE and retained journal review.
+
+Pile structural delivery: candidate 929d95b, integration cecffca, closure afb4b36. Context-version removal/rename defect separately reproduced at afb4b36 and registered/assigned; current 203/211. Parser ownership ambiguity requires lead-defined compatible boundaries before implementation.
