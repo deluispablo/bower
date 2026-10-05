@@ -15,12 +15,10 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 | Scope | Agent / role | Checkout or allowed output | Immutable base / contract | State |
 | --- | --- | --- | --- | --- |
-| Integration and shared records | Root coordinator | bower-app/codex/close-phase-2 | 1c1e60c; contracts-2/main53034a9 | sole writer; current-v1 closed e5cb57d, R1 execution pending independent review |
-| last-run-recovery-validation | /root/google_setup_rework, sole implementer | /private/tmp/bower-p2-journal-ack/codex/p2-run-v1-recovery; fake-worker.ts and fake-worker.test.ts only | aaf76ff5036d89662ee79d9bfe05e75bf5e2c981; current LastRunFilev1 | candidate17bbee4 reviewed clean/integrated1c1e60c/closed e5cb57d; workercheckout immutable/read-only |
-| Current O1 delta | /root/prerequisites_review, independent reviewer | scratch bower-o1-current-delta.md only; integration read-only | exactaaf76ff/sourcecbf4e9f | delivered immutable2181351d O1 delta; candidate review gets separate assignment |
-| R1 first-case micropacket | /root/approved_policy_slices, read-only spec author | scratch bower-r1-execution-micropacket.md only | exactaaf76ff/sourcecbf4e9f/currentDriveHttp | v2 clarified; sole preparer now implements NEW scratch R1 packet only, no provider/credentials/browser |
-
-| S02 pending-byte lifecycle reproduction | /root/approved_policy_slices, read-only auditor | NEW /private/tmp/bower-draft-lifecycle-reproduction and report only | exact e5cb57d/source1c1e60c; C01/C02/D02, no new schema | reproduction only; no product writer or provider/browser |
+| Integration and shared records | Root coordinator | bower-app/codex/close-phase-2 | source1c1e60c; contracts-2/main53034a9 | sole writer; current-v1 closed e5cb57d; no browser reservation |
+| R1 content-interleave scratch packet | /root/google_setup_rework, sole preparer | NEW /private/tmp/bower-r1-content-probe and report only | b970b4b/sourcecbf4e9f; unchanged DriveHttp | local synthetic tests and guards; no provider/credentials/browser; product17 checkout read-only |
+| Independent candidate/probe review | /root/prerequisites_review, reviewer | immutable public packets; integration read-only | 17bbee4 reviewed clean; next R1 packet pending | standby; no evolving-file review or execution |
+| S02 pending-byte lifecycle reproduction | /root/approved_policy_slices, read-only auditor | NEW /private/tmp/bower-draft-lifecycle-reproduction and report only | exact e5cb57d/source1c1e60c; C01/C02/D02 | reproduction only; no product writer/provider/browser |
 
 ## Historical assignments
 
