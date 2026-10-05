@@ -1,12 +1,12 @@
-# Latest handoff: final premise ended; schema ratification pending
+# Latest handoff: exact B contract adopted, two independent workers
 
-Root sole coordinator, contracts-2/main3136adc/P2, integrationcodex/close-phase-2. Parser257f904/proof5242808 closed, rawreadqa19false/exclusiveworker e3ddfd2 in/private/tmp/bower-p2-raw-read;215/219. All originalproductdefects remainopen. No currentprovider/browserreservation.
+Root is sole coordinator for integration codex/close-phase-2, revision contracts-2 / main3136adc. Parser257f904/proof5242808 is closed; registered215/220 includes three open original defects and two pending foundations. Current root check607/53 is green.
 
-ActualfinalD03dc446c7 INCONCLUSIVE23HTTP/0refresh/5454B/14.503s, complete23events, matchingPUT200 butCONTROLversionmismatch beforeB/staleA, rawownedBincleanup200/true/emptyroot/noresidual, authoritydisabled/manifestretained. ETaglineENDED/no4thvariant, R1-OBS01open. Original/secondcases preserved. Oneimmutable-contentproposalalternativepreparedforleaddecision, no providernewpermission.
+TL-P2-04 ratifies joint B contract aede6ef2 / original ten-file manifest3b954ed6 with corrected independent review7d5e8982. No v2 or fixture changes. Integer keys must be emitted in canonical UTF-16 order; public done waits for every required publication, including active legacy view. Fixtures remain NOT EXECUTED. Two disjoint workers are assigned: raw read qa19 in /private/tmp/bower-p2-raw-read at e3ddfd2, and pure strict JSON/hash qa20 in NEW /private/tmp/bower-p2-record-json at the ensuing TL04 checkpoint. Full packets are in ACTIVE; stub-first red/green/check, independent review and root inverse proof precede closure. Schema guards/report unit follows the canonical helper; consumers follow reviewed shared schema.
 
-ExactjointBschemaaede6ef2/tenfilemanifest3b954ed6 andCORRECTEDindependentreview7d5e8982 sentONEratificationrequesttoowner-authorizedPlanificador. Initial653hadfalseescapingfinding, preserved/withdrawnafteractualcodepoints/rootRegExpdiscriminator; no v2needed/created. No schemaadoption/consumerwriter untilleadexactdecision. Reviewer/authorreleased; rawreadworker onlyallowedpaths/fullpacketACTIVE, stub-first separateSHA/testreds/fullcheck/review/rootinverse required. Allotherscope O3–O8/D01D02/quality/nativeO8/PWA/ownerphaseacceptance remain. No push/productmainmerge/deploy/spend/P3P4.
+Actual final R1-D03 at dc446c7 is INCONCLUSIVE23HTTP/0refresh/5454B/14.503s. Matching PUT200 followed by CONTROL version mismatch prevented B/stale A. All23 events are complete; owned raw Bin200/true and empty inventory confirm no residual. Authority disabled/private manifest retained. ETag line is ENDED, no fourth variant or new real execution. R1-OBS01 remains Important. The documented immutable proposal is not adopted as a save replacement; do not implement proposal-only publication as apparent editing success.
 
-Older handoffs below retain provenance; currentACTIVE/Next/latest supplement supersede stale reservations.
+No provider/browser reservation. Root alone integrates and writes records; workers remain within exclusive paths. O3–O8/full capabilities/D01/D02/final evaluation and owner phase decision remain. No push, product main merge, deployment/spend or P3/P4. Older handoffs below retain provenance; current ACTIVE and Next supersede stale reservations.
 
 # Current handoff supplement: parser closed, final bounded premise reserved
 
