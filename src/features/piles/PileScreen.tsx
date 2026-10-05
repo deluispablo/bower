@@ -5,14 +5,13 @@ import { usePiles, useRun, useSources } from '@/data/provider';
 import type { Pile } from '@/data/types';
 import { thingsIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
-import { ago, plural } from '@/app/words';
 import { Button, IconButton } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import { inAppHistory } from '@/app/paths';
 import { isRunning } from '@/features/tidy/run-words';
 import { PileStack } from './PileStack';
-import { itemLine } from './item-words';
+import { itemLine, pileLine } from './item-words';
 import s from './piles.module.css';
 
 export function PileScreen() {
@@ -49,7 +48,7 @@ export function PileScreen() {
         <div>
           <h1 className={s.title}>{onlyNote ? 'Your note' : pile.text || pile.items[0]?.name}</h1>
           <p className="muted">
-            {onlyNote ? 'A note' : plural(thingsIn(pile), 'thing')}, added {ago(pile.createdAt).toLowerCase()}. {onlyNote ? 'Bower files it as a note where it belongs.' : ''}
+            {pileLine({ things: thingsIn(pile), onlyNote, createdAt: pile.createdAt })}
           </p>
         </div>
       </div>

@@ -181,3 +181,4 @@
 - 2026-10-05: former-names-gaps passes — fix(app): former names follow folder renames and #heading links, and leave a name taken again alone
 - 2026-10-05: tabs-forget-person passes — fix(app): tabs belong to who is signed in, and a new situation starts without them
 - 2026-10-05: create-name-speed passes — fix(app): a change takes no cross-tab lock when nothing waits to be sent, so a new name box comes at once
+- 2026-10-05: pile-date passes — fix(app): a pile page says its day as Home does
