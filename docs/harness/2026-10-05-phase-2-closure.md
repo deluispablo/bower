@@ -6,7 +6,7 @@ Session startup for subsequent rounds follows `STARTUP.md`; use the assigned `bo
 
 ## Independent review
 
-Review range: `4833d3c..5d26800`, plus the phase 2 data paths and deferred ledger. No Critical findings; six Important and two Minor findings. All eight are registered under `qa-11` in `harness/features.json` and stay open until their named regressions fail before the fix and pass afterward.
+Review range: `4833d3c..5d26800`, plus the phase 2 data paths and deferred ledger. No Critical findings; six Important and two Minor findings. All eight were registered under `qa-11` and are now closed with their named red/green proofs. The expanded closure round has 201/201 passing entries; fresh final acceptance remains pending.
 
 | Severity | Entry | Effect |
 | --- | --- | --- |
@@ -51,7 +51,11 @@ Pending owner ruling: keep offline reading, a queue of uploads that survives clo
 - Initial `harness/init.sh`: all check gates passed; 364 unit tests.
 - `phone-more-faint`: failed assertion before the change, passed via `harness/done.sh`, commit `9b0364e`.
 - Initial complete demo browser suite: 187 passed, 53 intentional skips.
-- Independent evaluator and complete fake/PWA browser suites: in progress.
+- Initial independent evaluator found naming and composer-focus polish; those are fixed, along with Home identity, runner read errors, scoped search and requested coverage.
+- Worker candidate independently reviewed clean; search candidate required a stale-parent cache correction and a fresh clean re-review before integration. No cherry-pick conflicts occurred. This is qualitative delivery evidence, not a controlled speed benchmark.
+- Naming integration `32bbd24`, proof closure `4a17962`: check 398 unit tests; complete demo and fake each 194 passed / 54 intentional skips. Naming gates exposed four old toast-copy expectations, required fixture reads and a test-only type option; corrected without weakening behavior assertions and repeated the full gates.
+- Manual phone/desktop checks recorded in ACTIVE.md for each screen fix. Fake source only; real Google Drive was not exercised.
+- Final production PWA gate and fresh independent whole-code review/browser evaluation are being prepared. No final clean verdict or merge is claimed.
 
 ## Closure conditions
 

@@ -2,7 +2,7 @@
 
 ## Next
 
-- Close the qa-11 findings from the independent review, harness findings first. Initial evaluator findings are registered; final fresh evaluation waits for the remaining fixes. Repeat both independent rounds after the fixes, then run every gate before merging locally to main.
+- All 201 registered entries are closed. Prepare the final PWA gate and freeze the assignment-record revision for fresh independent code review and browser evaluation; register and fix any findings before phase closure and a local main merge.
 - Await the owner's ruling on offline reading, a durable upload queue and the real-Drive smoke test for phase 3. Phase 2 stays open until the rounds are clean and its remaining rulings are agreed.
 - Both tools start with `docs/harness/STARTUP.md` and `bower-session`, load only the assigned role skill, and check capabilities from `SKILLS.md`; reviewers/evaluators use prepared read-only targets.
 - Follow `docs/harness/COORDINATION.md`: establish one coordinator and explicit assignments in the current integration copy of `ACTIVE.md`; keep writers in separate checkouts. Do not mutate a checkout while its gates, `done.sh` or evaluator run. Browser work remains serialized across worktrees.
@@ -241,3 +241,5 @@
 - 2026-10-05: Naming gates green on both sources; reserve final inline-stem and linked-label regressions before closure.
 - 2026-10-05: plain-file-names passes — fix(files): keep one plain name across views and actions
 - 2026-10-05: tab-link-name passes — fix(shell): prove plain saved-link tab names
+
+- 2026-10-05: Naming closed at 32bbd24 and 4a17962 with genuine assertion reds; check 398 tests and both complete browser suites 194 passed / 54 intended skips. Assign fresh final independent roles and freeze after production PWA preparation.

@@ -4,7 +4,7 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: closing phase 2; one implementer in an isolated worktree; integration and browser gates serialized.
+- State: all 201 entries closed; final independent review/evaluation preparation; no implementer active. Integration and browser gates serialized.
 - Coordinator/session: Codex `/root`, continuing the owner's request to finish P2, test the local app fully and audit it before merging to main.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
@@ -21,7 +21,8 @@ Only the named coordinator writes this file. Read this integration copy before c
 | search-root-scope | Codex `/root/audit_p2` | Implementer | same isolated checkout; `codex/qa11-search-root` | base `55810f9` | drive-http.ts; drive-http.test.ts | closed; assignment released | revised `a67c632`; integration `759ed24`; closure `0da4746` |
 | task-keeps-seen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `55810f9` | drive-vault.test.ts; temporary task-only red in drive-vault.ts; shared records | closed; production restored exactly after manual assertion red | `4460586` |
 | upload-retry-screen | Codex `/root` | Coordinator / sole integration writer | integration checkout | base `4460586` | PileScreen.test.tsx; temporary retry-callback red in PileScreen.tsx; shared records | closed; production restored after assertion red | `866a63c` |
-| Final review and evaluation | fresh sessions, pending | Reviewer / evaluator | integration checkout | final immutable SHA pending | read-only; no source/build changes during evaluation | unassigned | none |
+| Final code review | Codex `/root/final_review_p2` (fresh) | Reviewer | integration checkout | assignment-record SHA resolved in dispatch; production tip `4a17962` | whole P2 diff from `4833d3c`, contracts, proofs; read-only, no gates/browser/edits | assigned; dispatch after this record commits | pending |
+| Final browser evaluation | Codex `/root/final_evaluate_p2` (fresh) | Evaluator | integration checkout | same frozen assignment-record SHA | dev 5190 / production 5192; fake/demo, 1440×900 and 390×844; no edits/builds/git | assigned; dispatch only after PWA preparation | pending |
 
 ## Required skills and capabilities
 
@@ -65,3 +66,8 @@ For each assignment, record `bower-session` plus its role skill, the actual tool
 - Naming full-demo gate exposed four old toast expectations containing Lease draft.pdf (app.spec.ts, qa5.spec.ts, qa6.spec.ts, qa7.spec.ts); all actual actions now use the requested plain label. Reserve those four test files for literal-copy updates, retaining their move/Undo/keyboard assertions. Full-demo evidence: 4 failed / 190 passed / 54 intended skips in `/private/tmp/bower-names-demo.log`; fake suite not run after the failed gate. Also pin full-file-name search matching separately from displayed title before closing. No browser gate is running.
 
 - Naming combined gates now green: check 396 tests, full demo 194 / 54 skips and fake 194 / 54 skips, `/private/tmp/bower-names-final-{check,demo,fake}.log`. Final label inspection found inline rename removes two dot suffixes from a note stem and linked-file labels still expose extensions. Reserve LocalGraph.tsx and RightPanel.tsx plus the already reserved Explorer/file-names.test for a final assertion-red regression: preserve Garden.2026 from Garden.2026.md, use typed plain rename labels, and show the same plain linked-file name. No test process is running; close only after repeated gates.
+
+- Naming closure `32bbd24` and saved-link tab closure `4a17962`: 201/201 pass. Actual assertion reds cover file page/menu/list, typed folders, dotted stems and linked labels; full-file-name search matching retained. Final label check initially found a test-only unsupported `exact` role option; removed it, then repeated all gates: check 398 tests; complete demo and fake each 194 passed / 54 intended skips. Logs `/private/tmp/bower-names-complete-{check,demo,fake}.log`, closure logs `bower-names-close.log` and `bower-tab-name-close.log`.
+- Manual naming check on fake at 1440×900 / 390×844: PDF page, desktop tab/bookmark, mobile menu and rename field agree; console warnings/errors empty. First direct folder route was invalid; navigation via the visible tree reached the actual `/files/` and `/note/` routes. No file content changed in this check.
+- Final capabilities: canonical bower-session plus review/evaluate role skill loaded by each fresh session; Git/shell available to reviewer, native CUA browser available to evaluator. Reviewer must scrutinize the recorded same-id journal acknowledgment caveat. Evaluator must replay every qa-9/qa-10 bug/polish step and all feature flows, then explore first-use/keyboard/error states; report actual coverage and limits. Neither role may delegate or write repository files.
+- Freeze the resulting assignment-record commit after the coordinator's check and PWA gate. Both fresh roles receive its exact SHA in their dispatch packet. No source/docs/build/harness restores or browser gates while evaluation runs. Earlier full suites certify identical production sources; this record changes documentation only. Owner scope/closure ruling is still pending.
