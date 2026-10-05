@@ -13,7 +13,7 @@ import { toast } from '@/ui/toast';
 import s from './piles.module.css';
 import { normaliseLink } from './link';
 import { forget, get, keep } from './draft-files';
-import { draftLine, leftOut } from './add-words';
+import { draftLine } from './add-words';
 
 const DRAFT_KEY = 'bower:add-draft';
 const ITEMS_KEY = 'bower:add-items';
@@ -41,6 +41,7 @@ const missing = (d: Draft): boolean => d.kind !== 'link' && !get(d.key);
 export function Add() {
   const { vault } = useSources();
   const nav = useNavigate();
+  const saving = useRef(false);
   const [text, setTextState] = useState(() => {
     try {
       return sessionStorage.getItem(DRAFT_KEY) ?? '';
@@ -90,6 +91,7 @@ export function Add() {
   const bird = useRef<BowerController>(null);
 
   const add = (all: Array<Omit<Draft, 'key'> & { file?: Blob }>): void => {
+    if (saving.current) return;
     // The same file (name and size) or the same link, added again, is already here.
     const same = (d: Draft, x: (typeof all)[number]): boolean => (x.url ? d.url === x.url : d.name === x.name && !d.url && get(d.key)?.size === x.file?.size);
     const list = all.filter((x, i) => !items.some((d) => same(d, x)) && all.findIndex((y) => y.name === x.name && y.url === x.url && y.file?.size === x.file?.size) === i);
@@ -131,6 +133,7 @@ export function Add() {
   const fromFiles = (fl: FileList | null, origin: string): void => add([...(fl ?? [])].map((f) => ({ name: f.name, kind: kindOf(f.name), origin, file: f })));
   const [badLink, setBadLink] = useState(false);
   const addLink = (): void => {
+    if (saving.current) return;
     const v = normaliseLink(link);
     if (!v) {
       setBadLink(true);
@@ -141,16 +144,25 @@ export function Add() {
   };
   const onDrop = (e: DragEvent): void => {
     e.preventDefault();
+    if (saving.current) return;
     setOver(false);
     fromFiles(e.dataTransfer.files, 'Dropped here');
   };
   const ready = items.filter((d) => !missing(d));
   const save = async (): Promise<void> => {
+    if (saving.current) return;
+    // Bytes can disappear after rendering an enabled button. Refuse the whole draft.
+    if (items.some(missing)) {
+      setItemsState((cur) => [...cur]);
+      toast('Add the missing files again, or take them out.');
+      return;
+    }
+    saving.current = true;
     setBusy(true);
     try {
       await vault.addPile({
         text,
-        items: ready.map(({ key, name, kind, origin, url }) => {
+        items: items.map(({ key, name, kind, origin, url }) => {
           const body = get(key);
           return { name, kind, origin, ...(body ? { body } : {}), ...(url ? { url } : {}) };
         }),
@@ -159,12 +171,11 @@ export function Add() {
       setText('');
       setItems([]);
       toast(ready.length ? `${plural(ready.length, 'thing')} in the inbox` : 'Your note is in the inbox', { label: 'Tidy up now', run: () => useUi.getState().setTidy(true) });
-      const dropped = leftOut(items.filter(missing).map((d) => d.name));
-      if (dropped) toast(dropped);
       nav('/');
     } catch (e) {
       report(e, 'That did not save. Try again.');
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   };
@@ -176,15 +187,16 @@ export function Add() {
 
       <label className={s.what}>
         <span>What is this?</span>
-        <textarea rows={2} placeholder="Receipts from the Saltmere weekend" value={text} onChange={(e) => setText(e.target.value)} />
+        <textarea rows={2} placeholder="Receipts from the Saltmere weekend" value={text} disabled={busy} onChange={(e) => { if (!saving.current) setText(e.target.value); }} />
       </label>
 
       <div
         ref={zone}
         className={`${s.zone} ${over ? s.over : ''}`}
+        aria-disabled={busy || undefined}
         onDragOver={(e) => {
           e.preventDefault();
-          setOver(true);
+          if (!saving.current) setOver(true);
         }}
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
@@ -197,17 +209,17 @@ export function Add() {
             return z ? { x: z.clientWidth - 64, y: 2 } : { x: 200, y: 2 };
           }}
         />
-        <p className={s.zoneTitle}>{over ? 'Let go and Bower takes it' : 'Drop files here'}</p>
+        <p className={s.zoneTitle}>{busy ? 'Saving this pile…' : over ? 'Let go and Bower takes it' : 'Drop files here'}</p>
         <div className={s.zoneBtns}>
-          <Button variant="ghost" size="sm" onClick={() => files.current?.click()}>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { if (!saving.current) files.current?.click(); }}>
             <Icon name="file" size={18} /> Choose files
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => camera.current?.click()}>
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { if (!saving.current) camera.current?.click(); }}>
             <Icon name="camera" size={18} /> Take a photo
           </Button>
         </div>
-        <input ref={files} type="file" multiple hidden onChange={(e) => fromFiles(e.target.files, 'From this device')} />
-        <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={(e) => fromFiles(e.target.files, 'From the camera')} />
+        <input ref={files} type="file" multiple disabled={busy} hidden onChange={(e) => fromFiles(e.target.files, 'From this device')} />
+        <input ref={camera} type="file" accept="image/*" capture="environment" disabled={busy} hidden onChange={(e) => fromFiles(e.target.files, 'From the camera')} />
         <form
           className={s.linkRow}
           onSubmit={(e) => {
@@ -227,12 +239,14 @@ export function Add() {
             aria-invalid={badLink || undefined}
             aria-describedby={badLink ? 'bad-link' : undefined}
             value={link}
+            disabled={busy}
             onChange={(e) => {
+              if (saving.current) return;
               setLink(e.target.value);
               setBadLink(false);
             }}
           />
-          <Button size="sm" variant="ghost" type="submit" disabled={!link.trim()}>
+          <Button size="sm" variant="ghost" type="submit" disabled={busy || !link.trim()}>
             Add link
           </Button>
         </form>
@@ -258,14 +272,16 @@ export function Add() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      disabled={busy}
                       onClick={() => {
+                        if (saving.current) return;
                         forget(it.key);
                         setItems((x) => x.filter((y) => y.key !== it.key));
                       }}
                     >
                       Leave it out
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setItems((x) => x.map((y) => (y.key === it.key ? { key: y.key, name: y.name, kind: y.kind, origin: y.origin, ...(y.url ? { url: y.url } : {}) } : y)))}>
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (!saving.current) setItems((x) => x.map((y) => (y.key === it.key ? { key: y.key, name: y.name, kind: y.kind, origin: y.origin, ...(y.url ? { url: y.url } : {}) } : y))); }}>
                       Add it anyway
                     </Button>
                   </span>
@@ -275,7 +291,9 @@ export function Add() {
                 type="button"
                 className={s.remove}
                 aria-label={`Take ${it.name} out`}
+                disabled={busy}
                 onClick={() => {
+                  if (saving.current) return;
                   forget(it.key);
                   setItems((x) => x.filter((y) => y.key !== it.key));
                 }}
@@ -288,7 +306,7 @@ export function Add() {
       )}
 
       <div className={s.footer}>
-        <Button block disabled={busy || (!ready.length && !text.trim())} onClick={() => void save()}>
+        <Button block disabled={busy || ready.length !== items.length || (!ready.length && !text.trim())} onClick={() => void save()}>
           {busy ? 'Saving…' : ready.length ? `Put ${plural(ready.length, 'thing')} in the inbox` : 'Put the note in the inbox'}
         </Button>
       </div>

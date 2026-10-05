@@ -24,7 +24,8 @@ test('on screen: Add points out an empty file', async ({ page }) => {
   await expect(page.getByRole('list', { name: 'In this pile' })).toContainText('This file is empty. Add it anyway, or take it out.');
 });
 
-test('on screen: files not chosen again after a reload are named when the pile goes in', async ({ page }) => {
+// D02 supersedes the historical successful-omission case: retain the unresolved draft.
+test('on screen: an unresolved Add draft stays until its missing file is chosen again', async ({ page }) => {
   await open(page, '/add');
   await page.locator('textarea').first().fill('Papers for the flat');
   await page.locator('input[type="file"]').first().setInputFiles({ name: 'scan.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 x') });
@@ -32,8 +33,15 @@ test('on screen: files not chosen again after a reload are named when the pile g
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('list', { name: 'In this pile' })).toContainText('Add this file again');
-  await page.getByRole('button', { name: 'Put the note in the inbox' }).click();
-  await expect(toast(page, 'scan.pdf was left out: choose it again to add it.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Put the note in the inbox' })).toBeDisabled();
+  await expect(page.locator('textarea').first()).toHaveValue('Papers for the flat');
+  await expect(page).toHaveURL(/\/add(?:\?|$)/);
+  await page.locator('input[type="file"]').first().setInputFiles({ name: 'scan.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 x') });
+  await expect(page.getByRole('list', { name: 'In this pile' }).getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('list', { name: 'In this pile' })).not.toContainText('Add this file again');
+  await page.getByRole('button', { name: 'Put 1 thing in the inbox' }).click();
+  await expect(toast(page, '1 thing in the inbox')).toBeVisible();
+  await expect(page).toHaveURL(/\/(?:\?|$)/);
 });
 
 test('on screen: the result of a tidy-up names the request it did', async ({ page }) => {
