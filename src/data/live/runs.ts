@@ -6,13 +6,14 @@
  * going, every 60 s otherwise, and when the app comes back into view.
  */
 import type { RunSource, Unsubscribe } from '../sources';
-import type { RunReport, RunState } from '../types';
+import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
 import type { RunWire, WorkerApi } from '../worker/worker-api';
 
 const FAST_MS = 4_000;
 const SLOW_MS = 60_000;
 const SEEN = 'bower:run-seen';
+const ACTIVE: readonly RunWire['phase'][] = ['queued', 'reading', 'writing', 'saving'];
 
 const finished = (r: RunWire | null): boolean => !!r && (r.phase === 'done' || r.phase === 'failed');
 
@@ -30,6 +31,13 @@ export class LiveRuns implements RunSource {
   private last: RunWire | null = null;
   /** Each ended run's report, read once (null when it left none, as a failed run does). */
   private reports = new Map<string, RunReport | null>();
+  private loading = new Map<string, Promise<void>>();
+  private retired = new Set<string>();
+  private generation = 0;
+  private issued = 0;
+  private accepted = 0;
+  private starts: Promise<unknown> = Promise.resolve();
+  private disposed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private took = new Set<string>();
   private readonly onVisible = (): void => {
@@ -46,6 +54,8 @@ export class LiveRuns implements RunSource {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.generation++;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.listeners.clear();
@@ -58,21 +68,49 @@ export class LiveRuns implements RunSource {
     return this.took.size ? this.took : new Set(['*']);
   }
 
-  async start(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunState> {
+  start(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunState> {
+    const work = () => this.startNow(scope, opts);
+    const next = this.starts.then(work);
+    // expected: the caller receives next's failure; only the queue recovers so another admission can be tried.
+    this.starts = next.catch(() => undefined);
+    return next;
+  }
+
+  private async startNow(scope: 'all' | 'instructions', opts: { allowWeb?: boolean }): Promise<RunState> {
+    this.checkOpen();
     // What you did while Drive was out of reach goes first, so this tidy-up knows it.
     await this.vault.flushJournal();
+    this.checkOpen();
     const piles = scope === 'all' ? (await this.vault.piles()).map((p) => p.id) : [];
+    this.checkOpen();
     const wire = await this.worker.process(scope, opts);
-    if (wire.id !== this.last?.id) this.took = new Set(piles);
-    await this.take(wire);
+    this.checkOpen();
+    // Successful admission supersedes even status requests issued while process waited.
+    this.generation++;
+    this.accepted = ++this.issued;
+    this.take(wire, piles);
+    await this.hydrate();
+    this.checkOpen();
+    if (!this.last) throw new BowerError('conflict', 'The tidy-up status changed; try again.');
     this.schedule();
-    return this.state(wire);
+    return this.state(this.last);
+  }
+
+  private checkOpen(): void {
+    if (this.disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
   }
 
   async current(): Promise<RunState | null> {
+    if (this.disposed) return this.last ? this.state(this.last) : null;
+    const generation = this.generation;
+    const ticket = ++this.issued;
     const wire = await this.worker.status();
-    await this.take(wire);
-    return wire ? this.state(wire) : null;
+    if (!this.disposed && generation === this.generation && ticket > this.accepted) {
+      this.accepted = ticket;
+      this.take(wire);
+    }
+    await this.hydrate();
+    return this.last ? this.state(this.last) : null;
   }
 
   async markSeen(id: string): Promise<void> {
@@ -85,6 +123,7 @@ export class LiveRuns implements RunSource {
   }
 
   subscribe(cb: () => void): Unsubscribe {
+    if (this.disposed) return () => undefined;
     this.listeners.add(cb);
     this.schedule();
     return () => {
@@ -107,29 +146,67 @@ export class LiveRuns implements RunSource {
   }
 
   private schedule(): void {
-    if (!this.listeners.size) return;
+    if (this.disposed || !this.listeners.size) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.poll(), this.last && !finished(this.last) ? this.fastMs : SLOW_MS);
   }
 
-  /** Takes in the Worker's answer; when a run has just ended, reads its report and lists the folder again. */
-  private async take(wire: RunWire | null): Promise<void> {
+  /** Commits accepted state without awaiting I/O; old hydration cannot undo its locks or cadence. */
+  private take(wire: RunWire | null, piles?: string[]): void {
     const before = this.last;
-    const changed = JSON.stringify(before) !== JSON.stringify(wire);
-    this.last = wire;
-    if (wire && finished(wire) && !this.reports.has(wire.id)) {
-      // The run changed the folder: list it again, then read the report it left there.
-      if (before?.id !== wire.id || !finished(before)) await this.vault.refresh();
-      const file = await this.vault.lastRun();
-      const report = file?.run.id === wire.id ? file.run.report : undefined;
-      this.reports.set(wire.id, report ?? null);
+    // Eligible idle replies retain their API meaning; request tickets and admission generations reject stale ones.
+    if (!wire) {
+      this.last = null;
+      this.took = new Set();
+      if (before) {
+        this.schedule();
+        this.emit();
+      }
+      return;
     }
+    if (this.retired.has(wire.id)) return;
+    if (before?.id === wire.id) {
+      if (finished(before) && wire.phase !== before.phase) {
+        if (finished(wire)) console.error(new Error(`Conflicting terminal status for run ${wire.id}`));
+        return;
+      }
+      if (!finished(wire) && ACTIVE.indexOf(wire.phase) < ACTIVE.indexOf(before.phase)) return;
+    }
+    const changed = JSON.stringify(before) !== JSON.stringify(wire);
+    if (before && before.id !== wire.id) this.retired.add(before.id);
+    this.last = wire;
+    if (finished(wire)) this.took = new Set();
+    else if (before?.id !== wire.id) this.took = new Set(piles ?? []);
     if (changed) {
-      if (!wire || finished(wire)) this.took = new Set();
       // A run that starts or ends changes how often the Worker is asked.
       if (finished(before) !== finished(wire) || !before !== !wire) this.schedule();
-      this.emit();
+      if (!finished(wire) || this.reports.has(wire.id)) this.emit();
     }
+  }
+
+  /** Share report reads, recheck after each await, and return only the current accepted run. */
+  private async hydrate(): Promise<void> {
+    while (!this.disposed && this.last && finished(this.last) && !this.reports.has(this.last.id)) {
+      const wire = this.last;
+      const generation = this.generation;
+      let pending = this.loading.get(wire.id);
+      if (!pending) {
+        pending = this.loadReport(wire, generation).finally(() => this.loading.delete(wire.id));
+        this.loading.set(wire.id, pending);
+      }
+      await pending;
+    }
+  }
+
+  private async loadReport(wire: RunWire, generation: number): Promise<void> {
+    const current = () => !this.disposed && generation === this.generation && this.last?.id === wire.id;
+    await this.vault.refresh();
+    if (!current()) return;
+    const file = await this.vault.lastRun();
+    if (!current()) return;
+    const report = file?.run.id === wire.id ? file.run.report : undefined;
+    this.reports.set(wire.id, report ?? null);
+    this.emit();
   }
 
   private state(w: RunWire): RunState {
