@@ -2,7 +2,7 @@
 
 ## Next
 
-- Close the qa-11 findings from the independent review, harness findings first. The evaluator is exploring demo and fake; register its findings before fixing them. Repeat both independent rounds after the fixes, then run every gate before merging locally to main.
+- Close the qa-11 findings from the independent review, harness findings first. Initial evaluator findings are registered; final fresh evaluation waits for the remaining fixes. Repeat both independent rounds after the fixes, then run every gate before merging locally to main.
 - Await the owner's ruling on offline reading, a durable upload queue and the real-Drive smoke test for phase 3. Phase 2 stays open until the rounds are clean and its remaining rulings are agreed.
 - Both tools start with `docs/harness/STARTUP.md` and `bower-session`, load only the assigned role skill, and check capabilities from `SKILLS.md`; reviewers/evaluators use prepared read-only targets.
 - Follow `docs/harness/COORDINATION.md`: establish one coordinator and explicit assignments in the current integration copy of `ACTIVE.md`; keep writers in separate checkouts. Do not mutate a checkout while its gates, `done.sh` or evaluator run. Browser work remains serialized across worktrees.
@@ -225,3 +225,5 @@
 
 - 2026-10-05: Search integration reviewed and closed; assign runner read errors and add its helper stub before assertion red.
 - 2026-10-05: runner-json-shapes passes — fix(data): explain unreadable runner updates and offer retry
+
+- 2026-10-05: Runner read errors closed with full screen gates; assign the Open in Drive source contract and UI.
