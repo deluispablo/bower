@@ -299,3 +299,4 @@
 - 2026-10-05: reviewer disposal continuation concern actually reproduced at8bd67cd: held listing/markSeen writes bower:seen after Sources.dispose. Raw public probe retainedqa14. Candidate not integrated, same-entry six-file test-first rework authorized; independent review/replacement proof pending.
 
 - 2026-10-05: isolation replacement2244218 received; disposal red1/35, named36/full517 green. All three root public probes pass exact replacement, evidence retained. Renewed independent review dispatched; rejected8bd67cd report retained. No integration/closure/native/provider claim.
+- 2026-10-05: session-folder-isolation passes — fix(session): proof-close account and folder lifetime isolation
