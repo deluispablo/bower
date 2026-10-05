@@ -17,6 +17,21 @@ export interface RunWire {
   failure?: string;
 }
 
+/** A run received from the Worker or read from the runner's report. */
+export function isRunWire(value: unknown): value is RunWire {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const r = value as Record<string, unknown>;
+  const number = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+  const phases: readonly string[] = ['queued', 'reading', 'writing', 'saving', 'done', 'failed'];
+  return typeof r.id === 'string' && r.id.trim().length > 0
+    && (r.scope === 'all' || r.scope === 'instructions')
+    && typeof r.phase === 'string' && phases.includes(r.phase)
+    && number(r.requestedAt) && number(r.phaseAt)
+    && (r.finishedAt === undefined || number(r.finishedAt))
+    && (r.total === undefined || (number(r.total) && Number.isSafeInteger(r.total)))
+    && (r.failure === undefined || (typeof r.failure === 'string' && r.failure.trim().length > 0));
+}
+
 export interface Me {
   user: User;
   folderId: string | null;

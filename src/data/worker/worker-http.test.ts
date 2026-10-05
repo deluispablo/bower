@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { WorkerHttp } from './worker-http';
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -85,4 +85,37 @@ describe('WorkerHttp', () => {
     await new WorkerHttp(BASE, s.fetch).process('instructions');
     expect(JSON.parse(String(s.calls[1]?.init.body))).toEqual({ scope: 'instructions', allowWeb: false });
   });
+  it('malformed successful Worker responses give a readable error', async () => {
+    const run = { id: 'r1', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 2 };
+    const methods: Array<(worker: WorkerHttp) => Promise<unknown>> = [
+      (w) => w.me(), (w) => w.driveToken(false), (w) => w.createFolder(), (w) => w.process('all'), (w) => w.status(),
+    ];
+    const invalid: unknown[][] = [
+      [{ user: { name: 'Alex', email: 'you@example.com' } }, { user: null, folderId: null }, { user: { name: 1, email: 'you@example.com' }, folderId: null }],
+      [{ accessToken: 123, expiresAt: 1 }, { accessToken: 'PRIVATE_REPLY_CONTENT', expiresAt: 'later' }, { accessToken: '', expiresAt: 1 }, { accessToken: 'tok', expiresAt: -1 }],
+      [{ folderId: null, found: false }, { folderId: 'FOLDER_ID', found: 'yes' }, { folderId: 'FOLDER_ID' }],
+      [{ run: null }, { run: { ...run, phase: 'other' } }, { run: { ...run, total: -1 } }, { run: { ...run, phaseAt: null } }],
+      [{}, { run: { ...run, id: '' } }, { run: { ...run, finishedAt: 'yesterday' } }, { run: { ...run, failure: {} } }],
+    ];
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      for (const [i, method] of methods.entries()) {
+        for (const body of [...(invalid[i] ?? []), null, []]) {
+          await expect(method(new WorkerHttp(BASE, stub(() => json(body)).fetch))).rejects.toMatchObject({ code: 'unknown', message: "Bower's server sent an unreadable reply. Try again." });
+        }
+        await expect(method(new WorkerHttp(BASE, stub(() => new Response('not JSON', { status: 200 })).fetch))).rejects.toMatchObject({ code: 'unknown' });
+        await expect(method(new WorkerHttp(BASE, stub(() => new Response(null, { status: 204 })).fetch))).rejects.toMatchObject({ code: 'unknown' });
+      }
+      const empty = new WorkerHttp(BASE, stub(() => new Response(null, { status: 204 })).fetch);
+      await expect(empty.signOut()).resolves.toBeUndefined();
+      await expect(empty.deleteAccount()).resolves.toBeUndefined();
+      await expect(new WorkerHttp(BASE, stub(() => json({})).fetch).signOut()).rejects.toMatchObject({ code: 'unknown' });
+      expect(await new WorkerHttp(BASE, stub(() => json({ user: { name: 'Alex', email: 'you@example.com' }, folderId: null })).fetch).me()).toMatchObject({ folderId: null });
+      expect(logged).toHaveBeenCalled();
+      expect(JSON.stringify(logged.mock.calls)).not.toContain('PRIVATE_REPLY_CONTENT');
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
 });
