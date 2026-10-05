@@ -364,3 +364,6 @@
 
 
 Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkpoint, nine docs only, contracts-2 unchanged; live proofs/evidence preserved. Root is sole main backup integrator. Conditional unattended owner authority does not relax P2 criteria. Backup verification pending, no success claimed.
+
+
+2026-10-06 current supplement: adopted main10ca886; actual private main backup verified local=remote10ca886626206e0d4d880d6679dd4f57adcafcee, no product release/candidate push. JSON independent082ed5f2 has ONE Minor custom-array-prototype bypass; original author receives same two-path M01 assertion-first correction, fresh delta review before integration. P2 still216/220/open; no P3. Full packet/current authority in ACTIVE.
