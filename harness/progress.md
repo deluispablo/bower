@@ -2,7 +2,9 @@
 
 ## Next
 
-- qa-9 (reviewer) is closed. Fix the 18 qa-10 entries (the evaluator round after qa-8, all polish). Then a fresh reviewer and evaluator round; phase 3 waits until both come back clean.
+- 9 qa-10 entries left, all verified by e2e: bird-not-a-button (its fix and test are in `git stash`, "bird-not-a-button": pop, then close with done.sh), side-tabs-a11y (a Tabs component is drafted, not in the repo yet), tree-typeahead, one-naming, remove-pile-during-run, welcome-back, invalid-link-says, small-wording, offline-footer.
+- Run e2e only while the Mac's display is awake (`system_profiler SPDisplaysDataType | grep "Display Asleep"` says No): headless Chrome stalls otherwise. Never edit src/ while e2e or done.sh runs.
+- Then a fresh reviewer and evaluator round; phase 3 waits until both come back clean.
 
 ## Log
 
