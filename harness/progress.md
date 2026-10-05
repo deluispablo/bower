@@ -270,3 +270,4 @@
 - 2026-10-05: context version candidate reviewed and closed f9f0bf7 with actual red/check/verify; assign leading-dot source validation and phone recovery regression to the sole isolated worker.
 
 - 2026-10-05: leading-dot candidate independently reviewed/integrated28d2ce2; check420 and complete demo/fake each196 passed56 intended skips. Native evaluation unavailable atd086d6c: no Chrome browser surface, native-app selection interrupted/no modifying action; four cells NOT RUN. Preserve integrated-open entry, release preview and grant worker5191 for Timeline test-first. Run-order prerequisite retained; no schema adoption or dependent slice started.
+- 2026-10-05: run-status-monotonic passes — fix(runs): prove delayed replies preserve accepted state
