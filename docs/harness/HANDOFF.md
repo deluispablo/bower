@@ -1,3 +1,13 @@
+# Latest handoff: final premise ended; schema ratification pending
+
+Root sole coordinator, contracts-2/main3136adc/P2, integrationcodex/close-phase-2. Parser257f904/proof5242808 closed, rawreadqa19false/exclusiveworker e3ddfd2 in/private/tmp/bower-p2-raw-read;215/219. All originalproductdefects remainopen. No currentprovider/browserreservation.
+
+ActualfinalD03dc446c7 INCONCLUSIVE23HTTP/0refresh/5454B/14.503s, complete23events, matchingPUT200 butCONTROLversionmismatch beforeB/staleA, rawownedBincleanup200/true/emptyroot/noresidual, authoritydisabled/manifestretained. ETaglineENDED/no4thvariant, R1-OBS01open. Original/secondcases preserved. Oneimmutable-contentproposalalternativepreparedforleaddecision, no providernewpermission.
+
+ExactjointBschemaaede6ef2/tenfilemanifest3b954ed6 andCORRECTEDindependentreview7d5e8982 sentONEratificationrequesttoowner-authorizedPlanificador. Initial653hadfalseescapingfinding, preserved/withdrawnafteractualcodepoints/rootRegExpdiscriminator; no v2needed/created. No schemaadoption/consumerwriter untilleadexactdecision. Reviewer/authorreleased; rawreadworker onlyallowedpaths/fullpacketACTIVE, stub-first separateSHA/testreds/fullcheck/review/rootinverse required. Allotherscope O3–O8/D01D02/quality/nativeO8/PWA/ownerphaseacceptance remain. No push/productmainmerge/deploy/spend/P3P4.
+
+Older handoffs below retain provenance; currentACTIVE/Next/latest supplement supersede stale reservations.
+
 # Current handoff supplement: parser closed, final bounded premise reserved
 
 2026-10-05, root coordinator session p2-orchestrator-2026-10-05-01a10bbd, contracts-2/main3136adc. Current integration codex/close-phase-2: parser stub19682c1/fix257f904/proof5242808;215/218. Only unused two-file raw-byte ownership foundation added. Clean independentreviewa745, factual setup clarification, true inverse assertion red/fullrootcheck/47verify green archivedqa18/root-closure. Three original entries remainopen; no capability or P2 acceptance.
