@@ -2569,7 +2569,7 @@
     "verify": "pnpm vitest run src/data/live/live.test.ts -t \"returning to an idle folder refreshes external changes\"",
     "task": "qa-13",
     "passes": true,
-    "note": "Reproduced on 143ae2b by the O1 synthetic probe; named regression is planned, not implemented or executed. See docs/harness/evidence/2026-10-05-o1."
+    "note": "O1 stale-cache reproduction143ae2b; corrected candidate1d6fe32 independently reviewed, integrated390d305, proof-closed64d5e3d. Actual core/extended/pre-wave assertion reds; named16 cases and fullcheck464. Two typed clients/separate caches over one FakeDrive; visibility discovers text/newpath with same vault/pending state. Raw evidence2026-10-05-qa13. Provider atomicity and fullC14 remain unproven."
   },
   {
     "id": "run-status-monotonic",
