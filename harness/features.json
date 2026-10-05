@@ -2542,7 +2542,7 @@
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"an incomplete pile retains every member across tidy-up and retry\"",
     "task": "qa-13",
     "passes": false,
-    "note": "Reproduced on 143ae2b by the O1 synthetic probe; named regression is planned, not implemented or executed. See docs/harness/evidence/2026-10-05-o1."
+    "note": "Historical 143ae2b reproduction corroborated on current source1dc7f64 by a separate-reader public-API probe with BowerError offline: missing member disappears after scripted consumption. See docs/harness/2026-10-05-readiness-current-reproduction.md. Named regression/retry recovery remain planned, not executed or passed; lead readiness/capture contract pending."
   },
   {
     "id": "protected-current-prose",
@@ -2598,7 +2598,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"report save failure cannot publish done or repeat effects\"",
     "passes": false,
-    "note": "Reproduced against unchanged production sources of 143ae2b; docs/harness/evidence/2026-10-05-o1/report-save-results-143ae2b.txt. Named regression is planned, not executed; O3/O4 determines the compatible recovery contract."
+    "note": "Historical 143ae2b fault corroborated on current source1dc7f64 with a BowerError terminal-write refusal after actual filing: status done, durable saving/no report. See docs/harness/2026-10-05-report-barrier-current-reproduction.md. Named regression/same-run recovery are planned, not passed; O3/O4 compatible effect/report authority remains pending."
   },
   {
     "id": "pile-context-version",
