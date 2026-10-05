@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { report } from '@/ui/report';
 import { startRun } from './start-run';
-import { thingsIn, waitingIn } from '@/data/piles';
+import { pileName, thingsIn, waitingIn } from '@/data/piles';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import { BowerError, RUN_STEPS, type RunState } from '@/data/types';
 import { useUi } from '@/app/ui-store';
@@ -77,7 +77,7 @@ function Confirm() {
           {piles.map((p) => (
             <li key={p.id}>
               <Icon name={!p.items.length ? 'note' : p.text ? 'pile' : p.items[0]?.kind === 'link' ? 'link' : 'file'} size={18} />
-              <span>{p.text || p.items[0]?.name}</span>
+              <span>{pileName(p)}</span>
               <span className="muted">{thingsIn(p)}</span>
             </li>
           ))}

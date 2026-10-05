@@ -195,3 +195,4 @@
 - 2026-10-05: bird-not-a-button passes — fix(app): Bower's bird is a named button
 - 2026-10-05: side-tabs-a11y passes — fix(app): the side panel tabs are real tabs: one Tab stop, arrows, a panel each; Outline takes the keyboard to the heading
 - 2026-10-05: tree-typeahead passes — fix(app): the tree finds a row by typing; Delete on a folder asks, and on a main folder says why not
+- 2026-10-05: one-naming passes — fix(app): one thing has one name everywhere: Home, the tree, the tidy-up sheet and the report

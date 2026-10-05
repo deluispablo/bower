@@ -1,3 +1,4 @@
+import { thingName } from './tree';
 import type { Pile, PileItem, TreeNode } from './types';
 
 /**
@@ -57,3 +58,12 @@ export function folderCount(n: TreeNode): number {
   if (n.path === 'Inbox') return countThings(n);
   return (n.children ?? []).filter((c) => !c.hub && c.name !== PILE_NOTE).length;
 }
+
+/** A pile's name wherever it shows: its note, else its one thing as the tree names it (a link as its address). */
+export function pileName(p: Pick<Pile, 'text' | 'items'>): string {
+  const first = p.items[0];
+  if (p.text) return p.text;
+  if (!first) return '';
+  return first.kind === 'link' ? first.name.replace(/\.url$/, '') : thingName(first.name);
+}
+

@@ -3,11 +3,11 @@ import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
 import { answered } from './answer-words';
 import { startRun } from '@/features/tidy/start-run';
-import { waitingIn } from '@/data/piles';
+import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
 import { useChanges, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
-import { displayName, parentOf } from '@/data/tree';
+import { parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { ago, greeting, plural } from '@/app/words';
 import { crumbs, paraColor, routeFor } from '@/app/paths';
@@ -151,7 +151,7 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
               <Link to={`/pile/${p.id}`} className={s.pile}>
                 <PileStack items={p.items} />
                 <span className={s.pileMain}>
-                  <span className={p.text ? s.pileText : `${s.pileText} mono`}>{p.text || (p.items[0]?.kind === 'link' ? p.items[0].name.replace(/\.url$/, '') : p.items[0]?.name.replace(/\.[A-Za-z0-9]{1,5}$/, ''))}</span>
+                  <span className={p.text ? s.pileText : `${s.pileText} mono`}>{pileName(p)}</span>
                   <span className={s.pileSub}>
                     {!p.items.length ? 'A note' : p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
                     <span aria-hidden="true" className={s.sep} />
@@ -327,7 +327,7 @@ function JustFiled({ run }: { run: RunState | null }) {
             <Link to={routeFor(n)} className={s.recentRow}>
               <span className={s.tile}>{n.byBower ? <BowerHead size={20} /> : <Icon name={n.kind === 'image' ? 'image' : 'file'} />}</span>
               <span className={s.pileMain}>
-                <span className={s.pileText}>{displayName(n.name)}</span>
+                <span className={s.pileText}>{thingName(n.name)}</span>
                 <span className={s.pileSub}>
                   <span className={s.dot} style={{ background: paraColor(n.path) }} />
                   {crumbs(parentOf(n.path))}

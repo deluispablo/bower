@@ -140,3 +140,14 @@ test('Delete on a folder asks before the Bin; on a main folder it says why not',
   await page.keyboard.press('Delete');
   await expect(page.getByRole('status').getByText(/Main folders stay/)).toBeVisible();
 });
+
+test('one thing, one name: Home, the tree and the tidy-up sheet name things alike', async ({ page }) => {
+  await open(page, '/');
+  const homePiles = page.locator('main a[href*="/pile/"] [class*="pileText"]');
+  await expect(homePiles.first()).toBeVisible();
+  const onHome = (await homePiles.allTextContents()).map((t) => t.trim());
+  for (const t of await page.locator('section[aria-labelledby="recent"] [class*="pileText"]').allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,4}$/);
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  const inSheet = (await page.getByRole('dialog').locator('li > span:not(.muted)').allTextContents()).map((t) => t.trim());
+  expect(inSheet.sort()).toEqual([...onHome].sort());
+});

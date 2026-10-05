@@ -2170,7 +2170,7 @@
       "One thing has one name everywhere: no extension, its kind beside it."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"one thing, one name\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "palette-inbox",

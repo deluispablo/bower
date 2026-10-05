@@ -8,6 +8,7 @@ import {
   buildTree,
   checkLength,
   displayName,
+  thingName,
   ensureFolders,
   freeName,
   join,
@@ -483,7 +484,7 @@ export class DemoWorld {
         const path = join(folder, name);
         this.entries.set(path, { path, type: 'file', kind: kindOf(name), modified: at, created: at, isNew: true, byBower: kindOf(name) === 'note' });
         if (item.kind === 'link') this.links.set(path, `https://${item.name}`);
-        const f: FiledItem = { name: item.name, title: displayName(name), kind: item.kind, to: folder };
+        const f: FiledItem = { name: item.name, title: thingName(name), kind: item.kind, to: folder };
         if (plan.note) {
           this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
           f.note = plan.note;
