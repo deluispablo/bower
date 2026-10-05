@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { usePiles, useRun, useSources, useTree } from '@/data/provider';
 import { isRunning } from '@/features/tidy/run-words';
-import { displayName, nameOf, parentOf } from '@/data/tree';
+import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
 import type { SearchHit, TreeNode } from '@/data/types';
 import { useUi } from '@/app/ui-store';
 import { usePrefs } from '@/app/prefs';
@@ -129,9 +129,9 @@ export function Palette() {
               {q.trim().length > 0 && (
                 <Command.Group heading="Notes and folders" className={s.group}>
                   {files.slice(0, 400).map((f) => (
-                    <Command.Item key={f.path} value={`${f.type === 'folder' ? f.name : displayName(f.name)} :: ${f.path}`} onSelect={run(() => nav(routeFor(f)))} className={s.item}>
+                    <Command.Item key={f.path} value={`${f.type === 'folder' ? f.name : thingName(f.name)} :: ${f.path}`} onSelect={run(() => nav(routeFor(f)))} className={s.item}>
                       <Icon name={f.type === 'folder' ? 'folder' : f.kind === 'note' ? 'note' : 'file'} size={18} />
-                      <span className={s.label}>{f.type === 'folder' ? f.name : displayName(f.name)}</span>
+                      <span className={s.label}>{f.type === 'folder' ? f.name : thingName(f.name)}</span>
                       <span className={s.path}>{crumbs(parentOf(f.path))}</span>
                     </Command.Item>
                   ))}

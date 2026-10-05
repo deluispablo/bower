@@ -143,6 +143,15 @@ describe('the fake runner', () => {
     expect(out.phase === 'done' && out.report.yourChanges).toBe(1);
   });
 
+  it('a saved link is filed under a name that says what it is, with no query or .url in it', async () => {
+    await vault.addPile({ text: '', items: [{ name: 'saved-page.example/article/42?ref=x', kind: 'link', origin: 'Pasted', url: 'https://saved-page.example/article/42?ref=x' }] });
+    await vault.settled();
+    const out = await runFake(drive, root, opts());
+    if (out.phase !== 'done') throw new Error('failed');
+    const f = out.report.filed.find((x) => x.kind === 'link' && x.name.startsWith('saved-page'));
+    expect(f?.title).toBe('saved-page.example, article 42');
+  });
+
   it('pending rules are worded with your words kept', async () => {
     await vault.addRule('anything from the dentist goes in health');
     await runFake(drive, root, opts({ scope: 'instructions' }));

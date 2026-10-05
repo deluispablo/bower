@@ -13,12 +13,12 @@ import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } fr
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { thingsIn } from '../piles';
-import { displayName, freeName, join, kindOf, nameOf, parentOf } from '../tree';
+import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import type { FiledItem, Pile, Question, Request, Rule, RunPhase, RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import type { JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
-import { savedLinkAddress } from '../search-text';
+import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
@@ -155,7 +155,9 @@ class Writer {
           report.filed.push({ name: item.name, title: displayName(nameOf(merge.into)), kind: item.kind, to, note: merge.into });
           continue;
         }
-        const plan = PLAN_BY_NAME.get(item.name) ?? { title: file.name, to: guessFolder(`${pile.text} ${item.name}`, item.kind) };
+        // A saved link with no plan is named from its address, as Bower would name it.
+        const linkName = !PLAN_BY_NAME.has(item.name) && item.kind === 'link' ? savedLinkUrl(await this.drive.readText(file.id)) : null;
+        const plan = PLAN_BY_NAME.get(item.name) ?? { title: linkName ? `${linkTitle(linkName)}.url` : file.name, to: guessFolder(`${pile.text} ${item.name}`, item.kind) };
         const folder = await this.folder(plan.to);
         const name = freeName(this.ix.entries(), plan.to, plan.title);
         const isNote = kindOf(name) === 'note';
@@ -174,7 +176,7 @@ class Writer {
           const f = this.ix.file(join(plan.to, name));
           if (f) this.ix.put(await this.drive.writeText(f.id, text, f.modifiedTime));
         }
-        const filed: FiledItem = { name: item.name, title: displayName(name), kind: item.kind, to: plan.to };
+        const filed: FiledItem = { name: item.name, title: thingName(name), kind: item.kind, to: plan.to };
         if (plan.note && !this.ix.idOf(plan.note)) {
           const at = await this.folder(parentOf(plan.note));
           const text = serializeNote({ summary: `A note for ${displayName(name)}.`, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: 'Today', text: 'Filed by Bower.', source: name }], byBower: true });

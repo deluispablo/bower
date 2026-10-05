@@ -2158,7 +2158,7 @@
       "It is filed under a name that says what it is, no ?; ⌘K shows it without .url."
     ],
     "verify": "pnpm vitest run src/data/fake src/features/palette -t \"a saved link is filed under a name|the palette names things as the tree does\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "one-naming",

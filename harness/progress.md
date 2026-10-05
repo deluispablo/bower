@@ -188,3 +188,4 @@
 - 2026-10-05: suggestion-no-thanks passes — chore(harness): close suggestion-no-thanks
 - 2026-10-05: palette-inbox passes — fix(app): search finds what waits in the inbox, by its name
 - 2026-10-05: run-result-counts passes — fix(app): a tidy-up's result counts each change once; its live line is the detail, not the title again
+- 2026-10-05: runner-link-names passes — fix(app): the pretend tidy-up names a saved link from its address; the palette names things as the tree does

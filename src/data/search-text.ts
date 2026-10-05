@@ -46,6 +46,17 @@ export function savedLinkUrl(text: string): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null;
 }
 
+/**
+ * A saved link's name from its address: the site, then the words of its path
+ * ("saved-page.example, article 42"), without the query or the scheme.
+ */
+export function linkTitle(url: string): string {
+  const bare = url.replace(/^https?:\/\//i, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const [host = '', ...path] = bare.split('/');
+  const words = path.join(' ').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return words ? `${host}, ${words}` : host;
+}
+
 /** The same address as a person reads it: no scheme. */
 export function savedLinkAddress(text: string): string | null {
   return savedLinkUrl(text)?.replace(/^https?:\/\//i, '').replace(/\/$/, '') ?? null;

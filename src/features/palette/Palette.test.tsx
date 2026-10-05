@@ -26,4 +26,26 @@ describe('the palette', () => {
     await userEvent.type(screen.getByRole('combobox'), 'Tally');
     expect(await screen.findByText(/Search did not answer/)).toBeInTheDocument();
   });
+
+  it('the palette names things as the tree does: no .pdf or .url after a name', async () => {
+    const base = loadingSources();
+    const file = (path: string, kind: string) => ({ path, name: path.split('/').pop() ?? '', type: 'file', kind, modified: 0, created: 0 });
+    const tree = [{ path: 'Resources', name: 'Resources', type: 'folder', modified: 0, created: 0, children: [file('Resources/Lease draft.pdf', 'pdf'), file('Resources/saved-page.example.url', 'link')] }];
+    const vault = new Proxy(base.vault, {
+      get: (t, k) => (k === 'tree' ? async () => tree : k === 'search' ? async () => [] : Reflect.get(t, k)),
+    });
+    useUi.setState({ paletteOpen: true });
+    render(
+      <MemoryRouter>
+        <DataProvider sources={{ ...base, vault } as Sources}>
+          <Palette />
+        </DataProvider>
+      </MemoryRouter>,
+    );
+    await userEvent.type(screen.getByRole('combobox'), 'e');
+    expect(await screen.findByText('Lease draft')).toBeInTheDocument();
+    expect(screen.getByText('saved-page.example')).toBeInTheDocument();
+    expect(screen.queryByText(/\.(pdf|url)$/)).toBeNull();
+  });
 });
+

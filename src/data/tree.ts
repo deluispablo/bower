@@ -30,6 +30,9 @@ export const extOf = (name: string): string => {
 /** The name people read: a note without `.md`. */
 export const displayName = (name: string): string => name.replace(/\.md$/, '');
 
+/** A thing's name as people see it, wherever it shows: no extension (its kind shows beside it, as in the tree). */
+export const thingName = (name: string): string => name.replace(/\.[A-Za-z0-9]{1,5}$/, '');
+
 export function kindOf(name: string): FileKind {
   const e = extOf(name).toLowerCase();
   if (e === '.md') return 'note';
