@@ -199,3 +199,4 @@ task-keeps-seen	d4fc7ad086ea1e62	2026-10-05	known-green: Coverage-only as precom
 upload-retry-screen	6a7ef96e1f139498	2026-10-05	known-green: Coverage-only as precommitted note: temporarily disabled the actual screen retry callback and observed its upload-count assertion fail, then restored exact production; evidence /private/tmp/bower-upload-retry-screen-red.log.
 search-root-scope	723ab2b625b91ffa	2026-10-05	red (fixed in 759ed24)
 runner-json-shapes	3441556658d071ed	2026-10-05	red
+open-in-drive	d04cf32e0b228a66	2026-10-05	red

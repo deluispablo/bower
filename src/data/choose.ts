@@ -56,7 +56,7 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   }
   if (kind === 'real') {
     const worker = new WorkerHttp(import.meta.env.VITE_API_URL as string);
-    return { sources: makeLiveSources({ worker, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }) }) };
+    return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }) }) };
   }
   const [{ pretendDrive }, { FakeWorker }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker')]);
   const { drive, rootId, fresh } = await pretendDrive(scenario);

@@ -6,7 +6,7 @@ export function loadingSources(): Sources {
   const off = (): (() => void) => () => undefined;
   return {
     session: { current: never, signIn: never, signOut: never, folderState: never, createFolder: never, subscribe: off },
-    vault: new Proxy({}, { get: (_t, k) => (k === 'subscribe' ? off : never) }),
+    vault: new Proxy({}, { get: (_t, k) => (k === 'driveLinks' ? false : k === 'subscribe' ? off : never) }),
     runs: { start: never, current: never, markSeen: never, subscribe: off },
   } as unknown as Sources;
 }

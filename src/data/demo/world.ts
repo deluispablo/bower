@@ -585,6 +585,8 @@ export class DemoWorld {
         return out;
       });
     return {
+      driveLinks: false,
+      driveLink: async () => null,
       tree: () => this.wait(() => buildTree(this.entries)),
       note: (path) => this.wait(() => ({ ...this.noteFor(path), backlinks: this.backlinksOf(path) })),
       move: (path, to, opts) =>

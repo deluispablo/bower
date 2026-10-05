@@ -2367,7 +2367,7 @@
       "The matching folder or file opens; pretend sources clearly explain that they simulate Drive."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"Open in Drive resolves the selected folder or file\" && bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"Open in Drive explains the pretend source\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "search-root-scope",

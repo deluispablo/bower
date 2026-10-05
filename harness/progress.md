@@ -227,3 +227,4 @@
 - 2026-10-05: runner-json-shapes passes — fix(data): explain unreadable runner updates and offer retry
 
 - 2026-10-05: Runner read errors closed with full screen gates; assign the Open in Drive source contract and UI.
+- 2026-10-05: open-in-drive passes — fix(files): open the selected folder or file in Google Drive

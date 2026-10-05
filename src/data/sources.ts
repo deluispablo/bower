@@ -37,6 +37,10 @@ export interface Session {
 }
 
 export interface VaultSource {
+  /** Whether this source represents an actual Google Drive folder. */
+  readonly driveLinks: boolean;
+  /** The selected folder or file in Drive; null if it is missing or simulated. */
+  driveLink(path?: string): Promise<string | null>;
   tree(): Promise<TreeNode[]>;
   note(path: string): Promise<Note>;
   /** `undo` takes back the journal line of the move it reverses. */

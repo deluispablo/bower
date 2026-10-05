@@ -36,6 +36,7 @@ import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 
 export interface DriveVaultOptions {
+  driveLinks?: boolean;
   drive: DriveApi;
   rootId: () => Promise<string>;
   /** The piles the running tidy-up took; they cannot be changed until it ends. */
@@ -61,6 +62,7 @@ function deviceId(): string {
 }
 
 export class DriveVault implements VaultSource {
+  readonly driveLinks: boolean;
   protected readonly drive: DriveApi;
   protected readonly rootId: () => Promise<string>;
   protected readonly runningPiles: () => ReadonlySet<string>;
@@ -78,6 +80,7 @@ export class DriveVault implements VaultSource {
   private sending = new Set<Promise<void>>();
 
   constructor(opts: DriveVaultOptions) {
+    this.driveLinks = opts.driveLinks ?? false;
     this.drive = opts.drive;
     this.rootId = opts.rootId;
     this.runningPiles = opts.runningPiles;
@@ -159,6 +162,15 @@ export class DriveVault implements VaultSource {
     });
     const backlinks = linking.filter((p): p is string => !!p);
     return { ...parsed, path, links: [...new Set(links)], backlinks };
+  }
+
+  async driveLink(path = ''): Promise<string | null> {
+    if (!this.driveLinks) return null;
+    if (!path) return `https://drive.google.com/drive/folders/${encodeURIComponent(await this.rootId())}`;
+    const file = (await this.index()).file(path);
+    if (!file) return null;
+    const id = encodeURIComponent(file.id);
+    return file.folder ? `https://drive.google.com/drive/folders/${id}` : `https://drive.google.com/file/d/${id}/view`;
   }
 
   async move(path: string, toFolder: string, opts?: { undo?: boolean }): Promise<string> {

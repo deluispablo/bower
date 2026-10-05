@@ -6,7 +6,7 @@ import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
 import { Sheet } from '@/ui/Sheet';
-import { report } from '@/ui/report';
+import { openDrive, report } from '@/ui/report';
 import { useUi } from '@/app/ui-store';
 import { Link, useNavigate } from 'react-router';
 import s from './settings.module.css';
@@ -80,7 +80,7 @@ export function Settings() {
   const { data: user } = useUser();
   const prefs = usePrefs();
   const { data: rules } = useRules();
-  const { session } = useSources();
+  const { session, vault } = useSources();
   const nav = useNavigate();
   return (
     <div className={s.page}>
@@ -91,7 +91,7 @@ export function Settings() {
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => toast('Your Bower folder opens in Google Drive.')}
+          onClick={() => openDrive(vault)}
         >
           Open in Drive
         </Button>

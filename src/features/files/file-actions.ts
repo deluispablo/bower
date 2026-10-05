@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { report } from '@/ui/report';
+import { openDrive, report } from '@/ui/report';
 import { useLocation, useNavigate } from 'react-router';
 import { useSources } from '@/data/provider';
 import { crumbs, decodeSplat, folderRoute, routeFor } from '@/app/paths';
@@ -153,7 +153,7 @@ export function useFileActions() {
         );
       },
       openInDrive(path: string): void {
-        toast(`In your Drive, ${displayName(nameOf(path))} opens in a new tab.`);
+        openDrive(vault, path);
       },
     }),
     // follow reads the current location on purpose.

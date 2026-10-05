@@ -11,6 +11,7 @@ import { LiveRuns } from './runs';
 import { LiveSession } from './session';
 
 export interface LiveOptions {
+  driveLinks?: boolean;
   worker: WorkerApi;
   drive: DriveApi;
   /** The piles a running tidy-up took, when the Worker can say (the fake can); otherwise this device's guess. */
@@ -59,6 +60,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   const worker = watchAuth(opts.worker, expire);
   session = new LiveSession(opts.worker, drive, () => void vault?.refresh());
   vault = new DriveVault({
+    driveLinks: opts.driveLinks ?? false,
     drive,
     rootId: () => session.rootId(),
     runningPiles: () => {

@@ -602,3 +602,15 @@ it('runner files with the wrong shape give a readable error', async () => {
   }
   await vault.refresh();
 });
+
+it('Open in Drive resolves the selected folder or file', async () => {
+  const real = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), driveLinks: true });
+  expect(real.driveLinks).toBe(true);
+  expect(await real.driveLink()).toBe(`https://drive.google.com/drive/folders/${encodeURIComponent(root)}`);
+  expect(await real.driveLink('Areas')).toBe(`https://drive.google.com/drive/folders/${encodeURIComponent(await idOf('Areas'))}`);
+  expect(await real.driveLink(PASSPORT)).toBe(`https://drive.google.com/file/d/${encodeURIComponent(await idOf(PASSPORT))}/view`);
+  expect(await real.driveLink('Missing.md')).toBeNull();
+  expect(vault.driveLinks).toBe(false);
+  expect(await vault.driveLink(PASSPORT)).toBeNull();
+  real.dispose();
+});
