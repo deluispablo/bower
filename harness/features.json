@@ -2290,7 +2290,7 @@
       "The harness refuses the close; a genuine failed expectation is still accepted."
     ],
     "verify": "pnpm vitest run src/harness.test.ts -t \"a browser timeout is not an assertion red\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "harness-selected-files",

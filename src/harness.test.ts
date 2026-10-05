@@ -90,10 +90,10 @@ describe('the harness', () => {
   });
 
   it('a red is a failed assertion, not a test file that failed to load', () => {
-    expect(redKind(' Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 10 passed (12)\n')).toBe('assert');
+    expect(redKind('AssertionError: expected true to be false\n Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 10 passed (12)\n')).toBe('assert');
     expect(redKind(' Test Files  1 failed (1)\n      Tests  no tests\n')).toBe('load');
     expect(redKind(' Test Files  1 failed | 3 passed (4)\n      Tests  10 passed (10)\n')).toBe('load');
-    expect(redKind('  1 failed\n    [desktop] › e2e/a.spec.ts:3:1 › x\n  2 passed (4s)\n')).toBe('assert');
+    expect(redKind('Error: expect(locator).toHaveText() failed\n  1 failed\n    [desktop] › e2e/a.spec.ts:3:1 › x\n  2 passed (4s)\n')).toBe('assert');
     expect(redKind('Error: Cannot find module\n')).toBe('none');
   });
 
@@ -112,5 +112,21 @@ describe('the harness', () => {
     expect(() => doneArgs(['a', 'msg', '--known-green', 'why'], { note: 'decided now' }, {})).toThrow(/committed/);
     expect(() => doneArgs(['a', 'msg', '--known-green', 'why'], { note: 'decided now' }, undefined)).toThrow(/committed/);
   });
-});
 
+  it('a browser timeout is not an assertion red', () => {
+    const failed = '\n  1 failed\n    [desktop] › e2e/a.spec.ts:3:1 › app boots\n';
+    for (const error of [
+      'Test timeout of 30000ms exceeded.',
+      'Error: browserType.launch: Target page, context or browser has been closed',
+      'Error: page.goto: net::ERR_CONNECTION_REFUSED',
+      '"beforeEach" hook timeout of 30000ms exceeded.',
+      'Error: "beforeAll" hook failed\nAssertionError: expected setup to finish',
+      'Error: page.goto timed out\n  42 | expect(page).toBeDefined()',
+    ]) expect(redKind(error + failed)).toBe('none');
+    expect(redKind('Error: expect(locator).toBeVisible() failed\nCall log:\n  - Expect "toBeVisible" with timeout 5000ms' + failed)).toBe('assert');
+    expect(redKind('AssertionError: expected false to be true\n      Tests  1 failed | 2 passed (3)\n')).toBe('assert');
+    expect(redKind('Error: Failed to fetch\n      Tests  1 failed | 2 passed (3)\n')).toBe('none');
+    // A source excerpt with assertion text is not the reporter's error diagnostic.
+    expect(redKind('Error: page.goto failed\n  42 | throw new Error("AssertionError: expected a value")' + failed)).toBe('none');
+  });
+});

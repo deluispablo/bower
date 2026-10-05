@@ -140,13 +140,19 @@ export function nextProblems(text) {
 }
 
 /**
- * What a red run showed: 'assert' when a test ran and failed (vitest's
- * "Tests  N failed", Playwright's "N failed"); 'load' when only a test file
+ * What a red run showed: 'assert' only with a failed test and the reporter's
+ * assertion diagnostic (a failed expectation can itself time out); 'load' when only a test file
  * failed (a missing import is not a red that pins behaviour); 'none' otherwise.
  */
 export function redKind(output) {
-  if (/^\s*Tests\s+[1-9]\d* failed/m.test(output)) return 'assert';
-  if (/^\s+[1-9]\d* failed\s*$/m.test(output) && !/^\s*Test Files/m.test(output)) return 'assert';
-  if (/^\s*Test Files\s+[1-9]\d* failed/m.test(output)) return 'load';
+  // Colour codes do not change the diagnostic. Source excerpts and stack traces
+  // do not start with these error labels; merely mentioning expect is not proof.
+  const plain = output.replace(/\u001b\[[0-9;]*m/g, '');
+  if (/^\s*(?:Error: )?["']?(?:beforeAll|beforeEach|afterAll|afterEach)["']? hook\b/m.test(plain)) return 'none';
+  const assertion = /^\s*(?:AssertionError:|Error: expect\()/m.test(plain);
+  const unitFailed = /^\s*Tests\s+[1-9]\d* failed/m.test(plain);
+  const browserFailed = /^\s+[1-9]\d* failed\s*$/m.test(plain) && !/^\s*Test Files/m.test(plain);
+  if (assertion && (unitFailed || browserFailed)) return 'assert';
+  if (!unitFailed && /^\s*Test Files\s+[1-9]\d* failed/m.test(plain)) return 'load';
   return 'none';
 }
