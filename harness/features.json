@@ -2500,7 +2500,7 @@
       "Repeat with an existing pile folder and changed name or parent; the remote name, place and note remain untouched."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"editing a pile refuses external name or place changes\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "create-leading-dot",

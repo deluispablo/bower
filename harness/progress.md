@@ -261,3 +261,4 @@
 - 2026-10-05: journal-ack-content passes — fix(journal): prove complete acknowledgement before forgetting changes
 
 - 2026-10-05: journal-ack-content independently reviewed clean and integrated 7c95fd8, then assertion-red/check/verify closure 7869489; assign pile-edit-still-seen in the isolated worker. P2 remains open.
+- 2026-10-05: pile-edit-still-seen passes — fix(inbox): prove stale pile edits have no structural effects
