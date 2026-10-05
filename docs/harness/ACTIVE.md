@@ -110,3 +110,7 @@ Both packets use revision `2026-10-05-contracts-2`, phase P2, immutable adopted 
 - Required skills/tools: bower-session + bower-implement, Git/shell/Node/pnpm; run exclusive harness/init, named unchanged verify then check; no browser needed.
 - Verify: `pnpm vitest run src/data/vault/journal.test.ts -t "waiting changes require matching valid Drive contents"`.
 - Output: one candidate SHA (assigned files only), assertion-red/green/check logs and result packet. No shared records, done.sh, producer-schema expansion or phase closure. Independent reviewer assigned to immutable candidate before serial integration. State: prepared; dispatch after record commit.
+
+## Current reproduced O1 foundations
+
+Four archived concerns were reproduced on `143ae2b` before registration under qa-13: `partial-pile-readiness`, `protected-current-prose`, `external-change-refresh`, `run-status-monotonic`. Durable synthetic script/results: `evidence/2026-10-05-o1/`. Their named regressions are planned and unexecuted; no passes/proofs changed. O1's wider capability matrix follows; producer/report/browser-independent recovery concerns remain current code reasoning until a named fault reproduction.
