@@ -2688,5 +2688,20 @@
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"persisted v1 run fixtures agree across current recovery consumers\"",
     "passes": true,
     "note": "Reproduced at cbf4e9f/identical666074f public APIs:3valid controls,10refusal assertion reds and unknown-phase1durableoverwrite. qa16 retains exact bytes/snapshots/read-version recovery. Existing current-v1 shared validation only; no new schema, report-save barrier, scheduler, readiness or ownership grammar. HTTP validates RunWire alone, not this durable envelope/report."
+  },
+  {
+    "id": "pending-draft-bytes-cleanup",
+    "task": "qa-17",
+    "category": "bug",
+    "what": "Person cleanup forgets every unsent current-page draft file while preserving changes already made in its folder.",
+    "steps": [
+      "Keep two synthetic files, including a key absent from draft metadata, then run the actual central person cleanup.",
+      "Expect both file keys to be unavailable and every accessible person metadata key removed; preserve original-folder outboxes and device settings.",
+      "Repeat with storage access denied or an individual removal refused; forget memory synchronously, keep attempting accessible keys and log the failure without claiming denied data was deleted.",
+      "Use actual successful session sign-out, deletion and expiry; preserve failed remote sign-out retry behavior and public keep/get/per-key forget compatibility."
+    ],
+    "verify": "pnpm vitest run src/features/piles/draft-files.test.ts src/data/live/live.test.ts -t \"person cleanup forgets pending draft bytes and keeps the folder outbox\"",
+    "passes": false,
+    "note": "Actual e5cb57d/source1c1e60c shared production Map/device reproduction: same27-byte Blob survives actual forgetThisPerson after10metadata keys disappear; original-folder outbox exact. qa17 retains genuine ERR_ASSERTION and immutable a90154a9 packet; independent bfecf275 prerequisite confirms real-production applicability. Planned named verify not yet implemented. Memory-only cleanup; no visible cross-account disclosure, upload, durable retention/principal/schema or provider claim."
   }
 ]
