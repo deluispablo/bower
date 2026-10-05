@@ -88,7 +88,7 @@ test('starting again in first sign-in shows the welcome again, with every main f
   await page.getByRole('button', { name: 'Demo situations' }).click();
   await page.getByRole('button', { name: 'Start this situation again' }).click();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
-  await expect(page.getByRole('heading', { name: /Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: /Welcome back|Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
 });
 
 test('deleting the account and coming back: one name for it, and a fresh start', async ({ page }) => {
@@ -99,7 +99,7 @@ test('deleting the account and coming back: one name for it, and a fresh start',
   await expect(page.getByRole('status').getByText(/Your account is gone/)).toBeVisible();
   await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(page).toHaveURL(/\/welcome/, { timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: /Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: /Welcome back|Your folder is ready|Making your Bower folder/ })).toBeVisible({ timeout: 10_000 });
 });
 
 test('a saved link opens its web page, and a filed file is not promised a reading', async ({ page }) => {
