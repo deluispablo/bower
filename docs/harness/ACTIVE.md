@@ -4,12 +4,12 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: contracts-2 adopted; O1/O2 delivered. 209/214 entries pass. Eight bounded foundations independently reviewed and proof-closed, including session-folder-isolation at20864d4/source44ee162. Two naming entries remain integrated-open. No browser/evaluation reservation or active worker writer. Fresh combined gates/evaluation and O3-dependent capability work remain pending; actual missing capabilities/resources/decisions block full P2 acceptance.
+- State: contracts-2 adopted; O1/O2 delivered. 209/214 entries pass. Current source44ee162, isolation proof20864d4. Fresh combined check517/demo198/fake198/PWA4 and supplemental naming phone/desktop evaluation complete atfe9a965. Two naming inverse-fix closure proofs next. Owner offline/upload policies and existing-resource use approved; actual consent/provider probes, protected grammar, broader capabilities and independent full evaluation remain pending.
 - Coordinator/session: Codex `/root`, session `p2-orchestrator-2026-10-05-01a10bbd`, explicitly appointed by the owner after the previous batch ended. Sole integration writer and shared-record owner.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: root current-source names checkpoint, serial check/demo/fake/PWA on5191/5192 then supplemental IAB fake/demo default instant phone390x844/desktop1440x900. Target is resumed reservation commit; source44ee162, no independent evaluator navigation grant. No tracked writes/build/restores during manual freeze; proposals remain scratch-only.
+- Browser reservation: names manual freeze released after all own tabs closed/viewport reset/own preview stopped; ports5191/5192 free. Root next serial inverse-fix naming proofs, then read-only existing Google OAuth-client inventory. No concurrent worker browser/gate.
 
 ## Assignments
 
@@ -410,3 +410,11 @@ Owner instruction in Planificador was verified through its latest human turn: re
 The sole Google setup preparer was updated to reuse these resources, including safe non-secret existing local bower config/OAuth inventory and preservation of current redirect URIs/deployment. Its scratch-only ownership and no runtime/provider change remain. Google R1/R2/R4 can start independently from executorR3 once minimal access/resources are established; owner need not build the harness or design contracts.
 
 Independent evaluator performed exactly one fresh documented browser inventory: empty array, no surfaced browser/errors. Report retained evaluation/evaluator-capabilities-recheck-907c9f8.md. Independent live evaluation remains NOT RUN; no lock-causation assumption and no retry/tab/navigation. Root supplemental checks remain separately labeled. Independent code naming review reports no new actionable finding at907/source44; complete exact report/gates/manual/proofs are pending.
+
+## Current decisions and completed names freeze
+
+Owner policy decisions verified directly from human Planificador turn01a10cf5 and recorded in2026-10-05-product-policy-decisions.md: offline cached reading with editing disabled; best-effort retained pending bytes with verified reselection. Existing designated project/account/repository/origin bindings are resolved privately; no generic resource/policy approval request remains. Actual OAuth consent/export and synthetic R1–R4 runtime evidence remain missing. Phase acceptance/new grammar/spend/production replacement/P3/P4 remain unauthorized.
+
+Current names checkpoint2026-10-05-names-current-checkpoint.md retains exactfe9/source44 check517/demo198/fake198/PWA4, clean independent identical-source review and supplemental root fake/demo390x844/1440x900 outcomes. Initial1280 cells retained and repeated at confirmed1440. Expected refusal diagnostics only. Freeze released; source remains unchanged. Root alone runs serial create-leading-dot --fixed-in28d2ce2 then timeline-source-names --fixed-in6305ca9; entries remain open until actual assertion-red/check/verify proof.
+
+Interruption ended former agent sessions. New sole setup preparer /root/google_setup_rework owns only NEW scratchGoogle-v2 packet on basefe9/source44, same R1/R2/R4 existing adapters. Original reviewed packet preserved. Test-first reproduce and fix authorization expiry before every new OAuth/key/Drive dispatch, exact saved-session validation and strict boolean approval; no provider/browser/repo/shared-record execution. Independent /root/prerequisites_review owns read-only final ownership proposal review and later immutableGoogle-v2 review. No second implementer. Final ownership proposal has no remaining review finding, but grammar/raw adapter/activation still require lead adoption; fixtures are proposed expectations, not working tests. Google original Important/Minor findings remain until rework/review. No messaging another chat authorization inferred.

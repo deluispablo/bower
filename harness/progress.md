@@ -2,13 +2,12 @@
 
 ## Next
 
-- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns `codex/close-phase-2`. Main d12c55e / contracts-2 adopted at143ae2b; refresh main and ACTIVE before mutations.
-- O1 full rows remain four missing/twelve partial. O2 specifications complete; all real R1–R4 runtime probes NOT RUN. No O3 adoption or P2 acceptance from proposals/counts.
-- Count209/214: eight bounded foundations independently reviewed/proof-closed. Latest source44ee162 and isolation proof20864d4. Worker final named36/full517 green and three root probes pass; root inverse-fix assertion red/check/verify passed. Fresh full browser/PWA/native checks on this source remain pending; e15 check/demo are earlier evidence.
-- `session-folder-isolation` closed: candidate2244218 independently reviewed clean, integration44ee162, proof20864d4. Rejected8bd67cd disposed-seen finding actually reproduced and corrected; all logs/reports retained qa14. Sole worker released/read-only; no browser/provider claim.
-- Leading-dot28d2ce2 and revised Timeline6305ca9 remain integrated-open; final combined gates and actual phone/desktop checks pending. Independent evaluator lacks browser surfaces and reports locked Mac; owner availability query pending. Root IAB available for supplemental checks only, no independent certificate.
-- After isolation fix/review/closure, freeze a fresh target for check/demo/fake/PWA, independent global review and serialized prepared evaluation. Retained replay plan/fixtures do not certify results.
-- Protected ownership needs lead format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline/reload policies remain owner inputs; existing bower-home/Google project use is owner-authorized, project ID and safe access/setup pending. Continue independent authorized work; no P3/P4, product merge, push or deployment.
+- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd remains sole integration writer. Current209/214, source44ee162/isolation proof20864d4.
+- Frozenfe9 naming check517/demo198/fake198/PWA4 passed; root supplemental phone390x844/desktop1440x900 fake/demo complete. Independent identical-source code review clean; independent complete UI evaluation still NOT RUN. Evidence2026-10-05-names-current-checkpoint.md. Freeze released, own tabs/preview cleaned.
+- Run serial naming done.sh inverse-fix proofs for create-leading-dot28d2ce2 and timeline-source-names6305ca9; no closure until real assertion red/check/verify succeeds.
+- Owner offline cached-read-only and retained-bytes/verified-reselection decisions approved; see2026-10-05-product-policy-decisions.md. Existing project/account/repo/origin privately resolved; actual login/consent/client export and runtimeR1–R4 still pending. No generic policy/resource question.
+- Review-only final ownership proposal ready for lead grammar/raw adapter/activation decisions. Sole scratchGoogle-v2 preparer reworks expiry/session/approval findings with test-first; independent reviewer then inspects immutable replacement. No repo worker writer or parallel browser.
+- After names proofs: current-compatible fixtures/corpus and approved-policy entries; accepted O3 contracts before admitted recovery/persisted semantic simulations/Undo/preparation/measured quality/full O8 dossier. All C01–C16 obligations remain; no P3/P4, main product merge/push/deploy or owner phase acceptance.
 
 ## Log
 
