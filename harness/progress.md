@@ -2,9 +2,10 @@
 
 ## Next
 
-- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` resumes codex/close-phase-2 under the owner's explicit handoff; adopts main d12c55e / contracts-2 at a clean exclusive checkpoint. Read live ACTIVE for assignments.
+- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns codex/close-phase-2 under explicit owner handoff; main d12c55e / contracts-2 adopted at143ae2b. Read live ACTIVE for assignments; main planning remains d12c55e at last refresh.
 - O1 audit and O2 bounded R1–R4 specifications are complete at 143ae2b; read docs/harness/2026-10-05-p2-o1-audit.md and 2026-10-05-p2-r-probe-specs.md. Four rows missing, twelve partial; all real probes NOT RUN. Reuse proof evidence; reproduce historical concerns before registering gaps.
-- 204/211 registered entries pass after five current O1 reproductions; historic baseline was 201/205. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
+- 204/211 registered entries pass: journal-ack-content7869489, pile-edit-still-seen afb4b36 and adjacent pile-context-version f9f0bf7 closed with independent reviews and assertion proofs. Leading-dot integrated28d2ce2, check420/full demo+fake196 passed56 skips each; stays open because native manual evaluation unavailable atd086d6c. Timeline test/fixture prepared, worker owns5191 for assertion red then candidate. No manual certification or owner acceptance.
+- After Timeline candidate/review, continue independent run-status-monotonic and external-change-refresh foundations. Protected ownership requires the lead decision; incomplete-pile and report-save recovery depend on accepted O3/O4 contracts and relevant P2-R premises. Other capability gaps remain in O1; no gap disappears behind the harness count.
 - Stabilize contracts before O4–O7 dependent implementation. Finish full frozen evaluation, gates and O8 dossier before owner phase acceptance. P2 is open; P3/P4 do not start.
 - Offline reading and upload-reload policy require specific owner decisions. Real-provider premises require authorized synthetic observations, not fake guarantees. Browser gates and restores remain serialized.
 
@@ -267,3 +268,5 @@
 - 2026-10-05: pile-context-version passes — fix(inbox): prove context conflicts precede all pile effects
 
 - 2026-10-05: context version candidate reviewed and closed f9f0bf7 with actual red/check/verify; assign leading-dot source validation and phone recovery regression to the sole isolated worker.
+
+- 2026-10-05: leading-dot candidate independently reviewed/integrated28d2ce2; check420 and complete demo/fake each196 passed56 intended skips. Native evaluation unavailable atd086d6c: no Chrome browser surface, native-app selection interrupted/no modifying action; four cells NOT RUN. Preserve integrated-open entry, release preview and grant worker5191 for Timeline test-first. Run-order prerequisite retained; no schema adoption or dependent slice started.
