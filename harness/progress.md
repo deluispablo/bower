@@ -193,3 +193,4 @@
 - 2026-10-05: runner-link-names passes — fix(app): the pretend tidy-up names a saved link from its address; the palette names things as the tree does
 - 2026-10-05: landing-jargon passes — fix(landing): the tidy-up section says how it files in plain words
 - 2026-10-05: bird-not-a-button passes — fix(app): Bower's bird is a named button
+- 2026-10-05: side-tabs-a11y passes — fix(app): the side panel tabs are real tabs: one Tab stop, arrows, a panel each; Outline takes the keyboard to the heading

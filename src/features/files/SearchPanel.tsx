@@ -6,7 +6,8 @@ import { useFileActions } from './file-actions';
 import s from './files.module.css';
 
 /** Names first, then notes whose text matches, with the line that matched. */
-export function SearchPanel() {
+/** `focus`: the box takes the keyboard when it opens (not when arrows walk the panel's tabs). */
+export function SearchPanel({ focus = true }: { focus?: boolean }) {
   const { vault } = useSources();
   const act = useFileActions();
   const [q, setQ] = useState('');
@@ -35,7 +36,7 @@ export function SearchPanel() {
     <div className={s.panel}>
       <label className={s.search}>
         <Icon name="search" size={18} />
-        <input type="search" autoFocus placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" autoFocus={focus} placeholder="Search your notes and files" aria-label="Search your notes and files" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
       <p className={s.hint} role="status">
         {searching ? 'Searching…' : result?.q === q && result.failed ? 'Search did not work. Try again.' : shown === null ? 'Names, summaries and what notes say.' : `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}`}

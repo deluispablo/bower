@@ -2122,7 +2122,7 @@
       "Click an Outline entry: focus goes to that heading."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"the side panel tabs are tabs\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "tree-typeahead",

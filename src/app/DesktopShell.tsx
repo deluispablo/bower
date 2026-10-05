@@ -1,10 +1,11 @@
-import { useEffect, useRef, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { Icon, BowerHead, BowerMark } from '@/ui/Icon';
 import { IconButton } from '@/ui/Button';
 import { usePrefs } from './prefs';
 import { useUi } from './ui-store';
 import { useTabs } from './tabs-store';
+import { Tabs, tabPanel } from '@/ui/Tabs';
 import { decodeSplat } from './paths';
 import { displayName, nameOf } from '@/data/tree';
 import { Explorer } from '@/features/files/Explorer';
@@ -34,6 +35,7 @@ export function DesktopShell() {
   const loc = useLocation();
   const nav = useNavigate();
   const { tabs, active, follow, open, close, activate } = useTabs();
+  const [searchByKey, setSearchByKey] = useState(false);
 
   const route = loc.pathname + loc.search;
   useEffect(() => follow(route), [route, follow]);
@@ -92,22 +94,25 @@ export function DesktopShell() {
 
       {leftOpen && (
         <aside className={s.left} aria-label="Side panel">
-          <div className={s.panelTabs} role="tablist" aria-label="Side panel">
-            {(
-              [
-                ['files', 'folder', 'Files'],
-                ['search', 'search', 'Search'],
-                ['bookmarks', 'bookmark', 'Bookmarks'],
-              ] as const
-            ).map(([k, ic, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={leftTab === k} aria-label={label} title={label} className={s.ptab} onClick={() => setLeftTab(k)}>
-                <Icon name={ic} size={18} />
-              </button>
-            ))}
-          </div>
-          <div className={s.panelBody}>
+          <Tabs
+            label="Side panel"
+            id="side"
+            className={s.panelTabs}
+            tabClassName={s.ptab}
+            value={leftTab}
+            onChange={(k, by) => {
+              setSearchByKey(by === 'key');
+              setLeftTab(k);
+            }}
+            items={[
+              { key: 'files', label: 'Files', icon: <Icon name="folder" size={18} /> },
+              { key: 'search', label: 'Search', icon: <Icon name="search" size={18} /> },
+              { key: 'bookmarks', label: 'Bookmarks', icon: <Icon name="bookmark" size={18} /> },
+            ]}
+          />
+          <div className={s.panelBody} {...tabPanel('side', leftTab)}>
             {leftTab === 'files' && <Explorer variant="panel" />}
-            {leftTab === 'search' && <SearchPanel />}
+            {leftTab === 'search' && <SearchPanel focus={!searchByKey} />}
             {leftTab === 'bookmarks' && <BookmarksPanel />}
           </div>
           <div className={s.resizer} role="separator" tabIndex={0} aria-orientation="vertical" aria-valuenow={leftWidth} aria-valuemin={220} aria-valuemax={480} aria-label="Resize the side panel" onKeyDown={keyResize('left')} data-side="left" onPointerDown={startDrag} onPointerMove={onDrag} onPointerUp={endDrag} />

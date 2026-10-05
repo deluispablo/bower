@@ -89,3 +89,26 @@ test('no unnamed buttons: the tidy-up sheet and Add', async ({ page }) => {
   await open(page, '/add');
   expect(await unnamedButtons(page)).toEqual([]);
 });
+
+test('the side panel tabs are tabs: one Tab stop, arrows, a panel each; Outline goes to the heading', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop panels');
+  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
+  for (const name of ['Side panel', 'Right panel']) {
+    const list = page.getByRole('tablist', { name });
+    const tabs = list.getByRole('tab');
+    await expect(list.locator('[role="tab"][tabindex="0"]'), name).toHaveCount(1);
+    const first = list.locator('[role="tab"][aria-selected="true"]');
+    await first.focus();
+    await page.keyboard.press('ArrowRight');
+    const now = list.locator('[role="tab"][aria-selected="true"]');
+    await expect(now).toBeFocused();
+    const panel = await now.getAttribute('aria-controls');
+    expect(panel, name).toBeTruthy();
+    await expect(page.locator(`#${panel}[role="tabpanel"]`), name).toHaveCount(1);
+    expect(await tabs.count()).toBeGreaterThan(1);
+  }
+  const right = page.getByRole('tablist', { name: 'Right panel' });
+  await right.getByRole('tab', { name: 'Outline' }).click();
+  await page.getByRole('tabpanel').getByRole('button', { name: 'Timeline' }).click();
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('tl');
+});

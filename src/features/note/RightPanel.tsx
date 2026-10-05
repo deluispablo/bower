@@ -9,6 +9,7 @@ import { noteOutline } from './markdown';
 import { LocalGraph } from './LocalGraph';
 import { BowerPanel } from '@/features/bower/BowerPanel';
 import s from './panel.module.css';
+import { Tabs, tabPanel } from '@/ui/Tabs';
 
 /** The desktop's right panel: links of the open note, its outline, and Bower. */
 export function RightPanel() {
@@ -20,20 +21,20 @@ export function RightPanel() {
   const tab = isNote ? rightTab : 'bower';
   return (
     <>
-      <div className={s.tabs} role="tablist" aria-label="Right panel">
-        {(
-          [
-            ['links', 'graph', 'Linked notes'],
-            ['outline', 'outline', 'Outline'],
-            ['bower', 'bower', 'Bower'],
-          ] as const
-        ).map(([k, ic, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} aria-label={label} title={label} className={s.tab} onClick={() => setRightTab(k)}>
-            {ic === 'bower' ? <BowerHead size={20} /> : <Icon name={ic} size={18} />}
-          </button>
-        ))}
-      </div>
-      <div className={s.body}>
+      <Tabs
+        label="Right panel"
+        id="right"
+        className={s.tabs}
+        tabClassName={s.tab}
+        value={tab}
+        onChange={setRightTab}
+        items={[
+          { key: 'links', label: 'Linked notes', icon: <Icon name="graph" size={18} /> },
+          { key: 'outline', label: 'Outline', icon: <Icon name="outline" size={18} /> },
+          { key: 'bower', label: 'Bower', icon: <BowerHead size={20} /> },
+        ]}
+      />
+      <div className={s.body} {...tabPanel('right', tab)}>
         {tab === 'bower' ? (
           <BowerPanel />
         ) : !isNote || !path ? (
@@ -59,6 +60,9 @@ function NotePanel({ path, tab }: { path: string; tab: 'links' | 'outline' }) {
         return;
       }
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // The keyboard goes with it, so reading on starts at that heading.
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+      el.focus({ preventScroll: true });
       el.classList.remove('flash');
       void el.offsetWidth;
       el.classList.add('flash');
