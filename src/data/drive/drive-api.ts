@@ -30,6 +30,8 @@ export interface DriveApi {
   listAll(rootId: string): Promise<DriveFile[]>;
   get(id: string): Promise<DriveFile>;
   readText(id: string): Promise<string>;
+  /** Available undecoded media bytes; each returned array is an independent copy. */
+  readBytes(id: string): Promise<Uint8Array>;
   createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile>;

@@ -103,6 +103,11 @@ export class DriveHttp implements DriveApi {
     return (await this.call(`${API}/files/${id}?alt=media`)).text();
   }
 
+  /** Loadable proof baseline for the additive byte read. */
+  async readBytes(_id: string): Promise<Uint8Array> {
+    throw driveError('unknown');
+  }
+
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     return this.json(`${API}/files?fields=${FIELDS}`, 'POST', { name, mimeType: FOLDER, parents: [parentId], ...(appProperties ? { appProperties } : {}) });
   }

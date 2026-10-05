@@ -120,6 +120,11 @@ export class FakeDrive implements DriveApi {
     return typeof f.content === 'string' ? f.content : f.content.text();
   }
 
+  /** Loadable proof baseline for the additive byte read. */
+  async readBytes(_id: string): Promise<Uint8Array> {
+    throw driveError('unknown');
+  }
+
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
     return this.changed(this.add(parentId, name, true, null, appProperties));
