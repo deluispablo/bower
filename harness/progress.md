@@ -2,6 +2,9 @@
 
 ## Next
 
+- S02 pending-draft-bytes-cleanup proofclosedbf7278d of reviewedf219/integrated1dc7f64: genuine inverse3-production-file assertionred/check/unchanged11verify;214217. Root560/52, full demo198/56 and fake198/56 green, rawlogs/hashesqa17. All browser reservations released. No secure-erasure/durable-upload/C-row/phase claim.
+- Owner explicitlyauthorized sending R1evidence/options to Planificador; actualleaddecision R1-D02 approves ONE next v2 genuineETag/conditionalPUT matching/stale premise, no migration/guarantee. Decision+full solepreparer packet2026-10-05-r1-d02-conditional-probe.md; originalgrant unchanged, no newprovider untilfrozeninstrument/review/privateexactpacket. R1-OBS01 remainsImportant; O3contractacceptanceblocked.
+
 - Actual R1 atc349099/source1c1e60c refutes read-before-write protection: B's independently confirmed edit overwritten by A's delayed PATCH200. R1-OBS01 Important remainsopen; lead remedy/compatible contracts required beforeO3acceptance.24actualHTTP/1refresh/9134B/14.041s; rawfile/rootBin confirmed, noresidual; authoritydisabled, no morecases. Details2026-10-05-r1-real-content-interleave.md.
 - S02 candidatef219 independentlyreviewedclean02c30c5e, integrated1dc7f64 onlyafterR1ended. Rootcheck560/52green; solebrowser5191 reservedforfulldemo/fake; inverse-fix proof pending, count213217 unchanged.17frozenartifacts/review archivedqa17. No P2/P3acceptance.
 
@@ -19,6 +22,8 @@
 - Three-old-entry applicability report73f11992 archived: shared readiness highest next risk, rich prose needs lead-owned grammar adoption, report fault currently fake-only observation/real-plausible boundary requiring O3/O4 recovery. Historical evidence kept under originalSHA, no fresh replay or closure.
 
 ## Log
+
+- 2026-10-05: pending-draft-bytes-cleanup closedbf7278d after independentlyreviewedf219, integration1dc, root560/full demo19856/fake19856 and real inverse-red restoration/check/11verify.214217; evidencearchived, no browserlistener. Human "si" explicitlyauthorized Planificador message; lead R1-D02 selects bounded v2ETag premise, documentedwithnextscratchassignment and options73626cad, no contractmigration/providerpass/phaseclosure.
 
 - 2026-10-05: first actualDriveR1 content interleave completed under reviewedv2: observed-refuted/exit2, genuineA200losesconfirmedB; bothsyntheticobjects rawBinverified/noresidual, privateauthoritydisabled. S02 five-path candidatef219 cleanindependentreview integrated1dc afterproviderended; rootcheck560green, serialbrowser/proof next. R1safe-contractremedy remainslead-owned; no fabricatedconditional claim or phaseclosure.
 
