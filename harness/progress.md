@@ -2,14 +2,13 @@
 
 ## Next
 
-- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns `codex/close-phase-2` under explicit owner handoff. Main `d12c55e` / `2026-10-05-contracts-2` was adopted at `143ae2b`; refresh main and live ACTIVE before mutations.
-- O1/O2 evidence is retained at the immutable adoption SHA. Full capability rows: four missing, twelve partial. All R1–R4 runtime probes are NOT RUN; specifications and proposed fixtures do not certify provider behavior or O3 acceptance.
-- Current count: 208/213. Journal acknowledgement, pile metadata/context prechecks, local run-order guards and legacy task byte preservation are independently reviewed and proof-closed. Latest closed source is `cb73061`, request proof `16ab28c`; check481 and seventeen request cases passed.
-- Leading-dot `28d2ce2` and revised Timeline `6305ca9` are integrated-open. Earlier complete suites cover source28d2ce2 (196 passed/56 intentional skips each); final combined affected suites and manual evaluation remain pending. Chrome evaluation at `d086d6c` was NOT RUN. IAB has since been recovered through actual tab creation/closure; no app evaluation has yet occurred there.
-- Sole isolated implementer is read-only/released after `runner-request-preflight` closure `16ab28c`. Coordinator prepares combined exact-SHA check/demo/fake/PWA gates and independent global review. Independent live evaluator has no browser in its session and reports a locked Mac; availability query pending. Root supplemental IAB checks will remain separately labeled.
-- After the independent unit fixes, coordinator runs combined check/demo/fake/PWA gates, prepares a frozen production build and grants serialized IAB evaluation using the retained replay plan/fixtures. Fix new findings before closure. Keep actual uncovered controls/journeys explicit.
-- Protected ownership requires the lead's format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline reading and upload-reload policy remain owner decisions. Broader O1 capability gaps do not disappear behind the harness count.
-- Stabilize and independently review contracts before O4–O7 implementation. O8/full P2 acceptance remains open; no P3/P4, merge, push or deployment is authorized by these fixes.
+- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns `codex/close-phase-2`. Main d12c55e / contracts-2 adopted at143ae2b; refresh main and ACTIVE before mutations.
+- O1 full rows remain four missing/twelve partial. O2 specifications complete; all real R1–R4 runtime probes NOT RUN. No O3 adoption or P2 acceptance from proposals/counts.
+- Count208/214: seven bounded foundations independently reviewed and proof-closed. Source cb73061, latest proof16ab28c. Combined e15 check481/51 and demo198/56 intentional skips passed; fake/PWA/native NOT RUN there after the new Important isolation defect.
+- `session-folder-isolation` reproduced on adoption143 and e15: reused Sources switches session/root to B but reads/writes A. Evidence qa14. Named verify planned; reviewer prepares bounded prerequisite, then root assigns sole implementer with exact base/files. Preserve both roots' outboxes and guard deferred work; no rollback of issued I/O implied. Worker remains read-only until dispatch.
+- Leading-dot28d2ce2 and revised Timeline6305ca9 remain integrated-open; final combined gates and actual phone/desktop checks pending. Independent evaluator lacks browser surfaces and reports locked Mac; owner availability query pending. Root IAB available for supplemental checks only, no independent certificate.
+- After isolation fix/review/closure, freeze a fresh target for check/demo/fake/PWA, independent global review and serialized prepared evaluation. Retained replay plan/fixtures do not certify results.
+- Protected ownership needs lead format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline/reload policies and synthetic provider resources remain owner inputs. Continue independent authorized work; no P3/P4, product merge, push or deployment.
 
 ## Log
 
@@ -284,3 +283,5 @@
 - 2026-10-05: runner-request-preflight passes — fix(runner): prove malformed request history preserves pending data
 
 - 2026-10-05: request candidate00a17ff reviewed/integratedcb73061/proof-closed16ab28c, check481/17 cases after13 actual reds. Release sole writer and prepare frozen combined verification;208/213, P2 remains open.
+
+- 2026-10-05: combined e15 checkpoint check481/demo198 with56 intentional skips passed. Independent review exposed baseline reused-Sources account scope defect; actual public synthetic reproduction at143/e15 retained qa14, registered session-folder-isolation (planned verify), count208/214. Final fake/PWA/native deferred to corrected fresh target; sole worker remains read-only pending bounded prerequisite.

@@ -2642,5 +2642,20 @@
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"malformed request history stops a tidy-up before effects\"",
     "passes": true,
     "note": "Independent malformed request effects reproduced6305ca9. Candidate00a17ff independently reviewed, integratedcb73061 and proof-closed16ab28c with real assertion-red/check481/namedverify17. Existing v1 guard before first direct runner mutation; byte/domain preservation and versioned repair/retry proven. Raw evidence2026-10-05-qa13. Service telemetry, mid-run corruption, report durability and atomic recovery remain unproven."
+  },
+  {
+    "id": "session-folder-isolation",
+    "task": "qa-14",
+    "category": "bug",
+    "what": "Reused Sources never reveal or mutate the previous account folder after a session scope change.",
+    "steps": [
+      "Cache account A tree and note through makeLiveSources over two public synthetic Drive roots.",
+      "Sign out, then sign in as B with the same note path and different content. Current session says B, but currently reads A and creates a note and saved journal under A.",
+      "After the fix reads, writes, pending work, run hydration and recovery stay in their originating account/folder; no deferred continuation reaches B with A intent.",
+      "Keep folder-keyed durable and volatile journal outboxes at sign-out; refuse stale operations readably, then allow fresh B work and safe same-folder return."
+    ],
+    "verify": "pnpm vitest run src/data/live/live.test.ts -t \"reused sources isolate account and folder changes\"",
+    "passes": false,
+    "note": "Actual public synthetic observation at 143ae2b and e15d13c, retained in evidence/2026-10-05-qa14. First content assertion fails; wrong-folder creation/journal are actual snapshots. Named regression planned, not executed. Existing wire/current C01 isolation requirement; no real OAuth/provider or rollback claim. Independent prerequisite precedes a bounded assignment."
   }
 ]
