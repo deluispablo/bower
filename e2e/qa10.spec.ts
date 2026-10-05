@@ -28,6 +28,27 @@ test('a situation opened by its address starts clean: no earlier tabs, main fold
 
 const notBody = (page: Page) => expect.poll(() => page.evaluate(() => document.activeElement !== document.body && !!document.activeElement));
 
+test('the phone page menu button is as clear as Back', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'phone page controls');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
+  const more = page.getByRole('button', { name: 'More for Flat 3, 12 Larkspur Lane', exact: true });
+  await expect(more).toBeVisible();
+  const back = page.getByRole('button', { name: 'Back', exact: true });
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+    expect(await more.evaluate((el) => getComputedStyle(el).color)).toBe(await back.evaluate((el) => getComputedStyle(el).color));
+    // Tiny dotted paths need enough ink to remain visible on a phone screen.
+    const diameter = await more.locator('svg').evaluate((svg) => Number(getComputedStyle(svg).strokeWidth.replace('px', '')) * svg.getBoundingClientRect().width / 24);
+    expect(diameter, `${theme}: each menu dot is at least 2.4 CSS pixels wide`).toBeGreaterThanOrEqual(2.4);
+    const target = await more.boundingBox();
+    expect(target?.width).toBeGreaterThanOrEqual(44);
+    expect(target?.height).toBeGreaterThanOrEqual(44);
+  }
+  await more.click();
+  await expect(page.getByRole('dialog', { name: 'Flat 3, 12 Larkspur Lane', exact: true })).toBeVisible();
+});
+
 test('the keyboard stays in the page after closing, answering, removing or saying no', async ({ page, isMobile }) => {
   test.skip(isMobile, 'keyboard use');
   await open(page, '/');

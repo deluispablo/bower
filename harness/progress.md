@@ -201,3 +201,4 @@
 - 2026-10-05: small-wording passes — fix(app): words agree: one way to say a run stopped, Press in the tour, and a rename says so
 - 2026-10-05: offline-footer passes — fix(app): offline, the footer says your changes wait here
 - 2026-10-05: qa-10 closed (185/185). `docs/harness/HANDOFF.md` written: the state, the plan to close phase 2 and start phase 3, how to run a round, the traps of this machine.
+- 2026-10-05: phone-more-faint passes — fix(app): the phone page menu has clear dots and a full touch target

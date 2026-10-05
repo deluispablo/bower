@@ -669,8 +669,8 @@ export function NodeMenuButton({ node }: { node: TreeNode }) {
   const name = node.type === 'folder' ? node.name : displayName(node.name);
   return (
     <>
-      <IconButton label={`More for ${name}`} onClick={() => setOpen(true)}>
-        <Icon name="more" />
+      <IconButton className={s.pageMore} label={`More for ${name}`} onClick={() => setOpen(true)}>
+        <Icon name="more" stroke={3} />
       </IconButton>
       <Sheet open={open} onOpenChange={setOpen} title={name} description={parentOf(node.path).split('/').join(' / ') || 'Your Bower folder'}>
         {open && <NodeSheetActions node={node} done={() => setOpen(false)} />}
