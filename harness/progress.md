@@ -4,7 +4,7 @@
 
 - Coordinator `p2-orchestrator-2026-10-05-01a10bbd` resumes codex/close-phase-2 under the owner's explicit handoff; adopts main d12c55e / contracts-2 at a clean exclusive checkpoint. Read live ACTIVE for assignments.
 - O1 audit and O2 bounded R1–R4 specifications are complete at 143ae2b; read docs/harness/2026-10-05-p2-o1-audit.md and 2026-10-05-p2-r-probe-specs.md. Four rows missing, twelve partial; all real probes NOT RUN. Reuse proof evidence; reproduce historical concerns before registering gaps.
-- 201/210 registered entries pass after five current O1 reproductions; historic baseline was 201/205. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
+- 202/210 registered entries pass after five current O1 reproductions; historic baseline was 201/205. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
 - Stabilize contracts before O4–O7 dependent implementation. Finish full frozen evaluation, gates and O8 dossier before owner phase acceptance. P2 is open; P3/P4 do not start.
 - Offline reading and upload-reload policy require specific owner decisions. Real-provider premises require authorized synthetic observations, not fake guarantees. Browser gates and restores remain serialized.
 
@@ -259,3 +259,5 @@
 
 - 2026-10-05: O1/O2 delivered at 143ae2b and persisted; reproduced premature done after final report-save failure and registered its planned regression. Journal candidate 244be68 (400 tests) awaits independent review; no acceptance row or service probe declared passed.
 - 2026-10-05: journal-ack-content passes — fix(journal): prove complete acknowledgement before forgetting changes
+
+- 2026-10-05: journal-ack-content independently reviewed clean and integrated 7c95fd8, then assertion-red/check/verify closure 7869489; assign pile-edit-still-seen in the isolated worker. P2 remains open.
