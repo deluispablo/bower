@@ -2470,7 +2470,7 @@
       "It stays seen, including after a fresh folder listing."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"ticking your own task keeps its note seen\"",
-    "passes": false,
+    "passes": true,
     "note": "Coverage-only: keepSeen already handles the person’s task write. Close only after observing the regression fail with that preservation temporarily removed, then restoring the implementation."
   }
 ]

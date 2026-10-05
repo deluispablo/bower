@@ -560,3 +560,16 @@ describe('things that arrive late', () => {
     expect(await drive.readText(id)).toBe('written on another device');
   });
 });
+
+it('ticking your own task keeps its note seen', async () => {
+  const id = await idOf(PASSPORT);
+  await drive.update(id, { appProperties: { bowerNew: '1' } });
+  await vault.refresh();
+  expect(findNode(await vault.tree(), PASSPORT)?.isNew).toBe(true);
+  await vault.markSeen(PASSPORT);
+  expect(findNode(await vault.tree(), PASSPORT)?.isNew).toBeFalsy();
+  await vault.toggleTask(PASSPORT, 4);
+  expect(findNode(await vault.tree(), PASSPORT)?.isNew).toBeFalsy();
+  await vault.refresh();
+  expect(findNode(await vault.tree(), PASSPORT)?.isNew).toBeFalsy();
+});

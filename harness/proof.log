@@ -195,3 +195,4 @@ journal-storage-failure	e05044ce847b94d9	2026-10-05	red
 journal-separate-clients	3ea15399a71a8adf	2026-10-05	red
 home-person	0c1fe6e3f3032bbf	2026-10-05	red
 worker-response-shapes	f75c0c683e4a4233	2026-10-05	red (fixed in 0e978af)
+task-keeps-seen	d4fc7ad086ea1e62	2026-10-05	known-green: Coverage-only as precommitted note: the named test assertion failed with task-only keepSeen temporarily disabled, then production was restored exactly; evidence /private/tmp/bower-task-keeps-seen-red.log.
