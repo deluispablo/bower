@@ -1,0 +1,638 @@
+{
+  "status": "PROPOSED EXPECTATIONS ONLY; NOT RUN; not an adopted schema",
+  "target": "907c9f806e4e6c6b33e595c33232e27257913fdf",
+  "fixtures": [
+    {
+      "id": "legacy-canonical",
+      "input_file": "legacy-canonical.md",
+      "expected_status": "legacy",
+      "expected_personal_task_labels": [
+        "Personal task"
+      ],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "Preserve contiguous Current state bullets; unheaded personal paragraph and My notes remain personal.",
+      "personal_utf8_span": [
+        80,
+        137
+      ],
+      "personal_raw": "My paragraph café 🪶.\n## My notes\n- [ ] Personal task\n",
+      "input_sha256": "39021172d692f97f9166de8530faae9ea98e1f5af5bd344650b18f1cf1e2afed",
+      "input_utf8_bytes": 180,
+      "toggle_expected_file": "legacy-canonical.toggle-expected.md",
+      "toggle_expected_sha256": "33996c11b6570d0b441d97ae36da67a5bbe7425e83d96e2dad8fb943ac4495c5",
+      "provenance_original_input_sha256": "39021172d692f97f9166de8530faae9ea98e1f5af5bd344650b18f1cf1e2afed",
+      "toggle_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": false,
+        "requested_done": true
+      },
+      "toggle_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": true,
+        "output_file": "legacy-canonical.toggle-expected.md"
+      },
+      "toggle_back_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": true,
+        "requested_done": false
+      },
+      "toggle_back_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": false,
+        "output_sha256": "39021172d692f97f9166de8530faae9ea98e1f5af5bd344650b18f1cf1e2afed"
+      },
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "legacy-no-frontmatter",
+      "input_file": "legacy-no-frontmatter.md",
+      "expected_status": "plain",
+      "expected_personal_task_labels": [
+        "Personal task"
+      ],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "All text personal; headings never reserve ownership.",
+      "personal_utf8_span": [
+        0,
+        72
+      ],
+      "personal_raw": "# Personal\n## Current state\n- [ ] Personal task\n## Timeline\n## My notes\n",
+      "input_sha256": "a0bba6471155cf983004fda2272c6a6e4ce1b30f83d830354a22f0beea0d9c87",
+      "input_utf8_bytes": 72,
+      "toggle_expected_file": "legacy-no-frontmatter.toggle-expected.md",
+      "toggle_expected_sha256": "2ffe5d0ae902eae66c07c96defcc2ed01aec4bf16a3ae7690bd4a49fc81538b0",
+      "provenance_original_input_sha256": "a0bba6471155cf983004fda2272c6a6e4ce1b30f83d830354a22f0beea0d9c87",
+      "toggle_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": false,
+        "requested_done": true
+      },
+      "toggle_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": true,
+        "output_file": "legacy-no-frontmatter.toggle-expected.md"
+      },
+      "toggle_back_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": true,
+        "requested_done": false
+      },
+      "toggle_back_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": false,
+        "output_sha256": "a0bba6471155cf983004fda2272c6a6e4ce1b30f83d830354a22f0beea0d9c87"
+      },
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "legacy-rich-ambiguous",
+      "input_file": "legacy-rich-ambiguous.md",
+      "expected_status": "legacy",
+      "expected_personal_task_labels": [
+        "Disputed task",
+        "Personal task"
+      ],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "Same bytes can reflect different intent; no automatic reassignment. Explicit boundary confirmation is required for rich conversion.",
+      "personal_utf8_span": [
+        62,
+        144
+      ],
+      "personal_raw": "Protected-looking paragraph.\n\n- [ ] Disputed task\n## My notes\n- [ ] Personal task\n",
+      "input_sha256": "1393c7e707f51e212cd480a473d0d536c67858d77f36dbe44d917fa90d860ea9",
+      "input_utf8_bytes": 144,
+      "toggle_expected_file": "legacy-rich-ambiguous.toggle-expected.md",
+      "toggle_expected_sha256": "951d44b6fe2582312deaa98c6b881254eed0eaffecd10fe8d8f4840007ff8a47",
+      "provenance_original_input_sha256": "1393c7e707f51e212cd480a473d0d536c67858d77f36dbe44d917fa90d860ea9",
+      "toggle_request": {
+        "index": 1,
+        "label": "Personal task",
+        "previous_done": false,
+        "requested_done": true
+      },
+      "toggle_expected_result": {
+        "index": 1,
+        "label": "Personal task",
+        "done": true,
+        "output_file": "legacy-rich-ambiguous.toggle-expected.md"
+      },
+      "toggle_back_request": {
+        "index": 1,
+        "label": "Personal task",
+        "previous_done": true,
+        "requested_done": false
+      },
+      "toggle_back_expected_result": {
+        "index": 1,
+        "label": "Personal task",
+        "done": false,
+        "output_sha256": "1393c7e707f51e212cd480a473d0d536c67858d77f36dbe44d917fa90d860ea9"
+      },
+      "recovery_kind": "ownership-intent-confirmation"
+    },
+    {
+      "id": "plain-marker-looking",
+      "input_file": "plain-marker-looking.md",
+      "expected_status": "plain",
+      "expected_personal_task_labels": [
+        "Personal task"
+      ],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "No frontmatter means no ownership opt-in; marker-like text remains personal.",
+      "personal_utf8_span": [
+        0,
+        100
+      ],
+      "personal_raw": "<!-- bower:ownership/2 begin current -->\n- [ ] Personal task\n<!-- bower:ownership/2 end current -->\n",
+      "input_sha256": "5d44c2f17e37be5809b80e7ab33f5575d2891f59e5520d64fbf048f7c47ea114",
+      "input_utf8_bytes": 100,
+      "toggle_expected_file": "plain-marker-looking.toggle-expected.md",
+      "toggle_expected_sha256": "63aed45ae158761d7315e9255e74bc516f1ecbda9d9ce0fa4ea7d30f48b80244",
+      "provenance_original_input_sha256": "5d44c2f17e37be5809b80e7ab33f5575d2891f59e5520d64fbf048f7c47ea114",
+      "toggle_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": false,
+        "requested_done": true
+      },
+      "toggle_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": true,
+        "output_file": "plain-marker-looking.toggle-expected.md"
+      },
+      "toggle_back_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": true,
+        "requested_done": false
+      },
+      "toggle_back_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": false,
+        "output_sha256": "5d44c2f17e37be5809b80e7ab33f5575d2891f59e5520d64fbf048f7c47ea114"
+      },
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "v2-rich",
+      "input_file": "v2-rich.md",
+      "expected_status": "v2",
+      "expected_personal_task_labels": [
+        "Personal task"
+      ],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "All protected rich state remains raw; Personal task index0.",
+      "personal_utf8_span": [
+        294,
+        351
+      ],
+      "personal_raw": "My paragraph café 🪶.\n## My notes\n- [ ] Personal task\n",
+      "input_sha256": "fea64b5696902b0fadada7319d530f5ae213b62ca11014da99311d2ba1c6a626",
+      "input_utf8_bytes": 640,
+      "toggle_expected_file": "v2-rich.toggle-expected.md",
+      "toggle_expected_sha256": "77fd65138006c406620ff564ebee94d484ac2f383f44aac4195b950015de6226",
+      "expected_payload_utf8_spans": {
+        "current": [
+          112,
+          213
+        ],
+        "personal": [
+          294,
+          351
+        ],
+        "timeline": [
+          433,
+          475
+        ],
+        "bower-note": [
+          559,
+          598
+        ]
+      },
+      "provenance_original_input_sha256": "fea64b5696902b0fadada7319d530f5ae213b62ca11014da99311d2ba1c6a626",
+      "toggle_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": false,
+        "requested_done": true
+      },
+      "toggle_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": true,
+        "output_file": "v2-rich.toggle-expected.md"
+      },
+      "toggle_back_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": true,
+        "requested_done": false
+      },
+      "toggle_back_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": false,
+        "output_sha256": "fea64b5696902b0fadada7319d530f5ae213b62ca11014da99311d2ba1c6a626"
+      },
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "v2-crlf",
+      "input_file": "v2-crlf.md",
+      "expected_status": "v2",
+      "expected_personal_task_labels": [
+        "Personal task"
+      ],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "One ASCII checkbox byte only; CRLF/Unicode preserved.",
+      "personal_utf8_span": [
+        310,
+        370
+      ],
+      "personal_raw": "My paragraph café 🪶.\r\n## My notes\r\n- [ ] Personal task\r\n",
+      "input_sha256": "7acec4dafb190e2baba5bf2b7d4b10c088da6cc62ff3fa1bbb04c050b06e37c6",
+      "input_utf8_bytes": 668,
+      "toggle_expected_file": "v2-crlf.toggle-expected.md",
+      "toggle_expected_sha256": "7f09c3917794e53451541856d8626b15a73cd1ee4dc93a2ba5b348494085ee65",
+      "expected_payload_utf8_spans": {
+        "current": [
+          119,
+          227
+        ],
+        "personal": [
+          310,
+          370
+        ],
+        "timeline": [
+          454,
+          498
+        ],
+        "bower-note": [
+          584,
+          625
+        ]
+      },
+      "provenance_original_input_sha256": "7acec4dafb190e2baba5bf2b7d4b10c088da6cc62ff3fa1bbb04c050b06e37c6",
+      "toggle_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": false,
+        "requested_done": true
+      },
+      "toggle_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": true,
+        "output_file": "v2-crlf.toggle-expected.md"
+      },
+      "toggle_back_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": true,
+        "requested_done": false
+      },
+      "toggle_back_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": false,
+        "output_sha256": "7acec4dafb190e2baba5bf2b7d4b10c088da6cc62ff3fa1bbb04c050b06e37c6"
+      },
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "v2-fence-escape",
+      "input_file": "v2-fence-escape.md",
+      "expected_status": "v2",
+      "expected_personal_task_labels": [
+        "Personal task"
+      ],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "Marker/task example inside fence does not delimit or index; backslash-escaped marker stays literal.",
+      "personal_utf8_span": [
+        294,
+        432
+      ],
+      "personal_raw": "```markdown\n<!-- bower:ownership/2 end personal -->\n- [ ] Example only\n```\n\\<!-- bower:ownership/2 begin personal -->\n- [ ] Personal task\n",
+      "input_sha256": "f9689d09d23bed792cd8fa4161c434f0eaea6b3b6c9f2c631dc0461580aaec1a",
+      "input_utf8_bytes": 640,
+      "toggle_expected_file": "v2-fence-escape.toggle-expected.md",
+      "toggle_expected_sha256": "16356bad03c06600113dc48e9508db7a8499f23943f16f9c1131b6a7ded23a9f",
+      "expected_payload_utf8_spans": {
+        "current": [
+          112,
+          213
+        ],
+        "personal": [
+          294,
+          432
+        ],
+        "timeline": [
+          514,
+          514
+        ],
+        "bower-note": [
+          598,
+          598
+        ]
+      },
+      "provenance_original_input_sha256": "f9689d09d23bed792cd8fa4161c434f0eaea6b3b6c9f2c631dc0461580aaec1a",
+      "toggle_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": false,
+        "requested_done": true
+      },
+      "toggle_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": true,
+        "output_file": "v2-fence-escape.toggle-expected.md"
+      },
+      "toggle_back_request": {
+        "index": 0,
+        "label": "Personal task",
+        "previous_done": true,
+        "requested_done": false
+      },
+      "toggle_back_expected_result": {
+        "index": 0,
+        "label": "Personal task",
+        "done": false,
+        "output_sha256": "f9689d09d23bed792cd8fa4161c434f0eaea6b3b6c9f2c631dc0461580aaec1a"
+      },
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "v2-empty-personal",
+      "input_file": "v2-empty-personal.md",
+      "expected_status": "v2",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "proposed checkbox/owned-span only; byte claim conditional on future raw adapter",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "Empty personal span start=end after begin-personal line; no editable tasks.",
+      "input_sha256": "7792aa583e97f2670c3350ca8a64dc26cb04375f8a0759703b48c7cd37636520",
+      "input_utf8_bytes": 502,
+      "expected_payload_utf8_spans": {
+        "current": [
+          112,
+          213
+        ],
+        "personal": [
+          294,
+          294
+        ],
+        "timeline": [
+          376,
+          376
+        ],
+        "bower-note": [
+          460,
+          460
+        ]
+      },
+      "provenance_original_input_sha256": "7792aa583e97f2670c3350ca8a64dc26cb04375f8a0759703b48c7cd37636520",
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "invalid-missing-end",
+      "input_file": "invalid-missing-end.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "59f19c5409092fbdd6f026d930a014cee149f02e5b244bd2ab8fd5241471fc91",
+      "input_utf8_bytes": 601,
+      "provenance_original_input_sha256": "59f19c5409092fbdd6f026d930a014cee149f02e5b244bd2ab8fd5241471fc91",
+      "recovery_kind": "damaged-boundary",
+      "recovery_expected": "Known ownership/2 framing is damaged or violates its grammar. Show exact source/invalid boundary; require explicit preview/confirmation of repaired ownership, source-version checks and future raw adapter before content repair; no guessed write. Metadata/Bin operations remain available."
+    },
+    {
+      "id": "invalid-duplicate-personal",
+      "input_file": "invalid-duplicate-personal.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "9a7c950de5af63cfcbfbe0e6e6acc6bd1fd56eb4545400a4ab29f6aa908d158c",
+      "input_utf8_bytes": 779,
+      "provenance_original_input_sha256": "9a7c950de5af63cfcbfbe0e6e6acc6bd1fd56eb4545400a4ab29f6aa908d158c",
+      "recovery_kind": "damaged-boundary",
+      "recovery_expected": "Known ownership/2 framing is damaged or violates its grammar. Show exact source/invalid boundary; require explicit preview/confirmation of repaired ownership, source-version checks and future raw adapter before content repair; no guessed write. Metadata/Bin operations remain available."
+    },
+    {
+      "id": "invalid-unknown-version",
+      "input_file": "invalid-unknown-version.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "83a0b37328811eec7956473a237a32a32ca76fc9f351857d82dd0c51089c62d4",
+      "input_utf8_bytes": 640,
+      "provenance_original_input_sha256": "83a0b37328811eec7956473a237a32a32ca76fc9f351857d82dd0c51089c62d4",
+      "recovery_kind": "unsupported-version",
+      "recovery_expected": "Preserve bytes; use a reader that supports the declared version or copy/export unchanged source. Never guess boundaries, relabel the version or auto-convert a future format. Independently guarded metadata/Bin operations remain available."
+    },
+    {
+      "id": "invalid-duplicate-version",
+      "input_file": "invalid-duplicate-version.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "321a60279b3bde5791d224c98401ec1b6510c7b77a9d30ea47791b5bc969b5cf",
+      "input_utf8_bytes": 666,
+      "provenance_original_input_sha256": "321a60279b3bde5791d224c98401ec1b6510c7b77a9d30ea47791b5bc969b5cf",
+      "recovery_kind": "damaged-boundary",
+      "recovery_expected": "Known ownership/2 framing is damaged or violates its grammar. Show exact source/invalid boundary; require explicit preview/confirmation of repaired ownership, source-version checks and future raw adapter before content repair; no guessed write. Metadata/Bin operations remain available."
+    },
+    {
+      "id": "invalid-unknown-block",
+      "input_file": "invalid-unknown-block.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "636e23f80cd1d28f9acc4ba6c248566e5a980d10657ba31e964052987e0bb729",
+      "input_utf8_bytes": 636,
+      "provenance_original_input_sha256": "636e23f80cd1d28f9acc4ba6c248566e5a980d10657ba31e964052987e0bb729",
+      "recovery_kind": "damaged-boundary",
+      "recovery_expected": "Known ownership/2 framing is damaged or violates its grammar. Show exact source/invalid boundary; require explicit preview/confirmation of repaired ownership, source-version checks and future raw adapter before content repair; no guessed write. Metadata/Bin operations remain available."
+    },
+    {
+      "id": "invalid-reversed",
+      "input_file": "invalid-reversed.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "0696de28b689d67962601ca29b0fdf58fb0adc31727e6285242c0f045a03338f",
+      "input_utf8_bytes": 638,
+      "provenance_original_input_sha256": "0696de28b689d67962601ca29b0fdf58fb0adc31727e6285242c0f045a03338f",
+      "recovery_kind": "damaged-boundary",
+      "recovery_expected": "Known ownership/2 framing is damaged or violates its grammar. Show exact source/invalid boundary; require explicit preview/confirmation of repaired ownership, source-version checks and future raw adapter before content repair; no guessed write. Metadata/Bin operations remain available."
+    },
+    {
+      "id": "invalid-unclosed-fence",
+      "input_file": "invalid-unclosed-fence.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "25e6f975293761f0060257276b4aa76199e4901271b9e6b64abaeae61ad61a96",
+      "input_utf8_bytes": 644,
+      "provenance_original_input_sha256": "25e6f975293761f0060257276b4aa76199e4901271b9e6b64abaeae61ad61a96",
+      "recovery_kind": "damaged-boundary",
+      "recovery_expected": "Known ownership/2 framing is damaged or violates its grammar. Show exact source/invalid boundary; require explicit preview/confirmation of repaired ownership, source-version checks and future raw adapter before content repair; no guessed write. Metadata/Bin operations remain available."
+    },
+    {
+      "id": "invalid-outside-content",
+      "input_file": "invalid-outside-content.md",
+      "expected_status": "invalid",
+      "expected_personal_task_labels": [],
+      "expected_writes": {
+        "content": "refused: no trusted owner spans",
+        "metadata": "independent move/rename/Bin/restore permitted if their existing authorization/name/place/version/lifecycle guards pass; never rewrite content to achieve them"
+      },
+      "note": "",
+      "input_sha256": "da89b101a251c595b083178e14489bebc5531444cf59ffc44ea27679bacfe9ed",
+      "input_utf8_bytes": 661,
+      "provenance_original_input_sha256": "da89b101a251c595b083178e14489bebc5531444cf59ffc44ea27679bacfe9ed",
+      "recovery_kind": "damaged-boundary",
+      "recovery_expected": "Known ownership/2 framing is damaged or violates its grammar. Show exact source/invalid boundary; require explicit preview/confirmation of repaired ownership, source-version checks and future raw adapter before content repair; no guessed write. Metadata/Bin operations remain available."
+    },
+    {
+      "id": "v2-bom",
+      "input_file": "v2-bom.md",
+      "input_sha256": "0bb4c06e4b1fd92f578e2fab548efcfa64a86c4ff4d47e76ebccf2d672c0900c",
+      "input_utf8_bytes": 643,
+      "expected_status": "v2",
+      "expected_writes": {
+        "content": "trusted-span-only conditional on future raw adapter",
+        "metadata": "independently validated operations remain available"
+      },
+      "note": "BOM retained by future raw adapter; no such guarantee from current Response.text",
+      "recovery_kind": "none-required"
+    },
+    {
+      "id": "invalid-utf8",
+      "input_file": "invalid-utf8.md",
+      "input_sha256": "504a4d22d44e0e16338573defbddb6ee26e61da363402a28a109450f573a7815",
+      "input_utf8_bytes": 641,
+      "expected_status": "invalid",
+      "expected_writes": {
+        "content": "refused",
+        "metadata": "independently validated operations remain available"
+      },
+      "note": "Future raw adapter detects invalid byte; current text decoding may replace it, losing original provenance",
+      "recovery_kind": "invalid-encoding",
+      "recovery_expected": "Preserve actual undecoded bytes via future adapter; offer explicit source repair/copy, never treat replacement decoded text as original bytes. Metadata/Bin operations remain available."
+    }
+  ],
+  "proposed_recovery_cases": [
+    {
+      "input": "legacy-rich-ambiguous.md",
+      "explicit_confirmed_current_raw": "## Current state\nProtected-looking paragraph.\n\n- [ ] Disputed task\n",
+      "explicit_confirmed_personal_raw": "## My notes\n- [ ] Personal task\n",
+      "expected_output": "recovery-confirmed-expected.md",
+      "expected_tasks": [
+        "Personal task"
+      ],
+      "backup_bytes": "identical to legacy-rich-ambiguous.md",
+      "activation": "requires enforceable compatibility gate; otherwise no write"
+    },
+    {
+      "input": "legacy-rich-ambiguous.md",
+      "action": "cancel preview",
+      "expected_output": "recovery-cancelled-expected.md",
+      "expected_tasks": [
+        "Disputed task",
+        "Personal task"
+      ]
+    },
+    {
+      "input": "legacy-rich-ambiguous.md",
+      "intervening_source": "recovery-external-change-input.md",
+      "action": "confirm old preview",
+      "expected_writes": "none; preserve current external bytes; rebuild preview"
+    }
+  ],
+  "revision": "Final lead-ready replacement proposal; revised packet unchanged; no runtime evidence/adoption",
+  "raw_content_capability": "Future readBytes/writeBytes/createBytes adapter approval and observed byte/version capability required; current readText string cannot certify BOM/invalid UTF-8",
+  "metadata_operation_fixture_files": [
+    "invalid-missing-end.metadata-operations.json",
+    "invalid-unknown-version.metadata-operations.json"
+  ],
+  "original_manifest_sha256": "e7119998d5dded8acca2ee9f94925ecb1f6a86f8a391e23880003d174a54693d",
+  "reference": {
+    "planning": "2026-10-05-contracts-2",
+    "phase": "P2",
+    "package": "O3",
+    "base": "fe9a965d478fbe35b7f21eaa84d500cf590cf362",
+    "production_source": "44ee162abfeb77ec168d18b5e66cd24a43619915"
+  },
+  "revised_manifest_sha256": "c93f15e3516eedfa2f88034b44c5468ace8c047e863e0091839bdfbc6d61131d",
+  "consistency_inspection": {
+    "input_examples": 18,
+    "toggle_expected_examples": 7,
+    "metadata_operations_examples": 2,
+    "all_recorded_input_sizes_and_hashes_match": true,
+    "toggle_expected_hashes_match": true,
+    "each_expected_toggle_changes_one_space_to_x_byte": true,
+    "metadata_base64_matches_inputs": true,
+    "scope": "Private file identity/delta inspection only; no app/parser/writer/runtime/test execution"
+  }
+}

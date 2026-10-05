@@ -2,12 +2,12 @@
 
 ## Next
 
-- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd remains sole integration writer. Current209/214, source44ee162/isolation proof20864d4.
-- Frozenfe9 naming check517/demo198/fake198/PWA4 passed; root supplemental phone390x844/desktop1440x900 fake/demo complete. Independent identical-source code review clean; independent complete UI evaluation still NOT RUN. Evidence2026-10-05-names-current-checkpoint.md. Freeze released, own tabs/preview cleaned.
-- Run serial naming done.sh inverse-fix proofs for create-leading-dot28d2ce2 and timeline-source-names6305ca9; no closure until real assertion red/check/verify succeeds.
-- Owner offline cached-read-only and retained-bytes/verified-reselection decisions approved; see2026-10-05-product-policy-decisions.md. Existing project/account/repo/origin privately resolved; actual login/consent/client export and runtimeR1–R4 still pending. No generic policy/resource question.
-- Review-only final ownership proposal ready for lead grammar/raw adapter/activation decisions. Sole scratchGoogle-v2 preparer reworks expiry/session/approval findings with test-first; independent reviewer then inspects immutable replacement. No repo worker writer or parallel browser.
-- After names proofs: current-compatible fixtures/corpus and approved-policy entries; accepted O3 contracts before admitted recovery/persisted semantic simulations/Undo/preparation/measured quality/full O8 dossier. All C01–C16 obligations remain; no P3/P4, main product merge/push/deploy or owner phase acceptance.
+- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd sole integration writer. Current211/214 atf739b5c; production44ee162 unchanged.
+- Both naming entries proof-closed48e6544/f739b5c through real inverse-fix red/check/unchanged verify. Combined check517/demo198/fake198/PWA4 and supplemental root phone/desktop fake/demo retained; independent complete UI evaluation NOT RUN. Own tabs/preview cleaned; no browser reservation.
+- D01/D02 approved. Sole worker reproduces Add missing-byte draft loss atf739b5c in isolated checkout; root registers and assigns minimal no-drop fix only after actual red. Durable retention/hash reselection/shared readiness/offline boot remain separate obligations. Historical omission expectations need explicit policy migration.
+- Google v3 local setup reviewed clean,30 local tests/seven syntax and root actual synthetic CSP red/control. Existing callback already registered; no external change. Original private existing-client export path and interactive consent missing; actual R1–R4 pending. No rotation/revocation or generic repeated policy/resource approval.
+- Final rich-ownership proposal/review/fixtures archived for lead grammar/raw adapter/activation decisions; no implementation/adoption from proposed fixtures. Current-compatible fixtures/corpus and approved-policy work can continue independently.
+- O1 four missing/twelve partial capabilities remain. Accepted O3 compatibility before admitted recovery, persisted semantic simulations/Undo, preparation/measured corpus and complete O8 dossier. P2 open, no P3/P4/main product merge/push/deploy/spend/owner acceptance.
 
 ## Log
 
@@ -307,3 +307,5 @@
 - 2026-10-05: verified actual owner instruction permits reusing existing bower-home/Google Cloud project for isolated probes; setup preparer updated, no external change. Project ID/access pending, policies unanswered. One evaluator inventory remains empty: actual independent UI NOTRUN retained, root supplemental only.
 - 2026-10-05: create-leading-dot passes — fix(names): prove leading-dot refusal and dotted creation recovery
 - 2026-10-05: timeline-source-names passes — fix(names): prove plain Timeline labels preserve aliases and destinations
+
+- 2026-10-05: current naming closure logs archived;211/214/tenth bounded foundation. Public Google-v3/ownership-final proposals, independent reviews and approved-policy slices archived with identities; root inventory/CSP cleanup complete, real provider probes NOT RUN. Next isolated Add reproduction, no-loss requirement not yet claimed implemented.

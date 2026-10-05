@@ -1,0 +1,100 @@
+{
+  "status": "PROPOSED EXPECTATIONS ONLY; NOT RUN",
+  "input_file": "invalid-missing-end.md",
+  "content_base64": "LS0tCmJvd2VyX2Zvcm1hdDogb3duZXJzaGlwLzIKc3VtbWFyeTogU3ludGhldGljIGdhcmRlbgpieTogYm93ZXIKLS0tCgo8IS0tIGJvd2VyOm93bmVyc2hpcC8yIGJlZ2luIGN1cnJlbnQgLS0+CiMjIEN1cnJlbnQgc3RhdGUKUHJvdGVjdGVkIHByb3NlLgoKfCBJdGVtIHwgU3RhdGUgfAp8IC0tLSB8IC0tLSB8CnwgUG90IHwgRHJ5IHwKLSBbIF0gUHJvdGVjdGVkIHRhc2sKPCEtLSBib3dlcjpvd25lcnNoaXAvMiBiZWdpbiBwZXJzb25hbCAtLT4KTXkgcGFyYWdyYXBoIGNhZsOpIPCfqrYuCiMjIE15IG5vdGVzCi0gWyBdIFBlcnNvbmFsIHRhc2sKPCEtLSBib3dlcjpvd25lcnNoaXAvMiBlbmQgcGVyc29uYWwgLS0+CjwhLS0gYm93ZXI6b3duZXJzaGlwLzIgYmVnaW4gdGltZWxpbmUgLS0+CiMjIFRpbWVsaW5lCi0gNSBPY3QgwrcgU3ludGhldGljIGhpc3RvcnkuCjwhLS0gYm93ZXI6b3duZXJzaGlwLzIgZW5kIHRpbWVsaW5lIC0tPgo8IS0tIGJvd2VyOm93bmVyc2hpcC8yIGJlZ2luIGJvd2VyLW5vdGUgLS0+CiMjIEJvd2VyJ3Mgbm90ZQpQcm90ZWN0ZWQgZXhwbGFuYXRpb24uCjwhLS0gYm93ZXI6b3duZXJzaGlwLzIgZW5kIGJvd2VyLW5vdGUgLS0+Cg==",
+  "content_sha256": "59f19c5409092fbdd6f026d930a014cee149f02e5b244bd2ab8fd5241471fc91",
+  "before": {
+    "id": "file-note",
+    "name": "Garden.md",
+    "parents": [
+      "folder-resources"
+    ],
+    "trashed": false,
+    "modifiedTime": "2026-10-05T00:00:00.000Z"
+  },
+  "operations": [
+    {
+      "action": "move",
+      "stillAsSeen": {
+        "name": "Garden.md",
+        "parents": [
+          "folder-resources"
+        ]
+      },
+      "target_parent": "folder-archive",
+      "expected_after_fields": {
+        "id": "file-note",
+        "name": "Garden.md",
+        "parents": [
+          "folder-archive"
+        ],
+        "trashed": false
+      },
+      "expected_content_sha256": "59f19c5409092fbdd6f026d930a014cee149f02e5b244bd2ab8fd5241471fc91",
+      "readText_or_writeText_required": false
+    },
+    {
+      "action": "rename after move",
+      "stillAsSeen": {
+        "name": "Garden.md",
+        "parents": [
+          "folder-archive"
+        ]
+      },
+      "target_name": "Garden.2026.md",
+      "expected_after_fields": {
+        "id": "file-note",
+        "name": "Garden.2026.md",
+        "parents": [
+          "folder-archive"
+        ],
+        "trashed": false
+      },
+      "expected_content_sha256": "59f19c5409092fbdd6f026d930a014cee149f02e5b244bd2ab8fd5241471fc91",
+      "readText_or_writeText_required": false
+    },
+    {
+      "action": "Bin after rename",
+      "observed_name": "Garden.2026.md",
+      "observed_parents": [
+        "folder-archive"
+      ],
+      "expected_after_fields": {
+        "id": "file-note",
+        "name": "Garden.2026.md",
+        "parents": [
+          "folder-archive"
+        ],
+        "trashed": true
+      },
+      "expected_content_sha256": "59f19c5409092fbdd6f026d930a014cee149f02e5b244bd2ab8fd5241471fc91",
+      "hard_delete": false,
+      "content_rewrite": false
+    },
+    {
+      "action": "restore from Bin using fresh metadata",
+      "expected_after_fields": {
+        "id": "file-note",
+        "name": "Garden.2026.md",
+        "parents": [
+          "folder-archive"
+        ],
+        "trashed": false
+      },
+      "expected_content_sha256": "59f19c5409092fbdd6f026d930a014cee149f02e5b244bd2ab8fd5241471fc91",
+      "content_rewrite": false
+    },
+    {
+      "action": "task toggle or Timeline append",
+      "expected_content_write": "refused",
+      "expected_current_metadata_preserved": true
+    },
+    {
+      "action": "stale move with external name/place change",
+      "expected_metadata_write": "refused by existing guard",
+      "expected_content_write": "none",
+      "external_metadata_preserved": true
+    }
+  ],
+  "version_note": "Use actual fresh metadata/result versions, never invent a returned modifiedTime or atomic provider guarantee. These are independent metadata operations, not semantic tidy writes."
+}

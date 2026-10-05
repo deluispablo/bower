@@ -16,6 +16,6 @@ New browser tabs did not inherit the prior viewport override: initial desktop ch
 
 Independent evaluator had no usable browser in its own actual inventory. Root evaluation cannot replace independent certification. Full C01–C16 certification remains open. All own tabs closed, viewport reset, own preview stopped and ports5191/5192 confirmed free before source-restoring harness proofs.
 
-## Next
+## Verified closure
 
-Both integrated naming entries remain open until their unchanged done.sh inverse-fix assertion red/check/verify proofs succeed: create-leading-dot fixed-in28d2ce2; timeline-source-names fixed-in6305ca9. No known-green shortcut or phase closure.
+Coordinator ran both unchanged inverse-fix closures after browser cleanup. create-leading-dot fixed-in28d2ce2 passed with actual production inverse assertion red, restored source, check and named verify; closure48e6544. timeline-source-names fixed-in6305ca9 passed with actual production inverse assertion red, restored source, check and both-source named browser verify; closuref739b5c. Raw bower-create-current-close.log and bower-timeline-current-close.log archived beside the frozen gates. Production44ee162 unchanged;211/214 registered entries pass. No known-green shortcut; full C01–C16 acceptance and owner phase decision remain open.
