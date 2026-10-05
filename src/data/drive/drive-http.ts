@@ -103,9 +103,16 @@ export class DriveHttp implements DriveApi {
     return (await this.call(`${API}/files/${id}?alt=media`)).text();
   }
 
-  /** Loadable proof baseline for the additive byte read. */
-  async readBytes(_id: string): Promise<Uint8Array> {
-    throw driveError('unknown');
+  async readBytes(id: string): Promise<Uint8Array> {
+    const response = await this.call(`${API}/files/${id}?alt=media`);
+    try {
+      // Copy even when an injected transport retains its returned body buffer.
+      return new Uint8Array(new Uint8Array(await response.arrayBuffer()));
+    } catch (e) {
+      console.error(e);
+      if (e instanceof BowerError) throw e;
+      throw driveError(e instanceof TypeError ? 'offline' : 'unknown');
+    }
   }
 
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {

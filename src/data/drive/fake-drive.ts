@@ -3,13 +3,15 @@
  * same failures as the real one. Used by unit tests and by the fake stack
  * (`?source=fake`), where it holds Alex's folder in the browser.
  */
-import type { ErrorCode } from '../types';
+import { BowerError, type ErrorCode } from '../types';
 import { driveError, type DriveApi, type DriveFile, type DrivePatch } from './drive-api';
 
 interface Stored {
   meta: DriveFile;
   trashed: boolean;
   content: string | Blob | null;
+  /** A restored big-file placeholder has no original bytes; never certify it as content. */
+  bytesUnavailable?: true;
 }
 
 export interface FakeDriveOptions {
@@ -47,7 +49,7 @@ export class FakeDrive implements DriveApi {
     for (const f of this.files.values()) {
       const c = f.content;
       // A tab keeps a few MB: a big file keeps its place and size, not its bytes.
-      const content = c === null ? null : typeof c === 'string' ? { text: c } : c.size > KEEP_BYTES ? { big: true, type: c.type } : { b64: toBase64(new Uint8Array(await c.arrayBuffer())), type: c.type };
+      const content = c === null ? null : typeof c === 'string' ? { text: c } : f.bytesUnavailable || c.size > KEEP_BYTES ? { big: true, type: c.type } : { b64: toBase64(new Uint8Array(await c.arrayBuffer())), type: c.type };
       files.push({ meta: f.meta, trashed: f.trashed, content });
     }
     return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files });
@@ -61,7 +63,9 @@ export class FakeDrive implements DriveApi {
     for (const f of data.files) {
       const c = f.content;
       const content = c === null ? null : 'text' in c ? c.text : 'big' in c ? new Blob([`A big file, kept by name only on the pretend Drive.`], { type: c.type }) : new Blob([fromBase64(c.b64)], { type: c.type });
-      d.files.set(f.meta.id, { meta: f.meta, trashed: f.trashed, content });
+      // Old restore→snapshot could lose `big` and base64-encode the small placeholder.
+      const unavailable = c && ('big' in c || ('b64' in c && (f.meta.size ?? 0) > KEEP_BYTES && content instanceof Blob && content.size <= KEEP_BYTES));
+      d.files.set(f.meta.id, { meta: f.meta, trashed: f.trashed, content, ...(unavailable ? { bytesUnavailable: true as const } : {}) });
     }
     d.seq = data.seq;
     d.last = data.last;
@@ -120,9 +124,19 @@ export class FakeDrive implements DriveApi {
     return typeof f.content === 'string' ? f.content : f.content.text();
   }
 
-  /** Loadable proof baseline for the additive byte read. */
-  async readBytes(_id: string): Promise<Uint8Array> {
-    throw driveError('unknown');
+  async readBytes(id: string): Promise<Uint8Array> {
+    await this.gate();
+    const f = this.find(id);
+    if (f.bytesUnavailable) throw new BowerError('unknown', "This device no longer has this file's contents.");
+    if (f.content === null) return new Uint8Array();
+    if (typeof f.content === 'string') return new TextEncoder().encode(f.content);
+    try {
+      return new Uint8Array(new Uint8Array(await f.content.arrayBuffer()));
+    } catch (e) {
+      console.error(e);
+      if (e instanceof BowerError) throw e;
+      throw driveError(e instanceof TypeError ? 'offline' : 'unknown');
+    }
   }
 
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
@@ -147,6 +161,7 @@ export class FakeDrive implements DriveApi {
     const f = this.find(id);
     if (f.meta.modifiedTime !== ifModified) throw driveError('conflict');
     f.content = text;
+    delete f.bytesUnavailable;
     f.meta = { ...f.meta, modifiedTime: this.stamp(), size: text.length };
     return this.changed(this.copy(f.meta));
   }
