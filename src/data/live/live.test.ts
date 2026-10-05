@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { keep as keepDraft, get as getDraft, forget as forgetDraft } from '../../features/piles/draft-files';
 import { FakeDrive } from '../drive/fake-drive';
 import { driveError, type DriveApi } from '../drive/drive-api';
 import { FakeWorker } from '../fake/fake-worker';
@@ -1447,5 +1448,61 @@ describe('foreground discovery', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(listing).toHaveBeenCalledOnce();
     if (change === 'active') expect(await a.runs.current()).toMatchObject({ id: 'NEW', phase: 'queued' });
+  });
+});
+
+
+describe('person cleanup forgets pending draft bytes and keeps the folder outbox', () => {
+  const personLocal = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away'];
+  const personSession = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
+  const outbox = '[{"v":1,"id":"CHANGE_A","device":"DEVICE_A","at":1,"kind":"create","what":"Synthetic note","fileId":"FILE_A"}]';
+  const prefs = '{"theme":"dark"}';
+  afterEach(() => { vi.restoreAllMocks(); forgetDraft('LIVE_DRAFT_A'); forgetDraft('LIVE_ORPHAN_A'); });
+  async function draft() {
+    const s = await open('empty');
+    expect((await s.session.current())?.name).toBe('Alex');
+    await s.vault.flushJournal();
+    const folder = await s.session.rootId();
+    for (const key of personLocal) localStorage.setItem(key, '[]');
+    for (const key of personSession) sessionStorage.setItem(key, '[]');
+    sessionStorage.setItem('bower:add-items', '[{"key":"LIVE_DRAFT_A","name":"Synthetic.txt"}]');
+    localStorage.setItem(`bower:outbox:${folder}`, outbox); localStorage.setItem('bower:prefs', prefs);
+    const selected = new Blob(['Synthetic live draft.']), orphan = new Blob(['Synthetic live orphan.']);
+    keepDraft('LIVE_DRAFT_A', selected); keepDraft('LIVE_ORPHAN_A', orphan);
+    expect(getDraft('LIVE_DRAFT_A')).toBe(selected); expect(getDraft('LIVE_ORPHAN_A')).toBe(orphan);
+    const retained = () => {
+      expect(localStorage.getItem(`bower:outbox:${folder}`)).toBe(outbox);
+      expect(localStorage.getItem('bower:outbox:FOLDER_B')).toBeNull();
+      expect(localStorage.getItem('bower:prefs')).toBe(prefs);
+    };
+    const forgotten = () => {
+      expect(getDraft('LIVE_DRAFT_A')).toBeUndefined(); expect(getDraft('LIVE_ORPHAN_A')).toBeUndefined();
+      for (const key of personLocal) expect(localStorage.getItem(key), key).toBeNull();
+      for (const key of personSession) expect(sessionStorage.getItem(key), key).toBeNull();
+      retained();
+    };
+    return { s, selected, orphan, retained, forgotten };
+  }
+  for (const ending of ['logout', 'delete', 'expiry'] as const) it(`actual LiveSources ${ending} clears current-page bytes after successful cleanup`, async () => {
+    const { s, forgotten } = await draft();
+    if (ending === 'logout') await s.session.signOut();
+    else if (ending === 'delete') await s.session.deleteAccount();
+    else {
+      await s.worker.signOut();
+      (s.drive as FakeDrive).failNext('auth');
+      await expect(s.vault.tree()).rejects.toMatchObject({ code: 'auth' });
+    }
+    expect(await s.session.current()).toBeNull(); forgotten();
+    expect(sessionStorage.getItem('bower:bye')).toBe(ending === 'delete' ? '1' : null);
+  });
+  it('failed remote logout retains bytes and metadata until the successful retry', async () => {
+    const { s, selected, orphan, retained, forgotten } = await draft();
+    vi.spyOn(s.worker, 'signOut').mockRejectedValueOnce(new BowerError('offline', 'Signing out did not finish. Try again.'));
+    await expect(s.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+    expect(getDraft('LIVE_DRAFT_A')).toBe(selected); expect(getDraft('LIVE_ORPHAN_A')).toBe(orphan);
+    for (const key of personLocal) expect(localStorage.getItem(key), key).toBe('[]');
+    for (const key of personSession) expect(sessionStorage.getItem(key), key).not.toBeNull();
+    expect(sessionStorage.getItem('bower:bye')).toBeNull(); retained();
+    await s.session.signOut(); expect(await s.session.current()).toBeNull(); forgotten();
   });
 });

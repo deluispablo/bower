@@ -9,6 +9,8 @@
  * changes from the next tidy-up. They are keyed by the folder, so they only ever
  * go to it, the next time someone signed in to it uses this device.
  */
+import { forgetAll } from './draft-files';
+
 const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away'];
 const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
 
@@ -23,11 +25,14 @@ export function sayGoodbye(): void {
 }
 
 export function forgetThisPerson(): void {
-  try {
-    PERSON_LOCAL.forEach((k) => localStorage.removeItem(k));
-    PERSON_SESSION.forEach((k) => sessionStorage.removeItem(k));
-  } catch (e) {
-    // Storage blocked: there was nothing kept to forget.
-    console.error(e);
+  // Memory is independent of whether this device permits storage access.
+  forgetAll();
+  for (const key of PERSON_LOCAL) {
+    try { localStorage.removeItem(key); }
+    catch (e) { console.error(e); }
+  }
+  for (const key of PERSON_SESSION) {
+    try { sessionStorage.removeItem(key); }
+    catch (e) { console.error(e); }
   }
 }
