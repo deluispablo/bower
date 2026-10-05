@@ -4,14 +4,23 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: contracts-2 adopted; O1/O2 delivered. 212/216 after registering last-run-recovery-validation; Add passed c1b1975 genuine inverse-fix red/check/verify closure of integratedcbf4e9f. Rootcheck528/52/demo198/56/fake198/56 and four actual supplemental native cells pass. O3 current-v1 consumer defect reproduced; minimal prerequisite under independent review. Expanded P2 acceptance incomplete.
+- State: contracts-2 adopted; O1/O2 delivered. 212/216 after registering last-run-recovery-validation; Add passed c1b1975 genuine inverse-fix red/check/verify closure of integratedcbf4e9f. Rootcheck528/52/demo198/56/fake198/56 and four actual supplemental native cells pass. O3 current-v1 consumer defect reproduced and prerequisite independently reviewed; sole worker now assigned test-first repair at aaf76ff. Expanded P2 acceptance incomplete.
 - Coordinator/session: Codex `/root`, session `p2-orchestrator-2026-10-05-01a10bbd`, explicitly appointed by the owner after the previous batch ended. Sole integration writer and shared-record owner.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: Add freeze released; own tabs closed, viewport reset, owned5192/5193 stopped. User-created Bower tab preserved. Google-v4 actual owner consent completed, private grant validated; owned8788 stopped/tab closed. No active browser reservation; user-created Bower tab preserved. Sole worker next current-v1 test-first entry in separate checkout after clean registration commit.
+- Browser reservation: none. Own Add previews/tabs and Google callback/tab stopped; viewport reset; user-created Bower tab preserved. Sole worker unit/check only; no provider/browser permission.
 
-## Assignments
+## Current reservations
+
+| Scope | Agent / role | Checkout or allowed output | Immutable base / contract | State |
+| --- | --- | --- | --- | --- |
+| Integration and shared records | Root coordinator | bower-app/codex/close-phase-2 | aaf76ff/sourcecbf4e9f; contracts-2 | sole writer; documentation update only |
+| last-run-recovery-validation | /root/google_setup_rework, sole implementer | /private/tmp/bower-p2-journal-ack/codex/p2-run-v1-recovery; fake-worker.ts and fake-worker.test.ts only | aaf76ff5036d89662ee79d9bfe05e75bf5e2c981; current LastRunFilev1 | assigned init/test-first; known registry failure fallback to independent prepared runtime, genuine baseline/assertions still required |
+| Current O1 delta | /root/prerequisites_review, independent reviewer | scratch bower-o1-current-delta.md only; integration read-only | exactaaf76ff/sourcecbf4e9f | delivered immutable2181351d O1 delta; candidate review gets separate assignment |
+| R1 first-case micropacket | /root/approved_policy_slices, read-only spec author | scratch bower-r1-execution-micropacket.md only | exactaaf76ff/sourcecbf4e9f/currentDriveHttp | no script/provider/credentials/browser; later implementation by sole preparer after product candidate |
+
+## Historical assignments
 
 | Entry or scope | Tool/session | Role | Checkout / branch | Base / target SHA | Reserved files / contracts | State | Candidate / closure SHA |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -497,3 +506,8 @@ O3 scratch actual immutable f16beada report/9ded345f manifest: public3valid cont
 Google-v4 actually reaches selector/designatedA/unverifiedwarning/identityconsent. Automatic review rejects root warning bypass, owner explicitly approves reaching consent, then personally completes it. Root observes /complete and backendauthorization_saved; read-only exact saved-session validation succeeds/no dispatch, private600 with access/refresh/verifiedsubject/exactfullDrive+openid. Safe event/completion/result archivedgoogle-v4; allprivateidentifiers/credentials/warningimage stay outside repository. Ownlistener/tab stopped. Actual Drive R1/R2/R4 still NOT RUN, no fixtureallowlist/writeadapter yet; no grantrotation/revoke or P3/session implementation.
 
 Independent O3 prerequisite confirms reproduced Important, packet/source hashes and viable existing-validator repair. Root registers last-run-recovery-validation qa16, unchanged plannedverify,212/216. Sole implementer/root/google_setup_rework authorized after this registration commit: base ensuing clean integration commit/sourcecbf4e9f; owned/private/tmp/bower-p2-journal-ack NEWbranchcodex/p2-run-v1-recovery preserving Add666 branch. Allowed ONLY src/data/fake/fake-worker.ts and fake-worker.test.ts plus scratch evidence. Plancontracts-2/C12C14/O3/currentLastRunFilev1/isRunnerFile. Read prereqreview/current consumer tests; init exclusive/retain prepareddeps, no duplicate install attempt without cause. Test first literal fixtures group exact plannedverify; genuine publicstatus/process assertion red BEFORE production. Use existing shared guard before copy/normalization; handled constructor failure sentinel, readable public status/process refusal/no dispatch, no unhandled/swallowederrors, no fresh:true automaticstart after malformedinput. Preserve exact last-run/fullsnapshot/otherinput/journal; valid done/failed/additive/missing-file and all4legitimateactive reload controls. Explicit modifiedTime repair then freshconsumer retry. No schema/helper/HTTP/DriveVaultproduction/runner/report-save/readiness/grammar/store/scheduler/sharedrecords/browser/provider/credentials/delegation/closure. Return single immutable2file candidate originalbase, red/green/fullcheck/compatibility/failure-recovery/source identity. Independent candidate review before root serialintegration/proof; workers neverflip passes.
+
+
+Current independent O1 delta at exactaaf76ff/sourcecbf4e9f archived2026-10-05-p2-o1-current-delta.md, report2181351db25efed70eceb5c53338b7b02fd2064c11e146fe4881f60d07f132df. Full-row coverage stays0demonstrated/12partial/4absent C07/C08/C09/C13; stronger bounded foundations/Add evidenced, no fullphase inference. Existing policies/actualOAuth setup resolved, no repeated ask; provider R1–R4/O3/independentrecovery/semantics/Undo/preparation/corpus/O8 stillrequired.
+
+Sole current-v1 worker actual init installer exits1DNS naturally; restored independent prepareddeps, actual baselinecheck528/52/212216 succeeds. New unchanged named owned verify21selectedcases:13 genuine assertionreds/8compatibilitygreens before production;10outsidepattern skips. Includes status/process refusal/data mutation, runningfresh:true auto-dispatch and preserved offline-init failure. Not installation/load failure. Worker now fixes existing validator/handledsentinel only two assigned files; no candidate or pass yet.

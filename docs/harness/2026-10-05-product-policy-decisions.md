@@ -16,8 +16,14 @@ Approved: retain pending file bytes locally where supported; if unavailable thro
 
 ## Existing-resource permission
 
-Reuse of `LEGACY_PROBE_REPOSITORY`, `GOOGLE_P2_PROJECT`, `GOOGLE_TEST_ACCOUNT_A` and `LEGACY_APP_ORIGIN` is owner-authorized for bounded P2 premise probes. Real bindings remain private and unversioned. Prepare OAuth/Drive setup and synthetic isolated roots, and a separate no-model executor workflow. Preserve live redirects, audience, grants, personal content and production workflows. No new spend, old tidy-up invocation, immediate production replacement, product push/deployment or P3/P4 implementation is authorized. Consent/tokens and R1–R4 runtime observations are still absent; tool-required action-time confirmations still apply to actual access expansion. Request only the specific interactive login/consent or genuinely missing secure client export when the prepared procedure reaches it.
+Reuse of `LEGACY_PROBE_REPOSITORY`, `GOOGLE_P2_PROJECT`, `GOOGLE_TEST_ACCOUNT_A` and `LEGACY_APP_ORIGIN` is owner-authorized for bounded P2 premise probes. Real bindings remain private and unversioned. Prepare OAuth/Drive setup and synthetic isolated roots, and a separate no-model executor workflow. Preserve live redirects, audience, grants, personal content and production workflows. No new spend, old tidy-up invocation, immediate production replacement, product push/deployment or P3/P4 implementation is authorized. At initial recording consent/tokens and R1–R4 observations were absent; the actual authorization update below supersedes only that setup status; tool-required action-time confirmations still apply to actual access expansion. Request only the specific interactive login/consent or genuinely missing secure client export when the prepared procedure reaches it.
 
 ## Acceptance remains open
 
 These decisions resolve policy inputs; they do not approve a new ownership grammar, certify provider safety or accept P2. Lead grammar/raw-adapter/activation decisions and complete capability/probe/gate/independent-evaluation evidence remain required before the owner reviews phase closure.
+
+## Actual existing-client authorization update
+
+Root used the owner-supplied restricted client source without rotation, privately matched the current existing client, and completed the independently reviewed Google-v4 local callback. The owner personally completed Google consent after explicitly authorizing review of the unverified-app warning. Root observed authorization_saved and the /complete confirmation, then verified the exact saved aliasA/full-drive grant, access/refresh presence, verified opaque subject and private600 storage without a provider request. Own listener/tab stopped. See evidence/2026-10-05-local-prerequisites/google-v4/native-result.md. No raw real bindings/credentials are versioned.
+
+R1–R4 cases remain NOT RUN; this authorization setup is not provider precondition/metadata/upload/executor evidence. No live A grant revocation or broadened cleanup permission follows. Synthetic fixture bootstrap and case adapters must be reviewed and bounded separately. D01/D02 implementation and full acceptance remain open.
