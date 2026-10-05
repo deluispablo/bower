@@ -2527,7 +2527,7 @@
       "Naked source links should display Lease draft and IMG_2290; authored alias wording must stay intact."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa12.spec.ts -g \"timeline source links use plain file names and retain aliases\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "partial-pile-readiness",

@@ -306,3 +306,4 @@
 
 - 2026-10-05: verified actual owner instruction permits reusing existing bower-home/Google Cloud project for isolated probes; setup preparer updated, no external change. Project ID/access pending, policies unanswered. One evaluator inventory remains empty: actual independent UI NOTRUN retained, root supplemental only.
 - 2026-10-05: create-leading-dot passes — fix(names): prove leading-dot refusal and dotted creation recovery
+- 2026-10-05: timeline-source-names passes — fix(names): prove plain Timeline labels preserve aliases and destinations
