@@ -26,6 +26,8 @@
 
 - Readinessv2 review1aa836b2 clean in narrowdelta; exactfields still ratificationpending, no producer. B run/capture/effect/report exactschema preparer prerequisites_review queuedonlyNEW/tmp directory/onecontract+literalfixtures underTL03; independentreviewbeforeadoption/sourceconsumers. Aparser and R1D03 parallel independentlanes.
 
+- Lead explicit amendment: B ONE combined exactreadiness inventory/runmanifest schema+atmost9literalfixtures and sharedIDs/hash/reference table in SAME/tmpauthorreservation, thenoneindependentfinalreview/ratification/serialschemacommit. No duplicatedbroadproposals/consumerwrite/policyquestion. A baseline560green recovered via exactpnpm_configflag; separateloadablestub53aeee3, fixturesassertionredstageactive.
+
 ## Log
 
 - 2026-10-05: pending-draft-bytes-cleanup closedbf7278d after independentlyreviewedf219, integration1dc, root560/full demo19856/fake19856 and real inverse-red restoration/check/11verify.214217; evidencearchived, no browserlistener. Human "si" explicitlyauthorized Planificador message; lead R1-D02 selects bounded v2ETag premise, documentedwithnextscratchassignment and options73626cad, no contractmigration/providerpass/phaseclosure.
