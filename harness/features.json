@@ -2341,7 +2341,7 @@
       "Both changes remain visible and available to the runner."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"first changes on separate clients are all visible after refresh\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "runner-json-shapes",

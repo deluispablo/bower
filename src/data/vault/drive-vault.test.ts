@@ -3,6 +3,7 @@ import { FakeDrive } from '../drive/fake-drive';
 import { seedFakeDrive } from '../fake/seed';
 import { findNode } from '../tree';
 import { DriveVault } from './drive-vault';
+import { runFake } from '../fake/fake-runner';
 
 const PASSPORT = 'Areas/Documents/Passport renewal.md';
 let drive: FakeDrive;
@@ -374,6 +375,56 @@ describe('what the code review found', () => {
     expect(all.filter((f) => f.name === '.bower')).toHaveLength(1);
     expect(all.filter((f) => f.name === 'changes')).toHaveLength(1);
     expect(await v.changes()).toHaveLength(3);
+  });
+
+  it('first changes on separate clients are all visible after refresh', async () => {
+    for (const existingBower of [false, true]) {
+      localStorage.clear();
+      const fresh = new FakeDrive();
+      const r = (await fresh.createFolder('root', 'Bower')).id;
+      for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await fresh.createFolder(r, name);
+      if (existingBower) await fresh.createFolder(r, '.bower');
+      const open = (): DriveVault => new DriveVault({ drive: fresh, rootId: async () => r, runningPiles: () => new Set() });
+      const a = open();
+      const b = open();
+      await Promise.all([a.tree(), b.tree()]);
+      const create = fresh.createText.bind(fresh);
+      let lost = 2;
+      fresh.createText = async (parent, name, text, props) => {
+        const made = await create(parent, name, text, props);
+        if (name.endsWith('.json') && lost-- > 0) throw new TypeError('The write answer was lost');
+        return made;
+      };
+      await Promise.all([a.addRule('Keep receipts together'), b.addRule('Keep original files')]);
+      const before = await fresh.listAll(r);
+      const folders = before.filter((f) => f.folder && f.name === 'changes');
+      expect(folders).toHaveLength(2);
+      expect(before.filter((f) => f.folder && f.name === '.bower')).toHaveLength(existingBower ? 1 : 2);
+      const key = `bower:outbox:${r}`;
+      const waiting = localStorage.getItem(key);
+      expect(waiting).not.toBeNull();
+      localStorage.removeItem(key);
+      await Promise.all([a.refresh(), b.refresh()]);
+      for (const client of [a, b, open()]) {
+        expect((await client.rules()).map((rule) => rule.text).sort()).toEqual(['Keep original files', 'Keep receipts together']);
+      }
+      if (waiting) localStorage.setItem(key, waiting);
+      const line = before.find((f) => !f.folder && f.name.endsWith('.json'));
+      if (!line || !folders[1]) throw new Error('Missing change fixture');
+      await create(folders[1].id, line.name, await fresh.readText(line.id));
+      // Another device can process a write whose answer this browser lost.
+      const out = await runFake(fresh, r, { scope: 'instructions', scale: 'instant', failOnce: false, onPhase: () => undefined });
+      expect(out).toMatchObject({ phase: 'done', report: { rulesWorded: 2 } });
+      await a.flushJournal();
+      await Promise.all([a.refresh(), b.refresh()]);
+      expect(await a.changes()).toEqual([]);
+      expect(await b.changes()).toEqual([]);
+      const after = await fresh.listAll(r);
+      const lines = after.filter((f) => !f.folder && f.name.endsWith('.json'));
+      expect(lines).toHaveLength(3);
+      expect(lines.every((f) => after.find((parent) => parent.id === f.parents[0])?.name === 'archive')).toBe(true);
+      expect(localStorage.getItem(`bower:outbox:${r}`)).toBeNull();
+    }
   });
 
   it('a journal line names the Drive file it is about', async () => {

@@ -54,7 +54,7 @@ The app counts a run from `requestedAt` on every device. It asks `/status` every
 - `.bower/questions.json`, `.bower/suggestions.json`, `.bower/requests.json`, `.bower/hashes.json` (shapes in `src/data/vault/layout.ts`).
 - `Rules.md` with the rules typed in the app worded (`src/data/vault/rules-format.ts`), and the rules a `rule` line `removes` (by their wording) taken out.
 - After a `rename` or `move` line (`from` → `path`), every `[[link]]` to the old name written with the new one, in every note (a label after `|` stays). Until then the app finds a note by the names it had (`src/data/links.ts`).
-- The journal files it read moved to `.bower/changes/archive/`. Journal records are unique by `id`: a runner keeps one per id and archives every copy (a device whose answer was lost may have written one twice).
+- The journal files it read moved to `.bower/changes/archive/`. Find every root child folder whose actual Drive name is `.bower`, then every child folder named `changes`: two clients can create duplicate folders before either sees the other. Read the direct journal files from all of them; disambiguated display paths such as `.bower (2)` are not folder identities. Journal records are unique by `id`: a runner keeps one per id and archives every copy (a device whose answer was lost may have written one twice). An unreadable record stops the run before writes and stays untouched. The app's late acknowledgment check also reads the `archive` children of every `changes` folder, so an already processed line is never recreated.
 - `appProperties.bowerNew = "1"` on what it filed or changed, cleared from the previous run's things first.
 
 A run takes the piles in the inbox when it starts. Piles added during the run wait for the next one.

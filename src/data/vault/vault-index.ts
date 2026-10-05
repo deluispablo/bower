@@ -48,6 +48,19 @@ export class VaultIndex {
     return [...this.files.values()].filter((f) => f.parents[0] === id);
   }
 
+  /** Concurrent clients can create duplicate bookkeeping folders. Use their
+   * actual Drive names and parents, before path disambiguation, so no line
+   * is hidden by `.bower (2)` or `changes (2)`. Archives acknowledge old writes.
+   */
+  journalFiles(archived = false): DriveFile[] {
+    const all = [...this.files.values()];
+    const bower = new Set(all.filter((f) => f.folder && f.name === '.bower' && f.parents.includes(this.rootId)).map((f) => f.id));
+    const changes = new Set(all.filter((f) => f.folder && f.name === 'changes' && f.parents.some((p) => bower.has(p))).map((f) => f.id));
+    const parents = new Set(changes);
+    if (archived) for (const f of all) if (f.folder && f.name === 'archive' && f.parents.some((p) => changes.has(p))) parents.add(f.id);
+    return all.filter((f) => !f.folder && f.parents.some((p) => parents.has(p)));
+  }
+
   /** Everything the explorer shows. */
   entries(): Entries {
     const out: Entries = new Map();

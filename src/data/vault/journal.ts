@@ -29,8 +29,10 @@ export interface JournalPlace {
   folder: () => Promise<string>;
   /** The Bower folder's id: whose journal this is. */
   owner: () => Promise<string>;
-  /** The files in it now (not its archive). */
-  files: () => Promise<DriveFile[]>;
+  /** All copies of the journal, before paths are disambiguated. A fresh
+   * listing with archives also acknowledges a write processed elsewhere.
+   */
+  files: (fresh?: boolean, archived?: boolean) => Promise<DriveFile[]>;
   /** Told about each file the journal writes or bins, so a listing cache stays true. */
   wrote?: (f: DriveFile) => void;
   removed?: (id: string) => void;
@@ -182,7 +184,7 @@ export class Journal {
     // itself is asked (a cached listing never saw a file whose answer was lost).
     let there: Set<string>;
     try {
-      there = new Set((await this.drive.listAll(await this.place.folder())).map((f) => f.name));
+      there = new Set((await this.place.files(true, true)).map((f) => f.name));
     } catch (e) {
       console.error(e);
       if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');

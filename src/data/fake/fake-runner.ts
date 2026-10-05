@@ -113,7 +113,7 @@ class Writer {
   /** Each change once, by its id (a line written twice is one change), with all its files. */
   async journal(): Promise<Array<JournalRecord & { fileIds: string[] }>> {
     const byId = new Map<string, JournalRecord & { fileIds: string[] }>();
-    for (const f of this.ix.filesIn(SYSTEM.changes)) {
+    for (const f of this.ix.journalFiles()) {
       if (f.folder || !f.name.endsWith('.json')) continue;
       try {
         const rec: unknown = JSON.parse(await this.drive.readText(f.id));

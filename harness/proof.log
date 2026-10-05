@@ -192,3 +192,4 @@ harness-timeout-red	8d5ba898d2ac8e46	2026-10-05	red
 harness-selected-files	d13ef93b085523f6	2026-10-05	red
 journal-before-run	ddc77eda1642c9a5	2026-10-05	red
 journal-storage-failure	e05044ce847b94d9	2026-10-05	red
+journal-separate-clients	3ea15399a71a8adf	2026-10-05	red
