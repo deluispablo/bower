@@ -151,3 +151,14 @@ test('one thing, one name: Home, the tree and the tidy-up sheet name things alik
   const inSheet = (await page.getByRole('dialog').locator('li > span:not(.muted)').allTextContents()).map((t) => t.trim());
   expect(inSheet.sort()).toEqual([...onHome].sort());
 });
+
+test('no Remove while a tidy-up runs: the menu says to wait', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/', 'running', 'demo');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  const inbox = tree.getByRole('treeitem', { name: /^Inbox/ });
+  if ((await inbox.getAttribute('aria-expanded')) !== 'true') await inbox.click();
+  await tree.locator('[data-path^="Inbox/"]').first().click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: /Remove the pile/ })).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('menuitem', { name: /after the tidy-up/ })).toBeVisible();
+});

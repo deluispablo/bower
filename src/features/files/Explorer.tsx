@@ -2,7 +2,8 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { usePiles, useTree } from '@/data/provider';
+import { usePiles, useRun, useTree } from '@/data/provider';
+import { isRunning } from '@/features/tidy/run-words';
 import { displayName, findNode, isRoot, parentOf, thingName, visibleRows, type SortOrder } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
 import { countThings, folderCount } from '@/data/piles';
@@ -599,14 +600,17 @@ export function useNodeMenu(node: TreeNode) {
   const marked = ui.bookmarks.includes(node.path);
   const { data: piles } = usePiles();
   const nav = useNavigate();
-  const items: Array<{ key: string; label: string; icon: Parameters<typeof Icon>[0]['name']; run: () => void; danger?: boolean } | 'sep'> = [];
+  const { data: run } = useRun();
+  const items: Array<{ key: string; label: string; icon: Parameters<typeof Icon>[0]['name']; run: () => void; danger?: boolean; disabled?: boolean } | 'sep'> = [];
   if (inInbox(node.path) && node.path !== 'Inbox') {
     const pile = piles?.find((p) => p.path && (node.path === p.path || node.path.startsWith(`${p.path}/`)));
     if (pile) {
       items.push({ key: 'pile', label: 'Open the pile', icon: 'pile', run: () => nav(`/pile/${pile.id}`) });
       if (!folder) items.push({ key: 'tab', label: 'Open this file', icon: 'file', run: () => act.open(node) });
       items.push('sep');
-      items.push({ key: 'bin', label: 'Remove the pile from the inbox', icon: 'trash', danger: true, run: () => void act.trash(pile.path ?? node.path) });
+      // A tidy-up going now has taken the inbox: removing waits, as on the pile page.
+      if (isRunning(run)) items.push({ key: 'bin', label: 'Remove the pile (after the tidy-up)', icon: 'trash', danger: true, disabled: true, run: () => undefined });
+      else items.push({ key: 'bin', label: 'Remove the pile from the inbox', icon: 'trash', danger: true, run: () => void act.trash(pile.path ?? node.path) });
     }
     return items;
   }
@@ -649,7 +653,7 @@ function NodeMenuItems({ node, Item, Separator }: { node: TreeNode; Item: ItemCo
         it === 'sep' ? (
           <Separator key={`s${i}`} className={menuCls.sep} />
         ) : (
-          <Item key={it.key} className={it.danger ? menuCls.danger : menuCls.item} onSelect={it.run}>
+          <Item key={it.key} className={it.danger ? menuCls.danger : menuCls.item} onSelect={it.run} disabled={!!it.disabled}>
             <Icon name={it.icon} size={16} />
             {it.label}
           </Item>
@@ -696,6 +700,7 @@ function NodeSheetActions({ node, done }: { node: TreeNode; done: () => void }) 
             key={it.key}
             type="button"
             className={it.danger ? s.sheetDanger : ''}
+            disabled={!!it.disabled}
             onClick={() => {
               done();
               it.run();

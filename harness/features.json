@@ -2194,7 +2194,7 @@
       "Remove the pile is shown disabled, saying to wait for the tidy-up."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"no Remove while a tidy-up runs\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "landing-jargon",
