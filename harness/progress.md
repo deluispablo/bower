@@ -305,3 +305,4 @@
 - 2026-10-05: resumed authorized independent work at907c9f8/source44ee162: root reserves fresh serial full gates and supplemental naming evaluation; independent code reviewer907/source-equivalent reservation target. Scratch-only Google OAuth/R1R2R4 setup and protected ownership version/fixture proposals assigned; evaluator one capability recheck. No external authorization/policies/new grammar presumed.
 
 - 2026-10-05: verified actual owner instruction permits reusing existing bower-home/Google Cloud project for isolated probes; setup preparer updated, no external change. Project ID/access pending, policies unanswered. One evaluator inventory remains empty: actual independent UI NOTRUN retained, root supplemental only.
+- 2026-10-05: create-leading-dot passes — fix(names): prove leading-dot refusal and dotted creation recovery

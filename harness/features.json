@@ -2514,7 +2514,7 @@
       "After the fix both sources explain the restriction before creating anything; ordinary dotted stems remain allowed."
     ],
     "verify": "pnpm vitest run src/data/demo/world.test.ts src/data/vault/drive-vault.test.ts -t \"creation refuses a leading dot without writing\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "timeline-source-names",
