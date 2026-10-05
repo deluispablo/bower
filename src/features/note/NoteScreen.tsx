@@ -69,6 +69,7 @@ function PhoneBar({ folder, path }: { folder: string; path: string }) {
 
 function NoteView({ path }: { path: string }) {
   const { data: note, error, loading } = useNote(path);
+  const { data: tree } = useTree();
   const desktop = useIsDesktop();
   const resolve = useResolver();
   const { vault } = useSources();
@@ -91,6 +92,21 @@ function NoteView({ path }: { path: string }) {
         {label}
       </span>
     );
+  };
+
+  const sourceLink = (source: string, key: string) => {
+    const pipe = source.indexOf('|');
+    const target = pipe < 0 ? source : source.slice(0, pipe);
+    const destination = resolve(target);
+    const node = destination && tree ? findNode(tree, destination) : null;
+    const web = destination ? null : webSource(target);
+    const plain = node?.type === 'file' ? thingName(node.name) : (node?.name ?? target);
+    const label = pipe >= 0 ? source.slice(pipe + 1) : (web?.label ?? plain);
+    return web ? (
+      <a key={key} href={web.href} target="_blank" rel="noreferrer noopener">
+        {label}
+      </a>
+    ) : link(target, label, key);
   };
 
   return (
@@ -161,13 +177,7 @@ function NoteView({ path }: { path: string }) {
                     <span className={s.from}>
                       {' '}
                       From{' '}
-                      {resolve(t.source) || !webSource(t.source) ? (
-                        link(t.source, t.source, `src-${i}`)
-                      ) : (
-                        <a href={webSource(t.source)?.href} target="_blank" rel="noreferrer noopener">
-                          {webSource(t.source)?.label}
-                        </a>
-                      )}
+                      {sourceLink(t.source, `src-${i}`)}
                     </span>
                   )}
                 </span>

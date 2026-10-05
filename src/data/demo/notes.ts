@@ -101,7 +101,11 @@ Compare with [[Flat 7, Cobble Row]] and [[Flat 2, 40 Tanners Walk]].`,
 - [ ] Check the water pressure upstairs
 - [ ] Ask about the service charge
 - [ ] Measure the second bedroom for a desk`,
-    timeline: [{ date: '1 Oct', text: 'Listing saved; viewing booked for Thursday.', source: 'cobble-row-listing.example' }],
+    timeline: [
+      { date: '1 Oct', text: 'Listing saved; viewing booked for Thursday.', source: 'cobble-row-listing.example' },
+      { date: 'Today', text: 'Lease terms compared.', source: 'Lease draft.pdf|Lease copy.pdf' },
+      { date: 'Today', text: 'Viewing photos compared.', source: 'Viewing photos' },
+    ],
     links: [`${P}/Flat hunt/Flat hunt.md`, `${P}/Flat hunt/Flat 3, 12 Larkspur Lane.md`],
   },
   [`${P}/Flat hunt/Flat 2, 40 Tanners Walk.md`]: {

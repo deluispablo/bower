@@ -274,7 +274,7 @@ test('a folder counts what it shows', async ({ page }) => {
 test("the outline lists Bower's sections and sources link", async ({ page, isMobile }) => {
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md');
   const timeline = page.locator('section[aria-labelledby="tl"]');
-  await timeline.getByRole('link', { name: 'Lease draft.pdf' }).click();
+  await timeline.getByRole('link', { name: 'Lease draft' }).click();
   await expect(page).toHaveURL(/Lease%20draft\.pdf/);
   if (isMobile) return;
   await page.goBack();
