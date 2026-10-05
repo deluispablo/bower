@@ -285,3 +285,5 @@
 - 2026-10-05: request candidate00a17ff reviewed/integratedcb73061/proof-closed16ab28c, check481/17 cases after13 actual reds. Release sole writer and prepare frozen combined verification;208/213, P2 remains open.
 
 - 2026-10-05: combined e15 checkpoint check481/demo198 with56 intentional skips passed. Independent review exposed baseline reused-Sources account scope defect; actual public synthetic reproduction at143/e15 retained qa14, registered session-folder-isolation (planned verify), count208/214. Final fake/PWA/native deferred to corrected fresh target; sole worker remains read-only pending bounded prerequisite.
+
+- 2026-10-05: independent account isolation prerequisite retained (e15/source cb73061), no executions. Reserved six-file production stage uses internal lifetime/root checks and preserved durable/volatile outboxes, no public wire/policy changes. Sole worker first authors live.test.ts assertion reds; production dispatch waits for actual failure evidence.
