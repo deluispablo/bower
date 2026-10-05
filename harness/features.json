@@ -2099,7 +2099,7 @@
       "A toast says Bower will not suggest it again, with Undo; Undo brings it back."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"No thanks can be taken back\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "bird-not-a-button",
