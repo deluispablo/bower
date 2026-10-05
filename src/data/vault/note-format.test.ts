@@ -42,6 +42,52 @@ describe('the note file format', () => {
 });
 
 describe('ticking a task', () => {
+  const tasks = [
+    { line: '- [ ] First task 🧭  ', label: 'First task 🧭  ', done: true },
+    { line: '\t* [x] Second task — café', label: 'Second task — café', done: false },
+    { line: '  12. [ ] Third task: 日本語', label: 'Third task: 日本語', done: true },
+  ] as const;
+  const personal = ['Intro café 🪶 e\u0301.', tasks[0].line, 'Prose [ ] stays verbatim.', tasks[1].line, tasks[2].line, 'Trailing spaces   '];
+  const prefix = ['---', 'summary: "A café 🪶 note: keep this"', 'by: bower', 'custom:   spacing stays  ', '---', '', '## Current state', '- [ ] Protected current state', '- Bower maintained summary.', ''];
+  const suffix = ['', '## Timeline', '- Today · [ ] Protected history · [[Another note]]', '', "## Bower's note", '- [ ] Protected Bower note', ''];
+  const fixtures = (['LF', 'CRLF', 'mixed'] as const).flatMap((ending) => (['protected', 'plain'] as const).map((kind) => {
+    const lines = kind === 'protected' ? [...prefix, ...personal, ...suffix] : ['\uFEFFPlain note 🪶', '', ...personal, 'Last prose without a final newline.'];
+    const raw = lines.map((line, i) => line + (i === lines.length - 1 ? '' : ending === 'LF' ? '\n' : ending === 'CRLF' || i % 3 !== 1 ? '\r\n' : '\n')).join('');
+    return { ending, kind, raw };
+  }));
+
+  it.each(fixtures)('toggling a personal task preserves every other source byte ($ending, $kind)', ({ raw }) => {
+    for (const [index, task] of tasks.entries()) {
+      const changed = task.line.replace(task.done ? '[ ]' : '[x]', task.done ? '[x]' : '[ ]');
+      const expected = raw.replace(task.line, changed);
+      const out = toggleTaskInText(raw, index);
+      expect(out).toEqual({ text: expected, label: task.label, done: task.done });
+      expect(new TextEncoder().encode(out.text)).toEqual(new TextEncoder().encode(expected));
+      expect(toggleTaskInText(out.text, index)).toEqual({ text: raw, label: task.label, done: !task.done });
+    }
+  });
+
+  it('toggling a personal task preserves every other source byte (missing task is refused)', () => {
+    for (const { raw } of fixtures) {
+      expect(() => toggleTaskInText(raw, tasks.length)).toThrow('That line is no longer in the note.');
+      expect(() => toggleTaskInText(raw, -1)).toThrow('That line is no longer in the note.');
+    }
+  });
+
+  it('toggling a personal task preserves every other source byte (protected checkboxes are refused)', () => {
+    const raw = [...prefix, ...suffix].join('\r\n');
+    expect(() => toggleTaskInText(raw, 0)).toThrow('That line is no longer in the note.');
+  });
+
+  it('toggling a personal task preserves every other source byte (identical labels select the requested checkbox)', () => {
+    const before = `${prefix.join('\r\n')}\r\n- [ ] Repeat 🪶\r\n`;
+    const after = suffix.join('\r\n');
+    const raw = `${before}- [ ] Repeat 🪶${after}`;
+    const out = toggleTaskInText(raw, 1);
+    expect(out).toEqual({ text: `${before}- [x] Repeat 🪶${after}`, label: 'Repeat 🪶', done: true });
+    expect(toggleTaskInText(out.text, 1).text).toBe(raw);
+  });
+
   const text = serializeNote({
     summary: 's',
     properties: [],

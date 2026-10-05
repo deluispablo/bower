@@ -186,21 +186,22 @@ export function toggleTaskInText(raw: string, index: number): { text: string; la
   const text = raw.replace(/\r\n/g, '\n');
   const p = split(text);
   let i = -1;
-  let label = '';
-  let done = false;
-  const body = text
-    .slice(p.bodyStart, p.bodyEnd)
-    .split('\n')
-    .map((line) => {
-      const m = TASK_LINE.exec(line);
-      if (!m) return line;
-      i++;
-      if (i !== index) return line;
-      label = m[4] ?? '';
-      done = m[2] !== 'x';
-      return `${m[1]}${done ? 'x' : ' '}${m[3]}${m[4]}`;
-    })
-    .join('\n');
-  if (!label) throw new BowerError('not-found', 'That line is no longer in the note.');
-  return { text: text.slice(0, p.bodyStart) + body + text.slice(p.bodyEnd), label, done };
+  let at = p.bodyStart;
+  for (const line of text.slice(p.bodyStart, p.bodyEnd).split('\n')) {
+    const m = TASK_LINE.exec(line);
+    if (m && ++i === index) {
+      const label = m[4] ?? '';
+      if (!label) break;
+      const done = m[2] !== 'x';
+      const checkbox = at + (m[1]?.length ?? 0);
+      // Parser offsets count each CRLF as one character; map only this checkbox back to the original source.
+      let rawAt = 0;
+      for (let n = 0; n < checkbox; n++, rawAt++) {
+        if (raw[rawAt] === '\r' && raw[rawAt + 1] === '\n') rawAt++;
+      }
+      return { text: raw.slice(0, rawAt) + (done ? 'x' : ' ') + raw.slice(rawAt + 1), label, done };
+    }
+    at += line.length + 1;
+  }
+  throw new BowerError('not-found', 'That line is no longer in the note.');
 }
