@@ -2,7 +2,7 @@
 
 ## Next
 
-- Coordinator root remains sole integration/shared-record/provider operator; contracts-2/main3136adc method update adopted (parent53034a9; no product/contract revision). Product1dc7f64, registered214/217. Current O1 delta fb6d9afe archived2026-10-05-p2-o1-delta-1dc7f64.md:12 partial,4 absent C07/C08/C09/C13,0 complete rows. No count-based phase closure.
+- Coordinator root remains sole integration/shared-record/provider operator; contracts-2/main3136adc method update adopted (parent53034a9; no product/contract revision). Product1dc7f64, registered214/218 (new ownership-byte-parser foundation false). Current O1 delta fb6d9afe archived2026-10-05-p2-o1-delta-1dc7f64.md:12 partial,4 absent C07/C08/C09/C13,0 complete rows. No count-based phase closure.
 - S02 pending-draft-bytes-cleanup closedbf7278d after clean independentreview02c30c5e/integration1dc7f64/genuine inverse3-file red/check/unchanged11verify. Rootcheck560/52, full demo198/56 and fake198/56 green; immutableqa17 logs/hashes. Current-v1 closede5cb57d and Add closedc1b1975; preserve valid earlier evidence.
 - Real firstR1 refuted read-before-write safety: confirmed B overwritten by delayed A PATCH200. Important R1-OBS01 staysopen.24HTTP/1refresh/9134B/14.041s; both synthetic objects rawBinconfirmed, noresidual, privateauthoritydisabled/manifestretained. No optionalcases or blindrerun.
 - Readyqueue: R1 instrument review/case finished, O3 readiness reviewed correction now ready in independent NEW/tmp output. Three productentries still depend on unadopted sharedcontracts; reassess each after lead decisions. No project-wide R1 mutex.
@@ -18,6 +18,9 @@
 - No browser reservation/listener; user tab preserved. Full independent O8 evaluation and fresh final PWA gate incomplete. P2open; no product main merge/rootpush/deploy/spend/P3/P4/owner phase acceptance.
 
 - Current report-barrier reproduction at5814286/source1dc7f64: six controls pass, actual same-ID filing effects, observed done versus durable saving/no report; final assertion fails. Script0d834bda/logc0481844 archived, existing verify remains planned and compatible same-run recovery not implemented. No new product/provider change.
+
+- TL-P2-2026-10-05-03 adopted scope: exact ownership/2 pure parser now implementable; readiness direction/run-recovery invariants adopted, exact producer/shared schemas pending ratification. Final R1-D03 bounded3BASEtriplets authorized after instrument delta review. A parser worker isolated, readinessv2 5e4 frozen/review queued; B exact run contract next independent slot. New ACTIVE/decision fullpacket.
+- Owner explicitly authorizes ongoing Planificador P2 technical messages; routine coordination needs no repeated question. Current grammar discriminator7controls/1observation exit0 archived, no oldfeature closure.
 
 ## Log
 
@@ -350,3 +353,5 @@
 - 2026-10-05: actualR1-D02d8403fc inconclusive beforeconditionalwrite becauseprovider versionchanges under sameETag/across exactBASEread.16HTTP/1refresh/6282B, completeownedrawBincleanup/noresidual, authoritydisabled; no furthercase. Archived safeevents34f881ca/result4133f630/report. Parallelreadinessproposal9044204f delivered, freshindependentreview registeredbeforeleaddecision; no source/pass/schemachange.
 
 - 2026-10-05: archived current report-barrier actual red/six controls and readiness review2b8c0fec; corrected only existing readiness/report evidence notes, count214217 unchanged. Narrow NEW/tmp readinessv2 correction reserved for reviewed Important/Minor, no schema/source adoption/provider.
+
+- 2026-10-05: recorded bounded TL-P2-03 exact ownershipgrammar adoption/run-readiness invariants/final R1 variant; new ownership-byte-parser false214218, isolatedtest-first packet. Readinessv2 frozen5e4/exactdiff archived, renewed delta reviewer queued; no product/provider/phase acceptance.

@@ -2703,5 +2703,19 @@
     "verify": "pnpm vitest run src/features/piles/draft-files.test.ts src/data/live/live.test.ts -t \"person cleanup forgets pending draft bytes and keeps the folder outbox\"",
     "passes": true,
     "note": "Actual e5cb57d/source1c1e60c shared production Map/device reproduction: same27-byte Blob survives actual forgetThisPerson after10metadata keys disappear; original-folder outbox exact. qa17 retains genuine ERR_ASSERTION and immutable a90154a9 packet; independent bfecf275 prerequisite confirms real-production applicability. Planned named verify not yet implemented. Memory-only cleanup; no visible cross-account disclosure, upload, durable retention/principal/schema or provider claim."
+  },
+  {
+    "id": "ownership-byte-parser",
+    "task": "qa-18",
+    "category": "data",
+    "what": "The adopted ownership/2 pure parser and task byte splices preserve exact protected source bytes and existing legacy ownership.",
+    "steps": [
+      "Load all eighteen immutable ownership fixtures as raw bytes and check adopted framing, exact spans and refusal classifications.",
+      "Toggle only the requested personal checkbox in seven independently authored fixtures and toggle back to exact original bytes; fenced tasks never consume v2 task indices.",
+      "Preserve canonical legacy/no-frontmatter behavior, BOM and valid Unicode/line endings; refuse unsupported/damaged/invalid-encoding content without performing I/O or affecting independent metadata operations."
+    ],
+    "verify": "pnpm vitest run src/data/vault/ownership-format.test.ts -t \"ownership/2 raw byte authority\"",
+    "passes": false,
+    "note": "New bounded parser foundation authorized by TL-P2-2026-10-05-03; named verify planned, not yet implemented/executed. Does not close protected-current-prose, raw adapter/real activation/recovery UI or full C03 acceptance. Test-first loaded module stub required."
   }
 ]
