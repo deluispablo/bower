@@ -2,6 +2,9 @@
 
 ## Next
 
+- Actual R1 atc349099/source1c1e60c refutes read-before-write protection: B's independently confirmed edit overwritten by A's delayed PATCH200. R1-OBS01 Important remainsopen; lead remedy/compatible contracts required beforeO3acceptance.24actualHTTP/1refresh/9134B/14.041s; rawfile/rootBin confirmed, noresidual; authoritydisabled, no morecases. Details2026-10-05-r1-real-content-interleave.md.
+- S02 candidatef219 independentlyreviewedclean02c30c5e, integrated1dc7f64 onlyafterR1ended. Rootcheck560/52green; solebrowser5191 reservedforfulldemo/fake; inverse-fix proof pending, count213217 unchanged.17frozenartifacts/review archivedqa17. No P2/P3acceptance.
+
 - Adopted contracts-2/main53034a9 backup docs merged47d8658; root sole integration writer. Mainintegrator reports verified53034a9 privatebackup; implementationbranches remainlocal.213/217 after pending-byte registration; current-v1 proof e5cb57d; Add proofc1b1975, sourcecbf4e9f. Check528/52/demo198/56/fake198/56 green; root actual native fake/demo390x844/1440x900 at clean5193 retainedqa15, independent full UI NOT RUN.
 - Add freeze released; own tabs closed/viewport reset/previews stopped, user tab preserved. Googlev4 actual owner consent/private exact grant validated; listener/tab stopped. Drive premises still NOT RUN. No rotation/revocation/repeated generic setup questions.
 - O3 current-v1 consumer corruption actually reproduced:3valid/10assertionreds, unknownphase1durableoverwrite, bytes/journal/input recovery evidenceqa16. Fresh prerequisite reviewed; last-run-recovery-validation candidate17bbee4(2files) reviewedclean/integrated1c1e60c; root549green/fullfake retry198/56 and genuine inverse-fix proof e5cb57d; first navigation timeout retained. No newwire/scheduler/grammar.
@@ -16,6 +19,8 @@
 - Three-old-entry applicability report73f11992 archived: shared readiness highest next risk, rich prose needs lead-owned grammar adoption, report fault currently fake-only observation/real-plausible boundary requiring O3/O4 recovery. Historical evidence kept under originalSHA, no fresh replay or closure.
 
 ## Log
+
+- 2026-10-05: first actualDriveR1 content interleave completed under reviewedv2: observed-refuted/exit2, genuineA200losesconfirmedB; bothsyntheticobjects rawBinverified/noresidual, privateauthoritydisabled. S02 five-path candidatef219 cleanindependentreview integrated1dc afterproviderended; rootcheck560green, serialbrowser/proof next. R1safe-contractremedy remainslead-owned; no fabricatedconditional claim or phaseclosure.
 
 - 2026-10-05: R1v2 fresh read-only review and same-entry S02 resume dispatched6b3ee992. Root52-file/source-pin/private-permission preflight passes with authoritydisabled/manifestabsent/network0; fullcheck549/52/213217 green. S02 worker reports genuine first11assertionreds before production changes; candidate and actual R1 still pending. No repeat consent/init, browser/provider claim or phase closure.
 
