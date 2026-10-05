@@ -183,3 +183,4 @@
 - 2026-10-05: create-name-speed passes — fix(app): a change takes no cross-tab lock when nothing waits to be sent, so a new name box comes at once
 - 2026-10-05: pile-date passes — fix(app): a pile page says its day as Home does
 - 2026-10-05: situation-address-clean passes — fix(demo): a situation opened by its address starts clean; an empty folder reads closed
+- 2026-10-05: focus-after-close passes — fix(app): the keyboard stays in the page after a sheet closes, an answer, a removed rule or No thanks

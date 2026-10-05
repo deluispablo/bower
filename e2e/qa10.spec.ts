@@ -25,3 +25,24 @@ test('a situation opened by its address starts clean: no earlier tabs, main fold
     await expect(tree.getByRole('treeitem', { name: new RegExp(`^${name}`) }), name).toHaveAttribute('aria-expanded', 'false');
   }
 });
+
+const notBody = (page: Page) => expect.poll(() => page.evaluate(() => document.activeElement !== document.body && !!document.activeElement));
+
+test('the keyboard stays in the page after closing, answering, removing or saying no', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'keyboard use');
+  await open(page, '/');
+  await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Tidy up 15 things$/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await notBody(page).toBe(true);
+  await open(page, '/');
+  await page.locator('section[aria-labelledby="qs"] li').first().getByRole('button').first().click();
+  await notBody(page).toBe(true);
+  await open(page, '/');
+  await page.getByRole('region', { name: 'Bower suggests' }).getByRole('button', { name: 'No thanks' }).first().click();
+  await notBody(page).toBe(true);
+  await open(page, '/bower');
+  await page.getByRole('button', { name: /^Remove the rule/ }).first().click();
+  await notBody(page).toBe(true);
+});

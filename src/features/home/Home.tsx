@@ -223,7 +223,10 @@ function Questions() {
   if (!qs?.length) return null;
   const answer = (id: string, yes: boolean, label: string): void => {
     vault.answer(id, yes).then(
-      () => toast(answered(label)),
+      () => {
+        toast(answered(label));
+        focusMain();
+      },
       (e: unknown) => report(e, 'That answer did not save. Try again.'),
     );
   };
@@ -267,10 +270,18 @@ function Suggestions() {
             {sg.why}
           </p>
           <div className={s.row2}>
-            <Button size="sm" onClick={() => void vault.dismissSuggestion(sg.id, true).then(() => toast('Kept as a rule.'))}>
+            <Button size="sm" onClick={() =>
+                void vault.dismissSuggestion(sg.id, true).then(
+                  () => {
+                    toast('Kept as a rule.');
+                    focusMain();
+                  },
+                  (e: unknown) => report(e, 'That did not work. Try again.'),
+                )
+              }>
               Keep as a rule
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => void vault.dismissSuggestion(sg.id, false)}>
+            <Button size="sm" variant="ghost" onClick={() => void vault.dismissSuggestion(sg.id, false).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
               No thanks
             </Button>
           </div>

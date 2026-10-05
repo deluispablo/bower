@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 import s from './ui.module.css';
 import { useBackCloses } from './back';
+import { focusMain } from './focus';
 
 interface Props {
   open: boolean;
@@ -22,7 +23,12 @@ export function Sheet({ open, onOpenChange, title, hideTitle, description, child
       <Dialog.Portal>
         <Dialog.Overlay className={s.scrim} />
         {/* With no description, say so (aria-describedby undefined) rather than repeat the title. */}
-        <Dialog.Content className={`${s.sheet} ${className}`} {...(description ? {} : { 'aria-describedby': undefined })}>
+        <Dialog.Content
+          className={`${s.sheet} ${className}`}
+          {...(description ? {} : { 'aria-describedby': undefined })}
+          // Back to what opened it; when that is gone (a sheet opened by the app), to the page.
+          onCloseAutoFocus={focusMain}
+        >
           <div className={s.grab} aria-hidden="true" />
           <Dialog.Title className={hideTitle ? 'sr-only' : s.sheetTitle}>{title}</Dialog.Title>
           {description && <Dialog.Description className="muted">{description}</Dialog.Description>}

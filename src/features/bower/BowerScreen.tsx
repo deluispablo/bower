@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { shortDay } from '@/app/words';
 import { report } from '@/ui/report';
+import { focusMain } from '@/ui/focus';
 import { startRun } from '@/features/tidy/start-run';
 import { useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { PoseBower, type Pose } from '@/bird/Bower';
@@ -48,6 +49,7 @@ export function BowerScreen() {
   const removeRule = async (id: string): Promise<void> => {
     try {
       const undo = await vault.removeRule(id);
+      focusMain();
       toast('Rule removed. Bower stops following it from the next tidy-up.', { label: 'Undo', run: () => void undo().catch((e: unknown) => report(e, 'That did not work. Try again.')) });
     } catch (e) {
       report(e, 'That did not work. Try again.');

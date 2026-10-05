@@ -2075,7 +2075,7 @@
       "Each time the keyboard is in the page (main or the next control), not on the body."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"the keyboard stays in the page\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "undo-says-back",
