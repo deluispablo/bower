@@ -221,3 +221,4 @@
 - 2026-10-05: task-keeps-seen passes — test(data): retain seen state after ticking an own task
 - 2026-10-05: task-seen regression closed with manually observed assertion red and exact production restoration; assigned pile retry coverage. Fresh search review requested a stale-parent cache correction before integration; the candidate remains open. Coordinator skills loaded from canonical project files; check green before this record.
 - 2026-10-05: upload-retry-screen passes — test(piles): retry only failed uploads from the pile screen
+- 2026-10-05: search-root-scope passes — fix(drive): prove selected-folder search after integration

@@ -2380,7 +2380,7 @@
       "The matching Bower file is found and unrelated folders are not searched."
     ],
     "verify": "pnpm vitest run src/data/drive/drive-http.test.ts -t \"full-text search scopes its pages to the selected folder\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "worker-response-shapes",
