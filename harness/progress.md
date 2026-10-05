@@ -200,3 +200,4 @@
 - 2026-10-05: welcome-back passes — fix(app): coming back after deleting the account says welcome back, the folder still there
 - 2026-10-05: invalid-link-says passes — fix(app): a link that is not one is said so next to the box
 - 2026-10-05: small-wording passes — fix(app): words agree: one way to say a run stopped, Press in the tour, and a rename says so
+- 2026-10-05: offline-footer passes — fix(app): offline, the footer says your changes wait here

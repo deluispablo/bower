@@ -209,3 +209,15 @@ test('words agree: a rename says so, and says why a slash became a dash', async 
   await page.keyboard.press('Enter');
   await expect(page.getByRole('status').getByText('Renamed to Lemon tart-best. Names cannot have slashes; Bower used a dash.')).toBeVisible();
 });
+
+test('offline the footer says so, and says synced again when back', async ({ page, context, isMobile }) => {
+  test.skip(isMobile, 'the desktop footer');
+  await open(page, '/');
+  const footer = page.locator('footer');
+  await expect(footer.getByText('Synced with your Drive')).toBeVisible();
+  await context.setOffline(true);
+  await expect(footer.getByText('Offline. Your changes wait here until you are back.')).toBeVisible();
+  await expect(footer.getByText('Synced with your Drive')).toHaveCount(0);
+  await context.setOffline(false);
+  await expect(footer.getByText('Synced with your Drive')).toBeVisible();
+});

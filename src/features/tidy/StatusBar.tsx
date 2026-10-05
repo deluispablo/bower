@@ -4,6 +4,7 @@ import { countFiles } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { plural } from '@/app/words';
 import { BowerHead } from '@/ui/Icon';
+import { useOnline } from '@/ui/online';
 import { replayWaiting, isRunning, runShort, statusLine, stoppedUnseen } from './run-words';
 import s from './tidy.module.css';
 
@@ -13,6 +14,7 @@ export function StatusBar() {
   const { data: piles } = usePiles();
   const { data: tree } = useTree();
   const { setTidy, startReplay } = useUi();
+  const online = useOnline();
   const waiting = waitingIn(piles);
   const total = (tree ?? []).reduce((n, r) => n + countFiles(r), 0);
   const running = isRunning(run);
@@ -33,7 +35,7 @@ export function StatusBar() {
         ) : (
           <>
             <span>{plural(total, 'thing')}</span>
-            <span>Synced with your Drive</span>
+            <span>{online ? 'Synced with your Drive' : 'Offline. Your changes wait here until you are back.'}</span>
           </>
         )}
       </span>

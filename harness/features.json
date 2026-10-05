@@ -2266,6 +2266,6 @@
       "The footer says you are offline, changes wait."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"offline the footer says so\"",
-    "passes": false
+    "passes": true
   }
 ]
