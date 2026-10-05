@@ -34,7 +34,7 @@ Documentation changes may be committed with documentation/skill validation and p
 
 ## Handoff across sessions and tools
 
-Use the shared repository and assignment packet; do not depend on Claude private memory, Codex chat history or plugins being installed. Include a unique session/thread label (not only `/root`), plan revision, phase, capability/entry, exact SHAs, owned paths, checks and next action. Messaging another user-owned chat requires explicit authorization; a document assignment does not create that permission. Subagents require explicit delegation from the owner or current authorized assignment, and may not recursively expand it.
+Use the shared repository and assignment packet; do not depend on Claude private memory, Codex chat history or plugins being installed. Include a unique session/thread label (not only `/root`), plan revision, phase, capability/entry, exact SHAs, owned paths, checks and next action. Messaging another user-owned chat requires explicit authorization; a document assignment does not create that permission. The owner explicitly authorized the named coordinator on 2026-10-05 to spawn and assign subagents for independent parallel work within the accepted scope, as COORDINATION defines. Workers may not recursively expand that delegation. This does not grant permission to message unrelated user-owned chats.
 
 On context compaction/resume, refresh main's plan revision and the live ACTIVE record before changing files. A lost session does not release ownership automatically. Keep browser gates serialized under the current configuration. Native multi-agent features or a Claude-to-Codex bridge are optional transports; they do not replace ownership, proof or independent review.
 
@@ -45,3 +45,5 @@ On context compaction/resume, refresh main's plan revision and the live ACTIVE r
 - 2026-10-05: owner requested architectural concerns be adopted throughout planning. Revision `2026-10-05-contracts-2` adds stable app/service and runner/semantic contracts, shared pure rules, browser-independent admitted work, bounded P2 premise probes and a dispatch-ready queue. P3 now explicitly builds the reusable deterministic execution spine; P4 adds semantics. No product-code/proof edits or phase closure; existing coordinator/evaluation reservations preserved.
 
 - 2026-10-05: owner authorized a private GitHub backup of accepted main only, while all development remains local. BACKUP.md is the narrow exception to historical no-push rules; feature branches, deployment and production remain outside this authorization.
+
+- 2026-10-05: owner authorized coordinator-managed parallel work. One active entry applies per worker, not project-wide; isolated ownership, accepted dependencies, independent review and serialized integration/browser gates remain. This method-only update preserves contracts-2 product requirements, current reservations and phase boundaries.

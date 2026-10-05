@@ -10,6 +10,10 @@ Claude and Codex share this method. For simultaneous sessions, follow [the coord
 
 Startup and capability selection are shared: [STARTUP.md](STARTUP.md) and [SKILLS.md](SKILLS.md). Load `bower-session` once, then only the assigned role skill. Skills guide work; existing gates still prove it.
 
+## Parallel delivery
+
+The owner authorizes the named coordinator to delegate independent entries concurrently under COORDINATION. “One feature at a time” means one active entry per worker; it is not a project-wide queue of one. Use isolated checkouts and settled shared contracts, preserve independent review, and serialize integration/proof closure and shared browser resources. Reconsider ready independent work when a worker finishes or another entry becomes blocked. No extra owner confirmation is needed for ordinary subagent assignments within this scope.
+
 ## The parts
 
 | Part | Where | What it is for |

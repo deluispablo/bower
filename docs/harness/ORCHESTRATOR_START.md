@@ -6,7 +6,7 @@ Planning revision: `2026-10-05-contracts-2`. Ready for assignment preparation, n
 
 1. Follow STARTUP; locate the live ACTIVE file through git worktree list. Record actual code SHA, plan revision, ownership, running checks and frozen evaluations. Do not mutate a frozen target; let authorized review finish and retain its report with its original scope.
 2. At a clean exclusive checkpoint merge the docs-only main update, preserving newer implementation records. Run pnpm check and record the combined SHA. An existing 201/201 ledger does not prove the revised capability contract.
-3. Assign O1 below as the first planning/audit deliverable. Register implementation gaps only from current evidence. Prepare O2 in parallel only with explicit delegation and separate ownership; it needs no browser reservation. No speculative bulk feature registration.
+3. Assign O1 below as the first planning/audit deliverable. Register implementation gaps only from current evidence. The standing owner authorization in COORDINATION permits preparing O2 in parallel with separate ownership; it needs no browser reservation. No speculative bulk feature registration.
 4. Convert the queue into small executable entries. Use actual repository paths and real named test commands after inspecting the code. An unimplemented probe/test is planned evidence, never a green verify. Contract fixtures/types have one serialized owner.
 
 ## Ordered assignment queue
@@ -19,12 +19,16 @@ These are planning package IDs, not harness entries and not claims of completed 
 | O2 | Integration premise probe specifications for R1–R4 in WORK_PLAN | Adoption; scope synthetic resources and real-service access | Hypothesis, method, stop condition, result format and cleanup; execute only with authorized resources; missing credentials remain missing evidence |
 | O3 | Boundary contract and compatibility fixtures | O1 plus relevant R1–R4 results | App/Worker and runner/semantic contracts; scope, identity, versions, recovery, failures; independent review; accepted fixtures before dependent writers |
 | O4 | First vertical slice: accepted run → persisted effect/report → reopen/retry | O3 and reproduced prerequisite fixes | Two fake clients; lost response, duplicate dispatch, browser close, stale status and save failure; no duplicate effect or false done |
-| O5 | Complete semantic capability simulations C04–C11 and undo C13 | O3/O4 | Documents/revisions, answers, connections, contradictions, permitted research and conflicts with actual fake persistence; one capability entry at a time |
+| O5 | Complete semantic capability simulations C04–C11 and undo C13 | O3/O4 | Documents/revisions, answers, connections, contradictions, permitted research and conflicts with actual fake persistence; one capability entry per worker at a time |
 | O6 | Incremental preparation/shared core C02/C15 | O3; safe readiness primitives | External unprepared input, invalidated cache and bounded context expansion; responsive app; extract shared rules only as needed |
 | O7 | Quality/performance corpus and measured optimization | O4–O6; capture baseline before optimizing each slice | Same fixtures and expected outcomes; stage timings, reuse/read counts and complete outcome preservation |
 | O8 | Frozen P2 acceptance dossier | All gaps resolved, probes and policies resolved | Full gates, independent reviewer/evaluator, C01–C16 mapping and owner acceptance |
 
 Repair a reproduced data-loss or ownership defect before building a slice on it. O2 probes are P2 risk retirement, not permission to build P3 services. O5/O6 can be split across writers only once shared schemas are committed and file reservations are disjoint. No parallel edits to contracts, harness records, shared fixtures or test configuration.
+
+## Parallel dispatch
+
+Treat the queue as a dependency graph, not a global mutex. The owner authorizes the named coordinator to launch independent subagents without further permission. Schedule ready entries across isolated checkouts, preferably two implementers with review capacity when useful. O5 and O6 may progress concurrently after their actual shared prerequisites are accepted. O2 preparation and independent repairs may overlap when neither consumes the other's unsettled contract or shared resources. Keep actual provider probes and browser gates within their existing reservations. Finish existing reserved atomic work before changing its ownership.
 
 ## Required additions to each packet
 
