@@ -2701,7 +2701,7 @@
       "Use actual successful session sign-out, deletion and expiry; preserve failed remote sign-out retry behavior and public keep/get/per-key forget compatibility."
     ],
     "verify": "pnpm vitest run src/features/piles/draft-files.test.ts src/data/live/live.test.ts -t \"person cleanup forgets pending draft bytes and keeps the folder outbox\"",
-    "passes": false,
+    "passes": true,
     "note": "Actual e5cb57d/source1c1e60c shared production Map/device reproduction: same27-byte Blob survives actual forgetThisPerson after10metadata keys disappear; original-folder outbox exact. qa17 retains genuine ERR_ASSERTION and immutable a90154a9 packet; independent bfecf275 prerequisite confirms real-production applicability. Planned named verify not yet implemented. Memory-only cleanup; no visible cross-account disclosure, upload, durable retention/principal/schema or provider claim."
   }
 ]

@@ -215,3 +215,4 @@ create-leading-dot	5c634c8f5857c297	2026-10-05	red (fixed in 28d2ce2359a940f2e2d
 timeline-source-names	c25659444aa8b1f4	2026-10-05	red (fixed in 6305ca9dfa126fd08ef9fe819a4ba2000cb78437)
 add-draft-no-loss	cbcfe65144ab3fbc	2026-10-05	red (fixed in cbf4e9f14c1e66f61bbec81b58091d4ec356d96a)
 last-run-recovery-validation	a1fbbb26a93a28a9	2026-10-05	red (fixed in 1c1e60c0c6dee4b610cd845ee0a3c393f265370f)
+pending-draft-bytes-cleanup	1f136a26d5e07981	2026-10-05	red (fixed in 1dc7f64)
