@@ -231,3 +231,5 @@
 
 - 2026-10-05: Drive links closed with full screen gates; assign composer keyboard recovery.
 - 2026-10-05: composer-focus passes — fix(bower): keep the composer keyboard after sending
+
+- 2026-10-05: Composer focus closed; assign coherent names and expand the open naming entry with the reproduced file-page/menu mismatch.

@@ -2423,8 +2423,9 @@
     "id": "plain-file-names",
     "task": "qa-11",
     "category": "polish",
-    "what": "Search, file-action messages and the change list still expose extensions instead of the same plain name used on the page.",
+    "what": "File pages and menus, search, file-action messages and the change list expose extensions instead of one plain name.",
     "steps": [
+      "Open the PDF page on phone and desktop; its heading and phone menu use the same plain name.",
       "Search for Dentist reminder in the side panel.",
       "Move or put Lease draft in the Bin and inspect its message and Since the last tidy-up.",
       "On demo and fake, names agree with the tree and page without file extensions."
