@@ -2381,5 +2381,42 @@
     ],
     "verify": "pnpm vitest run src/data/drive/drive-http.test.ts -t \"full-text search scopes its pages to the selected folder\"",
     "passes": false
+  },
+  {
+    "id": "worker-response-shapes",
+    "task": "qa-11",
+    "category": "review",
+    "what": "Successful Worker responses with malformed fields can crash screens or create invalid access tokens.",
+    "steps": [
+      "Return malformed successful responses for session, token, folder and run endpoints.",
+      "The client rejects each with a readable error; expected empty sign-out responses still work."
+    ],
+    "verify": "pnpm vitest run src/data/worker/worker-http.test.ts -t \"malformed successful Worker responses give a readable error\"",
+    "passes": false
+  },
+  {
+    "id": "tab-link-name",
+    "task": "qa-11",
+    "category": "polish",
+    "what": "Desktop tabs show a saved link extension although the rest of the app hides it.",
+    "steps": [
+      "Open a saved link in the desktop app, on demo and fake.",
+      "The tab has the same plain name as its page and the tree."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"a saved link has the same name in its desktop tab\"",
+    "passes": false
+  },
+  {
+    "id": "composer-focus",
+    "task": "qa-11",
+    "category": "polish",
+    "what": "After a request or rule is sent, keyboard focus falls to the page body.",
+    "steps": [
+      "Open Tell Bower using the keyboard, type a request and send it.",
+      "Repeat with a rule, on phone and desktop, demo and fake.",
+      "Focus returns to the composer so another message can be written."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"sending a request or rule keeps the composer keyboard\"",
+    "passes": false
   }
 ]
