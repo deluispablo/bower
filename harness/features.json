@@ -2673,5 +2673,20 @@
     "verify": "pnpm vitest run src/features/piles/Add.test.tsx -t \"an Add draft with unavailable bytes keeps every member before saving\"",
     "passes": true,
     "note": "Actual three public-render assertion reds at f739b5c/source44ee162, retained qa15. Approved D02 supersedes historical successful left-out behavior; original qa9/unit/proof history preserved with explicit policy migration. Bounded screen guard only, no durable bytes/hash identity/shared readiness/wire or grammar claim."
+  },
+  {
+    "id": "last-run-recovery-validation",
+    "task": "qa-16",
+    "category": "bug",
+    "what": "An unreadable saved update is refused without changing it or starting another tidy-up.",
+    "steps": [
+      "Keep a synthetic current-v1 saved update, then replace its bytes with a malformed or unsupported record.",
+      "Reopen a fresh fake Worker and read its status; compare the same record through the app reader.",
+      "Expect a readable error from both, unchanged saved bytes and other folder data, and no new tidy-up when processing is requested.",
+      "Repair the saved update explicitly using the version just read and reopen; valid terminal and legitimate active-reload records retain existing behavior."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"persisted v1 run fixtures agree across current recovery consumers\"",
+    "passes": false,
+    "note": "Reproduced at cbf4e9f/identical666074f public APIs:3valid controls,10refusal assertion reds and unknown-phase1durableoverwrite. qa16 retains exact bytes/snapshots/read-version recovery. Existing current-v1 shared validation only; no new schema, report-save barrier, scheduler, readiness or ownership grammar. HTTP validates RunWire alone, not this durable envelope/report."
   }
 ]
