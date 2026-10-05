@@ -308,7 +308,8 @@ export function Explorer({ variant }: Props) {
 
   const renderRow = (node: TreeNode, level: number): ReactNode => {
     const folder = node.type === 'folder';
-    const isOpen = folder && ui.open.has(node.path);
+    // An empty folder has nothing to show open: it reads closed, with its 0, like every empty folder.
+    const isOpen = folder && ui.open.has(node.path) && !!node.children?.length;
     const root = isRoot(node.path) || (level === 0 && folder);
     const selected = ui.selected === node.path;
     const focused = kb && current === node.path;

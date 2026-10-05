@@ -102,3 +102,21 @@ export function keepSignedIn(on: boolean): void {
     console.error(e);
   }
 }
+
+/**
+ * Before anything reads the device's storage: an address opened with another
+ * situation than the one this tab had starts it clean, as choosing it in the
+ * panel does (signed in or not, toured or not, no tabs, folders closed).
+ */
+export function startCleanIfNewSituation(): void {
+  try {
+    const q = new URLSearchParams(location.search).get('scenario');
+    const how = (performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined)?.type;
+    const before = sessionStorage.getItem(KEY);
+    if (!isScenario(q) || how !== 'navigate' || before === null || before === q) return;
+    for (const k of [SIGNED_KEY, 'bower:toured', 'bower:tabs']) sessionStorage.removeItem(k);
+    localStorage.removeItem('bower:open');
+  } catch {
+    // expected: storage may be blocked (a private window); nothing was kept.
+  }
+}

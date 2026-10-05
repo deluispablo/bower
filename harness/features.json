@@ -2062,7 +2062,7 @@
       "One tab on Home; every empty main folder is closed and shows 0."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"a situation opened by its address starts clean\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "focus-after-close",
