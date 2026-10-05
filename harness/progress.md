@@ -264,3 +264,4 @@
 - 2026-10-05: pile-edit-still-seen passes — fix(inbox): prove stale pile edits have no structural effects
 
 - 2026-10-05: pile-edit-still-seen reviewed and closed afb4b36 with six genuine assertion reds. Reproduced and registered separate pile-context-version, assigning the same isolated sole writer before remaining Minor fixes.
+- 2026-10-05: pile-context-version passes — fix(inbox): prove context conflicts precede all pile effects
