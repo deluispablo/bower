@@ -2,8 +2,9 @@
 
 ## Next
 
-- Follow the plan in `docs/harness/HANDOFF.md`: close `phone-more-faint`, triage the phase 2 ledger's deferred minors with the owner, then a reviewer round over `4833d3c..HEAD` and an evaluator round (qa-11), fix their findings, repeat until clean. Phase 3 waits for that.
-- Run e2e only while the Mac's display is awake; never edit `src/` while e2e, `done.sh` or an evaluator runs.
+- Close the qa-11 findings from the independent review, harness findings first. The evaluator is exploring demo and fake; register its findings before fixing them. Repeat both independent rounds after the fixes, then run every gate before merging locally to main.
+- Await the owner's ruling on offline reading, a durable upload queue and the real-Drive smoke test for phase 3. Phase 2 stays open until the rounds are clean and its remaining rulings are agreed.
+- Never edit `src/` while e2e, `done.sh` or an evaluator runs.
 
 ## Log
 
@@ -202,3 +203,4 @@
 - 2026-10-05: offline-footer passes — fix(app): offline, the footer says your changes wait here
 - 2026-10-05: qa-10 closed (185/185). `docs/harness/HANDOFF.md` written: the state, the plan to close phase 2 and start phase 3, how to run a round, the traps of this machine.
 - 2026-10-05: phone-more-faint passes — fix(app): the phone page menu has clear dots and a full touch target
+- 2026-10-05: qa-11 review found six Important and two Minor issues; registered for test-first fixes before phase 2 closure. Initial demo suite: 187 passed, 53 skipped.

@@ -2279,5 +2279,107 @@
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"the phone page menu button is as clear as Back\"",
     "passes": true
+  },
+  {
+    "id": "harness-timeout-red",
+    "task": "qa-11",
+    "category": "review",
+    "what": "A browser or whole-test timeout is accepted as an assertion red.",
+    "steps": [
+      "Run a verify with a browser startup, navigation, hook or whole-test timeout.",
+      "The harness refuses the close; a genuine failed expectation is still accepted."
+    ],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"a browser timeout is not an assertion red\"",
+    "passes": false
+  },
+  {
+    "id": "harness-selected-files",
+    "task": "qa-11",
+    "category": "review",
+    "what": "A verify can name a test outside the files it actually runs.",
+    "steps": [
+      "Give a verify two alternatives, with the second test outside its selected file.",
+      "The harness refuses the proof even though the first test ran."
+    ],
+    "verify": "pnpm vitest run src/harness.test.ts -t \"every verify name runs in the files that verify selects\"",
+    "passes": false
+  },
+  {
+    "id": "journal-before-run",
+    "task": "qa-11",
+    "category": "review",
+    "what": "A tidy-up starts even when waiting instructions could not reach Drive.",
+    "steps": [
+      "Add a rule while Drive cannot write and leave its line waiting.",
+      "Start a tidy-up while the connection still fails.",
+      "The app says the changes must arrive first, and no run is started."
+    ],
+    "verify": "pnpm vitest run src/data/live/live.test.ts -t \"a tidy-up does not start while journal lines still wait\"",
+    "passes": false
+  },
+  {
+    "id": "journal-storage-failure",
+    "task": "qa-11",
+    "category": "review",
+    "what": "A rule is reported saved even when both Drive and device storage failed.",
+    "steps": [
+      "Make Drive writes fail and device storage refuse the waiting line.",
+      "Add a rule.",
+      "The app gives a readable error rather than claiming it is safely saved."
+    ],
+    "verify": "pnpm vitest run src/data/vault/journal.test.ts -t \"a rule is not reported saved when Drive and the outbox both fail\"",
+    "passes": false
+  },
+  {
+    "id": "journal-separate-clients",
+    "task": "qa-11",
+    "category": "review",
+    "what": "Two clients making their first changes can create folders that hide one client’s journal.",
+    "steps": [
+      "Open the same fresh folder through two independent clients.",
+      "Make the first change on each at the same time, then refresh.",
+      "Both changes remain visible and available to the runner."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"first changes on separate clients are all visible after refresh\"",
+    "passes": false
+  },
+  {
+    "id": "runner-json-shapes",
+    "task": "qa-11",
+    "category": "review",
+    "what": "Runner files with v:1 but the wrong shape can crash the app.",
+    "steps": [
+      "Load malformed questions, suggestions, requests, hashes and last-run files.",
+      "Open the corresponding screens.",
+      "Each read rejects with a short readable error, without crashing or silently replacing data."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"runner files with the wrong shape give a readable error\"",
+    "passes": false
+  },
+  {
+    "id": "open-in-drive",
+    "task": "qa-11",
+    "category": "review",
+    "what": "Open in Drive shows a placeholder instead of opening the selected thing.",
+    "steps": [
+      "On the real source, open Settings and choose Open in Drive.",
+      "Choose Open in Drive from a file menu.",
+      "The matching folder or file opens; pretend sources clearly explain that they simulate Drive."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"Open in Drive resolves the selected folder or file\" && bash scripts/e2e-both.sh e2e/qa11.spec.ts -g \"Open in Drive explains the pretend source\"",
+    "passes": false
+  },
+  {
+    "id": "search-root-scope",
+    "task": "qa-11",
+    "category": "review",
+    "what": "Search spends its two pages on unrelated Drive files and can miss a match inside Bower.",
+    "steps": [
+      "Keep more than two pages of unrelated Drive matches before a match in Bower.",
+      "Search for those words.",
+      "The matching Bower file is found and unrelated folders are not searched."
+    ],
+    "verify": "pnpm vitest run src/data/drive/drive-http.test.ts -t \"full-text search scopes its pages to the selected folder\"",
+    "passes": false
   }
 ]
