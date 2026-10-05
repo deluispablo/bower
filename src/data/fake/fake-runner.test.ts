@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { driveError } from '../drive/drive-api';
 import { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
 import { seedFakeDrive } from './seed';
 import { runFake, type FakeRunOptions } from './fake-runner';
-import type { RunPhase } from '../types';
+import { BowerError, type RunPhase } from '../types';
+import { PROP, SYSTEM } from '../vault/layout';
 
 let drive: FakeDrive;
 let root: string;
@@ -25,6 +27,8 @@ beforeEach(async () => {
   root = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
   vault = fresh();
 });
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('the fake runner', () => {
   it('files every pile it took and empties the journal', async () => {
@@ -201,5 +205,114 @@ describe('the fake runner', () => {
     if (out.phase !== 'done') throw new Error('failed');
     expect(out.report.questions.map((q) => q.id)).toEqual(['q-saltmere']);
     expect((await fresh().questions()).map((q) => q.id)).toEqual(['q1', 'q2', 'q-saltmere']);
+  });
+});
+
+describe('request history preflight', () => {
+  const marker = 'SYNTHETIC_PRIVATE_HISTORY';
+  const prior = { id: 'earlier', text: 'Keep the earlier request.', at: -0.5, done: 'Earlier completion.' };
+  const malformed = [
+    { name: 'syntax', text: `{ "v": 1, "done": [ "${marker}"\n`, category: 'is not valid JSON' },
+    { name: 'nested record', text: JSON.stringify({ v: 1, done: [{ id: marker, text: 123, at: 'later', done: [] }] }), category: 'has an unsupported shape' },
+    { name: 'container', text: JSON.stringify({ v: 1, done: { [marker]: prior } }), category: 'has an unsupported shape' },
+  ];
+
+  async function prepare(history: string | null, pending: boolean) {
+    // Small public-API world: snapshots include every byte, parent, mark and Bin entry.
+    drive = new FakeDrive();
+    root = (await drive.createFolder('root', 'Bower')).id;
+    for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root, name);
+    const system = await drive.createFolder(root, SYSTEM.dir);
+    await drive.createFolder(system.id, 'changes');
+    const file = history === null ? null : await drive.createText(system.id, 'requests.json', '{"v":1,"done":[]}\n');
+    if (file && history !== null) await drive.writeText(file.id, history, (await drive.get(file.id)).modifiedTime);
+    const marked = await drive.createText(root, 'Earlier.md', 'Earlier note café.\r\n', { [PROP.isNew]: '1' });
+    const binned = await drive.createText(root, 'Discarded.md', 'Existing Bin bytes.\r\n');
+    await drive.trash(binned.id);
+    vault = fresh();
+    const pile = await vault.addPile({ text: 'Synthetic garden observation', items: [] });
+    const request = pending ? await vault.addRequest('Describe the synthetic garden.') : null;
+    if (!pending) await vault.addRule('Keep garden observations together');
+    await vault.settled();
+    const journal = [...drive.dump(root)].filter(([path]) => /^\.bower\/changes\/[^/]+\.json$/.test(path));
+    expect(journal).toHaveLength(1);
+    const paths = (await drive.listAll(root)).map((f) => drive.pathOf(f.id, root));
+    expect(paths).not.toContain('Resources/Ideas');
+    expect(paths).not.toContain(SYSTEM.archive);
+    expect(paths).not.toContain(SYSTEM.hashes);
+    return { file, marked, pile, request, journal };
+  }
+
+  for (const scope of ['all', 'instructions'] as const) for (const pending of [true, false]) {
+    it.each(malformed)(`malformed request history stops a tidy-up before effects (${scope}, pending request ${pending}, $name)`, async ({ text, category }) => {
+      const { file, marked, pile, request, journal } = await prepare(text, pending);
+      if (!file) throw new Error('Expected the history file');
+      const before = await drive.snapshot();
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const refused = runFake(drive, root, opts({ scope }));
+      await expect(refused).rejects.toBeInstanceOf(BowerError);
+      await expect(refused).rejects.toMatchObject({ code: 'unknown', message: 'Bower could not read its latest update. Try again.' });
+      expect(await drive.snapshot()).toBe(before);
+      expect(await drive.readText(file.id)).toBe(text);
+      expect(await drive.get(marked.id)).toMatchObject({ appProperties: { [PROP.isNew]: '1' } });
+      expect(phases).toEqual(['queued', 'reading', 'writing', 'saving']);
+      expect(error.mock.calls).toEqual([[`${SYSTEM.requests} ${category}`]]);
+      expect(JSON.stringify(error.mock.calls)).not.toContain(marker);
+      error.mockClear();
+      await expect(fresh().requests()).rejects.toMatchObject({ code: 'unknown', message: 'Bower could not read its latest update. Try again.' });
+      expect(error.mock.calls).toEqual([[`${SYSTEM.requests} ${category}`]]);
+      expect(await drive.snapshot()).toBe(before);
+
+      // Repair with the version actually read; no failed run's intent was lost.
+      await drive.writeText(file.id, JSON.stringify({ v: 1, done: [prior] }), (await drive.get(file.id)).modifiedTime);
+      const out = await runFake(drive, root, opts({ scope }));
+      expect(out.phase).toBe('done');
+      if (out.phase !== 'done') throw new Error('Expected a completed retry');
+      expect(out.report.filed).toHaveLength(scope === 'all' ? 1 : 0);
+      expect(out.report.requests).toEqual(pending ? ['Describe the synthetic garden.'] : undefined);
+      expect(await fresh().changes()).toEqual([]);
+      const archived = [...drive.dump(root)].filter(([path]) => path.startsWith(`${SYSTEM.archive}/`));
+      expect(archived).toHaveLength(1);
+      expect(archived.map(([, bytes]) => bytes)).toEqual(journal.map(([, bytes]) => bytes));
+      const done = await fresh().requests();
+      expect(done).toContainEqual(prior);
+      expect(done.filter((r) => r.id === request?.id)).toHaveLength(pending ? 1 : 0);
+      expect(await drive.get(marked.id)).not.toMatchObject({ appProperties: { [PROP.isNew]: '1' } });
+      // A second full run files the waiting pile only for an instructions retry.
+      const again = await runFake(drive, root, opts());
+      expect(again.phase === 'done' && again.report.filed.length).toBe(scope === 'all' ? 0 : 1);
+      expect((await fresh().requests()).filter((r) => r.id === request?.id)).toHaveLength(pending ? 1 : 0);
+      expect([...drive.dump(root)].filter(([path]) => path.startsWith(`${SYSTEM.archive}/`))).toEqual(archived);
+      expect(await fresh().piles()).toEqual([]);
+      const saved = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string }; trashed: boolean }> };
+      expect(saved.files.find((f) => f.meta.id === pile.id)?.trashed).toBe(true);
+      expect([...drive.dump(root).keys()].filter((path) => path === 'Resources/Ideas/Synthetic garden observation.md')).toHaveLength(1);
+    });
+  }
+
+  it.each([
+    { name: 'missing history', history: null, retained: [] },
+    { name: 'empty history', history: JSON.stringify({ v: 1, done: [] }), retained: [] },
+    { name: 'optional completion', history: JSON.stringify({ v: 1, done: [{ id: '', text: '', at: 0.25 }] }), retained: [{ id: '', text: '', at: 0.25 }] },
+    { name: 'additive fields and finite timestamps', history: JSON.stringify({ v: 1, extra: marker, done: [{ ...prior, extra: marker }] }), retained: [{ ...prior, extra: marker }] },
+  ])('malformed request history stops a tidy-up before effects (valid $name remains compatible)', async ({ history, retained }) => {
+    const { request } = await prepare(history, true);
+    const out = await runFake(drive, root, opts());
+    expect(out.phase === 'done' && out.report.filed).toHaveLength(1);
+    const done = await fresh().requests();
+    expect(done.filter((r) => r.id === request?.id)).toHaveLength(1);
+    expect(done.slice(1)).toEqual(retained);
+    expect(await fresh().piles()).toEqual([]);
+    expect(await fresh().changes()).toEqual([]);
+  });
+
+  it('malformed request history stops a tidy-up before effects (Drive read failures propagate)', async () => {
+    const { file } = await prepare(JSON.stringify({ v: 1, done: [] }), true);
+    const before = await drive.snapshot();
+    const read = drive.readText.bind(drive);
+    const failure = driveError('offline');
+    vi.spyOn(drive, 'readText').mockImplementation((id) => id === file?.id ? Promise.reject(failure) : read(id));
+    await expect(runFake(drive, root, opts())).rejects.toBe(failure);
+    expect(await drive.snapshot()).toBe(before);
   });
 });

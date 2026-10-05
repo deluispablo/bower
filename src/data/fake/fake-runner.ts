@@ -17,7 +17,7 @@ import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from
 import { BowerError, type FiledItem, type Pile, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { isJournalRecord, type JournalRecord } from '../vault/journal';
-import { PROP, SYSTEM, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
+import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
@@ -78,6 +78,7 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
 
   const w = new Writer(drive, rootId, VaultIndex.build(rootId, await drive.listAll(rootId)));
   const journal = await w.journal();
+  await w.requests();
   await w.clearNew();
   const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [], yourChanges: journal.length };
   const saidYes = new Set(journal.filter((r) => r.kind === 'answer' && r.text === 'yes').map((r) => r.questionId ?? ''));
@@ -235,7 +236,7 @@ class Writer {
 
   async doRequests(asked: JournalRecord[]): Promise<void> {
     if (!asked.length) return;
-    const old = (await this.json<RequestsFile>(SYSTEM.requests))?.done ?? [];
+    const old = (await this.requests())?.done ?? [];
     const done: Request[] = [...asked].reverse().map((r) => ({ id: r.id, text: r.text ?? r.what, at: r.at, done: 'Done. See what changed in your folders.' }));
     await this.writeJson(SYSTEM.requests, { v: 1, done: [...done, ...old].slice(0, 20) } satisfies RequestsFile);
   }
@@ -294,6 +295,25 @@ class Writer {
       if (e instanceof SyntaxError) return null;
       throw e;
     }
+  }
+
+  /** Refuse unreadable history before any effects, including runs with no new requests. */
+  async requests(): Promise<RequestsFile | null> {
+    const id = this.ix.idOf(SYSTEM.requests);
+    if (!id) return null;
+    let value: unknown;
+    try {
+      value = JSON.parse(await this.drive.readText(id));
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      console.error(`${SYSTEM.requests} is not valid JSON`);
+      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
+    }
+    if (!isRunnerFile(SYSTEM.requests, value)) {
+      console.error(`${SYSTEM.requests} has an unsupported shape`);
+      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
+    }
+    return value;
   }
 
   private async writeJson(path: string, body: unknown): Promise<void> {
