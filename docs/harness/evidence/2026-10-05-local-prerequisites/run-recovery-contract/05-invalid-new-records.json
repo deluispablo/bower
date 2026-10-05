@@ -1,0 +1,521 @@
+{
+  "case": "duplicate-corrupt-unsupported-conflicting-record-refusal",
+  "status": "PROPOSED_NOT_EXECUTED",
+  "baseInputFixture": "01-admission-reopen.json",
+  "inputCases": [
+    {
+      "label": "canonical-identical-manifest-copies",
+      "copies": [
+        "manifest-A",
+        "manifest-B"
+      ],
+      "record": {
+        "v": 1,
+        "kind": "run-manifest",
+        "scope": {
+          "rootId": "fake-root"
+        },
+        "runId": "run-one",
+        "requestId": "request-one",
+        "runScope": "all",
+        "allowWeb": false,
+        "requestedAt": 1791194400001,
+        "captureId": "ae3b36b25031ccb1c4003080e90e08e146df73b93a9e74941db58909a1046314",
+        "capture": {
+          "piles": [
+            {
+              "pileId": "pile-receipt",
+              "source": {
+                "kind": "declared",
+                "ref": {
+                  "declarationId": "decl-receipt",
+                  "sha256": "6f4d484c644dd6b541967ea60ad56ed508d8ec520ac2c99a1b3a075afa00aca1"
+                }
+              },
+              "anchor": null,
+              "memberKeys": [
+                "member-receipt"
+              ],
+              "childFileIds": [],
+              "context": {
+                "kind": "absent"
+              }
+            }
+          ],
+          "members": [
+            {
+              "pileId": "pile-receipt",
+              "memberKey": "member-receipt",
+              "file": {
+                "fileId": "receipt-file",
+                "name": "receipt.txt",
+                "parents": [
+                  "inbox-folder"
+                ],
+                "folder": false,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "content": {
+                "encoding": "utf8",
+                "size": 8,
+                "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+                "provenance": "fake-stored",
+                "observedModifiedTime": "2026-10-05T10:00:00.000Z"
+              }
+            }
+          ],
+          "journal": [],
+          "places": [
+            {
+              "file": {
+                "fileId": "areas-folder",
+                "name": "Areas",
+                "parents": [
+                  "fake-root"
+                ],
+                "folder": true,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "path": "Areas"
+            },
+            {
+              "file": {
+                "fileId": "areas-home",
+                "name": "Home",
+                "parents": [
+                  "areas-folder"
+                ],
+                "folder": true,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "path": "Areas/Home"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+            "ordinal": 0,
+            "dependsOn": [],
+            "effect": {
+              "kind": "move",
+              "before": {
+                "fileId": "receipt-file",
+                "name": "receipt.txt",
+                "parents": [
+                  "inbox-folder"
+                ],
+                "folder": false,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "parent": {
+                "fileId": "areas-home"
+              },
+              "name": "Receipt.txt",
+              "properties": {
+                "bowerNew": "1"
+              }
+            }
+          }
+        ],
+        "reportPlan": [
+          {
+            "requires": [
+              "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da"
+            ],
+            "when": "applied",
+            "value": {
+              "filed": [
+                {
+                  "name": "receipt.txt",
+                  "title": "Receipt",
+                  "kind": "other",
+                  "to": "Areas/Home"
+                }
+              ],
+              "created": [],
+              "updated": [],
+              "setAside": [],
+              "questions": []
+            }
+          }
+        ]
+      },
+      "expected": "deduplicate-one"
+    },
+    {
+      "label": "conflicting-same-run",
+      "original": {
+        "v": 1,
+        "kind": "run-manifest",
+        "scope": {
+          "rootId": "fake-root"
+        },
+        "runId": "run-one",
+        "requestId": "request-one",
+        "runScope": "all",
+        "allowWeb": false,
+        "requestedAt": 1791194400001,
+        "captureId": "ae3b36b25031ccb1c4003080e90e08e146df73b93a9e74941db58909a1046314",
+        "capture": {
+          "piles": [
+            {
+              "pileId": "pile-receipt",
+              "source": {
+                "kind": "declared",
+                "ref": {
+                  "declarationId": "decl-receipt",
+                  "sha256": "6f4d484c644dd6b541967ea60ad56ed508d8ec520ac2c99a1b3a075afa00aca1"
+                }
+              },
+              "anchor": null,
+              "memberKeys": [
+                "member-receipt"
+              ],
+              "childFileIds": [],
+              "context": {
+                "kind": "absent"
+              }
+            }
+          ],
+          "members": [
+            {
+              "pileId": "pile-receipt",
+              "memberKey": "member-receipt",
+              "file": {
+                "fileId": "receipt-file",
+                "name": "receipt.txt",
+                "parents": [
+                  "inbox-folder"
+                ],
+                "folder": false,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "content": {
+                "encoding": "utf8",
+                "size": 8,
+                "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+                "provenance": "fake-stored",
+                "observedModifiedTime": "2026-10-05T10:00:00.000Z"
+              }
+            }
+          ],
+          "journal": [],
+          "places": [
+            {
+              "file": {
+                "fileId": "areas-folder",
+                "name": "Areas",
+                "parents": [
+                  "fake-root"
+                ],
+                "folder": true,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "path": "Areas"
+            },
+            {
+              "file": {
+                "fileId": "areas-home",
+                "name": "Home",
+                "parents": [
+                  "areas-folder"
+                ],
+                "folder": true,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "path": "Areas/Home"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+            "ordinal": 0,
+            "dependsOn": [],
+            "effect": {
+              "kind": "move",
+              "before": {
+                "fileId": "receipt-file",
+                "name": "receipt.txt",
+                "parents": [
+                  "inbox-folder"
+                ],
+                "folder": false,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "parent": {
+                "fileId": "areas-home"
+              },
+              "name": "Receipt.txt",
+              "properties": {
+                "bowerNew": "1"
+              }
+            }
+          }
+        ],
+        "reportPlan": [
+          {
+            "requires": [
+              "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da"
+            ],
+            "when": "applied",
+            "value": {
+              "filed": [
+                {
+                  "name": "receipt.txt",
+                  "title": "Receipt",
+                  "kind": "other",
+                  "to": "Areas/Home"
+                }
+              ],
+              "created": [],
+              "updated": [],
+              "setAside": [],
+              "questions": []
+            }
+          }
+        ]
+      },
+      "mutatedField": "allowWeb",
+      "mutatedValue": true,
+      "expected": "conflict"
+    },
+    {
+      "label": "unsupported-version",
+      "record": {
+        "v": 2,
+        "kind": "run-manifest",
+        "scope": {
+          "rootId": "fake-root"
+        },
+        "runId": "run-one",
+        "requestId": "request-one",
+        "runScope": "all",
+        "allowWeb": false,
+        "requestedAt": 1791194400001,
+        "captureId": "ae3b36b25031ccb1c4003080e90e08e146df73b93a9e74941db58909a1046314",
+        "capture": {
+          "piles": [
+            {
+              "pileId": "pile-receipt",
+              "source": {
+                "kind": "declared",
+                "ref": {
+                  "declarationId": "decl-receipt",
+                  "sha256": "6f4d484c644dd6b541967ea60ad56ed508d8ec520ac2c99a1b3a075afa00aca1"
+                }
+              },
+              "anchor": null,
+              "memberKeys": [
+                "member-receipt"
+              ],
+              "childFileIds": [],
+              "context": {
+                "kind": "absent"
+              }
+            }
+          ],
+          "members": [
+            {
+              "pileId": "pile-receipt",
+              "memberKey": "member-receipt",
+              "file": {
+                "fileId": "receipt-file",
+                "name": "receipt.txt",
+                "parents": [
+                  "inbox-folder"
+                ],
+                "folder": false,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "content": {
+                "encoding": "utf8",
+                "size": 8,
+                "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+                "provenance": "fake-stored",
+                "observedModifiedTime": "2026-10-05T10:00:00.000Z"
+              }
+            }
+          ],
+          "journal": [],
+          "places": [
+            {
+              "file": {
+                "fileId": "areas-folder",
+                "name": "Areas",
+                "parents": [
+                  "fake-root"
+                ],
+                "folder": true,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "path": "Areas"
+            },
+            {
+              "file": {
+                "fileId": "areas-home",
+                "name": "Home",
+                "parents": [
+                  "areas-folder"
+                ],
+                "folder": true,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "path": "Areas/Home"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+            "ordinal": 0,
+            "dependsOn": [],
+            "effect": {
+              "kind": "move",
+              "before": {
+                "fileId": "receipt-file",
+                "name": "receipt.txt",
+                "parents": [
+                  "inbox-folder"
+                ],
+                "folder": false,
+                "modifiedTime": "2026-10-05T10:00:00.000Z"
+              },
+              "parent": {
+                "fileId": "areas-home"
+              },
+              "name": "Receipt.txt",
+              "properties": {
+                "bowerNew": "1"
+              }
+            }
+          }
+        ],
+        "reportPlan": [
+          {
+            "requires": [
+              "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da"
+            ],
+            "when": "applied",
+            "value": {
+              "filed": [
+                {
+                  "name": "receipt.txt",
+                  "title": "Receipt",
+                  "kind": "other",
+                  "to": "Areas/Home"
+                }
+              ],
+              "created": [],
+              "updated": [],
+              "setAside": [],
+              "questions": []
+            }
+          }
+        ]
+      },
+      "expected": "unknown-readable-refusal"
+    },
+    {
+      "label": "corrupt-json",
+      "exactStoredText": "{\"v\":1,",
+      "expected": "unknown-readable-refusal"
+    },
+    {
+      "label": "duplicate-json-key",
+      "exactStoredText": "{\"v\":1,\"v\":2}",
+      "expected": "unknown-readable-refusal"
+    },
+    {
+      "label": "wrong-previous",
+      "record": {
+        "v": 1,
+        "kind": "run-checkpoint",
+        "scope": {
+          "rootId": "fake-root"
+        },
+        "runId": "run-one",
+        "manifestHash": "9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088",
+        "revision": 1,
+        "previous": "0000000000000000000000000000000000000000000000000000000000000000",
+        "attemptId": "attempt-one",
+        "epoch": 1,
+        "phase": "saving",
+        "phaseAt": 1791194400010,
+        "outcomes": [
+          {
+            "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+            "state": "possible-effect",
+            "dispatchId": "dispatch-one"
+          }
+        ],
+        "report": {
+          "state": "not-ready"
+        },
+        "retainedPileIds": [
+          "pile-receipt"
+        ]
+      },
+      "expected": "conflict"
+    },
+    {
+      "label": "unknown-field",
+      "record": {
+        "v": 1,
+        "kind": "run-checkpoint",
+        "scope": {
+          "rootId": "fake-root"
+        },
+        "runId": "run-one",
+        "manifestHash": "9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088",
+        "revision": 0,
+        "previous": null,
+        "attemptId": "bootstrap",
+        "epoch": 0,
+        "phase": "queued",
+        "phaseAt": 1791194400001,
+        "outcomes": [
+          {
+            "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+            "state": "not-dispatched"
+          }
+        ],
+        "report": {
+          "state": "not-ready"
+        },
+        "retainedPileIds": [
+          "pile-receipt"
+        ],
+        "unapproved": true
+      },
+      "expected": "unknown-readable-refusal"
+    },
+    {
+      "label": "missing-referenced-manifest",
+      "head": "2331ffc91a81ef0c0cb90aed68fd9f70263205cf6b99a9c6c22d6e9d27af287b",
+      "expected": "unknown-readable-refusal"
+    }
+  ],
+  "expected": {
+    "domainMutationCount": 0,
+    "dispatchCount": 0,
+    "originalFiles": [
+      {
+        "fileId": "receipt-file",
+        "name": "receipt.txt",
+        "parents": [
+          "inbox-folder"
+        ],
+        "text": "receipt\n",
+        "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+        "trashed": false
+      }
+    ],
+    "invalidBytesPreserved": true,
+    "automaticNormalizedReplacementCount": 0,
+    "automaticMigrationCount": 0,
+    "headAdvanceCountOnRejectedRecord": 0,
+    "allowedNextAction": "explicit correctly scoped repair/disposition, not empty defaults or blind retry"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "case": "legacy-valid-reportless-and-current-reader-compatibility",
+  "status": "PROPOSED_NOT_EXECUTED",
+  "input": {
+    "doneReportless": {
+      "v": 1,
+      "run": {
+        "id": "old-run",
+        "scope": "all",
+        "phase": "done",
+        "requestedAt": 10,
+        "phaseAt": 20,
+        "finishedAt": 20
+      }
+    },
+    "activePhases": [
+      "queued",
+      "reading",
+      "writing",
+      "saving"
+    ],
+    "activeTemplate": {
+      "v": 1,
+      "run": {
+        "id": "old-active",
+        "scope": "all",
+        "phase": "reading",
+        "requestedAt": 10,
+        "phaseAt": 20
+      }
+    },
+    "malformedCurrentV1": {
+      "v": 1,
+      "run": {
+        "id": "old-bad",
+        "scope": "all",
+        "phase": "unrecognized",
+        "requestedAt": 10,
+        "phaseAt": 20
+      }
+    },
+    "explicitRepair": {
+      "v": 1,
+      "run": {
+        "id": "old-bad",
+        "scope": "all",
+        "phase": "done",
+        "requestedAt": 10,
+        "phaseAt": 20
+      }
+    }
+  },
+  "expected": {
+    "validDoneReportlessReadable": true,
+    "newBarrierCertified": false,
+    "newManifestCount": 0,
+    "newDeclarationCount": 0,
+    "migrationCount": 0,
+    "dispatchCount": 0,
+    "domainEffectCount": 0,
+    "legacyActiveReload": "preserve existing explicit failed-with-reload-explanation behavior, not new same-run resume",
+    "malformedRead": "readable refusal, no last-run normalization/overwrite or dispatch",
+    "repair": "explicit read-version write then fresh legacy reader accepts supported bytes; no effect certified",
+    "oldInertAdditiveFields": "existing v1 tolerance preserved; not a guarantee for new closed records"
+  }
+}

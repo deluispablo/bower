@@ -1,0 +1,230 @@
+{
+  "case": "partial-membership-reselection-context-and-later-child",
+  "status": "PROPOSED_NOT_EXECUTED",
+  "input": {
+    "declaration": {
+      "v": 1,
+      "kind": "pile-declaration",
+      "scope": {
+        "rootId": "fake-root"
+      },
+      "declarationId": "decl-partial",
+      "pileId": "pile-partial",
+      "createdAt": 1791194400000,
+      "anchor": {
+        "kind": "folder",
+        "inboxId": "inbox-folder",
+        "name": "Receipts",
+        "createKey": "anchor-partial"
+      },
+      "members": [
+        {
+          "memberKey": "member-arrived",
+          "name": "arrived.txt",
+          "kind": "other",
+          "origin": null,
+          "content": {
+            "encoding": "utf8",
+            "size": 8,
+            "sha256": "22aaf2e5a79b0cc71cd7c024db3669888f81654337da679751a6d4fdb2da81f2"
+          }
+        },
+        {
+          "memberKey": "member-missing",
+          "name": "missing.txt",
+          "kind": "other",
+          "origin": null,
+          "content": {
+            "encoding": "utf8",
+            "size": 8,
+            "sha256": "6bbd052ab054ef222c1c87be60cd191addedd24cc882d1f5f7f7be61dc61bb3a"
+          }
+        }
+      ],
+      "context": {
+        "kind": "text",
+        "memberKey": "member-context",
+        "originalText": "Original context\n",
+        "content": {
+          "encoding": "utf8",
+          "size": 17,
+          "sha256": "5e73a4c26c2b1aaf45ec40bff7b61e7c242c5f06106c6ef38304fb374c0b2640"
+        }
+      }
+    },
+    "declarationRef": {
+      "declarationId": "decl-partial",
+      "sha256": "b6e762ef12e0b8a10c0cf6a6d1200252683d0b1f330e28c75d699d8f4230d896"
+    },
+    "actualAnchor": {
+      "fileId": "pile-folder",
+      "name": "Receipts",
+      "parents": [
+        "inbox-folder"
+      ],
+      "folder": true,
+      "modifiedTime": "2026-10-05T10:00:00.000Z"
+    },
+    "storedFiles": [
+      {
+        "fileId": "context-file",
+        "name": "Pile note.md",
+        "parents": [
+          "pile-folder"
+        ],
+        "text": "Original context\n",
+        "sha256": "5e73a4c26c2b1aaf45ec40bff7b61e7c242c5f06106c6ef38304fb374c0b2640",
+        "trashed": false
+      },
+      {
+        "fileId": "arrived-file",
+        "name": "arrived.txt",
+        "parents": [
+          "pile-folder"
+        ],
+        "text": "arrived\n",
+        "sha256": "22aaf2e5a79b0cc71cd7c024db3669888f81654337da679751a6d4fdb2da81f2",
+        "trashed": false,
+        "appProperties": {
+          "bowerItem": "member-arrived",
+          "bowerDeclaration": "decl-partial"
+        }
+      }
+    ],
+    "trustedAdapterEvidence": {
+      "source": "controlled-shared-fake-effect-ledger",
+      "memberKey": "member-missing",
+      "declarationId": "decl-partial",
+      "parentId": "pile-folder",
+      "expectedContent": {
+        "encoding": "utf8",
+        "size": 8,
+        "sha256": "6bbd052ab054ef222c1c87be60cd191addedd24cc882d1f5f7f7be61dc61bb3a"
+      },
+      "priorAttemptBeforeEffectRefused": true,
+      "priorProducerQuiescent": true,
+      "boundCurrentAccountSlot": "account-A",
+      "boundRootId": "fake-root"
+    }
+  },
+  "events": [
+    "missing-member-before-effect-refusal",
+    "uploader-map-lost",
+    "client-B-reads-declaration",
+    "wrong-bytes-reselection",
+    "matching-size-hash-reselection",
+    "upload-only-missing-same-key",
+    "context-edited-before-capture",
+    "later-child-arrives-after-capture"
+  ],
+  "expectedBeforeMatchingReselection": {
+    "rows": [
+      "member-arrived",
+      "member-missing",
+      "member-context"
+    ],
+    "retainedArrivedFileId": "arrived-file",
+    "missingFileCopies": 0,
+    "pileFilingCount": 0,
+    "binCount": 0,
+    "wrongReselectionDispatchCount": 0,
+    "action": "readable exact-file reselection required, never silent retry no-op"
+  },
+  "expectedAfterMatchingReselection": {
+    "storedFiles": [
+      {
+        "fileId": "arrived-file",
+        "name": "arrived.txt",
+        "parents": [
+          "pile-folder"
+        ],
+        "text": "arrived\n",
+        "sha256": "22aaf2e5a79b0cc71cd7c024db3669888f81654337da679751a6d4fdb2da81f2",
+        "trashed": false
+      },
+      {
+        "fileId": "missing-file",
+        "name": "missing.txt",
+        "parents": [
+          "pile-folder"
+        ],
+        "text": "missing\n",
+        "sha256": "6bbd052ab054ef222c1c87be60cd191addedd24cc882d1f5f7f7be61dc61bb3a",
+        "trashed": false
+      },
+      {
+        "fileId": "context-file",
+        "name": "Pile note.md",
+        "parents": [
+          "pile-folder"
+        ],
+        "text": "Edited context\n",
+        "sha256": "9ae27dab37e62844e3efb919b7442ebc0f13abfb95ddba762be7c6d022bc41d0",
+        "trashed": false
+      },
+      {
+        "fileId": "late-file",
+        "name": "late.txt",
+        "parents": [
+          "pile-folder"
+        ],
+        "text": "late\n",
+        "sha256": "f152945b358aa26a9e72e25381deff94e254c547089bd690dccd218e9414d148",
+        "trashed": false
+      }
+    ],
+    "arrivedRetransmissionCount": 0,
+    "missingSuccessfulUploadCount": 1,
+    "declarationRewriteCount": 0,
+    "memberKeys": [
+      "member-arrived",
+      "member-missing"
+    ],
+    "capturedFileIds": [
+      "arrived-file",
+      "missing-file"
+    ],
+    "capturedContext": {
+      "fileId": "context-file",
+      "text": "Edited context\n",
+      "content": {
+        "encoding": "utf8",
+        "size": 15,
+        "sha256": "9ae27dab37e62844e3efb919b7442ebc0f13abfb95ddba762be7c6d022bc41d0"
+      }
+    },
+    "excludedFileIds": [
+      "late-file"
+    ],
+    "parentBinCount": 0,
+    "retainedFileIds": [
+      "context-file",
+      "pile-folder",
+      "late-file"
+    ],
+    "noOriginalContextOverwrite": true
+  },
+  "contextDistinctions": {
+    "absent": {
+      "kind": "absent",
+      "requiredContextFileCount": 0
+    },
+    "presentEmptyWithFiles": {
+      "kind": "text",
+      "text": "",
+      "content": {
+        "encoding": "utf8",
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "requiredContextFileCount": 1
+    },
+    "editedCurrent": "capture verified current text/version, not declaration recovery original"
+  },
+  "storageBoundary": "S02 central cleanup clears current-page holder; Storage denial alone preserves current-page draft. Future absent durable bytes requires D02 reselection; no durable store is claimed.",
+  "missingTrustedProofVariant": {
+    "expectedSuccessfulUploadCount": 0,
+    "rowState": "unresolved",
+    "action": "readable pending evidence/recovery, not blind upload after reselection"
+  }
+}

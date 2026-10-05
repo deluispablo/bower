@@ -1,0 +1,130 @@
+{
+  "case": "loose-first-create-before-effect-and-possible-effect",
+  "status": "PROPOSED_NOT_EXECUTED",
+  "input": {
+    "declaration": {
+      "v": 1,
+      "kind": "pile-declaration",
+      "scope": {
+        "rootId": "fake-root"
+      },
+      "declarationId": "decl-loose",
+      "pileId": "pile-loose",
+      "createdAt": 1791194400000,
+      "anchor": {
+        "kind": "loose",
+        "inboxId": "inbox-folder"
+      },
+      "members": [
+        {
+          "memberKey": "member-loose",
+          "name": "receipt.txt",
+          "kind": "other",
+          "origin": null,
+          "content": {
+            "encoding": "utf8",
+            "size": 8,
+            "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63"
+          }
+        }
+      ],
+      "context": {
+        "kind": "absent"
+      }
+    },
+    "declarationRef": {
+      "declarationId": "decl-loose",
+      "sha256": "a6433b2f0f2655da3c03ebbd569bc34bef3bdb2557e054c643d07a9b4e20fdd4"
+    },
+    "trustedVerifiedParent": {
+      "rootId": "fake-root",
+      "inboxId": "inbox-folder"
+    },
+    "createIntent": {
+      "declaration": {
+        "declarationId": "decl-loose",
+        "sha256": "a6433b2f0f2655da3c03ebbd569bc34bef3bdb2557e054c643d07a9b4e20fdd4"
+      },
+      "memberKey": "member-loose",
+      "parent": "inbox-folder",
+      "name": "receipt.txt",
+      "content": {
+        "encoding": "utf8",
+        "size": 8,
+        "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63"
+      }
+    },
+    "createIntentHash": "d262e537bdfcb270c2d02589e33d10d53094b7b98a274e2bc61b543064fcd628"
+  },
+  "beforeEffectBranch": {
+    "events": [
+      "confirm-declaration-and-parent",
+      "upload-refused-offline-before-effect",
+      "second-client-discovers-missing-row",
+      "revalidate-bytes-authority-and-same-key-retry"
+    ],
+    "expectedAfterRefusal": {
+      "memberFileId": null,
+      "storedLooseFiles": [],
+      "newPileFolderCount": 0,
+      "missingRowKeys": [
+        "member-loose"
+      ],
+      "uploadDispatchCount": 1,
+      "successfulUploadCount": 0
+    },
+    "expectedAfterRetry": {
+      "storedLooseFiles": [
+        {
+          "fileId": "loose-real-id",
+          "name": "receipt.txt",
+          "parents": [
+            "inbox-folder"
+          ],
+          "text": "receipt\n",
+          "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+          "trashed": false,
+          "appProperties": {
+            "bowerItem": "member-loose",
+            "bowerDeclaration": "decl-loose"
+          }
+        }
+      ],
+      "newPileFolderCount": 0,
+      "successfulUploadCount": 1,
+      "logicalCreateIntentCount": 1,
+      "placeholderCount": 0
+    }
+  },
+  "possibleEffectBranch": {
+    "events": [
+      "same-intent-dispatch",
+      "actual-file-created",
+      "reply-lost",
+      "fresh-unique-key-and-independent-bytes-verification"
+    ],
+    "expected": {
+      "storedLooseFiles": [
+        {
+          "fileId": "loose-real-id",
+          "name": "receipt.txt",
+          "parents": [
+            "inbox-folder"
+          ],
+          "text": "receipt\n",
+          "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+          "trashed": false,
+          "appProperties": {
+            "bowerItem": "member-loose",
+            "bowerDeclaration": "decl-loose"
+          }
+        }
+      ],
+      "boundActualFileId": "loose-real-id",
+      "successfulUploadCount": 1,
+      "secondUploadCount": 0,
+      "newPileFolderCount": 0
+    },
+    "unverifiedOrSeveralMatches": "unresolved, zero second upload, no capture/Bin"
+  }
+}

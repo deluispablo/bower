@@ -1,0 +1,76 @@
+{
+  "case": "duplicate-stale-expired-cross-scope-refusal",
+  "status": "PROPOSED_NOT_EXECUTED",
+  "baseInputFixture": "01-admission-reopen.json",
+  "input": {
+    "control": {
+      "runId": "run-one",
+      "requestId": "request-one",
+      "scope": {
+        "rootId": "fake-root"
+      },
+      "manifestHash": "9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088",
+      "head": "2331ffc91a81ef0c0cb90aed68fd9f70263205cf6b99a9c6c22d6e9d27af287b",
+      "statusRevision": 3,
+      "claim": {
+        "attemptId": "attempt-two",
+        "epoch": 2,
+        "expiresAt": 1791194460000
+      },
+      "outstandingDispatch": null
+    }
+  },
+  "events": [
+    {
+      "event": "same-requestId-same-manifest-replay"
+    },
+    {
+      "event": "same-requestId-different-allowWeb-manifest"
+    },
+    {
+      "event": "attempt-one-epoch1-callback-and-effect"
+    },
+    {
+      "event": "attempt-two-after-expiry",
+      "now": 1791194460001
+    },
+    {
+      "event": "sessionGeneration-replaced-before-continuation",
+      "from": 4,
+      "to": 5
+    },
+    {
+      "event": "different-account-slot-same-record-root",
+      "accountSlot": "account-B"
+    },
+    {
+      "event": "record-root-swapped",
+      "rootId": "other-root"
+    }
+  ],
+  "expected": {
+    "sameReplayRunId": "run-one",
+    "sameReplayActiveRunCount": 1,
+    "changedIntent": "conflict",
+    "staleAttempt": "conflict",
+    "expiredAttempt": "auth",
+    "replacedSession": "conflict",
+    "differentAccount": "auth",
+    "wrongRoot": "conflict",
+    "controlHeadUnchanged": "2331ffc91a81ef0c0cb90aed68fd9f70263205cf6b99a9c6c22d6e9d27af287b",
+    "domainMutationCount": 0,
+    "storedFiles": [
+      {
+        "fileId": "receipt-file",
+        "name": "receipt.txt",
+        "parents": [
+          "inbox-folder"
+        ],
+        "text": "receipt\n",
+        "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+        "trashed": false
+      }
+    ],
+    "allowedNextAction": "current service-authorized claim only; reconcile outstanding effect before new epoch"
+  }
+}

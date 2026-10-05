@@ -1,0 +1,150 @@
+{
+  "case": "same-operation-lost-reply-reconciliation",
+  "status": "PROPOSED_NOT_EXECUTED",
+  "baseInputFixture": "01-admission-reopen.json",
+  "input": {
+    "checkpoint1": {
+      "v": 1,
+      "kind": "run-checkpoint",
+      "scope": {
+        "rootId": "fake-root"
+      },
+      "runId": "run-one",
+      "manifestHash": "9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088",
+      "revision": 1,
+      "previous": "2331ffc91a81ef0c0cb90aed68fd9f70263205cf6b99a9c6c22d6e9d27af287b",
+      "attemptId": "attempt-one",
+      "epoch": 1,
+      "phase": "saving",
+      "phaseAt": 1791194400010,
+      "outcomes": [
+        {
+          "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+          "state": "possible-effect",
+          "dispatchId": "dispatch-one"
+        }
+      ],
+      "report": {
+        "state": "not-ready"
+      },
+      "retainedPileIds": [
+        "pile-receipt"
+      ]
+    },
+    "checkpoint1Hash": "daf46b16a1e83726c3ec36863863c0263f03170f87efc525154d44f8b0ef431d"
+  },
+  "events": [
+    {
+      "event": "commit-possible-effect-head-before-dispatch"
+    },
+    {
+      "event": "actual-move",
+      "fileId": "receipt-file",
+      "toParentId": "areas-home",
+      "name": "Receipt.txt"
+    },
+    {
+      "event": "lose-response-after-effect"
+    },
+    {
+      "event": "origin-client-gone-authorized-client-discovers"
+    },
+    {
+      "event": "service-reconcile-unique-same-ID-scope-place-content-and-dispatch"
+    }
+  ],
+  "expected": {
+    "storedFiles": [
+      {
+        "fileId": "receipt-file",
+        "name": "Receipt.txt",
+        "parents": [
+          "areas-home"
+        ],
+        "text": "receipt\n",
+        "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+        "trashed": false
+      }
+    ],
+    "checkpoint2": {
+      "v": 1,
+      "kind": "run-checkpoint",
+      "scope": {
+        "rootId": "fake-root"
+      },
+      "runId": "run-one",
+      "manifestHash": "9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088",
+      "revision": 2,
+      "previous": "daf46b16a1e83726c3ec36863863c0263f03170f87efc525154d44f8b0ef431d",
+      "attemptId": "attempt-one",
+      "epoch": 1,
+      "phase": "saving",
+      "phaseAt": 1791194400010,
+      "outcomes": [
+        {
+          "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+          "state": "applied",
+          "evidence": {
+            "file": {
+              "fileId": "receipt-file",
+              "name": "Receipt.txt",
+              "parents": [
+                "areas-home"
+              ],
+              "folder": false,
+              "modifiedTime": "2026-10-05T10:00:00.010Z"
+            },
+            "trashed": false,
+            "content": {
+              "encoding": "utf8",
+              "size": 8,
+              "sha256": "6afd9c1cbf495f9221fe5f9d03d4f0e962babd83fd293c696e69686510611a63",
+              "provenance": "fake-stored",
+              "observedModifiedTime": "2026-10-05T10:00:00.010Z"
+            },
+            "provenance": "fake-stored"
+          }
+        }
+      ],
+      "report": {
+        "state": "not-ready"
+      },
+      "retainedPileIds": [
+        "pile-receipt"
+      ]
+    },
+    "checkpoint2Hash": "c4a51f314933b9bf1ba5a8e765d50deba71392753cb88690ceaf4d6b04c52599",
+    "moveCount": 1,
+    "extraCreateCount": 0,
+    "extraMoveCountAfterReconcile": 0,
+    "runId": "run-one",
+    "operationId": "ffc686d1c2d38997ab8d92f0fd566b21a1989fd900b8ba38c5b9f5a1cd1ac1da",
+    "pendingReportBody": {
+      "v": 1,
+      "kind": "run-report",
+      "scope": {
+        "rootId": "fake-root"
+      },
+      "runId": "run-one",
+      "captureId": "ae3b36b25031ccb1c4003080e90e08e146df73b93a9e74941db58909a1046314",
+      "manifestHash": "9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088",
+      "report": {
+        "filed": [
+          {
+            "name": "receipt.txt",
+            "title": "Receipt",
+            "kind": "other",
+            "to": "Areas/Home"
+          }
+        ],
+        "created": [],
+        "updated": [],
+        "setAside": [],
+        "questions": []
+      }
+    },
+    "pendingReportHash": "0cd0587cca6328889ab16642f1b20c7ef1942fea3b770f297d45fe8a1d46ee8c",
+    "allowedNextAction": "publish the same report; never repeat move",
+    "unknownOrChangedEvidenceAction": "retain possible-effect; no automatic retry"
+  }
+}
