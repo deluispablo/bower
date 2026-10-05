@@ -184,3 +184,4 @@
 - 2026-10-05: pile-date passes — fix(app): a pile page says its day as Home does
 - 2026-10-05: situation-address-clean passes — fix(demo): a situation opened by its address starts clean; an empty folder reads closed
 - 2026-10-05: focus-after-close passes — fix(app): the keyboard stays in the page after a sheet closes, an answer, a removed rule or No thanks
+- 2026-10-05: undo-says-back passes — fix(app): every Undo says what came back; No thanks can be taken back

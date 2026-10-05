@@ -63,6 +63,7 @@ export function useFileActions() {
               void vault.move(moved, from, { undo: true }).then((back) => {
                 follow(moved, back);
                 useUi.getState().relocate(moved, back);
+                toast(`${displayName(nameOf(back))} is back in ${crumbs(from) || 'your Bower folder'}`);
               }, (e: unknown) => report(e, 'That did not work. Try again.')),
           });
           return moved;

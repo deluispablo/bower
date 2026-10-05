@@ -281,7 +281,15 @@ function Suggestions() {
               }>
               Keep as a rule
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => void vault.dismissSuggestion(sg.id, false).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'))}>
+            <Button size="sm" variant="ghost" onClick={() =>
+                void vault.dismissSuggestion(sg.id, false).then(
+                  (undo) => {
+                    toast("Bower won't suggest it again.", { label: 'Undo', run: () => void undo().catch((e: unknown) => report(e, 'That did not work. Try again.')) });
+                    focusMain();
+                  },
+                  (e: unknown) => report(e, 'That did not work. Try again.'),
+                )
+              }>
               No thanks
             </Button>
           </div>

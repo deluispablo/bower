@@ -2087,7 +2087,7 @@
       "Remove a rule, Undo: a toast says the rule is back."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"every Undo says what came back\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "suggestion-no-thanks",

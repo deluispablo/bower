@@ -72,7 +72,8 @@ export interface VaultSource {
   toggleTask(path: string, index: number): Promise<void>;
   /** Your changes since the last tidy-up (the change journal). */
   changes(): Promise<ChangeEntry[]>;
-  dismissSuggestion(id: string, keep: boolean): Promise<void>;
+  /** Keeps a suggestion as a rule, or says no to it; gives back its Undo. */
+  dismissSuggestion(id: string, keep: boolean): Promise<() => Promise<void>>;
   subscribe(cb: () => void): Unsubscribe;
 }
 

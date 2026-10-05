@@ -50,7 +50,7 @@ export function BowerScreen() {
     try {
       const undo = await vault.removeRule(id);
       focusMain();
-      toast('Rule removed. Bower stops following it from the next tidy-up.', { label: 'Undo', run: () => void undo().catch((e: unknown) => report(e, 'That did not work. Try again.')) });
+      toast('Rule removed. Bower stops following it from the next tidy-up.', { label: 'Undo', run: () => void undo().then(() => toast('The rule is back.'), (e: unknown) => report(e, 'That did not work. Try again.')) });
     } catch (e) {
       report(e, 'That did not work. Try again.');
     }

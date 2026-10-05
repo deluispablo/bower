@@ -46,3 +46,30 @@ test('the keyboard stays in the page after closing, answering, removing or sayin
   await page.getByRole('button', { name: /^Remove the rule/ }).first().click();
   await notBody(page).toBe(true);
 });
+
+const toast = (page: Page, text: string | RegExp) => page.getByRole('status').getByText(text);
+
+test('every Undo says what came back: a move and a removed rule', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  await page.getByRole('tree', { name: 'Your Bower folder' }).getByRole('treeitem', { name: /Lease draft/ }).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move to…' }).click();
+  await page.getByLabel('Find a folder').fill('Documents');
+  await page.keyboard.press('Enter');
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).last().click();
+  await expect(toast(page, /Lease draft(\.pdf)? is back in Projects \/ Flat hunt/)).toBeVisible();
+  await open(page, '/bower');
+  await page.getByRole('button', { name: /^Remove the rule/ }).first().click();
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).last().click();
+  await expect(toast(page, 'The rule is back.')).toBeVisible();
+});
+
+test('No thanks can be taken back', async ({ page }) => {
+  await open(page, '/');
+  const box = page.getByRole('region', { name: 'Bower suggests' });
+  const title = (await box.locator('[class*="suggestTitle"]').first().textContent()) ?? '';
+  await box.getByRole('button', { name: 'No thanks' }).first().click();
+  await expect(toast(page, "Bower won't suggest it again.")).toBeVisible();
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).last().click();
+  await expect(page.getByText(title).first()).toBeVisible();
+});

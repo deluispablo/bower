@@ -552,12 +552,17 @@ export class DriveVault implements VaultSource {
     return all.filter((s) => !dropped.includes(s.id) && !ruleLike(rules, s.title));
   }
 
-  async dismissSuggestion(id: string, keep: boolean): Promise<void> {
+  async dismissSuggestion(id: string, keep: boolean): Promise<() => Promise<void>> {
     const all = (await this.json<SuggestionsFile>(SYSTEM.suggestions))?.suggestions ?? [];
     const s = all.find((x) => x.id === id);
     dismiss(id);
-    if (keep && s && !ruleLike(await this.rules(), s.title)) await this.journal.record('rule', `Kept a suggestion as a rule: "${s.title}"`, { path: 'Rules.md', text: s.title });
+    const line = keep && s && !ruleLike(await this.rules(), s.title) ? await this.journal.record('rule', `Kept a suggestion as a rule: "${s.title}"`, { path: 'Rules.md', text: s.title }) : null;
     this.emit();
+    return async () => {
+      undismiss(id);
+      if (line) await this.journal.remove(line.id);
+      this.emit();
+    };
   }
 
   // ---------- plumbing
@@ -793,6 +798,14 @@ function dismiss(id: string): void {
     localStorage.setItem(DISMISSED, JSON.stringify([...dismissed(), id].slice(-200)));
   } catch {
     // expected: Without storage it comes back next time; nothing is lost.
+  }
+}
+
+function undismiss(id: string): void {
+  try {
+    localStorage.setItem(DISMISSED, JSON.stringify(dismissed().filter((x) => x !== id)));
+  } catch (e) {
+    console.error(e);
   }
 }
 

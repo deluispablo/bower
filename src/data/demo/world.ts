@@ -816,11 +816,21 @@ export class DemoWorld {
       dismissSuggestion: (id, keep) =>
         change(() => {
           const s = this.suggestions.find((x) => x.id === id);
+          const at = s ? this.suggestions.indexOf(s) : -1;
           this.suggestions = this.suggestions.filter((x) => x.id !== id);
+          let line: string | null = null;
           if (keep && s && !ruleLike(this.rules, s.title)) {
-            const id = this.record('rule', `Kept a suggestion as a rule: "${s.title}"`, 'Rules.md');
-            this.rules = [{ id, text: s.title, yourWords: s.title, since: Date.now(), pending: true }, ...this.rules];
+            line = this.record('rule', `Kept a suggestion as a rule: "${s.title}"`, 'Rules.md');
+            this.rules = [{ id: line, text: s.title, yourWords: s.title, since: Date.now(), pending: true }, ...this.rules];
           }
+          return () =>
+            change(() => {
+              if (s && !this.suggestions.includes(s)) this.suggestions = [...this.suggestions.slice(0, at), s, ...this.suggestions.slice(at)];
+              if (line) {
+                this.unrecord(line);
+                this.rules = this.rules.filter((r) => r.id !== line);
+              }
+            });
         }),
       toggleTask: (path, index) =>
         change(() => {
