@@ -43,4 +43,4 @@ Bower in motion: `/_bird` shows every pose and flight.
 
 Phase work follows the harness in `harness/`: one feature at a time, each proven by its own command.
 
-Local only for now: no remote.
+Development stays local. Only local `main` is backed up to the owner-authorized private GitHub repository; see [BACKUP](docs/harness/BACKUP.md). Feature branches and uncommitted work remain local.
