@@ -215,3 +215,4 @@
 - 2026-10-05: assigned Worker response guards to an isolated implementer checkout at d423225, candidate-only; the coordinator owns Home identity in integration. Browser resources remain serialized. pnpm check green before the assignment record commit.
 - 2026-10-05: researched Codex skills; added four shared project skills and Claude discovery links, common role-aware startup and capability matrix; updated the map, method, handoff and all role briefs. pnpm check passed; optional upstream skills were not installed; native cross-tool discovery still needs a fresh-session check.
 - 2026-10-05: home-person passes — fix(home): greet the person who signed in
+- 2026-10-05: independently reviewed Worker candidate 3cba3ba with no findings, integrated as 0e978af without conflict. Combined pnpm check green (375 unit tests); its entry remains open until coordinator proof closure. Home full demo/fake suites and manual phone/desktop review are recorded in ACTIVE.md.
