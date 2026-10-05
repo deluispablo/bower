@@ -556,6 +556,8 @@ export class DemoWorld {
         }),
       folderState: () => this.wait(() => this.folder),
       createFolder: async (onStep) => {
+        // After a deleted account the made-up folder is still there: it is found, not made.
+        const found = this.entries.has('Rules.md');
         const step = this.scale === 'instant' ? 0 : 650;
         for (const r of PARA_ROOTS) {
           await new Promise((res) => setTimeout(res, step));
@@ -569,6 +571,7 @@ export class DemoWorld {
         this.folder = 'ready';
         this.sessionListeners.forEach((l) => l());
         this.emitVault();
+        return { found };
       },
       subscribe: (cb) => this.on(this.sessionListeners, cb),
     };

@@ -67,8 +67,8 @@ export class LiveSession implements Session {
     return (await this.whoami())?.folderId ? 'ready' : 'missing';
   }
 
-  async createFolder(onStep: (root: ParaRoot) => void): Promise<void> {
-    const id = await this.worker.createFolder();
+  async createFolder(onStep: (root: ParaRoot) => void): Promise<{ found: boolean }> {
+    const { id, found } = await this.worker.createFolder();
     const told = new Set<ParaRoot>();
     const until = Date.now() + GIVE_UP_MS;
     while (told.size < PARA_ROOTS.length) {
@@ -86,6 +86,7 @@ export class LiveSession implements Session {
     this.me = null;
     this.onFolder();
     this.emit();
+    return { found };
   }
 
   /** Google or the Worker no longer accepts this person: ask again, and tell the screens (sign-in shows). */

@@ -31,7 +31,8 @@ export interface Session {
   deleteAccount(): Promise<void>;
   folderState(): Promise<FolderState>;
   /** Makes the Bower folder; `onStep` hears each top folder as it appears. */
-  createFolder(onStep: (root: ParaRoot) => void): Promise<void>;
+  /** Makes the Bower folder, or finds the one the person had (`found`: say welcome back). */
+  createFolder(onStep: (root: ParaRoot) => void): Promise<{ found: boolean }>;
   subscribe(cb: () => void): Unsubscribe;
 }
 

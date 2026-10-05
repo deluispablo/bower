@@ -30,7 +30,8 @@ describe('the fake Worker', () => {
   it('makes the Bower folder with the five main folders', async () => {
     const { drive, worker } = await world('first');
     expect((await worker.me())?.folderId).toBeNull();
-    const id = await worker.createFolder();
+    const { id, found } = await worker.createFolder();
+    expect(found).toBe(false);
     const names = (await drive.listAll(id)).filter((f) => f.parents[0] === id).map((f) => f.name).sort();
     expect(names).toEqual(['.bower', 'About me.md', 'Archive', 'Areas', 'Inbox', 'Projects', 'Resources', 'Rules.md']);
     expect((await worker.me())?.folderId).toBe(id);

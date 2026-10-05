@@ -58,8 +58,9 @@ export class WorkerHttp implements WorkerApi {
     return t.accessToken;
   }
 
-  async createFolder(): Promise<string> {
-    return (await this.call<{ folderId: string }>('POST', '/vault', {})).folderId;
+  async createFolder(): Promise<{ id: string; found: boolean }> {
+    const r = await this.call<{ folderId: string; found?: boolean }>('POST', '/vault', {});
+    return { id: r.folderId, found: !!r.found };
   }
 
   async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunWire> {

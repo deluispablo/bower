@@ -85,9 +85,11 @@ export class FakeWorker implements WorkerApi {
   }
 
   /** The template: the five main folders, Rules.md, About me.md and Bower's own folder. */
-  async createFolder(): Promise<string> {
+  async createFolder(): Promise<{ id: string; found: boolean }> {
+    // After a deleted account, the folder it had is found again, as the Worker finds it in the Drive.
+    const found = forgotten();
     forget(false);
-    if (this.rootId) return this.rootId;
+    if (this.rootId) return { id: this.rootId, found };
     const d = this.drive;
     const root = (await d.createFolder('root', BOWER_FOLDER)).id;
     for (const r of PARA_ROOTS) await d.createFolder(root, r);
@@ -101,7 +103,7 @@ export class FakeWorker implements WorkerApi {
     await d.createText(sys, 'requests.json', '{ "v": 1, "done": [] }\n');
     await d.createText(sys, 'hashes.json', '{ "v": 1, "hashes": {} }\n');
     this.rootId = root;
-    return root;
+    return { id: root, found: false };
   }
 
   /** What the last tidy-up was told about the web, for tests (the pretend runner never goes online). */

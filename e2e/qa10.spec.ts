@@ -162,3 +162,12 @@ test('no Remove while a tidy-up runs: the menu says to wait', async ({ page, isM
   await expect(page.getByRole('menuitem', { name: /Remove the pile/ })).toHaveAttribute('aria-disabled', 'true');
   await expect(page.getByRole('menuitem', { name: /after the tidy-up/ })).toBeVisible();
 });
+
+test('coming back says welcome back: the folder is still there', async ({ page }) => {
+  await open(page, '/settings');
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete your Bower account?' }).getByRole('button', { name: 'Delete my account' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Your Bower folder is still in your Drive/)).toBeVisible();
+});

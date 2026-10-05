@@ -6,6 +6,7 @@ import { paraColor } from '@/app/paths';
 import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
+import { report } from '@/ui/report';
 import s from './welcome.module.css';
 
 const MEANING: Record<ParaRoot, string> = {
@@ -24,6 +25,7 @@ const STEPS = [
 
 const TOURED = 'bower:toured';
 function markToured(): void {
+  cameBack = false;
   try {
     sessionStorage.setItem(TOURED, '1');
   } catch {
@@ -44,6 +46,9 @@ function toured(): boolean {
  * toured, Welcome goes Home, but only while the folder exists: with no
  * folder, Home would send back here (a loop), so the folder is made again.
  */
+/** The folder was found, not made: kept while the welcome remounts once the folder is ready. */
+let cameBack = false;
+
 export function Welcome({ missing = false }: { missing?: boolean }) {
   if (toured() && !missing) return <Navigate to="/" replace />;
   return <WelcomeSteps />;
@@ -54,6 +59,7 @@ function WelcomeSteps() {
   const nav = useNavigate();
   const [made, setMade] = useState<ParaRoot[]>([]);
   const [ready, setReady] = useState(false);
+  const [back, setBack] = useState(cameBack);
   // Each step is a history entry, so the phone's back button goes back a step.
   const [params, setParams] = useSearchParams();
   const step = Math.min(STEPS.length - 1, Math.max(-1, Number(params.get('step') ?? -1)));
@@ -64,14 +70,20 @@ function WelcomeSteps() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void session.folderState().then((st) => {
-      if (st === 'ready') {
-        setMade([...PARA_ROOTS]);
+    void session
+      .folderState()
+      .then(async (st) => {
+        if (st === 'ready') {
+          setMade([...PARA_ROOTS]);
+          setReady(true);
+          return;
+        }
+        const { found } = await session.createFolder((r) => setMade((m) => [...m, r]));
+        cameBack = found;
+        setBack(found);
         setReady(true);
-        return;
-      }
-      void session.createFolder((r) => setMade((m) => [...m, r])).then(() => setReady(true));
-    });
+      })
+      .catch((e: unknown) => report(e, 'Your Bower folder could not be opened. Try again.'));
   }, [session]);
 
   if (step >= 0) {
@@ -103,8 +115,8 @@ function WelcomeSteps() {
       <div className={s.head}>
         <PoseBower pose={ready ? 'proud' : 'carry'} size={96} />
         <div>
-          <h1 className={s.title}>{ready ? 'Your folder is ready' : 'Making your Bower folder'}</h1>
-          <p className="muted">{ready ? 'It is called Bower, in My Drive.' : 'In your Google Drive. A few seconds.'}</p>
+          <h1 className={s.title}>{back ? 'Welcome back' : ready ? 'Your folder is ready' : 'Making your Bower folder'}</h1>
+          <p className="muted">{back ? 'Your Bower folder is still in your Drive, with everything in it.' : ready ? 'It is called Bower, in My Drive.' : 'In your Google Drive. A few seconds.'}</p>
         </div>
       </div>
       <ul className={s.folders} aria-live="polite">

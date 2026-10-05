@@ -27,7 +27,7 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 | `POST /auth/logout` | | 204, the cookie cleared | |
 | `DELETE /me` | | 204: the Worker forgets the person (tokens, settings, runs, the pointer to their folder) and clears the cookie; the Drive folder is never touched, and signing in again starts at the folder step (`POST /vault` finds the folder they had) | 401 |
 | `GET /drive/token` (`?fresh=1` after Drive said 401) | | `{ accessToken, expiresAt }` (epoch ms, at most 1 h) | 401 signed out; 409 `no-folder` |
-| `POST /vault` | `{}` | `{ folderId }`: a new Bower folder made from the template (the five main folders, `Rules.md`, `About me.md`, `.bower/`), or the existing one | 401 |
+| `POST /vault` | `{}` | `{ folderId, found }`: a new Bower folder made from the template (the five main folders, `Rules.md`, `About me.md`, `.bower/`), or the existing one (`found: true`, so the app says welcome back) | 401 |
 | `POST /process` | `{ scope: "all" \| "instructions", allowWeb: boolean }` (the person's "Look things up on the web"; the dispatch's `allow_web`) | `{ run: RunWire }`, the run it started, or the one already going | 401; 409 `nothing` "Nothing is waiting in the inbox." / "There is nothing new for Bower to read."; 429 over the daily limit |
 | `GET /status` | | `{ run: RunWire \| null }`, the run going now or the last one | 401 |
 

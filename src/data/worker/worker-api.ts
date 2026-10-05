@@ -33,7 +33,8 @@ export interface WorkerApi {
   /** A Drive access token; `fresh` after Drive refused the last one. */
   driveToken(fresh: boolean): Promise<string>;
   /** Makes the Bower folder from the template (or finds it); answers its id. */
-  createFolder(): Promise<string>;
+  /** The Bower folder: made from the template, or `found` when the person's earlier one is still in their Drive. */
+  createFolder(): Promise<{ id: string; found: boolean }>;
   process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunWire>;
   /** The run going now, or the last one. */
   status(): Promise<RunWire | null>;

@@ -2218,7 +2218,7 @@
       "Welcome says your Bower folder is still in your Drive, welcome back."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"coming back says welcome back\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "run-result-counts",
