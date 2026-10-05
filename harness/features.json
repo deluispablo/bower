@@ -1779,7 +1779,8 @@
       "A toast or line says which files were left out."
     ],
     "verify": "pnpm vitest run src/features/piles -t \"files not added again are named\"",
-    "passes": true
+    "passes": true,
+    "note": " Historical omission/left-out requirement superseded by owner D02 (2026-10-05-product-policy-decisions.md) and add-draft-no-loss; original verify/proof retained, qa9 screen coverage explicitly migrates to retained rows/no effect/recovery. No durable retention claim."
   },
   {
     "id": "undo-toast-time",
@@ -1916,7 +1917,7 @@
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"on screen:\"",
     "passes": true,
-    "note": "Tests only, so done.sh has nothing to set aside. Red checked by hand on 2026-10-05 by breaking each screen's wiring: Home's answer toast, Add's empty-file line, Add's left-out toast, the demo report's requests: each test failed."
+    "note": "Tests only, so done.sh has nothing to set aside. Red checked by hand on 2026-10-05 by breaking each screen's wiring: Home's answer toast, Add's empty-file line, Add's left-out toast, the demo report's requests: each test failed. Historical omission/left-out requirement superseded by owner D02 (2026-10-05-product-policy-decisions.md) and add-draft-no-loss; original verify/proof retained, qa9 screen coverage explicitly migrates to retained rows/no effect/recovery. No durable retention claim."
   },
   {
     "id": "demo-links-after-tidy",
@@ -2656,6 +2657,21 @@
     ],
     "verify": "pnpm vitest run src/data/live/live.test.ts -t \"reused sources isolate account and folder changes\"",
     "passes": true,
-    "note": "Actual public synthetic observation at 143ae2b and e15d13c, retained in evidence/2026-10-05-qa14. First content assertion fails; wrong-folder creation/journal are actual snapshots. Named regression planned, not executed. Existing wire/current C01 isolation requirement; no real OAuth/provider or rollback claim. Independent prerequisite precedes a bounded assignment."
+    "note": "Actual public synthetic observation at 143ae2b and e15d13c, retained in evidence/2026-10-05-qa14. First content assertion fails; wrong-folder creation/journal are actual snapshots. Named regression planned, not executed. Existing wire/current C01 isolation requirement; no real OAuth/provider or rollback claim. Independent prerequisite precedes a bounded assignment. Replacement2244218 independently reviewed, integrated44ee162 and proof-closed20864d4; named36/check517 and three public synthetic probes pass. Prior planned wording is historical; evidence qa14 preserves rejected candidate/disposal red."
+  },
+  {
+    "id": "add-draft-no-loss",
+    "task": "qa-15",
+    "category": "bug",
+    "what": "Saving an Add draft never silently omits a member whose bytes are unavailable or clears its retained context and other members.",
+    "steps": [
+      "Restore context and a missing-file row; saving currently dispatches no files then clears all draft data and navigates away.",
+      "Repeat with a ready file and link alongside the missing member; preserve every row, ready Blob and context with no addPile call.",
+      "Render a complete draft, remove one Blob through the public byte store before clicking the enabled save; revalidate at dispatch and preserve all draft data.",
+      "Recover through deliberate removal or supported reselection, admit the complete selected set once, and clear only after successful admission; rejected admission retains draft."
+    ],
+    "verify": "pnpm vitest run src/features/piles/Add.test.tsx -t \"an Add draft with unavailable bytes keeps every member before saving\"",
+    "passes": false,
+    "note": "Actual three public-render assertion reds at f739b5c/source44ee162, retained qa15. Approved D02 supersedes historical successful left-out behavior; original qa9/unit/proof history preserved with explicit policy migration. Bounded screen guard only, no durable bytes/hash identity/shared readiness/wire or grammar claim."
   }
 ]

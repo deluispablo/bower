@@ -2,7 +2,7 @@
 
 ## Next
 
-- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd sole integration writer. Current211/214 atf739b5c; production44ee162 unchanged.
+- Adopted contracts-2/main d12c55e; root p2-orchestrator-2026-10-05-01a10bbd sole integration writer. Current211/215 after add-draft-no-loss registration; production44ee162 unchanged.
 - Both naming entries proof-closed48e6544/f739b5c through real inverse-fix red/check/unchanged verify. Combined check517/demo198/fake198/PWA4 and supplemental root phone/desktop fake/demo retained; independent complete UI evaluation NOT RUN. Own tabs/preview cleaned; no browser reservation.
 - D01/D02 approved. Sole worker reproduces Add missing-byte draft loss atf739b5c in isolated checkout; root registers and assigns minimal no-drop fix only after actual red. Durable retention/hash reselection/shared readiness/offline boot remain separate obligations. Historical omission expectations need explicit policy migration.
 - Google v3 local setup reviewed clean,30 local tests/seven syntax and root actual synthetic CSP red/control. Existing callback already registered; no external change. Original private existing-client export path and interactive consent missing; actual R1–R4 pending. No rotation/revocation or generic repeated policy/resource approval.
@@ -309,3 +309,9 @@
 - 2026-10-05: timeline-source-names passes — fix(names): prove plain Timeline labels preserve aliases and destinations
 
 - 2026-10-05: current naming closure logs archived;211/214/tenth bounded foundation. Public Google-v3/ownership-final proposals, independent reviews and approved-policy slices archived with identities; root inventory/CSP cleanup complete, real provider probes NOT RUN. Next isolated Add reproduction, no-loss requirement not yet claimed implemented.
+
+- 2026-10-05: qa15 Add omission and late-byte loss genuinely reproduced in three public-render cases onf739b5c; registered add-draft-no-loss and assigned minimal fix/migrated qa9 to sole isolated writer. New owner-supplied secret data source verified, root private setup only. R3 timestamp correction reviewed/local4controls, current two-workflow inventory read-only, O3 matrix archived; no provider runtime or contract acceptance.
+
+- 2026-10-05: private owner credentials match actual existing Google web-client ID; unchanged local v3 validation exits0, no OAuth request/token/secret validity claim. Root serial callback/browser reservation for bounded A authorization; actual new grant awaits action-time tool confirmation. Original unchanged/no values versioned.
+
+- 2026-10-05: first Add candidatee23245a independently requests changes: pending-admission mutation loss source-derived, worker assigned actual red then same-entry correction; not integrated. OAuth local correspondence validated but actual Continue remains on landing, no consent/session. Own tab/listener stopped, cause unestablished; bounded observer review before one repeat.
