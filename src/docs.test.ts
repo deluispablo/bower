@@ -48,5 +48,11 @@ describe('what the repository promises', () => {
   it('the contract says journal records are unique by id', () => {
     expect(read('docs/specs/2026-10-04-worker-contract.md')).toMatch(/Journal records are unique by `id`: a runner keeps one per id and archives every copy/);
   });
+
+  it('the landing has no jargon where it says what a tidy-up does', () => {
+    const html = read('public/landing/index.html');
+    expect(html).not.toMatch(/using PARA unless your rules say otherwise/);
+    expect(html).toMatch(/in folders by how soon you need things/);
+  });
 });
 

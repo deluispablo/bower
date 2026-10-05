@@ -2206,7 +2206,7 @@
       "Plain words, no PARA."
     ],
     "verify": "node scripts/fix-landing.mjs --check && pnpm vitest run src/docs.test.ts -t \"the landing has no jargon\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "welcome-back",
