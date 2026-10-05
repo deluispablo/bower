@@ -30,6 +30,8 @@
 
 - A parser frozen candidatee3ee111/stub53/base1c7c;47named/full60753worker green with31firststub assertionreds andlateBuffer1red;16publicevidencefiles/report819archivedbyteverified. Workerreleased/read-only; freshimmutableindependentreview beforerootcherrypicks/actualinverse-proof. Moduleunused; no richfeature/C-row/P2closure.
 
+- R1-D03 instrumenteee/33932files/delta998 frozenarchive verified;7loadedv2 assertionreds+1control/named26/full125/syntax16. Freshaffected-deltareview assigned r1_d03_review beforeonefinalactualcase;caps/reserves/stableversioncheck intact, no provider/product. Fixed38route differsfromhard60transportcap explicitly.
+
 ## Log
 
 - 2026-10-05: pending-draft-bytes-cleanup closedbf7278d after independentlyreviewedf219, integration1dc, root560/full demo19856/fake19856 and real inverse-red restoration/check/11verify.214217; evidencearchived, no browserlistener. Human "si" explicitlyauthorized Planificador message; lead R1-D02 selects bounded v2ETag premise, documentedwithnextscratchassignment and options73626cad, no contractmigration/providerpass/phaseclosure.
