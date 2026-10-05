@@ -214,3 +214,4 @@
 - 2026-10-05: journal-separate-clients passes — fix(data): keep changes from concurrent clients and acknowledge archived copies
 - 2026-10-05: assigned Worker response guards to an isolated implementer checkout at d423225, candidate-only; the coordinator owns Home identity in integration. Browser resources remain serialized. pnpm check green before the assignment record commit.
 - 2026-10-05: researched Codex skills; added four shared project skills and Claude discovery links, common role-aware startup and capability matrix; updated the map, method, handoff and all role briefs. pnpm check passed; optional upstream skills were not installed; native cross-tool discovery still needs a fresh-session check.
+- 2026-10-05: home-person passes — fix(home): greet the person who signed in

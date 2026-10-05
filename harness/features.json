@@ -2443,7 +2443,7 @@
       "Its greeting and account initial belong to Sam; while loading it does not show Alex."
     ],
     "verify": "pnpm vitest run src/features/home/Home.test.tsx -t \"Home greets the person who signed in\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "upload-retry-screen",

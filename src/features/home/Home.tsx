@@ -5,7 +5,7 @@ import { answered } from './answer-words';
 import { startRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
-import { useChanges, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree } from '@/data/provider';
+import { useChanges, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
 import { parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
@@ -20,6 +20,8 @@ import { PileStack } from '@/features/piles/PileStack';
 import s from './home.module.css';
 
 export function Home() {
+  const { data: user } = useUser();
+  const name = user?.name.trim() ?? '';
   const { data: run } = useRun();
   const { data: piles } = usePiles();
   const waiting = waitingIn(piles);
@@ -31,9 +33,9 @@ export function Home() {
   return (
     <div className={s.page}>
       <header className={s.top}>
-        <h1 className={s.hello}>{greeting('Alex')}</h1>
+        <h1 className={s.hello}>{name ? greeting(name) : "G'day"}</h1>
         <Link to="/settings" className={s.avatar} aria-label="Your account and settings">
-          A
+          {name ? name.slice(0, 1).toUpperCase() : '…'}
         </Link>
       </header>
       <div className={s.grid}>
