@@ -18,6 +18,8 @@ Owner explicitly authorized messaging Planificador with evidence/options; techni
 
 All owned browser listeners released, no browser reservation; user-created Bower tab preserved. Current independently inspected O1 delta is archived in `2026-10-05-p2-o1-delta-1dc7f64.md` (fb6d9afe): four absent C07/C08/C09/C13, twelve partial, zero complete rows at source1dc7f64. It reuses unchanged valid evidence; no new replay or full phase evaluation was executed. Three registered entries remain open: partial-pile-readiness, protected-current-prose, run-report-save-barrier. Rich ownership/version/raw-byte/activation remains lead-owned; reviewed proposals are not adoption. O3 compatible contracts, O4 browser-independent admitted simulation/effect/report recovery, O5 persisted semantic results/Undo, O6 D01/D02/preparation, O7 quality/performance and complete O8/owner acceptance remain. P2 stays open; no product main merge, root push/deployment/spend or P3/P4 implementation.
 
+A later root current-source public-API readiness reproduction at f98cc59 confirms the existing open qa13 fault with contract-conforming upload refusal and separate reader: the scripted consumer reports done and the missing member disappears. See `2026-10-05-readiness-current-reproduction.md`; no retry/recovery or repair is claimed, no actual deployed runner observation. Frozen O1 report is unchanged.
+
 Technical-lead reuse recommendations are archived in `../research/2026-10-05-software-reuse.md` (dcb230b5). They guide future substantial assignments with small version/license/benefit/verification decisions; they install no dependency or adopt a contract. Current R1-D02 remains the priority and existing boundaries/phase scope remain in force.
 
 ## Previous stable handoff: 2026-10-05
