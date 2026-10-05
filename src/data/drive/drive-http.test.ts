@@ -196,4 +196,107 @@ describe('DriveHttp', () => {
     await d.fullText('ROOT', 'rent');
     expect(s.calls.filter((c) => c.url.searchParams.get('q')?.startsWith('fullText'))).toHaveLength(2);
   });
+  it('full-text search scopes its pages to the selected folder', async () => {
+    const wanted = file('wanted', 'rent.md', 'ROOT');
+    const s = stub((c) => {
+      const q = c.url.searchParams.get('q') ?? '';
+      if (!q.startsWith('fullText')) return json({ files: [wanted] });
+      if (q.includes("'ROOT' in parents")) return json({ files: [wanted] });
+      // Two pages of unrelated matches precede Bower's match in a global query.
+      return json({ files: [file('outside', 'rent.md', 'UNRELATED')], nextPageToken: 'more' });
+    });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    expect((await d.fullText('ROOT', 'rent')).map((f) => f.id)).toEqual(['wanted']);
+    const queries = s.calls.filter((c) => c.url.searchParams.get('q')?.startsWith('fullText'));
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.url.searchParams.get('q')).toContain("'ROOT' in parents");
+  });
+
+  it('full-text search scopes every descendant-parent batch', async () => {
+    const folders = Array.from({ length: 45 }, (_, i) => file(`d${i}`, `Folder ${i}`, 'ROOT', true));
+    const leaves = [file('root-hit', 'rent.md', 'ROOT'), file('deep-hit', 'rent.md', 'd44')];
+    const s = stub((c) => {
+      const q = c.url.searchParams.get('q') ?? '';
+      const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
+      if (q.startsWith('fullText')) return json({ files: leaves.filter((f) => parents.includes(f.parents[0])), nextPageToken: 'more' });
+      return json({ files: [...folders, ...leaves].filter((f) => parents.includes(f.parents[0])) });
+    });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    expect((await d.fullText('ROOT', 'rent')).map((f) => f.id)).toEqual(['root-hit', 'deep-hit']);
+    const queries = s.calls.filter((c) => c.url.searchParams.get('q')?.startsWith('fullText'));
+    expect(queries).toHaveLength(4); // Two batches, at most two pages apiece.
+    const searched = new Set<string>();
+    for (const q of queries) {
+      const ids = [...(q.url.searchParams.get('q') ?? '').matchAll(/'([^']+)' in parents/g)].map((m) => m[1] ?? '');
+      expect(ids.length).toBeLessThanOrEqual(40);
+      ids.forEach((id) => searched.add(id));
+    }
+    expect([...searched].sort()).toEqual(['ROOT', ...folders.map((f) => f.id)].sort());
+  });
+
+  it('full-text search follows a move into a folder created after the listing', async () => {
+    let note = file('existing', 'Note.md', 'ROOT');
+    let folder: ReturnType<typeof file> | null = null;
+    const s = stub((c) => {
+      if (c.method === 'POST') {
+        folder = file('new-folder', 'New place', 'ROOT', true);
+        return json(folder);
+      }
+      if (c.method === 'PATCH') {
+        note = { ...note, parents: [c.url.searchParams.get('addParents') ?? 'ROOT'] };
+        return json(note);
+      }
+      const q = c.url.searchParams.get('q') ?? '';
+      const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
+      const all = folder ? [folder, note] : [note];
+      return json({ files: all.filter((f) => (!q.startsWith('fullText') || f.id === note.id) && parents.includes(f.parents[0])) });
+    });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    await d.listAll('ROOT');
+    const made = await d.createFolder('ROOT', 'New place');
+    await d.update('existing', { addParent: made.id, removeParent: 'ROOT' });
+    expect((await d.fullText('ROOT', 'body-only-word')).map((f) => f.id)).toEqual(['existing']);
+    const full = s.calls.find((c) => c.url.searchParams.get('q')?.startsWith('fullText'));
+    expect(full?.url.searchParams.get('q')).toContain("'new-folder' in parents");
+  });
+
+  it('full-text search sees new uploads and relists after binning or restoring them', async () => {
+    const sends: Array<(drive: DriveHttp) => Promise<unknown>> = [
+      (d) => d.createText('ROOT', 'Created.md', 'matching words'),
+      (d) => d.upload('ROOT', 'Small.txt', new Blob(['matching words'])),
+      (d) => d.upload('ROOT', 'Large.txt', new Blob([new Uint8Array(6 * 1024 * 1024)])),
+    ];
+    for (const send of sends) {
+      const made = file('added', 'Thing.md', 'ROOT');
+      let arrived = false;
+      let binned = false;
+      let lists = 0;
+      const s = stub((c) => {
+        if (c.method === 'POST' && c.url.searchParams.get('uploadType') === 'resumable') return new Response(null, { status: 200, headers: { location: 'https://upload.example/session' } });
+        if (c.method === 'POST' || c.method === 'PUT') {
+          arrived = true;
+          return json(made);
+        }
+        if (c.method === 'PATCH') {
+          binned = (JSON.parse(String(c.body)) as { trashed: boolean }).trashed;
+          return json(made);
+        }
+        const q = c.url.searchParams.get('q') ?? '';
+        if (!q.startsWith('fullText')) lists++;
+        return json({ files: arrived && !binned ? [made] : [] });
+      });
+      const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+      await d.listAll('ROOT');
+      await send(d);
+      expect((await d.fullText('ROOT', 'matching')).map((f) => f.id)).toEqual(['added']);
+      expect(lists).toBe(2);
+      await d.trash('added');
+      expect(await d.fullText('ROOT', 'matching')).toEqual([]);
+      expect(lists).toBe(3);
+      await d.untrash('added');
+      expect((await d.fullText('ROOT', 'matching')).map((f) => f.id)).toEqual(['added']);
+      expect(lists).toBe(4);
+    }
+  });
+
 });

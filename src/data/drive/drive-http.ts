@@ -65,6 +65,8 @@ export class DriveHttp implements DriveApi {
   private readonly fetchFn: typeof fetch;
   /** Ids known under each root from the last listing, so full-text hits stay inside it. */
   private known = new Map<string, Set<string>>();
+  /** Root and descendant folders from the same listing, for parent-scoped searches. */
+  private searchParents = new Map<string, string[]>();
 
   constructor(opts: DriveHttpOptions) {
     this.token = opts.token;
@@ -87,6 +89,7 @@ export class DriveHttp implements DriveApi {
       level = next;
     }
     this.known.set(rootId, new Set(out.map((f) => f.id)));
+    this.searchParents.set(rootId, [rootId, ...out.filter((f) => f.folder).map((f) => f.id)]);
     return out;
   }
 
@@ -131,7 +134,7 @@ export class DriveHttp implements DriveApi {
         body: body.slice(at, end),
       });
       onProgress?.(Math.round((end / body.size) * 100) / 100);
-      if (res.status !== 308) return toFile((await res.json()) as WireFile);
+      if (res.status !== 308) return this.changed(toFile((await res.json()) as WireFile));
     }
     throw driveError('unknown');
   }
@@ -161,9 +164,16 @@ export class DriveHttp implements DriveApi {
 
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
     const inside = this.known.get(rootId) ?? new Set((await this.listAll(rootId)).map((f) => f.id));
-    // Full text runs over the person's whole Drive: the first two pages are plenty for one folder.
-    const hits = await this.query(`fullText contains ${quote(query)} and trashed = false`, 2);
-    return hits.filter((f) => inside.has(f.id));
+    // Unrelated Drive hits cannot spend this folder's page allowance. Parent queries
+    // are bounded to 40 folders and two pages each, even for a large folder tree.
+    const parents = this.searchParents.get(rootId) ?? [rootId];
+    const hits = new Map<string, DriveFile>();
+    for (let i = 0; i < parents.length; i += BATCH) {
+      const scope = parents.slice(i, i + BATCH).map((id) => `${quote(id)} in parents`).join(' or ');
+      const files = await this.query(`fullText contains ${quote(query)} and (${scope}) and trashed = false`, 2);
+      for (const f of files) if (inside.has(f.id)) hits.set(f.id, f);
+    }
+    return [...hits.values()];
   }
 
   private async query(q: string, maxPages = Infinity): Promise<DriveFile[]> {
@@ -181,9 +191,19 @@ export class DriveHttp implements DriveApi {
     return out;
   }
 
+  /** A structural write can change which roots contain a file or a new folder.
+   * Forget both halves together; the next search lists its root once afresh.
+   * Existing VaultIndexes keep their own immediate updates without extra reads.
+   */
+  private changed(file: DriveFile): DriveFile {
+    this.known.clear();
+    this.searchParents.clear();
+    return file;
+  }
+
   private async json(url: string, method: string, body: unknown): Promise<DriveFile> {
     const res = await this.call(url, { method, headers: { 'content-type': 'application/json; charset=UTF-8' }, body: JSON.stringify(body) });
-    return toFile((await res.json()) as WireFile);
+    return this.changed(toFile((await res.json()) as WireFile));
   }
 
   private async multipart(meta: Record<string, unknown>, content: Blob): Promise<DriveFile> {
@@ -199,7 +219,7 @@ export class DriveHttp implements DriveApi {
       headers: { 'content-type': `multipart/related; boundary=${boundary}` },
       body,
     });
-    return toFile((await res.json()) as WireFile);
+    return this.changed(toFile((await res.json()) as WireFile));
   }
 
   /** One request with the token, the one refresh and the retries. Answers ok or 308 (resumable). */
