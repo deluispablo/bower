@@ -1,6 +1,6 @@
 # Product purpose and architecture boundaries
 
-Adopted direction: 2026-10-05. Planning revision: `2026-10-05-app-first-1`. The owner's latest clarification governs this document. Delivery order is in [WORK_PLAN.md](WORK_PLAN.md); capability acceptance is in [P2_ACCEPTANCE.md](P2_ACCEPTANCE.md). This is a requirement, not a claim that every capability is implemented.
+Adopted direction: 2026-10-05. Planning revision: `2026-10-05-contracts-2`. The owner's latest clarification governs this document. Delivery order is in [WORK_PLAN.md](WORK_PLAN.md); capability acceptance is in [P2_ACCEPTANCE.md](P2_ACCEPTANCE.md). This is a requirement, not a claim that every capability is implemented.
 
 ## Purpose
 
@@ -41,7 +41,9 @@ The current operation list is a starting contract, not a ceiling on the second b
 
 Distinguish a generated document's writable body from a person's protected body. Existing hard ownership rules remain until a separately specified, explicitly authorized editing flow changes them. Do not infer permission to rewrite user text from “tidy up.” The initial portable document representation is Markdown, including tables and citations. Additional export formats need individual requirements and acceptance tests; “documents” does not silently promise every binary format.
 
-Drive remains the knowledge store. A version precheck is not a proven atomic transaction against external clients; real-Drive conflict behavior is a P3 integration gate. Neither adding a lock nor reducing tokens proves data safety.
+Drive remains the knowledge store. A version precheck is not a proven atomic transaction against external clients. P2 must retire contract-threatening provider assumptions through bounded real-service probes; P3 repeats and broadens integration proof. Neither adding a lock nor reducing tokens proves data safety.
+
+[ARCHITECTURE](ARCHITECTURE.md) defines stable app/service and runner/semantic boundaries, compatible schema evolution, the reusable deterministic core and durable execution. An admitted run must remain recoverable without its originating browser. Keep the Worker small without leaving authoritative scheduling or recovery only on the device.
 
 ## Product continuity from the original Bower
 

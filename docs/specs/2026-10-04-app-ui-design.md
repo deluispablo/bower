@@ -1,5 +1,7 @@
 # Bower app, phase 1: the UI — design
 
+
+Architecture revision `2026-10-05-contracts-2`: [ARCHITECTURE](../ARCHITECTURE.md) governs stable boundaries, compatible evolution, durable execution and early premise probes. Shapes and operation lists below are a historical implementation baseline, not the final capability ceiling; change them only with assigned migration/compatibility evidence.
 Planning update 2026-10-05: read [PRODUCT](../PRODUCT.md), [WORK_PLAN](../WORK_PLAN.md) and [P2_ACCEPTANCE](../P2_ACCEPTANCE.md). The app-first, full second-brain capability contract governs delivery. Existing shapes below describe the current baseline; extensions must be versioned and implemented through assigned entries, not assumed present.
 
 Date: 2026-10-04. Status: approved in conversation with the owner.

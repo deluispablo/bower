@@ -1,10 +1,10 @@
 # Handoff for planning and phased delivery
 
-Planning revision: `2026-10-05-app-first-1`. Read PRODUCT, WORK_PLAN, P2_ACCEPTANCE, GOVERNANCE and shared STARTUP. The owner appointed the current Codex lead for planning/method only. Preserve the separately owned implementation batch.
+Planning revision: `2026-10-05-contracts-2`. Read PRODUCT, WORK_PLAN, P2_ACCEPTANCE, GOVERNANCE and shared STARTUP. The owner appointed the current Codex lead for planning/method only. Preserve the separately owned implementation batch.
 
 ## Where things stand
 
-P1 is the accepted UI baseline. P2 is built in substantial part and still open: the existing coordinator is fixing naming-related regressions in `codex/close-phase-2`, while the adopted plan also requires an explicit full capability audit. P3 and P4 implementation have not been authorized to start.
+P1 is the accepted UI baseline. P2 is built in substantial part and still open: the integration record observed at `4d98eb0` has 201/201 historical entries and final review/evaluation preparation, while the adopted plan requires the full capability and boundary audit. This is a dated observation, not live acceptance or a reservation release. P3 and P4 implementation have not been authorized to start.
 
 This main update is documentation/method only, based on main's existing product code. Do not confuse main's older feature counts with the implementation branch's evidence. Consult that branch's live ACTIVE file and exact SHA for assignments and code status; copied historical counts never certify closure.
 
@@ -12,10 +12,10 @@ This main update is documentation/method only, based on main's existing product 
 
 1. Existing coordinator completes or preserves its current reserved atomic entry, reaches a clean checkpoint and adopts the docs-only main planning update. Never merge over another session's dirty files.
 2. Audit C01–C16 against the current immutable implementation target. Register missing capabilities, contracts and the four reproduced review concerns (incomplete uploads, protected sections, refresh, stale status). Do not infer closure from the old ledger count.
-3. Execute P2-A through P2-H in WORK_PLAN: foundations, complete simulated flows, deterministic preparation, quality/efficiency corpus and final acceptance. One assigned entry at a time, with honest proofs.
+3. Use ORCHESTRATOR_START to assign P2-A through P2-H, including P2-R probes, in WORK_PLAN: foundations, complete simulated flows, deterministic preparation, quality/efficiency corpus and final acceptance. One assigned entry at a time, with honest proofs.
 4. Resolve offline-reading/upload-reload policy with actual owner rulings. Record supported behavior without silently deferring same-session correctness or core second-brain capabilities.
 5. Freeze one SHA; run all gates and independent reviewer/evaluator rounds. Fix every known unresolved defect and uncovered acceptance obligation, rerun affected evidence, then obtain owner acceptance.
-6. Only after P2 closure start the minimal real Worker/service plan. Only after P3 closure implement the real runner/model/research. See PHASES and WORK_PLAN.
+6. Only after P2 closure start the minimal real Worker/service plan. P3 includes the production deterministic execution spine; only after P3 closure add the real semantic provider/model/research. See PHASES and WORK_PLAN.
 
 ## How to run a round
 
@@ -37,7 +37,7 @@ Findings return to the integration coordinator for registration. A candidate, a 
 
 Current hard rules remain in AGENTS and accepted specs: content writes check their read version, moves/renames check name/place, app-owned text and runner-owned sections remain separate, no hard deletes and no app writes to index/hot/log. The folder-keyed journal outbox exception at sign-out remains. Exact implementation rulings/evidence belong to the integration ledger, not this main planning snapshot.
 
-The owner adopted app-first development with a complete simulated P2 and a minimal backend, preserving generation, modification, connections and permitted web research. The centralized-write default in backend proposal v2 is superseded. Specific offline/read-reload decisions and actual provider guarantees remain unresolved; see WORK_PLAN's decision register.
+The owner adopted app-first development with a complete simulated P2 and a minimal backend, preserving generation, modification, connections and permitted web research. The centralized-write default in backend proposal v2 is superseded. Specific offline/read-reload decisions and actual provider guarantees remain unresolved; contract-threatening premises need P2-R observations before acceptance, followed by full P3 verification; see WORK_PLAN's decision register.
 
 ## Cross-session continuation
 

@@ -11,3 +11,5 @@ The spec is a vision document: judge what it is silent on by what a reasonable p
 Read the assignment packet and `docs/harness/COORDINATION.md`. Report base and target SHA, checked scope, evidence and unresolved findings. Do not use moving HEAD as the target or edit shared records. Later changes require review of the affected diff.
 
 Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase acceptance before acting. Record plan revision and capability IDs with the code SHA. For P2, check full simulated-app capability coverage, protected knowledge semantics and realistic failure behavior. A fast classifier alone does not satisfy the second-brain goal. Distinguish simulated evidence from real-model/provider proof.
+
+Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.

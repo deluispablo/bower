@@ -12,8 +12,9 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 ## Where things are
 
 - Planning authority: `docs/PRODUCT.md`, `docs/WORK_PLAN.md`, `docs/P2_ACCEPTANCE.md`; roles and main/implementation separation: `docs/harness/GOVERNANCE.md`.
+- Boundary architecture: `docs/ARCHITECTURE.md`; orchestrator launch queue: `docs/harness/ORCHESTRATOR_START.md`. Read relevant sections before contract work or assignment.
 - Specs: `docs/specs/` (UI, who does what, the Worker contract). Plans and their ledgers: `docs/superpowers/plans/`.
-- Phases (`docs/PHASES.md`): 1 UI on demo data (done), 2 complete app with simulated backend (in progress), 3 minimal real Worker, 4 full second-brain runner. No next phase while an entry is open.
+- Phases (`docs/PHASES.md`): 1 UI on demo data (done), 2 complete app with simulated backend (in progress), 3 minimal real Worker, 4 full second-brain runner. No next-phase implementation while an entry is open; bounded P2 premise probes follow WORK_PLAN.
 - Screens: `src/features/`, shell `src/app/`, parts `src/ui/`, Bower the bird `src/bird/`.
 - Data: screens only use `src/data/sources.ts` through `provider.tsx`. Sources: `demo/` (in memory), `vault/` + `drive/` + `live/` + `worker/` (real), `fake/` (pretend Drive and Worker). `choose.ts` picks one (`?source=demo|fake|real`).
 - Coordination: `docs/harness/COORDINATION.md` (worktrees, ownership, serialized integration and browser gates).

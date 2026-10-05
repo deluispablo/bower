@@ -17,7 +17,7 @@ Technical lead and coordinator can both be Codex or Claude in future assignments
 ## Sources of authority
 
 1. Current explicit owner instruction.
-2. Adopted PRODUCT, WORK_PLAN, P2_ACCEPTANCE and planning revision on local main.
+2. Adopted PRODUCT, ARCHITECTURE, WORK_PLAN, P2_ACCEPTANCE and planning revision on local main.
 3. Accepted phase-specific specs/contracts and actual implementation assignment.
 4. Live integration ACTIVE record for who may touch which files/resources.
 5. Historical ledgers/proposals and tool-private memory as context only.
@@ -41,3 +41,5 @@ On context compaction/resume, refresh main's plan revision and the live ACTIVE r
 ## Planning log
 
 - 2026-10-05: owner adopted app-first phased delivery and appointed a planning/method technical lead. Prepared revision `2026-10-05-app-first-1` on a docs-only branch from main. P2 expanded into explicit complete simulated-app acceptance; full second-brain capabilities preserved; the heavier backend-v2 recommendation superseded. Implementation remains with its existing coordinator, with no feature/proof changes from this update. Local main integration is authorized; no push is authorized.
+
+- 2026-10-05: owner requested architectural concerns be adopted throughout planning. Revision `2026-10-05-contracts-2` adds stable app/service and runner/semantic contracts, shared pure rules, browser-independent admitted work, bounded P2 premise probes and a dispatch-ready queue. P3 now explicitly builds the reusable deterministic execution spine; P4 adds semantics. No product-code/proof edits or phase closure; existing coordinator/evaluation reservations preserved.

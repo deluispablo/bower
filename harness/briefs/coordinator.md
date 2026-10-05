@@ -9,3 +9,5 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
 Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase acceptance before acting. Record plan revision and capability IDs with the code SHA. At a safe checkpoint adopt the main planning revision, map C01–C16 to current tests/entries and register gaps before new assignments or closure. The technical lead owns planning/method; you retain live implementation records. No feature-count-only closure.
+
+Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.

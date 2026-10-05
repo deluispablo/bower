@@ -1,12 +1,12 @@
 # The phases of the Bower app rebuild
 
-Current planning revision: `2026-10-05-app-first-1`. Read [PRODUCT.md](PRODUCT.md), [WORK_PLAN.md](WORK_PLAN.md) and [P2_ACCEPTANCE.md](P2_ACCEPTANCE.md) for the adopted purpose, sequence and closure contract. [METHOD.md](harness/METHOD.md) governs execution. Phase state and evidence must always name a committed target; main receiving planning is not a phase-completion event.
+Current planning revision: `2026-10-05-contracts-2`. Read [PRODUCT.md](PRODUCT.md), [WORK_PLAN.md](WORK_PLAN.md) and [P2_ACCEPTANCE.md](P2_ACCEPTANCE.md) for the adopted purpose, sequence and closure contract. [METHOD.md](harness/METHOD.md) governs execution. Phase state and evidence must always name a committed target; main receiving planning is not a phase-completion event.
 
 ## Why a rebuild
 
 Bower is a complete web second brain in the person's own Google Drive: understand incoming material, create and update documents, connect knowledge, detect contradictions, answer requests and enrich with permitted web research. The original system's tidy-ups are too slow. Reduce repeated preparation, unnecessary reads, mechanical model work and redundant output while preserving those capabilities. Use the original project for behavior and synthetic benchmark references, never copied implementation or private data.
 
-The owner requires phase-by-phase development: a finished UI, then a fully functional app on a simulated backend, then real backend services, then real reasoning. No next-phase implementation until the current phase is accepted. Planning interfaces ahead is allowed; declaring simulated model quality or real provider guarantees is not.
+The owner requires phase-by-phase development: a finished UI, then a fully functional app on a simulated backend, then real backend services, then real reasoning. No next-phase implementation until the current phase is accepted. Planning interfaces and bounded P2 integration-premise probes are allowed; they do not begin P3 implementation. Declaring simulated model quality or unobserved provider guarantees is not. See [ARCHITECTURE](ARCHITECTURE.md).
 
 | Phase | Deliverable | Status |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ Production app logic runs through Sources over fake Drive/Worker. Demo remains a
 
 The deliverable includes document generation/revision results, connections, contradictions, requests over existing notes, simulated research, rules/questions, reports, recovery and supported undo. Scripted semantic responses must create real fake-file effects. The app prepares work incrementally and supports more-context/fallback cases without needing a real model.
 
-Exit: all capability obligations covered, all P2 entries validly closed, zero known unresolved defects, full check/demo/fake/production-PWA gates on one SHA, independent code review and phone/desktop evaluation, documented product rulings and owner acceptance. Historical feature counts are not the acceptance contract. Real semantic quality and Drive guarantees remain explicitly unproven until their phases.
+Exit: all capability obligations covered, all P2 entries validly closed, zero known unresolved defects, full check/demo/fake/production-PWA gates on one SHA, independent code review and phone/desktop evaluation, documented product rulings and owner acceptance. Historical feature counts are not the acceptance contract. P2-R must resolve assumptions that threaten the accepted contract. Full real integration and semantic quality remain P3/P4 evidence obligations.
 
 The [original phase-2 recipe](superpowers/plans/2026-10-04-phase-2-app-logic.md) and [ledger](superpowers/plans/2026-10-04-phase-2-ledger.md) preserve history. Their old checklist/counts, tool requirements and deferrals do not override WORK_PLAN.
 
@@ -33,7 +33,7 @@ The [original phase-2 recipe](superpowers/plans/2026-10-04-phase-2-app-logic.md)
 
 Replace simulated service boundaries with a small Worker and real Drive integration while preserving the accepted app. Own sign-in, encrypted credentials, folder pointer, run admission/limits, dispatch, authenticated runner access and ordered status. Test concurrency/recovery and actual Drive behavior using synthetic data. The app retains direct Drive mechanics; no default central content/write service.
 
-A deterministic runner double proves the end-to-end backend path before Claude is introduced. Pick storage/coordination based on invariants, not a predetermined list of services. Close only after real-service gates, independent review/evaluation and owner acceptance. Offline/read-reload policy needs an actual owner ruling; do not silently move a P2 defect into this phase.
+A production deterministic execution spine with a scripted semantic-provider double proves the backend path before Claude is introduced. It persists admission, applies/reconciles operations and recovers without the originating browser. P4 reuses it instead of building a second mutation engine. Pick storage/coordination based on invariants, not a predetermined list of services. Close only after real-service gates, independent review/evaluation and owner acceptance. Offline/read-reload policy needs an actual owner ruling; do not silently move a P2 defect into this phase.
 
 ## Phase 4: runner and complete second brain
 

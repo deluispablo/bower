@@ -17,3 +17,5 @@ Report each finding as: severity (bug / polish), source, scenario, size, exact s
 Read `docs/harness/COORDINATION.md`; the coordinator must reserve the browser/server and freeze the target checkout for the whole run. Report target SHA and sources/scenarios. No edits, rebuilds or harness restores may occur in that checkout during evaluation. Use synthetic upload fixtures in the assigned checkout.
 
 Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase acceptance before acting. Record plan revision and capability IDs with the code SHA. For P2, replay the journeys in docs/P2_ACCEPTANCE.md as well as assigned regressions. Generated documents, connections, contradictions, web permission/results, recovery and supported undo must have actual fake data effects. Report any missing journey even if it has no existing feature entry.
+
+For assigned P2 acceptance, include the boundary journeys in `docs/P2_ACCEPTANCE.md`: reopen from another client, truthful partial/failure results and persisted file effects. Use only prepared scenarios on the frozen target; do not run live-provider probes or infer production durability from browser-local fake behavior.

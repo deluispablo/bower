@@ -47,3 +47,5 @@ Measure verified integration time, rework and missing evidence in `ACTIVE.md` fo
 ## Planning revision and role boundaries
 
 The four shared skills remain the entry points; no large always-loaded planner skill is needed. bower-session routes the owner-appointed planning/method lead to GOVERNANCE and the technical-lead brief. Implementers, reviewers and evaluators name the adopted plan revision, phase and capability IDs. P2 evaluation checks the entire acceptance matrix, not only registered historical entries. Native discovery and a live Claude/Codex handoff still need actual session evidence; files passing validation alone do not prove orchestration.
+
+Architecture revision contracts-2 keeps the four skill definitions unchanged: routing through STARTUP and role briefs loads ARCHITECTURE only for relevant boundary work and ORCHESTRATOR_START for coordinators. No new global skill, plugin or duplicated rulebook is introduced.

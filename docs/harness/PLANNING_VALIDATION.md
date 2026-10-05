@@ -15,3 +15,13 @@ Revision: `2026-10-05-app-first-1`. Documentation branch starts from local main 
 No browser/e2e evaluation was run for this prose/skill change. No real Drive, Worker, Actions or Claude execution was invoked. Native fresh-session skill discovery and Claude-to-Codex delivery were not exercised; repository instructions/links do not prove host orchestration. No independent reviewer was spawned or another session messaged without explicit delegation/channel authorization.
 
 The current implementation coordinator has a durable adoption packet in PLANNING_HANDOFF. Its dirty checkout is preserved. It must integrate the main planning update at a clean checkpoint and rerun combined-tree checks before new assignments or phase closure.
+
+## Architecture revision contracts-2
+
+Documentation update based on local main `616768a`, in the same isolated planning checkout. Current integration was observed at `4d98eb0` with its own final review/evaluation reservations; none were changed. New target architecture and orchestrator queue describe required work, not implemented guarantees. The four skill definitions and Claude symlinks are unchanged. Validation results for this revision follow.
+
+- `bash harness/init.sh`: passed in the exclusively owned planning checkout; its historical next entry was not taken as an assignment.
+- `pnpm check`: passed after the architecture/plan update (45 test files, 364 tests; lint, types, build and repository sensors). Existing build chunk-size advisory remains.
+- Thirty changed/new documentation paths checked for relative links, closed code fences and documentation-only scope; `git diff --check` passed. Existing Claude skill links resolve; skill definitions unchanged.
+- No production source, dependencies, feature status, verify commands or proof records changed. No browser gate, live provider probe, model execution, subagent launch or inter-session message was performed for this documentation task.
+- Ready for coordinator adoption and assignment preparation through ORCHESTRATOR_START. Product acceptance, integration-risk evidence and live orchestration remain separate implementation obligations.

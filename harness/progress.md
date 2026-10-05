@@ -2,10 +2,10 @@
 
 ## Next
 
-- Adopt `docs/WORK_PLAN.md` and `docs/P2_ACCEPTANCE.md`, revision `2026-10-05-app-first-1`, in the active implementation branch at an owned clean checkpoint. Complete its reserved atomic task first; do not overwrite dirty work.
+- Adopt `docs/WORK_PLAN.md` and `docs/P2_ACCEPTANCE.md`, revision `2026-10-05-contracts-2`, in the active implementation branch at an owned clean checkpoint. Complete its reserved atomic task first; do not overwrite dirty work.
 - The implementation coordinator maps C01–C16 to evidence and registers gaps plus current review findings, then executes one assigned entry at a time. P2 remains open until full simulated-app acceptance, independent review/evaluation and owner rulings.
 - Local main receives planning/method only in this update. Its feature/proof history is not the newer implementation branch's status. Read the live integration ACTIVE record; do not restart main's historical first open entry.
-- P3/P4 implementation remains gated. Technical lead currently owns planning/method only; see GOVERNANCE. Browser resources remain serialized and code must stay frozen during their use.
+- Use ORCHESTRATOR_START O1–O8 and ARCHITECTURE; P2-R retires provider/executor premises before dependent contract acceptance. P3/P4 implementation remains gated. Technical lead currently owns planning/method only; see GOVERNANCE. Browser resources remain serialized and code must stay frozen during their use.
 
 ## Log
 
@@ -205,3 +205,5 @@
 - 2026-10-05: qa-10 closed (185/185). `docs/harness/HANDOFF.md` written: the state, the plan to close phase 2 and start phase 3, how to run a round, the traps of this machine.
 
 - 2026-10-05: owner-authorized planning-only main update adopts full second-brain purpose, complete simulated P2 acceptance, minimal backend and shared technical-lead/coordinator authority. No feature status or proof changed; integration branch must adopt the plan at a safe checkpoint.
+
+- 2026-10-05: planning revision contracts-2 adopts stable boundaries, durable browser-independent execution, bounded P2 premise probes and orchestrator assignment queue; documentation only, no entry/proof closure.

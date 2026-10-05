@@ -27,7 +27,7 @@ Startup and capability selection are shared: [STARTUP.md](STARTUP.md) and [SKILL
 
 ## Phase acceptance before feature counts
 
-P2 must deliver a complete app on realistic simulated services, including generation, connections, knowledge updates and web-result flows. The capability matrix is a separate coverage obligation from the historical feature ledger. Audit gaps, register them through the coordinator and preserve honest red/green proofs. No known unresolved defect or required capability gap may be hidden by a green count. P3/P4 implementation waits for the preceding phase's complete evidence and owner acceptance. Tests cannot prove that unseen bugs do not exist.
+P2 must deliver a complete app on realistic simulated services, including generation, connections, knowledge updates and web-result flows. The capability matrix is a separate coverage obligation from the historical feature ledger. Audit gaps, register them through the coordinator and preserve honest red/green proofs. No known unresolved defect or required capability gap may be hidden by a green count. P3/P4 implementation waits for the preceding phase's complete evidence and owner acceptance. Bounded P2 premise probes in WORK_PLAN retire integration risks without beginning P3 implementation. ARCHITECTURE defines shared boundary/compatibility tests and durable execution. Tests cannot prove that unseen bugs do not exist.
 
 ## The feature list
 

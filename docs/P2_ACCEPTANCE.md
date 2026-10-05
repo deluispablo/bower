@@ -1,6 +1,6 @@
 # Phase 2 capability and acceptance contract
 
-Revision: `2026-10-05-app-first-1`. Phase 2 delivers the complete app over simulated backend behavior. Its fake stack uses production app data logic and realistic persistence/failure contracts; the demo illustrates the experience. P3 supplies real backend services, and P4 supplies real semantic reasoning and research. A scripted result proves the app can carry and present a capability, not that a model can perform it well.
+Revision: `2026-10-05-contracts-2`. Phase 2 delivers the complete app over simulated backend behavior. Its fake stack uses production app data logic and realistic persistence/failure contracts; the demo illustrates the experience. P3 supplies real backend services, and P4 supplies real semantic reasoning and research. A scripted result proves the app can carry and present a capability, not that a model can perform it well.
 
 ## Capability matrix
 
@@ -54,7 +54,15 @@ The output contract must support generated document content, owned-section chang
 
 Create a capability corpus from the original synthetic benchmark, extended to the journeys above. In P2, check preparation relevance, cache reuse, bounded reads, output expressiveness, file effects, UI responsiveness and failure recovery with scripted semantic results. In P4, run the same semantic questions against Claude and compare content quality as well as latency/tokens. Never use fake-model time as a production speed benchmark.
 
-Record cold/warm preparation time, context bytes (tokens when the actual tokenizer/provider is available), candidate count, extraction reuse, remote-read count and operation count. Define device/file-size assumptions before setting responsive-time targets. Do not declare “optimized” from a smaller prompt alone or adopt arbitrary one-call/output limits that break generation/research.
+Capture the baseline before optimizing each slice. Separate admission/dispatch/startup, preparation, retrieval, model/tool, apply/report and retry time where the phase can actually observe them. Record cold/warm preparation time, context bytes (tokens when the actual tokenizer/provider is available), candidate count, extraction reuse, remote-read count and operation count. Define device/file-size assumptions before setting responsive-time targets. Do not declare “optimized” from a smaller prompt alone or adopt arbitrary one-call/output limits that break generation/research.
+
+## Boundary and integration-risk acceptance
+
+Apply [ARCHITECTURE](ARCHITECTURE.md) and WORK_PLAN P2-R. P2 freezes a stable baseline contract with compatible evolution, not a final API for all future features. Tests exercise fake service substitution through the production app boundary without screen/domain rewrites. Runner proposals have a separate validated semantic contract; malformed/unknown operations produce no silent partial application.
+
+Cover accepted-but-not-dispatched work, duplicate request/dispatch, lost response after an effect, stale attempt/status, closed originating browser, unavailable credentials and report-save failure. Persist actual fake effects and recover from another client. Model the simulated service lifecycle independently from the client under test (controlled scheduler and shared fake persistence); closing one client must not destroy the simulated accepted work. This is contract evidence, not a claim that browser-local demo code executes while every browser is closed. Version old/new durable fixtures and prove compatibility or a specified migration. Conceptual lifecycle/error cases must be mapped onto tested schemas; this document does not add wire enums.
+
+Observe contract-threatening real provider/executor assumptions through the bounded P2-R probes before accepting dependent contracts. Record exact limitations and remedies. These probes do not certify a production backend and do not replace P3 integration. A blocked high-impact premise is a blocked acceptance item, never an implicit deferral.
 
 ## P2 exit checklist
 
@@ -64,6 +72,7 @@ Record cold/warm preparation time, context bytes (tokens when the actual tokeniz
 - `pnpm check`, full `pnpm e2e`, full `pnpm e2e:fake` and `pnpm e2e:pwa` pass on the same frozen implementation SHA. Explain each skip; no skipped required journey counts as coverage.
 - Independent reviewer and evaluator certify their stated scope on that SHA. Phone/desktop and console/error paths are covered; later relevant changes invalidate the affected evidence.
 - Offline reading, reload durability and other unresolved product policies have actual owner rulings and matching behavior. A PWA shell is not offline notes; fake data is not evidence of real-service behavior.
+- Shared boundary/fault/compatibility suites pass for implemented P2 adapters; R1–R4 results resolve contract-threatening assumptions, with no unsupported data-safety guarantee. Admitted work survives the originating client in the simulation.
 - Specs, schemas, handoff and fixtures match the accepted app. Owner accepts closure after reviewing the evidence summary.
 
 “Without failures” means no known unresolved defects within the accepted scope, completed gates and independent evaluation. It is not a mathematical claim that unseen defects cannot exist. If a relevant defect appears after closure, stop dependent phase work, repair the foundation and revalidate before continuing.

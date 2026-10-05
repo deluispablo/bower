@@ -66,7 +66,8 @@ Current coordination record: <integration-path>/docs/harness/ACTIVE.md
 Worker checkout and branch:
 Base SHA / target SHA: immutable commits, not HEAD
 Allowed production and test paths:
-Dependencies and reserved contracts:
+Dependencies and reserved contracts / versions:
+Compatibility fixtures and failure/recovery scenario:
 Acceptance: entry what, steps and unchanged verify
 Skills / required capabilities: bower-session + assigned role; tools checked live
 Commands: writer verify/check and applicable screen gates; read-only roles use prepared evidence
@@ -112,17 +113,17 @@ Return: entry/role, base and target SHA, candidate SHA, changed paths, checks (p
 
 If a session stops responding, retain its assignment and checkout. The coordinator checks its Git status and latest commits, contacts the owner/session, then explicitly marks it stopped or hands it over. Time passing does not release ownership. Never delete a dirty worktree; preserve needed work before cleanup. Reassign using a new packet with the exact latest committed base and unresolved checks.
 
-`HANDOFF.md` is durable phase state; `ACTIVE.md` is the current batch; `progress.md` is the historical log; `features.json` is completion truth. Keep those meanings separate. A batch record in an old worktree cannot override the integration record.
+`HANDOFF.md` is durable phase state; `ACTIVE.md` is the current batch; `progress.md` is the historical log; `features.json` records registered entry completion; P2_ACCEPTANCE is phase completion truth. Keep those meanings separate. A batch record in an old worktree cannot override the integration record.
 
 ## First rollout and measurement
 
-For the remaining phase 2 work, start with Claude implementing one assigned entry and Codex reviewing its immutable candidate, or reverse the tools. Next try two independent unit-test entries in separate worktrees. Keep browser work serialized. Phase closure criteria stay unchanged.
+For the remaining phase 2 work, start with Claude implementing one assigned entry and Codex reviewing its immutable candidate, or reverse the tools. Next try two independent unit-test entries in separate worktrees. Keep browser work serialized. Use the current adopted phase closure criteria, including the expanded capability and boundary evidence.
 
 For the first three completed entries, record elapsed time to verified integration, review findings requiring rework, conflicts, repeated gate time and missing evidence. Compare with the existing roughly 3-minute unit closure and 10–15-minute browser closure observations (these are not a controlled benchmark). Continue parallel implementation only if it reduces elapsed delivery time without more regressions, conflicting edits or unverifiable closures. Otherwise keep the writer/reviewer pairing. No automated scheduler, lock enforcement or cross-vendor messaging was added here.
 
 ## Adopted phase acceptance and planning updates
 
-Read PRODUCT, WORK_PLAN and P2_ACCEPTANCE before assigning new scope. A phase is blocked by uncovered capability obligations even if the old feature list is entirely green. The coordinator registers gaps, while the technical lead resolves planning/contracts and the owner resolves product tradeoffs. Keep one defect/delivery entry at a time and use the smallest test that demonstrates its effect. Independent review must check interactions as well as each local fix.
+Read PRODUCT, WORK_PLAN, P2_ACCEPTANCE and ORCHESTRATOR_START before assigning new scope. Boundary work follows ARCHITECTURE. Serialize shared schema changes before downstream writers; require compatibility and recovery evidence, not just type checking. A phase is blocked by uncovered capability obligations even if the old feature list is entirely green. The coordinator registers gaps, while the technical lead resolves planning/contracts and the owner resolves product tradeoffs. Keep one defect/delivery entry at a time and use the smallest test that demonstrates its effect. Independent review must check interactions as well as each local fix.
 
 Planning can land on main independently of product code. Compare PLAN_REVISION on startup and resume. Finish or preserve a reserved atomic entry, then integrate the docs-only main update in an exclusively owned clean checkout; reconcile conflicts by purpose, preserving newer implementation evidence. Record the adopted revision before further assignments. Do not merge an old proposal branch just to acquire its prose, because it may carry unfinished product commits.
 

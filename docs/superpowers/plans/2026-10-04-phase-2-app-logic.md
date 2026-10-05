@@ -424,7 +424,7 @@ export function runFake(drive: FakeDrive, rootId: string, opts: { failOnce: bool
 - the status codes;
 - whether a same-origin check applies.
 
-It also records the dispatch payload to the runner and states that the runner writes `.bower/last-run.json`. Phase 3 builds exactly this.
+It also records the dispatch payload to the runner and states that the runner writes `.bower/last-run.json`. This was the original baseline; P3 implements the versioned contract accepted through current WORK_PLAN and ARCHITECTURE.
 
 **What the fake runner does,** in order, with phases timed by `PHASE_MS[scale]`:
 1. It snapshots the inbox piles as `runPiles`.
