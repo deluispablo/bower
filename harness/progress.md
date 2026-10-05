@@ -350,3 +350,5 @@
 - 2026-10-05: ownership-byte-parser passes — fix: proof-close raw byte ownership parser foundation
 
 - 2026-10-05: actual finalD03dc446c7 inconclusive23HTTP/0refresh/5454B; BASEretryboundworked butCONTROLversionmismatch stopsbeforeB/staleA. All23eventscomplete/rawownedBin200/noresidual/authoritydisabled; probe line ended. B Important schema-patternreview6535422d archived/narrowv2correction assigned; additive rawreadqa19 isolatedstub-first writer assigned.
+
+- 2026-10-05: B alleged Important NOT reproduced: exactJSONdecode/rootstandardRegExp discriminator accepts validIDs/rejectscontrols. Independent reviewer withdraws mistaken tool-escaping interpretation; corrected NEWreport reserved, original653/aede/3b954 preserved, no inventedv2. Single R1 immutable-operation alternativepreparedforleaddecision, rawreadworker active.

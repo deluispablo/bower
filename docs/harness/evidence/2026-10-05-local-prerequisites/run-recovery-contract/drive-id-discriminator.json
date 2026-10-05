@@ -1,0 +1,73 @@
+{
+  "contractHash": "aede6ef26f21b894dfd9c169cd158c812534ed333b8f77c461105529fcaabdeb",
+  "patternCodepoints": [
+    94,
+    91,
+    94,
+    92,
+    117,
+    48,
+    48,
+    48,
+    48,
+    45,
+    92,
+    117,
+    48,
+    48,
+    49,
+    102,
+    92,
+    117,
+    48,
+    48,
+    55,
+    102,
+    93,
+    43,
+    36
+  ],
+  "backslashCount": 3,
+  "cases": [
+    {
+      "sampleAlias": "fake-root",
+      "accepts": true
+    },
+    {
+      "sampleAlias": "receipt-file",
+      "accepts": true
+    },
+    {
+      "sampleAlias": "inbox-folder",
+      "accepts": true
+    },
+    {
+      "sampleAlias": "f",
+      "accepts": true
+    },
+    {
+      "sampleAlias": "u",
+      "accepts": true
+    },
+    {
+      "sampleAlias": "FOLDER_ID",
+      "accepts": true
+    },
+    {
+      "sampleAlias": "control-or-empty-6",
+      "accepts": false
+    },
+    {
+      "sampleAlias": "control-or-empty-7",
+      "accepts": false
+    },
+    {
+      "sampleAlias": "control-or-empty-8",
+      "accepts": false
+    },
+    {
+      "sampleAlias": "control-or-empty-9",
+      "accepts": false
+    }
+  ]
+}
