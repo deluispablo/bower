@@ -2,12 +2,14 @@
 
 ## Next
 
-- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns codex/close-phase-2 under explicit owner handoff; main d12c55e / contracts-2 adopted at143ae2b. Read live ACTIVE for assignments; main planning remains d12c55e at last refresh.
-- O1 audit and O2 bounded R1–R4 specifications are complete at 143ae2b; read docs/harness/2026-10-05-p2-o1-audit.md and 2026-10-05-p2-r-probe-specs.md. Four rows missing, twelve partial; all real probes NOT RUN. Reuse proof evidence; reproduce historical concerns before registering gaps.
-- 206/213 registered entries pass: journal-ack-content7869489, pile-edit-still-seen afb4b36 and adjacent pile-context-version f9f0bf7 closed with independent reviews and assertion proofs. Leading-dot integrated28d2ce2, check420/full demo+fake196 passed56 skips each; stays open because native manual evaluation unavailable atd086d6c. Revised Timeline6305ca9 independently reviewed/integrated-open after actual renamed-folder red/green; full affected gates/manual pending. Run-status-monotonic closed7f49572 after independent corrected candidate71ef6be, check439/19 named cases. Task-preserves-source-bytes closedaf90266, check448/9 cases. Sole worker next external-change-refresh onaf90266. Canonical task-byte preservation newly reproduced/registered, queued before foreground refresh. No manual certification or owner acceptance.
-- Continue external-change-refresh then existing-v1 runner-request-preflight. Protected ownership requires the lead decision; incomplete-pile and report-save recovery depend on accepted O3/O4 contracts and relevant P2-R premises. Other capability gaps remain in O1; no gap disappears behind the harness count.
-- Stabilize contracts before O4–O7 dependent implementation. Finish full frozen evaluation, gates and O8 dossier before owner phase acceptance. P2 is open; P3/P4 do not start.
-- Offline reading and upload-reload policy require specific owner decisions. Real-provider premises require authorized synthetic observations, not fake guarantees. Browser gates and restores remain serialized.
+- Coordinator `p2-orchestrator-2026-10-05-01a10bbd` owns `codex/close-phase-2` under explicit owner handoff. Main `d12c55e` / `2026-10-05-contracts-2` was adopted at `143ae2b`; refresh main and live ACTIVE before mutations.
+- O1/O2 evidence is retained at the immutable adoption SHA. Full capability rows: four missing, twelve partial. All R1–R4 runtime probes are NOT RUN; specifications and proposed fixtures do not certify provider behavior or O3 acceptance.
+- Current count: 206/213. Journal acknowledgement, pile metadata/context prechecks, local run-order guards and legacy task byte preservation are independently reviewed and proof-closed. Latest closed source is `6dda1a4`, task proof `af90266`; check448 and nine task cases passed.
+- Leading-dot `28d2ce2` and revised Timeline `6305ca9` are integrated-open. Earlier complete suites cover source28d2ce2 (196 passed/56 intentional skips each); final combined affected suites and manual evaluation remain pending. Chrome evaluation at `d086d6c` was NOT RUN. IAB has since been recovered through actual tab creation/closure; no app evaluation has yet occurred there.
+- Sole isolated implementer owns `external-change-refresh`, base `af90266`. Candidate `50d918f` has an Important pre-wave listing race, reproduced by a coordinator assertion and confirmed independently; same-entry rework is active. Existing-v1 `runner-request-preflight` is queued next with a read-only prerequisite. No worker browser grant or second implementer.
+- After the independent unit fixes, coordinator runs combined check/demo/fake/PWA gates, prepares a frozen production build and grants serialized IAB evaluation using the retained replay plan/fixtures. Fix new findings before closure. Keep actual uncovered controls/journeys explicit.
+- Protected ownership requires the lead's format decision; incomplete-pile and report-save recovery need accepted O3/O4 contracts and relevant P2-R observations. Offline reading and upload-reload policy remain owner decisions. Broader O1 capability gaps do not disappear behind the harness count.
+- Stabilize and independently review contracts before O4–O7 implementation. O8/full P2 acceptance remains open; no P3/P4, merge, push or deployment is authorized by these fixes.
 
 ## Log
 
@@ -272,7 +274,7 @@
 - 2026-10-05: leading-dot candidate independently reviewed/integrated28d2ce2; check420 and complete demo/fake each196 passed56 intended skips. Native evaluation unavailable atd086d6c: no Chrome browser surface, native-app selection interrupted/no modifying action; four cells NOT RUN. Preserve integrated-open entry, release preview and grant worker5191 for Timeline test-first. Run-order prerequisite retained; no schema adoption or dependent slice started.
 - 2026-10-05: run-status-monotonic passes — fix(runs): prove delayed replies preserve accepted state
 
-- 2026-10-05: run-status-monotonic independently reviewed after actual null/disposal/admission-result rework reds, integrated2bd3346 and proof-closed7f49572. Register narrow legacy task-byte preservation before foreground refresh;206/213, P2 open.
+- 2026-10-05: run-status-monotonic independently reviewed after actual null/disposal/admission-result rework reds, integrated2bd3346 and proof-closed7f49572. Register narrow legacy task-byte preservation before foreground refresh;205/212 at that closure, P2 open.
 - 2026-10-05: task-preserves-source-bytes passes — fix(notes): prove task toggles preserve every other byte
 
 - 2026-10-05: task-byte candidate71e9707 reviewed/integrated6dda1a4/proof-closedaf90266; legacy source preserved with5 actual assertion reds. Sole isolated writer assigned foreground refresh;206/213 and P2 remains open.
