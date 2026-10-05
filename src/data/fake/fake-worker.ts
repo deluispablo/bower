@@ -10,7 +10,7 @@ import { keepSignedIn, keptSignedIn, type Scenario, type TimeScale } from '../de
 import { thingsIn } from '../piles';
 import { BowerError, PARA_ROOTS, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
-import { BOWER_FOLDER, PROP, SYSTEM, type LastRunFile } from '../vault/layout';
+import { BOWER_FOLDER, PROP, SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import { serializeNote } from '../vault/note-format';
 import { serializeRules } from '../vault/rules-format';
 import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
@@ -35,6 +35,7 @@ export class FakeWorker implements WorkerApi {
   private failOnce: boolean;
   private run: (RunWire & { report?: RunReport }) | null = null;
   private loaded: Promise<void>;
+  private loadFailure: { error: unknown } | null = null;
   private took = new Set<string>();
   private seq = 0;
   private readonly offline: boolean;
@@ -47,7 +48,10 @@ export class FakeWorker implements WorkerApi {
     this.failOnce = opts.scenario === 'fail-run';
     this.offline = !!opts.offline;
     // Offline, the folder cannot be read now; every call says so on its own.
-    this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario, opts.fresh ?? true).catch((e: unknown) => console.error(e));
+    this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario, opts.fresh ?? true).catch((e: unknown) => {
+      console.error(e);
+      this.loadFailure = { error: e };
+    });
   }
 
   /** The piles the tidy-up going now took; empty when none is going. */
@@ -111,8 +115,9 @@ export class FakeWorker implements WorkerApi {
 
   async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunWire> {
     this.online();
-    this.lastAllowWeb = !!opts.allowWeb;
     await this.loaded;
+    if (this.loadFailure) throw this.loadFailure.error;
+    this.lastAllowWeb = !!opts.allowWeb;
     if (this.run && !['done', 'failed'].includes(this.run.phase)) return this.wire();
     const root = this.rootId;
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
@@ -125,6 +130,7 @@ export class FakeWorker implements WorkerApi {
   async status(): Promise<RunWire | null> {
     this.online();
     await this.loaded;
+    if (this.loadFailure) throw this.loadFailure.error;
     return this.run ? this.wire() : null;
   }
 
@@ -186,22 +192,29 @@ export class FakeWorker implements WorkerApi {
     const sys = all.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === root);
     const file = sys && all.find((f) => f.name === 'last-run.json' && f.parents[0] === sys.id);
     if (file) {
+      let value: unknown;
       try {
-        const v = JSON.parse(await this.drive.readText(file.id)) as Partial<LastRunFile>;
-        if (v.v === 1 && v.run) this.run = { ...v.run };
-        // A run still going in the folder was cut short by a reload: the runner (this page) is gone.
-        if (this.run && !['done', 'failed'].includes(this.run.phase)) {
-          const now = Date.now();
-          // Filing happens while saving: cut there, some things may have moved already.
-          const failure =
-            this.run.phase === 'saving'
-              ? 'The tidy-up stopped when the page was reloaded, while it was putting things away. Some things may be in their new places already; the rest is still in your inbox. Tidy up again.'
-              : 'The tidy-up stopped when the page was reloaded. Nothing was moved; tidy up again.';
-          this.run = { ...this.run, phase: 'failed', phaseAt: now, finishedAt: now, failure };
-          await this.writeLastRun(root, this.run);
-        }
+        value = JSON.parse(await this.drive.readText(file.id));
       } catch (e) {
+        if (!(e instanceof SyntaxError)) throw e;
         console.error(e);
+        throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
+      }
+      if (!isRunnerFile(SYSTEM.lastRun, value)) {
+        console.error(`${SYSTEM.lastRun} has an unsupported shape`);
+        throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
+      }
+      this.run = { ...value.run };
+      // A run still going in the folder was cut short by a reload: the runner (this page) is gone.
+      if (!['done', 'failed'].includes(this.run.phase)) {
+        const now = Date.now();
+        // Filing happens while saving: cut there, some things may have moved already.
+        const failure =
+          this.run.phase === 'saving'
+            ? 'The tidy-up stopped when the page was reloaded, while it was putting things away. Some things may be in their new places already; the rest is still in your inbox. Tidy up again.'
+            : 'The tidy-up stopped when the page was reloaded. Nothing was moved; tidy up again.';
+        this.run = { ...this.run, phase: 'failed', phaseAt: now, finishedAt: now, failure };
+        await this.writeLastRun(root, this.run);
       }
     }
     // As on the demo: a run asked for 70 s ago, 20 s into reading.
