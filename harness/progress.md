@@ -4,8 +4,9 @@
 
 - Adopted contracts-2/main d12c55e; root sole integration writer.212/216 after current-v1 registration; Add proofc1b1975, sourcecbf4e9f. Check528/52/demo198/56/fake198/56 green; root actual native fake/demo390x844/1440x900 at clean5193 retainedqa15, independent full UI NOT RUN.
 - Add freeze released; own tabs closed/viewport reset/previews stopped, user tab preserved. Googlev4 actual owner consent/private exact grant validated; listener/tab stopped. Drive premises still NOT RUN. No rotation/revocation/repeated generic setup questions.
-- O3 current-v1 consumer corruption actually reproduced:3valid/10assertionreds, unknownphase1durableoverwrite, bytes/journal/input recovery evidenceqa16. Fresh prerequisite reviewed; last-run-recovery-validation registered/sole worker assigned after clean commit,2files existing validator. No newwire/scheduler/grammar.
+- O3 current-v1 consumer corruption actually reproduced:3valid/10assertionreds, unknownphase1durableoverwrite, bytes/journal/input recovery evidenceqa16. Fresh prerequisite reviewed; last-run-recovery-validation candidate17bbee4(2files) delivered549green; independent review then rootintegration/proof. No newwire/scheduler/grammar.
 - D01/D02 approved; durable upload retention/hash reselection/shared readiness/offline boot still separate obligations. Final ownership proposal needs lead grammar/rawadapter/activation adoption. Three older open entries readiness/protected-prose/report-barrier remain.
+- Next sole scratch preparer assigned after checkpoint to R1 first content race guarded shim; no actual provider until immutable independent review. One root/file, no personal search, exactbounds/Bin cleanup; micropacketv2 retained.
 - O1 fourmissing/twelvepartial full capability obligations remain. AcceptedO3 beforeO4; persisted semantic simulations/Undo, preparation/corpus and completeO8 owner dossier required. P2 open; no P3/P4/main product merge/push/deploy/spend/phase acceptance.
 
 ## Log
