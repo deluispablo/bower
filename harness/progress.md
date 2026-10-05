@@ -317,3 +317,4 @@
 - 2026-10-05: first Add candidatee23245a independently requests changes: pending-admission mutation loss source-derived, worker assigned actual red then same-entry correction; not integrated. OAuth local correspondence validated but actual Continue remains on landing, no consent/session. Own tab/listener stopped, cause unestablished; bounded observer review before one repeat.
 
 - 2026-10-05: Add pending-admission loss genuinely reproduced then replacement666074f supplied528check/5regressions/11controls, renewed independent review pending. Native local OAuth policy defect reproduced with Originnull→400/no-referrer and exactOrigin→200/same-origin; guards intact. Sole worker scratchv4 test-first correction next, no credential/provider access. Own tabs/listeners closed.
+- 2026-10-05: add-draft-no-loss passes — fix(add): prove incomplete and pending drafts retain all selected data

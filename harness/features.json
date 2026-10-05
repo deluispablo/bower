@@ -2671,7 +2671,7 @@
       "Recover through deliberate removal or supported reselection, admit the complete selected set once, and clear only after successful admission; rejected admission retains draft."
     ],
     "verify": "pnpm vitest run src/features/piles/Add.test.tsx -t \"an Add draft with unavailable bytes keeps every member before saving\"",
-    "passes": false,
+    "passes": true,
     "note": "Actual three public-render assertion reds at f739b5c/source44ee162, retained qa15. Approved D02 supersedes historical successful left-out behavior; original qa9/unit/proof history preserved with explicit policy migration. Bounded screen guard only, no durable bytes/hash identity/shared readiness/wire or grammar claim."
   }
 ]
