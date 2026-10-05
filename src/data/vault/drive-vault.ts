@@ -455,6 +455,12 @@ export class DriveVault implements VaultSource {
     const f = pile.path ? ix.file(pile.path) : undefined;
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
     await this.stillAsSeen(f);
+    const note = ix.file(join(pile.path, PILE_NOTE));
+    // Check the context before a rename or removal can partially apply a stale edit.
+    if (note && (await this.drive.get(note.id)).modifiedTime !== note.modifiedTime) {
+      void this.refresh();
+      throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
+    }
     let folderPath = pile.path;
     if (!f.folder) {
       // A lone thing that gets a note becomes a pile folder; the pile keeps its id.
@@ -471,7 +477,6 @@ export class DriveVault implements VaultSource {
       }
     }
     const folderId = ix.idOf(folderPath);
-    const note = ix.file(join(folderPath, PILE_NOTE));
     if (note && text) ix.put(await this.drive.writeText(note.id, text, note.modifiedTime));
     else if (note) {
       await this.drive.trash(note.id);

@@ -163,6 +163,38 @@ describe('DriveVault inbox and Bower', () => {
     expect(await drive.readText(note)).toBe('New remote context');
   });
 
+  it.each(['', 'Different context'])('stale pile context refuses every effect before write or removal ("%s")', async (text) => {
+    const { pile } = await contextPile(true);
+    const named = await vault.updatePile(pile.id, 'Original context');
+    const note = await idOf(`${named.path}/Pile note.md`);
+    await drive.writeText(note, 'New remote context', (await drive.get(note)).modifiedTime);
+    const before = await drive.snapshot();
+    await expect(vault.updatePile(pile.id, text)).rejects.toMatchObject({ code: 'conflict' });
+    // Include the Bin and metadata: a content conflict must not partially rename or clear.
+    expect(await drive.snapshot()).toBe(before);
+    expect(await drive.readText(note)).toBe('New remote context');
+    await vault.refresh();
+    const fresh = await vault.updatePile(pile.id, text);
+    expect(fresh.text).toBe(text);
+    expect(fresh.items).toHaveLength(1);
+    if (text) expect(await drive.readText(note)).toBe(text);
+    else expect((await drive.listAll(root)).some((f) => f.id === note)).toBe(false);
+  });
+
+  it('editing a pile still checks context versions at the content write', async () => {
+    const { pile } = await contextPile(true);
+    const named = await vault.updatePile(pile.id, 'Original context');
+    const note = await idOf(`${named.path}/Pile note.md`);
+    const write = drive.writeText.bind(drive);
+    const race = vi.spyOn(drive, 'writeText').mockImplementationOnce(async (id, text, modified) => {
+      await write(id, 'A late remote context', modified);
+      return write(id, text, modified);
+    });
+    await expect(vault.updatePile(pile.id, 'Original context')).rejects.toMatchObject({ code: 'conflict' });
+    expect(await drive.readText(note)).toBe('A late remote context');
+    race.mockRestore();
+  });
+
   it('piles keep the names their things were added under', async () => {
     const piles = await vault.piles();
     const job = piles.find((p) => p.text.startsWith('Job offer and a flat'));
