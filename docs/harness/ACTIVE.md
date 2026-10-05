@@ -4,12 +4,12 @@ Only the named coordinator writes this file. Read this integration copy before c
 
 ## Batch
 
-- State: contracts-2 adopted; O1/O2 delivered. 208/214 entries pass. Seven foundations proof-closed; two naming entries integrated-open. Combined review exposed an Important baseline reused-Sources account isolation defect, now actually reproduced and registered. The e15 freeze has ended after check/demo; final fake/PWA/native were not started. Sole implementer assigned test-first preparation only; production scope awaits the independent prerequisite. Independent live evaluation and O3-dependent work remain blocked by actual missing capabilities, resources and decisions.
+- State: contracts-2 adopted; O1/O2 delivered. 208/214 entries pass. Seven foundations proof-closed; two naming entries integrated-open. Combined review exposed an Important baseline reused-Sources account isolation defect, now actually reproduced and registered. The e15 freeze has ended after check/demo; final fake/PWA/native were not started. Sole implementer now authorized for the six-file session isolation production stage after real initial assertion reds and independent prerequisite. Independent live evaluation and O3-dependent work remain blocked by actual missing capabilities, resources and decisions.
 - Coordinator/session: Codex `/root`, session `p2-orchestrator-2026-10-05-01a10bbd`, explicitly appointed by the owner after the previous batch ended. Sole integration writer and shared-record owner.
 - Integration checkout: `/Users/deluisp/Projects/bower-app`.
 - Integration branch: `codex/close-phase-2`; batch base: `5d26800`; methodology update: `1a79dfd`.
 - Existing dirty work: none; separate-client handoff closed at `d423225`.
-- Browser reservation: none active. Ports 5191/5192 empty after full e15 demo. No worker/evaluator grant or owned tab. Existing dev5190 PID61369 preserved. Independent evaluator sees no browser and locked Mac; owner availability query pending. Root IAB id2 is available for later separately labeled supplemental checks.
+- Browser reservation: none active. Ports 5191/5192 empty after full e15 demo. No worker/evaluator grant or owned tab. Root never stopped the former dev5190 PID61369; its port/PID are no longer observed in the latest lsof check. Independent evaluator has no surfaced browser; one known-id2 selection also returned unavailable. Owner Mac-availability query pending. Root IAB id2 is available for later separately labeled supplemental checks.
 
 ## Assignments
 
@@ -353,3 +353,11 @@ The independent read-only prerequisite is retained at `2026-10-05-account-isolat
 Core assertion red received: seven genuine failures/two compatibility passes/50 exclusions, nine new cases at unchanged base7c48f4d. Separate account-switch and same-user/folder-change cases reach stale reads, wrong creation and wrong journal. Signed-out create rejects auth after already creating A content; note/request refuse without effects. Baseline init481/51 passed. Only live.test.ts changed, no partial commit. Raw init/core-red retained qa14. Same-base six-file production scope is now ready for explicit dispatch after this evidence record check/commit.
 
 Worker production dispatch packet uses the reserved six files/current wire and complete prerequisite matrix. No browser/server grant. After more meaningful reds, implement the smallest scoped lifetime repair; one candidate, green/check, independent review and serial proof are mandatory.
+
+## Current production and evaluator status
+
+- Explicit six-file isolation implementation dispatched after record667a80b; same worker/base7c48f4d/branch codex/p2-session-isolation and registered entry. Core reds7/2 establish the defect; full continuation matrix and immutable candidate/review remain pending. Root integration stays unchanged and sole-owned; worker has no browser/server/shared-record grant.
+- Bounded independent evaluator capability recovery: exactly one documented selection of root-observed IAB id2 returned Browser not available in the evaluator session (0.1358 seconds). No tab/navigation/input/settings or app evaluation occurred; no lock-causation inference. Report retained evidence/2026-10-05-evaluation/evaluator-known-browser-check.md. Previous NOT RUN findings stand. Root supplemental IAB checks cannot substitute for independent certification.
+- Latest lsof sees no5190/5191/5192 listener and no cwd for former61369; root did not stop that external dev process. Keep port ownership checks before every future browser grant. No preview/tab/evaluator reservation active.
+
+Coordinator additionally reproduced the assigned late-effect hazard at immutable e15: real A create applied, held metadata reply, B sign-in, actual next journal transport failure, then reply released. Returned success; A outbox empty, B outbox has A file ID. All three collected assertions fail. Script/results/raw log retained qa14 and sent to worker for meaningful matrix red before correction. No new entry/schema/policy or provider claim; this remains session-folder-isolation.

@@ -9,3 +9,9 @@ Both invocations exit 1 on the first actual content assertion. Creation placemen
 Run from this prepared repository: copy the retained script to private tmp, then `node <script> <full-SHA>`. The loader's repository path is explicit; adapt it only when reproducing in another prepared checkout. JSON snapshots use made-up names, emails, text and local identifiers only. Existing folder-keyed durable/volatile journal outboxes must survive sign-out; a fix must prevent them and deferred work reaching another scope, without claiming rollback of calls already dispatched.
 
 The new named regression is planned and NOT RUN. Final combined fake/PWA/native gates were not started at e15 after the Important defect was reproduced. Full e15 check passed 481 tests/51 files; demo passed 198/56 intentional skips. Subsequent fixes require a fresh combined freeze and independent review/evaluation.
+
+## Late observed effect and wrong-owner outbox
+
+A separate public-call observation at exact e15 applies an A note creation, captures and holds its successful metadata reply, switches the same Sources to B, fails the next actual journal send through public FakeDrive.failNext(offline), then releases the reply. The operation returns success; A outbox is empty, B outbox contains the actual A file ID, and no A journal record was saved. All three collected assertions genuinely fail: stale success refusal, original-owner retention and B isolation. Separate script/results/log are retained here. No private state, UI/OAuth/provider/new wire or harness proof.
+
+This reproduces the already-assigned late-effect bookkeeping hazard rather than adding a new feature or changing scope. The repair must retain observed A bookkeeping under A even when its send fails, refuse stale success, and avoid rollback/cleanup with B credentials. Unknown/lost effects and general recovery remain separate.
