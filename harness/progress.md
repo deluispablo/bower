@@ -4,7 +4,7 @@
 
 - Coordinator `p2-orchestrator-2026-10-05-01a10bbd` resumes codex/close-phase-2 under the owner's explicit handoff; adopts main d12c55e / contracts-2 at a clean exclusive checkpoint. Read live ACTIVE for assignments.
 - O1 audit and O2 bounded R1–R4 specifications are complete at 143ae2b; read docs/harness/2026-10-05-p2-o1-audit.md and 2026-10-05-p2-r-probe-specs.md. Four rows missing, twelve partial; all real probes NOT RUN. Reuse proof evidence; reproduce historical concerns before registering gaps.
-- 203/211 registered entries pass after five current O1 reproductions; historic baseline was 201/205. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
+- 204/211 registered entries pass after five current O1 reproductions; historic baseline was 201/205. Reproduce and assign journal-ack-content then pile-edit-still-seen (Important), then create-leading-dot and timeline-source-names (Minor), one candidate/review/proof closure per entry.
 - Stabilize contracts before O4–O7 dependent implementation. Finish full frozen evaluation, gates and O8 dossier before owner phase acceptance. P2 is open; P3/P4 do not start.
 - Offline reading and upload-reload policy require specific owner decisions. Real-provider premises require authorized synthetic observations, not fake guarantees. Browser gates and restores remain serialized.
 
@@ -265,3 +265,5 @@
 
 - 2026-10-05: pile-edit-still-seen reviewed and closed afb4b36 with six genuine assertion reds. Reproduced and registered separate pile-context-version, assigning the same isolated sole writer before remaining Minor fixes.
 - 2026-10-05: pile-context-version passes — fix(inbox): prove context conflicts precede all pile effects
+
+- 2026-10-05: context version candidate reviewed and closed f9f0bf7 with actual red/check/verify; assign leading-dot source validation and phone recovery regression to the sole isolated worker.
