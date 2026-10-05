@@ -5,6 +5,37 @@ import { DemoWorld } from './world';
 afterEach(() => vi.useRealTimers());
 
 describe('the demo world', () => {
+  it.each(['note', 'folder'] as const)('creation refuses a leading dot without writing (%s)', async (type) => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant', latency: 0 });
+    const { vault } = w.sources();
+    try {
+      const before = await vault.tree();
+      const changes = await vault.changes();
+      for (const name of [type === 'note' ? '.Garden.md' : '.Garden', ' \t.Garden \n', '.', '..Garden']) {
+        await expect(vault.create('Resources/Cooking', type, name)).rejects.toMatchObject({ name: 'BowerError', code: 'conflict', message: 'A name cannot start with a dot.' });
+        expect(await vault.tree()).toEqual(before);
+        expect(await vault.changes()).toEqual(changes);
+      }
+    } finally {
+      w.dispose();
+    }
+  });
+
+  it.each(['note', 'folder'] as const)('creation keeps dotted names defaults and length limits (%s)', async (type) => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant', latency: 0 });
+    const { vault } = w.sources();
+    try {
+      const suffix = type === 'note' ? '.md' : '';
+      expect(await vault.create('Resources/Cooking', type, `Garden.2026${suffix}`)).toBe(`Resources/Cooking/Garden.2026${suffix}`);
+      expect(await vault.create('Resources/Cooking', type)).toBe(`Resources/Cooking/${type === 'note' ? 'Untitled.md' : 'New folder'}`);
+      const limit = `${'a'.repeat(120)}${suffix}`;
+      expect(await vault.create('Resources/Cooking', type, limit)).toBe(`Resources/Cooking/${limit}`);
+      await expect(vault.create('Resources/Cooking', type, `${'a'.repeat(121)}${suffix}`)).rejects.toMatchObject({ code: 'conflict', message: expect.stringContaining('too long') });
+    } finally {
+      w.dispose();
+    }
+  });
+
   it('walks the real phases and files the inbox', async () => {
     vi.useFakeTimers();
     const w = new DemoWorld({ scenario: 'default', scale: 'demo', latency: 0 });

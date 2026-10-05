@@ -6,7 +6,7 @@
 import type { RunSource, Session, Sources, VaultSource } from '../sources';
 import {
   buildTree,
-  checkLength,
+  checkCreationName,
   displayName,
   thingName,
   ensureFolders,
@@ -625,7 +625,7 @@ export class DemoWorld {
         change(() => {
           const now = Date.now();
           const base = name ?? (type === 'folder' ? 'New folder' : 'Untitled.md');
-          checkLength(base, type);
+          checkCreationName(base, type);
           const path = join(folder, freeName(this.entries, folder, base));
           this.entries.set(path, type === 'folder' ? { path, type, modified: now, created: now } : { path, type: 'file', kind: 'note', modified: now, created: now });
           this.record('create', `New ${type} "${(type === 'folder' ? nameOf(path) : thingName(nameOf(path)))}" in ${folder.replaceAll('/', ' / ') || 'your Bower folder'}`, path);

@@ -67,6 +67,12 @@ export function checkLength(name: string, type: 'note' | 'folder'): void {
   if ((type === 'folder' ? shown : shown.replace(/\.[A-Za-z0-9]{1,5}$/, '')).length > MAX_NAME) throw new BowerError('conflict', `That name is too long. Keep it under ${MAX_NAME} characters.`);
 }
 
+/** A new note or folder must stay visible, with the same length limit as before. */
+export function checkCreationName(name: string, type: 'note' | 'folder'): void {
+  if (name.trim().startsWith('.')) throw new BowerError('conflict', 'A name cannot start with a dot.');
+  checkLength(name, type);
+}
+
 /** A free name in `folder`: `Name`, then `Name (2)`, `Name (3)`. */
 export function freeName(entries: Entries, folder: string, name: string, except?: string): string {
   const ext = extOf(name);

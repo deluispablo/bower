@@ -8,7 +8,7 @@
 import type { DriveApi, DriveFile } from '../drive/drive-api';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
-import { buildTree, checkLength, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
+import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
 import {
   BowerError,
   type ChangeEntry,
@@ -220,8 +220,9 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const parent = ix.idOf(folder);
     if (!parent) throw new BowerError('not-found', 'That folder is no longer there.');
-    if (name) checkLength(name, type);
-    const path = join(folder, freeName(ix.entries(), folder, name ?? (type === 'folder' ? 'New folder' : 'Untitled.md')));
+    const base = name ?? (type === 'folder' ? 'New folder' : 'Untitled.md');
+    checkCreationName(base, type);
+    const path = join(folder, freeName(ix.entries(), folder, base));
     refuseReserved(path);
     const made = type === 'folder' ? await this.drive.createFolder(parent, nameOf(path)) : await this.drive.createText(parent, nameOf(path), '');
     ix.put(made);

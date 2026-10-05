@@ -25,6 +25,27 @@ const idOf = async (path: string): Promise<string> => {
 };
 
 describe('DriveVault files', () => {
+  it.each(['note', 'folder'] as const)('creation refuses a leading dot without writing (%s)', async (type) => {
+    const before = await drive.snapshot();
+    const tree = await vault.tree();
+    const changes = await vault.changes();
+    for (const name of [type === 'note' ? '.Garden.md' : '.Garden', ' \t.Garden \n', '.', '..Garden']) {
+      await expect(vault.create('Resources/Cooking', type, name)).rejects.toMatchObject({ name: 'BowerError', code: 'conflict', message: 'A name cannot start with a dot.' });
+      expect(await drive.snapshot()).toBe(before);
+      expect(await vault.tree()).toEqual(tree);
+      expect(await vault.changes()).toEqual(changes);
+    }
+  });
+
+  it.each(['note', 'folder'] as const)('creation keeps dotted names defaults and length limits (%s)', async (type) => {
+    const suffix = type === 'note' ? '.md' : '';
+    expect(await vault.create('Resources/Cooking', type, `Garden.2026${suffix}`)).toBe(`Resources/Cooking/Garden.2026${suffix}`);
+    expect(await vault.create('Resources/Cooking', type)).toBe(`Resources/Cooking/${type === 'note' ? 'Untitled.md' : 'New folder'}`);
+    const limit = `${'a'.repeat(120)}${suffix}`;
+    expect(await vault.create('Resources/Cooking', type, limit)).toBe(`Resources/Cooking/${limit}`);
+    await expect(vault.create('Resources/Cooking', type, `${'a'.repeat(121)}${suffix}`)).rejects.toMatchObject({ code: 'conflict', message: expect.stringContaining('too long') });
+  });
+
   it('an applied change kept only on this page remains visible and can leave the Bin', async () => {
     await vault.tree();
     const create = drive.createText.bind(drive);
