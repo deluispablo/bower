@@ -2626,7 +2626,7 @@
     ],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"toggling a personal task preserves every other source byte\"",
     "passes": true,
-    "note": "Observed at6305ca9: canonical protected prefix/suffix changed, CRLF count12 to0. Reproducible synthetic script/results under docs/harness/evidence/2026-10-05-o1/protected-crlf-*. Named assertion is planned, not executed. Existing grammar only; rich ownership decision remains separate."
+    "note": "Canonical CRLF observation6305ca9; candidate71e9707 independently reviewed, integrated6dda1a4, proof-closedaf90266. Actualred5fail4pass; namedgreen9/check448. Source-offset mapping replaces exactly one checkbox character; legacy parser/serializer/ownership grammar unchanged. Raw evidence2026-10-05-qa13. Rich ownership/provider safety separate."
   },
   {
     "id": "runner-request-preflight",
