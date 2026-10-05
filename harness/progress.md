@@ -22,6 +22,8 @@
 - TL-P2-2026-10-05-03 adopted scope: exact ownership/2 pure parser now implementable; readiness direction/run-recovery invariants adopted, exact producer/shared schemas pending ratification. Final R1-D03 bounded3BASEtriplets authorized after instrument delta review. A parser worker isolated, readinessv2 5e4 frozen/review queued; B exact run contract next independent slot. New ACTIVE/decision fullpacket.
 - Owner explicitly authorizes ongoing Planificador P2 technical messages; routine coordination needs no repeated question. Current grammar discriminator7controls/1observation exit0 archived, no oldfeature closure.
 
+- Aparser newcheckout1c7c created/exclusive; init DNS fault observed, independent localdependency-copy recovery authorized after ownprocess stops, baseline/stub/tests pending. R1-D03 sole scratch delta preparation assigned google_setup_rework ONLYNEWv3packet/report; immutable originalv2, no providercall; fullpacketACTIVE. B exact runcontract next author lane, no consumer writer.
+
 ## Log
 
 - 2026-10-05: pending-draft-bytes-cleanup closedbf7278d after independentlyreviewedf219, integration1dc, root560/full demo19856/fake19856 and real inverse-red restoration/check/11verify.214217; evidencearchived, no browserlistener. Human "si" explicitlyauthorized Planificador message; lead R1-D02 selects bounded v2ETag premise, documentedwithnextscratchassignment and options73626cad, no contractmigration/providerpass/phaseclosure.
