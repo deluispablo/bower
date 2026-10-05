@@ -3,7 +3,7 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { usePiles, useTree } from '@/data/provider';
-import { displayName, findNode, isRoot, parentOf, visibleRows, type SortOrder } from '@/data/tree';
+import { displayName, findNode, isRoot, parentOf, thingName, visibleRows, type SortOrder } from '@/data/tree';
 import type { TreeNode } from '@/data/types';
 import { countThings, folderCount } from '@/data/piles';
 import { ancestors, useUi } from '@/app/ui-store';
@@ -180,6 +180,7 @@ export function Explorer({ variant }: Props) {
     setFocus(node.path);
   };
 
+  const typed = useRef({ text: '', at: 0 });
   const onKey = (e: KeyboardEvent<HTMLDivElement>): void => {
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
     const i = rows.findIndex((r) => r.node.path === current);
@@ -226,6 +227,18 @@ export function Explorer({ variant }: Props) {
           activate(row.node, e.metaKey || e.ctrlKey);
         }
         return;
+      default:
+        // Type-ahead: the first letters of a name move to the next row that starts with them.
+        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey && /\S/.test(e.key)) {
+          const now = Date.now();
+          const more = now - typed.current.at < 800;
+          typed.current = { text: (more ? typed.current.text : '') + e.key.toLowerCase(), at: now };
+          const from = more ? i : i + 1;
+          const order = [...rows.slice(Math.max(0, from)), ...rows.slice(0, Math.max(0, from))];
+          const hit = order.find((r) => thingName(shownFolderName(r.node.path, r.node.name)).toLowerCase().startsWith(typed.current.text));
+          if (hit) go(hit.node.path);
+        }
+        return;
       case 'F2':
         if (row && !isRoot(row.node.path) && !inInbox(row.node.path)) {
           e.preventDefault();
@@ -234,6 +247,11 @@ export function Explorer({ variant }: Props) {
         return;
       case 'Delete':
       case 'Backspace':
+        if (row && (e.metaKey || e.key === 'Delete') && (isRoot(row.node.path) || row.node.path === 'Inbox')) {
+          e.preventDefault();
+          toast('Main folders stay: Bower files everything into them.');
+          return;
+        }
         if (row && !isRoot(row.node.path) && !inInbox(row.node.path) && (e.metaKey || e.key === 'Delete')) {
           e.preventDefault();
           // The next thing in the same folder, else the one before it (its sibling or its folder).

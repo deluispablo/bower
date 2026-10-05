@@ -2134,7 +2134,7 @@
       "Delete on a folder with things in it: the Bin question opens."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"the tree finds a row by typing|Delete on a folder asks\"",
-    "passes": false
+    "passes": true
   },
   {
     "id": "pile-date",

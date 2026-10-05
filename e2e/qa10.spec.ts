@@ -112,3 +112,31 @@ test('the side panel tabs are tabs: one Tab stop, arrows, a panel each; Outline 
   await page.getByRole('tabpanel').getByRole('button', { name: 'Timeline' }).click();
   await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('tl');
 });
+
+test('the tree finds a row by typing its first letters', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.focus();
+  await page.keyboard.type('res');
+  await expect(tree).toHaveAttribute('aria-activedescendant', 'row-Resources');
+  await page.waitForTimeout(900);
+  await page.keyboard.type('ar');
+  await expect(tree).toHaveAttribute('aria-activedescendant', /^row-Ar/);
+});
+
+test('Delete on a folder asks before the Bin; on a main folder it says why not', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desktop tree');
+  await open(page, '/');
+  const tree = page.getByRole('tree', { name: 'Your Bower folder' });
+  await tree.getByRole('treeitem', { name: /^Flat hunt/ }).click({ button: 'right' });
+  await page.keyboard.press('Escape');
+  await expect(tree).toBeFocused();
+  await page.keyboard.press('Delete');
+  await expect(page.getByRole('dialog', { name: 'Put Flat hunt in the Bin?' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await tree.getByRole('treeitem', { name: /^Projects/ }).click({ button: 'right' });
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Delete');
+  await expect(page.getByRole('status').getByText(/Main folders stay/)).toBeVisible();
+});
