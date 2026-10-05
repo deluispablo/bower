@@ -158,3 +158,10 @@ Pile review returned no candidate regression and certifies its registered name/p
 - Unchanged verify: `pnpm vitest run src/data/vault/drive-vault.test.ts -t "stale pile context refuses every effect before write or removal"`. Require genuine assertion red/green/full check, one assigned-file candidate, independent review. No browser/shared records/done.sh/delegation. Git/shell/Node/pnpm/session+implement skills; prepared exclusive dependencies. State ready for dispatch from registered packet.
 
 Technical-lead decision packet retained at `2026-10-05-protected-ownership-decision.md`; protected-current-prose requires explicit compatible ownership grammar/source preservation before its dependent implementation. This is a proposal, not adopted syntax, a scope removal or a closed defect. Continue independent context/name/status/refresh repairs.
+
+## Context version candidate review
+
+- Sole implementer returned `dc45b035b41b1b63ef05cddaac37996c2d2fb62d`, clean worker codex/p2-pile-context, base `afb4b3633388e8c09132f2b9b3b6387c2295b3c2`. Two genuine assertion reds/greens and full 412-test check; only drive-vault.ts/test. Worker remains read-only.
+- Reviewer `/root/o1_audit`, `p2-context-review-2026-10-05`; contracts-2/P2/C02,C03,C14/pile-context-version. Read-only exact base..candidate at `/private/tmp/bower-p2-journal-ack`; inspect content version precheck before first effects, later write precondition, unchanged/fresh clear/edit, input-file changes and retry-after-refresh. Existing name/place producer contract remains; R1 atomicity unproven. Supplied `/private/tmp/bower-pile-context-{red,green,check}.log`; no tests/builds/installs/browser/edits/delegation or closure. Return exact verdict/refs/limits.
+
+Context candidate dc45b03 independently reviewed without correctness findings. Report retained in evidence/2026-10-05-qa12/context-review-dc45b03.md. Two assertion reds/greens and 412-test check inspected; provider races remain unproven R1. Ready for serial integration/proof closure, worker read-only.
