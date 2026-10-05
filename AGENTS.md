@@ -24,7 +24,7 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 ## Hard rules
 
 - No personal data: names, places, companies, emails, vault content are made up (`Alex`, `you@example.com`, `FOLDER_ID`). The one exception: the owner's GitHub links (`github.com/deluispablo`, its `bower` repo), which the landing needs as a portfolio.
-- Local only: never `git push`, never add a remote. No secrets in the repo.
+- Development stays local. Owner-authorized exception: back up only accepted local `main` to private `deluispablo/bower-app`, following `docs/harness/BACKUP.md`. Workers never push; no other branch/tag, force push or deployment. No secrets in the repo.
 - English everywhere. UI copy: sentence case, plain words, never "vault", no file names or jargon in sentences. Bower is a bowerbird, never "the bird" in copy.
 - TypeScript strict, no `any`. Errors are never swallowed: a `BowerError` with one short sentence for the person, details to `console.error`.
 - The app never hard-deletes (Drive Bin only), never writes `index.md`, `hot.md`, `log.md`, nor Bower's sections of a note. Every content write passes the modifiedTime it read; a move or rename checks the name and place it read (`stillAsSeen`), since a text change elsewhere does not clash with it.

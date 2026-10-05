@@ -45,4 +45,4 @@ Phase work follows the harness in `harness/`: one feature at a time, each proven
 
 Claude and Codex use the same startup: `AGENTS.md` → `docs/harness/STARTUP.md`. The four project skills are versioned in `.agents/skills/`, with Claude discovery links in `.claude/skills/`. Load session guidance first, then only the assigned role; check actual optional capabilities in `docs/harness/SKILLS.md`. Worktree assignments and serialized integration follow `docs/harness/COORDINATION.md`.
 
-Local only for now: no remote.
+Development stays local. Only local `main` is backed up to the owner-authorized private GitHub repository; see [BACKUP](docs/harness/BACKUP.md). Feature branches and uncommitted work remain local.

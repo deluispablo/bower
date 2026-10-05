@@ -45,4 +45,4 @@ Prove all semantic capabilities in PRODUCT and the shared corpus, including rese
 
 ## Ownership and portability
 
-The app never writes `index.md`, `hot.md`, `log.md` or Bower-owned note sections under the current contract. New preparation caches use separately versioned artifacts. A proposed broader editing capability needs its own ownership contract. Drive is the durable knowledge store; no personal content belongs in source repositories. Development stays local with no push or remote creation.
+The app never writes `index.md`, `hot.md`, `log.md` or Bower-owned note sections under the current contract. New preparation caches use separately versioned artifacts. A proposed broader editing capability needs its own ownership contract. Drive is the durable knowledge store; no personal content belongs in source repositories. Development stays local; the owner-authorized private main backup follows harness/BACKUP.md. It neither deploys the app nor accepts a phase.

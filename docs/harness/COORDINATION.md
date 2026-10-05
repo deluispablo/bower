@@ -42,7 +42,7 @@ Every session follows `STARTUP.md` through the canonical `bower-session` skill; 
 2. Name the coordinator, integration path/branch and batch base commit in `ACTIVE.md`. Existing uncommitted work needs its owner's handoff; meanwhile other agents can investigate or review committed code.
 3. Run `bash harness/init.sh` in each writable checkout before implementation. Record the exact checkout/commit and failures. If installation or a gate is unavailable, report it as blocked evidence; do not call that checkout green or repair someone else's failing work without assignment.
 4. Coordinator selects one open entry per worker, checks dependencies and reserves its production and test files. Independent source files are not sufficient if both tasks change one contract or fixture. Overlap means sequence the work or re-split it.
-5. For parallel writers, create separate worktrees from the recorded committed base and use distinct local branches. Keep changes local; never push or add a remote. Codex app worktrees may start detached: record the path and commit, and give the work a local branch before committing. Worktrees do not contain another checkout's uncommitted work.
+5. For parallel writers, create separate worktrees from the recorded committed base and use distinct local branches. Keep worker changes local; workers never push or add a remote. The designated main integrator backs up main only under BACKUP.md after accepted integration. Codex app worktrees may start detached: record the path and commit, and give the work a local branch before committing. Worktrees do not contain another checkout's uncommitted work.
 
 A CLI example after choosing real entry IDs, a committed base and writable paths (replace the placeholders; never run it literally):
 
