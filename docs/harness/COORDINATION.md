@@ -4,13 +4,13 @@ Researched and adopted for the workflow documentation on 2026-10-05. This is a r
 
 ## Recommendation and evidence
 
-Keep the existing harness: a small map, explicit requirements, reproducible tests, red/green proofs and fresh review. Add one coordinator, explicit assignments, separate worktrees and serialized integration. Start with one implementer and one independent reviewer; use two implementers only for work with disjoint files and independent contracts.
+Keep the existing harness: a small map, explicit requirements, reproducible tests, red/green proofs and fresh review. Add one coordinator, explicit assignments, separate worktrees and serialized integration. Use parallel implementation when ready entries have independent files and settled contracts. One entry at a time applies per worker, not to the whole project. Keep one coordinator and independent review.
 
 | Approach | Fit for Bower | Decision |
 | --- | --- | --- |
 | Two writers in one checkout | Share files, index, restores and test outputs; `done.sh` temporarily replaces code | Do not use |
-| One writer plus a read-only reviewer | Low coordination cost; useful for the remaining phase 2 fixes | Default |
-| Two implementers in separate worktrees | Useful for independent entries; still requires assignment and integration | Use selectively |
+| One writer plus a read-only reviewer | Low coordination cost when work shares files or unsettled contracts | Use when parallel implementation would conflict |
+| Two implementers in separate worktrees | Useful for independent entries; still requires assignment and integration | Prefer when dependencies and ownership permit |
 | Native agent teams or subagents | Useful inside a tool, but no shared Claude/Codex task transport is established by these sources | Optional adapters, not the source of truth |
 | Two agents implement the same entry | Duplicated work and incompatible solutions | Only for an explicitly requested experiment in separate worktrees |
 
@@ -21,6 +21,21 @@ The following are primary sources, checked on the date above. Their recommendati
 - [Claude Code: best practices](https://code.claude.com/docs/en/best-practices): verifiable outcomes and a fresh session for review. Give each assignment acceptance criteria and evidence.
 - [OpenAI: worktrees](https://learn.chatgpt.com/docs/environments/git-worktrees): parallel checkouts have separate files but shared Git metadata. Use separate paths and branches; do not treat worktrees as separate repositories.
 - [OpenAI: AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and [Claude Code: memory](https://code.claude.com/docs/en/memory): repository instructions persist beyond chat context. Keep `AGENTS.md` canonical and `CLAUDE.md` importing it.
+
+## Standing authorization for parallel work
+
+Owner authorization dated 2026-10-05 explicitly permits the named coordinator to spawn and assign subagents for independent work without asking again for each worker. This covers implementation, focused research, tests, and independent review/evaluation within the accepted phase and authorized resources. It does not authorize recursive delegation by workers, unrelated user-owned chats, new services/spend, deployment or next-phase implementation.
+
+At dispatch and when a slot becomes free, inspect the ready entries and dependencies. Prefer two implementers plus an independent reviewer when available capacity supports that team; reduce concurrency when contracts overlap, resource contention rises or integration cannot keep up. This is a starting configuration, not a fixed cap or a target to keep every slot busy. Reserve review capacity and prioritize completing/integrating candidates over accumulating branches.
+
+- Assign one entry per worker in its own exclusively owned checkout, from a named immutable base. Record files, tests, contract version, prerequisite commits, shared resources and candidate destination in ACTIVE before work starts.
+- Parallel entries need disjoint write ownership, including test files, fixtures, dependencies and configuration, and no dependence on another worker's uncommitted behavior. Commit shared contracts first; dependent workers start from that accepted base. Different files alone do not prove independence.
+- A blocked provider premise blocks its dependent entries, not the entire project. Continue ready independent fixes, preparation or research. Do not bypass phase acceptance or implement speculative contracts to manufacture parallel work.
+- Unit checks/builds may run in isolated checkouts within machine capacity. Browser suites/evaluation keep the existing serialized port/server reservation. Real-provider operations retain their explicit operator/resource limits. A browser reservation is not a ban on unrelated offline implementation.
+- Review immutable candidates independently and integrate/close one entry at a time. Recheck the later candidate against the updated integration base and rerun required combined checks. Changed behavior invalidates affected review; a clean cherry-pick alone is not compatibility evidence.
+- Existing narrow assignments remain narrow. A historical “sole writer” packet is not project-wide policy, but its reservation is not silently revoked either: the coordinator explicitly records new disjoint reservations or a clean handoff.
+
+Record a brief reason in the current assignment when otherwise ready work is serialized (shared contract, overlapping file, resource limit or pending integration). Do not add a separate approval gate or research phase for routine dispatch.
 
 ## Roles and authority
 
@@ -76,7 +91,7 @@ Deliverable: candidate SHA, evidence and unresolved findings
 Restrictions: local only; no shared-record edits; no done.sh as a worker
 ```
 
-A role assignment is permission to do the stated work, not permission to expand scope or spawn more agents. If a needed file belongs to another assignment, report the dependency before editing it. Additional agents require explicit delegation in the current assignment or from the owner.
+A role assignment is permission to do the stated work, not permission to expand scope or spawn more agents. If a needed file belongs to another assignment, report the dependency before editing it. The named coordinator has the standing owner delegation above; workers need an explicit coordinator assignment and may not recursively spawn agents.
 
 ## Implementation and integration
 
@@ -117,7 +132,7 @@ If a session stops responding, retain its assignment and checkout. The coordinat
 
 ## First rollout and measurement
 
-For the remaining phase 2 work, start with Claude implementing one assigned entry and Codex reviewing its immutable candidate, or reverse the tools. Next try two independent unit-test entries in separate worktrees. Keep browser work serialized. Use the current adopted phase closure criteria, including the expanded capability and boundary evidence.
+For the remaining phase 2 work, dispatch independent ready entries in separate worktrees and reserve fresh review capacity; either Claude or Codex can fill each assigned role. Keep browser work serialized. Use the current adopted phase closure criteria, including the expanded capability and boundary evidence.
 
 For the first three completed entries, record elapsed time to verified integration, review findings requiring rework, conflicts, repeated gate time and missing evidence. Compare with the existing roughly 3-minute unit closure and 10–15-minute browser closure observations (these are not a controlled benchmark). Continue parallel implementation only if it reduces elapsed delivery time without more regressions, conflicting edits or unverifiable closures. Otherwise keep the writer/reviewer pairing. No automated scheduler, lock enforcement or cross-vendor messaging was added here.
 
@@ -127,4 +142,4 @@ Read PRODUCT, WORK_PLAN, P2_ACCEPTANCE and ORCHESTRATOR_START before assigning n
 
 Planning can land on main independently of product code. Compare PLAN_REVISION on startup and resume. Finish or preserve a reserved atomic entry, then integrate the docs-only main update in an exclusively owned clean checkout; reconcile conflicts by purpose, preserving newer implementation evidence. Record the adopted revision before further assignments. Do not merge an old proposal branch just to acquire its prose, because it may carry unfinished product commits.
 
-Prefer a writer/reviewer pair. Additional subagents are justified only by independently owned deliverables, and require explicit delegation. Use bounded packets rather than copying whole chat histories. Return assumptions and missing evidence in the result, and recheck reservations before integration. Optional bridges carry packets; they do not grant authority or certify work.
+Prefer parallel ready deliverables with independent review when ownership and dependencies permit. The standing owner authorization above permits coordinator delegation; it does not expand worker authority. Use bounded packets rather than copying whole chat histories. Return assumptions and missing evidence in the result, and recheck reservations before integration. Optional bridges carry packets; they do not grant authority or certify work.

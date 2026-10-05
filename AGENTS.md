@@ -7,7 +7,7 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 1. Read the adopted `docs/PRODUCT.md`, `docs/WORK_PLAN.md` and current phase acceptance (`docs/P2_ACCEPTANCE.md` for P2). Compare `docs/harness/PLAN_REVISION` with local main as `docs/harness/GOVERNANCE.md` describes. Follow `docs/harness/STARTUP.md` and load `.agents/skills/bower-session/SKILL.md` once. Read `docs/harness/METHOD.md`, `docs/PHASES.md`, `docs/harness/HANDOFF.md`, the `## Next` of `harness/progress.md` and `git log --oneline -15` as startup specifies.
 2. Read the current integration copy of `docs/harness/ACTIVE.md`; follow `docs/harness/COORDINATION.md` for assignments. One writer per checkout; only the named coordinator writes live implementation records; the technical lead owns main planning as GOVERNANCE defines. Preserve others' dirty work; unassigned sessions stay read-only.
 3. Load only the assigned role skill/brief; check actual tools using `docs/harness/SKILLS.md`. Assigned writers run `bash harness/init.sh` with exclusive checkout use; reviewers/evaluators remain read-only and use a prepared target.
-4. One assigned entry at a time, test first; flip `passes` only after its `verify` is green; the coordinator records progress; one entry per commit (parallel candidate/closure flow: `COORDINATION.md`).
+4. One assigned entry per worker at a time; the coordinator may delegate multiple independent entries concurrently under COORDINATION. Test first; flip `passes` only after its `verify` is green; the coordinator records progress; one entry per commit (parallel candidate/closure flow: `COORDINATION.md`).
 
 ## Where things are
 
