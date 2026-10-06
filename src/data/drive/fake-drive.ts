@@ -5,7 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
-import { driveError, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
+import { driveError, RESUMABLE_UNIT, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
 interface Stored {
   meta: DriveFile;
@@ -23,7 +23,7 @@ export interface FakeDriveOptions {
   latency?: number;
   /** Every call fails as with no network. */
   offline?: boolean;
-  /** Resumable chunks other than the last must be a multiple of this (stub: unused). */
+  /** Resumable chunks other than the last must be a multiple of this (Drive: 256 KiB). */
   chunkMultiple?: number;
 }
 
@@ -36,12 +36,21 @@ export interface ResumableCall {
   bytes?: number;
 }
 
+interface FakeSession {
+  target: ResumableTarget;
+  parts: Blob[];
+  held: number;
+  expired: boolean;
+  file: DriveFile | null;
+}
+
 export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   private files = new Map<string, Stored>();
   private seq = 0;
   private last = 0;
   private failing: ErrorCode | null = null;
   private readonly clock: () => number;
+  private readonly chunkMultiple: number;
   /** Can change after seeding, so a folder fills at once and then answers slowly or not at all. */
   latency: number;
   offline: boolean;
@@ -50,6 +59,7 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     this.clock = opts.clock ?? Date.now;
     this.latency = opts.latency ?? 0;
     this.offline = opts.offline ?? false;
+    this.chunkMultiple = opts.chunkMultiple ?? RESUMABLE_UNIT;
     const at = this.stamp();
     this.files.set('root', { meta: { id: 'root', name: 'My Drive', folder: true, parents: [], modifiedTime: at, createdTime: at }, trashed: false, content: null });
   }
@@ -69,7 +79,7 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
       const hash = big ? (f.bytesUnavailable ? f.sha256 : await sha256(c)) : undefined;
       files.push({ meta: f.meta, trashed: f.trashed, content, ...(hash ? { sha256: hash } : {}) });
     }
-    return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files });
+    return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files, ...(await this.resumableSnapshot()) });
   }
 
   /** A FakeDrive back from `snapshot()`. */
@@ -87,6 +97,7 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     }
     d.seq = data.seq;
     d.last = data.last;
+    d.restoreResumable(JSON.parse(json) as unknown);
     return d;
   }
 
@@ -274,37 +285,123 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     return out;
   }
 
-  // ---------- resumable uploads: an inert stub until upload-queue-persistent lands
-
-  /** Every resumable call, in order (stub: none are answered). */
+  /** Every resumable call, in order. */
   resumableCalls: ResumableCall[] = [];
-  /** Runs before a chunk is taken (stub: never). */
+  /** Runs before a chunk is taken: a test may wait here, expire sessions or lose the reply. */
   beforeChunk: ((call: { session: string; start: number; bytes: number }) => void | Promise<void>) | null = null;
+  private reserved = new Set<string>();
+  private reservedSeq = 0;
+  private sessions = new Map<string, FakeSession>();
+  private sessionSeq = 0;
+  private loseReply = false;
 
-  /** Every open session answers as expired from now on (stub: there are none). */
-  expireSessions(): void {}
-
-  /** The next resumable call's answer is lost (stub: there are none). */
-  loseNextReply(): void {}
-
-  async generateIds(_count: number): Promise<string[]> {
-    throw driveError('unknown');
+  /** Every open session answers as expired from now on. */
+  expireSessions(): void {
+    for (const session of this.sessions.values()) session.expired = true;
   }
 
-  async openResumable(_target: ResumableTarget): Promise<string> {
-    throw driveError('unknown');
+  /** The next resumable call does what it was asked, then its answer is lost. */
+  loseNextReply(): void {
+    this.loseReply = true;
   }
 
-  async putChunk(_session: string, _start: number, _chunk: Blob, _size: number, _signal?: AbortSignal): Promise<SessionStatus> {
-    throw driveError('unknown');
+  async generateIds(count: number): Promise<string[]> {
+    this.resumableCalls.push({ op: 'generateIds' });
+    await this.gate();
+    const ids: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const id = `r${++this.reservedSeq}`;
+      this.reserved.add(id);
+      ids.push(id);
+    }
+    return this.reply(ids);
   }
 
-  async sessionStatus(_session: string, _size: number): Promise<SessionStatus> {
-    throw driveError('unknown');
+  async openResumable(target: ResumableTarget): Promise<string> {
+    this.resumableCalls.push({ op: 'open', id: target.id });
+    await this.gate();
+    if (!this.reserved.has(target.id)) throw driveError('unknown');
+    if (this.files.has(target.id)) throw driveError('conflict');
+    this.find(target.parentId);
+    const url = `https://drive.test/upload/session-${++this.sessionSeq}`;
+    this.sessions.set(url, { target: { ...target }, parts: [], held: 0, expired: false, file: null });
+    return this.reply(url);
   }
 
-  async getUploaded(_id: string): Promise<DriveFile> {
-    throw driveError('unknown');
+  async putChunk(session: string, start: number, chunk: Blob, size: number, signal?: AbortSignal): Promise<SessionStatus> {
+    this.resumableCalls.push({ op: 'put', session, start, bytes: chunk.size });
+    await this.beforeChunk?.({ session, start, bytes: chunk.size });
+    if (signal?.aborted) throw new DOMException('The upload stopped.', 'AbortError');
+    await this.gate();
+    const s = this.sessions.get(session);
+    if (!s || s.expired || s.file || start > s.held) return this.reply(this.statusOf(s));
+    // Drive answers 400 to a size that changed, or a chunk off its 256 KiB unit before the last.
+    if (size !== s.target.size || (start + chunk.size < size && chunk.size % this.chunkMultiple !== 0)) throw driveError('unknown');
+    // Bytes Drive already holds are skipped, as Drive does with an overlapping chunk.
+    const fresh = chunk.slice(s.held - start);
+    s.parts.push(fresh);
+    s.held += fresh.size;
+    if (s.held >= s.target.size) {
+      const { id, parentId, name, type, appProperties } = s.target;
+      const content = new Blob(s.parts, { type });
+      const hash = await sha256(content);
+      if (this.files.has(id)) throw driveError('conflict');
+      s.file = { ...this.changed(this.add(parentId, name, false, content, appProperties, id)), sha256: hash };
+      s.parts = [];
+    }
+    return this.reply(this.statusOf(s));
+  }
+
+  async sessionStatus(session: string, _size: number): Promise<SessionStatus> {
+    this.resumableCalls.push({ op: 'status', session });
+    await this.gate();
+    return this.reply(this.statusOf(this.sessions.get(session)));
+  }
+
+  async getUploaded(id: string): Promise<DriveFile> {
+    await this.gate();
+    const f = this.find(id);
+    const hash = f.bytesUnavailable ? f.sha256 : (await this.digestOfStored(f)).sha256;
+    return { ...this.copy(f.meta), ...(hash ? { sha256: hash } : {}) };
+  }
+
+  /** Reserved ids and open sessions, so an upload resumes after the fake source reloads. */
+  private async resumableSnapshot(): Promise<{ resumable: KeptResumable }> {
+    const sessions: KeptResumable['sessions'] = [];
+    for (const [url, s] of this.sessions) {
+      const bytes = new Blob(s.parts);
+      // Like big files, a big session keeps no bytes: it comes back expired, to restart under its id.
+      const keep = !s.expired && !s.file && bytes.size <= KEEP_BYTES;
+      sessions.push({ url, target: s.target, ...(keep ? { b64: toBase64(new Uint8Array(await bytes.arrayBuffer())) } : {}), fileId: s.file?.id ?? null });
+    }
+    return { resumable: { reserved: [...this.reserved], reservedSeq: this.reservedSeq, sessionSeq: this.sessionSeq, sessions } };
+  }
+
+  private restoreResumable(data: unknown): void {
+    const kept = typeof data === 'object' && data !== null && 'resumable' in data ? (data.resumable as Partial<KeptResumable>) : null;
+    if (!kept) return;
+    this.reserved = new Set(Array.isArray(kept.reserved) ? kept.reserved.filter((id): id is string => typeof id === 'string') : []);
+    this.reservedSeq = typeof kept.reservedSeq === 'number' ? kept.reservedSeq : 0;
+    this.sessionSeq = typeof kept.sessionSeq === 'number' ? kept.sessionSeq : 0;
+    for (const k of Array.isArray(kept.sessions) ? kept.sessions : []) {
+      const made = k.fileId ? this.files.get(k.fileId) : undefined;
+      const parts = k.b64 !== undefined ? [new Blob([fromBase64(k.b64)])] : [];
+      const held = parts[0]?.size ?? 0;
+      this.sessions.set(k.url, { target: k.target, parts, held, expired: !made && k.b64 === undefined, file: made ? this.copy(made.meta) : null });
+    }
+  }
+
+  private statusOf(s: FakeSession | undefined): SessionStatus {
+    if (!s || s.expired) return { kind: 'expired' };
+    if (s.file) return { kind: 'done', file: { ...this.copy(s.file), ...(s.file.sha256 ? { sha256: s.file.sha256 } : {}) } };
+    return { kind: 'partial', confirmed: s.held };
+  }
+
+  /** The answer, unless a test asked for it to be lost after the effect. */
+  private reply<T>(value: T): T {
+    if (!this.loseReply) return value;
+    this.loseReply = false;
+    throw driveError('offline');
   }
 
   private changed<T>(out: T): T {
@@ -332,10 +429,10 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     return f;
   }
 
-  private add(parentId: string, name: string, folder: boolean, content: string | Blob | null, appProperties?: Record<string, string>): DriveFile {
+  private add(parentId: string, name: string, folder: boolean, content: string | Blob | null, appProperties?: Record<string, string>, reservedId?: string): DriveFile {
     this.find(parentId);
     const at = this.stamp();
-    const id = `f${++this.seq}`;
+    const id = reservedId ?? `f${++this.seq}`;
     const size = content === null ? undefined : typeof content === 'string' ? content.length : content.size;
     const meta: DriveFile = { id, name, folder, parents: [parentId], modifiedTime: at, createdTime: at, ...(size !== undefined ? { size } : {}), ...(appProperties ? { appProperties: { ...appProperties } } : {}) };
     this.files.set(id, { meta, trashed: false, content });
@@ -363,6 +460,14 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   private copy(m: DriveFile): DriveFile {
     return { ...m, parents: [...m.parents], ...(m.appProperties ? { appProperties: { ...m.appProperties } } : {}) };
   }
+}
+
+/** The resumable part of a snapshot. */
+interface KeptResumable {
+  reserved: string[];
+  reservedSeq: number;
+  sessionSeq: number;
+  sessions: Array<{ url: string; target: ResumableTarget; b64?: string; fileId: string | null }>;
 }
 
 /** Files bigger than this keep only their name and size across a reload. */

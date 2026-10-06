@@ -2,11 +2,14 @@
  * The real doors: the Bower folder in Google Drive, and the Worker for the
  * session and tidy-ups. The same screens run on these as on the demo.
  */
-import type { DriveApi } from '../drive/drive-api';
+import type { DriveApi, ResumableDrive } from '../drive/drive-api';
 import type { Sources } from '../sources';
 import { DriveVault } from '../vault/drive-vault';
 import type { WorkerApi } from '../worker/worker-api';
 import { BowerError } from '../types';
+import { broadcastBus, createUploadQueue, type UploadQueue } from '../upload-queue';
+import { indexedDbUploadStore } from '../upload-store';
+import { sha256 } from '../vault/hashes';
 import { LiveRuns } from './runs';
 import { LiveSession } from './session';
 
@@ -20,6 +23,32 @@ export interface LiveOptions {
   pollMs?: number;
   /** Declares each new pile before sending it (the pretend Drive only, until the real runner reads declarations). */
   declarePiles?: boolean;
+  /**
+   * Send pile files through the persistent upload queue: `true` builds it over
+   * this device (needs a resumable Drive client and IndexedDB), a queue uses that
+   * one. Off unless asked for: the real resumable protocol waits for P3 (TL-P2-07).
+   */
+  uploadQueue?: boolean | UploadQueue | null;
+}
+
+/** How the upload queue keys a person on this device: a hash of their email, never the email. */
+export async function uploadAccount(email: string): Promise<string> {
+  return sha256(new Blob([email.trim().toLowerCase()]));
+}
+
+const isResumable = (drive: DriveApi): drive is DriveApi & ResumableDrive =>
+  'generateIds' in drive && 'openResumable' in drive && 'putChunk' in drive && 'sessionStatus' in drive && 'getUploaded' in drive;
+
+/**
+ * The app's upload queue over this device's IndexedDB, Web Locks and storage.
+ * None without a resumable Drive, or where there is no IndexedDB at all (tests):
+ * things are then sent straight, as before.
+ */
+function deviceQueue(drive: DriveApi): UploadQueue | null {
+  if (!isResumable(drive) || typeof indexedDB === 'undefined') return null;
+  const nav = typeof navigator === 'undefined' ? undefined : navigator;
+  const bus = broadcastBus();
+  return createUploadQueue({ drive, store: indexedDbUploadStore(), ...(nav?.locks ? { locks: nav.locks } : {}), ...(nav?.storage ? { storage: nav.storage } : {}), ...(bus ? { bus } : {}) });
 }
 
 export interface LiveSources extends Sources {
@@ -61,6 +90,13 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   let session: LiveSession | null = null;
   const expire = (): void => { expiredFrom = epoch; session?.expire(); };
   const drive = watchAuth(opts.drive, expire, () => epoch);
+  // One queue for the page: each lifetime starts it for its own person and folder.
+  const queue = opts.uploadQueue === true ? deviceQueue(drive) : opts.uploadQueue || null;
+  const account = async (): Promise<string> => {
+    const user = await session?.current();
+    if (!user) throw new BowerError('auth', 'Sign in again to keep going.');
+    return uploadAccount(user.email);
+  };
   const worker = watchAuth(opts.worker, expire, () => epoch);
   const vaultListeners = new Set<() => void>();
   const runListeners = new Set<() => void>();
@@ -177,6 +213,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       declarePiles: opts.declarePiles ?? false,
       drive: bound(drive, ['createFolder', 'createText', 'upload', 'update', 'writeText', 'trash', 'untrash']),
       rootId: boundRoot,
+      ...(queue ? { uploads: { queue, account } } : {}),
       runningPiles: () => {
         if (!active()) return new Set();
         const mine = r?.runningPiles() ?? new Set<string>();
@@ -189,6 +226,8 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   }
   const invalidate = (): void => {
     epoch++;
+    // Signed out, or someone else: stop sending; what this device kept stays for that person.
+    queue?.stop();
     detachVault();
     detachRuns();
     v?.dispose();
@@ -198,6 +237,20 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     connectRuns();
   };
   session = new LiveSession(worker, drive, () => undefined, invalidate);
+  if (queue) {
+    const leave = session.deleteAccount.bind(session);
+    // Leaving Bower removes the uploads this device kept for that person, once the Worker agreed.
+    session.deleteAccount = async (): Promise<void> => {
+      const who = await account().catch((e: unknown) => {
+        console.error(e);
+        return null;
+      });
+      await leave();
+      if (who === null) return;
+      // The account is gone either way; a device that cannot forget the bytes says why in the console.
+      await queue.forgetAccount(who).catch((e: unknown) => console.error(e));
+    };
+  }
   fresh();
   const vault = door(v, () => v, vaultListeners, connectVault);
   vaultDoor = vault;
@@ -230,6 +283,9 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       if (!(e instanceof BowerError && (e.code === 'auth' || e.code === 'not-found' || e.code === 'conflict'))) console.error(e);
     });
   window.addEventListener('online', flush);
+  // Uploads that waited for a connection go on by themselves; ones Drive refused wait for Try again.
+  const resume = (): void => queue?.retry('offline');
+  window.addEventListener('online', resume);
   flush();
   return {
     session,
@@ -239,6 +295,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     drive: opts.drive,
     dispose: () => {
       window.removeEventListener('online', flush);
+      window.removeEventListener('online', resume);
       disposed = true;
       detachVault();
       detachRuns();
@@ -246,6 +303,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       runListeners.clear();
       r.dispose();
       v.dispose();
+      queue?.stop();
       session.dispose();
     },
   };

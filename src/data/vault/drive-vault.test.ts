@@ -8,6 +8,11 @@ import { runFake } from '../fake/fake-runner';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { driveError } from '../drive/drive-api';
+import { IDBFactory } from 'fake-indexeddb';
+import { createUploadQueue, type StorageLike, type UploadQueue } from '../upload-queue';
+import { indexedDbUploadStore } from '../upload-store';
+import { makeLiveSources, uploadAccount } from '../live';
+import { FakeWorker } from '../fake/fake-worker';
 
 const PASSPORT = 'Areas/Documents/Passport renewal.md';
 let drive: FakeDrive;
@@ -1051,5 +1056,376 @@ describe('pile declarations', () => {
     await drive.createText(folder.id, 'Pile note.md', 'Papers from Alex', { bowerItem: declaration.context.memberKey });
     const seen = (await declaring().piles()).find((p) => p.id === pile.id);
     expect(seen?.items.map((i) => i.name)).toEqual(['a.pdf', 'b.pdf']);
+  });
+});
+
+describe('uploads survive a reload, through the vault', () => {
+  const ACCOUNT_A = 'ACCOUNT_A';
+  const ACCOUNT_B = 'ACCOUNT_B';
+  const BYTES = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  const scan = (): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name: 'scan.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob([BYTES], { type: 'application/pdf' }) });
+
+  interface Page {
+    drive: FakeDrive;
+    queue: UploadQueue;
+    vault: DriveVault;
+  }
+
+  /** One page load of the fake stack: the pretend Drive as it was kept, the device's IndexedDB, a fresh queue and vault. */
+  function page(d: FakeDrive, idb: IDBFactory, account = ACCOUNT_A, storage?: StorageLike): Page {
+    const queue = createUploadQueue({ drive: d, store: indexedDbUploadStore(idb), chunkSize: 4, ...(storage ? { storage } : {}) });
+    const vault = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => account } });
+    return { drive: d, queue, vault };
+  }
+
+  async function fresh(): Promise<{ d: FakeDrive; idb: IDBFactory }> {
+    const d = new FakeDrive({ chunkMultiple: 4 });
+    root = (await seedFakeDrive(d, 'default', Date.now())) ?? '';
+    return { d, idb: new IDBFactory() };
+  }
+
+  /** Holds chunks from `start` on until `open()`. */
+  function holdAt(d: FakeDrive, start: number): { open: () => void } {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    d.beforeChunk = async (call) => {
+      if (call.start >= start) await gate;
+    };
+    return { open: () => release() };
+  }
+
+  const reached = (d: FakeDrive, start: number): Promise<void> =>
+    vi.waitFor(() => expect(d.resumableCalls.some((c) => c.op === 'put' && c.start === start)).toBe(true));
+  const scans = async (d: FakeDrive, r = root): Promise<string[]> => (await d.listAll(r)).filter((f) => f.appProperties?.asAdded === 'scan.pdf').map((f) => f.id);
+  const rowsOf = async (v: DriveVault, id: string): Promise<Array<[string, number | undefined]>> => ((await v.piles()).find((p) => p.id === id)?.items ?? []).map((i) => [i.name, i.upload]);
+
+  it('a reload mid-upload resumes from where Drive stopped, and the thing arrives once', async () => {
+    const { d, idb } = await fresh();
+    const hold = holdAt(d, 4);
+    const first = page(d, idb);
+    const pile = await first.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await reached(d, 4);
+    const sending = (await rowsOf(first.vault, pile.id))[0];
+    expect(sending?.[0]).toBe('scan.pdf');
+    expect(sending?.[1]).toBeGreaterThan(0);
+    expect(sending?.[1]).toBeLessThan(1);
+    const reserved = d.resumableCalls.find((c) => c.op === 'open')?.id;
+
+    // The page goes away: the pretend Drive is kept as the fake source keeps it.
+    const kept = await d.snapshot();
+    first.queue.stop();
+    first.vault.dispose();
+    hold.open();
+
+    const again = FakeDrive.restore(kept, { chunkMultiple: 4 });
+    const second = page(again, idb);
+    expect((await rowsOf(second.vault, pile.id)).map(([name]) => name)).toEqual(['scan.pdf']);
+    await vi.waitFor(async () => expect(await scans(again)).toEqual([reserved]));
+    expect(again.resumableCalls.map((c) => (c.op === 'put' ? `put@${c.start}` : c.op))).toEqual(['status', 'put@4', 'put@8']);
+    expect(await rowsOf(second.vault, pile.id)).toEqual([['scan.pdf', undefined]]);
+    expect([...(await again.readBytes(reserved ?? ''))]).toEqual([...BYTES]);
+  });
+
+  it('sign-out keeps the bytes for that account and folder; another account never sees or sends them', async () => {
+    const { d, idb } = await fresh();
+    const hold = holdAt(d, 4);
+    const first = page(d, idb);
+    const pile = await first.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await reached(d, 4);
+    // Signing out stops the queue; what it kept stays on the device.
+    first.queue.stop();
+    first.vault.dispose();
+    hold.open();
+    d.beforeChunk = null;
+    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toHaveLength(1);
+
+    const calls = d.resumableCalls.length;
+    const other = page(d, idb, ACCOUNT_B);
+    const rows = await rowsOf(other.vault, pile.id);
+    await other.queue.idle();
+    expect(rows.filter(([, upload]) => upload !== undefined && upload >= 0)).toEqual([]);
+    expect(other.queue.items()).toEqual([]);
+    expect(d.resumableCalls).toHaveLength(calls);
+    other.queue.stop();
+
+    const back = page(d, idb, ACCOUNT_A);
+    await back.vault.piles();
+    await vi.waitFor(async () => expect(await scans(d)).toHaveLength(1));
+  });
+
+  it('leaving Bower removes the bytes this device kept', async () => {
+    const backend = new FakeDrive({ chunkMultiple: 4 });
+    const backendRoot = (await seedFakeDrive(backend, 'default', Date.now())) ?? '';
+    const idb = new IDBFactory();
+    const store = indexedDbUploadStore(idb);
+    const queue = createUploadQueue({ drive: backend, store, chunkSize: 4 });
+    const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, rootId: backendRoot, scenario: 'default', scale: 'instant' }), declarePiles: true, uploadQueue: queue });
+    const hold = holdAt(backend, 4);
+    try {
+      await live.vault.addPile({ text: 'Papers', items: [scan()] });
+      await reached(backend, 4);
+      const user = await live.session.current();
+      const account = await uploadAccount(user?.email ?? '');
+      expect(account).toMatch(/^[0-9a-f]{64}$/);
+      expect(await store.list(account, backendRoot)).toHaveLength(1);
+      await live.session.deleteAccount();
+      hold.open();
+      expect(await store.list(account, backendRoot)).toEqual([]);
+      await queue.idle();
+      expect(await scans(backend, backendRoot)).toEqual([]);
+    } finally {
+      hold.open();
+      live.dispose();
+      // The pretend Worker keeps "signed out" for this tab; the next test starts signed in.
+      sessionStorage.clear();
+    }
+  });
+
+  it('removing a pile on its way discards its bytes and makes nothing', async () => {
+    const { d, idb } = await fresh();
+    const hold = holdAt(d, 4);
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await reached(d, 4);
+    // The chunk on its way settles (aborted) before the removal ends.
+    const removing = tab.vault.removePile(pile.id);
+    hold.open();
+    await removing;
+    await tab.vault.settled();
+    await tab.queue.idle();
+    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toEqual([]);
+    expect(await scans(d)).toEqual([]);
+  });
+
+  it('removing a lone thing whose last answer was lost puts the file Drive made in the Bin', async () => {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    d.beforeChunk = (call) => {
+      if (call.start === 8) d.loseNextReply();
+    };
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: '', items: [scan()] });
+    await tab.vault.settled();
+    await tab.queue.idle();
+    expect(await scans(d)).toHaveLength(1);
+    expect(d.resumableCalls.some((c) => c.op === 'open')).toBe(true);
+    d.beforeChunk = null;
+    await tab.vault.removePile(pile.id);
+    expect(await scans(d)).toEqual([]);
+    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toEqual([]);
+    expect((await tab.vault.piles()).find((p) => p.id === pile.id)).toBeUndefined();
+  });
+
+  it('a thing that waited for a connection is sent once on Try again', async () => {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
+    d.offline = true;
+    await tab.vault.settled();
+    d.offline = false;
+    expect(await rowsOf(tab.vault, pile.id)).toEqual([['scan.pdf', -1]]);
+    await tab.vault.retryPile(pile.id);
+    await tab.vault.settled();
+    await vi.waitFor(async () => expect(await rowsOf(tab.vault, pile.id)).toEqual([['scan.pdf', undefined]]));
+    expect(await scans(d)).toHaveLength(1);
+    expect(d.resumableCalls.filter((c) => c.op === 'open')).toHaveLength(1);
+  });
+
+  it('the declared hash keys the upload, so the bytes are not hashed again', async () => {
+    const { d, idb } = await fresh();
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await tab.vault.settled();
+    const [declared] = (await d.listAll(root)).filter((f) => d.pathOf(f.id, root).startsWith('.bower/piles/'));
+    const parsed = await parsePileDeclaration(await d.readBytes(declared?.id ?? ''), root);
+    if (!parsed.ok) throw new Error('declaration');
+    const member = parsed.value.members[0];
+    expect(tab.queue.items()[0]).toMatchObject({ pileId: pile.id, declarationId: parsed.value.declarationId, memberKey: member?.memberKey, sha256: member?.content.sha256 });
+  });
+
+  it('a browser that will not keep storage is told in plain words', async () => {
+    const { d, idb } = await fresh();
+    const tab = page(d, idb, ACCOUNT_A, { persist: async () => false });
+    expect(tab.vault.uploadNotice()).toBeNull();
+    await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await tab.vault.settled();
+    await vi.waitFor(() => expect(tab.vault.uploadNotice()).toBe('This browser may clear what Bower keeps here. Keep Bower open until everything is sent.'));
+  });
+
+  it('kept uploads this device cannot read are told once, and the things they held show as missing', async () => {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const hold = holdAt(d, 4);
+    const first = page(d, idb);
+    const pile = await first.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await reached(d, 4);
+    first.queue.stop();
+    first.vault.dispose();
+    hold.open();
+    d.beforeChunk = null;
+    const unreadable = { ...indexedDbUploadStore(idb), list: () => Promise.reject(new Error('IndexedDB list failed')) };
+    const queue = createUploadQueue({ drive: d, store: unreadable, chunkSize: 4 });
+    const vault = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => ACCOUNT_A } });
+    await vault.piles();
+    await vi.waitFor(() => expect(vault.uploadNotice()).toBe("Bower couldn't read what it kept on this device. Choose those files again to send them."));
+    expect(await rowsOf(vault, pile.id)).toEqual([['scan.pdf', -1]]);
+  });
+
+  it.each([
+    ['left out', undefined],
+    ['off', false],
+    ['on', true],
+  ] as const)('live sources use the upload queue only when asked to (%s)', async (_label, uploadQueue) => {
+    // A browser: IndexedDB is there, so only the option decides. Signed in, as a fresh tab is.
+    sessionStorage.clear();
+    vi.stubGlobal('indexedDB', new IDBFactory());
+    try {
+      const backend = new FakeDrive();
+      const backendRoot = (await seedFakeDrive(backend, 'default', Date.now())) ?? '';
+      const upload = vi.spyOn(backend, 'upload');
+      const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, rootId: backendRoot, scenario: 'default', scale: 'instant' }), declarePiles: true, ...(uploadQueue === undefined ? {} : { uploadQueue }) });
+      try {
+        await live.vault.addPile({ text: 'Papers', items: [scan()] });
+        await vi.waitFor(async () => expect(await scans(backend, backendRoot)).toHaveLength(1));
+        const resumable = backend.resumableCalls.map((c) => c.op);
+        if (uploadQueue === true) {
+          expect(resumable).toEqual(expect.arrayContaining(['generateIds', 'open', 'put']));
+          expect(upload).not.toHaveBeenCalled();
+        } else {
+          expect(resumable).toEqual([]);
+          expect(upload).toHaveBeenCalledOnce();
+        }
+      } finally {
+        live.dispose();
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  /** A declared pile whose one thing arrived, its answer lost, and was then moved out of the pile. */
+  async function arrivedAndMoved(): Promise<{ d: FakeDrive; idb: IDBFactory; tab: Page; pileId: string; fileId: string; projects: string }> {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    d.beforeChunk = (call) => {
+      if (call.start === 8) d.loseNextReply();
+    };
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await tab.vault.settled();
+    await tab.queue.idle();
+    d.beforeChunk = null;
+    const [fileId] = await scans(d);
+    const projects = (await d.listAll(root)).find((f) => f.folder && d.pathOf(f.id, root) === 'Projects')?.id ?? '';
+    const made = await d.get(fileId ?? '');
+    await d.update(fileId ?? '', { addParent: projects, removeParent: made.parents[0] ?? '' });
+    return { d, idb, tab, pileId: pile.id, fileId: fileId ?? '', projects };
+  }
+
+  it('removing a pile never bins its thing once it was filed elsewhere', async () => {
+    const { d, idb, tab, pileId, fileId, projects } = await arrivedAndMoved();
+    await tab.vault.removePile(pileId);
+    expect((await d.listAll(root)).filter((f) => f.id === fileId).map((f) => f.parents)).toEqual([[projects]]);
+    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toEqual([]);
+  });
+
+  it('Try again on a thing filed elsewhere after a lost answer ends it, without a Drive error', async () => {
+    const { d, tab, pileId, fileId } = await arrivedAndMoved();
+    // The session is gone too: the reserved id is read back where it is now.
+    d.expireSessions();
+    await tab.vault.retryPile(pileId);
+    await tab.vault.settled();
+    await tab.queue.idle();
+    expect(tab.queue.items()[0]).toMatchObject({ state: 'done', file: { id: fileId } });
+    expect(tab.queue.items()[0]?.error).toBeUndefined();
+    expect(await scans(d)).toEqual([fileId]);
+  });
+
+  it('a pile whose removal fails keeps the bytes of its things', async () => {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const hold = holdAt(d, 4);
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await reached(d, 4);
+    vi.spyOn(d, 'trash').mockRejectedValueOnce(driveError('offline'));
+    const removing = tab.vault.removePile(pile.id);
+    hold.open();
+    await expect(removing).rejects.toMatchObject({ code: 'offline' });
+    expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toHaveLength(1);
+  });
+
+  it('a thing whose lost answer already shows in the folder is listed once', async () => {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    d.beforeChunk = (call) => {
+      if (call.start === 8) d.loseNextReply();
+    };
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await tab.vault.settled();
+    await tab.queue.idle();
+    await tab.vault.refresh();
+    expect((await rowsOf(tab.vault, pile.id)).map(([name]) => name)).toEqual(['scan.pdf']);
+  });
+
+  it('signed out, listing the inbox starts no upload queue and logs nothing', async () => {
+    const { d, idb } = await fresh();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const queue = createUploadQueue({ drive: d, store: indexedDbUploadStore(idb), chunkSize: 4 });
+    const start = vi.spyOn(queue, 'start');
+    const vault = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => { throw new BowerError('auth', 'Sign in again to keep going.'); } } });
+    await vault.piles();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(start).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('coming back online asks the queue to retry only what waited for a connection', async () => {
+    const backend = new FakeDrive({ chunkMultiple: 4 });
+    const backendRoot = (await seedFakeDrive(backend, 'default', Date.now())) ?? '';
+    const queue = createUploadQueue({ drive: backend, store: indexedDbUploadStore(new IDBFactory()), chunkSize: 4 });
+    const retry = vi.spyOn(queue, 'retry');
+    const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, rootId: backendRoot, scenario: 'default', scale: 'instant' }), uploadQueue: queue });
+    try {
+      window.dispatchEvent(new Event('online'));
+      expect(retry).toHaveBeenCalledWith('offline');
+    } finally {
+      live.dispose();
+    }
+  });
+
+  it('a thing whose bytes this device no longer has is asked for again, as a missing one', async () => {
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const hold = holdAt(d, 4);
+    const first = page(d, idb);
+    const pile = await first.vault.addPile({ text: 'Receipts', items: [scan()] });
+    await reached(d, 4);
+    first.queue.stop();
+    first.vault.dispose();
+    hold.open();
+    d.beforeChunk = null;
+    const queue = createUploadQueue({ drive: d, store: { ...indexedDbUploadStore(idb), body: async () => null }, chunkSize: 4 });
+    const vault = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => ACCOUNT_A } });
+    await vault.piles();
+    await vi.waitFor(() => expect(queue.items()[0]?.state).toBe('failed'));
+    expect(await rowsOf(vault, pile.id)).toEqual([['scan.pdf', -1]]);
+    await expect(vault.retryPile(pile.id)).rejects.toThrow('Choose scan.pdf again on this device to send it.');
+  });
+
+  it('a thing filed elsewhere after a lost answer is not sent again when its binned pile comes back', async () => {
+    const { d, tab, pileId, fileId, projects } = await arrivedAndMoved();
+    const pile = (await tab.vault.piles()).find((p) => p.id === pileId);
+    expect(pile?.path).toBeTruthy();
+    await tab.vault.trash(pile?.path ?? '');
+    const opens = d.resumableCalls.filter((c) => c.op === 'open').length;
+    await tab.vault.restore(pile?.path ?? '');
+    await tab.vault.settled();
+    await tab.queue.idle();
+    expect(d.resumableCalls.filter((c) => c.op === 'open')).toHaveLength(opens);
+    expect(await scans(d)).toEqual([fileId]);
+    expect((await d.get(fileId)).parents).toEqual([projects]);
   });
 });

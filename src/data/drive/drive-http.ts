@@ -5,11 +5,16 @@
  * else becomes one of `DRIVE_MESSAGES`.
  */
 import { BowerError } from '../types';
-import { driveError, type DriveApi, type DriveFile, type DrivePatch } from './drive-api';
+import { confirmedFrom, chunkRange } from './resumable-upload';
+import { driveError, RESUMABLE_UNIT, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
+/** A file made by a resumable upload, with its content's checksum to check it. */
+const UPLOADED_FIELDS = `${FIELDS},sha256Checksum`;
+/** The only session addresses that get the person's token. */
+const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';
 const FOLDER = 'application/vnd.google-apps.folder';
 const BATCH = 40;
 const SMALL = 5 * 1024 * 1024;
@@ -26,6 +31,7 @@ interface WireFile {
   size?: string;
   appProperties?: Record<string, string>;
   trashed?: boolean;
+  sha256Checksum?: string;
 }
 
 export interface DriveHttpOptions {
@@ -43,6 +49,7 @@ const toFile = (w: WireFile): DriveFile => ({
   createdTime: w.createdTime,
   ...(w.size !== undefined ? { size: Number(w.size) } : {}),
   ...(w.appProperties ? { appProperties: w.appProperties } : {}),
+  ...(w.sha256Checksum ? { sha256: w.sha256Checksum } : {}),
 });
 
 const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -60,7 +67,7 @@ async function isRateLimit(res: Response): Promise<boolean> {
   }
 }
 
-export class DriveHttp implements DriveApi {
+export class DriveHttp implements DriveApi, ResumableDrive {
   private readonly token: (fresh: boolean) => Promise<string>;
   private readonly fetchFn: typeof fetch;
   /** Ids known under each root from the last listing, so full-text hits stay inside it. */
@@ -186,6 +193,109 @@ export class DriveHttp implements DriveApi {
       for (const f of files) if (inside.has(f.id)) hits.set(f.id, f);
     }
     return [...hits.values()];
+  }
+
+  async generateIds(count: number): Promise<string[]> {
+    const q = new URLSearchParams({ count: String(count), space: 'drive', type: 'files' });
+    const body = (await (await this.call(`${API}/files/generateIds?${q}`)).json()) as { ids?: unknown };
+    const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === 'string') : [];
+    if (ids.length !== count) {
+      console.error(`Drive generated ${ids.length} of ${count} ids`);
+      throw driveError('unknown');
+    }
+    return ids;
+  }
+
+  async openResumable(target: ResumableTarget): Promise<string> {
+    const meta = { id: target.id, name: target.name, parents: [target.parentId], ...(target.appProperties ? { appProperties: target.appProperties } : {}) };
+    const res = await this.raw(`${UPLOAD}/files?uploadType=resumable&fields=${UPLOADED_FIELDS}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=UTF-8', 'x-upload-content-type': target.type || 'application/octet-stream', 'x-upload-content-length': String(target.size) },
+      body: JSON.stringify(meta),
+    });
+    const session = res.headers.get('location');
+    if (res.ok && session) return session;
+    throw this.sessionFailure(res, 'opening an upload');
+  }
+
+  async putChunk(session: string, start: number, chunk: Blob, size: number, signal?: AbortSignal): Promise<SessionStatus> {
+    this.mustBeSession(session);
+    if (start + chunk.size < size && chunk.size % RESUMABLE_UNIT !== 0) {
+      console.error(`Refused an upload chunk of ${chunk.size} bytes: not a multiple of 256 KiB`);
+      throw driveError('unknown');
+    }
+    const res = await this.raw(session, { method: 'PUT', headers: { 'content-range': chunkRange(start, start + chunk.size, size) }, body: chunk, ...(signal ? { signal } : {}) });
+    return this.sessionAnswer(res, 'an upload chunk');
+  }
+
+  async sessionStatus(session: string, size: number): Promise<SessionStatus> {
+    this.mustBeSession(session);
+    const res = await this.raw(session, { method: 'PUT', headers: { 'content-range': `bytes */${size}` } });
+    return this.sessionAnswer(res, 'an upload status');
+  }
+
+  async getUploaded(id: string): Promise<DriveFile> {
+    const w = (await (await this.call(`${API}/files/${id}?fields=${UPLOADED_FIELDS}`)).json()) as WireFile;
+    if (w.trashed) throw driveError('not-found');
+    return toFile(w);
+  }
+
+  /** A kept session address is sent the token only when it is Google's upload service. */
+  private mustBeSession(session: string): void {
+    if (session.startsWith(UPLOAD_SESSIONS)) return;
+    console.error('Refused a resumable session outside Google upload');
+    throw driveError('unknown');
+  }
+
+  /** 200/201 done, 308 partial, 404/410 the session expired; anything else rejects. */
+  private async sessionAnswer(res: Response, what: string): Promise<SessionStatus> {
+    if (res.status === 200 || res.status === 201) return { kind: 'done', file: this.changed(toFile((await res.json()) as WireFile)) };
+    if (res.status === 308) return { kind: 'partial', confirmed: confirmedFrom(res.headers.get('range')) };
+    if (res.status === 404 || res.status === 410) return { kind: 'expired' };
+    throw this.sessionFailure(res, what);
+  }
+
+  /** A reserved id already taken answers 409: `conflict`, so the caller reads the file back. */
+  private sessionFailure(res: Response, what: string): BowerError {
+    if (res.status === 409) return driveError('conflict');
+    if (res.status === 404) return driveError('not-found');
+    console.error(`Drive answered ${res.status} for ${what}`);
+    return driveError('unknown');
+  }
+
+  /** One resumable request with the token, its one refresh and the retries; every other answer goes back as is. */
+  private async raw(url: string, init: RequestInit): Promise<Response> {
+    let token = await this.token(false);
+    let refreshed = false;
+    let tries = 0;
+    for (;;) {
+      let res: Response;
+      try {
+        res = await this.fetchFn(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } });
+      } catch (e) {
+        if (e instanceof BowerError) throw e;
+        // Stopped on purpose: the queue tells this from a failure.
+        if (e instanceof DOMException && e.name === 'AbortError') throw e;
+        if (e instanceof TypeError) throw driveError('offline');
+        console.error(e);
+        throw driveError('unknown');
+      }
+      if (res.status === 401) {
+        if (refreshed) throw driveError('auth');
+        refreshed = true;
+        token = await this.token(true);
+        continue;
+      }
+      // Busy or failing on Google's side: ask again with a growing wait. A resumable
+      // request is safe to repeat: a chunk carries its range, a create its reserved id.
+      const wait = WAITS[tries];
+      if (wait !== undefined && (res.status === 429 || res.status >= 500 || (await isRateLimit(res)))) {
+        tries++;
+        await sleep(wait);
+        continue;
+      }
+      return res;
+    }
   }
 
   private async query(q: string, maxPages = Infinity): Promise<DriveFile[]> {
