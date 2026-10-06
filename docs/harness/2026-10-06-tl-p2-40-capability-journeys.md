@@ -26,3 +26,9 @@ The coordinator re-registers them that way, closing the merged originals as supe
 3. **The journeys run on fake only.** The demo stays an illustration, like its in-memory run. A demo screen must still never contradict what fake shows.
 
 A request answer must name what was done, with links. The generic "Done. See what changed in your folders." stays only when nothing specific can be named.
+
+**Labels approved (same day).**
+
+- **Result sections.** The finished tidy-up sheet and Home's result card have two section labels: "New notes" and "Brought up to date". Each lists links to the notes, with the run's line beside each one.
+- **Timeline lines.** A "New" mark appears on the Timeline lines the last tidy-up added. It reuses the existing note-level word.
+- **Home's question** shows its note's name as a link.
