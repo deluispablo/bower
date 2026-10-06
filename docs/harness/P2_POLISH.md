@@ -62,3 +62,9 @@ From P3-2:
 
 From the worker-skeleton review (CLEAN): Hono cors sends Allow-Credentials/Expose-Headers and a 204 preflight to other origins (no Allow-Origin, so browsers block; tighten the test or the wording) · a misconfigured deploy answers anyone a 500 naming the missing key (env.ts:90,128) · the app-origin 404 lacks Vary: Origin (no-store makes it harmless) · **allowHeaders lacks x-bower-place and x-bower-epoch: worker-session-lease must add them** · `@cloudflare/workers-types` added; api lint uses undeclared root packages · **error codes are snake_case (not_found, internal) while the spec uses kebab-case: align when the first spec route lands** · the thrown-error test uses app.request, not SELF.
 - Tooling: `harness/done.sh` code paths (`paths=` line 49) do not include `api/`, so `--fixed-in` and red mode cannot show a red for Worker entries.
+
+From the P3-3 review (both CLEAN), carried to later entries:
+- `assertCurrentGeneration` is not called and no generation is stored yet: wire it when the person object holds the session generation (worker-session-lease / sign-in).
+- `SESSION_SECRET_PREVIOUS` is not in env.ts: rotation is a library function only until the sign-in entry wires it.
+- `session_lease` lacks lease-expiry and leave-generation columns the contract needs: a schema v2 step in worker-session-lease.
+- The person object throws a plain Error naming schema versions: the first HTTP route that reaches it must answer `internal` with no cause.
