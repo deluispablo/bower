@@ -2743,7 +2743,7 @@
       "Reparse canonical records and compare immutable fixture digests; explicit refusal produces no authoritative normalized output or permission."
     ],
     "verify": "pnpm vitest run src/data/contracts/record-json.test.ts -t \"record JSON preserves canonical authority\"",
-    "passes": false,
+    "passes": true,
     "note": "Bounded canonical helper authorized by TL-P2-04 and exact B aede/3b954; named assertions planned. Separate loadable stub required. No shape/semantic/scope validation, consumer activation, executed recovery, CAS or phase certification."
   }
 ]
