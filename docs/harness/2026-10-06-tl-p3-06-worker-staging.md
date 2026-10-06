@@ -19,8 +19,14 @@ Staging serves the app and the Worker from **one Worker on one origin**, the exi
 | `GOOGLE_CLIENT_SECRET` | **Owner** | `wrangler secret put GOOGLE_CLIENT_SECRET --name bower-staging`, typed by the owner. No session handles it. |
 | `SESSION_SECRET` (32 random bytes or more) and `TOKEN_ENC_KEY` (base64 of 32 random bytes, AES-256) | **Lead** | Generated with `openssl rand` and piped straight into `wrangler secret put`, never printed or logged. |
 | The KV namespace bound as `BOWER_KV`, and the two test addresses in the allowlist key format of the original store | **Lead** | `wrangler kv namespace create`, then one key per address. The addresses never enter the repository, a commit or a message. |
-| `GOOGLE_CLIENT_ID` | Coordinator | A plain `vars` entry in `api/wrangler.jsonc`, since it is not a secret. |
+| `GOOGLE_CLIENT_ID` | **Owner** | `wrangler secret put GOOGLE_CLIENT_ID --name bower-staging`. It is not secret, but it is specific to the owner's Google project, so it stays out of the repository like `FOLDER_ID`. |
+| `APP_ORIGIN` and `API_ORIGIN` | The deploy | Both are the staging origin, passed as `--var` at deploy time, because the account's subdomain stays out of the repository (STAGING.md). The repository keeps placeholders. |
 | The deploy | `bower-mechanical`, after the OIDC review | The updated STAGING runbook: build the app, then `wrangler deploy` from `api/` with `assets.directory` set to the app's `dist/`. |
 | The first sign-in with both accounts | **Owner** | In the browser, when the lead asks. |
 
 [STAGING.md](STAGING.md) is updated by the lead in the same batch: staging stops being a static preview at P3-4.
+
+**Done by the lead, 2026-10-07:**
+
+- A new KV namespace, `bower-staging-kv`, holds the two allowlist keys. The original app's own `BOWER_KV` namespace is production's and is never touched.
+- `SESSION_SECRET` (48 random bytes) and `TOKEN_ENC_KEY` (32 random bytes, standard base64) are set on `bower-staging`.
