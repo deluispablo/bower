@@ -4,11 +4,10 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 
 - **Role.** Claude session `Planificador`, technical lead and planner of the whole project ([GOVERNANCE](GOVERNANCE.md)). It talks to the coordinator `Orquestador` through cross-session messages, in 10 lines or fewer.
 - **Documentation checkout.** `/private/tmp/bower-tl-planning`, branch `claude/tl-planning`. Fast-forward it to `main` before each change. After `pnpm check`, or the docs test plus lint for documentation only, fast-forward local `main`. Then message the coordinator, who adopts the change and backs it up.
-- **Staging preview.** Redeploy after each main batch, following [STAGING.md](STAGING.md). Last deployed: `main` `cc54d83` (P2 closed), version `0996fb05`.
-- **Open with the owner:** none. The backup is credentialed through `gh` (owner's browser login, keychain). `backup/main` = `03054bd`, verified 2026-10-06.
-- **Waiting on the coordinator:**
-  - P2 closed at dossier `3e6e7da` under conditional acceptance;
-  - the supplemental walk ([TL-P2-47](2026-10-06-tl-p2-47-supplemental-walk.md)) before P3 implementation;
+- **Staging preview.** Redeploy after each main batch, following [STAGING.md](STAGING.md). Last deployed: `main` `605bbaa` (P2 re-closed), version `ec070ce8`.
+- **Open with the owner:** two Google test accounts for P3-B (addresses stay out of the repo), added to the staging Worker's allowlist by the owner.
+- **Waiting on the coordinator:** batch P3-1 ([TL-P3-01](2026-10-06-tl-p3-01-p3-start.md)).
+- **Lead's own P3-1 work:** `p3-acceptance-checklist` (the P3 column of C01–C16) and `p3-accounts-and-secrets` (the owner's setup list).
 - **Session rule:** never clear this session; the owner compacts by hand ([TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md)). After a compaction, re-read this file.
 - **Recurring duties:**
   - Measure tokens per batch with `npx ccusage session`, reporting cache reads and cost by session, and log the lead's own row in `harness/tokens.csv` through the coordinator.

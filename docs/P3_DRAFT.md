@@ -1,6 +1,6 @@
 # Phase 3 draft plan: a minimal real backend
 
-**Status: draft by the technical lead, 2026-10-06. Not adopted, and no entry is registered.** The coordinator registers P3 entries only after P2 closes, following GOVERNANCE. Revision stays `2026-10-05-contracts-2`. This draft gathers the P3 obligations that came out of P2 decisions, together with the reuse found in the original app, so that P3 can start the day P2 closes. The authority stays with [WORK_PLAN](WORK_PLAN.md) Phase 3, [ARCHITECTURE](ARCHITECTURE.md) and the [Worker contract](specs/2026-10-04-worker-contract.md).
+**Status: adopted as the P3 plan by [TL-P3-01](harness/2026-10-06-tl-p3-01-p3-start.md), 2026-10-06.** The coordinator registers P3 entries batch by batch, as TL-P3-01 says. Revision stays `2026-10-05-contracts-2`. This draft gathers the P3 obligations that came out of P2 decisions, together with the reuse found in the original app, so that P3 can start the day P2 closes. The authority stays with [WORK_PLAN](WORK_PLAN.md) Phase 3, [ARCHITECTURE](ARCHITECTURE.md) and the [Worker contract](specs/2026-10-04-worker-contract.md).
 
 ## Goal and entry condition
 
