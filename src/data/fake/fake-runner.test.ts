@@ -4,7 +4,7 @@ import { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
 import { thingsIn } from '../piles';
 import { seedFakeDrive } from './seed';
-import { runFake, type FakeRunOptions } from './fake-runner';
+import { planRun, runFake, type FakeRunOptions } from './fake-runner';
 import { BowerError, type RunPhase } from '../types';
 import { PROP, SYSTEM } from '../vault/layout';
 
@@ -614,6 +614,88 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
       expect(out.report.setAside).toEqual([]);
       expect(await declarations()).toEqual([kept]);
     });
+
+    // TL-P2-31 amendment: every copy missing or in the Bin makes the pile an ordinary observed one, in the inbox and the run.
+    const gone = (errors: { mock: { calls: unknown[][] } }): number => errors.mock.calls.filter((c) => String(c[0]).includes('declaration is gone')).length;
+
+    it('a folder pile restored from Drive\'s Bin after Remove is an ordinary pile in the inbox and the run, logged once', async () => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('one.pdf'), pdf('two.pdf')] });
+      await uploader.settled();
+      const folder = await folderOf(pile.id);
+      await twoCopies();
+      await declaring().removePile(pile.id);
+      // Restored in Drive itself: the folder comes back, its declaration copies stay in the Bin.
+      await drive.untrash(folder.id);
+      const inbox = fresh();
+      for (let i = 0; i < 2; i++) {
+        const seen = (await inbox.piles()).find((p) => p.id === pile.id);
+        expect(seen?.setAside).toBeUndefined();
+        expect(seen?.items.map((i) => [i.name, i.upload])).toEqual([['one.pdf', undefined], ['two.pdf', undefined]]);
+      }
+      expect(gone(errors)).toBe(1);
+      const out = await runFake(drive, root, opts());
+      if (out.phase !== 'done') throw new Error('failed');
+      expect(out.report.filed.map((f) => f.name)).toEqual(expect.arrayContaining(['one.pdf', 'two.pdf']));
+      expect(out.report.setAside).toEqual([]);
+    });
+
+    it('a loose file restored from Drive\'s Bin after Remove is an ordinary pile in the inbox and the run', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+      await uploader.settled();
+      const shown = (await fresh().piles()).find((p) => p.id === pile.id);
+      const file = (await drive.listAll(root)).find((f) => f.name === 'loose.pdf');
+      await declaring().trash(shown?.path ?? '');
+      await drive.untrash(file?.id ?? '');
+      const seen = (await fresh().piles()).find((p) => p.id === pile.id);
+      expect(seen?.items.map((i) => [i.name, i.upload])).toEqual([['loose.pdf', undefined]]);
+      const out = await runFake(drive, root, opts());
+      if (out.phase !== 'done') throw new Error('failed');
+      expect(out.report.filed.map((f) => f.name)).toContain('loose.pdf');
+      expect(out.report.setAside).toEqual([]);
+    });
+
+    it('a Remove that fails halfway is completed on retry, and Undo restores everything', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('one.pdf'), pdf('two.pdf')] });
+      await uploader.settled();
+      const folder = await folderOf(pile.id);
+      const copies = await twoCopies();
+      const real = drive.trash.bind(drive);
+      let calls = 0;
+      const trash = vi.spyOn(drive, 'trash').mockImplementation(async (id) => {
+        if (++calls === 2) throw driveError('offline');
+        return real(id);
+      });
+      const vault = declaring();
+      await expect(vault.removePile(pile.id)).rejects.toMatchObject({ code: 'offline' });
+      await expect(vault.removePile(pile.id)).resolves.toBeUndefined();
+      trash.mockRestore();
+      expect(await declarations()).toEqual([]);
+      expect((await drive.listAll(root)).some((f) => f.id === folder.id)).toBe(false);
+      expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+      await vault.restore(pile.path ?? '');
+      expect(ids(await declarations())).toEqual(ids(copies));
+      expect((await fresh().piles()).find((p) => p.id === pile.id)?.setAside).toBeUndefined();
+    });
+  });
+
+  it('a run reads each declaration copy once for its capture', async () => {
+    const uploader = declaring();
+    await uploader.addPile({ text: 'Papers from Alex', items: [pdf('one.pdf'), pdf('two.pdf')] });
+    await uploader.addPile({ text: '', items: [pdf('loose one.pdf')] });
+    await uploader.addPile({ text: '', items: [pdf('loose two.pdf')] });
+    await uploader.settled();
+    const copies = new Set((await declarations()).map((d) => d.id));
+    expect(copies.size).toBe(3);
+    const read = vi.spyOn(drive, 'readBytes');
+    await planRun(drive, root, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    // Once by the inbox listing the run starts from, once by its capture: never once per loose file.
+    for (const id of copies) expect(read.mock.calls.filter(([x]) => x === id).length, id).toBeLessThanOrEqual(2);
   });
 
   /** A declared pile whose things all arrived. */
