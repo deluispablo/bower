@@ -2372,6 +2372,32 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await linesOf(w)).toEqual([]);
     });
 
+    // TL-P2-38: a removal is matched with the same renames the edit's link rewrite applies.
+    it('takes out a rule whose link is renamed in the same tidy-up', async () => {
+      const w = await bWorld();
+      const rules = await fileAt(w, RULES);
+      const garden = 'Keep [[Garden]] receipts together.';
+      await w.drive.writeText(rules.id, serializeRules([
+        { id: 'rule-1', text: garden, yourWords: 'keep garden receipts together', since: Date.parse('2026-10-01T00:00:00Z') },
+        { id: 'rule-2', text: wordRule(RECEIPTS_RULE), yourWords: RECEIPTS_RULE, since: Date.parse('2026-10-02T00:00:00Z') },
+      ]), rules.modifiedTime);
+      await w.drive.createText((await fileAt(w, 'Projects')).id, 'Garden.md', '# Garden\n');
+      // Alex takes the rule out, then renames the note it links to, before the next tidy-up.
+      const [rule] = (await vaultOf(w).rules()).filter((r) => r.text === garden);
+      if (!rule) throw new Error('the rule is missing');
+      await vaultOf(w).removeRule(rule.id);
+      const removal = (await linesOf(w)).find((l) => l.rec.kind === 'rule');
+      await vaultOf(w).rename('Projects/Garden.md', 'Garden plans');
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      const text = w.drive.dump(w.rootId).get(RULES) ?? '';
+      expect(parseRules(text).map((r) => r.text)).toEqual([wordRule(RECEIPTS_RULE)]);
+      expect(text).not.toContain('Garden');
+      expect((await linesOf(w)).map((l) => l.rec.id)).not.toContain(removal?.rec.id);
+      expect(await linesOf(w)).toEqual([]);
+      expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
+    });
+
     it('refuses an instructions run whose only line is a rule left pending, as nothing to read', async () => {
       const w = await bWorld();
       const rules = await fileAt(w, RULES);
