@@ -28,3 +28,9 @@ The two checks without tests become the first P3 batch entries, because a test c
 ## Not decided here
 
 The backup push to `backup/main` needs the owner's GitHub credentials. It stays pending in HANDOFF until the owner runs it or starts a session that holds them.
+
+## Amendment, after the walk (G1, G2)
+
+F2, G1 and G2 are the same defect: a route change leaves focus on `body`. The fix goes in one place, the router's navigation handler, so every route change moves focus to the new view's `h1` (`tabindex="-1"`). Do not patch individual links or screens. This is the standard pattern for client-side routing; routers that did it built in, such as Reach Router and Gatsby, did it at that level ([Gatsby accessible client-side routing](https://www.gatsbyjs.com/blog/2019-07-11-user-testing-accessible-client-routing/)).
+
+The fix comes with a sensor rather than another walk. One e2e visits every route by keyboard and asserts that the focused element is that view's `h1`, on demo and fake. After that, an evaluator replays only G1 and G2. If the result is clean, P3 implementation starts. The demo cells of C06 and C07 stay recorded as not applicable, because their journeys are fake-only by design.
