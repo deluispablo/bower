@@ -506,10 +506,13 @@ export class DriveVault implements VaultSource {
       // Pile.text is editable context, so a refusal must not masquerade as saved text.
       if (note && !parsed && !unread) continue;
       const text = parsed?.body.trim() ?? '';
-      const declared = f.appProperties?.[PROP.declaration] ? await this.declaredState(f, this.uploads.get(id), queued.map((i) => i.memberKey)) : null;
+      // A pile whose note could not be read already waits, logged: nothing more of it is read (or logged) now.
+      const marked = !!f.appProperties?.[PROP.declaration];
+      const declared = marked && !unread ? await this.declaredState(f, this.uploads.get(id), queued.map((i) => i.memberKey)) : null;
       const contextKey = declared?.contextKey ?? null;
-      // Every note with the pile's context key is its context, never a thing to file.
-      const things = kids.filter((k) => k !== note && !(contextKey && k.appProperties?.[PROP.item] === contextKey));
+      // Every note with the pile's context key is its context, never a thing to file; unread, any keyed pile note.
+      const bound = (k: DriveFile): boolean => (contextKey ? k.appProperties?.[PROP.item] === contextKey : marked && unread && k.name === PILE_NOTE && !!k.appProperties?.[PROP.item]);
+      const things = kids.filter((k) => k !== note && !bound(k));
       // A changed thing shows as changed; one that has left the pile is not listed again, and the reason says so.
       const items = [...things.map((k) => (declared?.changed.has(k.id) ? { ...itemOf(k), changed: true as const } : itemOf(k))), ...sending, ...(declared?.rows ?? [])];
       // What the tidy-up cannot write down waits, as not checked, here and in the tidy-up (pile-readiness `writable`):
