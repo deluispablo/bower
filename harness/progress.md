@@ -31,3 +31,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: c05-journey-hub-updated passes — chore(harness): c05-journey-hub-updated passes (batch 5)
 - 2026-10-06: c11-journey-rule-and-answer passes — chore(harness): c11-journey-rule-and-answer passes (batch 5)
 - 2026-10-06: c06-hub-cites-filed passes — chore(harness): c06-hub-cites-filed passes (batch 5)
+- 2026-10-06: c09-request-answer-links passes — chore(harness): c09-request-answer-links passes (batch 5)
