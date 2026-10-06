@@ -84,14 +84,14 @@ export const MAX_BODY_BYTES = 64 * 1024;
 
 /**
  * Rejects a request body over `MAX_BODY_BYTES` with a 413
- * `payload_too_large`, before any handler parses it: on `Content-Length`
+ * `payload-too-large`, before any handler parses it: on `Content-Length`
  * when the request declares one, else by counting the streamed body as it
  * is read (Hono's `bodyLimit`). Requests without a body pass untouched.
  */
 export const limitBody: MiddlewareHandler<AppEnv> = bodyLimit({
   maxSize: MAX_BODY_BYTES,
   onError: () => {
-    throw new HttpError(413, 'payload-too-large', 'Request body too large');
+    throw new HttpError(413, 'payload-too-large');
   },
 });
 
@@ -105,7 +105,7 @@ function carriesBody(request: Request): boolean {
 /**
  * A write (`POST`, `PUT`, `PATCH`, `DELETE`) that carries a body must send
  * it as `Content-Type: application/json` (parameters such as `charset`
- * allowed), else a 415 `unsupported_media_type`. Writes that take no body
+ * allowed), else a 415 `unsupported-media-type`. Writes that take no body
  * (`POST /auth/logout`, `POST /auth/logout-all`, `POST /process`,
  * `DELETE /me`, `DELETE /admin/allow/:email`) send none and are not checked. Also closes
  * the "simple request" door: a cross-site form can only send
@@ -119,11 +119,7 @@ export const requireJsonBody: MiddlewareHandler<AppEnv> = async (c, next) => {
       ?.trim()
       .toLowerCase();
     if (type !== 'application/json') {
-      throw new HttpError(
-        415,
-        'unsupported-media-type',
-        'Send the request body as application/json',
-      );
+      throw new HttpError(415, 'unsupported-media-type');
     }
   }
   await next();
@@ -150,7 +146,7 @@ export const requireSameOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
   const origin =
     c.req.header('origin') ?? refererOrigin(c.req.header('referer'));
   if (origin !== c.get('env').APP_ORIGIN) {
-    throw new HttpError(403, 'forbidden', 'Cross-site request rejected');
+    throw new HttpError(403, 'forbidden');
   }
   await next();
 };
@@ -273,7 +269,7 @@ export const genericWindow: SlidingWindow = createSlidingWindow(
 /**
  * The generic limit on every cookie route (`COOKIE_ROUTES`): at most
  * `GENERIC_RATE_LIMIT_PER_MINUTE` requests per client IP in any 60 seconds,
- * all routes together. Over the limit, the same 429 `rate_limited`, with
+ * all routes together. Over the limit, the same 429 `rate-limited`, with
  * `Retry-After` set to the seconds until the oldest counted request leaves
  * the window.
  *
@@ -287,7 +283,7 @@ export const genericRateLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
   const retryAfter = genericWindow.hit(clientIp(c), Date.now());
   if (retryAfter > 0) {
     c.header('Retry-After', String(retryAfter));
-    throw new HttpError(429, 'rate-limited', 'Too many requests, slow down');
+    throw new HttpError(429, 'rate-limited');
   }
   await next();
 };
@@ -305,7 +301,7 @@ export const strictWindow: SlidingWindow = createSlidingWindow(
 /**
  * The strict limit for `route`: at most `RATE_LIMIT_PER_MINUTE` requests per
  * key in any 60 seconds, the key being `keyOf(c)` (the client IP by
- * default). Over the limit, a 429 `rate_limited` with `Retry-After` set to
+ * default). Over the limit, a 429 `rate-limited` with `Retry-After` set to
  * the seconds until the oldest counted request leaves the window.
  *
  * In memory (`strictWindow`), like the generic limit: it costs no KV write,
@@ -322,7 +318,7 @@ export function rateLimit<E extends AppEnv = AppEnv>(
     const retryAfter = strictWindow.hit(`${route}:${keyOf(c)}`, Date.now());
     if (retryAfter > 0) {
       c.header('Retry-After', String(retryAfter));
-      throw new HttpError(429, 'rate-limited', 'Too many requests, slow down');
+      throw new HttpError(429, 'rate-limited');
     }
     await next();
   };

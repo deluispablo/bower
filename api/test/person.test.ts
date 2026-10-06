@@ -1,6 +1,6 @@
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
 import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
@@ -104,5 +104,30 @@ describe('person object', () => {
       rowCount(state.storage.sql, 'schema_version'),
     );
     expect(versionRows).toBe(1);
+  });
+
+  it('a person object refuses storage from a newer build', async () => {
+    const alex = personFor('sub-alex-newer');
+    expect(await alex.countQuota('2026-10-06')).toBe(1);
+    const newer = SCHEMA_VERSION + 1;
+    await runInDurableObject(alex, (_instance, state) => {
+      state.storage.sql.exec('UPDATE schema_version SET version = ? WHERE id = 1', newer);
+    });
+    await evictDurableObject(alex);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await expect(alex.schemaVersion()).rejects.toThrow();
+      await expect(alex.countQuota('2026-10-06')).rejects.toThrow();
+    } finally {
+      log.mockRestore();
+    }
+    // Nothing was downgraded: a restart still refuses (a downgrade would let it start), and no call wrote.
+    const again = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await expect(alex.countQuota('2026-10-06')).rejects.toThrow();
+      await expect(runInDurableObject(alex, () => 1)).rejects.toThrow(/newer than this build/);
+    } finally {
+      again.mockRestore();
+    }
   });
 });

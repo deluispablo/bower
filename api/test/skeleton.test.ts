@@ -18,7 +18,7 @@ describe('worker skeleton', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe('not-found');
-    expect(typeof body.error.message).toBe('string');
+    expect(body.error.message).toBe("Bower couldn't find that.");
   });
 
   it('a thrown error answers 500 in the same format with no internals', async () => {
@@ -29,7 +29,7 @@ describe('worker skeleton', () => {
     const res = await app.request('/__boom', {}, env);
     expect(res.status).toBe(500);
     const text = await res.text();
-    expect(JSON.parse(text)).toEqual({ error: { code: 'internal', message: 'Internal error' } });
+    expect(JSON.parse(text)).toEqual({ error: { code: 'internal', message: "Something went wrong on Bower's side. Try again later." } });
     expect(text).not.toContain('secret-detail');
   });
 
