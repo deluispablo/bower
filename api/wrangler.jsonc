@@ -2,12 +2,20 @@
   "name": "bower-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-22",
+  // One origin (TL-P3-06): the app's build is served as static assets, and the Worker runs
+  // first only on its own paths, so the session cookie is first-party on Safari too.
+  "assets": {
+    "directory": "../dist",
+    "run_worker_first": ["/auth/*", "/me", "/drive/*", "/vault", "/process", "/status", "/session"]
+  },
   "kv_namespaces": [{ "binding": "BOWER_KV", "id": "KV_NAMESPACE_ID" }],
   // One SQLite-backed Durable Object per person, addressed by idFromName(sub).
   "durable_objects": { "bindings": [{ "name": "PERSON", "class_name": "Person" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Person"] }],
-  // Secrets (SESSION_SECRET, TOKEN_ENC_KEY, ...) are never set here: `wrangler secret put` only.
+  // Secrets (GOOGLE_CLIENT_SECRET, SESSION_SECRET, TOKEN_ENC_KEY) are never set here: `wrangler secret put` only.
   "vars": {
+    // The OAuth client id is public (it travels in every sign-in address); a placeholder until deploy.
+    "GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID",
     "APP_ORIGIN": "https://app.example.com",
     "API_ORIGIN": "https://api.example.com",
     "APP_VERSION": "0.1.0",

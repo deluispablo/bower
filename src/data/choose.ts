@@ -3,7 +3,7 @@
  * - `demo`: Alex's folder in memory (`DemoWorld`), the UI's reference;
  * - `fake`: the real logic (Drive folder, journal, runs) over a fake Drive
  *   and a fake Worker in the browser, seeded with the same folder;
- * - `real`: Google Drive and Bower's Worker at `VITE_API_URL`.
+ * - `real`: Google Drive and Bower's Worker at `apiBase()`.
  * `?source=` picks one for the tab; with `VITE_API_URL` set and no query,
  * the app is real.
  */
@@ -19,17 +19,26 @@ export type SourceKind = 'demo' | 'fake' | 'real';
 const KEY = 'bower:demo:source';
 const isKind = (v: string | null): v is SourceKind => v === 'demo' || v === 'fake' || v === 'real';
 
+/**
+ * The Worker's address: `VITE_API_URL` when set, else the app's own origin,
+ * where the Worker answers its own paths (one origin, TL-P3-06).
+ */
+export function apiBase(): string {
+  const api = import.meta.env.VITE_API_URL as string | undefined;
+  return api ? api : location.origin;
+}
+
 export function readSource(): SourceKind {
   const api = import.meta.env.VITE_API_URL as string | undefined;
   try {
     const q = new URLSearchParams(location.search).get('source');
     if (q !== null) {
-      const kind: SourceKind = isKind(q) && (q !== 'real' || api) ? q : 'demo';
+      const kind: SourceKind = isKind(q) ? q : 'demo';
       sessionStorage.setItem(KEY, kind);
       return kind;
     }
     const kept = sessionStorage.getItem(KEY);
-    if (isKind(kept) && (kept !== 'real' || api)) return kept;
+    if (isKind(kept)) return kept;
   } catch {
     // expected: Storage may be blocked; the address decides.
   }
@@ -62,7 +71,7 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     return { sources: { ...fenced, session: leavingLetsGo(fenced.session, place) }, world };
   }
   if (kind === 'real') {
-    const worker = new WorkerHttp(import.meta.env.VITE_API_URL as string);
+    const worker = new WorkerHttp(apiBase());
     // P3 obligation (TL-P2-14/24/25): no place here yet, because today's real Worker has no POST /session
     // and asking it would stop the app at start. Once the P3 Worker answers it, wire `place: { world: 'real' }`.
     return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }) }) };
