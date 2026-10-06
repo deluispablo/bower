@@ -2995,8 +2995,8 @@
       "Recovery never archives twice or reports an unarchived change."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"journal changes take the recoverable path\"",
-    "passes": false,
-    "note": "TL-P2-10 item 3. Planned, not implemented."
+    "passes": true,
+    "note": "Claude candidate claude/p2-b-journal head fc619fc; review journal-review-1 (3f2339f BLOCKED by TL-P2-23 rulings; HEAD CLEAN after deltas; docs/harness/2026-10-06-journal-review.md). B covers request, answer, create, trash and task records; rule/rename/move records keep the plan legacy until o5-rules-wording/o5-rename-link-rewrite (B.2 C2); unreadable lines stay in place (TL-P2-23 §3); 20 oldest requests per run. Remaining legacy reasons mapped to b-path-unreadable-runner-files (M2/M5). Root gates check 3163, e2e 200, e2e:fake 202."
   },
   {
     "id": "b-path-generated-note",
