@@ -429,6 +429,65 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
   });
 
+  // loose-pile-declaration (TL-P2-06 §6.2, fixture 07): one loose file, no folder, declared before it is sent.
+  it('a declared loose file stays pending until it arrives', async () => {
+    const uploader = declaring();
+    const real = drive.upload.bind(drive);
+    let fail = true;
+    drive.upload = async (parent, name, body, onProgress, props) => {
+      if (name === 'loose.pdf' && fail) throw driveError('offline');
+      return real(parent, name, body, onProgress, props);
+    };
+    const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+    await uploader.settled();
+    const inbox = (await drive.listAll(root)).find((f) => f.folder && drive.pathOf(f.id, root) === 'Inbox');
+    const copies = async (): Promise<number> => {
+      const live = (await drive.listAll(root)).filter((f) => !f.folder);
+      const texts = await Promise.all(live.map(async (f) => new TextDecoder().decode(await drive.readBytes(f.id))));
+      return texts.filter((t) => t === '%PDF loose.pdf').length;
+    };
+
+    // Declared before anything was sent: a loose anchor in the inbox, one member, no folder made for it.
+    const declared = await declarations();
+    expect(declared).toHaveLength(1);
+    expect(JSON.parse(declared[0]?.text ?? '{}')).toMatchObject({ pileId: pile.id, anchor: { kind: 'loose', inboxId: inbox?.id }, members: [{ name: 'loose.pdf' }], context: { kind: 'absent' } });
+    expect((await drive.listAll(root)).some((f) => f.folder && f.appProperties?.[PROP.pile] === pile.id)).toBe(false);
+    expect(await copies()).toBe(0);
+
+    // A second client sees it missing, to be chosen again there.
+    const seen = (await fresh().piles()).find((p) => p.id === pile.id);
+    expect(seen?.path).toBeUndefined();
+    expect(seen?.items.map((i) => [i.name, i.upload, i.chooseAgain])).toEqual([['loose.pdf', -1, true]]);
+
+    // A tidy-up takes nothing for it: nothing filed, nothing moved, no disposition, still pending.
+    const took: string[] = [];
+    const first = await runFake(drive, root, opts({ took: (ids) => took.push(...ids) }));
+    if (first.phase !== 'done') throw new Error('failed');
+    expect(took).not.toContain(pile.id);
+    expect(first.report.filed.map((f) => f.name)).not.toContain('loose.pdf');
+    expect(await declarations()).toEqual(declared);
+    expect((await fresh().piles()).find((p) => p.id === pile.id)?.items.map((i) => [i.name, i.upload])).toEqual([['loose.pdf', -1]]);
+
+    // Try again from the uploader: sent once, under its declared key, straight into the inbox.
+    fail = false;
+    const upload = vi.spyOn(drive, 'upload');
+    await uploader.retryPile(pile.id);
+    await uploader.settled();
+    expect(upload.mock.calls.map((c) => c[1])).toEqual(['loose.pdf']);
+    const member = (JSON.parse(declared[0]?.text ?? '{}') as { members: Array<{ memberKey: string }> }).members[0]?.memberKey;
+    const arrived = (await drive.listAll(root)).filter((f) => f.appProperties?.[PROP.item] === member);
+    expect(arrived.map((f) => f.parents)).toEqual([[inbox?.id]]);
+    expect((await fresh().piles()).find((p) => p.id === pile.id)?.items.map((i) => [i.name, i.upload])).toEqual([['loose.pdf', undefined]]);
+
+    // The next tidy-up files it once, and nothing of it is pending any more.
+    const out = await runFake(drive, root, opts());
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.report.filed.filter((f) => f.name === 'loose.pdf')).toHaveLength(1);
+    expect(await copies()).toBe(1);
+    expect(await declarations()).toEqual(declared);
+    expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+  });
+
   /** A declared pile whose things all arrived. */
   async function readyPile(text = 'Papers from Alex', items = [pdf('arrived.pdf'), pdf('missing.pdf')]) {
     const uploader = declaring();
