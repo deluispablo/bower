@@ -1,13 +1,15 @@
-entry,role,model,attempt,tokens,outcome,date
-o5-final (b-path-asked-question+legacy-runner-write-removal+o5-no-legacy-run-path),implementer,opus,1,482630,delivered,2026-10-06
-o5-final,reviewer,opus,1,203731,clean,2026-10-06
-o5-final,implementer (pace fix),opus,2,549761,delivered (cumulative session total),2026-10-06
-journeys-a (run-result-links+journeys-existing-effects),implementer,opus,1,234991,delivered,2026-10-06
-journeys-a,reviewer,opus,1,161053,changes requested,2026-10-06
-journeys-a,implementer,opus,2,289752,delivered (cumulative session total),2026-10-06
-journeys-b (journeys-cites-and-answers+c10+c08+c07),implementer,opus,1,339798,delivered,2026-10-06
-capability-audit,analyst,opus,1,164345,report,2026-10-06
-journeys-b,reviewer,opus,1,178596,changes requested (1 Important),2026-10-06
-o5-final,reviewer (pace fix),opus,1,135354,changes requested (1 Important),2026-10-06
-journeys-b,implementer,opus,2,361797,delivered (cumulative session total),2026-10-06
-journeys-b,implementer,opus,3,389505,rebased onto A (cumulative session total),2026-10-06
+entry,role,tool,model,effort,attempt,tokens,input,cache_write,cache_read,output,cost_usd,tool_uses,minutes,outcome,date
+o5-final (b-path-asked-question+legacy-runner-write-removal+o5-no-legacy-run-path),implementer,claude,opus,,1,482630,,,,,,,,delivered,2026-10-06
+o5-final,reviewer,claude,opus,,1,203731,,,,,,,,clean,2026-10-06
+o5-final,implementer (pace fix),claude,opus,,2,549761,,,,,,,,delivered (cumulative session total),2026-10-06
+journeys-a (run-result-links+journeys-existing-effects),implementer,claude,opus,,1,234991,,,,,,,,delivered,2026-10-06
+journeys-a,reviewer,claude,opus,,1,161053,,,,,,,,changes requested,2026-10-06
+journeys-a,implementer,claude,opus,,2,289752,,,,,,,,delivered (cumulative session total),2026-10-06
+journeys-b (journeys-cites-and-answers+c10+c08+c07),implementer,claude,opus,,1,339798,,,,,,,,delivered,2026-10-06
+capability-audit,analyst,claude,opus,,1,164345,,,,,,,,report,2026-10-06
+journeys-b,reviewer,claude,opus,,1,178596,,,,,,,,changes requested (1 Important),2026-10-06
+o5-final,reviewer (pace fix),claude,opus,,1,135354,,,,,,,,changes requested (1 Important),2026-10-06
+journeys-b,implementer,claude,opus,,2,361797,,,,,,,,delivered (cumulative session total),2026-10-06
+journeys-b,implementer,claude,opus,,3,389505,,,,,,,,rebased onto A (cumulative session total),2026-10-06
+o5-final-fix (I1 uncheckable thing),implementer,claude,opus,,2,582844,,,,,,40,13,delivered (cumulative session total),2026-10-06
+coordinator (session e759b272 through batch 5),coordinator,claude,opus,,1,1541779425,13620,32016085,1503963900,5785820,580.82,,,cumulative ccusage session incl. subagents,2026-10-06

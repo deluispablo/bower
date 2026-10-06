@@ -4,20 +4,17 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## Where things stand
 
-- `main` carries green batches 1–4 (latest batch 4 `3939760`); 261/280 entries pass.
-- Integrated, waiting for e2e + closure (batch 5): `b-path-asked-question`, `legacy-runner-write-removal`, `o5-no-legacy-run-path` (+ five superseded TL-P2-37 entries pinned). Blocked by three fake e2e regressions (qa5 ×2, robustness retry), being fixed on `claude/p2-o5-final-fix`.
-- Journeys A (`claude/p2-journeys-r1`): `run-result-links`, `journeys-existing-effects` delivered with the demo-duplicate fix; needs a spot check.
-- Journeys B (`claude/p2-journeys-b`): C06/C09, C10, C08, C07 in review; C07 follow-up (TL-P2-40: answer recorded as a Timeline line) still to add.
+- `main` carries green batches 1–5 (batch 5: O5 final + pace fix, journeys A and B); 280/280 entries pass. Batch 5 gates: check 3478, e2e 212, e2e:fake 238.
+- No workers running. TL-P2-44 adopted: dispatch only through `.claude/agents/` (bower-implementer/reviewer Sonnet, bower-mechanical Haiku, bower-escalated Opus), never pass `model`; every fix round is a fresh session; one review from the other provider against the packet's acceptance contract; ledger has the new columns.
 
 ## The plan, in order
 
-1. O5 fix → e2e (display awake) → batch 5 to `main`, tell the lead the SHA.
-2. Journeys A and B → batch 6. Close `c04/c05/c11/c06/c09` journey originals as superseded by TL-P2-40 (pinned).
-3. Freeze one SHA → one batch review → phone/desktop evaluation → one C/I fix round → dossier (fresh C01–C16 row-to-evidence map) → close P2.
+1. Freeze one SHA (the batch 5 SHA) → one batch review (Codex, `codex exec --json`, explicit effort) against the P2 exit contract.
+2. Phone/desktop evaluation → one C/I fix round → dossier (fresh C01–C16 row-to-evidence map) → close P2.
 
 ## How to run a round
 
-- At most two workers at a time (Sonnet; Opus only for contracts/data safety). Packets one page with the rules copied in; workers read only `WORKER.md` + packet.
+- At most two workers at a time, through `.claude/agents/` only (TL-P2-44). Packets one page with the rules copied in; workers read only `WORKER.md` + packet.
 - Ordinary entry: self-review + coordinator spot check. Independent review only for contracts, data or shared persistence, plus one batch review at the freeze; a delta only after a Critical.
 - Per entry: `pnpm check` + the touched screens' e2e; full `e2e` + `e2e:fake` once per batch, under `caffeinate -dims`, display awake.
 - Workers never use port 5191 (Playwright reuses it): a private config on 5195–5198.
@@ -32,4 +29,4 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## Decisions taken in phase 2
 
-All rulings are indexed in [DECISIONS.md](DECISIONS.md). P3 notes: a session `leave` after `DELETE /me` must be answered harmlessly; the real runner drops the last edit without re-reading on a size refusal; native Workspace members need their own capture rule; the Inbox byte checks must use Drive checksums on the real source.
+All rulings are indexed in [DECISIONS.md](DECISIONS.md). P3 notes: a session `leave` after `DELETE /me` must be answered harmlessly; the real runner drops the last edit without re-reading on a size refusal; native Workspace members need their own capture rule; the Inbox byte checks must use Drive checksums on the real source, and the real listing must request `sha256Checksum`/`size` and mark a file with neither as `unchecked` (O5 I1).
