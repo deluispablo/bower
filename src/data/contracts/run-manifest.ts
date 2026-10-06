@@ -35,6 +35,24 @@ export type Effect =
     path: '.bower/questions.json' | '.bower/requests.json' | '.bower/hashes.json'; text: string; content: Content }
   | { kind: 'bin'; before: SeenFile; capturedChildIds: string[] };
 export type Operation = { operationId: string; ordinal: number; dependsOn: string[]; effect: Effect };
+/** One Timeline line: `- <date> · <text>` plus ` · [[<source>]]` when there is a source (TL-P2-20). */
+export type EditEntry = { date: string; text: string; source: string | null };
+/** Display names: a link to `from` (compared lowercased) is written with `to`. */
+export type Rename = { from: string; to: string };
+export type RuleAdd = { recordId: string; text: string; yourWords: string; since: number };
+export type RuleRemove = { recordId: string; text: string };
+/** The closed change union of manifest v2; an edit holds at most one of each, in this order. */
+export type Change =
+  | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
+  | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[] }
+  | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] };
+/** Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. */
+export type EditText = {
+  kind: 'edit-text'; before: SeenFile; path: string; beforeContent: VerifiedContent;
+  changes: Change[]; text: string; content: Content;
+};
+export type EffectV2 = Effect | EditText;
+export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
 export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string };
 export type ReportQuestion = { id: string; text: string; yes: string; no: string; askedAt: number; about?: string };
 /** The existing RunReport shape in the stricter closed form used inside new records. */
@@ -49,12 +67,22 @@ export type Manifest = {
   runScope: 'all' | 'instructions'; allowWeb: boolean; requestedAt: number;
   captureId: string; capture: Capture; operations: Operation[]; reportPlan: ReportContribution[];
 };
+/** v1 plus `edit-text`; a v2 manifest always holds at least one. */
+export type ManifestV2 = Omit<Manifest, 'v' | 'operations'> & { v: 2; operations: OperationV2[] };
 /**
  * `content`: a captured context, create-text or write-runner-json text whose content is not utf8 with the exact
  * UTF-8 size and raw SHA-256 of that text. Observed-pile keys, member keys and createdBy targets refuse as `shape`.
  */
 export type ManifestRefusal = RecordJsonFailure['reason'] | 'shape' | 'scope' | 'content' | 'capture-id' | 'order' | 'operation-id' | 'report';
 export type ManifestResult = { ok: true; value: Manifest; sha256: string } | { ok: false; reason: ManifestRefusal };
+/** Which TL-P2-20 rule an `edit` refusal broke, for the log; the public reason stays `edit`. */
+export type EditGuardRule = 'target' | 'one-per-file' | 'rules-path' | 'encoding' | 'size' | 'unchanged' | 'date' | 'record' | 'mark' | 'archive';
+/** `edit`: a v2 edit breaks a TL-P2-20 rule; `version`: a manifest version later than this build reads. */
+export type ManifestV2Refusal = ManifestRefusal | 'edit' | 'version';
+export type ManifestV2Result = { ok: true; value: Manifest | ManifestV2; sha256: string }
+  | { ok: false; reason: Exclude<ManifestV2Refusal, 'edit'> } | { ok: false; reason: 'edit'; rule: EditGuardRule };
+/** A v2 manifest's whole size is capped at 8 MiB (TL-P2-20 rule 6). */
+export const MANIFEST_V2_LIMIT = 8 * 1024 * 1024;
 
 type Fields = Record<string, unknown>;
 
@@ -313,4 +341,12 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
     }
   }
   return { ok: true, value, sha256: await digest(value) };
+}
+
+/** Inert stub of the v2 reader: v1 is read exactly as `parseRunManifest`; every other version is refused. */
+export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string): Promise<ManifestV2Result> {
+  const parsed = parseRecordJson(bytes);
+  if (!parsed.ok) return parsed;
+  if (record(parsed.value) && parsed.value.v === 1) return parseRunManifest(bytes, expectedRootId);
+  return { ok: false, reason: 'shape' };
 }
