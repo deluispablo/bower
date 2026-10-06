@@ -4,6 +4,7 @@
  */
 export function focusMain(): void {
   setTimeout(() => {
+    if (typeof document === 'undefined') return;
     if (!document.activeElement || document.activeElement === document.body) document.getElementById('main')?.focus();
   }, 0);
 }
@@ -34,12 +35,19 @@ export function returnFocusTo(opener: HTMLElement | null): void {
   }
   opener.focus();
   const watch = new MutationObserver(() => {
+    if (typeof document === 'undefined') {
+      watch.disconnect();
+      return;
+    }
     if (document.contains(opener)) return;
     watch.disconnect();
     clearTimeout(stop);
     focusHeading();
   });
-  const stop = setTimeout(() => watch.disconnect(), 3000);
+  const stop = setTimeout(() => {
+    if (typeof document === 'undefined') return;
+    watch.disconnect();
+  }, 3000);
   watch.observe(document.body, { childList: true, subtree: true });
 }
 
@@ -81,6 +89,7 @@ export function focusRouteHeading(): () => void {
   let placed = false;
   let mine: EventTarget | null = null;
   const onIn = (e: FocusEvent): void => {
+    if (typeof document === 'undefined') return;
     if (e.target !== mine) placed = true;
   };
   document.addEventListener('focusin', onIn, true);
@@ -90,6 +99,7 @@ export function focusRouteHeading(): () => void {
     toHeading(h1);
   };
   const step = (): void => {
+    if (typeof document === 'undefined') return;
     if (leaveAlone()) return;
     const h1 = heading();
     // Still on something on screen: wait while the old view may yet go, then leave it.
@@ -111,6 +121,10 @@ export function focusRouteHeading(): () => void {
   let stop = 0;
   const keep = (focused: HTMLElement): void => {
     watch = new MutationObserver(() => {
+      if (typeof document === 'undefined') {
+        watch?.disconnect();
+        return;
+      }
       if (leaveAlone() || focused.isConnected || !fallen()) return;
       const next = heading();
       if (next) move(next);
@@ -119,6 +133,7 @@ export function focusRouteHeading(): () => void {
   };
   timer = window.setTimeout(step, 50);
   stop = window.setTimeout(() => {
+    if (typeof document === 'undefined') return;
     watch?.disconnect();
     document.removeEventListener('focusin', onIn, true);
   }, 1600);
@@ -126,6 +141,8 @@ export function focusRouteHeading(): () => void {
     clearTimeout(timer);
     clearTimeout(stop);
     watch?.disconnect();
-    document.removeEventListener('focusin', onIn, true);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('focusin', onIn, true);
+    }
   };
 }
