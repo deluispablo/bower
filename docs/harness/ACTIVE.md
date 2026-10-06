@@ -44,6 +44,7 @@
 - CLOSED: `upload-queue-persistent` (stub `e7c9c72`, fix `e6a097d`, proof `e20a05c`), `run-report-save-barrier` with U2 (stub `c6b7483`, fix `b0b54ab`, proof `92a9756`); gates check 3088/3121, e2e 198, e2e:fake 198. All four entries open at the 2026-10-06 handover are now closed. 228/247.
 - TL-P2-16..19 adopted (main up to `9cc09cb`, backed up). Inbox entry widened (set-aside reasons + queue notices); candidate `785a884` under review `inbox-review-1`; TL-P2-19 copy changes pending for its rework. Registered `fake-drive-reservation-saved` (u2-review-1 observation).
 - `b-path-held-piles` paused (`held-piles-impl-1` found the setAside grounding gap); TL-P2-21 (main `8f9c606`): option B, contract unchanged, B report covers only captured input, held reasons live in the Inbox, nothing-ready → 409 `nothing`; late child grounded by guard 7; two Pile notes → extra note is an uncaptured child; test `fake-worker.test.ts:1491` update authorized. Resumes after `b-path-journal` integrates (both own fake-runner/service). Assignment I-journal-1: Claude `journal-impl-1`, checkout `/private/tmp/bower-p2-b-journal` base `2792e2f`. B.2 note-edit contract proposal (TL-P2-20) under review `b2-contract-review-1`.
+- `pile-set-aside-reason-visible` CLOSED (fix `a06bb16`, proof `2ca69f9`; check 3149, e2e 200, e2e:fake 202). 229/249. B.2 note-edit contract RATIFIED (main `d40e5b9`); registered `note-edit-contract`, in implementation. S1 rework (TL-P2-24) in review; journal final delta in review; held-piles resumes after journal.
 
 # Previous coordinator: stopped and released
 

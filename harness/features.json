@@ -3138,5 +3138,19 @@
     "verify": "pnpm vitest run src/features/piles/PileScreen.test.tsx -t \"an empty pile's removal never mentions a note\"",
     "passes": false,
     "note": "Minor from inbox-review-1 final delta: RemovePile keeps its own onlyNote = !pile.items.length (PileScreen.tsx:150). Planned, not implemented."
+  },
+  {
+    "id": "note-edit-contract",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Note edits are fixed in a v2 run manifest and written only by one pure function that changes nothing outside what the ratified contract allows.",
+    "steps": [
+      "Parse v1 and v2 manifests: v1 identities unchanged, v2 edit-text shapes and every scope, size, order and dependency guard enforced.",
+      "applyChanges produces timeline-append, link-rewrite and rules-wording results that re-parse with identical protected and personal bytes and tasks.",
+      "Every refusal case of the ratified fixture list refuses; nothing is wired to a runner yet (fake-only until the raw-byte adapter)."
+    ],
+    "verify": "pnpm vitest run src/data/contracts/note-edit.test.ts -t \"note edits change only what the contract allows\"",
+    "passes": false,
+    "note": "B.2 ratified by the technical lead (TL-P2-20 rev 1-4 + Ratification, main d40e5b9); independent document review b2-contract-review-1 READY after three deltas (docs/harness/2026-10-06-b2-contract-review.md). Assignment I-ne-1: Claude note-edit-impl-1, checkout /private/tmp/bower-p2-note-edit. Planned, in implementation."
   }
 ]
