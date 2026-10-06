@@ -22,6 +22,7 @@ import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
 import { ALEX, wordRule } from '../demo/fixture';
 import { parseRules, serializeRules } from '../vault/rules-format';
+import { nameOf } from '../tree';
 import { pretendDrive, pretendRuns } from './pretend';
 
 afterEach(() => vi.useRealTimers());
@@ -2117,6 +2118,19 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       }
     });
 
+    it('refuses before admission when the digest of questions.json cannot be read', async () => {
+      const w = await needingAll();
+      const questions = await fileAt(w, SYSTEM.questions);
+      const before = await domain(w.drive, w.rootId);
+      const storedDigest = w.drive.storedDigest.bind(w.drive);
+      w.drive.storedDigest = async (id) => (id === questions.id ? Promise.reject(driveError('offline')) : storedDigest(id));
+      await expect(w.worker.process('all')).rejects.toMatchObject({ message: OWN_FILES });
+      await w.runs.settled();
+      expect(await recordsOf(w)).toEqual([]);
+      expect(w.calls).toEqual([]);
+      expect(await domain(w.drive, w.rootId)).toBe(before);
+    });
+
     // TL-P2-33 §2a: a runner file is made only at its supported path under the verified `.bower/`.
     it('grounds a runner file made again only at its own path in .bower', async () => {
       const w = await bWorld();
@@ -2369,6 +2383,70 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(w.calls).toEqual([]);
       expect(viewOf(w)).toBeNull();
       expect(await linesOf(w)).toHaveLength(1);
+    });
+
+    it('refuses before admission when Rules.md cannot be read', async () => {
+      for (const how of ['bytes', 'digest'] as const) {
+        const w = await bWorld();
+        await w.uploader.addRule(LEASE_RULE);
+        const rules = await fileAt(w, RULES);
+        const before = await domain(w.drive, w.rootId);
+        if (how === 'bytes') {
+          const readBytes = w.drive.readBytes.bind(w.drive);
+          w.drive.readBytes = async (id) => (id === rules.id ? Promise.reject(driveError('offline')) : readBytes(id));
+        } else {
+          const storedDigest = w.drive.storedDigest.bind(w.drive);
+          w.drive.storedDigest = async (id) => (id === rules.id ? Promise.reject(driveError('offline')) : storedDigest(id));
+        }
+        await expect(w.worker.process('all'), how).rejects.toMatchObject({ message: "Bower couldn't read its own files. Try again." });
+        await w.runs.settled();
+        expect(await recordsOf(w), how).toEqual([]);
+        expect(w.calls, how).toEqual([]);
+        expect(await domain(w.drive, w.rootId), how).toBe(before);
+      }
+    });
+
+    it('leaves the rules pending past the edit cap, with one BowerError, and words them in a later run', async () => {
+      const PENDING = 'Bower could not word some of your rules; they wait for the next tidy-up.';
+      // Eight hub notes of Bower's come before Rules.md in path order: their Timeline lines fill the cap.
+      const hubs = Array.from({ length: 8 }, (_, i) => ({ path: `Projects/Hub ${i + 1}.md`, what: `Hub ${i + 1} brought up to date.` }));
+      const w = await bWorld({ updates: hubs });
+      const projects = await fileAt(w, 'Projects');
+      for (const hub of hubs) await w.drive.createText(projects.id, nameOf(hub.path), ['---', 'summary: A hub.', 'by: bower', '---', '', 'Words about it.', '', '## Timeline', '- 2026-10-01 · Started.', '', "## Bower's note", 'So far.', ''].join('\n'));
+      await w.uploader.addRule(LEASE_RULE);
+      const [line] = await linesOf(w);
+      const rulesBefore = w.drive.dump(w.rootId).get(RULES);
+      const out = await planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now(), updates: hubs });
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      expect(operationsOf(out.manifest).filter((o) => o.effect.kind === 'edit-text').map((o) => (o.effect.kind === 'edit-text' ? o.effect.path : ''))).toEqual(hubs.map((h) => h.path));
+      expect(out.manifest.capture.journal).toEqual([]);
+      w.errors.mockClear();
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(bowerErrors(w).filter((e) => e.message === PENDING)).toHaveLength(1);
+      expect(w.drive.dump(w.rootId).get(RULES)).toBe(rulesBefore);
+      expect((await linesOf(w)).map((l) => l.rec.id)).toEqual([line?.rec.id]);
+      expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
+
+      // The hub lines are there now: the next run has room, and words the rule.
+      const next = await w.worker.process('instructions');
+      expect(await settle(w)).toMatchObject({ id: next.id, phase: 'done' });
+      expect(parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => r.yourWords)).toEqual([LEASE_RULE]);
+      expect(viewOf(w)?.run.report?.rulesWorded).toBe(1);
+    });
+
+    it("logs one BowerError for rules left pending in a Rules.md that is not Bower's", async () => {
+      const w = await bWorld();
+      const rules = await fileAt(w, RULES);
+      await w.drive.writeText(rules.id, '# My rules\n\n## Rules\n\n- Mine.\n', rules.modifiedTime);
+      await w.uploader.addRule(LEASE_RULE);
+      await w.uploader.addRule(RECEIPTS_RULE);
+      w.errors.mockClear();
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(bowerErrors(w).filter((e) => e.message === 'Bower could not word some of your rules; they wait for the next tidy-up.')).toHaveLength(1);
+      expect(await linesOf(w)).toHaveLength(2);
     });
 
     it("leaves rules pending when Rules.md is not Bower's, and files the rest on the recoverable path", async () => {
