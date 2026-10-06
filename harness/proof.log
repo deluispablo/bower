@@ -292,3 +292,4 @@ done-sh-api-paths	a57a4478f51ef498	2026-10-06	known-green: Tooling: set aside, t
 focus-timers-after-teardown	90b093b4c5662aba	2026-10-06	red (fixed in cdceca8)
 worker-crypto-session	a0d144da17a13fda	2026-10-06	red (fixed in 4e0bde7)
 worker-person-object	2354b593fc992bc8	2026-10-06	known-green: New class: without person.ts the tests cannot load. Assertion reds: the worker's placeholder class (0 vs 1..25, version 0 vs 1) and the Opus reviewer's mutation (countQuota read, wait 1 ms, write) turned 'one person's calls run one at a time' red while the others stayed green; review CLEAN
+worker-error-codes-contract	27656ffd087379c9	2026-10-06	red (fixed in 8aa066c)

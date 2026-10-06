@@ -3731,7 +3731,7 @@
       "assertEnv checks the PERSON binding; a SESSION_SECRET shorter than 32 bytes is refused."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a missing secret answers internal and names no cause|every error code the Worker emits is in the contract and kebab-case|a person object refuses storage from a newer build\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-05 (main a8e5d66) and the P3-3 Opus review minors."
   }
 ]
