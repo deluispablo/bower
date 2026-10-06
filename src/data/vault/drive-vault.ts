@@ -521,7 +521,7 @@ export class DriveVault implements VaultSource {
         // A declared loose file waits for the run's reason, by the rule the run shares (TL-P2-21, TL-P2-29).
         const loose = f.appProperties?.[PROP.declaration] ? await this.looseState(f) : null;
         const item = loose?.changed ? { ...itemOf(f), changed: true as const } : itemOf(f);
-        const setAside = loose?.setAside ?? (await this.untidied(id, f, [f]));
+        const setAside = loose?.setAside ?? (await this.untidied(id, f));
         out.push({ id, path, text: '', createdAt: Date.parse(f.createdTime), items: [item], ...(setAside ? { setAside } : {}) });
         continue;
       }
@@ -588,7 +588,7 @@ export class DriveVault implements VaultSource {
       }
       const noteLocked = locked || refused !== null;
       const setAside = refused ?? (unread || raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null)
-        ?? (raw === null ? null : await this.untidied(id, f, things, { kids, recorded, raw, remaining: declared?.remaining ?? [] }));
+        ?? (raw === null ? null : await this.untidied(id, f, { kids, recorded, raw, remaining: declared?.remaining ?? [] }));
       // Its note is shown read-only until a listing reads it (RFC 9110 §13.1.1: no update over an unseen version).
       if (noteLocked) this.lockedNotes.set(id, refused ? SET_ASIDE_TEXT[refused] : NOTE_LOCKED);
       else this.lockedNotes.delete(id);
@@ -719,15 +719,15 @@ export class DriveVault implements VaultSource {
 
   /**
    * Why a tidy-up that would take this pile cannot write it down now, by the rules the run shares (TL-P2-38): its id
-   * or a name no run record can carry, a thing whose bytes cannot be checked, a note whose text is not the bytes
-   * stored, or a declared member read as the pile's note. The run holds such a pile; null when it can take it.
+   * or a name no run record can carry, a note whose text is not the bytes stored, or a declared member read as the
+   * pile's note. The run holds such a pile; null when it can take it. A listing reads no thing's bytes (it would read
+   * every file in the inbox each time): a thing a run cannot check holds its pile for that run only, and the next
+   * run tries again.
    */
-  private async untidied(id: string, place: DriveFile, things: readonly DriveFile[], folder?: { kids: readonly DriveFile[]; recorded: DriveFile | undefined; raw: string; remaining: readonly string[] }): Promise<SetAside | null> {
+  private async untidied(id: string, place: DriveFile, folder?: { kids: readonly DriveFile[]; recorded: DriveFile | undefined; raw: string; remaining: readonly string[] }): Promise<SetAside | null> {
     if (!recordablePile(id, [place.name, ...(folder?.kids ?? []).map((k) => k.name)])) return 'not-tidied';
     if (folder && memberAsNote(folder.kids, folder.remaining)) return 'not-tidied';
     if (folder?.recorded && !(await sameText(folder.raw, await this.digestOf(folder.recorded)))) return 'not-tidied';
-    // Every thing a run files is checked by its bytes; a second pile note stays in the folder unread.
-    for (const thing of things.filter((k) => k.name !== PILE_NOTE)) if (!(await this.digestOf(thing))) return 'not-tidied';
     this.checkCurrent();
     return null;
   }

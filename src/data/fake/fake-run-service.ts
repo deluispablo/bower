@@ -150,6 +150,10 @@ export class FakeRunService {
   private readonly clock: () => number;
   private readonly scale: TimeScale;
   private readonly hooks: FakeRunServiceOptions['hooks'];
+  /** How the admitting attempt waits out each phase's pace. */
+  private readonly pace: (ms: number) => Promise<void>;
+  /** Where each run's records were last written: a cache only, never authority (`RunRecords.putNew`). */
+  private readonly placed = new Map<string, string>();
   private readonly persist: FakeRunServiceOptions['persist'];
   private rows = new Map<string, Row>();
   private revoked = new Set<string>();
@@ -167,6 +171,7 @@ export class FakeRunService {
     this.clock = opts.clock ?? Date.now;
     this.scale = opts.scale ?? 'instant';
     this.hooks = opts.hooks;
+    this.pace = opts.sleep ?? sleep;
     this.persist = opts.persist;
   }
 
@@ -221,7 +226,7 @@ export class FakeRunService {
       if (now.going) return now.wire;
     }
     const m = await canonical(manifest);
-    const records = new RunRecords(this.drive, binding.rootId);
+    const records = new RunRecords(this.drive, binding.rootId, this.placed);
     const attempt: Attempt = { key, attemptId: this.mint('attempt'), epoch: (before?.lastEpoch ?? 0) + 1, original: true };
     const first: Checkpoint = {
       v: 1, kind: 'run-checkpoint', scope: { rootId: binding.rootId }, runId: manifest.runId, manifestHash: m.hash,
@@ -421,10 +426,13 @@ export class FakeRunService {
     let head = chain.at(-1);
     if (!head) throw new BowerError('unknown', SAVE_FAILED);
     const ms = PHASE_MS[this.scale];
-    const walk: Array<['reading' | 'writing' | 'saving', number]> = [['reading', ms.queued], ['writing', ms.reading], ['saving', ms.writing]];
+    // The pace a person watches, on the scenario's clock. A run waits in the queue from when it was asked for, so the
+    // time it took to plan counts; the effects take their own time inside the putting-away pace, never after it.
+    const queued = Math.max(0, ms.queued - (this.clock() - manifest.requestedAt));
+    const walk: Array<['reading' | 'writing' | 'saving', number]> = [['reading', queued], ['writing', ms.reading], ['saving', ms.writing]];
     for (const [phase, wait] of walk) {
       if (!['queued', 'reading', 'writing'].includes(head.phase) || rank(head.phase) >= rank(phase)) continue;
-      if (attempt.original) await sleep(wait);
+      if (attempt.original) await this.pace(wait);
       if (phase === 'saving' && this.failing.delete(manifest.runId)) {
         // The runner stops before any effect: an honest failure (nothing was dispatched).
         head = await this.commit(attempt, head, { phase: 'failed', phaseAt: this.clock() });
@@ -433,8 +441,9 @@ export class FakeRunService {
       head = await this.commit(attempt, head, { phase, phaseAt: this.clock() });
     }
     if (head.phase === 'saving') {
-      if (attempt.original) await sleep(ms.saving);
+      const pace = attempt.original ? this.pace(ms.saving) : Promise.resolve();
       for (const op of manifest.operations) head = await this.settle(attempt, manifest, head, op);
+      await pace;
       const manifestHash = this.row(attempt.key).control.manifestHash;
       if (head.report.state === 'not-ready') {
         const body = materialize(manifest, manifestHash, head.outcomes);
@@ -703,7 +712,7 @@ export class FakeRunService {
     const c = await canonical(next);
     const cache = this.cache.get(attempt.key);
     if (!cache) throw new BowerError('unknown', SAVE_FAILED);
-    await this.records(attempt.key).put(this.fence(attempt, expected), { runId: next.runId }, checkpointName(next.revision, c.hash), c.text);
+    await this.records(attempt.key).putNew(this.fence(attempt, expected), { runId: next.runId }, checkpointName(next.revision, c.hash), c.text);
     this.check(attempt, expected);
     const pending = next.outcomes.find((o) => o.state === 'possible-effect');
     row.control.head = c.hash;
@@ -858,7 +867,7 @@ export class FakeRunService {
   }
 
   private records(key: string): RunRecords {
-    return new RunRecords(this.drive, this.row(key).binding.rootId);
+    return new RunRecords(this.drive, this.row(key).binding.rootId, this.placed);
   }
 
   private row(key: string): Row {

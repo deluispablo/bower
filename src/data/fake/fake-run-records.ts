@@ -662,15 +662,27 @@ export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcom
   return out;
 }
 
+/** The folders a record can be in, and the listing they were found in. */
+type Folders = { listing: DriveFile[]; bower: DriveFile[]; ns: DriveFile[]; run: DriveFile[] };
+
 /** One verified run's records over the fake Drive, scoped to one root. */
 export class RunRecords {
+  /**
+   * `placed` keeps, across instances, the record folder each run's records were last written to, so a record whose
+   * name no earlier write can have used is written there without listing the folder again (`putNew`).
+   */
   constructor(
     private readonly drive: FakeDrive,
     private readonly rootId: string,
+    private readonly placed: Map<string, string> = new Map(),
   ) {}
 
+  private placeOf(where: Where): string {
+    return `${this.rootId}/${where === 'piles' ? 'piles' : `runs/${where.runId}`}`;
+  }
+
   /** The folders a record can be in, by real names and parents, duplicates included. */
-  private async folders(where: Where): Promise<{ listing: DriveFile[]; bower: DriveFile[]; ns: DriveFile[]; run: DriveFile[] }> {
+  private async folders(where: Where): Promise<Folders> {
     const listing = await this.drive.listAll(this.rootId);
     const bower = listing.filter((f) => f.folder && f.name === SYSTEM.dir && f.parents.includes(this.rootId));
     const ns = listing.filter((f) => f.folder && f.name === (where === 'piles' ? PILES_NAME : RUNS_NAME) && f.parents.some((p) => bower.some((b) => b.id === p)));
@@ -686,8 +698,13 @@ export class RunRecords {
 
   /** The bytes of a record, when one is there; copies with other bytes refuse. */
   async read(where: Where, name: string): Promise<Uint8Array | null> {
+    return this.readIn(await this.folders(where), name);
+  }
+
+  /** The same, from a listing already taken. */
+  private async readIn({ listing, run }: Folders, name: string): Promise<Uint8Array | null> {
     let found: Uint8Array | null = null;
-    for (const copy of (await this.list(where)).filter((f) => f.name === name)) {
+    for (const copy of listing.filter((f) => !f.folder && f.name === name && f.parents.some((p) => run.some((r) => r.id === p)))) {
       const bytes = await this.drive.readBytes(copy.id);
       if (found && !same(found, bytes)) {
         console.error(`Run record ${name} has copies with other bytes`);
@@ -705,25 +722,62 @@ export class RunRecords {
    */
   async put(w: FencedDrive, where: Where, name: string, text: string): Promise<void> {
     const bytes = new TextEncoder().encode(text);
-    const there = async (): Promise<boolean> => {
-      const found = await this.read(where, name);
-      if (found && !same(found, bytes)) {
+    /** Whether the record is there with these bytes, from a listing (one is taken when none is given). */
+    const there = async (found: Folders | null = null): Promise<boolean> => {
+      const stored = await this.readIn(found ?? (await this.folders(where)), name);
+      if (stored && !same(stored, bytes)) {
         console.error(`Run record ${name} is there with other bytes`);
         throw new BowerError('conflict', SAVE_FAILED);
       }
-      return found !== null;
+      return stored !== null;
     };
-    if (await there()) return;
-    const parent = await this.ensure(w, where);
+    // One listing answers both whether it is there already and where it goes.
+    const found = await this.folders(where);
+    if (await there(found)) return;
+    const parent = await this.ensure(w, where, found);
+    this.placed.set(this.placeOf(where), parent);
+    let made: DriveFile;
     try {
-      await w.createText(parent, name, text);
+      made = await w.createText(parent, name, text);
     } catch (e) {
       if (!(await there())) throw e;
       // The record landed and only its answer was lost: it is the same record, not a second one.
       console.error(e);
       return;
     }
-    if (!(await there())) {
+    // Confirmed by reading back the very file written.
+    if (!same(await this.drive.readBytes(made.id), bytes)) {
+      console.error(`Run record ${name} could not be read back`);
+      throw new BowerError('unknown', SAVE_FAILED);
+    }
+  }
+
+  /**
+   * Writes a record whose name no earlier write can have used: a checkpoint names its revision and its own hash, and
+   * its body names the attempt that writes it. So it is written into the folder its run's records were last written
+   * to, with no listing first; confirmed by reading it back. With no folder known yet it goes through `put`; a write
+   * that fails is done only if the record landed with these bytes (a lost reply), and is never written twice.
+   */
+  async putNew(w: FencedDrive, where: Where, name: string, text: string): Promise<void> {
+    const parent = this.placed.get(this.placeOf(where));
+    if (!parent) return this.put(w, where, name, text);
+    let made: DriveFile;
+    try {
+      made = await w.createText(parent, name, text);
+    } catch (e) {
+      // The next write looks for its folder again; this one is done only if the record landed with these bytes.
+      this.placed.delete(this.placeOf(where));
+      const landed = await this.read(where, name);
+      if (!landed) throw e;
+      if (!same(landed, new TextEncoder().encode(text))) {
+        console.error(`Run record ${name} is there with other bytes`);
+        throw new BowerError('conflict', SAVE_FAILED);
+      }
+      // The record landed and only its answer was lost: it is the same record, not a second one.
+      console.error(e);
+      return;
+    }
+    if (!same(await this.drive.readBytes(made.id), new TextEncoder().encode(text))) {
       console.error(`Run record ${name} could not be read back`);
       throw new BowerError('unknown', SAVE_FAILED);
     }
@@ -799,8 +853,7 @@ export class RunRecords {
   }
 
   /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed. */
-  private async ensure(w: FencedDrive, where: Where): Promise<string> {
-    const { bower, ns, run } = await this.folders(where);
+  private async ensure(w: FencedDrive, where: Where, { bower, ns, run }: Folders): Promise<string> {
     if (run[0]) return run[0].id;
     const sys = bower[0]?.id ?? (await this.folder(w, this.rootId, SYSTEM.dir));
     const space = ns[0]?.id ?? (await this.folder(w, sys, where === 'piles' ? PILES_NAME : RUNS_NAME));

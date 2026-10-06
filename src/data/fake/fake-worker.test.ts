@@ -5092,12 +5092,12 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await domain(w.drive, w.rootId)).toBe(before);
       expect(await recordsOf(w)).toEqual([]);
 
-      // One pile's thing cannot be checked: that pile is held, in the Inbox and the run alike; the rest goes on, on B.
+      // One pile's thing cannot be checked while the run plans: that pile is held for this run, the rest goes on, on
+      // B. A listing reads no thing's bytes, so the Inbox shows it as waiting, and the next run tries it again.
       const { lease, ideas } = await pilesOf(w);
       const stored = w.drive.storedDigest.bind(w.drive);
       const unchecked = vi.spyOn(w.drive, 'storedDigest').mockImplementation(async (id) => (id === lease.items[0]?.id ? null : stored(id)));
-      expect((await held(w, lease.id))?.setAside).toBe('not-tidied');
-      expect((SET_ASIDE_TEXT as Readonly<Record<string, string>>)['not-tidied']).toBe(NOT_TIDIED);
+      expect(SET_ASIDE_TEXT['not-tidied']).toBe(NOT_TIDIED);
       const manifest = await tidy({ ...w, worker: reopened });
       unchecked.mockRestore();
       expect(manifest.capture.piles.map((p) => p.pileId)).toEqual([ideas.id]);
