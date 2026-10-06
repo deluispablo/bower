@@ -27,3 +27,25 @@ export function undoCommit(sha, paths, cwd = process.cwd()) {
     return false;
   }
 }
+
+/** Where code lives for done.sh's red step (everything else is a record or a test). */
+export const CODE_PATHS = ['api', 'src', 'public', 'index.html', 'vite.config.ts', 'scripts', 'package.json', 'AGENTS.md', 'docs'];
+/** Tests stay in place while the code is set aside. */
+export const TEST_PATTERN = /\.test\.tsx?$|^api\/test\/|^e2e\/|^src\/data\/contract\/|^src\/testing\//;
+
+/** The files of `files` that are code: under CODE_PATHS and not a test. */
+export function selectCode(files) {
+  return files.filter((f) => CODE_PATHS.some((p) => f === p || f.startsWith(`${p}/`)) && !TEST_PATTERN.test(f));
+}
+
+/** Code changed or new in the working tree (staged or not). */
+export function codeInWorktree(cwd = process.cwd()) {
+  const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=all', '--', ...CODE_PATHS], { cwd, encoding: 'utf8' });
+  return selectCode(statusPaths(status));
+}
+
+/** Code that commit `sha` changed. */
+export function codeInCommit(sha, cwd = process.cwd()) {
+  const out = execFileSync('git', ['diff', '--name-only', `${sha}^`, sha, '--', ...CODE_PATHS], { cwd, encoding: 'utf8' });
+  return selectCode(out.split('\n').filter(Boolean));
+}

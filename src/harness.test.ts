@@ -1,8 +1,11 @@
 /// <reference types="node" />
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -158,5 +161,23 @@ describe('the harness', () => {
     expect(check('pnpm exec playwright test -c e2e/pwa.config.ts -g "selected production"')).toEqual([]);
     expect(check('pnpm exec playwright test --project=phone -g "selected second"')).toContainEqual(expect.stringMatching(/selected second.*matches no test/));
     expect(check('pnpm exec playwright test --project desktop -g "selected second"')).toEqual([]);
+  });
+
+  it("the harness check finds a verify's titles among the api tests", () => {
+    // The report the api's vitest run writes, collected the way check-harness.mjs does.
+    const root = mkdtempSync(join(tmpdir(), 'harness-api-'));
+    mkdirSync(join(root, 'api/test-results'), { recursive: true });
+    const report = { testResults: [{ name: join(root, 'api/test/skeleton.test.ts'), assertionResults: [{ fullName: 'the skeleton answers health' }] }] };
+    writeFileSync(join(root, 'api/test-results/unit.json'), JSON.stringify(report));
+    const api = apiTests(root, root);
+    expect(api).toEqual([{ name: 'the skeleton answers health', file: 'api/test/skeleton.test.ts', config: 'api/vitest.config.ts', project: '' }]);
+    const tests = { unit: [], e2e: [], api };
+    const entry = (verify: string): Entry => ({ id: 'api-entry', task: 'p3-1', steps: S, verify, passes: true });
+    const check = (verify: string): string[] => problems([entry(verify)], proofOf(entry(verify)), tests) as string[];
+    expect(check('pnpm -C api exec vitest run -t "skeleton answers health"')).toEqual([]);
+    expect(check('pnpm -C api exec vitest run test/skeleton.test.ts -t "skeleton answers health"')).toEqual([]);
+    expect(check('pnpm -C api exec vitest run -t "a title that is gone"')).toContainEqual(expect.stringMatching(/a title that is gone.*matches no test/));
+    // An app verify does not see the api's tests.
+    expect(check('pnpm vitest run src -t "skeleton answers health"')).toContainEqual(expect.stringMatching(/matches no test/));
   });
 });
