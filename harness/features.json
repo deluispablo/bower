@@ -2981,8 +2981,8 @@
       "After a reload the cut-off run reads as failed with the honest wording and nothing is filed again."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"report save failure cannot publish done or repeat effects on the legacy path\"",
-    "passes": false,
-    "note": "TL-P2-06 item 1 legacy path; U1 of docs/harness/2026-10-06-o4-unit-packet.md. Parent run-report-save-barrier closes after U2 (B path). Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-06 item 1 / TL-P2-10 item 2 legacy path. Claude candidate c6cd09a/5e75de7 + rework ebb60f9/47056f8; review u1-review-1 BLOCKED (failed view not retried) then delta CLEAN (docs/harness/2026-10-06-u1-review.md). Proves no false done and honest failure without refiling on the legacy path; does NOT prove legacy recovery. Parent run-report-save-barrier closes after U2 (B path)."
   },
   {
     "id": "b-path-journal",

@@ -226,3 +226,4 @@ run-checkpoint-authority	e6b30162e4765a9c	2026-10-06	red (fixed in b4724fed0a2a8
 run-manifest-authority	235fbf246e54c076	2026-10-06	red (fixed in 7abc8c9ffe95ca75f48e87d99602383df57b0ee2)
 run-checkpoint-monotonic	8de31da3ad8180fd	2026-10-06	red (fixed in b83db6d795f507d6c37ce14f33cb5b1b80fb6940)
 run-manifest-content-consistency	47d2935572169c11	2026-10-06	red (fixed in 6f6681d1699313549ce10f9b7faf4d1ee24b8ef3)
+run-report-save-barrier-legacy	911a8ae39ca41164	2026-10-06	red (fixed in eb64ebd9a832e421f285254041dc111485c7f335)
