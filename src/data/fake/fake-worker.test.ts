@@ -2736,7 +2736,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
 
     // TL-P2-34 (1): a thing filed without its own note keeps its filed row, plus one sentence about the note.
-    it("a thing filed without its note says Bower couldn't write its note this time", async () => {
+    it("a thing filed without its note says Bower couldn't write its note", async () => {
       let drive: FakeDrive | null = null;
       let rootId = '';
       const hooks: Hooks = {
@@ -2756,7 +2756,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(w.drive.dump(w.rootId).get(COMPANION)).toBe('Alex got there first.');
       const report = viewOf(w)?.run.report;
       expect(report?.filed.find((f) => f.name === OFFER)).toMatchObject({ to: 'Projects/Job hunt/Applications' });
-      expect(report?.setAside.filter((row) => row.name === OFFER)).toEqual([{ name: OFFER, why: "Bower couldn't write its note this time." }]);
+      expect(report?.setAside.filter((row) => row.name === OFFER)).toEqual([{ name: OFFER, why: "Bower couldn't write its note." }]);
     });
   });
 
@@ -2879,6 +2879,40 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['Your note', 'idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
       expect((await w.drive.evidence(broken.id))?.trashed).toBe(false);
       expect(bowerErrors(w).length).toBeGreaterThan(0);
+    });
+
+    // TL-P2-21: a held pile always has a reason the Inbox shows; the runner and the Inbox agree through readiness.
+    it('a pile Bower cannot write down is held with a reason the Inbox shows', async () => {
+      /** A pile folder whose note holds half of a character, which no record can carry. */
+      const brokenPile = async (w: World): Promise<DriveFile> => {
+        const inbox = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Inbox' && f.parents[0] === w.rootId);
+        const folder = await w.drive.createFolder(inbox?.id ?? '', 'Broken');
+        await w.drive.createText(folder.id, 'Pile note.md', 'Bins go out \ud800 on Tuesday nights');
+        await w.drive.createText(folder.id, 'bins.pdf', '%PDF bins');
+        return folder;
+      };
+      const inboxOf = (w: World) => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles();
+
+      // Beside other piles: the others are filed, the held pile shows why it waits.
+      const w = await bWorld();
+      const broken = await brokenPile(w);
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
+      expect((await w.drive.evidence(broken.id))?.trashed).toBe(false);
+      expect((await inboxOf(w)).find((p) => p.path === `Inbox/${broken.name}`)?.setAside).toBe('not-checked');
+
+      // Alone: the Inbox shows the reason, and the tidy-up says honestly that nothing is ready.
+      const alone = await bWorld();
+      const sources = new Set(alone.sources);
+      for (const p of await alone.uploader.piles()) {
+        const folder = (await alone.drive.listAll(alone.rootId)).find((f) => f.folder && alone.drive.pathOf(f.id, alone.rootId) === p.path);
+        if (folder && p.items.some((i) => sources.has(i.id))) await alone.drive.trash(folder.id);
+      }
+      const only = await brokenPile(alone);
+      expect((await inboxOf(alone)).map((p) => [p.path, p.setAside])).toEqual([[`Inbox/${only.name}`, 'not-checked']]);
+      await expect(alone.worker.process('all')).rejects.toThrow('Nothing in the inbox is ready yet.');
     });
 
     it('grounds the root only as the parent of a folder the run makes', async () => {
