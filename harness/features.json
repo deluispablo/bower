@@ -3164,8 +3164,8 @@
       "The fake and demo sources wire the session for every factory; the real source stays unwired until the P3 Worker has POST /session (P3 obligation); phone and desktop, accessibility clean."
     ],
     "verify": "pnpm vitest run src/app/OpenElsewhere.test.tsx -t \"Bower is open in another window\"",
-    "passes": false,
-    "note": "Split from single-active-session (S2a screen + Gatekeeper, S2b choose.ts wiring + e2e demo/fake two pages phone/desktop + axe). Before P2-H. Plan docs/harness/2026-10-06-single-session-plan.md. Planned, not implemented."
+    "passes": true,
+    "note": "Split from single-active-session (S2a screen + S2b wiring + e2e). Claude candidate claude/p2-session-screen head 6c9872e; review screen-review-1 CLEAN after deltas (docs/harness/2026-10-06-screen-review.md). Root gates check 3304, e2e 206, e2e:fake 210, qa27 x10 demo 60/60 fake 80/80 (evidence/2026-10-06-session-screen). Real source unwired until P3. Follow-ups: session-signout-helper, bfcache-reload."
   },
   {
     "id": "b-path-leftover-piles",
