@@ -230,3 +230,4 @@ run-report-save-barrier-legacy	911a8ae39ca41164	2026-10-06	red (fixed in eb64ebd
 partial-pile-readiness	e2caf67631c309d2	2026-10-06	red (fixed in a8b31d7fffefec20501ba4400b3e251c90438675)
 upload-queue-persistent	42d6497250abd84e	2026-10-06	red (fixed in e6a097d52b7c754b5c7b6d772732b18a518e03b9)
 run-report-save-barrier	d4e1706895b1af8f	2026-10-06	red (fixed in b0b54ab6313429d9f74335e57635c9c2e01c32ac)
+pile-set-aside-reason-visible	7ac0e1ee3f3e9042	2026-10-06	red (fixed in a06bb16bea48a639d93e22e611f59eee2ac4d2cc)

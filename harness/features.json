@@ -3024,8 +3024,8 @@
       "When the device could not keep a copy, refused persistent storage or could not read kept uploads, the Inbox shows the matching sentence once; the keep-open notice is global for the Inbox, not per pile."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a set-aside pile shows its reason in the inbox\"",
-    "passes": false,
-    "note": "TL-P2-11 (2): field on Pile/PileItem plus a changed member state, minimal Inbox/PileScreen change with existing components, e2e demo + fake. After readiness, before P2-H. Planned, not implemented. Widened 2026-10-06 by lead decision (no TL doc): merged with the upload-queue notices into one Inbox UI entry; queue copy sent to the lead for review."
+    "passes": true,
+    "note": "TL-P2-11 (2) widened with the upload-queue notices; copy TL-P2-11/15/19/22. Claude candidate claude/p2-inbox-reasons head c9c84ed; review inbox-review-1 BLOCKED (TL-P2-19 not yet applied; phone overflow) then CLEAN after three deltas (docs/harness/2026-10-06-inbox-reasons-review.md). Root gates check 3149, e2e 200, e2e:fake 202 (incl. e2e/qa26.spec.ts). Follow-up: empty-pile-remove-copy. Interactive phone/desktop inspection of the reviewer checklist pending O8."
   },
   {
     "id": "single-active-session",
