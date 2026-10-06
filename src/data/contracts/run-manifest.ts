@@ -1,5 +1,6 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { sha256 } from '../vault/hashes';
+import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -257,6 +258,49 @@ function operation(value: unknown): value is Operation {
     && list(value.dependsOn, hash) && unique(value.dependsOn) && effect(value.effect);
 }
 
+// Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
+const CHANGE_ORDER: readonly Change['kind'][] = ['link-rewrite', 'timeline-append', 'rules-wording'];
+const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
+function editEntry(value: unknown): value is EditEntry {
+  return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
+    && (value.source === null || text(value.source)) && entryOk(value as EditEntry);
+}
+function rename(value: unknown): value is Rename {
+  return closed(value, ['from', 'to']) && text(value.from) && text(value.to) && renameOk(value as Rename);
+}
+function ruleAdd(value: unknown): value is RuleAdd {
+  return closed(value, ['recordId', 'text', 'yourWords', 'since']) && recordId(value.recordId) && text(value.text)
+    && text(value.yourWords) && integer(value.since) && ruleAddOk(value as RuleAdd);
+}
+function ruleRemove(value: unknown): value is RuleRemove {
+  return closed(value, ['recordId', 'text']) && recordId(value.recordId) && text(value.text) && ruleRemoveOk(value as RuleRemove);
+}
+function change(value: unknown): value is Change {
+  if (!record(value)) return false;
+  switch (value.kind) {
+    case 'link-rewrite': return closed(value, ['kind', 'recordIds', 'renames']) && recordIds(value.recordIds)
+      && list(value.renames, rename) && value.renames.length > 0 && unique((value.renames as Rename[]).map((item) => item.from.toLowerCase()));
+    case 'timeline-append': return closed(value, ['kind', 'recordIds', 'entries']) && recordIds(value.recordIds)
+      && list(value.entries, editEntry) && value.entries.length > 0;
+    case 'rules-wording': return closed(value, ['kind', 'add', 'remove']) && list(value.add, ruleAdd) && list(value.remove, ruleRemove)
+      && value.add.length + value.remove.length > 0;
+    default: return false;
+  }
+}
+/** 1+ changes, at most one of each kind, in the order link-rewrite, timeline-append, rules-wording (R3-7 m4). */
+const canonical = (changes: Change[]): boolean => changes.length > 0
+  && changes.every((item, i) => i === 0 || CHANGE_ORDER.indexOf(changes[i - 1]?.kind ?? item.kind) < CHANGE_ORDER.indexOf(item.kind));
+function editText(value: unknown): value is EditText {
+  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content']) && value.kind === 'edit-text'
+    && seenFile(value.before) && path(value.path) && verifiedContent(value.beforeContent)
+    && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content);
+}
+const effectV2 = (value: unknown): value is EffectV2 => effect(value) || editText(value);
+function operationV2(value: unknown): value is OperationV2 {
+  return closed(value, ['operationId', 'ordinal', 'dependsOn', 'effect']) && hash(value.operationId) && integer(value.ordinal)
+    && list(value.dependsOn, hash) && unique(value.dependsOn) && effectV2(value.effect);
+}
+
 const rows = (value: unknown, keys: string[], optional: string[] = []): boolean =>
   list(value, (row) => closed(row, keys, optional) && Object.values(row).every(text));
 function runReport(value: unknown): value is ManifestRunReport {
@@ -276,12 +320,19 @@ function contribution(value: unknown): value is ReportContribution {
     && unique(value.requires) && oneOf(value.when, ['applied', 'rejected']) && runReport(value.value);
 }
 
-function manifest(value: unknown): value is Manifest {
+function manifestOf(value: unknown, v: 1 | 2, item: (value: unknown) => boolean): boolean {
   return closed(value, ['v', 'kind', 'scope', 'runId', 'requestId', 'runScope', 'allowWeb', 'requestedAt', 'captureId', 'capture', 'operations', 'reportPlan'])
-    && value.v === 1 && value.kind === 'run-manifest' && closed(value.scope, ['rootId']) && driveId(value.scope.rootId)
+    && value.v === v && value.kind === 'run-manifest' && closed(value.scope, ['rootId']) && driveId(value.scope.rootId)
     && id(value.runId) && id(value.requestId) && oneOf(value.runScope, ['all', 'instructions'])
     && typeof value.allowWeb === 'boolean' && integer(value.requestedAt) && hash(value.captureId)
-    && capture(value.capture) && list(value.operations, operation) && list(value.reportPlan, contribution);
+    && capture(value.capture) && list(value.operations, item) && list(value.reportPlan, contribution);
+}
+function manifest(value: unknown): value is Manifest {
+  return manifestOf(value, 1, operation);
+}
+/** A v2 manifest without edit-text is refused: the runner writes v1 then. */
+function manifestV2(value: unknown): value is ManifestV2 {
+  return manifestOf(value, 2, operationV2) && (value as ManifestV2).operations.some((item) => item.effect.kind === 'edit-text');
 }
 
 /** Raw text content: utf8 with the size and SHA-256 of the exact UTF-8 bytes, not of C(text). */
@@ -289,10 +340,10 @@ async function describes(content: Content, text: string): Promise<boolean> {
   const raw = new TextEncoder().encode(text);
   return content.encoding === 'utf8' && content.size === raw.byteLength && content.sha256 === await sha256(new Blob([raw.buffer]));
 }
-function texts(value: Manifest): { text: string; content: Content }[] {
+function texts(value: Manifest | ManifestV2): { text: string; content: Content }[] {
   const found: { text: string; content: Content }[] = value.capture.piles.flatMap((pile) => pile.context.kind === 'text' ? [pile.context] : []);
   for (const { effect } of value.operations) {
-    if (effect.kind === 'create-text' || effect.kind === 'write-runner-json') found.push(effect);
+    if (effect.kind === 'create-text' || effect.kind === 'write-runner-json' || effect.kind === 'edit-text') found.push(effect);
   }
   return found;
 }
@@ -308,8 +359,15 @@ async function digest(value: unknown): Promise<string> {
 export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string): Promise<ManifestResult> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
-  if (!manifest(parsed.value)) return { ok: false, reason: 'shape' };
-  const value = parsed.value;
+  return admit(parsed.value, expectedRootId, manifest);
+}
+
+/** The guards every manifest version shares, in the v1 order; identities are computed as in v1. */
+async function admit<M extends Manifest | ManifestV2>(
+  parsed: unknown, expectedRootId: string, guard: (value: unknown) => value is M,
+): Promise<{ ok: true; value: M; sha256: string } | { ok: false; reason: ManifestRefusal }> {
+  if (!guard(parsed)) return { ok: false, reason: 'shape' };
+  const value = parsed;
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
   for (const item of texts(value)) {
     if (!await describes(item.content, item.text)) return { ok: false, reason: 'content' };
@@ -323,7 +381,7 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
     if (expected !== item.operationId) return { ok: false, reason: 'operation-id' };
   }
   // Earlier operation ID -> its effect kind; a createdBy parent must be an earlier create-folder.
-  const earlier = new Map<string, Effect['kind']>();
+  const earlier = new Map<string, EffectV2['kind']>();
   for (const item of value.operations) {
     const parent = 'parent' in item.effect ? item.effect.parent : null;
     const createdBy = parent && 'createdBy' in parent ? parent.createdBy : null;
@@ -343,10 +401,90 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
   return { ok: true, value, sha256: await digest(value) };
 }
 
-/** Inert stub of the v2 reader: v1 is read exactly as `parseRunManifest`; every other version is refused. */
+const sameSeen = (a: SeenFile, b: SeenFile): boolean => a.fileId === b.fileId && a.name === b.name && a.folder === b.folder
+  && a.modifiedTime === b.modifiedTime && a.parents.length === b.parents.length && a.parents.every((parent, i) => parent === b.parents[i]);
+const recordsOf = (item: Change): string[] => item.kind === 'rules-wording'
+  ? [...item.add, ...item.remove].map((entry) => entry.recordId) : item.recordIds;
+const appends = (item: EditText): boolean => item.changes.some((entry) => entry.kind === 'timeline-append');
+
+/**
+ * TL-P2-20's rules across a v2 manifest: each target (rule 2, R3-7, ratification 5), one edit per file (rule 3),
+ * the size limits (rule 6), records in capture.journal and archives held by every edit naming them (rule 7, R3-4),
+ * Timeline dates from requestedAt, and the in-place `bowerNew` move only after an edit with a Timeline line (m3).
+ * Returns the first rule broken, null when every rule holds.
+ */
+function edits(value: ManifestV2): EditGuardRule | null {
+  const { capture, operations } = value;
+  const journal = new Map(capture.journal.map((entry) => [entry.recordId, entry.fileIds]));
+  const places = new Map(capture.places.map((place) => [place.file.fileId, place]));
+  const captured = new Set([
+    ...capture.members.map((member) => member.file.fileId),
+    ...capture.piles.flatMap((pile) => [...pile.childFileIds, ...(pile.anchor ? [pile.anchor.fileId] : []),
+      ...(pile.context.kind === 'text' ? [pile.context.file.fileId] : [])]),
+  ]);
+  const date = timelineDate(value.requestedAt);
+  const edited = new Map<string, { operationId: string; effect: EditText }>();
+  const paths = new Set<string>();
+  for (const item of operations) {
+    const e = item.effect;
+    if (e.kind !== 'edit-text') continue;
+    const place = places.get(e.before.fileId);
+    const segments = e.path.split('/');
+    if (edited.has(e.before.fileId) || paths.has(e.path)) return 'one-per-file';
+    const target = !e.before.folder && place !== undefined && sameSeen(place.file, e.before) && place.path === e.path
+      && segments[segments.length - 1] === e.before.name && e.path.endsWith('.md')
+      && segments[0] !== '.bower' && segments[0] !== 'Inbox' && !captured.has(e.before.fileId);
+    if (!target) return 'target';
+    if (e.beforeContent.encoding !== 'utf8') return 'encoding';
+    if (e.beforeContent.size > EDIT_FILE_LIMIT) return 'size';
+    if (e.content.sha256 === e.beforeContent.sha256) return 'unchanged';
+    for (const entry of e.changes) {
+      if (entry.kind === 'rules-wording' && e.path !== 'Rules.md') return 'rules-path';
+      if (entry.kind === 'timeline-append' && !entry.entries.every((line) => line.date === date)) return 'date';
+      if (!recordsOf(entry).every((id) => journal.has(id))) return 'record';
+    }
+    edited.set(e.before.fileId, { operationId: item.operationId, effect: e });
+    paths.add(e.path);
+  }
+  const marks = new Map<string, number>();
+  for (const item of operations) {
+    const e = item.effect;
+    if (e.kind !== 'move' && e.kind !== 'bin') continue;
+    const target = edited.get(e.before.fileId);
+    if (!target) continue;
+    // Only an in-place move may touch an edited note; anything else moves or bins the target.
+    const inPlace = e.kind === 'move' && sameSeen(e.before, target.effect.before) && e.before.parents.length === 1
+      && 'fileId' in e.parent && e.parent.fileId === e.before.parents[0] && e.name === e.before.name;
+    if (!inPlace) return 'target';
+    const mark = Object.keys(e.properties).length === 1 && e.properties.bowerNew === '1'
+      && item.dependsOn.includes(target.operationId) && appends(target.effect);
+    if (!mark) return 'mark';
+    marks.set(e.before.fileId, (marks.get(e.before.fileId) ?? 0) + 1);
+  }
+  for (const [fileId, target] of edited) {
+    if ((marks.get(fileId) ?? 0) !== (appends(target.effect) ? 1 : 0)) return 'mark';
+    for (const id of target.effect.changes.flatMap(recordsOf)) {
+      const files = journal.get(id) ?? [];
+      const archives = operations.filter((item) => item.effect.kind === 'move' && files.includes(item.effect.before.fileId));
+      if (!archives.every((item) => item.dependsOn.includes(target.operationId))) return 'archive';
+    }
+  }
+  return null;
+}
+
+/**
+ * Reads v1 exactly as `parseRunManifest` (same path, digests and identities) and v2: v1's guards plus `edit-text`.
+ * A later version refuses as `version`, so a build that reads v2 can say it needs a newer Bower (R3-7 m9).
+ */
 export async function parseRunManifestV2(bytes: Uint8Array, expectedRootId: string): Promise<ManifestV2Result> {
   const parsed = parseRecordJson(bytes);
   if (!parsed.ok) return parsed;
-  if (record(parsed.value) && parsed.value.v === 1) return parseRunManifest(bytes, expectedRootId);
-  return { ok: false, reason: 'shape' };
+  const v = record(parsed.value) ? parsed.value.v : undefined;
+  if (v === 1) return parseRunManifest(bytes, expectedRootId);
+  if (integer(v) && v > 2) return { ok: false, reason: 'version' };
+  if (v === 2 && bytes.byteLength > MANIFEST_V2_LIMIT) return { ok: false, reason: 'edit', rule: 'size' };
+  const admitted = await admit(parsed.value, expectedRootId, manifestV2);
+  if (!admitted.ok) return admitted;
+  const broken = edits(admitted.value);
+  return broken === null ? admitted : { ok: false, reason: 'edit', rule: broken };
 }
