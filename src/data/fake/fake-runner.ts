@@ -155,15 +155,20 @@ export interface PlanOptions {
  * changed during the run. The B plan fixes every operation and every report
  * row (TL-P2-06 §1, contract B guards 7 and 9) and reuses the readiness
  * capture: only ready piles are captured, and their folders go to the Bin
- * only with no child the run did not capture.
+ * only with no child the run did not capture. Your changes from the journal
+ * are captured too (record id, digest, files) and archived by B moves into
+ * `.bower/changes/archive`, after the runner-JSON writes derived from them.
  */
 export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions): Promise<RunPlan> {
   const legacy = (why: string): RunPlan => ({ path: 'legacy', why });
-  if (opts.scope !== 'all') return legacy('instructions');
+  const all = opts.scope === 'all';
   const listing = await drive.listAll(rootId);
   const ix = VaultIndex.build(rootId, listing);
-  if (ix.journalFiles().some((f) => !f.folder && f.name.endsWith('.json'))) return legacy('journal');
-  if (UPDATES.some((u) => ix.file(u.path))) return legacy('timeline');
+  const journal = await journalOf(drive, ix);
+  if (!Array.isArray(journal)) return legacy(journal.why);
+  // An instructions run with no line it can take has nothing to read: the existing refusal, before admission.
+  if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
+  if (all && UPDATES.some((u) => ix.file(u.path))) return legacy('timeline');
   const requests = ix.file(SYSTEM.requests);
   const hashesFile = ix.file(SYSTEM.hashes);
   if (!requests || !hashesFile) return legacy('runner files');
@@ -176,13 +181,28 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       return null;
     }
   };
-  if (!isRunnerFile(SYSTEM.requests, parsed(await drive.readText(requests.id)))) return legacy('requests');
+  const requestsValue = parsed(await drive.readText(requests.id));
+  if (!isRunnerFile(SYSTEM.requests, requestsValue)) return legacy('requests');
   const hashesText = await drive.readText(hashesFile.id);
   if (!isRunnerFile(SYSTEM.hashes, parsed(hashesText))) return legacy('hashes');
+  // Answers drop their questions from questions.json, as the legacy runner does.
+  const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
+  const questionsFile = ix.file(SYSTEM.questions);
+  let questionsText: string | null = null;
+  if (answered.size && questionsFile) {
+    const value = parsed(await drive.readText(questionsFile.id));
+    const readable = isRunnerFile(SYSTEM.questions, value);
+    // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
+    if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
+    const all = readable ? value.questions : [];
+    const left = all.filter((q) => !answered.has(q.id));
+    if (!readable || left.length !== all.length) questionsText = `${JSON.stringify({ v: 1, questions: left } satisfies QuestionsFile, null, 2)}\n`;
+  }
 
   const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });
-  const piles = await reader.piles();
-  if (!piles.length) return legacy('empty');
+  // An instructions run takes no pile: it reads only your changes.
+  const piles = all ? await reader.piles() : [];
+  if (all && !piles.length) return legacy('empty');
   const capture = await captureOf(drive, rootId, piles);
   const verified = async (f: DriveFile, encoding: 'utf8' | 'blob'): Promise<VerifiedContent | null> => {
     const d = await storedDigest(drive, f);
@@ -261,8 +281,17 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     planned.set(join(to, name), { path: join(to, name), type: 'file', kind: kindOf(name), modified: 0, created: 0 });
     filing.push({ thing, to, name });
   }
+  // Your changes go to the archive the legacy runner uses, made in `.bower/changes` when missing.
+  const changesFolder = ix.file(SYSTEM.changes);
+  const archiveFolder = ix.file(SYSTEM.archive);
+  if (journal.length) {
+    const place = archiveFolder?.folder ? archiveFolder : changesFolder;
+    if (!place?.folder) return legacy('journal');
+    places.set(place.id, place);
+  }
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
-  const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: [], places: capturedPlaces };
+  const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
+  const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
   const scope = { rootId };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
 
@@ -306,23 +335,63 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   for (const pile of capturedPiles) {
     if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, movesOf.get(pile.pileId) ?? []);
   }
-  const hashes: Record<string, string> = {};
-  const digests = new Map(things.map(({ file, content }) => [file.id, content.sha256]));
-  const finalPaths = new Map(filing.map(({ thing, to, name }) => [join(to, name), thing.file.id]));
-  for (const [path, entry] of [...planned].sort(([a], [b]) => a.localeCompare(b))) {
-    if (entry.type !== 'file' || entry.kind === 'note' || path.startsWith('Inbox/')) continue;
-    const id = finalPaths.get(path) ?? ix.idOf(path);
-    const f = id ? listing.find((x) => x.id === id) : undefined;
-    const hash = (id && digests.get(id)) ?? (f ? (await storedDigest(drive, f))?.sha256 : undefined);
-    if (!hash) return legacy('hashes');
-    hashes[hash] = path;
+  // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
+  // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
+  const asked = journal.filter((l) => l.rec.kind === 'request');
+  let requestsOp: string | null = null;
+  if (asked.length) {
+    const before = await verified(requests, 'utf8');
+    if (!before) return legacy('requests');
+    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: REQUEST_DONE }));
+    // A request done before (its line not archived then) keeps one row: the new one.
+    const again = new Set(done.map((r) => r.id));
+    const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsValue.done.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
+    requestsOp = await add({ kind: 'write-runner-json', before: seen(requests), beforeContent: before, path: SYSTEM.requests, text, content: await utf8(text) });
   }
-  const text = `${JSON.stringify({ v: 1, hashes } satisfies HashesFile, null, 2)}\n`;
-  if (text !== hashesText) {
-    const before = await verified(hashesFile, 'utf8');
-    if (!before) return legacy('hashes');
-    const raw = new TextEncoder().encode(text);
-    await add({ kind: 'write-runner-json', before: seen(hashesFile), beforeContent: before, path: SYSTEM.hashes, text, content: { encoding: 'utf8', size: raw.byteLength, sha256: await sha256(new Blob([raw])) } }, [...movesOf.values()].flat());
+  let questionsOp: string | null = null;
+  if (questionsText !== null && questionsFile) {
+    const before = await verified(questionsFile, 'utf8');
+    if (!before) return legacy('questions');
+    questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) });
+  }
+  const archiveChain: string[] = [];
+  let archiveTo: Target | null = archiveFolder?.folder ? { fileId: archiveFolder.id } : null;
+  if (journal.length && !archiveTo && changesFolder) {
+    const made = await add({ kind: 'create-folder', parent: { fileId: changesFolder.id }, name: nameOf(SYSTEM.archive), createKey: mintKey('folder') });
+    archiveChain.push(made);
+    archiveTo = { createdBy: made };
+  }
+  for (const line of journal) {
+    if (!archiveTo) return legacy('journal');
+    const derived = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
+    const moves: string[] = [];
+    for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived ? [derived] : []));
+    if (line.rec.kind === 'request' && requestsOp) {
+      reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what] } });
+    } else {
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 1 } });
+    }
+  }
+
+  // `.bower/hashes.json` only on a full run, as the legacy runner writes it.
+  if (all) {
+    const hashes: Record<string, string> = {};
+    const digests = new Map(things.map(({ file, content }) => [file.id, content.sha256]));
+    const finalPaths = new Map(filing.map(({ thing, to, name }) => [join(to, name), thing.file.id]));
+    for (const [path, entry] of [...planned].sort(([a], [b]) => a.localeCompare(b))) {
+      if (entry.type !== 'file' || entry.kind === 'note' || path.startsWith('Inbox/')) continue;
+      const id = finalPaths.get(path) ?? ix.idOf(path);
+      const f = id ? listing.find((x) => x.id === id) : undefined;
+      const hash = (id && digests.get(id)) ?? (f ? (await storedDigest(drive, f))?.sha256 : undefined);
+      if (!hash) return legacy('hashes');
+      hashes[hash] = path;
+    }
+    const text = `${JSON.stringify({ v: 1, hashes } satisfies HashesFile, null, 2)}\n`;
+    if (text !== hashesText) {
+      const before = await verified(hashesFile, 'utf8');
+      if (!before) return legacy('hashes');
+      await add({ kind: 'write-runner-json', before: seen(hashesFile), beforeContent: before, path: SYSTEM.hashes, text, content: await utf8(text) }, [...movesOf.values()].flat());
+    }
   }
 
   const manifest: Manifest = {
@@ -340,6 +409,78 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   }
   return { path: 'b', manifest };
 }
+
+/** A journal line as a B run captures it: the record, every file it was written to, and their one digest. */
+type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string };
+
+/**
+ * Your changes since the last tidy-up, each once by its id with all its
+ * files, when every one can take the B path: a request (completed in
+ * requests.json), an answer (dropped from questions.json) or a change that
+ * needs nothing but archiving. A rule, a rename or a move needs an edit B
+ * does not have yet (rule wording, link rewrites), so its whole run stays
+ * legacy. Your changes are never replaced or discarded (TL-P2-23): a line
+ * that cannot be read, a line whose copies differ and a line in more than
+ * one place stay where they are, uncaptured, with one BowerError for all of
+ * them; the run goes on with the rest. At most the 20 oldest requests are
+ * taken; the others wait for the next run. A Drive read failure refuses the
+ * plan before admission.
+ */
+async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[] | { why: string }> {
+  const copies = new Map<string, Array<{ rec: JournalRecord; file: DriveFile; sha256: string }>>();
+  let left = 0;
+  for (const f of ix.journalFiles()) {
+    if (f.folder || !f.name.endsWith('.json')) continue;
+    let rec: unknown;
+    try {
+      rec = JSON.parse(await drive.readText(f.id));
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      console.error(e);
+      left++;
+      continue;
+    }
+    const digest = await drive.storedDigest(f.id);
+    if (!isJournalRecord(rec) || !digest) {
+      left++;
+      continue;
+    }
+    copies.set(rec.id, [...(copies.get(rec.id) ?? []), { rec, file: f, sha256: digest.sha256 }]);
+  }
+  const lines: JournalLine[] = [];
+  for (const [, all] of copies) {
+    const [first] = all;
+    if (!first || all.some((c) => c.sha256 !== first.sha256 || c.file.parents.length !== 1)) {
+      left += all.length;
+      continue;
+    }
+    lines.push({ rec: first.rec, files: all.map((c) => c.file), sha256: first.sha256 });
+  }
+  lines.sort((a, b) => a.rec.at - b.rec.at || a.rec.id.localeCompare(b.rec.id));
+  if (left) console.error(new BowerError('unknown', JOURNAL_LEFT), `${left} journal files left uncaptured`);
+  // Every readable line decides the path, captured or not: a rule left behind must not let runs take B.
+  const kinds = new Set([...copies.values()].flat().map((c) => c.rec.kind));
+  if (kinds.has('rule')) return { why: 'rules' };
+  if (kinds.has('rename') || kinds.has('move')) return { why: 'renames' };
+  const requests = lines.filter((l) => l.rec.kind === 'request').slice(0, REQUESTS_PER_RUN);
+  return lines.filter((l) => l.rec.kind !== 'request' || requests.includes(l));
+}
+
+/** Requests a run takes at most, the oldest first: requests.json keeps the last 20 done. */
+const REQUESTS_PER_RUN = 20;
+/** The fake Worker's refusal of an instructions run with nothing new (409). */
+const NOTHING_TO_READ = 'There is nothing new for Bower to read.';
+const JOURNAL_LEFT = 'Bower could not read some of your changes; they stay for the next tidy-up.';
+const QUESTIONS_REPLACED = 'Bower replaced its list of questions, which it could not read.';
+
+/** A text's content as contract B describes it: its exact UTF-8 size and SHA-256. */
+async function utf8(text: string): Promise<{ encoding: 'utf8'; size: number; sha256: string }> {
+  const raw = new TextEncoder().encode(text);
+  return { encoding: 'utf8', size: raw.byteLength, sha256: await sha256(new Blob([raw])) };
+}
+
+/** The line a request done by a tidy-up carries in requests.json. */
+export const REQUEST_DONE = 'Done. See what changed in your folders.';
 
 /** Why a thing the run captured was not filed (a rejected move). */
 export const NOT_FILED = 'It was moved, renamed or removed before Bower could file it.';
@@ -556,7 +697,7 @@ class Writer {
   async doRequests(asked: JournalRecord[]): Promise<void> {
     if (!asked.length) return;
     const old = (await this.requests())?.done ?? [];
-    const done: Request[] = [...asked].reverse().map((r) => ({ id: r.id, text: r.text ?? r.what, at: r.at, done: 'Done. See what changed in your folders.' }));
+    const done: Request[] = [...asked].reverse().map((r) => ({ id: r.id, text: r.text ?? r.what, at: r.at, done: REQUEST_DONE }));
     await this.writeJson(SYSTEM.requests, { v: 1, done: [...done, ...old].slice(0, 20) } satisfies RequestsFile);
   }
 

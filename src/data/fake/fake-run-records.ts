@@ -13,11 +13,11 @@ import type { FakeDrive, FencedDrive, StoredEvidence } from '../drive/fake-drive
 import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
-import { parseRunManifest, type Effect, type Manifest, type Operation, type SeenFile, type Target } from '../contracts/run-manifest';
+import { parseRunManifest, type Effect, type Manifest, type Operation, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { join } from '../tree';
 import { BowerError, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
-import { SYSTEM } from '../vault/layout';
+import { SYSTEM, isRunnerFile } from '../vault/layout';
 
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
@@ -109,12 +109,17 @@ export function materialize(manifest: Manifest, manifestHash: string, outcomes: 
 }
 
 /**
- * Contract B's grounding for this finite slice (filing by move): every applied
+ * Contract B's grounding for this finite slice. Filing by move: every applied
  * contribution is one filed row backed by one move of a captured member, named
  * as captured, `to` its verified destination path, with every folder made for
  * it required too; every rejected one is that member's set-aside row. Each
- * captured member has both. Nothing else (created, updated, questions,
- * requests, counts) is claimed.
+ * captured member has both. Your changes (guard 9): a request row requires the
+ * requests.json write that persists that captured line's completion with the
+ * same wording, and the archive moves of every file of that line, each
+ * depending on the write; a `yourChanges` row counts one captured line that is
+ * not a completed request, archived by all its moves. Every captured line is
+ * archived once and claimed by exactly one row. Nothing else (created,
+ * updated, questions, rules worded) is claimed.
  */
 export function grounded(manifest: Manifest): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
@@ -132,11 +137,50 @@ export function grounded(manifest: Manifest): boolean {
     const op = ops.get(t.createdBy);
     return op?.effect.kind === 'create-folder' ? [t.createdBy, ...chainOf(op.effect.parent)] : [];
   };
+  const lineOf = new Map(manifest.capture.journal.flatMap((j) => j.fileIds.map((id) => [id, j] as const)));
+  const isArchive = (o: Operation): o is Operation & { effect: MoveEffect } => o.effect.kind === 'move' && lineOf.has(o.effect.before.fileId)
+    && pathOf(o.effect.parent) === SYSTEM.archive && o.effect.name === o.effect.before.name && Object.keys(o.effect.properties).length === 0;
+  const completed = new Map<string, string>();
+  for (const o of manifest.operations) {
+    if (o.effect.kind !== 'write-runner-json' || o.effect.path !== SYSTEM.requests) continue;
+    const done = requestsDone(o.effect.text);
+    if (!done) return false;
+    for (const [id, text] of done) completed.set(id, text);
+  }
+  const claimed = new Set<string>();
+  const journalRow = (c: ReportContribution): boolean => {
+    const v = c.value;
+    if (c.when !== 'applied' || v.filed.length || v.created.length || v.updated.length || v.setAside.length || v.questions.length || v.rulesWorded !== undefined) return false;
+    const required = c.requires.map((id) => ops.get(id));
+    const moves = required.filter((o): o is Operation & { effect: MoveEffect } => !!o && isArchive(o));
+    const line = moves[0] ? lineOf.get(moves[0].effect.before.fileId) : undefined;
+    if (!line || claimed.has(line.recordId)) return false;
+    const files = moves.map((o) => o.effect.before.fileId);
+    if (files.length !== line.fileIds.length || !line.fileIds.every((id) => files.includes(id))) return false;
+    const chain = new Set(moves.flatMap((o) => chainOf(o.effect.parent)));
+    if (![...chain].every((id) => c.requires.includes(id))) return false;
+    const writes = required.filter((o): o is Operation => o?.effect.kind === 'write-runner-json');
+    const allowed = new Set([...moves, ...writes].map((o) => o.operationId));
+    if (required.some((o) => !o || (!allowed.has(o.operationId) && !chain.has(o.operationId)))) return false;
+    if (v.requests !== undefined) {
+      const [write, ...more] = writes;
+      const [text, ...rest] = v.requests;
+      if (v.yourChanges !== undefined || !write || more.length || text === undefined || rest.length) return false;
+      if (write.effect.kind !== 'write-runner-json' || write.effect.path !== SYSTEM.requests || requestsDone(write.effect.text)?.get(line.recordId) !== text) return false;
+      if (!moves.every((o) => o.dependsOn.includes(write.operationId))) return false;
+    } else if (v.yourChanges !== 1 || writes.length || completed.has(line.recordId)) return false;
+    claimed.add(line.recordId);
+    return true;
+  };
   const filed = new Set<string>();
   const setAside = new Set<string>();
   for (const c of manifest.reportPlan) {
     const v = c.value;
-    if (v.created.length || v.updated.length || v.questions.length || v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) return false;
+    if (v.requests !== undefined || v.yourChanges !== undefined) {
+      if (!journalRow(c)) return false;
+      continue;
+    }
+    if (v.created.length || v.updated.length || v.questions.length || v.rulesWorded !== undefined) return false;
     const moves = c.requires.flatMap((id) => {
       const op = ops.get(id);
       return op?.effect.kind === 'move' && members.has(op.effect.before.fileId) ? [op.effect] : [];
@@ -157,7 +201,28 @@ export function grounded(manifest: Manifest): boolean {
     if (!chainOf(move.parent).every((id) => c.requires.includes(id))) return false;
     filed.add(member.file.fileId);
   }
-  return [...members.keys()].every((id) => filed.has(id) && setAside.has(id));
+  // Every captured line's every file is moved once, into the archive, and the line is claimed by one row.
+  for (const id of lineOf.keys()) {
+    const touching = manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id);
+    if (touching.length !== 1 || !touching[0] || !isArchive(touching[0])) return false;
+  }
+  return [...members.keys()].every((id) => filed.has(id) && setAside.has(id))
+    && manifest.capture.journal.every((j) => claimed.has(j.recordId));
+}
+
+type MoveEffect = Extract<Effect, { kind: 'move' }>;
+
+/** The done requests a requests.json text holds, by id; null when it is not a valid requests file. */
+function requestsDone(text: string): Map<string, string> | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    console.error(e);
+    return null;
+  }
+  return isRunnerFile(SYSTEM.requests, value) ? new Map(value.done.map((r) => [r.id, r.text])) : null;
 }
 
 /** A filing move: a captured member going to another place (a cleared "new" mark stays where it is). */

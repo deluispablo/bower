@@ -6,8 +6,9 @@ import { seedFakeDrive } from './seed';
 import { DriveVault } from '../vault/drive-vault';
 import type { Scenario } from '../demo/scenario';
 import { BowerError } from '../types';
-import type { LastRunFile } from '../vault/layout';
-import { driveError } from '../drive/drive-api';
+import type { LastRunFile, QuestionsFile, RequestsFile } from '../vault/layout';
+import type { JournalRecord } from '../vault/journal';
+import { driveError, type DriveFile } from '../drive/drive-api';
 import { LiveRuns } from '../live/runs';
 import { FAILURE, planRun } from './fake-runner';
 import type { RunWire } from '../worker/worker-api';
@@ -1466,10 +1467,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('takes the B path for ready plain files', async () => {
       expect((await plan(await bWorld())).path).toBe('b');
     });
-    it('sends a run with your changes to the legacy path', async () => {
+    it('sends a run with a rule to word to the legacy path', async () => {
       const w = await bWorld();
       await w.uploader.addRule('Keep lease papers together');
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'journal' });
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'rules' });
     });
     it('sends a run with a hub Timeline update to the legacy path', async () => {
       const w = await bWorld();
@@ -1516,6 +1517,401 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.addPile({ text: 'Saltmere weekend receipts', items: [pdf('taxi.pdf'), pdf('hotel.pdf')] });
       await w.uploader.settled();
       expect(await plan(w)).toEqual({ path: 'legacy', why: 'question' });
+    });
+  });
+
+  describe('journal changes take the recoverable path', () => {
+    const FOUR = ['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf'];
+    const DONE = 'Done. See what changed in your folders.';
+    const plan = async (w: { drive: FakeDrive; rootId: string }, scope: 'all' | 'instructions' = 'all') =>
+      planRun(w.drive, w.rootId, { scope, allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    type Line = { file: DriveFile; rec: JournalRecord };
+    /** The journal lines not archived yet, oldest first. */
+    async function linesOf(w: { drive: FakeDrive; rootId: string }): Promise<Line[]> {
+      const files = (await w.drive.listAll(w.rootId)).filter((f) => {
+        const path = w.drive.pathOf(f.id, w.rootId);
+        return !f.folder && path.startsWith(`${SYSTEM.changes}/`) && !path.startsWith(`${SYSTEM.archive}/`);
+      });
+      const out = await Promise.all(files.map(async (file) => ({ file, rec: JSON.parse(await w.drive.readText(file.id)) as JournalRecord })));
+      return out.sort((a, b) => a.rec.at - b.rec.at || a.file.id.localeCompare(b.file.id));
+    }
+    const vaultOf = (w: { drive: FakeDrive; rootId: string }): DriveVault => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    const fileAt = async (w: { drive: FakeDrive; rootId: string }, path: string): Promise<DriveFile> => {
+      const f = (await w.drive.listAll(w.rootId)).find((x) => w.drive.pathOf(x.id, w.rootId) === path);
+      if (!f) throw new Error(`${path} is missing`);
+      return f;
+    };
+    const isWriteOf = (w: { drive: FakeDrive; rootId: string }, path: string) => (call: FencedCall): boolean => call.op === 'write-text' && w.drive.pathOf(call.id, w.rootId) === path;
+    const archiveMoves = (m: Manifest | undefined, fileId: string) => (m?.operations ?? []).filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === fileId);
+    const question = (id: string) => ({ id, text: `Question ${id}?`, yes: 'Yes', no: 'No', askedAt: 1 });
+
+    it('keeps the whole plan on the legacy path for a rule, a rename or a move', async () => {
+      const rule = await bWorld();
+      await rule.uploader.addRule('Keep lease papers together');
+      await rule.uploader.addRequest('Put the lease papers together');
+      expect(await plan(rule)).toEqual({ path: 'legacy', why: 'rules' });
+      expect(await plan(rule, 'instructions')).toEqual({ path: 'legacy', why: 'rules' });
+
+      const renamed = await bWorld();
+      const projects = await fileAt(renamed, 'Projects');
+      await renamed.drive.createFolder(projects.id, 'Garden');
+      await vaultOf(renamed).rename('Projects/Garden', 'Garden plans');
+      expect((await linesOf(renamed)).map((l) => l.rec.kind)).toEqual(['rename']);
+      expect(await plan(renamed)).toEqual({ path: 'legacy', why: 'renames' });
+
+      const moved = await bWorld();
+      await moved.drive.createFolder((await fileAt(moved, 'Projects')).id, 'Garden');
+      await vaultOf(moved).move('Projects/Garden', 'Areas');
+      expect((await linesOf(moved)).map((l) => l.rec.kind)).toEqual(['move']);
+      expect(await plan(moved, 'instructions')).toEqual({ path: 'legacy', why: 'renames' });
+
+      // The legacy path takes the rule's run whole: no run records, nothing through the B boundary.
+      const admitted = await rule.worker.process('all');
+      await until(rule.worker, 'done');
+      expect(await rule.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(await recordsOf(rule)).toEqual([]);
+      expect(rule.calls).toEqual([]);
+    });
+
+    it('completes a request through requests.json and archives its line only after that write', async () => {
+      const w = await bWorld();
+      await w.uploader.addRequest('Put the lease papers together');
+      const [line, ...more] = await linesOf(w);
+      expect(more).toEqual([]);
+      if (!line) return;
+      const digest = await w.drive.storedDigest(line.file.id);
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+
+      // Fixed in the manifest before any effect: the captured line, the write, the archive move after it, the row.
+      const [manifest, ...others] = await manifestsOf(w);
+      expect(others).toEqual([]);
+      expect(manifest?.runId).toBe(admitted.id);
+      expect(manifest?.capture.journal).toEqual([{ recordId: line.rec.id, sha256: digest?.sha256, fileIds: [line.file.id] }]);
+      const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.requests);
+      const [archive, ...again] = archiveMoves(manifest, line.file.id);
+      expect(again).toEqual([]);
+      expect(archive?.dependsOn).toContain(write?.operationId);
+      expect(archive?.ordinal).toBeGreaterThan(write?.ordinal ?? Number.POSITIVE_INFINITY);
+      expect(archive?.effect).toMatchObject({ name: line.file.name, properties: {} });
+      const rows = manifest?.reportPlan.filter((c) => c.value.requests !== undefined) ?? [];
+      expect(rows.map((c) => ({ when: c.when, value: c.value }))).toEqual([{ when: 'applied', value: { filed: [], created: [], updated: [], setAside: [], questions: [], requests: ['Put the lease papers together'] } }]);
+      expect(rows[0]?.requires).toEqual(expect.arrayContaining([write?.operationId, archive?.operationId]));
+
+      // Done in requests.json, the line archived once with its bytes, and the report names the request.
+      const requests = JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile;
+      expect(requests.done).toEqual([{ id: line.rec.id, text: 'Put the lease papers together', at: line.rec.at, done: DONE }]);
+      expect(w.drive.pathOf(line.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${line.file.name}`);
+      expect(movesOf(w, line.file.id)).toBe(1);
+      expect(await w.drive.storedDigest(line.file.id)).toEqual(digest);
+      expect(await linesOf(w)).toEqual([]);
+      const report = viewOf(w)?.run.report;
+      expect(report?.requests).toEqual(['Put the lease papers together']);
+      expect(report?.yourChanges).toBeUndefined();
+      expect(report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+      await expectFiledOnce(w);
+    });
+
+    it('counts each plain change once, archives every copy and drops answered questions', async () => {
+      const w = await bWorld();
+      const questions = await fileAt(w, SYSTEM.questions);
+      await w.drive.writeText(questions.id, `${JSON.stringify({ v: 1, questions: [question('q-keep'), question('q-answered')] }, null, 2)}\n`, questions.modifiedTime);
+      const other = vaultOf(w);
+      await other.answer('q-answered', false);
+      await other.create('Projects', 'folder', 'Garden');
+      const lines = await linesOf(w);
+      expect(lines.map((l) => l.rec.kind)).toEqual(['answer', 'create']);
+      const [answered, made] = lines;
+      if (!answered || !made) return;
+      // The same line written twice (its first answer was lost) is one change.
+      const copy = await w.drive.createText(made.file.parents[0] ?? '', made.file.name, await w.drive.readText(made.file.id));
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      expect(manifest?.capture.journal.map((j) => ({ recordId: j.recordId, fileIds: [...j.fileIds].sort() }))).toEqual([
+        { recordId: answered.rec.id, fileIds: [answered.file.id] },
+        { recordId: made.rec.id, fileIds: [made.file.id, copy.id].sort() },
+      ]);
+      const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
+      expect(write).toBeDefined();
+      for (const op of archiveMoves(manifest, answered.file.id)) expect(op.dependsOn).toContain(write?.operationId);
+      for (const id of [answered.file.id, made.file.id, copy.id]) {
+        expect(archiveMoves(manifest, id)).toHaveLength(1);
+        expect(movesOf(w, id)).toBe(1);
+        expect(w.drive.pathOf(id, w.rootId).startsWith(`${SYSTEM.archive}/`)).toBe(true);
+      }
+      expect((JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.questions) ?? '') as QuestionsFile).questions.map((q) => q.id)).toEqual(['q-keep']);
+      const report = viewOf(w)?.run.report;
+      expect(report?.yourChanges).toBe(2);
+      expect(report?.requests).toBeUndefined();
+      expect(report?.questions).toEqual([]);
+      expect(report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+      expect(await linesOf(w)).toEqual([]);
+    });
+
+    it('takes the B path for an instructions run, filing nothing', async () => {
+      const w = await bWorld();
+      await w.uploader.addRequest('Keep garden notes together');
+      expect((await plan(w, 'instructions')).path).toBe('b');
+      const admitted = await w.worker.process('instructions');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      expect(manifest).toMatchObject({ runId: admitted.id, runScope: 'instructions', capture: { piles: [], members: [] } });
+      expect(manifest?.operations.some((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.hashes)).toBe(false);
+      for (const id of w.sources) expect(movesOf(w, id)).toBe(0);
+      expect(await inboxPdfs(w.drive, w.rootId)).toEqual(w.sources);
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [], requests: ['Keep garden notes together'] });
+      expect(await linesOf(w)).toEqual([]);
+    });
+
+    it('reconciles lost archive and requests.json replies by evidence, archiving and completing once', async () => {
+      const w = await bWorld();
+      await w.uploader.addRequest('Put the lease papers together');
+      await w.uploader.create('Projects', 'folder', 'Garden');
+      const lines = await linesOf(w);
+      const made = lines.find((l) => l.rec.kind === 'create');
+      const asked = lines.find((l) => l.rec.kind === 'request');
+      if (!made || !asked) throw new Error('missing journal lines');
+      w.rules.push(once(isWriteOf(w, SYSTEM.requests), 'lose-reply'), once(isMoveOf(made.file.id), 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+      for (let i = 0; i < 5 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.calls.filter(isWriteOf(w, SYSTEM.requests))).toHaveLength(1);
+      for (const l of lines) {
+        expect(w.calls.filter(isMoveOf(l.file.id)), `archive calls of ${l.rec.kind}`).toHaveLength(1);
+        expect(w.drive.pathOf(l.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${l.file.name}`);
+      }
+      const requests = JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile;
+      expect(requests.done.filter((r) => r.id === asked.rec.id)).toHaveLength(1);
+      expect((await checkpointsOf(w, admitted.id)).at(-1)?.outcomes.every((o) => o.state === 'applied')).toBe(true);
+      expect(viewOf(w)?.run.report).toMatchObject({ requests: ['Put the lease papers together'], yourChanges: 1 });
+      await expectFiledOnce(w);
+    });
+
+    it('keeps a request unarchived and unreported when its requests.json write is rejected', async () => {
+      let drive: FakeDrive | null = null;
+      let rootId = '';
+      const hooks: Hooks = {
+        beforeDispatch: async (at) => {
+          if (!drive || at.effect.kind !== 'write-runner-json' || at.effect.path !== SYSTEM.requests) return;
+          // Another writer changes requests.json after Bower read it.
+          const f = (await drive.listAll(rootId)).find((x) => drive?.pathOf(x.id, rootId) === SYSTEM.requests);
+          if (f) await drive.writeText(f.id, '{ "v": 1, "done": [] }\n\n', f.modifiedTime);
+        },
+      };
+      const w = await bWorld({ hooks });
+      drive = w.drive;
+      rootId = w.rootId;
+      await w.uploader.addRequest('Put the lease papers together');
+      const [line] = await linesOf(w);
+      if (!line) throw new Error('missing journal line');
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const [archive] = archiveMoves(manifest, line.file.id);
+      const outcomes = (await checkpointsOf(w, admitted.id)).at(-1)?.outcomes ?? [];
+      expect(outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('rejected');
+      expect(movesOf(w, line.file.id)).toBe(0);
+      expect((await linesOf(w)).map((l) => l.rec.id)).toEqual([line.rec.id]);
+      expect(viewOf(w)?.run.report?.requests).toBeUndefined();
+      await expectFiledOnce(w);
+    });
+
+    it('leaves unreadable lines, differing copies and lines in two places where they are, logs once and goes on', async () => {
+      const w = await bWorld();
+      await w.uploader.addRequest('Put the lease papers together');
+      const [asked] = await linesOf(w);
+      if (!asked) throw new Error('missing journal line');
+      const changes = asked.file.parents[0] ?? '';
+      const line = (id: string): JournalRecord => ({ v: 1, id, at: 1, kind: 'create', what: 'New folder "Garden" in Projects', device: 'DEVICE_X', path: 'Projects/Garden' });
+      const broken = await w.drive.createText(changes, 'LINE_BROKEN.json', '{ not a change\n');
+      const twin = line('LINE_TWIN');
+      const first = await w.drive.createText(changes, 'LINE_TWIN.json', `${JSON.stringify(twin)}\n`);
+      const second = await w.drive.createText(changes, 'LINE_TWIN.json', `${JSON.stringify(twin, null, 1)}\n`);
+      const shared = await w.drive.createText(changes, 'LINE_SHARED.json', `${JSON.stringify(line('LINE_SHARED'))}\n`);
+      await w.drive.update(shared.id, { addParent: (await fileAt(w, 'Projects')).id });
+      const kept = [broken, first, second, shared];
+      const before = await Promise.all(kept.map(async (f) => ({ id: f.id, text: await w.drive.readText(f.id), file: (await w.drive.evidence(f.id))?.file })));
+      expect(await plan(w)).toMatchObject({ path: 'b' });
+      // Only the run's own planning counts below.
+      w.errors.mockClear();
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      expect(manifest?.capture.journal.map((j) => j.recordId)).toEqual([asked.rec.id]);
+      for (const f of kept) expect(manifest?.operations.some((o) => 'before' in o.effect && o.effect.before.fileId === f.id), `an operation on ${f.name}`).toBe(false);
+      expect(w.calls.filter((c) => 'id' in c && kept.some((f) => f.id === c.id))).toEqual([]);
+      const after = await Promise.all(kept.map(async (f) => ({ id: f.id, text: await w.drive.readText(f.id), file: (await w.drive.evidence(f.id))?.file })));
+      expect(after).toEqual(before);
+      expect(w.drive.pathOf(asked.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${asked.file.name}`);
+      expect(viewOf(w)?.run.report).toMatchObject({ requests: ['Put the lease papers together'] });
+      expect(viewOf(w)?.run.report?.yourChanges).toBeUndefined();
+      expect(bowerErrors(w).filter((e) => e.message === 'Bower could not read some of your changes; they stay for the next tidy-up.')).toHaveLength(1);
+    });
+
+    it('replaces an unreadable questions.json when an answer needs it, recording the bytes it replaced', async () => {
+      const w = await bWorld();
+      const questions = await fileAt(w, SYSTEM.questions);
+      await w.drive.writeText(questions.id, `${JSON.stringify({ v: 1, questions: [question('q-answered')] }, null, 2)}\n`, questions.modifiedTime);
+      await vaultOf(w).answer('q-answered', true);
+      const [answered] = await linesOf(w);
+      if (!answered) throw new Error('missing journal line');
+      const now = await fileAt(w, SYSTEM.questions);
+      await w.drive.writeText(now.id, '{ "v": 1, "questions": [', now.modifiedTime);
+      const unreadable = await w.drive.storedDigest(now.id);
+      expect(await plan(w)).toMatchObject({ path: 'b' });
+      // Only the run's own planning counts below.
+      w.errors.mockClear();
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
+      expect(write?.effect.kind === 'write-runner-json' ? write.effect.beforeContent.sha256 : null).toBe(unreadable?.sha256);
+      for (const op of archiveMoves(manifest, answered.file.id)) expect(op.dependsOn).toContain(write?.operationId);
+      expect(JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.questions) ?? '')).toEqual({ v: 1, questions: [] });
+      expect(w.drive.pathOf(answered.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${answered.file.name}`);
+      const report = viewOf(w)?.run.report;
+      expect(report?.questions).toEqual([]);
+      expect(report?.yourChanges).toBe(1);
+      expect(bowerErrors(w).filter((e) => e.message === 'Bower replaced its list of questions, which it could not read.')).toHaveLength(1);
+    });
+
+    it('takes at most the 20 oldest requests; the rest wait for the next run', async () => {
+      const w = await bWorld();
+      const texts = Array.from({ length: 21 }, (_, i) => `Request number ${i + 1}`);
+      for (const t of texts) await w.uploader.addRequest(t);
+      const lines = await linesOf(w);
+      expect(lines.map((l) => l.rec.text)).toEqual(texts);
+      expect(await plan(w)).toMatchObject({ path: 'b' });
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      expect(manifest?.capture.journal.map((j) => j.recordId)).toEqual(lines.slice(0, 20).map((l) => l.rec.id));
+      expect(viewOf(w)?.run.report?.requests).toEqual(texts.slice(0, 20));
+      const done = (JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile).done;
+      expect(done.map((r) => r.text)).toEqual(texts.slice(0, 20).reverse());
+      expect((await linesOf(w)).map((l) => l.rec.text)).toEqual([texts[20]]);
+
+      const next = await w.worker.process('instructions');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.requests).toEqual([texts[20]]);
+      expect(await linesOf(w)).toEqual([]);
+    });
+
+    it('keeps the whole plan legacy for a rule or rename line it cannot capture', async () => {
+      const at = (kind: JournalRecord['kind'], id: string): JournalRecord => ({ v: 1, id, at: 1, kind, what: `A ${kind}`, device: 'DEVICE_X', ...(kind === 'rule' ? { path: 'Rules.md', text: 'Keep lease papers together' } : { path: 'Projects/Garden plans', from: 'Projects/Garden' }) });
+      for (const [kind, why] of [['rule', 'rules'], ['rename', 'renames']] as const) {
+        const w = await bWorld();
+        await w.uploader.addRequest('Put the lease papers together');
+        const [asked] = await linesOf(w);
+        const changes = asked?.file.parents[0] ?? '';
+        const rec = at(kind, `LINE_${kind.toUpperCase()}`);
+        // Two copies with other bytes: the line is left uncaptured, yet its kind still decides the path.
+        await w.drive.createText(changes, `${rec.id}.json`, `${JSON.stringify(rec)}\n`);
+        await w.drive.createText(changes, `${rec.id}.json`, `${JSON.stringify(rec, null, 1)}\n`);
+        expect(await plan(w), kind).toEqual({ path: 'legacy', why });
+      }
+    });
+
+    it('refuses an instructions run whose only lines are left uncaptured, as nothing to read', async () => {
+      const w = await bWorld();
+      const changes = (await fileAt(w, SYSTEM.changes)).id;
+      const rec: JournalRecord = { v: 1, id: 'LINE_TWIN', at: 1, kind: 'create', what: 'New folder "Garden" in Projects', device: 'DEVICE_X', path: 'Projects/Garden' };
+      await w.drive.createText(changes, 'LINE_TWIN.json', `${JSON.stringify(rec)}\n`);
+      await w.drive.createText(changes, 'LINE_TWIN.json', `${JSON.stringify(rec, null, 1)}\n`);
+      await expect(w.worker.process('instructions')).rejects.toMatchObject({ code: 'conflict', message: 'There is nothing new for Bower to read.' });
+      await w.runs.settled();
+      expect(await recordsOf(w)).toEqual([]);
+      expect(w.calls).toEqual([]);
+      expect(viewOf(w)).toBeNull();
+    });
+
+    it('completes a request again without a second done row for it', async () => {
+      const w = await bWorld();
+      await w.uploader.addRequest('Put the lease papers together');
+      const [line] = await linesOf(w);
+      if (!line) throw new Error('missing journal line');
+      // An earlier run completed it, but its line was not archived then.
+      const requests = await fileAt(w, SYSTEM.requests);
+      const earlier = { id: line.rec.id, text: 'Put the lease papers together', at: line.rec.at, done: DONE };
+      const older = { id: 'REQUEST_OLDER', text: 'An older request', at: 0, done: DONE };
+      await w.drive.writeText(requests.id, `${JSON.stringify({ v: 1, done: [earlier, older] }, null, 2)}\n`, requests.modifiedTime);
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const done = (JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile).done;
+      expect(done).toEqual([earlier, older]);
+      expect(viewOf(w)?.run.report?.requests).toEqual(['Put the lease papers together']);
+      expect(await linesOf(w)).toEqual([]);
+    });
+
+    it('reconciles a lost reply of the archive folder it makes, ending with one folder', async () => {
+      const w = await bWorld();
+      await w.uploader.create('Projects', 'folder', 'Garden');
+      const [line] = await linesOf(w);
+      if (!line) throw new Error('missing journal line');
+      const isArchiveFolder = (call: FencedCall): boolean => call.op === 'create-folder' && call.name === 'archive';
+      w.rules.push(once(isArchiveFolder, 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      for (let i = 0; i < 5 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.calls.filter(isArchiveFolder)).toHaveLength(1);
+      const folders = (await w.drive.listAll(w.rootId)).filter((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === SYSTEM.archive);
+      expect(folders).toHaveLength(1);
+      expect(w.drive.pathOf(line.file.id, w.rootId)).toBe(`${SYSTEM.archive}/${line.file.name}`);
+      expect(movesOf(w, line.file.id)).toBe(1);
+      expect(viewOf(w)?.run.report?.yourChanges).toBe(1);
+    });
+
+    it('never archives or counts a change taken back before its archive move', async () => {
+      let drive: FakeDrive | null = null;
+      let target: string | null = null;
+      const hooks: Hooks = {
+        beforeDispatch: async (at) => {
+          if (!drive || !target || at.effect.kind !== 'move' || at.effect.before.fileId !== target) return;
+          // Undo takes the line back (to the Bin) after Bower checked it and before the move is sent.
+          const id = target;
+          target = null;
+          await drive.trash(id);
+        },
+      };
+      const w = await bWorld({ hooks });
+      drive = w.drive;
+      await w.uploader.create('Projects', 'folder', 'Garden');
+      const [line] = await linesOf(w);
+      if (!line) throw new Error('missing journal line');
+      target = line.file.id;
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const ev = await w.drive.evidence(line.file.id);
+      expect(ev).toMatchObject({ trashed: true, file: { parents: line.file.parents, name: line.file.name } });
+      expect(movesOf(w, line.file.id)).toBe(0);
+      const [manifest] = await manifestsOf(w);
+      const [archive] = archiveMoves(manifest, line.file.id);
+      expect((await checkpointsOf(w, admitted.id)).at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('rejected');
+      expect(viewOf(w)?.run.report?.yourChanges).toBeUndefined();
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
     });
   });
 });
