@@ -2314,6 +2314,27 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await w.drive.readText(context.id)).toBe(body);
     });
 
+    // Final review: the capture checks the refusal itself, even when the listing it starts from read the note before.
+    it('holds a declared pile whose context note became a newer format after the listing read it', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      await w.drive.createText(folder, 'Pile note.md', 'Soup recipes to try');
+      const bound = await w.drive.createText(folder, 'Pile note.md', 'Papers about the lease', { ...keyed.appProperties });
+      await w.drive.trash(keyed.id);
+      const real = w.drive.readText.bind(w.drive);
+      let reads = 0;
+      // The listing reads the context note as it was; by the capture, another device wrote a newer format into it.
+      vi.spyOn(w.drive, 'readText').mockImplementation(async (id) => {
+        if (id === bound.id && ++reads >= 2) return '---\nbower_format: ownership/9\n---\nPapers\n';
+        return real(id);
+      });
+      const planned = await runPlan(w);
+      if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
+      expect(reads).toBe(2);
+      expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(folder);
+      expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+    });
+
     it('holds a declared pile whose bound note, not listed first, cannot be read, and plans the others', async () => {
       const w = await bWorld({ declared: true });
       const { folder, keyed } = await leasePile(w);
