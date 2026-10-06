@@ -3402,7 +3402,7 @@
       "No legacy run is started on load."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"the running situation is a recoverable run\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P2-37 (main d6dca4b). Planned, not implemented."
   },
   {
