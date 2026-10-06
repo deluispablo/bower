@@ -76,6 +76,14 @@ export interface PileItem {
   upload?: number;
   /** Declared with other bytes than Drive has now: a tidy-up will not take it. */
   changed?: true;
+  /** Declared, not in Drive, and its bytes are not on this device: only choosing it again can send it. */
+  chooseAgain?: true;
+}
+
+/** A declared thing chosen again on a device without its bytes: its file, or its pasted link. */
+export interface ChosenAgain {
+  body?: Blob;
+  url?: string;
 }
 
 /**

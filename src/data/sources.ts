@@ -1,5 +1,6 @@
 import type {
   ChangeEntry,
+  ChosenAgain,
   FolderState,
   NewPile,
   Note,
@@ -58,6 +59,12 @@ export interface VaultSource {
   updatePile(id: string, text: string): Promise<Pile>;
   /** Sends again the things of a pile that did not arrive. */
   retryPile(id: string): Promise<void>;
+  /**
+   * Sends a declared thing whose bytes are not on this device (`chooseAgain`),
+   * chosen again: only when its size and hash match what the pile declared.
+   * Only a source with pile declarations has it.
+   */
+  chooseAgain?(pileId: string, itemId: string, chosen: ChosenAgain): Promise<void>;
   /**
    * One plain sentence about keeping uploads on this device, or null. Only a
    * source with an upload queue has it; behind the live door it answers as a promise.

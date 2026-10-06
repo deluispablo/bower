@@ -767,4 +767,78 @@ describe('uploads survive a reload without a second file', () => {
     expect(env.drive.resumableCalls.filter((c) => c.op === 'open')).toHaveLength(opens + 1);
     expect((await files(env)).map((f) => f.name)).toEqual(['scan-2.pdf']);
   });
+
+  it.each([
+    ['lost', { body: async (): Promise<null> => null }],
+    ['unreadable', { body: (): Promise<never> => Promise.reject(new Error('IndexedDB body failed')) }],
+  ] as const)('a gone one (%s) chosen again with the same bytes is sent once, under the file id reserved for it', async (_label, broken) => {
+    const env = await setup();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const hold = holdAt(env, 4);
+    const first = device(env);
+    await first.queue.start(ACCOUNT, FOLDER);
+    await first.queue.add(await member(env));
+    await reachedChunk(env, 4);
+    const reserved = env.drive.resumableCalls.find((c) => c.op === 'open')?.id;
+    first.queue.stop();
+    hold.open();
+    env.drive.beforeChunk = null;
+
+    const store = indexedDbUploadStore(env.idb);
+    const second = device(env, { store: { ...store, ...broken } });
+    await second.queue.start(ACCOUNT, FOLDER);
+    await second.queue.idle();
+    expect(second.queue.items()[0]).toMatchObject({ state: 'failed', gone: true });
+    const opens = env.drive.resumableCalls.filter((c) => c.op === 'open').length;
+    const again = await second.queue.add(await member(env));
+    await second.queue.idle();
+    expect(second.queue.items()).toHaveLength(1);
+    expect(second.queue.items()[0]).toMatchObject({ id: again.id, state: 'done', reserved });
+    expect(second.queue.items()[0]?.gone).toBeUndefined();
+    expect((await files(env)).map((f) => f.id)).toEqual([reserved]);
+    expect([...(await env.drive.readBytes(reserved ?? ''))]).toEqual([...BYTES]);
+    expect(env.drive.resumableCalls.filter((c) => c.op === 'open')).toHaveLength(opens);
+    // Drive has it: nothing of it stays on the device.
+    expect(await store.list(ACCOUNT, FOLDER)).toEqual([]);
+  });
+
+  it('a gone one chosen again with bytes of another size is refused, and stays gone', async () => {
+    const env = await setup();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    env.drive.offline = true;
+    const first = device(env);
+    await first.queue.start(ACCOUNT, FOLDER);
+    await first.queue.add(await member(env));
+    await first.queue.idle();
+    first.queue.stop();
+    env.drive.offline = false;
+    const second = device(env, { store: { ...indexedDbUploadStore(env.idb), body: async () => null } });
+    await second.queue.start(ACCOUNT, FOLDER);
+    await second.queue.idle();
+    const other = { ...(await member(env)), body: new Blob([new Uint8Array([1, 2, 3])]) };
+    await expect(second.queue.add(other)).rejects.toMatchObject({ message: "This couldn't be sent. Try again." });
+    await second.queue.idle();
+    expect(second.queue.items()[0]).toMatchObject({ state: 'failed', gone: true });
+    expect(await files(env)).toHaveLength(0);
+  });
+
+  it('a gone one chosen again with other bytes of the same size is refused, and stays gone', async () => {
+    const env = await setup();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    env.drive.offline = true;
+    const first = device(env);
+    await first.queue.start(ACCOUNT, FOLDER);
+    await first.queue.add(await member(env));
+    await first.queue.idle();
+    first.queue.stop();
+    env.drive.offline = false;
+    const second = device(env, { store: { ...indexedDbUploadStore(env.idb), body: async () => null } });
+    await second.queue.start(ACCOUNT, FOLDER);
+    await second.queue.idle();
+    const other = { ...(await member(env)), body: new Blob([new Uint8Array([9, 9, 9, 9, 9, 9, 9, 9, 9, 9])]) };
+    await expect(second.queue.add(other)).rejects.toMatchObject({ message: "This couldn't be sent. Try again." });
+    await second.queue.idle();
+    expect(second.queue.items()[0]).toMatchObject({ state: 'failed', gone: true });
+    expect(await files(env)).toHaveLength(0);
+  });
 });

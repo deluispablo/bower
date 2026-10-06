@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { report } from '@/ui/report';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import type { Pile, SetAside } from '@/data/types';
 import { SET_ASIDE_TEXT } from '@/data/pile-readiness';
@@ -12,6 +12,7 @@ import { toast } from '@/ui/toast';
 import { inAppHistory } from '@/app/paths';
 import { isRunning } from '@/features/tidy/run-words';
 import { PileStack } from './PileStack';
+import { normaliseLink } from './link';
 import { itemLine, pileLine } from './item-words';
 import s from './piles.module.css';
 
@@ -19,9 +20,9 @@ export function PileScreen() {
   const { id } = useParams();
   const { data: piles } = usePiles();
   const { data: run } = useRun();
-  const { vault } = useSources();
   const nav = useNavigate();
   const pile = piles?.find((p) => p.id === id);
+  const tryAgain = useTryAgain(pile, true);
   if (piles && !pile)
     return (
       <div className={s.page}>
@@ -73,15 +74,19 @@ export function PileScreen() {
         </ul>
       )}
       {pile.setAside ? (
-        <SetAsideNote pile={pile} />
+        <SetAsideNote pile={pile} choose />
       ) : (
         pile.items.some((it) => it.upload === -1) && (
-          <p className={s.retry} role="alert">
-            Some things did not reach your Bower folder.{' '}
-            <Button size="sm" variant="ghost" onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => report(e, 'That did not work. Try again.'))}>
-              Try again
-            </Button>
-          </p>
+          <>
+            <p className={s.retry} role="alert">
+              Some things did not reach your Bower folder.{' '}
+              <Button id={tryAgain.buttonId} size="sm" variant="ghost" aria-disabled={tryAgain.busy || undefined} aria-describedby={tryAgain.describedBy} onClick={tryAgain.onClick}>
+                Try again
+              </Button>
+              {tryAgain.picker}
+            </p>
+            {tryAgain.paste}
+          </>
         )
       )}
       <div className={s.footer}>
@@ -104,10 +109,12 @@ const TRY_AGAIN: ReadonlySet<SetAside> = new Set(['not-arrived', 'not-checked'])
  * a thing that has not arrived or could not be checked, Remove this pile
  * when the sentence says Remove. On the pile's screen its own Remove button
  * is below, so `remove` is only for the Inbox, where `nameId` names the pile
- * each action is for.
+ * each action is for. On the pile's screen (`choose`), a thing whose bytes
+ * are not on this device is chosen again there; in the Inbox, its Try again
+ * says so and opens the pile's screen, ready at it (TL-P2-27).
  */
-export function SetAsideNote({ pile, remove, disabled, nameId, onRemoved }: { pile: Pile; remove?: boolean; disabled?: boolean; nameId?: string; onRemoved?: () => void }) {
-  const { vault } = useSources();
+export function SetAsideNote({ pile, remove, choose, disabled, nameId, onRemoved }: { pile: Pile; remove?: boolean; choose?: boolean; disabled?: boolean; nameId?: string; onRemoved?: () => void }) {
+  const tryAgain = useTryAgain(pile, choose ?? false);
   const sentenceId = useId();
   const why = pile.setAside;
   if (!why) return null;
@@ -119,15 +126,182 @@ export function SetAsideNote({ pile, remove, disabled, nameId, onRemoved }: { pi
         {TRY_AGAIN.has(why) && (
           <>
             {' '}
-            <Button size="sm" variant="ghost" aria-describedby={describedBy} onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => report(e, 'That did not work. Try again.'))}>
+            <Button id={tryAgain.buttonId} size="sm" variant="ghost" aria-disabled={tryAgain.busy || undefined} aria-describedby={[describedBy, tryAgain.describedBy].filter(Boolean).join(' ') || undefined} onClick={tryAgain.onClick}>
               Try again
             </Button>
+            {tryAgain.picker}
           </>
         )}
       </p>
+      {TRY_AGAIN.has(why) && tryAgain.paste}
       {remove && REMOVE_IT.has(why) && <RemovePile pile={pile} disabled={disabled} describedBy={describedBy} onRemoved={onRemoved} />}
     </div>
   );
+}
+
+/** What the Inbox's Try again hands the pile's screen: the thing to choose again. */
+interface ChooseState {
+  choose: string;
+}
+
+const chooseOf = (state: unknown): string | undefined =>
+  typeof state === 'object' && state !== null && 'choose' in state && typeof state.choose === 'string' ? state.choose : undefined;
+
+/**
+ * Try again for a pile. A declared thing whose bytes are not on this device
+ * (`chooseAgain`) can only be sent by choosing it again. On the pile's screen
+ * (`choose`), Try again opens the file picker for a file, or goes to the
+ * field where a link is pasted again (as Add takes it, then Send); the folder
+ * takes it only if it is the same. In the Inbox, Try again says what to do
+ * and opens the pile's screen, ready at that thing. Anything else sends again
+ * what did not arrive.
+ */
+function useTryAgain(pile: Pile | undefined, choose: boolean): { onClick: () => void; buttonId: string; busy: boolean; describedBy: string | undefined; picker: ReactNode; paste: ReactNode } {
+  const { vault } = useSources();
+  const nav = useNavigate();
+  const focusKey = chooseOf(useLocation().state);
+  const buttonId = useId();
+  const badId = useId();
+  const askId = useId();
+  const linkAskId = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const focused = useRef(false);
+  const [link, setLink] = useState('');
+  const [badLink, setBadLink] = useState(false);
+  /** A thing chosen again is being checked and sent: Try again and Send wait. */
+  const [busy, setBusy] = useState(false);
+  /** The same, at once: a second press in the same moment is ignored too. */
+  const working = useRef(false);
+  const work = (on: boolean): void => {
+    working.current = on;
+    setBusy(on);
+  };
+  const again = vault.chooseAgain ? (pile?.items.filter((it) => it.chooseAgain) ?? []) : [];
+  const pick = (kind: 'file' | 'link') => {
+    const fits = again.filter((it) => (it.kind === 'link') === (kind === 'link'));
+    return fits.find((it) => it.id === focusKey) ?? fits[0];
+  };
+  const file = choose ? pick('file') : undefined;
+  const pasted = choose ? pick('link') : undefined;
+  // Opened from the Inbox for one thing: the screen is ready at it, once.
+  useEffect(() => {
+    if (!focusKey || focused.current) return;
+    const target = focusKey === pasted?.id ? field.current : focusKey === file?.id ? document.getElementById(buttonId) : null;
+    if (!target) return;
+    target.focus();
+    focused.current = true;
+  });
+  const retry = (): Promise<void> => (pile ? vault.retryPile(pile.id).catch((e: unknown) => report(e, 'That did not work. Try again.')) : Promise.resolve());
+  // What failed from this page with its bytes here is sent again by the same Try again.
+  const failedHere = Boolean(pile?.items.some((it) => it.upload === -1 && !it.chooseAgain));
+  const onClick = (): void => {
+    if (working.current) return;
+    if (file || pasted) {
+      if (file) input.current?.click();
+      else field.current?.focus();
+      if (failedHere) void retry();
+    } else if (!choose && pile && again[0]) {
+      // The sentence says what to do; the pile's screen is where it is done. Once, however often pressed.
+      const state: ChooseState = { choose: again[0].id };
+      work(true);
+      void retry().then(() => {
+        work(false);
+        nav(`/pile/${pile.id}`, { state });
+      });
+    } else void retry();
+  };
+  // Try again says what it asks for, in the words the Inbox shows (one sentence per thing).
+  const asking = choose ? again : [];
+  const picker = file && pile ? (
+    <input
+      ref={input}
+      type="file"
+      hidden
+      onChange={(e) => {
+        const chosen = e.target.files?.[0];
+        // The same file can be chosen again after a refusal.
+        e.target.value = '';
+        if (!chosen || !vault.chooseAgain || working.current) return;
+        work(true);
+        vault.chooseAgain(pile.id, file.id, { body: chosen })
+          .catch((err: unknown) => report(err, 'That did not work. Try again.'))
+          .finally(() => work(false));
+      }}
+    />
+  ) : null;
+  const send = (): void => {
+    if (!pasted || !pile || !vault.chooseAgain || working.current) return;
+    const url = normaliseLink(link);
+    if (!url) {
+      setBadLink(true);
+      return;
+    }
+    work(true);
+    vault.chooseAgain(pile.id, pasted.id, { url }).then(
+      () => setLink(''),
+      (err: unknown) => report(err, 'That did not work. Try again.'),
+    ).finally(() => work(false));
+  };
+  const paste = pasted ? (
+    <>
+      <form
+        className={s.linkRow}
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+      >
+        <Icon name="link" size={18} />
+        <input
+          ref={field}
+          type="text"
+          inputMode="url"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="Paste a link"
+          aria-label="Paste a link"
+          aria-invalid={badLink || undefined}
+          aria-describedby={badLink ? `${linkAskId} ${badId}` : linkAskId}
+          value={link}
+          onChange={(e) => {
+            setLink(e.target.value);
+            setBadLink(false);
+          }}
+        />
+        <Button size="sm" variant="ghost" type="submit" disabled={!link.trim()} aria-disabled={busy || undefined}>
+          Send
+        </Button>
+        <span id={linkAskId} className="sr-only">
+          Paste the link again on this device to send it.
+        </span>
+      </form>
+      {badLink && (
+        <p id={badId} className={s.badLink} role="alert">
+          That is not a web address. Check it and try again.
+        </p>
+      )}
+    </>
+  ) : null;
+  const ask = asking.length ? (
+    <span id={askId} className="sr-only">
+      {asking.map((it) => (it.kind === 'link' ? 'Paste the link again on this device to send it.' : `Choose ${it.name} again on this device to send it.`)).join(' ')}
+    </span>
+  ) : null;
+  return {
+    onClick,
+    buttonId,
+    busy,
+    describedBy: ask ? askId : undefined,
+    picker: (
+      <>
+        {ask}
+        {picker}
+      </>
+    ),
+    paste,
+  };
 }
 
 /**

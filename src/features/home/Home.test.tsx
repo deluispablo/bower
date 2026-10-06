@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
-import type { Pile } from '@/data/types';
+import { BowerError, type Pile } from '@/data/types';
 import { loadingSources } from '@/testing/loading-sources';
+import { useToasts } from '@/ui/toast';
 import { Home } from './Home';
 
 afterEach(cleanup);
@@ -134,5 +135,54 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     await screen.findByRole('link', { name: /Papers from Alex/ });
     const inbox = screen.getByRole('region', { name: 'Inbox' });
     expect(within(inbox).getByRole('status')).toHaveTextContent('');
+  });
+});
+
+describe('a reselected file must match its declared member', () => {
+  function Opened() {
+    const { id } = useParams();
+    const state: unknown = useLocation().state;
+    const choose = typeof state === 'object' && state !== null && 'choose' in state ? String(state.choose) : 'nothing';
+    return <p>{`Pile ${id ?? ''} ready at ${choose}`}</p>;
+  }
+
+  it.each([
+    ['a file', { id: 'member-c', name: 'c.pdf', kind: 'pdf', origin: 'From this computer', upload: -1, chooseAgain: true }, 'Choose c.pdf again on this device to send it.'],
+    ['a link', { id: 'member-l', name: 'source.example/path', kind: 'link', origin: 'A link you pasted', upload: -1, chooseAgain: true }, 'Paste the link again on this device to send it.'],
+  ] as const)('Try again in the Inbox for %s to choose again says so and opens its pile, ready at it', async (_label, item, sentence) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const base = loadingSources();
+    const pile: Pile = { id: 'missing', path: 'Inbox/Receipts', text: 'Receipts', createdAt: Date.now(), setAside: 'not-arrived', items: [{ id: 'a', name: 'a.pdf', kind: 'pdf', origin: 'From this computer' }, { ...item }] };
+    const retryPile = vi.fn(async () => { throw new BowerError('conflict', sentence); });
+    const doors: Record<string, unknown> = { piles: async () => [pile], retryPile, chooseAgain: vi.fn(async () => undefined), uploadNotice: async () => null };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/" element={<Home />} /><Route path="/pile/:id" element={<Opened />} /></Routes></DataProvider></MemoryRouter>);
+    const row = (await screen.findByRole('link', { name: /Receipts/ })).closest('li');
+    if (!row) throw new Error('no row');
+    expect(within(row).getByText('Some of its things have not arrived yet.')).toBeVisible();
+    fireEvent.click(within(row).getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText(`Pile missing ready at ${item.id}`)).toBeVisible();
+    expect(retryPile).toHaveBeenCalledWith('missing');
+    await waitFor(() => expect(useToasts.getState().list.map((t) => t.text)).toContain(sentence));
+  });
+
+  it('Try again in the Inbox, pressed twice while it works, asks and opens the pile once', async () => {
+    const base = loadingSources();
+    const pile: Pile = { id: 'missing', path: 'Inbox/Receipts', text: 'Receipts', createdAt: Date.now(), setAside: 'not-arrived', items: [{ id: 'member-c', name: 'c.pdf', kind: 'pdf', origin: 'From this computer', upload: -1, chooseAgain: true }] };
+    let done!: () => void;
+    const retryPile = vi.fn(() => new Promise<void>((r) => { done = r; }));
+    const doors: Record<string, unknown> = { piles: async () => [pile], retryPile, chooseAgain: vi.fn(async () => undefined), uploadNotice: async () => null };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/" element={<Home />} /><Route path="/pile/:id" element={<Opened />} /></Routes></DataProvider></MemoryRouter>);
+    const row = (await screen.findByRole('link', { name: /Receipts/ })).closest('li');
+    if (!row) throw new Error('no row');
+    const button = within(row).getByRole('button', { name: 'Try again' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(retryPile).toHaveBeenCalledOnce();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    done();
+    expect(await screen.findByText('Pile missing ready at member-c')).toBeVisible();
+    expect(retryPile).toHaveBeenCalledOnce();
   });
 });

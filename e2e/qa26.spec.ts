@@ -198,7 +198,8 @@ test('fake: the device notice shows once while something waits to be sent and go
   await expect(things.getByRole('button', { name: 'Remove this pile', exact: true })).toHaveCount(0);
   await things.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(toast(page, 'Choose c.pdf again on this device to send it.')).toBeVisible();
-  await things.getByRole('link', { name: /Receipts from Alex/ }).click();
+  // TL-P2-27 (3): Try again keeps its sentence and opens the pile, ready at the thing.
+  await expect(page).toHaveURL(/\/pile\//);
   await expect(page.getByRole('main').getByText(NOT_ARRIVED, { exact: true })).toBeVisible();
   await expect(page.getByRole('list', { name: 'In this pile' }).getByRole('listitem').filter({ hasText: 'c.pdf' })).toContainText("Didn't arrive");
   await expect(page.getByRole('main').getByRole('button', { name: 'Try again', exact: true })).toHaveCount(1);

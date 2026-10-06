@@ -3,7 +3,7 @@ import { FakeDrive } from '../drive/fake-drive';
 import { seedFakeDrive } from '../fake/seed';
 import { findNode } from '../tree';
 import { BowerError } from '../types';
-import { DriveVault } from './drive-vault';
+import { DriveVault, NOT_THE_SAME_TEXT } from './drive-vault';
 import { runFake } from '../fake/fake-runner';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
@@ -1720,5 +1720,261 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     await vi.waitFor(() => expect(v.uploadNotice()).toBe("Bower couldn't read what it kept on this device. Choose those files again to send them."));
     await vi.waitFor(() => expect(heard).toHaveBeenCalled());
     v.dispose();
+  });
+});
+
+describe('a reselected file must match its declared member', () => {
+  const declaring = (opts: { running?: string } = {}): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(opts.running ? [opts.running] : []), declarePiles: true });
+  const pdf = (name: string, text = `%PDF ${name}`): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name, kind: 'pdf', origin: 'From this computer', body: new Blob([text]) });
+  const LINK = 'https://source.example/path';
+
+  /** `name` does not get through, from this client, until the returned function is called. */
+  function failing(on: { upload?: string | readonly string[]; link?: boolean }): () => void {
+    const upload = drive.upload.bind(drive);
+    const createText = drive.createText.bind(drive);
+    const names: readonly (string | undefined)[] = typeof on.upload === 'string' || on.upload === undefined ? [on.upload] : on.upload;
+    let fail = true;
+    drive.upload = async (parent, n, body, onProgress, props) => {
+      if (fail && names.includes(n)) throw driveError('offline');
+      return upload(parent, n, body, onProgress, props);
+    };
+    drive.createText = async (parent, n, text, props) => {
+      if (fail && on.link && n.endsWith('.url')) throw driveError('offline');
+      return createText(parent, n, text, props);
+    };
+    return () => { fail = false; };
+  }
+
+  /** A pile whose `missing` thing never left the first client, which then went away. */
+  async function leftBehind(items: NewPileItems, missing: { upload?: string | readonly string[]; link?: boolean }) {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const heal = failing(missing);
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items });
+    await uploader.settled();
+    uploader.dispose();
+    heal();
+    const folder = (await drive.listAll(root)).find((f) => f.folder && f.appProperties?.pile === pile.id);
+    const declared = (await drive.listAll(root)).find((f) => !f.folder && drive.pathOf(f.id, root).startsWith('.bower/piles/'));
+    const parsed = await parsePileDeclaration(await drive.readBytes(declared?.id ?? ''), root);
+    if (!folder || !parsed.ok) throw new Error('no declared pile');
+    const first = typeof missing.upload === 'string' ? missing.upload : missing.upload?.[0];
+    const member = parsed.value.members.find((m) => (missing.link ? m.kind === 'link' : m.name === first));
+    if (!member) throw new Error('no member');
+    return { pile, folder, declaration: parsed.value, member };
+  }
+  type NewPileItems = Parameters<DriveVault['addPile']>[0]['items'];
+
+  const things = async (folderId: string) => (await drive.listAll(folderId)).filter((f) => !f.folder && f.parents[0] === folderId && f.name !== 'Pile note.md');
+
+  it('the same file, chosen on a client without its bytes, is sent once under its declared member; its sibling is not sent again', async () => {
+    const { pile, folder, declaration, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
+    const second = declaring();
+    const row = (await second.piles()).find((p) => p.id === pile.id)?.items.find((i) => i.name === 'b.pdf');
+    expect(row).toMatchObject({ id: member.memberKey, upload: -1, chooseAgain: true });
+    const upload = vi.spyOn(drive, 'upload');
+    await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).resolves.toBeUndefined();
+    await second.settled();
+    expect(upload).toHaveBeenCalledTimes(1);
+    const kids = await things(folder.id);
+    expect(kids.map((f) => f.appProperties?.asAdded).sort()).toEqual(['a.pdf', 'b.pdf']);
+    const sent = kids.find((f) => f.appProperties?.bowerItem === member.memberKey);
+    expect(sent?.appProperties).toMatchObject({ asAdded: 'b.pdf', bowerItem: member.memberKey, bowerDeclaration: declaration.declarationId });
+    expect(new TextDecoder().decode(await drive.readBytes(sent?.id ?? ''))).toBe('%PDF b.pdf');
+    const now = (await declaring().piles()).find((p) => p.id === pile.id);
+    expect(now?.items.map((i) => [i.name, i.upload, i.chooseAgain])).toEqual([['a.pdf', undefined, undefined], ['b.pdf', undefined, undefined]]);
+    expect(now?.setAside).toBeUndefined();
+  });
+
+  it.each([
+    ['other bytes of the same size', '%PDF c.pdf'],
+    ['another size', '%PDF b-2.pdf'],
+  ])('a different file (%s) is refused in one sentence, nothing is sent, and the thing stays missing and retryable', async (_label, text) => {
+    const { pile, folder, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
+    const second = declaring();
+    const upload = vi.spyOn(drive, 'upload');
+    const createText = vi.spyOn(drive, 'createText');
+    await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob([text]) })).rejects.toMatchObject({ code: 'conflict', message: NOT_THE_SAME_TEXT.file });
+    await second.settled();
+    expect(upload).not.toHaveBeenCalled();
+    expect(createText).not.toHaveBeenCalled();
+    expect((await things(folder.id)).map((f) => f.appProperties?.asAdded)).toEqual(['a.pdf']);
+    const still = (await second.piles()).find((p) => p.id === pile.id);
+    expect(still?.items.find((i) => i.id === member.memberKey)).toMatchObject({ upload: -1, chooseAgain: true });
+    expect(still?.setAside).toBe('not-arrived');
+    await expect(second.retryPile(pile.id)).rejects.toMatchObject({ message: 'Choose b.pdf again on this device to send it.' });
+    // Still retryable: the right file afterwards is sent.
+    await second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) });
+    await second.settled();
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it('a link pasted again is sent only when it is the same link', async () => {
+    const { pile, folder, member } = await leftBehind([pdf('a.pdf'), { name: 'source.example/path', kind: 'link', origin: 'A link you pasted', url: LINK }], { link: true });
+    const second = declaring();
+    expect((await second.piles()).find((p) => p.id === pile.id)?.items.find((i) => i.kind === 'link')).toMatchObject({ id: member.memberKey, upload: -1, chooseAgain: true });
+    const createText = vi.spyOn(drive, 'createText');
+    await expect(second.chooseAgain(pile.id, member.memberKey, { url: 'https://source.example/other' })).rejects.toMatchObject({ code: 'conflict', message: NOT_THE_SAME_TEXT.link });
+    await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob([`[InternetShortcut]\nURL=${LINK}\n`]) })).rejects.toMatchObject({ message: NOT_THE_SAME_TEXT.link });
+    expect(createText).not.toHaveBeenCalled();
+    await expect(second.chooseAgain(pile.id, member.memberKey, { url: LINK })).resolves.toBeUndefined();
+    await second.settled();
+    expect(createText).toHaveBeenCalledTimes(1);
+    const sent = (await things(folder.id)).filter((f) => f.appProperties?.bowerItem === member.memberKey);
+    expect(sent).toHaveLength(1);
+    expect(await drive.readText(sent[0]?.id ?? '')).toBe(`[InternetShortcut]\nURL=${LINK}\n`);
+  });
+
+  it('a thing that arrived meanwhile from another device is not sent again', async () => {
+    const { pile, folder, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
+    const second = declaring();
+    await second.piles();
+    // Another device sends it after this client listed the pile.
+    await drive.upload(folder.id, 'b.pdf', new Blob(['%PDF b.pdf']), undefined, { asAdded: 'b.pdf', bowerItem: member.memberKey });
+    const upload = vi.spyOn(drive, 'upload');
+    await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).resolves.toBeUndefined();
+    await second.settled();
+    expect(upload).not.toHaveBeenCalled();
+    expect((await things(folder.id)).filter((f) => f.appProperties?.bowerItem === member.memberKey)).toHaveLength(1);
+  });
+
+  it('while a tidy-up holds the pile, nothing is sent', async () => {
+    const { pile, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
+    const upload = vi.spyOn(drive, 'upload');
+    await expect(declaring({ running: pile.id }).chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).rejects.toMatchObject({ code: 'conflict', message: 'Wait for the tidy-up to end.' });
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('a file chosen for one thing that is another thing waiting to be chosen is sent as that one', async () => {
+    const { pile, folder, declaration, member: c } = await leftBehind([pdf('a.pdf'), pdf('c.pdf'), pdf('d.pdf')], { upload: ['c.pdf', 'd.pdf'] });
+    const d = declaration.members.find((m) => m.name === 'd.pdf');
+    if (!d) throw new Error('no d.pdf');
+    const second = declaring();
+    const upload = vi.spyOn(drive, 'upload');
+    await expect(second.chooseAgain(pile.id, c.memberKey, { body: new Blob(['%PDF d.pdf']) })).resolves.toBeUndefined();
+    await second.settled();
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect((await things(folder.id)).filter((f) => f.appProperties?.bowerItem === d.memberKey).map((f) => f.appProperties?.asAdded)).toEqual(['d.pdf']);
+    expect((await things(folder.id)).filter((f) => f.appProperties?.bowerItem === c.memberKey)).toEqual([]);
+    const rows = (await declaring().piles()).find((p) => p.id === pile.id)?.items ?? [];
+    expect(rows.filter((i) => i.chooseAgain).map((i) => i.name)).toEqual(['c.pdf']);
+  });
+
+  it('a sibling already in Drive, chosen for the thing asked for, is refused and nothing is sent', async () => {
+    const { pile, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
+    const second = declaring();
+    const upload = vi.spyOn(drive, 'upload');
+    await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF a.pdf']) })).rejects.toMatchObject({ code: 'conflict', message: NOT_THE_SAME_TEXT.file });
+    await second.settled();
+    expect(upload).not.toHaveBeenCalled();
+    expect((await second.piles()).find((p) => p.id === pile.id)?.items.find((i) => i.id === member.memberKey)).toMatchObject({ upload: -1, chooseAgain: true });
+  });
+
+  it('the same file chosen twice at once is sent once', async () => {
+    const { pile, folder, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
+    const second = declaring();
+    await second.piles();
+    // Both choices are checked before either is sent: each looks at the folder at the same time.
+    const listAll = drive.listAll.bind(drive);
+    let looking = 0;
+    let both!: () => void;
+    const together = new Promise<void>((r) => { both = r; });
+    vi.spyOn(drive, 'listAll').mockImplementation(async (id) => {
+      if (id === folder.id && ++looking === 2) both();
+      if (id === folder.id) await together;
+      return listAll(id);
+    });
+    const upload = vi.spyOn(drive, 'upload');
+    await Promise.all([1, 2].map(() => second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })));
+    await second.settled();
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect((await things(folder.id)).filter((f) => f.appProperties?.bowerItem === member.memberKey)).toHaveLength(1);
+  });
+
+  it('a tidy-up that takes the pile while the file is checked: nothing is sent', async () => {
+    const { pile, member } = await leftBehind([pdf('a.pdf'), pdf('b.pdf')], { upload: 'b.pdf' });
+    const running = new Set<string>();
+    const second = new DriveVault({ drive, rootId: async () => root, runningPiles: () => running, declarePiles: true });
+    await second.piles();
+    const listAll = drive.listAll.bind(drive);
+    vi.spyOn(drive, 'listAll').mockImplementation(async (id) => {
+      running.add(pile.id);
+      return listAll(id);
+    });
+    const upload = vi.spyOn(drive, 'upload');
+    await expect(second.chooseAgain(pile.id, member.memberKey, { body: new Blob(['%PDF b.pdf']) })).rejects.toMatchObject({ code: 'conflict', message: 'Wait for the tidy-up to end.' });
+    await second.settled();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('a send whose folder cannot be listed again tries each thing once, not again and again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const v = declaring();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const upload = drive.upload.bind(drive);
+    let held = false;
+    drive.upload = async (parent, n, body, onProgress, props) => {
+      if (!held) {
+        held = true;
+        await gate;
+      }
+      return upload(parent, n, body, onProgress, props);
+    };
+    await v.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await vi.waitFor(() => expect(held).toBe(true));
+    // Drive stops listing while a.pdf is on its way, and the folder must be listed again.
+    const listAll = drive.listAll.bind(drive);
+    let lists = 0;
+    vi.spyOn(drive, 'listAll').mockImplementation(async (id) => {
+      lists += 1;
+      if (lists <= 40) throw driveError('offline');
+      return listAll(id);
+    });
+    await v.refresh().catch(() => undefined);
+    release();
+    await v.settled();
+    expect(lists).toBeLessThanOrEqual(3);
+    v.dispose();
+  });
+
+  it('through the upload queue: bytes this device lost are chosen again and sent once, under the file id reserved for them', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const BYTES = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const d = new FakeDrive({ chunkMultiple: 4 });
+    root = (await seedFakeDrive(d, 'default', Date.now())) ?? '';
+    const idb = new IDBFactory();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    d.beforeChunk = async (call) => { if (call.start >= 4) await gate; };
+    const firstQueue = createUploadQueue({ drive: d, store: indexedDbUploadStore(idb), chunkSize: 4 });
+    const first = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue: firstQueue, account: async () => 'ACCOUNT_A' } });
+    const pile = await first.addPile({ text: 'Receipts', items: [{ name: 'scan.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob([BYTES], { type: 'application/pdf' }) }] });
+    await vi.waitFor(() => expect(d.resumableCalls.some((c) => c.op === 'put' && c.start === 4)).toBe(true));
+    const reserved = d.resumableCalls.find((c) => c.op === 'open')?.id;
+    firstQueue.stop();
+    first.dispose();
+    release();
+    d.beforeChunk = null;
+
+    // The next page cannot read the bytes back: the thing is gone from this device.
+    const queue = createUploadQueue({ drive: d, store: { ...indexedDbUploadStore(idb), body: async () => null }, chunkSize: 4 });
+    const vault = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => 'ACCOUNT_A' } });
+    await vault.piles();
+    await vi.waitFor(() => expect(queue.items()[0]).toMatchObject({ state: 'failed', gone: true }));
+    const row = (await vault.piles()).find((p) => p.id === pile.id)?.items[0];
+    expect(row).toMatchObject({ name: 'scan.pdf', upload: -1, chooseAgain: true });
+    const opens = d.resumableCalls.filter((c) => c.op === 'open').length;
+    await expect(vault.chooseAgain(pile.id, row?.id ?? '', { body: new Blob([new Uint8Array([9, 9, 9, 9, 9, 9, 9, 9, 9, 9])]) })).rejects.toMatchObject({ message: NOT_THE_SAME_TEXT.file });
+    await expect(vault.chooseAgain(pile.id, row?.id ?? '', { body: new Blob([BYTES], { type: 'application/pdf' }) })).resolves.toBeUndefined();
+    await vault.settled();
+    await queue.idle();
+    const scans = (await d.listAll(root)).filter((f) => f.appProperties?.asAdded === 'scan.pdf');
+    expect(scans.map((f) => f.id)).toEqual([reserved]);
+    expect([...(await d.readBytes(reserved ?? ''))]).toEqual([...BYTES]);
+    expect(d.resumableCalls.filter((c) => c.op === 'open')).toHaveLength(opens);
+    expect(queue.items().map((i) => i.state)).toEqual(['done']);
+    expect((await vault.piles()).find((p) => p.id === pile.id)?.items.map((i) => [i.name, i.upload])).toEqual([['scan.pdf', undefined]]);
+    vault.dispose();
   });
 });

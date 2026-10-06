@@ -23,6 +23,7 @@ import { RESUMABLE_CHUNK_BYTES, sendResumable, type ResumableClient } from './dr
 import { isOpenElsewhere, OPEN_ELSEWHERE_TEXT } from './session';
 import { BowerError } from './types';
 import { uploadId, type PendingUpload, type UploadStore } from './upload-store';
+import { sha256 } from './vault/hashes';
 
 /** The largest file the queue copies onto the device. */
 export const DURABLE_MAX_BYTES = 200 * 1024 * 1024;
@@ -633,6 +634,48 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     }
   }
 
+  /**
+   * A gone one, chosen again (D02): only the same bytes (size, then SHA-256,
+   * which is part of its id) take its place. It keeps its record, so its
+   * reserved file id and session: Drive never gets a second file. The bytes
+   * are kept on the device again when they can be.
+   */
+  async function chosenAgain(entry: Entry, body: Blob, gen: number): Promise<QueueItem> {
+    const { item, record } = entry;
+    if (body.size !== record.size || (await sha256(body)) !== record.sha256) {
+      console.error('Bytes chosen again differ from the pending upload');
+      throw new BowerError('unknown', NOT_SENT_TEXT);
+    }
+    let durable = await fits(record.size);
+    if (durable) {
+      try {
+        await store.add(record, body);
+      } catch (error) {
+        if (!isQuotaError(error)) console.error(error);
+        durable = false;
+      }
+    }
+    if (gen !== generation) {
+      console.error('The upload queue stopped while a file was chosen again');
+      throw new BowerError('unknown', stoppedText(record.appProperties[KIND_PROP]));
+    }
+    // Chosen twice at once: the first one already took its place.
+    if (entries.get(item.id) !== entry || !item.gone) return { ...item };
+    entry.body = body;
+    entry.kept = entry.kept || durable;
+    item.durable = durable;
+    if (durable) delete item.note;
+    else item.note = KEEP_OPEN_TEXT;
+    delete item.gone;
+    delete item.error;
+    item.state = 'waiting';
+    item.sent = record.confirmed;
+    notify();
+    if (durable && role !== 'owner') bus?.post();
+    void pump();
+    return { ...item };
+  }
+
   return {
     async start(account, folder) {
       if (scope?.account === account && scope.folder === folder && role !== 'idle') return role;
@@ -686,6 +729,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       };
       const id = uploadId(record);
       const known = entries.get(id);
+      // Its bytes are gone from this device: the same file, chosen again, takes their place.
+      if (known?.item.gone) return chosenAgain(known, input.body, gen);
       if (known) return { ...known.item };
       if (!persistAsked) {
         persistAsked = true;

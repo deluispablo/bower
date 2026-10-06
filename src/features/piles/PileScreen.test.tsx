@@ -7,6 +7,9 @@ import { FakeDrive } from '@/data/drive/fake-drive';
 import { DriveVault } from '@/data/vault/drive-vault';
 import { BowerError, type Pile } from '@/data/types';
 import type { Sources } from '@/data/sources';
+import { useToasts } from '@/ui/toast';
+import { DemoWorld } from '@/data/demo/world';
+import { SAMPLE_PILES } from '@/data/demo/fixture';
 import { PileScreen } from './PileScreen';
 
 let vault: DriveVault | null = null;
@@ -88,5 +91,166 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(screen.queryByText('Some things did not reach your Bower folder.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(retry).toHaveBeenCalledWith('p-missing'));
+  });
+});
+
+describe('a reselected file must match its declared member', () => {
+  const missing: Pile = {
+    id: 'p-chosen', path: 'Inbox/2026-10-06 Receipts', text: 'Receipts', createdAt: Date.now(), setAside: 'not-arrived',
+    items: [{ id: 'a', name: 'a.pdf', kind: 'pdf', origin: 'From this computer' }, { id: 'member-c', name: 'c.pdf', kind: 'pdf', origin: 'From this computer', upload: -1, chooseAgain: true }],
+  };
+  function screenFor(pile: Pile, chooseAgain: Sources['vault']['chooseAgain']) {
+    const base = loadingSources();
+    const retryPile = vi.fn(async () => undefined);
+    const vault = new Proxy({}, { get: (_t, k) => (k === 'piles' ? async () => [pile] : k === 'retryPile' ? retryPile : k === 'chooseAgain' ? chooseAgain : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+    return retryPile;
+  }
+  const picker = (): HTMLInputElement => {
+    const input = document.querySelector<HTMLInputElement>('input[type=file]');
+    if (!input) throw new Error('no file picker');
+    return input;
+  };
+
+  it('Try again for a thing whose bytes are not on this device opens a file picker and sends the chosen file for it', async () => {
+    const chooseAgain = vi.fn(async () => undefined);
+    const retry = screenFor(missing, chooseAgain);
+    const open = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(open).toHaveBeenCalledOnce();
+    const file = new File(['%PDF c.pdf'], 'c.pdf', { type: 'application/pdf' });
+    fireEvent.change(picker(), { target: { files: [file] } });
+    await waitFor(() => expect(chooseAgain).toHaveBeenCalledWith('p-chosen', 'member-c', { body: file }));
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it('a different file is refused in its one sentence, and Try again opens the picker again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const refusal = "That isn't the same file. Choose the file you added before.";
+    const chooseAgain = vi.fn(async () => { throw new BowerError('conflict', refusal); });
+    screenFor(missing, chooseAgain);
+    const open = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(open).toHaveBeenCalledOnce();
+    fireEvent.change(picker(), { target: { files: [new File(['other'], 'other.pdf')] } });
+    await waitFor(() => expect(useToasts.getState().list.map((t) => t.text)).toContain(refusal));
+    expect(screen.getByText('Some of its things have not arrived yet.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
+  const linkPile: Pile = { ...missing, id: 'p-link', items: [{ id: 'a', name: 'a.pdf', kind: 'pdf', origin: 'From this computer' }, { id: 'member-l', name: 'source.example/path', kind: 'link', origin: 'A link you pasted', upload: -1, chooseAgain: true }] };
+
+  it('a link that did not arrive is pasted again: Try again goes to the field, and Send sends it as Add would', async () => {
+    const chooseAgain = vi.fn(async () => undefined);
+    const retry = screenFor(linkPile, chooseAgain);
+    const open = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    const field = screen.getByRole('textbox', { name: 'Paste a link' });
+    expect(field).toHaveFocus();
+    expect(open).not.toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();
+    fireEvent.change(field, { target: { value: 'not a link' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('That is not a web address. Check it and try again.');
+    expect(chooseAgain).not.toHaveBeenCalled();
+    fireEvent.change(field, { target: { value: ' source.example/path ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(chooseAgain).toHaveBeenCalledWith('p-link', 'member-l', { url: 'https://source.example/path' }));
+  });
+
+  it('another link is refused in its one sentence, and the field keeps it to correct', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const refusal = "That isn't the same link. Paste the link you added before.";
+    const chooseAgain = vi.fn(async () => { throw new BowerError('conflict', refusal); });
+    screenFor(linkPile, chooseAgain);
+    const field = await screen.findByRole('textbox', { name: 'Paste a link' });
+    fireEvent.change(field, { target: { value: 'source.example/other' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(useToasts.getState().list.map((t) => t.text)).toContain(refusal));
+    expect(field).toHaveValue('source.example/other');
+  });
+
+  it.each([
+    ['a file: Try again, which opens its picker', 'member-c', () => screen.getByRole('button', { name: 'Try again' })],
+    ['a link: the field to paste it in', 'member-l', () => screen.getByRole('textbox', { name: 'Paste a link' })],
+  ] as const)('opened from the Inbox for a thing to choose again, the screen is ready at it (%s)', async (_label, key, ready) => {
+    const pile: Pile = { ...missing, items: [...missing.items, { id: 'member-l', name: 'source.example/path', kind: 'link', origin: 'A link you pasted', upload: -1, chooseAgain: true }] };
+    const base = loadingSources();
+    const vault = new Proxy({}, { get: (_t, k) => (k === 'piles' ? async () => [pile] : k === 'chooseAgain' ? vi.fn(async () => undefined) : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter initialEntries={[{ pathname: `/pile/${pile.id}`, state: { choose: key } }]}><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+    await screen.findByRole('button', { name: 'Try again' });
+    await waitFor(() => expect(ready()).toHaveFocus());
+  });
+
+  it("Try again says which files it asks for, and waits while one is checked", async () => {
+    const pile: Pile = { ...missing, items: [...missing.items, { id: 'member-d', name: 'd.pdf', kind: 'pdf', origin: 'From this computer', upload: -1, chooseAgain: true }] };
+    let done!: () => void;
+    const chooseAgain = vi.fn(() => new Promise<void>((r) => { done = r; }));
+    screenFor(pile, chooseAgain);
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    const button = await screen.findByRole('button', { name: 'Try again' });
+    expect(button).toHaveAccessibleDescription('Choose c.pdf again on this device to send it. Choose d.pdf again on this device to send it.');
+    button.focus();
+    fireEvent.click(button);
+    fireEvent.change(picker(), { target: { files: [new File(['%PDF d.pdf'], 'd.pdf')] } });
+    // Waiting, it keeps the focus: aria-disabled, not disabled, and a press does nothing.
+    await waitFor(() => expect(button).toHaveAttribute('aria-disabled', 'true'));
+    expect(button).toBeEnabled();
+    expect(button).toHaveFocus();
+    fireEvent.click(button);
+    expect(chooseAgain).toHaveBeenCalledOnce();
+    done();
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-disabled'));
+  });
+
+  it('the paste field says which link it asks for, and Send waits, keeping the focus, while it is checked', async () => {
+    let done!: () => void;
+    const chooseAgain = vi.fn(() => new Promise<void>((r) => { done = r; }));
+    screenFor(linkPile, chooseAgain);
+    const field = await screen.findByRole('textbox', { name: 'Paste a link' });
+    expect(field).toHaveAccessibleDescription('Paste the link again on this device to send it.');
+    fireEvent.change(field, { target: { value: 'source.example/path' } });
+    const send = screen.getByRole('button', { name: 'Send' });
+    send.focus();
+    fireEvent.click(send);
+    await waitFor(() => expect(send).toHaveAttribute('aria-disabled', 'true'));
+    expect(send).toBeEnabled();
+    expect(send).toHaveFocus();
+    fireEvent.click(send);
+    expect(chooseAgain).toHaveBeenCalledOnce();
+    done();
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
+  });
+
+  it('Try again also sends again what failed from this page, then asks for the file', async () => {
+    const pile: Pile = { ...missing, items: [{ id: 'x', name: 'x.pdf', kind: 'pdf', origin: 'From this computer', upload: -1 }, ...missing.items.slice(1)] };
+    const retry = screenFor(pile, vi.fn(async () => undefined));
+    const open = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(open).toHaveBeenCalledOnce();
+    await waitFor(() => expect(retry).toHaveBeenCalledWith('p-chosen'));
+  });
+
+  it('the demo has nothing to choose again: no thing asks for it, and its piles show no picker or paste field', async () => {
+    const w = new DemoWorld({ scenario: 'default', scale: 'instant', latency: 0 });
+    try {
+      const sources = w.sources();
+      for (const sample of SAMPLE_PILES) w.addSample(sample);
+      await sources.vault.addPile({ text: 'Receipts from Alex', items: [{ name: 'c.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob(['%PDF c.pdf']) }, { name: 'source.example/path', kind: 'link', origin: 'A link you pasted', url: 'https://source.example/path' }] });
+      const piles = await sources.vault.piles();
+      expect(piles.some((p) => p.setAside)).toBe(true);
+      expect(piles.flatMap((p) => p.items).filter((i) => i.chooseAgain)).toEqual([]);
+      expect(sources.vault.chooseAgain).toBeUndefined();
+      for (const pile of piles.filter((p) => p.setAside || p.items.length)) {
+        render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={sources}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+        await screen.findByRole('list', { name: 'In this pile' });
+        expect(document.querySelector('input[type=file]')).toBeNull();
+        expect(screen.queryByRole('textbox', { name: 'Paste a link' })).toBeNull();
+        cleanup();
+      }
+    } finally {
+      w.dispose();
+    }
   });
 });

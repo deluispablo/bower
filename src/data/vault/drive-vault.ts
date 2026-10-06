@@ -12,6 +12,7 @@ import { buildTree, checkCreationName, displayName, thingName, freeName, join, k
 import {
   BowerError,
   type ChangeEntry,
+  type ChosenAgain,
   type FileKind,
   type NewPile,
   type Note,
@@ -58,6 +59,15 @@ export interface DriveVaultUploads {
   /** Who is signed in, as the queue keys their uploads (never shown). */
   account: () => Promise<string>;
 }
+
+/**
+ * A file or link chosen again that is not the one the pile declared
+ * (proposed copy, waiting for approval): what happened, then the action.
+ */
+export const NOT_THE_SAME_TEXT = {
+  file: "That isn't the same file. Choose the file you added before.",
+  link: "That isn't the same link. Paste the link you added before.",
+} as const;
 
 const where = (folder: string): string => folder.replaceAll('/', ' / ') || 'your Bower folder';
 const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
@@ -522,7 +532,7 @@ export class DriveVault implements VaultSource {
     const missing = found.declaration.members.filter((m) => state.get(m.memberKey)?.state === 'missing');
     const rows = missing
       .filter((m) => !local.has(m.memberKey))
-      .map((m) => ({ id: m.memberKey, name: shownName(m), kind: m.kind, origin: m.origin ?? 'Added in Drive', upload: -1 }));
+      .map((m) => ({ id: m.memberKey, name: shownName(m), kind: m.kind, origin: m.origin ?? 'Added in Drive', upload: -1, chooseAgain: true as const }));
     const changed = new Set(readiness.members.flatMap((m) => (m.state === 'changed' ? m.fileIds : [])));
     return { rows, contextKey, changed, lookup: found.state, blocked: readiness.blocked, missing: missing.map((m) => m.memberKey) };
   }
@@ -798,6 +808,76 @@ export class DriveVault implements VaultSource {
     this.track(this.send(id));
   }
 
+  /**
+   * A declared thing that has not arrived, and whose bytes are not on this
+   * device, chosen again (D02, TL-P2-07): sent once, under its declared member
+   * key and declaration, only when its size and hash are the declared ones.
+   * `itemId` is the thing asked for; bytes that are another thing waiting to
+   * be chosen in the same pile are sent as that one. Anything else is refused
+   * and nothing is sent: it stays missing, and can be chosen again. Its
+   * siblings are never sent again.
+   */
+  async chooseAgain(pileId: string, itemId: string, chosen: ChosenAgain): Promise<void> {
+    this.refuseWhileHeld(pileId);
+    const pile = await this.pile(pileId);
+    const ix = await this.index();
+    const folder = pile.path ? ix.file(pile.path) : undefined;
+    const found = folder?.folder && folder.appProperties?.[PROP.declaration] ? await this.declarationOf(folder, this.known(ix)) : null;
+    const asked = found?.state === 'found' ? found.declaration.members.find((m) => m.memberKey === itemId) : undefined;
+    if (!folder || found?.state !== 'found' || !asked) throw new BowerError('not-found', 'That is no longer there.');
+    const link = asked.kind === 'link';
+    const url = link ? chosen.url : undefined;
+    const bytes = link ? (url === undefined ? null : new Blob([shortcut(url)])) : (chosen.body ?? null);
+    const refused = new BowerError('conflict', link ? NOT_THE_SAME_TEXT.link : NOT_THE_SAME_TEXT.file);
+    if (!bytes) throw refused;
+    const digest = await sha256(bytes);
+    this.checkCurrent();
+    // The things still missing, and not on its way from here: only one of them is sent.
+    const state = await this.declaredState(folder, this.uploads.get(pileId), this.queuedItems(pileId).map((i) => i.memberKey));
+    const waiting = new Set(state.rows.map((r) => r.id));
+    const same = found.declaration.members.filter((m) => (m.kind === 'link') === link && m.content.size === bytes.size && m.content.sha256 === digest);
+    const member = same.find((m) => m.memberKey === itemId && waiting.has(m.memberKey)) ?? same.find((m) => waiting.has(m.memberKey)) ?? same[0];
+    if (!member) throw refused;
+    // The thing asked for still waits, and these are a sibling's bytes that already arrived: not it.
+    if (!waiting.has(member.memberKey) && waiting.has(itemId)) throw refused;
+    // The same as the thing asked for, which arrived or is on its way from here meanwhile: nothing to send.
+    if (!waiting.has(member.memberKey)) {
+      this.emit();
+      return;
+    }
+    const key = member.memberKey;
+    // Another device may have sent it since this one listed the folder: look before sending.
+    const there = (await this.drive.listAll(folder.id)).find((f) => f.parents[0] === folder.id && f.appProperties?.[PROP.item] === key);
+    this.checkCurrent();
+    if (there) {
+      ix.put(there);
+      this.emit();
+      return;
+    }
+    // Nothing awaited from here on: a tidy-up that took the pile meanwhile, or the same thing
+    // chosen twice at once, is seen now and never sent.
+    this.refuseWhileHeld(pileId);
+    const u = this.uploads.get(pileId);
+    if (u?.entries.some((e) => e.key === key) || this.queuedItems(pileId).some((i) => i.memberKey === key)) return;
+    const entry: Sending = {
+      key,
+      tried: false,
+      sha256: member.content.sha256,
+      item: { id: key, name: shownName(member), kind: member.kind, origin: member.origin ?? 'Added in Drive', upload: 0 },
+      ...(url === undefined ? { body: bytes } : { url }),
+    };
+    if (u) u.entries.push(entry);
+    else this.uploads.set(pileId, { lone: false, createdAt: pile.createdAt, parent: folder.id, entries: [entry], declaration: found.declaration.declarationId });
+    this.emit();
+    // A send already going picks it up; otherwise one starts.
+    this.track(this.send(pileId));
+  }
+
+  /** A tidy-up holds this pile: nothing is sent into it until it ends. */
+  private refuseWhileHeld(pileId: string): void {
+    if (this.runningPiles().has(pileId)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+  }
+
   async duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>> {
     const known = (await this.json(SYSTEM.hashes))?.hashes ?? {};
     const ix = await this.index();
@@ -1006,14 +1086,23 @@ export class DriveVault implements VaultSource {
     if (!u || this.sendingPiles.has(pileId)) return;
     this.sendingPiles.add(pileId);
     try {
-      await this.sendAll(pileId, u);
+      // Each thing once in this run: one chosen again while it ran is sent by it too, and one that
+      // failed (even before it was tried) waits for Try again, never looped on.
+      const seen = new Set<Sending>();
+      for (let next: Upload | undefined = u; next; next = this.uploads.get(pileId)) {
+        await this.sendAll(pileId, next, seen);
+        if (!this.current() || !this.uploads.get(pileId)?.entries.some((e) => !seen.has(e))) break;
+      }
     } finally {
       this.sendingPiles.delete(pileId);
     }
   }
 
-  private async sendAll(pileId: string, u: Upload): Promise<void> {
-    for (const e of [...u.entries]) {
+  private async sendAll(pileId: string, u: Upload, seen: Set<Sending>): Promise<void> {
+    const next = (): Sending | undefined => u.entries.find((x) => !seen.has(x));
+    // Each thing once, in order, those added while this runs included.
+    for (let e = next(); e; e = next()) {
+      seen.add(e);
       if (!this.current()) return;
       if (this.uploads.get(pileId) !== u) return;
       try {
