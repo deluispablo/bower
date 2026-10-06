@@ -52,3 +52,6 @@ Flaky under the full `e2e:fake` load at `3e6e7da` (each 6/6 alone, green on the 
 - `e2e/robustness.spec.ts:11` [phone] "a failed tidy-up says why…": "15 things filed" not visible within 30 s once (the test takes about 53 s).
 
 From the supplemental walk at `3e6e7da` ([report](2026-10-06-p2-supplemental-walk-3e6e7da.md)): answering a Home question leaves focus on the container, not the next question; the inbox confirmation is not found as a `status` role right after "Put the note in the inbox"; demo sign-in "Demo" + Enter stays on `/sign-in`.
+
+From P3-1:
+- `c11-no-policy-from-documents` test seeds a made-up `bower.allowWeb` localStorage key; the real per-device prefs key is `bower:prefs` (still covered, since the test snapshots all of localStorage). The web setting becomes a Worker account setting in P3; the test should then assert that setting.
