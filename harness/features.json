@@ -2785,8 +2785,8 @@
       "A pending report body must hash to its reportHash and bind the same run, capture and manifest; nothing here publishes, claims or recovers a run."
     ],
     "verify": "pnpm vitest run src/data/contracts/run-checkpoint.test.ts -t \"run checkpoints keep one honest recoverable chain\"",
-    "passes": false,
-    "note": "Pure O3 slice of ratified B contract aede6ef2 (TL-P2-03/04), packet docs/harness/2026-10-06-run-record-units.md unit C. Planned, not implemented."
+    "passes": true,
+    "note": "Claude candidate 2ae3b3c/6bebc98/6881668 + rework e5ab68a/1f95721; Codex review R-chk-1 BLOCKED 0C/2I/1M (failed with applied effects; frozen refusal details), Claude delta R-chk-2 CLEAN (docs/harness/2026-10-06-run-checkpoint-review.md). Structural chain guard only: no publication, claims, head selection, CAS or recovery; phase/report-state monotonicity awaits a lead ruling."
   },
   {
     "id": "pile-disposition-authority",

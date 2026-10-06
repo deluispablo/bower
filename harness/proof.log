@@ -222,3 +222,4 @@ record-json-authority	7fe1b78991994252	2026-10-06	red (fixed in ed7203d925221595
 pile-declaration-authority	2dea88fdc0fe3e08	2026-10-06	red (fixed in ed5e965ab26bdab7b6eab2b062edf639c6c12088)
 protected-current-prose	0bf01dc829b63b07	2026-10-06	red (fixed in 03cc5b1f3a60cf4a78397a0e05c70040753097d6)
 pile-disposition-authority	f0b42b5c66e12aa9	2026-10-06	red (fixed in 7f5252a1785831b7937b438aea601de2a3ae381b)
+run-checkpoint-authority	e6b30162e4765a9c	2026-10-06	red (fixed in b4724fed0a2a81c780f37e5039024e7448fc2bc3)
