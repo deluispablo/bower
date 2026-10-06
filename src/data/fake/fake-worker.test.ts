@@ -20,7 +20,7 @@ import { canonical, grounded, groundedKeys } from './fake-run-records';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
-import { ALEX, wordRule } from '../demo/fixture';
+import { ALEX, saltmereQuestion, wordRule } from '../demo/fixture';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { nameOf } from '../tree';
 import { pretendDrive, pretendRuns } from './pretend';
@@ -2491,6 +2491,86 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await linesOf(w)).map((l) => l.rec.id)).toEqual([line?.rec.id]);
       expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
       await expectFiledOnce(w);
+    });
+  });
+
+  // b-path-asked-question (TL-P2-37 Q1 (a)): the run's own question is written by B's questions.json write, and its
+  // report row is grounded by that write (contract B: questions equal the validated entries written).
+  describe('a question the run asks takes the recoverable path', () => {
+    const SALTMERE = 'Saltmere weekend receipts';
+    const plan = async (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    const isQuestionsWrite = (w: { drive: FakeDrive; rootId: string }) => (c: FencedCall): boolean => c.op === 'write-text' && w.drive.pathOf(c.id, w.rootId) === SYSTEM.questions;
+    const askedIn = (text: string | undefined): QuestionsFile['questions'] => (text === undefined ? [] : (JSON.parse(text) as QuestionsFile).questions);
+    async function settle(w: World): Promise<RunWire | null> {
+      await w.runs.settled();
+      for (let i = 0; i < 5 && !['done', 'failed'].includes((await w.worker.status())?.phase ?? ''); i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      return w.worker.status();
+    }
+    async function saltmere(w: World, names = ['taxi.pdf', 'hotel.pdf']): Promise<void> {
+      await w.uploader.addPile({ text: SALTMERE, items: names.map(pdf) });
+      await w.uploader.settled();
+    }
+
+    it('a question the run asks is written once through the recoverable path', async () => {
+      const w = await bWorld();
+      await saltmere(w);
+      // Planned on B: the question goes into the questions.json write, its row requires only that write, with the
+      // same fields and askedAt = requestedAt.
+      const planned = await plan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      const write = planned.manifest.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
+      const asked = saltmereQuestion(planned.manifest.requestedAt);
+      expect(askedIn(write?.effect.kind === 'write-runner-json' ? write.effect.text : undefined)).toEqual([asked]);
+      const rows = planned.manifest.reportPlan.filter((c) => c.value.questions.length);
+      expect(rows).toEqual([{ requires: [write?.operationId], when: 'applied', value: { filed: [], created: [], updated: [], setAside: [], questions: [asked] } }]);
+      expect(grounded(planned.manifest)).toBe(true);
+      // A row the write does not carry is not grounded.
+      const other = { ...planned.manifest, reportPlan: planned.manifest.reportPlan.map((c) => (c.value.questions.length ? { ...c, value: { ...c.value, questions: [{ ...asked, askedAt: asked.askedAt + 1 }] } } : c)) };
+      expect(grounded(other)).toBe(false);
+
+      // The write's answer is lost: the run reconciles it from what is stored and never asks twice.
+      w.rules.push(once(isQuestionsWrite(w), 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const ran = saltmereQuestion(manifest?.requestedAt ?? -1);
+      expect(askedIn(w.drive.dump(w.rootId).get(SYSTEM.questions))).toEqual([ran]);
+      expect(w.calls.filter(isQuestionsWrite(w))).toHaveLength(1);
+      expect(viewOf(w)?.run.report?.questions).toEqual([ran]);
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['hotel.pdf', 'idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf', 'taxi.pdf']);
+      expect((await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).questions()).map((q) => q.id)).toEqual([ran.id]);
+
+      // A later run with another such pile does not ask it again while it is open.
+      await saltmere(w, ['parking.pdf']);
+      const later = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: later.id, phase: 'done' });
+      expect(askedIn(w.drive.dump(w.rootId).get(SYSTEM.questions))).toEqual([ran]);
+      expect(viewOf(w)?.run.report?.questions).toEqual([]);
+      expect(w.calls.filter(isQuestionsWrite(w))).toHaveLength(1);
+    });
+
+    it('makes the list of questions again when it is missing, to ask its question', async () => {
+      const w = await bWorld();
+      await saltmere(w);
+      const list = (await w.drive.listAll(w.rootId)).find((f) => w.drive.pathOf(f.id, w.rootId) === SYSTEM.questions);
+      await w.drive.trash(list?.id ?? '');
+      const planned = await plan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      const made = planned.manifest.operations.find((o) => o.effect.kind === 'create-text' && o.effect.name === 'questions.json');
+      expect(made?.effect).toMatchObject({ kind: 'create-text', purpose: 'runner-json' });
+      expect(planned.manifest.reportPlan.filter((c) => c.value.questions.length).map((c) => c.requires)).toEqual([[made?.operationId]]);
+      expect(grounded(planned.manifest)).toBe(true);
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      expect(askedIn(w.drive.dump(w.rootId).get(SYSTEM.questions))).toEqual([saltmereQuestion(manifest?.requestedAt ?? -1)]);
+      expect(viewOf(w)?.run.report?.questions).toEqual([saltmereQuestion(manifest?.requestedAt ?? -1)]);
     });
   });
 
