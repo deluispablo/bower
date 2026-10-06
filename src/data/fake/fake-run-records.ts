@@ -15,7 +15,6 @@ import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
-import { safeInboxName } from '../piles';
 import { join, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
@@ -306,13 +305,13 @@ export function grounded(manifest: RunManifest): boolean {
     if (!member) return false;
     if (c.when === 'rejected') {
       const [row, ...rest] = v.setAside;
-      if (v.filed.length || !row || rest.length || !shownAs(row.name, member.file.name) || setAside.has(member.file.fileId)) return false;
+      if (v.filed.length || !row || rest.length || row.name !== member.file.name || setAside.has(member.file.fileId)) return false;
       setAside.add(member.file.fileId);
       continue;
     }
     const [row, ...rest] = v.filed;
     if (v.setAside.length || !row || rest.length) return false;
-    if (!shownAs(row.name, member.file.name) || row.to !== pathOf(move.parent) || filed.has(member.file.fileId)) return false;
+    if (row.name !== member.file.name || row.to !== pathOf(move.parent) || filed.has(member.file.fileId)) return false;
     if (!chainOf(move.parent).every((id) => c.requires.includes(id))) return false;
     if (row.note !== undefined && !noteGrounded(manifest, c, moveOp, row.note, claimedNotes)) return false;
     filed.add(member.file.fileId);
@@ -326,16 +325,6 @@ export function grounded(manifest: RunManifest): boolean {
     && manifest.capture.journal.every((j) => claimed.has(j.recordId))
     && notes.every((o) => written.has(o.operationId) && unwritten.has(o.operationId))
     && linkNotes.every((o) => manifest.reportPlan.some((c) => c.when === 'applied' && c.requires.includes(o.operationId) && c.value.filed.some((r) => r.note !== undefined)));
-}
-
-/**
- * A filed row's name as the person added the thing: the captured file name, or for a saved link the name it was
- * added under, from which the inbox made that `.url` file (`safeInboxName`, plus any ` (n)` a clash added).
- */
-export function shownAs(name: string, fileName: string): boolean {
-  if (name === fileName) return true;
-  const inbox = fileName.replace(/ \(\d+\)(\.url)$/i, '$1');
-  return /\.url$/i.test(fileName) && [fileName, inbox].includes(safeInboxName({ name, kind: 'link' }));
 }
 
 /**
