@@ -3458,7 +3458,7 @@
       "Open the saved link's note and follow its Source link."
     ],
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04: a note added to the inbox becomes a note reached by a link\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {

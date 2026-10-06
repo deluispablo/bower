@@ -27,3 +27,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: running-scenario-on-b passes — chore(harness): running-scenario-on-b passes (batch 5)
 - 2026-10-06: legacy-runner-write-removal passes — chore(harness): legacy-runner-write-removal passes (batch 5)
 - 2026-10-06: run-result-links passes — chore(harness): run-result-links passes (batch 5)
+- 2026-10-06: c04-journey-new-note passes — chore(harness): c04-journey-new-note passes (batch 5)
