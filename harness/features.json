@@ -2869,8 +2869,8 @@
       "Completed siblings are never resent."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a reselected file must match its declared member\"",
-    "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. D02."
+    "passes": true,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). D02. Integrated in 1deb3dd from claude/p2-reselection 9f9fc98; review CLEAN after deltas; gates check 3333, e2e 206, e2e:fake 214."
   },
   {
     "id": "o5-saved-link-note",

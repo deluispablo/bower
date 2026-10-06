@@ -384,3 +384,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: session-signout-state passes — fix: proof-close session sign-out state
 - 2026-10-06: o5-timeline-append passes — feat: proof-close Timeline lines on the recoverable path
 - 2026-10-06: single-active-session-screen passes — feat: proof-close the open-elsewhere screen
+- 2026-10-06: pile-member-reselection passes — feat: proof-close member reselection

@@ -238,3 +238,4 @@ note-edit-contract	aafffa972f3ddbb5	2026-10-06	red (fixed in dfc55d60e59c148f8bc
 session-signout-state	28b19b039fae420f	2026-10-06	red (fixed in 45c69e11f7e971f9403a3511593b4698f78f6595)
 o5-timeline-append	5af29c92ff18ade1	2026-10-06	red (fixed in 9aa5f4aed8c1abe590057e480fbdc312ca4b4aae)
 single-active-session-screen	6956bc68d927e6aa	2026-10-06	red (fixed in cd4acf07c05b72e5000cd1e286655c16bddaaa7d)
+pile-member-reselection	a9112c7e5fa82530	2026-10-06	red (fixed in 1deb3dd)
