@@ -3346,7 +3346,7 @@
       "Recovery never asks it twice; the legacy reason question is gone."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a question the run asks is written once through the recoverable path\"",
-    "passes": false,
+    "passes": true,
     "note": "Q1 (a). TL-P2-37 (main d6dca4b). Planned, not implemented."
   },
   {
