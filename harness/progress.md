@@ -48,3 +48,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: worker-crypto-session passes — chore(harness): worker-crypto-session passes (P3-3)
 - 2026-10-06: worker-person-object passes — chore(harness): worker-person-object passes (P3-3)
 - 2026-10-06: worker-error-codes-contract passes — chore(harness): worker-error-codes-contract passes (P3-3)
+- 2026-10-07: worker-google-oidc passes — chore(harness): worker-google-oidc passes (P3-4)

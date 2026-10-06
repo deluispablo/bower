@@ -3747,7 +3747,7 @@
       "A cancelled or failed callback redirects to the app's sign-in with ?signin=cancelled or ?signin=failed; no JSON, details to the log only (TL-P3-07)."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the callback refuses an ID token with the wrong audience or nonce|a person not on the allowlist is refused at the callback|logout retires every other cookie for that person|GET /me answers signed-out without a session|a cancelled sign-in returns to the app saying so|a failed sign-in returns to the app saying so\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-04 (P3-4) and its amendment: session generation store and check, SESSION_SECRET_PREVIOUS rotation; errors reaching the person object answer internal. TL-P3-07 (main dc23772): failed and cancelled callbacks redirect to the app's sign-in."
   }
 ]
