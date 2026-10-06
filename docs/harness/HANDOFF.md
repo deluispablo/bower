@@ -9,7 +9,7 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## The plan, in order
 
-1. Freeze one SHA (the batch 5 SHA) → one batch review (Codex, `codex exec --json`, explicit effort) against the P2 exit contract.
+1. Frozen at `4d7ab08`; the Codex batch review against the P2 exit contract is running (see ACTIVE).
 2. Phone/desktop evaluation → one C/I fix round → dossier (fresh C01–C16 row-to-evidence map) → close P2.
 
 ## How to run a round
