@@ -3250,5 +3250,61 @@
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"the inbox accounts for filed members like the tidy-up\"",
     "passes": true,
     "note": "Second amendment to TL-P2-29 (main 07ba2b6): one shared function in pile-readiness.ts used by the runner and DriveVault. Internal to contract B; no external standard. Integrated in 54e7212 from claude/p2-leftover 9857543; review CLEAN after delta. Gates on 49681df (combined with the other three): check 3347, e2e 208, e2e:fake 218."
+  },
+  {
+    "id": "b-path-context-restore",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A declared pile whose context note is missing is held until the app writes the note back; the runner never writes into the Inbox.",
+    "steps": [
+      "Declare a pile with words, then remove its context note from the Inbox.",
+      "The app restores the note from the declaration's original text; until then the pile is held: not captured, no report row, its reason in the Inbox.",
+      "No plan takes the legacy path for it and the runner writes nothing into the Inbox."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile waiting for its context note is held, never restored by the runner\"",
+    "passes": false,
+    "note": "TL-P2-32 (1) (main 936cbb0), no exception to TL-P2-17: restoring is the app's job (TL-P2-08b, from originalText); held per TL-P2-21. Removes the legacy reason 'context restore' found by the b-path-generated-note lane. Planned, not implemented."
+  },
+  {
+    "id": "b-path-pile-notes-only",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A pile whose only things are notes is filed as an ordinary note pile on the recoverable path.",
+    "steps": [
+      "Add an undeclared pile whose only things are notes.",
+      "The first note is its context, filed as a generated note (create-text with the TL-P2-17 destination); the other notes stay uncaptured children and the folder stays (late-child rule).",
+      "No plan takes the legacy path for it; recovery never creates the note twice."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile of notes only is filed through the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-32 (1) (main 936cbb0). Removes the legacy reason 'pile notes only' found by the b-path-generated-note lane. Planned, not implemented."
+  },
+  {
+    "id": "b-path-missing-journal",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A run whose journal folders do not exist yet plans as with an empty journal on the recoverable path.",
+    "steps": [
+      "Remove .bower/changes and its archive folder before a tidy-up.",
+      "The run plans on the B path as with an empty journal; a keyed create-folder is planned only when an operation needs the folder.",
+      "A failed read refuses before admission with \"Bower couldn't read its own files. Try again.\"; nothing takes the legacy path."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a missing journal plans as an empty one on the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-33 (1) (main e83be8c). Removes the legacy reason 'journal' found by the b-path-unreadable-runner-files lane. Planned, not implemented."
+  },
+  {
+    "id": "pile-note-read-isolation",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "A pile note that cannot be read affects only its own pile, which stays visible with a reason and a retry.",
+    "steps": [
+      "Make one pile's note fail to read, next to healthy piles.",
+      "The Inbox lists every other pile; the affected pile shows \"Bower could not check some of its things. Try again.\" with Try again, and a tidy-up holds it and plans the rest.",
+      "A failed read is never cached; a sign-out still stops everything; when the whole app is offline every pile may show the reason, with one error per pile and listing, never per render."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"an unreadable pile note affects only its own pile\"",
+    "passes": false,
+    "note": "TL-P2-08 (a) applied to pile notes (lead, 2026-10-06, no new TL doc). Found by the b-path-generated-note review: one failed pile-note read made the Inbox listing throw for every pile and refused the whole tidy-up. Planned, not implemented."
   }
 ]
