@@ -34,8 +34,17 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 | `DELETE /me` | | 204: the Worker forgets the person (tokens, settings, runs, the pointer to their folder) and clears the cookie; the Drive folder is never touched, and signing in again starts at the folder step (`POST /vault` finds the folder they had) | 401 |
 | `GET /drive/token` (`?fresh=1` after Drive said 401) | | `{ accessToken, expiresAt }` (epoch ms, at most 1 h) | 401 signed out; 409 `no-folder` |
 | `POST /vault` | `{}` | `{ folderId, found }`: a new Bower folder made from the template (the five main folders, `Rules.md`, `About me.md`, `.bower/`), or the existing one (`found: true`, so the app says welcome back) | 401 |
-| `POST /process` | `{ scope: "all" \| "instructions", allowWeb: boolean }` (the person's "Look things up on the web"; the dispatch's `allow_web`) | `{ run: RunWire }`, the run it started, or the one already going | 401; 409 `nothing` "Nothing is waiting in the inbox." / "There is nothing new for Bower to read."; 429 over the daily limit |
+| `POST /process` | `{ scope: "all" \| "instructions", allowWeb: boolean }` (the person's "Look things up on the web"; the dispatch's `allow_web`) | `{ run: RunWire }`, the run it started, or the one already going | 401; 409 `nothing` "Nothing is waiting in the inbox." / "There is nothing new for Bower to read." / "Nothing in the inbox is ready yet." (only held piles wait, TL-P2-21); 409 `stale-session`; 429 over the daily limit |
+| `POST /session` | `{ place, action: "check" \| "take" \| "leave" }` | `{ active, epoch }`: one active session per person (TL-P2-13, TL-P2-14, TL-P2-25) | 401 |
 | `GET /status` | | `{ run: RunWire \| null }`, the run going now or the last one | 401 |
+
+**One active session** (TL-P2-13, TL-P2-14, TL-P2-24 and TL-P2-25).
+
+- **Headers.** `POST /process`, `POST /vault` and `DELETE /me` carry `x-bower-place` and `x-bower-epoch`. CORS allows both headers.
+- **Stale session.** A missing or stale epoch on those calls gets 409 `stale-session` with "Bower is open in another window."
+- **Leaving.** The app sends `leave` on `pagehide` with `fetch(..., { keepalive: true })`.
+- **Leaving Bower.** `DELETE /me` releases the person's lease.
+- **Coming back.** A holder whose lease expired, and that nobody took, takes it again without asking.
 
 ```ts
 interface RunWire {
