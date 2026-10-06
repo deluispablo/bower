@@ -43,14 +43,30 @@ export function returnFocusTo(opener: HTMLElement | null): void {
   watch.observe(document.body, { childList: true, subtree: true });
 }
 
-/** Controls that stay on screen across views; a keyboard in them is already somewhere sensible. */
-const PERSISTENT = '[role="tree"]';
+/** A menu, sheet or dialog open on screen owns the keyboard; the route rule leaves it alone. */
+const OPEN_LAYER = '[role="dialog"], [role="alertdialog"], [role="menu"], dialog[open]';
+
+const heading = (): HTMLElement | null => document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1');
+
+const toHeading = (h1: HTMLElement): void => {
+  if (!h1.hasAttribute('tabindex')) h1.setAttribute('tabindex', '-1');
+  h1.focus({ preventScroll: true });
+};
+
+/** Focus has fallen to nothing: on the body, or on an element the change took away. */
+const fallen = (): boolean => {
+  const at = document.activeElement;
+  return !at || at === document.body || !at.isConnected;
+};
 
 /**
- * After a route change the keyboard goes to the new view's h1 (tabindex="-1"), wherever
- * it was: Fable Tech Labs/Gatsby routing study and GOV.UK both move focus to the new
- * page's heading. Exception: focus resting in a control that persists across views
- * (the file tree, where arrow keys keep the place) stays. Waits briefly for a view that renders its heading late.
+ * After a route change, once the new view has rendered, the keyboard goes to the new
+ * view's h1 (tabindex="-1") only when focus has fallen to nothing (the body, or an
+ * element the change took away). Focus the view set itself (an autofocused field), a
+ * control that navigated and is still on screen (a top-bar link), and an open menu,
+ * sheet or dialog are never taken. This is the rule of Reach Router and React Router's
+ * focus-management guidance, Gatsby's route-change study (Fable Tech Labs) and GOV.UK:
+ * move focus to the new page's heading, and do not fight focus placed after navigation.
  * Returns a cancel function.
  */
 export function focusRouteHeading(): () => void {
@@ -58,14 +74,31 @@ export function focusRouteHeading(): () => void {
   let timer = 0;
   // The old view's heading may still be on screen while the new view loads; wait for it
   // to go, unless it is reused (the same screen showing another note).
-  const old = document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1');
+  const old = heading();
+  // Focus placed after the change, by the view or the person (a field, a menu that
+  // opened and closed), ends the rule: what they placed, or what a closing menu hands
+  // back, is never taken. Only the rule's own moves to a heading do not count.
+  let placed = false;
+  let mine: EventTarget | null = null;
+  const onIn = (e: FocusEvent): void => {
+    if (e.target !== mine) placed = true;
+  };
+  document.addEventListener('focusin', onIn, true);
+  const leaveAlone = (): boolean => placed || Boolean(document.querySelector(OPEN_LAYER));
+  const move = (h1: HTMLElement): void => {
+    mine = h1;
+    toHeading(h1);
+  };
   const step = (): void => {
-    const held = document.activeElement;
-    if (held && held !== document.body && held.isConnected && held.closest(PERSISTENT)) return;
-    const h1 = document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1');
+    if (leaveAlone()) return;
+    const h1 = heading();
+    // Still on something on screen: wait while the old view may yet go, then leave it.
+    if (!fallen()) {
+      if (++tries < 12) timer = window.setTimeout(step, 50);
+      return;
+    }
     if (h1 && (h1 !== old || tries >= 4)) {
-      if (!h1.hasAttribute('tabindex')) h1.setAttribute('tabindex', '-1');
-      h1.focus({ preventScroll: true });
+      move(h1);
       keep(h1);
       return;
     }
@@ -73,25 +106,26 @@ export function focusRouteHeading(): () => void {
     else document.getElementById('main')?.focus({ preventScroll: true });
   };
   // A view that loads its content after its heading replaces the heading: if focus
-  // falls to the body in the next moment, it goes to the new heading.
+  // falls to nothing in the next moment, it goes to the new heading.
   let watch: MutationObserver | undefined;
   let stop = 0;
   const keep = (focused: HTMLElement): void => {
     watch = new MutationObserver(() => {
-      // Only when the heading we focused was itself replaced and focus fell with it.
-      if (focused.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
-      const next = document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1');
-      if (!next) return;
-      if (!next.hasAttribute('tabindex')) next.setAttribute('tabindex', '-1');
-      next.focus({ preventScroll: true });
+      if (leaveAlone() || focused.isConnected || !fallen()) return;
+      const next = heading();
+      if (next) move(next);
     });
     watch.observe(document.body, { childList: true, subtree: true });
-    stop = window.setTimeout(() => watch?.disconnect(), 1000);
   };
   timer = window.setTimeout(step, 50);
+  stop = window.setTimeout(() => {
+    watch?.disconnect();
+    document.removeEventListener('focusin', onIn, true);
+  }, 1600);
   return () => {
     clearTimeout(timer);
     clearTimeout(stop);
     watch?.disconnect();
+    document.removeEventListener('focusin', onIn, true);
   };
 }

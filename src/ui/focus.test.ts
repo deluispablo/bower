@@ -40,18 +40,58 @@ describe('returnFocusTo', () => {
 });
 
 describe('focusRouteHeading', () => {
-  it('moves a held link to the new heading, but leaves the file tree alone', async () => {
-    document.body.innerHTML = '<main><a href="#x" id="a">x</a><h1>Note</h1></main>';
-    document.getElementById('a')?.focus();
+  const wait = (ms: number): Promise<unknown> => new Promise((r) => setTimeout(r, ms));
+
+  it('moves the keyboard to the new heading when the control that navigated went away', async () => {
+    document.body.innerHTML = '<main><button id="b">Go</button></main>';
+    document.getElementById('b')?.focus();
     const cancel = focusRouteHeading();
-    await new Promise((r) => setTimeout(r, 300));
+    document.body.innerHTML = '<main><h1>Note</h1></main>';
+    await wait(300);
     expect(document.activeElement?.tagName).toBe('H1');
     cancel();
-    document.body.innerHTML = '<main><ul role="tree"><li><a href="#t" id="t">t</a></li></ul><h1>Files</h1></main>';
+  });
+
+  it('leaves a control that navigated and stays on screen (a top-bar link)', async () => {
+    document.body.innerHTML = '<nav><a href="#x" id="a">x</a></nav><main><h1>Home</h1></main>';
+    document.getElementById('a')?.focus();
+    const cancel = focusRouteHeading();
+    document.querySelector('main')?.replaceChildren(Object.assign(document.createElement('h1'), { textContent: 'Settings' }));
+    await wait(700);
+    expect(document.activeElement?.id).toBe('a');
+    cancel();
+  });
+
+  it('never takes a field the new view focused itself', async () => {
+    document.body.innerHTML = '<main><button id="b">Go</button></main>';
+    document.getElementById('b')?.focus();
+    const cancel = focusRouteHeading();
+    document.body.innerHTML = '<main><h1>Pile</h1><input id="f" aria-label="Paste a link"></main>';
+    document.getElementById('f')?.focus();
+    await wait(300);
+    expect(document.activeElement?.id).toBe('f');
+    cancel();
+  });
+
+  it('never moves focus while a menu or dialog is open', async () => {
+    document.body.innerHTML = '<main><button id="b">Go</button></main>';
+    document.getElementById('b')?.focus();
+    const cancel = focusRouteHeading();
+    document.body.innerHTML = '<main><h1>Files</h1></main><div role="menu"><div role="menuitem">Remove</div></div>';
+    await wait(300);
+    expect(document.activeElement?.tagName).not.toBe('H1');
+    cancel();
+  });
+
+  it('stops once focus is placed after the change, even when a menu closes between checks', async () => {
+    document.body.innerHTML = '<main><h1>Files</h1><div role="tree" tabindex="0" id="t"></div></main>';
     document.getElementById('t')?.focus();
-    const cancel2 = focusRouteHeading();
-    await new Promise((r) => setTimeout(r, 80));
-    expect(document.activeElement?.id).toBe('t');
-    cancel2();
+    const cancel = focusRouteHeading();
+    document.body.innerHTML = '<main><h1>Lease draft</h1><button id="m">Move to</button></main>';
+    document.getElementById('m')?.focus();
+    (document.activeElement as HTMLElement | null)?.blur();
+    await wait(300);
+    expect(document.activeElement?.tagName).not.toBe('H1');
+    cancel();
   });
 });
