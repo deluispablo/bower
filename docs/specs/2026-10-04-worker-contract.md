@@ -38,6 +38,20 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 | `POST /session` | `{ place, action: "check" \| "take" \| "leave" }` | `{ active, epoch }`: one active session per person (TL-P2-13, TL-P2-14, TL-P2-25) | 401 |
 | `GET /status` | | `{ run: RunWire \| null }`, the run going now or the last one | 401 |
 
+**General error codes** ([TL-P3-05](../harness/2026-10-06-tl-p3-05-general-error-codes.md)). Every error answer carries one code from this list or from the calls above. Codes are kebab-case. The app decides by status and code, and shows `message`.
+
+| Status | Code | When | Message (one sentence for the person) |
+| --- | --- | --- | --- |
+| 401 | `signed-out` | No valid session | "Sign in to continue." |
+| 403 | `forbidden` | Wrong origin, or the person is not on the allowlist | "Bower can't do that from here." |
+| 404 | `not-found` | Unknown path or resource | "Bower couldn't find that." |
+| 413 | `payload-too-large` | The body is over the limit | "That is too large for Bower to take." |
+| 415 | `unsupported-media-type` | The body is not JSON where JSON is expected | "Bower couldn't read that request." |
+| 429 | `rate-limited` | Over a rate or daily limit | "Bower needs a short break. Try again later." |
+| 500 | `internal` | Anything unexpected, including missing configuration | "Something went wrong on Bower's side. Try again later." |
+
+A 500 never names its cause. Missing configuration, a missing secret or a failed dependency all answer `internal`, and the details go to the Worker's log only ([OWASP error handling](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html)). There is no `config` code.
+
 **One active session** (TL-P2-13, TL-P2-14, TL-P2-24 and TL-P2-25).
 
 - **Headers.** `POST /process`, `POST /vault` and `DELETE /me` carry `x-bower-place` and `x-bower-epoch`. CORS allows both headers.
