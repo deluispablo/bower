@@ -2734,6 +2734,30 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(report?.setAside.map((s) => s.why)).toContain('Bower could not write a note from it, so it stays in your inbox.');
       expect((await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles()).some((p) => p.id === w.pileId)).toBe(true);
     });
+
+    // TL-P2-34 (1): a thing filed without its own note keeps its filed row, plus one sentence about the note.
+    it("a thing filed without its note says Bower couldn't write its note this time", async () => {
+      let drive: FakeDrive | null = null;
+      let rootId = '';
+      const hooks: Hooks = {
+        beforeDispatch: async (at) => {
+          if (!drive || at.effect.kind !== 'create-text' || at.effect.name !== 'Industrial Designer, Ferrowick.md') return;
+          // Alex makes a note with that very name after Bower planned it: Bower's is not written.
+          const folder = (await drive.listAll(rootId)).find((f) => f.folder && drive?.pathOf(f.id, rootId) === 'Projects/Job hunt/Applications');
+          await drive.createText(folder?.id ?? '', at.effect.name, 'Alex got there first.');
+        },
+      };
+      const w = await generating({ hooks });
+      drive = w.drive;
+      rootId = w.rootId;
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.drive.dump(w.rootId).get(COMPANION)).toBe('Alex got there first.');
+      const report = viewOf(w)?.run.report;
+      expect(report?.filed.find((f) => f.name === OFFER)).toMatchObject({ to: 'Projects/Job hunt/Applications' });
+      expect(report?.setAside.filter((row) => row.name === OFFER)).toEqual([{ name: OFFER, why: "Bower couldn't write its note this time." }]);
+    });
   });
 
   // b-path-context-restore (TL-P2-32 1): the runner never writes into the Inbox; a pile whose context note is missing
