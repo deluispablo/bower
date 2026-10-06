@@ -2736,6 +2736,51 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
   });
 
+  // b-path-context-restore (TL-P2-32 1): the runner never writes into the Inbox; a pile whose context note is missing
+  // waits, held (TL-P2-21), until the app writes it again from its first words (TL-P2-08 b).
+  describe('a pile waiting for its context note takes the recoverable path', () => {
+    const plan = (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+
+    it('a pile waiting for its context note is held, never restored by the runner', async () => {
+      const w = await bWorld({ declared: true });
+      const lease = (await w.uploader.piles()).find((p) => p.text === 'Papers about the lease');
+      const folder = (await w.drive.listAll(w.rootId)).find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === lease?.path);
+      if (!lease || !folder) throw new Error('no lease pile');
+      const note = (await w.drive.listAll(folder.id)).find((f) => f.parents[0] === folder.id && f.name === 'Pile note.md');
+      if (!note) throw new Error('no pile note');
+      const key = note.appProperties?.bowerItem;
+      // The note goes to the Bin in Drive, not through Bower: nothing in your changes says it was removed.
+      await w.drive.trash(note.id);
+      const children = async (): Promise<string> => JSON.stringify((await w.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id).map((f) => [f.id, f.name, f.modifiedTime]));
+      const before = await children();
+
+      const out = await plan(w);
+      expect(out).toMatchObject({ path: 'b' });
+      if (out.path !== 'b') return;
+      expect(out.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(folder.id);
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      // Nothing written into the pile, nothing of it moved or put in the Bin, and no report row for it.
+      expect(w.applied.filter((c) => (c.op === 'create-text' || c.op === 'create-folder') && c.parentId === folder.id)).toEqual([]);
+      expect(await children()).toBe(before);
+      expect((await w.drive.evidence(folder.id))?.trashed).toBe(false);
+      const report = viewOf(w)?.run.report;
+      expect(report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      expect(report?.setAside).toEqual([]);
+
+      // The Inbox says why it waits; Try again writes the note again from its first words, in the app.
+      const device = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_B' });
+      expect((await device.piles()).find((p) => p.id === lease.id)?.setAside).toBe('not-arrived');
+      await device.retryPile(lease.id);
+      const back = (await w.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id && f.appProperties?.bowerItem === key);
+      expect(back).toHaveLength(1);
+      expect(await w.drive.readText(back[0]?.id ?? '')).toBe('Papers about the lease');
+    });
+  });
+
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
   describe('a Timeline line is added once and keeps the rest of the note', () => {
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';
