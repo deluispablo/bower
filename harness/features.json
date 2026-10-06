@@ -3586,5 +3586,18 @@
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C06: a project note cites what it is about|C09: a question about your notes is answered\"",
     "passes": true,
     "note": "Merges c06-hub-cites-filed, c09-request-answer-links (closed as superseded, pinned by these tests). TL-P2-40 (main cfd63e6). Planned, not implemented."
+  },
+  {
+    "id": "focus-after-replay-and-route",
+    "task": "p2-eval-4d7ab08",
+    "category": "fix",
+    "what": "C16: the keyboard never falls to the page body after closing the replay opened from the Home result card, or after a button changes the route.",
+    "steps": [
+      "Finish a tidy-up, press 'Watch what Bower did' on the Home card, then Escape or Skip: focus is on a visible control or the page's main region, not the body.",
+      "Press Enter on Home 'Add a pile', then on 'Put the note in the inbox': after each route change focus is on the new page's main region."
+    ],
+    "verify": "pnpm exec playwright test e2e/focus-after-close.spec.ts -g \"F1: closing the replay from the Home card keeps the keyboard on the page|F2: a button that changes the page moves the keyboard to the new page\"",
+    "passes": false,
+    "note": "Important findings F1, F2 of the P2 evaluation at 4d7ab08 (docs/harness/2026-10-06-p2-evaluation-4d7ab08.md). The one C/I round of TL-P2-38 section 4."
   }
 ]
