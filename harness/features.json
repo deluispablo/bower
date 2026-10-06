@@ -3665,5 +3665,18 @@
     "verify": "pnpm exec vitest run src/architecture.test.ts -t \"contracts import only themselves and allowlisted pure libraries|api imports nothing from src except contracts\"",
     "passes": true,
     "note": "TL-P3-02 (main 54620a9). ARCHITECTURE line 22: no published package; old import paths keep working."
+  },
+  {
+    "id": "done-sh-api-paths",
+    "task": "p3-tooling",
+    "category": "tooling",
+    "what": "The harness knows the Worker: done.sh treats api/ as code (api/test/ and api/**/*.test.ts as tests), and the harness check resolves `pnpm -C api exec vitest` verifies against the api's own tests.",
+    "steps": [
+      "A commit changing api/src/x.ts and api/test/x.test.ts: done.sh selects api/src/x.ts as code and not the test.",
+      "An entry whose verify is `pnpm -C api exec vitest run -t \"<title>\"` passes the harness check when api/ has that test, and fails it when it does not."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"done.sh sees a change under api/ as code and api tests as tests|the harness check finds a verify's titles among the api tests\"",
+    "passes": false,
+    "note": "TL-P3-03 (main c98b186). Today pnpm check is red: worker-skeleton's verify titles are looked up only among the app's unit tests."
   }
 ]
