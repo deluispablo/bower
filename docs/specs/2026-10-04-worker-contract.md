@@ -29,7 +29,7 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 | Call | Body | Answer | Errors |
 | --- | --- | --- | --- |
 | `GET /me` | | `{ user: { name, email }, folderId: string \| null }` | 401 when signed out (the app shows sign-in) |
-| `GET /auth/login` | | A redirect to Google, then back to the app | |
+| `GET /auth/login` | | A redirect to Google, then back to the app | A failed or cancelled callback redirects to the app's sign-in with `?signin=failed` or `?signin=cancelled`, never a JSON page ([TL-P3-07](../harness/2026-10-07-tl-p3-07-staging-source-and-callback.md)) |
 | `POST /auth/logout` | | 204, the cookie cleared | |
 | `DELETE /me` | | 204: the Worker forgets the person (tokens, settings, runs, the pointer to their folder) and clears the cookie; the Drive folder is never touched, and signing in again starts at the folder step (`POST /vault` finds the folder they had) | 401 |
 | `GET /drive/token` (`?fresh=1` after Drive said 401) | | `{ accessToken, expiresAt }` (epoch ms, at most 1 h) | 401 signed out; 409 `no-folder` |
