@@ -24,7 +24,8 @@ test('a failed tidy-up says why, never freezes, and trying again works', async (
   expect(await responsive(page)).toBe('ok');
 });
 
-test('the demo panel is reachable offline and leads back', async ({ page }) => {
+test('the demo panel is reachable offline and leads back', async ({ page, allowConsole }) => {
+  allowConsole(/BowerError: You're offline\./, 'offline scenario');
   await page.goto('/?scenario=offline&time=instant');
   await expect(page.getByText("You're offline")).toBeVisible({ timeout: 8000 });
   await page.getByRole('button', { name: 'Demo situations' }).click();
@@ -138,8 +139,9 @@ test('New note from the right-click menu asks for its name', async ({ page, isMo
   await expect(page.getByRole('treeitem', { name: /Interview questions/ })).toBeVisible();
 });
 
-test('clicking away from a refused name cancels without a second toast', async ({ page, isMobile }) => {
+test('clicking away from a refused name cancels without a second toast', async ({ page, isMobile, allowConsole }) => {
   test.skip(isMobile, 'desktop tree');
+  allowConsole(/BowerError: There is already a "Flat 7, Cobble Row" here\./, 'duplicate name rejected');
   await open(page, '/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md', 'default', 'instant');
   const tree = page.getByRole('tree', { name: 'Your Bower folder' });
   await tree.getByRole('treeitem', { name: /Flat 3, 12 Larkspur/ }).click({ button: 'right' });

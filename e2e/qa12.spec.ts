@@ -2,8 +2,9 @@
 import { expect, test } from './fixtures';
 
 for (const type of ['note', 'folder'] as const) {
-  test(`phone creation refuses a leading dot and retries a dotted name (${type})`, async ({ page, isMobile }) => {
+  test(`phone creation refuses a leading dot and retries a dotted name (${type})`, async ({ page, isMobile, allowConsole }) => {
     test.skip(!isMobile, 'the phone page menu and NameSheet');
+    allowConsole(/BowerError: A name cannot start with a dot\./, 'refuses dotted names');
     await page.goto('/files/Resources/Cooking?scenario=default&time=instant');
     await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
     const title = type === 'note' ? 'New note' : 'New folder';

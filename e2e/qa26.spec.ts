@@ -163,8 +163,9 @@ test('fake: a thing changed in Drive says why on the Inbox and its screen, stays
   await removeFromInbox(page, /Papers from Alex/);
 });
 
-test('fake: the device notice shows once while something waits to be sent and goes when it is sent; a lost thing says Try again', async ({ page }) => {
+test('fake: the device notice shows once while something waits to be sent and goes when it is sent; a lost thing says Try again', async ({ page, allowConsole }) => {
   test.skip(!isFake, 'the upload queue and the pretend Drive are the fake source');
+  allowConsole(/BowerError: Choose c\.pdf again on this device to send it\./, 'file lost after upload failure');
   test.setTimeout(60_000);
   // This browser will not promise to keep what Bower stores here, and another tab holds the uploads
   // until the test lets this one take its turn: what waits is held still, with no race.
@@ -177,8 +178,9 @@ test('fake: the device notice shows once while something waits to be sent and go
     (window as unknown as { bowerTakeTurn: () => void }).bowerTakeTurn = () => free();
     Object.defineProperty(locks, 'request', {
       configurable: true,
-      value: (name: string, opts: LockOptions | LockGrantedCallback<unknown>, cb?: LockGrantedCallback<unknown>) => {
-        if (!name.startsWith('bower-uploads:') || typeof opts === 'function' || !cb) return real(name, opts, cb);
+      value: (name: string, ...args: unknown[]) => {
+        if (!name.startsWith('bower-uploads:') || typeof args[0] === 'function') return real(name, ...args);
+        const [opts, cb] = args as [LockOptions, LockGrantedCallback<unknown>];
         if (opts.ifAvailable) return Promise.resolve(cb(null));
         return turn.then(() => real(name, opts, cb));
       },

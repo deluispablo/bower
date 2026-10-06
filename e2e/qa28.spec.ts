@@ -99,8 +99,10 @@ async function chooseAgain(page: Page, file: ReturnType<typeof pdf>): Promise<vo
   await (await picker).setFiles(file);
 }
 
-test('fake: a thing that never arrived is chosen again on its pile; only the same file is sent, once', async ({ page }) => {
+test('fake: a thing that never arrived is chosen again on its pile; only the same file is sent, once', async ({ page, allowConsole }) => {
   test.skip(!isFake, 'the pretend Drive loses the thing as another device would see it');
+  allowConsole(/BowerError: Choose b\.pdf again on this device to send it\./, 'file missing after upload failure');
+  allowConsole(/BowerError: That isn't the same file\. Choose the file you added before\./, 'wrong file selected');
   test.setTimeout(60_000);
   await open(page, '/add');
   await page.locator('textarea').first().fill('Papers from Alex');
@@ -138,8 +140,10 @@ test('fake: a thing that never arrived is chosen again on its pile; only the sam
   await axeClean(page);
 });
 
-test('fake: a link that never arrived is pasted again on its pile; only the same link is sent, once', async ({ page }) => {
+test('fake: a link that never arrived is pasted again on its pile; only the same link is sent, once', async ({ page, allowConsole }) => {
   test.skip(!isFake, 'the pretend Drive loses the thing as another device would see it');
+  allowConsole(/BowerError: Paste the link again on this device to send it\./, 'link missing after upload failure');
+  allowConsole(/BowerError: That isn't the same link\. Paste the link you added before\./, 'wrong link pasted');
   test.setTimeout(60_000);
   await open(page, '/add');
   await page.locator('textarea').first().fill('Reading from Alex');
