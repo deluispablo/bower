@@ -405,3 +405,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: pile-note-format-visible passes — fix: proof-close a pile whose note Bower cannot parse stays visible
 - 2026-10-06: b-path-unreadable-runner-files passes — fix: proof-close unreadable runner files on the recoverable path
 - 2026-10-06: o5-rules-wording passes — fix: proof-close rule wording on the recoverable path
+- 2026-10-06: b-path-missing-journal passes — fix: proof-close a missing journal on the recoverable path
