@@ -87,10 +87,11 @@ export function shows(effect: Effect, ev: StoredEvidence, parentId: string | nul
     case 'write-runner-json':
       return !ev.trashed && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256;
     case 'create-text':
-      // A generated note (TL-P2-17): its exact bytes, its create key and Bower's marks; new runner files stay legacy.
+      // A generated note (TL-P2-17): its create key, place, name and exact bytes; new runner files stay legacy. The
+      // "new" mark is not evidence: it may be cleared (the note opened) between a lost reply and recovery.
       return effect.purpose === 'generated' && !ev.trashed && !f.folder && f.parents.length === 1 && f.parents[0] === parentId
         && f.name === effect.name && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256
-        && f.appProperties?.bowerItem === effect.createKey && f.appProperties.by === 'bower' && f.appProperties.bowerNew === '1';
+        && f.appProperties?.bowerItem === effect.createKey;
   }
 }
 
