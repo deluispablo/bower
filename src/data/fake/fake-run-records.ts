@@ -279,6 +279,7 @@ export function grounded(manifest: RunManifest): boolean {
   const filed = new Set<string>();
   const setAside = new Set<string>();
   const claimedNotes = new Set<string>();
+  const alone = new Set<string>();
   for (const c of manifest.reportPlan) {
     const v = c.value;
     if (v.requests !== undefined || v.yourChanges !== undefined) {
@@ -307,6 +308,13 @@ export function grounded(manifest: RunManifest): boolean {
       const [row, ...rest] = v.setAside;
       if (v.filed.length || !row || rest.length || row.name !== member.file.name || setAside.has(member.file.fileId)) return false;
       setAside.add(member.file.fileId);
+      continue;
+    }
+    if (!v.filed.length) {
+      // TL-P2-35: a thing filed on its own, as its merge could not be planned, says so once its move applied.
+      const [row, ...others] = v.setAside;
+      if (!row || others.length || c.requires.length !== 1 || row.name !== member.file.name || alone.has(member.file.fileId)) return false;
+      alone.add(member.file.fileId);
       continue;
     }
     const [row, ...rest] = v.filed;

@@ -215,7 +215,9 @@ export type HubUpdate = { path: string; what: string };
  * A "yes" to keeping one note merges the thing into it: the note's Timeline line (an edit carrying the
  * answer's record id), then the thing's move after it; the questions.json write that drops the question
  * waits for both, and the answer's archive for all three (TL-P2-20 I4, R3-4, R4-1). A person's note is
- * never merged into: the thing is filed as usual.
+ * never merged into: the thing is filed as usual. A merge line refused at plan time files the thing on its
+ * own, with a row saying so; the answer then settles with that filing (TL-P2-35). The note is followed
+ * through the renames and moves since the last tidy-up.
  * At most `editCap` edits are planned, in code-point path order (TL-P2-29 (1)); when the manifest guard
  * refuses the plan as too big, it is planned again with one edit fewer. The rest wait for the next run;
  * a pile whose merge line waits is planned again as `held`, left whole for the next run with its answer.
@@ -248,9 +250,19 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   if (!isRunnerFile(SYSTEM.hashes, parsed(hashesText))) return legacy('hashes');
   // A "yes" to keeping one note joins the thing it is about to that note (MERGES), by the answer's line.
   const yes = new Map(journal.filter((l) => l.rec.kind === 'answer' && l.rec.text === 'yes').map((l) => [l.rec.questionId ?? '', l.rec.id]));
+  // Its note is followed through the renames and moves since the last tidy-up, as the resolver follows a link.
+  const follow = (path: string): string => {
+    let now = path;
+    for (const l of journal.filter((x) => (x.rec.kind === 'rename' || x.rec.kind === 'move') && x.rec.from && x.rec.path)) {
+      const from = l.rec.from ?? '';
+      if (now === from) now = l.rec.path ?? now;
+      else if (now.startsWith(`${from}/`)) now = (l.rec.path ?? '') + now.slice(from.length);
+    }
+    return now;
+  };
   const mergeOf = (item: PileItem): Merge | null => {
     const m = MERGES.find((x) => x.item === item.name && yes.has(x.question));
-    return m ? { into: m.into, title: m.title, line: m.line, answer: yes.get(m.question) ?? '' } : null;
+    return m ? { into: follow(m.into), title: m.title, line: m.line, answer: yes.get(m.question) ?? '' } : null;
   };
   /** Answers whose merge waits with its pile: they stay unarchived and keep their question (R4-1). */
   const heldAnswers = new Set<string>();
@@ -414,16 +426,17 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }
   }
   /**
-   * Each Timeline line wanted: written by this run, there already, refused as a person's note (I7), or held: refused
-   * for any other reason or deferred, so whatever derives from it waits (rule 7, R4-1).
+   * Each Timeline line wanted: written by this run, there already, refused as a person's note (I7), refused for any
+   * other reason at plan time (too big, unknown format, not UTF-8, changed while read, refused when authored), or
+   * deferred past the edit cap, so whatever derives from it waits for the next run.
    */
-  const lineState = new Map<WantedLine, 'planned' | 'present' | 'person' | 'held'>();
+  const lineState = new Map<WantedLine, LineState>();
   /** A line wanted twice in one note (the same words): written once, and it goes as its twin goes. */
   const twins = new Map<WantedLine, WantedLine>();
   const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[] }> = [];
   for (const w of [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path))) {
     const f = w.file;
-    for (const l of w.lines) lineState.set(l, 'held');
+    for (const l of w.lines) lineState.set(l, 'refused');
     const before = await verified(f, 'utf8');
     const bytes = before ? await drive.readBytes(f.id) : null;
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
@@ -457,6 +470,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
   // stay unarchived meanwhile (TL-P2-29 (1)).
   if (candidates.slice(editCap).some((c) => c.rewrite)) holdRenames = true;
+  for (const l of candidates.slice(editCap).flatMap((c) => c.lines)) lineState.set(l, 'deferred');
   // Each kept note's changes together, in the contract's order; the text never depends on the record ids.
   const appendOf = (lines: WantedLine[]): Change[] => (lines.length
     ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
@@ -478,25 +492,32 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, changes: changesOf(c, renameIds), text });
     places.set(c.file.id, c.file);
   }
-  for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'held');
+  for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'refused');
   /** A merge's line, when its note is one a line can go to at all. */
   const lineOf = (m: Merge): WantedLine | undefined => wanted.get(ix.idOf(m.into) ?? '')?.lines.find((l) => l.record === m.answer && l.entry.text === m.line);
-  // A merge whose line is held (refused at plan time, changed while read, past the cap) waits with its whole pile
-  // and its answer: planned again with that pile held, so its question is never dropped (rule 7, R4-1).
-  const waitingPiles = things.filter((t) => {
-    const line = t.merge ? lineOf(t.merge) : undefined;
-    return line !== undefined && lineState.get(line) === 'held';
-  }).map((t) => t.pile.id);
+  const stateOf = (m: Merge | null): LineState | undefined => {
+    const line = m ? lineOf(m) : undefined;
+    return line ? lineState.get(line) : undefined;
+  };
+  // A merge whose line waits past the cap waits with its whole pile and its answer: planned again with that pile
+  // held, so its question is never dropped (rule 7, R4-1). A refused line is not a wait (TL-P2-35): see below.
+  const waitingPiles = things.filter((t) => stateOf(t.merge) === 'deferred').map((t) => t.pile.id);
   if (waitingPiles.length) return planRun(drive, rootId, opts, editCap, new Set([...held, ...waitingPiles]));
   /**
-   * How each merge goes: after its line, beside a line already there, or not at all when the note is a person's own
-   * (I7) or there is no note to merge into: then the thing is filed as usual.
+   * How each merge goes: after its line, beside a line already there, or not at all: when the note is a person's own
+   * (I7), when there is no note to merge into, or when its line was refused at plan time (TL-P2-35), the thing is
+   * filed as usual, and in the last case the report says it was filed on its own.
    */
   const mergeState = (thing: (typeof things)[number]): MergeState | null => {
     const m = thing.merge;
-    const line = m ? lineOf(m) : undefined;
-    const state = line ? lineState.get(line) : undefined;
+    const state = stateOf(m);
     return m && (state === 'planned' || state === 'present') ? { ...m, line: state } : null;
+  };
+  /** A thing whose merge fell back to ordinary filing: its answer, and the note's shown name when its line was refused. */
+  const fallbackOf = (thing: (typeof things)[number]): Fallback | null => {
+    const m = thing.merge;
+    if (!m || mergeState(thing)) return null;
+    return { answer: m.answer, alone: stateOf(m) === 'refused' ? displayName(nameOf(m.into)) : null };
   };
   // Lines held back stay where they are, uncaptured, for the next run (rule 7).
   if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
@@ -651,6 +672,14 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }, created ? [created] : merge?.line === 'planned' ? [editOf.get(ix.idOf(merge.into) ?? '') ?? ''] : []);
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
     moveOf.set(thing.file.id, move);
+    const fallback = fallbackOf(thing);
+    if (fallback) {
+      // R4-1: what derives from the answer is now this ordinary filing; TL-P2-35: and the report says why, once it applied.
+      fromAnswer.set(fallback.answer, [...(fromAnswer.get(fallback.answer) ?? []), ...(created ? [created] : []), move]);
+      if (fallback.alone !== null) {
+        reportPlan.push({ requires: [move], when: 'applied', value: { ...empty(), setAside: [{ name: thing.file.name, why: `Bower couldn't add it to ${fallback.alone}, so it was filed on its own.` }] } });
+      }
+    }
     if (merge) {
       // The line first, then the move after it; filed with the note only when both applied (I4, R3-5).
       const line = merge.line === 'planned' ? editOf.get(ix.idOf(merge.into) ?? '') ?? null : null;
@@ -895,6 +924,10 @@ type WantedLine = { entry: EditEntry; record: string | null; what: string | null
 type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null };
 /** A thing joining a note you said yes to keeping (MERGES), with the answer that says so. */
 type Merge = { into: string; title: string; line: string; answer: string };
+/** Where a wanted Timeline line ended up at plan time. */
+type LineState = 'planned' | 'present' | 'person' | 'refused' | 'deferred';
+/** A merge filed as usual instead: the answer it settles, and the shown name of the note it could not join, if refused. */
+type Fallback = { answer: string; alone: string | null };
 /** A merge as planned: after its Timeline line, or beside a line already there from an earlier run. */
 type MergeState = Omit<Merge, 'line'> & { line: 'planned' | 'present' };
 
