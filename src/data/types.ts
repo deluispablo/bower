@@ -235,8 +235,10 @@ export class BowerError extends Error {
     message: string,
     /** A Drive change succeeded, but its journal could only be kept on this page. */
     public readonly applied?: { path: string | null; changeId: string },
+    /** `cause`: a typed marker for code to tell this error by, never its words (ES2022 Error cause). */
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = 'BowerError';
   }
 }

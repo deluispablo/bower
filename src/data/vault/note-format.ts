@@ -47,15 +47,30 @@ const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 /** The two refusals of a note Bower will not parse: a format it does not know yet, or a damaged one. */
 export const NOTE_REFUSED = { newer: 'This note uses an unsupported format.', damaged: 'This note cannot be read safely.' } as const;
 
-/** Which refusal an error is, or null when it is not a refusal to parse a note (a Drive read failure, say). */
-export function noteRefusal(e: unknown): keyof typeof NOTE_REFUSED | null {
-  if (!(e instanceof BowerError)) return null;
-  return e.message === NOTE_REFUSED.newer ? 'newer' : e.message === NOTE_REFUSED.damaged ? 'damaged' : null;
+/** Why Bower refused a note, on the refusal's `cause`: the typed marker code tells a refusal by. */
+export interface NoteRefusedCause {
+  kind: 'note-refused';
+  refusal: keyof typeof NOTE_REFUSED;
+  /** The ownership check's reason, for the console. */
+  reason: string;
 }
 
+const refusedCause = (cause: unknown): cause is NoteRefusedCause =>
+  typeof cause === 'object' && cause !== null && (cause as { kind?: unknown }).kind === 'note-refused';
+
+/**
+ * Which refusal an error is, by its typed `cause` (MDN, Error: cause), or null when it is not a refusal to
+ * parse a note (a Drive read failure, say). Its words are never matched.
+ */
+export function noteRefusal(e: unknown): keyof typeof NOTE_REFUSED | null {
+  return e instanceof BowerError && refusedCause(e.cause) ? e.cause.refusal : null;
+}
+
+/** A refusal to parse a note, logged by whoever catches it, once. */
 function ownershipError(reason: string): BowerError {
-  console.error('Cannot read note ownership:', reason);
-  return new BowerError('unknown', reason === 'unsupported-version' ? NOTE_REFUSED.newer : NOTE_REFUSED.damaged);
+  const refusal = reason === 'unsupported-version' ? 'newer' : 'damaged';
+  const cause: NoteRefusedCause = { kind: 'note-refused', refusal, reason };
+  return new BowerError('unknown', NOTE_REFUSED[refusal], undefined, { cause });
 }
 
 function ownershipOf(raw: string) {

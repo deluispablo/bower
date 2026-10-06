@@ -106,6 +106,8 @@ export class DriveVault implements VaultSource {
    * so none are written over them.
    */
   private lockedNotes = new Map<string, string>();
+  /** Pile notes Bower refused to parse, by file id and modified time, already logged: once until they change. */
+  private refusalsLogged = new Set<string>();
   /** Sizes and hashes of files already checked, by file id and modified time. */
   private digests = new Map<string, Digest>();
   private ix: Promise<VaultIndex> | null = null;
@@ -504,11 +506,15 @@ export class DriveVault implements VaultSource {
         // A note Drive cannot give back now holds only its own pile (TL-P2-08 (a)): logged once for this pile and
         // listing, never kept, so the next listing reads it again. Signed out, or a session that changed, stops all.
         if (!(e instanceof BowerError) || e.code === 'auth' || !this.current()) throw e;
-        console.error(e);
         // A note Bower will not parse keeps its pile visible and held, with why; a retry does not change a format.
+        // It is logged once until it changes (TL-P2-08); a read failure, once per listing.
         const format = noteRefusal(e);
-        if (format) refused = format === 'newer' ? 'note-format' : 'note-damaged';
-        else unread = true;
+        const seen = note ? `${note.id}@${note.modifiedTime}` : '';
+        if (!format || !this.refusalsLogged.has(seen)) console.error(e);
+        if (format) {
+          this.refusalsLogged.add(seen);
+          refused = format === 'newer' ? 'note-format' : 'note-damaged';
+        } else unread = true;
       }
       // Pile.text is editable context, so a refusal must not masquerade as saved text: the note is locked instead.
       const locked = unread || refused !== null;
