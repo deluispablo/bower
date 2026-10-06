@@ -3499,7 +3499,7 @@
       "Open the project note and follow the cited link.",
       "See the backlink in the cited note's Linked notes."
     ],
-    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a hub line cites\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C06: a project note cites what it is about\"",
     "passes": false,
     "note": "Plus e2e -g C06. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3513,7 +3513,7 @@
       "The request's answer shows links to the notes it used; each opens.",
       "The inbox count is unchanged."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C09: a question about your notes is answered with links\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C09: a question about your notes is answered\"",
     "passes": false,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
