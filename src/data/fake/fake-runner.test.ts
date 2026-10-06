@@ -505,6 +505,113 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     await expect(drive.untrash(declaration?.id ?? '')).resolves.toMatchObject({ id: declaration?.id });
   });
 
+  // TL-P2-31: the person's Remove sends a pile's folder (if any) and every copy of its declaration to the Bin; Undo restores both.
+  describe('removing a declared pile bins its declaration copies too', () => {
+    /** A second, identical copy of the one declaration, as another device's retried write leaves it. */
+    async function twoCopies(): Promise<Array<{ id: string; name: string; text: string }>> {
+      const [first] = await declarations();
+      if (!first) throw new Error('no declaration');
+      await drive.createText((await drive.get(first.id)).parents[0] ?? '', first.name, first.text);
+      const all = await declarations();
+      expect(all).toHaveLength(2);
+      return all;
+    }
+    const ids = (list: Array<{ id: string }>): string[] => list.map((d) => d.id).sort();
+
+    it('a folder pile: its folder and every declaration copy go to the Bin, and Undo restores both', async () => {
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('one.pdf'), pdf('two.pdf')] });
+      await uploader.settled();
+      const folder = await folderOf(pile.id);
+      const copies = await twoCopies();
+      const vault = declaring();
+      await vault.trash(pile.path ?? '');
+      expect(await declarations()).toEqual([]);
+      expect((await drive.listAll(root)).some((f) => f.id === folder.id)).toBe(false);
+      expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+      await vault.restore(pile.path ?? '');
+      expect(ids(await declarations())).toEqual(ids(copies));
+      expect((await fresh().piles()).find((p) => p.id === pile.id)?.items.map((i) => i.name)).toEqual(['one.pdf', 'two.pdf']);
+
+      // Remove the pile does the same, and Undo from where it was brings both back.
+      await vault.removePile(pile.id);
+      expect(await declarations()).toEqual([]);
+      expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+      await vault.restore(pile.path ?? '');
+      expect(ids(await declarations())).toEqual(ids(copies));
+      expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(true);
+    });
+
+    it('a loose pile: the arrived file and every declaration copy go to the Bin, and Undo restores both', async () => {
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+      await uploader.settled();
+      const copies = await twoCopies();
+      const shown = (await fresh().piles()).find((p) => p.id === pile.id);
+      if (!shown?.path) throw new Error('no loose file');
+      const vault = declaring();
+      await vault.trash(shown.path);
+      expect(await declarations()).toEqual([]);
+      expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+      await vault.restore(shown.path);
+      expect(ids(await declarations())).toEqual(ids(copies));
+      expect((await fresh().piles()).find((p) => p.id === pile.id)?.items.map((i) => [i.name, i.upload])).toEqual([['loose.pdf', undefined]]);
+    });
+
+    it('a loose pile that never arrived: every declaration copy goes to the Bin, and Undo restores them', async () => {
+      const uploader = declaring();
+      drive.upload = async () => {
+        throw driveError('offline');
+      };
+      const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+      await uploader.settled();
+      const copies = await twoCopies();
+      const vault = fresh();
+      await vault.removePile(pile.id);
+      expect(await declarations()).toEqual([]);
+      expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+      // It had no place: Undo finds it by the pile's id.
+      await expect(vault.restore(pile.id)).resolves.toBeUndefined();
+      expect(ids(await declarations())).toEqual(ids(copies));
+      expect((await fresh().piles()).find((p) => p.id === pile.id)?.items.map((i) => [i.name, i.upload])).toEqual([['loose.pdf', -1]]);
+    });
+
+    it('a declaration copy found in the Bin is ignored by the inbox and the runner, and logged once', async () => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const uploader = declaring();
+      const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('one.pdf'), pdf('two.pdf')] });
+      await uploader.settled();
+      const [binned] = await twoCopies();
+      const stale = await drive.listAll(root);
+      // A device that listed before the copy went to the Bin still has it in its listing.
+      const inbox = fresh();
+      await inbox.refresh();
+      await drive.trash(binned?.id ?? '');
+      const logged = (): number => errors.mock.calls.filter((c) => String(c[0]).includes('in the Bin')).length;
+      for (let i = 0; i < 2; i++) {
+        const listed: unknown = await inbox.piles().catch((e: unknown) => e);
+        expect(listed).toBeInstanceOf(Array);
+        const seen = (listed as Awaited<ReturnType<DriveVault['piles']>>).find((p) => p.id === pile.id);
+        expect(seen?.setAside).toBeUndefined();
+        expect(seen?.items.map((i) => i.name)).toEqual(['one.pdf', 'two.pdf']);
+      }
+      expect(logged()).toBe(1);
+
+      // The runner, given the same stale listing, takes the pile on its other copy.
+      errors.mockClear();
+      // Its inbox listing and its capture read the stale listing; its writes see Drive as it is.
+      const listAll = drive.listAll.bind(drive);
+      let staleReads = 2;
+      const spy = vi.spyOn(drive, 'listAll').mockImplementation(async (id) => (id === root && staleReads-- > 0 ? stale : listAll(id)));
+      const out = await runFake(drive, root, opts());
+      spy.mockRestore();
+      if (out.phase !== 'done') throw new Error('failed');
+      expect(out.report.filed.map((f) => f.name).sort()).toEqual(expect.arrayContaining(['one.pdf', 'two.pdf']));
+      expect(out.report.setAside).toEqual([]);
+      expect(logged()).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   /** A declared pile whose things all arrived. */
   async function readyPile(text = 'Papers from Alex', items = [pdf('arrived.pdf'), pdf('missing.pdf')]) {
     const uploader = declaring();
