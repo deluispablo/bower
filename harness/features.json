@@ -3638,5 +3638,32 @@
     "verify": "pnpm exec playwright test e2e/console-guard.spec.ts -g \"console guard: an unexpected console error fails the test|console guard: an allowlisted error passes with its reason\"",
     "passes": true,
     "note": "TL-P3-01 batch P3-1. The C04–C11 journeys (e2e/capabilities*.spec.ts) and e2e/focus-after-close.spec.ts adopt the fixture."
+  },
+  {
+    "id": "worker-skeleton",
+    "task": "p3-2",
+    "category": "feature",
+    "what": "P3-C: the Worker exists as api/ (pnpm workspace, Hono, wrangler.jsonc) with GET /health, the JSON error format, CORS for the app origin only, and contract tests run by the root pnpm check. Not deployed.",
+    "steps": [
+      "GET /health answers 200 with a small JSON body.",
+      "An unknown path answers 404 with {error:{code,message}}; a thrown error answers 500 in the same format with no stack.",
+      "A request from the app origin gets CORS headers; any other origin gets none."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"GET /health answers ok|an unknown path answers the JSON error format|CORS allows only the app origin\"",
+    "passes": false,
+    "note": "TL-P3-02 (main 54620a9). Reuses the original api's security.ts, errors.ts and env.ts as they are."
+  },
+  {
+    "id": "shared-domain-package",
+    "task": "p3-2",
+    "category": "architecture",
+    "what": "P3-D: src/data/contracts is pure (no DOM, browser storage, network, React or environment globals), so the Worker and the runner can import it; an architecture test enforces the dependency direction.",
+    "steps": [
+      "Every module src/data/contracts imports, transitively, is inside src/data/contracts or an allowlisted pure library.",
+      "Nothing under api/ imports from src/ except src/data/contracts."
+    ],
+    "verify": "pnpm exec vitest run src/architecture.test.ts -t \"contracts import only themselves and allowlisted pure libraries|api imports nothing from src except contracts\"",
+    "passes": false,
+    "note": "TL-P3-02 (main 54620a9). ARCHITECTURE line 22: no published package; old import paths keep working."
   }
 ]
