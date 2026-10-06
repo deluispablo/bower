@@ -17,8 +17,8 @@ Staging serves the app and the Worker from **one Worker on one origin**, the exi
 | --- | --- | --- |
 | The redirect URI `https://<staging host>/auth/callback` and the JavaScript origin on the existing OAuth client | **Owner** | Google Cloud console. It is the owner's account. |
 | `GOOGLE_CLIENT_SECRET` | **Owner** | `wrangler secret put GOOGLE_CLIENT_SECRET --name bower-staging`, typed by the owner. No session handles it. |
-| `SESSION_SECRET` and `ENCRYPTION_KEY` (32 random bytes or more) | **Lead** | Generated with `openssl rand` and piped straight into `wrangler secret put`, never printed or logged. |
-| The KV allowlist namespace and the two test addresses | **Lead** | `wrangler kv namespace create`, then one key per address. The addresses never enter the repository, a commit or a message. |
+| `SESSION_SECRET` (32 random bytes or more) and `TOKEN_ENC_KEY` (base64 of 32 random bytes, AES-256) | **Lead** | Generated with `openssl rand` and piped straight into `wrangler secret put`, never printed or logged. |
+| The KV namespace bound as `BOWER_KV`, and the two test addresses in the allowlist key format of the original store | **Lead** | `wrangler kv namespace create`, then one key per address. The addresses never enter the repository, a commit or a message. |
 | `GOOGLE_CLIENT_ID` | Coordinator | A plain `vars` entry in `api/wrangler.jsonc`, since it is not a secret. |
 | The deploy | `bower-mechanical`, after the OIDC review | The updated STAGING runbook: build the app, then `wrangler deploy` from `api/` with `assets.directory` set to the app's `dist/`. |
 | The first sign-in with both accounts | **Owner** | In the browser, when the lead asks. |
