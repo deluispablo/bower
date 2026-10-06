@@ -277,3 +277,4 @@ c05-journey-hub-updated	52a3979f62312072	2026-10-06	known-green: journeys red te
 c11-journey-rule-and-answer	251b7c32b4338424	2026-10-06	known-green: journeys red test commits dd1142a/06ec655/530aa82 and journeys B reds; batch 5 gates green (check 3478, e2e 212, e2e:fake 238)
 c06-hub-cites-filed	4d36c16df9f125a6	2026-10-06	known-green: journeys red test commits dd1142a/06ec655/530aa82 and journeys B reds; batch 5 gates green (check 3478, e2e 212, e2e:fake 238)
 c09-request-answer-links	338661d700ebf886	2026-10-06	known-green: journeys red test commits dd1142a/06ec655/530aa82 and journeys B reds; batch 5 gates green (check 3478, e2e 212, e2e:fake 238)
+c10-web-on-off	4af7e82a019792d2	2026-10-06	known-green: journeys red test commits dd1142a/06ec655/530aa82 and journeys B reds; batch 5 gates green (check 3478, e2e 212, e2e:fake 238)

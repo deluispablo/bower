@@ -3528,7 +3528,7 @@
       "The note's timeline shows an external link to the source."
     ],
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C10: web lookups say what they did, off and on\"",
-    "passes": false,
+    "passes": true,
     "note": "Web off says \"Bower did not look anything up\"; web on gives a scripted result with URL and provenance; failed and stale evidence are P4 depth (TL-P2-40 (2)). Fake only; the demo must never contradict the fake. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {
