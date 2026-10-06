@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countThings, folderCount, safeInboxName } from './piles';
+import { countThings, folderCount, isEmptyPile, safeInboxName } from './piles';
 import type { TreeNode } from './types';
 
 const file = (path: string, hub = false): TreeNode => ({ path, name: path.split('/').pop() ?? '', type: 'file', kind: 'note', modified: 0, ...(hub ? { hub: true } : {}) }) as TreeNode;
@@ -26,3 +26,10 @@ describe('counting', () => {
   });
 });
 
+
+describe('an empty pile', () => {
+  it('is never a pile whose note Bower could not read', () => {
+    expect(isEmptyPile({ items: [], text: '' })).toBe(true);
+    expect(isEmptyPile({ items: [], text: '', noteLocked: true })).toBe(false);
+  });
+});

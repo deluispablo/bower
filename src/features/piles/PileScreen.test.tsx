@@ -122,6 +122,14 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     await waitFor(() => expect(retry).toHaveBeenCalledWith('p-unreadable'));
   });
 
+  it('a note-only pile whose note Bower could not read is your note, not an empty pile, and Remove says it goes to the Bin', async () => {
+    screenFor({ id: 'p-unread', path: 'Inbox/2026-10-06 Bins', text: '', createdAt: Date.now(), setAside: 'not-checked', noteLocked: true, items: [] });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Your note' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'An empty pile' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove this pile' }));
+    expect(await screen.findByText('The note goes to the Bin of your Drive.')).toBeVisible();
+  });
+
   it('an empty pile is called an empty pile, not your note', async () => {
     screenFor({ id: 'p-empty', path: 'Inbox/2026-10-06 Old', text: '', createdAt: Date.now(), setAside: 'empty', items: [] });
     expect(await screen.findByRole('heading', { level: 1, name: 'An empty pile' })).toBeVisible();

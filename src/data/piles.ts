@@ -16,7 +16,7 @@ export function thingsIn(p: Pile): number {
 }
 
 /** A pile with no things and no words: nothing to file and no note to keep (TL-P2-22). */
-export function isEmptyPile(p: Pick<Pile, 'items' | 'text'>): boolean {
+export function isEmptyPile(p: Pick<Pile, 'items' | 'text' | 'noteLocked'>): boolean {
   return !p.items.length && !p.text.trim();
 }
 
