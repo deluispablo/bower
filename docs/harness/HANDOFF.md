@@ -11,7 +11,7 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## The plan, in order
 
-1. TL-P2-47 walk and fix round done; P3 implementation can start from the lead's adopted P3 plan. First P3 batch entries: C11 "no policy change from documents" and an app console-error e2e check.
+1. P3 started (TL-P3-01, integration branch `claude/p3`); batch P3-1 entries: C11 "no policy change from documents" and an app console-error e2e check.
 2. Coordinator resumes from HANDOFF/ACTIVE and runs P3 batches under the same method. Codex is back as reviewer from 2026-10-12 (no re-review of 4d7ab08, TL-P2-46).
 
 ## How to run a round
