@@ -3610,7 +3610,7 @@
       "In Settings, press Enter on Sign out: focus is on the sign-in page's heading."
     ],
     "verify": "pnpm exec playwright test e2e/focus-after-close.spec.ts -g \"G1: a link from one note to another moves the keyboard to the new note|G2: signing out moves the keyboard to the sign-in page|focus: every route lands the keyboard on its h1\"",
-    "passes": false,
+    "passes": true,
     "note": "Important findings G1, G2 of the TL-P2-47 supplemental walk at 3e6e7da (docs/harness/2026-10-06-p2-supplemental-walk-3e6e7da.md). One P2 fix round. Lead amendment (main cc22bea): one router-level fix for every route change, plus a sensor over every route on demo and fake."
   }
 ]

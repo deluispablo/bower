@@ -283,3 +283,4 @@ c08-generated-comparison	d3663cb21254d3e5	2026-10-06	known-green: journeys red t
 journeys-existing-effects	323e854dc42142b8	2026-10-06	known-green: journeys red test commits dd1142a/06ec655/530aa82 and journeys B reds; batch 5 gates green (check 3478, e2e 212, e2e:fake 238)
 journeys-cites-and-answers	d3b3c341c94fffcc	2026-10-06	known-green: journeys red test commits dd1142a/06ec655/530aa82 and journeys B reds; batch 5 gates green (check 3478, e2e 212, e2e:fake 238)
 focus-after-replay-and-route	92ae3986baecaa97	2026-10-06	red (fixed in 7334d1f)
+focus-note-link-and-sign-out	34a327ac49df52de	2026-10-06	red (fixed in cb9b7c9)
