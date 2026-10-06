@@ -64,6 +64,7 @@ const UPDATES = [
 export const SET_ASIDE = {
   notArrived: 'Some of its things have not arrived yet.',
   notChecked: 'Bower could not check some of its things. Try again.',
+  unreadable: 'Bower could not check some of its things. Try again.',
   changed: 'Some of its things changed after they were added. Remove it and add them again.',
   declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
   empty: 'Nothing is left in it. Remove it from your inbox.',
