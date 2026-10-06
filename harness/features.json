@@ -3556,7 +3556,7 @@
       "The note shows a table and links to its sources."
     ],
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C08: a comparison request makes a note with a table and its sources\"",
-    "passes": false,
+    "passes": true,
     "note": "Revision is P4 depth (TL-P2-40 (1)); in P2 only the comparison note with table, sources and links. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {

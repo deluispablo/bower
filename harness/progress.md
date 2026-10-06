@@ -34,3 +34,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: c09-request-answer-links passes — chore(harness): c09-request-answer-links passes (batch 5)
 - 2026-10-06: c10-web-on-off passes — chore(harness): c10-web-on-off passes (batch 5)
 - 2026-10-06: c07-contradiction-question passes — chore(harness): c07-contradiction-question passes (batch 5)
+- 2026-10-06: c08-generated-comparison passes — chore(harness): c08-generated-comparison passes (batch 5)
