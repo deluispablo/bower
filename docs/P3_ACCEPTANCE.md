@@ -2,7 +2,7 @@
 
 **Status: adopted by the technical lead under [TL-P3-01](harness/2026-10-06-tl-p3-01-p3-start.md), 2026-10-06.** The plan is [P3_DRAFT](P3_DRAFT.md) under [WORK_PLAN](WORK_PLAN.md) Phase 3. This document says what "P3 done" means. P2's [acceptance](P2_ACCEPTANCE.md) stays the baseline. Every P2 journey keeps passing on demo and fake, and none of its screens or domain logic is rewritten ("Prove the accepted app needs no screen/domain rewrite").
 
-All real-service evidence uses synthetic data in the second test account's own Bower folder, on the staging Worker. The owner's main account is used only for the R2 isolation checks, and those never open or write its Bower folder.
+All real-service evidence uses synthetic data, on the staging Worker. The owner gave two test accounts on 2026-10-06; neither holds the owner's real Bower folder, so both carry synthetic Bower folders and both serve the R2 isolation checks. Their addresses stay out of the repository. The account with the owner's real folder is never used in P3.
 
 ## Capability matrix, P3 column
 
@@ -24,7 +24,7 @@ All real-service evidence uses synthetic data in the second test account's own B
 
 No session ever enters credentials. Each step below is the owner's, done once:
 
-1. **Two Google test accounts.** Add both addresses to the staging Worker's allowlist yourself, for example with `wrangler kv key put` or the secret the Worker reads. The addresses never enter the repository or a chat.
+1. **Two Google test accounts.** Given on 2026-10-06. Their addresses go only into the staging Worker's allowlist (a Worker secret or the store it reads), never into the repository. The owner signs in to each when a probe asks for it.
 2. **Cloudflare.** `wrangler login` on this machine is already done, and staging deploys work. Paid plans go back to the owner first.
 3. **Google OAuth client.** Reuse the existing client. Add the staging Worker's origin and redirect URI in the Google Cloud console.
 4. **Worker secrets.** Set them with `wrangler secret put` against the staging Worker: session key, encryption key, OAuth client secret and runner-ticket key. The runbook entry `runbook-p3` lists their names.
