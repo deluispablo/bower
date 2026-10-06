@@ -2537,6 +2537,56 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const leaseTo = (m: Pick<Manifest | ManifestV2, 'reportPlan'> | undefined): string[] => (m?.reportPlan ?? []).flatMap((c) => c.value.filed).filter((f) => f.name === 'lease.pdf' || f.name === 'inventory.pdf').map((f) => f.to);
     const runPlan = (w: Where) => planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
 
+    // b-path-loose-piles (TL-P2-16 item 5): one file in the Inbox, declared or observed, is a B move on the file as seen.
+    it('a loose pile is filed through the recoverable path', async () => {
+      const w = await bWorld({ declared: true });
+      const declaredPile = await w.uploader.addPile({ text: '', items: [pdf('declared loose.pdf')] });
+      const observer = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+      await observer.addPile({ text: '', items: [pdf('observed loose.pdf')] });
+      await w.uploader.settled();
+      await observer.settled();
+      const loose = async (name: string): Promise<DriveFile> => {
+        const f = (await w.drive.listAll(w.rootId)).find((x) => x.name === name);
+        if (!f) throw new Error(`no ${name}`);
+        return f;
+      };
+      const declared = await loose('declared loose.pdf');
+      const observed = await loose('observed loose.pdf');
+
+      // Planned on the B path: each is captured with no folder, its file as seen, and nothing goes to the Bin for it.
+      const planned = await runPlan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      const captured = planned.manifest.capture.piles.filter((p) => p.childFileIds.includes(declared.id) || p.childFileIds.includes(observed.id));
+      expect(captured.map((p) => [p.source.kind, p.anchor, p.memberKeys.length])).toEqual(expect.arrayContaining([['declared', null, 1], ['observed', null, 1]]));
+      expect(captured.find((p) => p.source.kind === 'declared')?.pileId).toBe(declaredPile.id);
+      for (const f of [declared, observed]) {
+        expect(planned.manifest.capture.members.find((m) => m.file.fileId === f.id)?.file).toEqual({ fileId: f.id, name: f.name, parents: f.parents, folder: false, modifiedTime: f.modifiedTime });
+        expect(planned.manifest.operations.filter((o) => o.effect.kind === 'bin' && o.effect.before.fileId === f.id)).toEqual([]);
+      }
+
+      // The declared one's move loses its reply: recovery reconciles it and never moves it twice.
+      w.rules.push(once(isMoveOf(declared.id), 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      w.clock.later();
+      expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.calls.filter(isMoveOf(declared.id))).toHaveLength(1);
+      expect(movesOf(w, observed.id)).toBe(1);
+      for (const f of [declared, observed]) expect(w.drive.pathOf(f.id, w.rootId).startsWith('Inbox/')).toBe(false);
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).toEqual(expect.arrayContaining(['declared loose.pdf', 'observed loose.pdf']));
+
+      // The declared one is retired by a consumed disposition (TL-P2-03), so it never comes back as a row to choose
+      // again, not even once its file leaves the Bower folder (TL-P2-30).
+      const consumed = await Promise.all((await dispositions(w)).map(async (f) => parsePileDisposition(await w.drive.readBytes(f.id), w.rootId)));
+      expect(consumed.flatMap((d) => (d.ok && d.value.pileId === declaredPile.id ? [d.value.action] : []))).toEqual(['consumed']);
+      const reader = (): DriveVault => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set() });
+      expect((await reader().piles()).some((p) => p.id === declaredPile.id)).toBe(false);
+      const filed = await w.drive.get(declared.id);
+      await w.drive.update(declared.id, { addParent: 'root', removeParent: filed.parents[0] ?? '' });
+      expect((await reader().piles()).some((p) => p.id === declaredPile.id)).toBe(false);
+    });
+
     it('keeps the B path while a declared loose file has not arrived, and captures nothing for it', async () => {
       const w = await bWorld({ declared: true });
       const real = w.drive.upload.bind(w.drive);
