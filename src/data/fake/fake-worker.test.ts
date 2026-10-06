@@ -5,7 +5,7 @@ import { FakeWorker } from './fake-worker';
 import { seedFakeDrive } from './seed';
 import { DriveVault } from '../vault/drive-vault';
 import type { Scenario } from '../demo/scenario';
-import { BowerError } from '../types';
+import { BowerError, type Pile } from '../types';
 import type { LastRunFile, QuestionsFile, RequestsFile } from '../vault/layout';
 import type { JournalRecord } from '../vault/journal';
 import { driveError, type DriveFile } from '../drive/drive-api';
@@ -2191,6 +2191,68 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
       expect(report?.setAside).toEqual([]);
       await expectFiledOnce(w);
+    });
+
+    // pile-note-read-isolation (TL-P2-08 (a)): the run holds only the pile whose recorded note Drive cannot give back.
+    it('holds a pile whose recorded note cannot be read and files the others', async () => {
+      const w = await bWorld();
+      const lease = await parentOfFile(w, 'lease.pdf');
+      const note = (await w.drive.listAll(w.rootId)).find((f) => f.parents[0] === lease && f.name === 'Pile note.md');
+      if (!note) throw new Error('missing pile note');
+      const ids = new Set([lease, ...(await w.drive.listAll(w.rootId)).filter((f) => f.parents[0] === lease).map((f) => f.id)]);
+      const before = await stateOf(w, ids);
+      const real = w.drive.readText.bind(w.drive);
+      const readText = vi.spyOn(w.drive, 'readText').mockImplementation(async (id) => {
+        if (id === note.id) throw driveError('offline');
+        return real(id);
+      });
+
+      // One note Drive cannot give back never refuses the whole tidy-up.
+      const admitting = w.worker.process('all');
+      await expect(admitting).resolves.toMatchObject({ id: expect.any(String) });
+      const admitted = await admitting;
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest, ...more] = await manifestsOf(w);
+      expect(more).toEqual([]);
+      const text = JSON.stringify(manifest);
+      for (const id of ids) expect(text, `the manifest names ${id}`).not.toContain(JSON.stringify(id));
+      expect(w.calls.filter(touches(ids))).toEqual([]);
+      expect(await stateOf(w, ids)).toBe(before);
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      const inbox = (): Promise<Pile[]> => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles();
+      expect((await inbox()).map((p) => [p.items.map((i) => i.name).sort(), p.setAside])).toEqual([[['inventory.pdf', 'lease.pdf'], 'not-checked']]);
+
+      // Once Drive answers, the pile is itself again and the next run takes it.
+      readText.mockRestore();
+      expect((await inbox()).map((p) => [p.text, p.setAside])).toEqual([['Papers about the lease', undefined]]);
+    });
+
+    it('holds a declared pile whose bound note, not listed first, cannot be read, and plans the others', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      const text = await w.drive.readText(keyed.id);
+      await w.drive.createText(folder, 'Pile note.md', 'Soup recipes to try');
+      const bound = await w.drive.createText(folder, 'Pile note.md', text, { ...keyed.appProperties });
+      await w.drive.trash(keyed.id);
+      const real = w.drive.readText.bind(w.drive);
+      vi.spyOn(w.drive, 'readText').mockImplementation(async (id) => {
+        if (id === bound.id) throw driveError('offline');
+        return real(id);
+      });
+      // One note Drive cannot give back never refuses the whole plan.
+      const planning = runPlan(w);
+      await expect(planning).resolves.toMatchObject({ path: 'b' });
+      const planned = await planning;
+      if (planned.path !== 'b') return;
+      expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(folder);
+      expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      // A sign-out still stops the plan.
+      vi.spyOn(w.drive, 'readText').mockImplementation(async (id) => {
+        if (id === bound.id) throw driveError('auth');
+        return real(id);
+      });
+      await expect(runPlan(w)).rejects.toMatchObject({ code: 'auth' });
     });
 
     it('admits nothing when only held piles are waiting', async () => {

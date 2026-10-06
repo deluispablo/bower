@@ -1775,6 +1775,78 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     await vanished('deleted for good');
   });
 
+  // pile-note-read-isolation (TL-P2-08 (a) applied to pile notes): a note Drive cannot read now holds only its own pile.
+  it('an unreadable pile note affects only its own pile', async () => {
+    const lease = await vault.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf')] });
+    const ideas = await vault.addPile({ text: 'Ideas from Alex', items: [pdf('idea.pdf')] });
+    await vault.settled();
+    const noteOf = async (pileId: string) => {
+      const f = (await drive.listAll(pileId)).find((x) => x.name === 'Pile note.md' && x.parents[0] === pileId);
+      if (!f) throw new Error('no pile note');
+      return f;
+    };
+    const leaseNote = await noteOf(lease.id);
+    const notes = new Set((await drive.listAll(root)).filter((f) => f.name === 'Pile note.md').map((f) => f.id));
+    expect(notes.size).toBeGreaterThan(1);
+    const real = drive.readText.bind(drive);
+    let failing = new Set([leaseNote.id]);
+    let failure = driveError('offline');
+    const readText = vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+      if (failing.has(id)) throw failure;
+      return real(id);
+    });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const logged = (): number => errors.mock.calls.filter(([e]) => e === failure).length;
+    const reader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+
+    // Only that pile waits, with the existing reason and Try again; every other pile is listed as it is.
+    const listing = reader.piles();
+    await expect(listing).resolves.toBeInstanceOf(Array);
+    const listed = await listing;
+    const held = listed.find((p) => p.id === lease.id);
+    expect(held).toMatchObject({ setAside: 'not-checked', text: '' });
+    expect(held?.items.map((i) => i.name)).toEqual(['lease.pdf']);
+    expect(listed.find((p) => p.id === ideas.id)).toMatchObject({ text: 'Ideas from Alex' });
+    expect(listed.find((p) => p.id === ideas.id)?.setAside).toBeUndefined();
+    // One BowerError per pile and listing.
+    expect(logged()).toBe(1);
+    // Words it could not read are never saved over.
+    await expect(reader.updatePile(lease.id, 'New words')).rejects.toBe(failure);
+    expect(await real(leaseNote.id)).toBe('Papers about the lease');
+
+    // A tidy-up holds that pile and takes the rest.
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    expect(out.report.filed.map((f) => f.name)).toContain('idea.pdf');
+    expect(out.report.filed.map((f) => f.name)).not.toContain('lease.pdf');
+    expect(out.report.setAside).toContainEqual({ name: (await drive.get(lease.id)).name, why: 'Bower could not check some of its things. Try again.' });
+    expect((await drive.listAll(lease.id)).map((f) => f.name).sort()).toEqual(['Pile note.md', 'lease.pdf']);
+
+    // A failed read is never kept: once Drive answers, the pile is itself again.
+    failing = new Set();
+    expect((await reader.piles()).find((p) => p.id === lease.id)).toMatchObject({ text: 'Papers about the lease' });
+    expect((await reader.piles()).find((p) => p.id === lease.id)?.setAside).toBeUndefined();
+
+    // The whole app offline: every pile with a note waits, each logged once per listing.
+    const third = await vault.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
+    await vault.settled();
+    failing = new Set((await drive.listAll(root)).filter((f) => f.name === 'Pile note.md').map((f) => f.id));
+    failure = driveError('offline');
+    // A fresh page: no note was read here before (a note read once is kept while it is unchanged).
+    const fresh = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    const offline = await fresh.piles();
+    expect([lease.id, third.id].map((id) => offline.find((p) => p.id === id)?.setAside)).toEqual(['not-checked', 'not-checked']);
+    const waiting = offline.filter((p) => p.setAside === 'not-checked').length;
+    expect(logged()).toBe(waiting);
+    await fresh.piles();
+    expect(logged()).toBe(waiting * 2);
+
+    // Signed out still stops everything.
+    failure = driveError('auth');
+    await expect(fresh.piles()).rejects.toBe(failure);
+    readText.mockRestore();
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();
