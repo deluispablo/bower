@@ -1710,6 +1710,70 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect((JSON.parse(await drive.snapshot()) as Snap).files.filter((f) => theirs.has(f.meta.id))).toEqual(before);
   });
 
+  // declared-pile-folder-lost, retired by TL-P2-30: a folder gone outside Bower takes its pile out of view, inertly.
+  async function vanished(how: 'moved out of the inbox' | 'deleted for good'): Promise<void> {
+    localStorage.clear();
+    // A fresh Bower folder whose inbox a tidy-up can take on the B path.
+    drive = new FakeDrive();
+    const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
+    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    const uploader = declaring();
+    const ready = await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf')] });
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
+    const folder = await folderOf(pile.id);
+    const inside = (await drive.listAll(folder.id)).map((f) => f.id);
+    const declarationsNow = async () => {
+      const files = (await drive.listAll(root)).filter((f) => !f.folder && drive.pathOf(f.id, root).startsWith('.bower/piles/') && f.name.startsWith(`declaration-${folder.appProperties?.bowerDeclaration ?? ''}-`));
+      return Promise.all(files.map(async (f) => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime, bytes: [...(await drive.readBytes(f.id))] })));
+    };
+    const declared = await declarationsNow();
+    expect(declared).toHaveLength(1);
+    const parsed = await parsePileDeclaration(new Uint8Array(declared[0]?.bytes ?? []), root);
+    if (!parsed.ok) throw new Error('declaration refused');
+    const memberKeys = parsed.value.members.map((m) => m.memberKey);
+
+    if (how === 'moved out of the inbox') await drive.update(folder.id, { addParent: (await drive.createFolder(root, 'Elsewhere')).id, removeParent: folder.parents[0] ?? '' });
+    else {
+      // Gone from Drive and from its Bin: only a copy of Drive without it can say so.
+      const gone = new Set([folder.id, ...inside]);
+      const kept = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string } }> };
+      drive = FakeDrive.restore(JSON.stringify({ ...kept, files: kept.files.filter((f) => !gone.has(f.meta.id)) }));
+    }
+    type Snap = { files: Array<{ meta: { id: string }; trashed: boolean }> };
+    const theirs = async (): Promise<Snap['files']> => (JSON.parse(await drive.snapshot()) as Snap).files.filter((f) => f.meta.id === folder.id || inside.includes(f.meta.id));
+    const before = await theirs();
+
+    // The Inbox does not show it; the other pile is listed as before.
+    const listed = await declaring().piles();
+    expect(listed.map((p) => p.id)).toContain(ready.id);
+    expect(listed.find((p) => p.id === pile.id)).toBeUndefined();
+    // A tidy-up's plan does not capture it, nor any of its things; it takes the other pile as usual.
+    const planned = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
+    expect(planned.manifest.capture.piles.map((p) => p.pileId)).toEqual([ready.id]);
+    expect(planned.manifest.capture.piles.flatMap((p) => p.memberKeys).filter((k) => k !== null && memberKeys.includes(k))).toEqual([]);
+    expect(planned.manifest.capture.members.map((m) => m.file.fileId).filter((id) => id === folder.id || inside.includes(id))).toEqual([]);
+    // A whole tidy-up files nothing of it, retires nothing, and brings nothing back.
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    expect(out.report.filed.map((f) => f.name)).toContain('lease.pdf');
+    expect(out.report.filed.map((f) => f.name)).not.toContain('a.pdf');
+    expect(out.report.setAside.map((s) => s.name)).not.toContain(folder.name);
+    expect(await theirs()).toEqual(before);
+    const dispositions = (await drive.listAll(root)).filter((f) => !f.folder && f.name.startsWith('disposition-'));
+    for (const d of dispositions) expect(await drive.readText(d.id)).not.toContain(pile.id);
+    expect((await drive.listAll(root)).filter((f) => f.appProperties?.pile === pile.id && drive.pathOf(f.id, root).startsWith('Inbox/'))).toEqual([]);
+    expect((await declaring().piles()).find((p) => p.id === pile.id)).toBeUndefined();
+    // Its declaration stays where it was, untouched: inert history.
+    expect(await declarationsNow()).toEqual(declared);
+  }
+
+  it('a declared pile whose folder vanished is not silently retired', async () => {
+    await vanished('moved out of the inbox');
+    await vanished('deleted for good');
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();
