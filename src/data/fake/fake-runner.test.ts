@@ -10,6 +10,7 @@ import { B_FAILURE, type FakeRunServiceOptions } from './fake-run-service';
 import { tidyUp, type TidyUpResult } from '@/testing/tidy-up';
 import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { PROP, SYSTEM } from '../vault/layout';
+import { parseNote } from '../vault/note-format';
 
 let drive: FakeDrive;
 let root: string;
@@ -318,15 +319,32 @@ describe('the fake runner', () => {
     expect(out.report.questions.map((q) => q.id)).toEqual(['q-saltmere']);
   });
 
-  it('answering the question and the next tidy-up drop it for good', async () => {
+  // TL-P2-40 C07 (main 479d305): the answer is recorded on the stored note's Timeline; its Current state is P4.
+  it.each([
+    [true, 'You said the rent is now £1,550.'],
+    [false, 'You said the rent is still £1,450.'],
+  ] as const)('answering the question (yes: %s) records it on the note, and the next tidy-up drops it for good', async (yes, line) => {
+    const FLAT = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
     await vault.addPile({ text: 'Flat 3 rent is now £1,550', items: [] });
     await tidyUp(drive, root);
     const q = (await fresh().questions()).find((x) => x.text === RENT_QUESTION);
     expect(q?.text).toBe(RENT_QUESTION);
     if (!q) return;
-    await fresh().answer(q.id, true);
+    const before = parseNote(FLAT, drive.dump(root).get(FLAT) ?? '');
+    await fresh().answer(q.id, yes);
     const out = await tidyUp(drive, root, 'instructions');
     if (out.phase !== 'done') throw new Error('failed');
+    const after = parseNote(FLAT, drive.dump(root).get(FLAT) ?? '');
+    expect(after.timeline.slice(0, -1)).toEqual(before.timeline);
+    expect(after.timeline.at(-1)).toMatchObject({ text: line });
+    expect(after.timeline.at(-1)?.source).toBeUndefined();
+    // Nothing promises a revision: Current state, the body and the properties stay as they were.
+    expect({ currentState: after.currentState, body: after.body, properties: after.properties }).toEqual({ currentState: before.currentState, body: before.body, properties: before.properties });
+    // R4-1: the line names the answer, and the questions.json write that drops the question waits for it.
+    const edit = out.manifest.operations.find((o) => o.effect.kind === 'edit-text' && o.effect.path === FLAT);
+    const write = out.manifest.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
+    expect(edit?.effect.kind === 'edit-text' && edit.effect.changes).toEqual([expect.objectContaining({ kind: 'timeline-append', recordIds: [out.manifest.capture.journal[0]?.recordId] })]);
+    expect(write?.dependsOn).toContain(edit?.operationId);
     expect(out.report.questions).toEqual([]);
     expect(drive.dump(root).get(SYSTEM.questions)).not.toContain(q.id);
     expect((await fresh().questions()).some((x) => x.id === q.id)).toBe(false);

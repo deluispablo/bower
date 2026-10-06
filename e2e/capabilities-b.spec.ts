@@ -213,4 +213,9 @@ test('C07: a contradiction asks a question linking both sources', async ({ page 
   await page.reload();
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByText('says the rent is £1,550')).toHaveCount(0);
+
+  // The answer is recorded on the stored note's Timeline (TL-P2-40); its Current state is unchanged.
+  await goNote(page, 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md');
+  await expect(lineOf(page, 'You said the rent is now £1,550.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Current state' })).not.toContainText('£1,550');
 });
