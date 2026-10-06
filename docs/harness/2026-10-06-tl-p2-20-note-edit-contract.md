@@ -1,6 +1,6 @@
-# Technical-lead decision TL-P2-2026-10-06-20: the note-edit contract (B.2), revision 3
+# Technical-lead decision TL-P2-2026-10-06-20: the note-edit contract (B.2), revision 4
 
-Lead: Claude `Planificador`. This is a **contract proposal**, not yet ratified. Revision 2 answers independent review `b2-contract-review-1`; revision 3 (the last section, which overrides earlier text where they differ) answers its delta review: 2 Critical, 12 Important and 8 Minor findings, each listed by ID at the end. Adopted revision stays `2026-10-05-contracts-2`.
+Lead: Claude `Planificador`. This is a **contract proposal**, not yet ratified. Revision 2 answers independent review `b2-contract-review-1`; revisions 3 and 4 (the last sections, which override earlier text where they differ) answer its delta reviews: 2 Critical, 12 Important and 8 Minor findings, each listed by ID at the end. Adopted revision stays `2026-10-05-contracts-2`.
 
 Contract B's records and rules are unchanged except where extended here. This proposal adds one effect to TL-P2-06's list of B effects. Ownership/2 (TL-P2-03 and the final grammar) governs every byte range named below.
 
@@ -294,3 +294,49 @@ These are added to the list above.
 - the `bowerNew` move;
 - R3-4, R3-5 and R3-6;
 - `updated.path`, `filed.note` and `rulesWorded`.
+
+## Revision 4: answers to the second delta review (2 Important, 7 Minor)
+
+These rules override everything above wherever they differ.
+
+### R4-1. An answered question stays until its answer's work is done (P1)
+
+The `.bower/questions.json` write that removes an answered question `dependsOn` every operation derived from that answer. If any of them is rejected:
+
+- the questions write is rejected too, so the question stays;
+- the answer's archive is rejected too (R3-4), so the answer stays.
+
+The next run then plans the same merge again from the same question and answer: the Timeline line is skipped as already present, and the move is retried. A run never removes a question whose derived operations are not all planned in that same run.
+
+Two consequences:
+
+- New questions planned in a run whose questions write is rejected are not lost. The next run plans them again.
+- The app already treats a question with a pending answer record as answered. It shows the answer given and never asks again, while the question stays in the file. Make this an explicit test.
+
+A fixture covers a rejected merge move, then the next run converging.
+
+### R4-2. Grounding a reused note (P2)
+
+When R3-6 reuses an existing note, `filed.note` may name it if all of these hold:
+
+- The note is recorded in `capture.places`.
+- Its `bowerItem` equals the stable key.
+- That was verified at plan time.
+- It is checked again before the move is dispatched, with `stillAsSeen` and the same key.
+
+The move's destination is that note's folder. If the check before dispatch fails, the move is `rejected` (conflict), and R3-5's row applies.
+
+### R4-3. Minor answers
+
+- **m-a: line endings.** `eol` is CRLF if the file contains any CRLF, otherwise LF, as in `history.ts`. In an empty Timeline section, the last non-blank line is the heading, so new lines go right after it. Fixture.
+- **m-b: insertion only.** For `timeline-append`, the guard also checks that the result is the original bytes with insertions only, every original byte kept in order. Re-parsing the Timeline must give the previous entries followed by the new ones, in order.
+- **m-c: which operations belong to a member.**
+  - **What counts.** "Every operation for that member" means the member's own append or create, plus its move. It never includes the target note's `bowerNew` move.
+  - **The `setAside` reason.** It is now only "It couldn't be filed this time." The person may already have moved the item, so the sentence promises nothing about where it is.
+- **m-d: entries never repeat.** Accepted explicitly: one note never gets an entry with the same `text` and `source` twice, even on another day. Entries record what happened to a named item, and that does not repeat.
+- **m-e: guard checks.** The guard checks:
+  - every record archive's `dependsOn` (R3-4);
+  - `path` as a relative path: not empty, no leading `/`, no `.` or `..` segments, no empty segment;
+  - `since` > 0.
+- **m-f: the stable key.** `createKey` is the SHA-256, in lowercase hex, of the UTF-8 bytes of `<fileId>:saved-link-note`. Fixture of the reuse.
+- **m-g: a faulty splice.** A fixture injects a faulty splice, and `applyChanges` must refuse it through the re-parse invariant (R3-1).
