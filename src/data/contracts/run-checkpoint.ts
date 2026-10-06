@@ -48,7 +48,7 @@ export type RecordRefusal = {
 export type CheckpointResult = { ok: true; value: Checkpoint; sha256: string } | RecordRefusal;
 export type ReportRecordResult = { ok: true; value: ReportRecord; sha256: string } | RecordRefusal;
 export type ChainResult = { ok: true; head: string } | {
-  ok: false; reason: 'empty' | 'start' | 'revision' | 'previous' | 'binding' | 'phase' | 'transition'; at: number;
+  ok: false; reason: 'empty' | 'start' | 'revision' | 'previous' | 'binding' | 'phase' | 'transition' | 'report'; at: number;
 };
 
 // Small private primitives; consolidation with sibling record modules is a separate unit.
@@ -266,6 +266,22 @@ function allowed(before: Outcome, after: Outcome): boolean {
     default: return false;
   }
 }
+const PHASE_RANK: Record<Checkpoint['phase'], number> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
+/** Phases never go back and may repeat; failed may follow any non-terminal phase; nothing follows done or failed. */
+function forwardPhase(before: Checkpoint['phase'], after: Checkpoint['phase']): boolean {
+  if (before === 'done' || before === 'failed') return false;
+  return after === 'failed' || PHASE_RANK[after] >= PHASE_RANK[before];
+}
+/** Report state only advances not-ready → pending → published, keeping one report identity once pending. */
+function forwardReport(before: ReportState, after: ReportState): boolean {
+  switch (before.state) {
+    case 'not-ready': return after.state !== 'published';
+    case 'pending': return after.state === 'pending'
+      ? canonical(before) === canonical(after)
+      : after.state === 'published' && after.reportHash === before.reportHash;
+    case 'published': return after.state === 'published' && after.reportHash === before.reportHash;
+  }
+}
 async function digest(value: Checkpoint): Promise<string> {
   const result = await hashRecordJson(value);
   if (!result.ok) throw new Error(`Parsed checkpoint is not canonical: ${result.reason}`);
@@ -275,6 +291,7 @@ async function digest(value: Checkpoint): Promise<string> {
 /**
  * Verifies a complete chain of already parsed checkpoints from revision zero.
  * Each previous digest is recomputed from the prior record; caller digests are not trusted.
+ * The chain only moves forward: a resumed attempt continues from the head, never resetting its phase or report.
  */
 export async function verifyCheckpointChain(chain: readonly Checkpoint[]): Promise<ChainResult> {
   const first = chain[0];
@@ -298,6 +315,8 @@ export async function verifyCheckpointChain(chain: readonly Checkpoint[]): Promi
       const prior = before.outcomes[index];
       return !prior || !allowed(prior, item);
     })) return { ok: false, reason: 'transition', at };
+    if (!forwardPhase(before.phase, next.phase)) return { ok: false, reason: 'phase', at };
+    if (!forwardReport(before.report, next.report)) return { ok: false, reason: 'report', at };
     head = await digest(next);
   }
   return { ok: true, head };

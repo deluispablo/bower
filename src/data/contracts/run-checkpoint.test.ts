@@ -531,3 +531,155 @@ describe('run checkpoints keep one honest recoverable chain', () => {
 function outcomeChain(): Checkpoint[] {
   return chain04().map((item) => item.record);
 }
+
+// TL-P2-06 item 5: a chain only moves forward. Successors are linked with the
+// integrated canonical hasher; expected heads are computed independently.
+function phased(base: Checkpoint, phase: Checkpoint['phase']): Checkpoint {
+  const value = clone(base); value.phase = phase; return value;
+}
+/** Another attempt resumes the same run from its head: new attempt, greater epoch. */
+function resumed(base: Checkpoint): Checkpoint {
+  const value = clone(base); value.attemptId = 'attempt-two'; value.epoch = base.epoch + 1; return value;
+}
+function reported(base: Checkpoint, report: Checkpoint['report']): Checkpoint {
+  const value = clone(base); value.report = clone(report); return value;
+}
+async function linked(first: Checkpoint, ...rest: Checkpoint[]): Promise<Checkpoint[]> {
+  const chain = [first];
+  for (const next of rest) chain.push(await after(chain[chain.length - 1] ?? first, next));
+  return chain;
+}
+async function headOf(chain: readonly Checkpoint[]): Promise<string> {
+  const digest = await hashRecordJson(chain[chain.length - 1]);
+  if (!digest.ok) throw new Error('Synthetic head must be canonical');
+  return digest.value;
+}
+async function extend(chain: readonly Checkpoint[], next: Checkpoint): Promise<Checkpoint[]> {
+  const last = chain[chain.length - 1];
+  if (!last) throw new Error('A chain to extend is required');
+  return [...chain, await after(last, next)];
+}
+const throughPending04 = (): Checkpoint[] => [...outcomeChain(), pending04()];
+const throughPublished04 = (): Checkpoint[] => [...throughPending04(), published04()];
+const throughDone04 = (): Checkpoint[] => [...throughPublished04(), done04()];
+const notReady: Checkpoint['report'] = { state: 'not-ready' };
+async function rewordedPending(): Promise<Checkpoint['report']> {
+  const body = report04();
+  const row = body.report.filed[0];
+  if (!row) throw new Error('Fixture 04 report must file a row');
+  row.title = 'Another title';
+  const digest = await hashRecordJson(body);
+  if (!digest.ok) throw new Error('Synthetic body must be canonical');
+  return { state: 'pending', reportHash: digest.value, body };
+}
+
+describe('run checkpoint chains only move forward', () => {
+  it('still verifies the fixture 02 and 04 chains at their literal heads', async () => {
+    expect(await verifyCheckpointChain([cp0(), cp1(), cp2()])).toEqual({ ok: true, head: CHECKPOINT_2 });
+    expect(await verifyCheckpointChain(throughPublished04())).toEqual({ ok: true, head: PUBLISHED_04 });
+    const done = throughDone04();
+    expect(await verifyCheckpointChain(done)).toEqual({ ok: true, head: await headOf(done) });
+  });
+
+  it('allows the same phase to repeat and a phase to be skipped forward', async () => {
+    const repeated = await linked(cp0(), phased(cp0(), 'queued'), phased(cp0(), 'reading'), phased(cp0(), 'reading'),
+      phased(cp0(), 'writing'), phased(cp0(), 'writing'), phased(cp0(), 'saving'), phased(cp0(), 'saving'));
+    expect(await verifyCheckpointChain(repeated)).toEqual({ ok: true, head: await headOf(repeated) });
+    const skipped = await linked(cp0(), phased(cp0(), 'writing'));
+    expect(await verifyCheckpointChain(skipped)).toEqual({ ok: true, head: await headOf(skipped) });
+  });
+
+  it.each(['queued', 'reading', 'writing', 'saving'] as const)('allows failed after %s when no effect may remain', async (phase) => {
+    const quiet = await linked(cp0(), phased(cp0(), phase), phased(cp0(), 'failed'));
+    expect(await verifyCheckpointChain(quiet)).toEqual({ ok: true, head: await headOf(quiet) });
+    const refusal = await linked(cp0(), withOutcome(phased(cp0(), phase), refused()), withOutcome(phased(cp0(), 'failed'), refused()));
+    expect(await verifyCheckpointChain(refusal)).toEqual({ ok: true, head: await headOf(refusal) });
+  });
+
+  it('still refuses failed after reading, writing or saving while an effect may remain', async () => {
+    for (const phase of ['reading', 'writing', 'saving'] as const) {
+      const chain = await linked(cp0(), withOutcome(phased(cp0(), phase), possible()), withOutcome(phased(cp0(), 'failed'), possible()));
+      expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'phase', at: 2 });
+    }
+  });
+
+  it('lets a recovery continue from the head with the same phase and report', async () => {
+    const lost = [cp0(), cp1(), cp2(), await after(cp2(), resumed(cp2()))];
+    expect(await verifyCheckpointChain(lost)).toEqual({ ok: true, head: await headOf(lost) });
+    let chain = await extend(throughPending04(), resumed(pending04()));
+    chain = await extend(chain, resumed(published04()));
+    chain = await extend(chain, resumed(published04()));
+    chain = await extend(chain, resumed(done04()));
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: true, head: await headOf(chain) });
+  });
+
+  it.each([
+    ['reading back to queued', ['reading', 'queued']],
+    ['writing back to reading', ['writing', 'reading']],
+    ['saving back to writing', ['saving', 'writing']],
+    ['saving back to queued', ['saving', 'queued']],
+    ['writing repeated then back to queued', ['writing', 'writing', 'queued']],
+  ] as [string, Checkpoint['phase'][]][])('refuses a phase going back: %s', async (_label, phases) => {
+    const chain = await linked(cp0(), ...phases.map((phase) => phased(cp0(), phase)));
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'phase', at: chain.length - 1 });
+  });
+
+  it('refuses a recovery that resets the phase of the head', async () => {
+    const lost = [cp0(), cp1(), cp2(), await after(cp2(), phased(resumed(cp2()), 'queued'))];
+    expect(await verifyCheckpointChain(lost)).toEqual({ ok: false, reason: 'phase', at: 3 });
+    const pending = await extend(throughPending04(), phased(resumed(pending04()), 'reading'));
+    expect(await verifyCheckpointChain(pending)).toEqual({ ok: false, reason: 'phase', at: 32 });
+  });
+
+  it('refuses a recovery that resets the revision of the head', async () => {
+    const reset = resumed(cp2()); reset.revision = 0; reset.previous = null;
+    expect(await verifyCheckpointChain([cp0(), cp1(), cp2(), reset])).toEqual({ ok: false, reason: 'revision', at: 3 });
+  });
+
+  it.each(['queued', 'reading', 'writing', 'saving', 'failed'] as const)('refuses any record after failed: %s', async (phase) => {
+    const chain = await linked(cp0(), phased(cp0(), 'failed'), phased(cp0(), phase));
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'phase', at: 2 });
+  });
+
+  it('refuses retrying a refused operation after the run failed', async () => {
+    const chain = await linked(cp0(), withOutcome(phased(cp0(), 'failed'), refused()), withOutcome(phased(resumed(cp0()), 'saving'), possible()));
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'phase', at: 2 });
+  });
+
+  it.each(['saving', 'done'] as const)('refuses any record after done: %s', async (phase) => {
+    const chain = await extend(throughDone04(), phased(done04(), phase));
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'phase', at: 34 });
+  });
+
+  it('refuses a report that skips pending', async () => {
+    const chain = await extend(outcomeChain(), published04());
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'report', at: 31 });
+    const lost = await extend([cp0(), cp1(), cp2()], reported(cp2(), { state: 'published', reportHash: REPORT_02 }));
+    expect(await verifyCheckpointChain(lost)).toEqual({ ok: false, reason: 'report', at: 3 });
+  });
+
+  it.each([
+    ['pending back to not-ready', (): Checkpoint => reported(pending04(), notReady)],
+    ['pending back to not-ready in a recovery', (): Checkpoint => reported(resumed(pending04()), notReady)],
+    ['pending under another hash', (): Checkpoint => reported(pending04(), { state: 'pending', reportHash: OTHER, body: report04() })],
+    ['pending published under another hash', (): Checkpoint => reported(pending04(), { state: 'published', reportHash: OTHER })],
+  ])('refuses a report change after pending: %s', async (_label, make) => {
+    const chain = await extend(throughPending04(), make());
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'report', at: 32 });
+  });
+
+  it('refuses a pending report replaced by other wording under its own matching hash', async () => {
+    const chain = await extend(throughPending04(), reported(pending04(), await rewordedPending()));
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'report', at: 32 });
+  });
+
+  it.each([
+    ['published back to pending', (): Checkpoint => pending04()],
+    ['published back to not-ready', (): Checkpoint => reported(published04(), notReady)],
+    ['published back to not-ready in a recovery', (): Checkpoint => reported(resumed(published04()), notReady)],
+    ['published under another hash', (): Checkpoint => reported(published04(), { state: 'published', reportHash: OTHER })],
+  ])('refuses a report change after published: %s', async (_label, make) => {
+    const chain = await extend(throughPublished04(), make());
+    expect(await verifyCheckpointChain(chain)).toEqual({ ok: false, reason: 'report', at: 33 });
+  });
+});
