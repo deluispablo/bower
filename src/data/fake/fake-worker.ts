@@ -34,6 +34,12 @@ export class FakeWorker implements WorkerApi {
   private signedIn: boolean;
   private failOnce: boolean;
   private run: (RunWire & { report?: RunReport }) | null = null;
+  /**
+   * A finished run whose end view could not be saved, kept to save this very object again; it is never
+   * planned or filed again. A done run stays saving until then; a failed one shows its failure at once.
+   */
+  private unsaved: { root: string; run: RunWire & { report?: RunReport }; end: RunWire & { report?: RunReport }; nextAt: number } | null = null;
+  private retrying: Promise<void> | null = null;
   private loaded: Promise<void>;
   private loadFailure: { error: unknown } | null = null;
   private took = new Set<string>();
@@ -118,6 +124,7 @@ export class FakeWorker implements WorkerApi {
     await this.loaded;
     if (this.loadFailure) throw this.loadFailure.error;
     this.lastAllowWeb = !!opts.allowWeb;
+    await this.saveUnsaved();
     if (this.run && !['done', 'failed'].includes(this.run.phase)) return this.wire();
     const root = this.rootId;
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
@@ -131,12 +138,14 @@ export class FakeWorker implements WorkerApi {
     this.online();
     await this.loaded;
     if (this.loadFailure) throw this.loadFailure.error;
+    await this.saveUnsaved();
     return this.run ? this.wire() : null;
   }
 
   private start(root: string, scope: 'all' | 'instructions', at: number, readingFor?: number): RunWire {
     const run: RunWire & { report?: RunReport } = { id: `run-${Date.now().toString(36)}-${++this.seq}`, scope, phase: 'queued', requestedAt: at, phaseAt: Date.now() };
     this.run = run;
+    this.unsaved = null;
     this.took = new Set();
     const failOnce = this.failOnce;
     this.failOnce = false;
@@ -168,15 +177,74 @@ export class FakeWorker implements WorkerApi {
       )
       // The report is in the folder before the run says it is done, as the real runner does it.
       .then(async (end) => {
-        await this.writeLastRun(root, end).catch((e: unknown) => console.error(e));
+        try {
+          await this.writeLastRun(root, end);
+        } catch (e) {
+          console.error(e);
+          // Keep this exact end to save again. Things are filed but the report is not saved: a done run stays saving.
+          this.unsaved = { root, run, end, nextAt: 0 };
+          if (end.phase === 'done') return;
+        }
         Object.assign(run, end);
       });
     return this.wire();
   }
 
+  /**
+   * Saves an end view whose first save failed: the same object, never a new run, and at most once every
+   * RETRY_MS while it keeps failing. Only while the folder still shows this run going, or already shows this
+   * exact view (a write whose answer was lost). A failure is logged and never rejects the caller.
+   */
+  private async saveUnsaved(): Promise<void> {
+    if (this.retrying) return this.retrying;
+    const unsaved = this.unsaved;
+    if (!unsaved || unsaved.run !== this.run || Date.now() < unsaved.nextAt) return;
+    this.retrying = (async () => {
+      try {
+        const stored = await this.storedView(unsaved.root);
+        if (stored?.text !== lastRunText(unsaved.end)) {
+          if (stored?.run.id !== unsaved.end.id || ['done', 'failed'].includes(stored.run.phase)) {
+            console.error(`${SYSTEM.lastRun} no longer shows run ${unsaved.end.id} going; its end is not saved over it`);
+            throw new BowerError('conflict', 'Bower could not save what it did. Try again later.');
+          }
+          await this.writeLastRun(unsaved.root, unsaved.end);
+        }
+        if (this.unsaved === unsaved) this.unsaved = null;
+        Object.assign(unsaved.run, unsaved.end);
+      } catch (e) {
+        console.error(e);
+        unsaved.nextAt = Date.now() + RETRY_MS;
+      } finally {
+        this.retrying = null;
+      }
+    })();
+    return this.retrying;
+  }
+
+  /** The run the folder shows now and its exact text, or null when it shows none. */
+  private async storedView(root: string): Promise<{ run: RunWire; text: string } | null> {
+    const all = await this.drive.listAll(root);
+    const sys = all.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === root);
+    const file = sys && all.find((f) => f.name === 'last-run.json' && f.parents[0] === sys.id);
+    if (!file) return null;
+    const text = await this.drive.readText(file.id);
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      console.error(e);
+      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
+    }
+    if (!isRunnerFile(SYSTEM.lastRun, value)) {
+      console.error(`${SYSTEM.lastRun} has an unsupported shape`);
+      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
+    }
+    return { run: value.run, text };
+  }
+
   private async writeLastRun(root: string, run: RunWire & { report?: RunReport }): Promise<void> {
-    const body: LastRunFile = { v: 1, run: { ...run } };
-    const text = `${JSON.stringify(body, null, 2)}\n`;
+    const text = lastRunText(run);
     const all = await this.drive.listAll(root);
     const sys = all.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === root);
     const file = sys && all.find((f) => f.name === 'last-run.json' && f.parents[0] === sys.id);
@@ -229,6 +297,15 @@ export class FakeWorker implements WorkerApi {
     const { report: _report, ...wire } = this.run ?? { id: '', scope: 'all', phase: 'done', requestedAt: 0, phaseAt: 0 };
     return { ...wire };
   }
+}
+
+/** How long to wait before trying again to save a run's end view that keeps failing. */
+const RETRY_MS = 5_000;
+
+/** The exact text of the run's view in the folder; the same run always gives the same bytes. */
+function lastRunText(run: RunWire & { report?: RunReport }): string {
+  const body: LastRunFile = { v: 1, run: { ...run } };
+  return `${JSON.stringify(body, null, 2)}\n`;
 }
 
 /** Kept with the pretend Drive (a new one forgets it): the pretend Worker deleted the account. */
