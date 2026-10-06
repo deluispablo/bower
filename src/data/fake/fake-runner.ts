@@ -24,7 +24,7 @@ import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
-import { parseNote, serializeNote } from '../vault/note-format';
+import { noteRefusal, parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { NOT_FILED, canonical, grounded, groundedKeys, seen } from './fake-run-records';
@@ -142,6 +142,21 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       console.error(new BowerError('unknown', SET_ASIDE.noteDamaged), 'A pile note has text no run record can carry');
       out.set(pile.id, { blocked: SET_ASIDE.noteDamaged });
       continue;
+    }
+    // The note a run records is refused by its format or its damage as in the Inbox; nothing else of the pile is read.
+    if (recorded) {
+      let refusal: ReturnType<typeof noteRefusal> = null;
+      try {
+        parseNote(join(pile.path, PILE_NOTE), raw);
+      } catch (e) {
+        refusal = noteRefusal(e);
+        if (!refusal) throw e;
+        console.error(e);
+      }
+      if (refusal) {
+        out.set(pile.id, { blocked: refusal === 'newer' ? SET_ASIDE.noteFormat : SET_ASIDE.noteDamaged });
+        continue;
+      }
     }
     if (!writable([folder.name, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
       console.error(new BowerError('unknown', SET_ASIDE.notChecked), 'A pile has text no run record can carry; it waits as not checked');

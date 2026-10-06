@@ -535,12 +535,25 @@ export class DriveVault implements VaultSource {
       const raw = locked && recorded === note ? null : recorded ? await this.rawText(recorded) : '';
       // A note with text no record can carry is a damaged note (TL-P2-36 (9)): Remove, no Try again, never written
       // over; logged once until it changes.
+      const logRefusal = (file: DriveFile | undefined, e: BowerError): void => {
+        const seen = file ? `${file.id}@${file.modifiedTime}` : '';
+        if (this.refusalsLogged.has(seen)) return;
+        this.refusalsLogged.add(seen);
+        console.error(e);
+      };
       if (refused === null && raw !== null && !writable([raw])) {
         refused = 'note-damaged';
-        const seen = recorded ? `${recorded.id}@${recorded.modifiedTime}` : '';
-        if (!this.refusalsLogged.has(seen)) {
-          this.refusalsLogged.add(seen);
-          console.error(new BowerError('unknown', SET_ASIDE_TEXT['note-damaged'], undefined, { cause: { kind: 'note-refused', refusal: 'damaged', reason: 'text-cannot-be-recorded' } }));
+        logRefusal(recorded, new BowerError('unknown', SET_ASIDE_TEXT['note-damaged'], undefined, { cause: { kind: 'note-refused', refusal: 'damaged', reason: 'text-cannot-be-recorded' } }));
+      }
+      // The note a run records, when it is not the first one, is refused the same way (its format, or damage).
+      if (refused === null && raw !== null && recorded && recorded !== note) {
+        try {
+          parseNote(`${path}/${PILE_NOTE}`, raw);
+        } catch (e) {
+          const format = noteRefusal(e);
+          if (!format || !(e instanceof BowerError)) throw e;
+          refused = format === 'newer' ? 'note-format' : 'note-damaged';
+          logRefusal(recorded, e);
         }
       }
       const noteLocked = locked || refused !== null;
