@@ -25,7 +25,7 @@ export function createApp(): Hono<AppEnv> {
   app.get('/health', (c) => c.json({ ok: true, version: c.get('env').APP_VERSION }));
 
   app.notFound(() => {
-    throw new HttpError(404, 'not-found', 'Not found');
+    throw new HttpError(404, 'not-found');
   });
 
   return app;

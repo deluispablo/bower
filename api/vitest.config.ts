@@ -10,7 +10,7 @@ export default defineConfig({
         bindings: {
           GOOGLE_CLIENT_ID: 'test-google-client-id',
           GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
-          SESSION_SECRET: 'test-session-secret',
+          SESSION_SECRET: 'test-session-secret-at-least-32-bytes-long',
           // base64 of 32 zero bytes: a fixture, not a real key.
           TOKEN_ENC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
           GITHUB_TOKEN: 'test-github-token',
@@ -22,5 +22,10 @@ export default defineConfig({
     }),
   ],
   // The harness check reads this report to match a verify's titles (scripts/harness-rules.mjs apiTests).
-  test: { reporters: ['default', 'json'], outputFile: { json: 'test-results/unit.json' } },
+  test: {
+    // A person object that refuses newer storage resets itself on purpose; workerd reports that
+    // reset as an unhandled rejection (test/person.test.ts). Only that one is let through.
+    onUnhandledError: (error) => !/newer than this build/.test(String((error as Error).message ?? error)),
+    reporters: ['default', 'json'], outputFile: { json: 'test-results/unit.json' },
+  },
 });

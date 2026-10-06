@@ -278,7 +278,7 @@ async function verifySessionWith(
  * caller's check: it needs the user record.
  *
  * `previousSecret` gives a `SESSION_SECRET` rotation a grace window
- * (`SESSION_SECRET_PREVIOUS`, docs/runbook.md "Hardening your instance"):
+ * (`SESSION_SECRET_PREVIOUS`, the worker contract):
  * when `secret` alone rejects the token with `bad_signature`, it is retried
  * once against `previousSecret`. Every other rejection (malformed shape,
  * unsupported algorithm, expired, absolute lifetime) is not retried, since

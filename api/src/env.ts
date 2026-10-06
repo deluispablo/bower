@@ -25,8 +25,8 @@ export interface Env {
   /**
    * Optional: when set, `verifySession` also accepts a session cookie
    * signed with this value, giving a `SESSION_SECRET` rotation a grace
-   * window instead of signing everyone out at once (docs/runbook.md,
-   * "Hardening your instance"). Absent on an instance that has never
+   * window instead of signing everyone out at once (worker
+   * contract). Absent on an instance that has never
    * rotated `SESSION_SECRET` this way.
    */
   SESSION_SECRET_PREVIOUS?: string;
@@ -81,6 +81,9 @@ const REQUIRED_VARS = [
   'VAPID_SUBJECT',
 ] as const satisfies readonly (keyof Env)[];
 
+/** The shortest `SESSION_SECRET` accepted: the SHA-256 output size (RFC 2104). */
+const MIN_SESSION_SECRET_BYTES = 32;
+
 const DEFAULTS = {
   DAILY_RUN_LIMIT: '100',
   DEFAULT_MAX_TURNS: '60',
@@ -89,8 +92,13 @@ const DEFAULTS = {
 
 type UnvalidatedEnv = Partial<Record<keyof Env, unknown>>;
 
+/** Bad configuration is a 500 `internal`; the cause (never sent) goes to the log. */
+function misconfigured(cause: string): never {
+  throw new HttpError(500, 'internal', undefined, { cause: new Error(cause) });
+}
+
 function missing(key: string): never {
-  throw new HttpError(500, 'config', `missing ${key}`);
+  return misconfigured(`missing ${key}`);
 }
 
 function requireString(source: UnvalidatedEnv, key: keyof Env): string {
@@ -128,20 +136,16 @@ function decodedByteLength(base64: string): number | null {
 /** A non-negative integer, as Cloudflare gives us vars: a plain string. */
 function requireCount(value: string, key: keyof Env): string {
   if (!/^\d+$/.test(value)) {
-    throw new HttpError(
-      500,
-      'config',
-      `invalid ${key}: must be a whole number`,
-    );
+    misconfigured(`invalid ${key}: must be a whole number`);
   }
   return value;
 }
 
 /**
  * Validates the Worker's bindings and returns them typed as `Env`, throwing
- * `HttpError(500, 'config', ...)` naming the first missing secret or
- * var-without-a-default, or the first var that fails its own validation
- * (`TOKEN_ENC_KEY`'s length, the numeric vars' format). Vars with a default
+ * `HttpError(500, 'internal')` whose cause (logged, never sent) names the first
+ * missing secret or var-without-a-default, or the first value that fails its own
+ * validation (`TOKEN_ENC_KEY`'s and `SESSION_SECRET`'s length, the numeric vars' format). Vars with a default
  * (`DAILY_RUN_LIMIT`, `DEFAULT_MAX_TURNS`, `TEMPLATE_FOLDER_NAME`) fall back
  * to it when absent.
  *
@@ -164,11 +168,17 @@ export function assertEnv(env: unknown): Env {
 
   const tokenEncKey = requireString(source, 'TOKEN_ENC_KEY');
   if (decodedByteLength(tokenEncKey) !== 32) {
-    throw new HttpError(
-      500,
-      'config',
-      'invalid TOKEN_ENC_KEY: must be base64 for exactly 32 bytes',
-    );
+    misconfigured('invalid TOKEN_ENC_KEY: must be base64 for exactly 32 bytes');
+  }
+
+  // RFC 2104: an HMAC key shorter than the hash output (32 bytes for SHA-256) weakens it.
+  const sessionSecret = requireString(source, 'SESSION_SECRET');
+  if (new TextEncoder().encode(sessionSecret).length < MIN_SESSION_SECRET_BYTES) {
+    misconfigured(`invalid SESSION_SECRET: must be at least ${MIN_SESSION_SECRET_BYTES} bytes`);
+  }
+
+  if (typeof source.PERSON !== 'object' || source.PERSON === null) {
+    missing('PERSON');
   }
 
   const dailyRunLimit = requireCount(
@@ -195,7 +205,7 @@ export function assertEnv(env: unknown): Env {
 
     GOOGLE_CLIENT_ID: requireString(source, 'GOOGLE_CLIENT_ID'),
     GOOGLE_CLIENT_SECRET: requireString(source, 'GOOGLE_CLIENT_SECRET'),
-    SESSION_SECRET: requireString(source, 'SESSION_SECRET'),
+    SESSION_SECRET: sessionSecret,
     TOKEN_ENC_KEY: tokenEncKey,
     GITHUB_TOKEN: requireString(source, 'GITHUB_TOKEN'),
     ADMIN_KEY: requireString(source, 'ADMIN_KEY'),
