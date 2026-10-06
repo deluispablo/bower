@@ -2339,6 +2339,19 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await linesOf(w)).toEqual([]);
     });
 
+    it('refuses an instructions run whose only line is a rule left pending, as nothing to read', async () => {
+      const w = await bWorld();
+      const rules = await fileAt(w, RULES);
+      await w.drive.writeText(rules.id, '# My rules\n\n## Rules\n\n- Mine.\n', rules.modifiedTime);
+      await w.uploader.addRule(LEASE_RULE);
+      await expect(w.worker.process('instructions')).rejects.toMatchObject({ code: 'conflict', message: 'There is nothing new for Bower to read.' });
+      await w.runs.settled();
+      expect(await recordsOf(w)).toEqual([]);
+      expect(w.calls).toEqual([]);
+      expect(viewOf(w)).toBeNull();
+      expect(await linesOf(w)).toHaveLength(1);
+    });
+
     it("leaves rules pending when Rules.md is not Bower's, and files the rest on the recoverable path", async () => {
       const w = await bWorld();
       const rules = await fileAt(w, RULES);
