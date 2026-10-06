@@ -369,12 +369,17 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
 function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const { vault } = useSources();
   const [text, setText] = useState(pile.text);
-  // The words the draft started from. When a listing reads the note again, the editor shows the new words
-  // only while nothing is typed; a draft is kept, and saving it meets the vault's own conflict check.
-  const [from, setFrom] = useState(pile.text);
-  if (pile.text !== from) {
-    setFrom(pile.text);
-    if (text.trim() === from) setText(pile.text);
+  // The words the draft started from (its base), and the words last listed. When a listing brings new words,
+  // the editor shows them only while nothing is typed; a draft is kept with its base, and the vault saves it
+  // only over that base (RFC 9110 §13.1.1), so words changed elsewhere are never replaced unseen.
+  const [base, setBase] = useState(pile.text);
+  const [seen, setSeen] = useState(pile.text);
+  if (pile.text !== seen) {
+    setSeen(pile.text);
+    if (text.trim() === base) {
+      setText(pile.text);
+      setBase(pile.text);
+    }
   }
   const [busy, setBusy] = useState(false);
   // A note Bower could not read is shown, never typed over: Try again reads it (the reason above says so).
@@ -384,7 +389,8 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const save = async (): Promise<void> => {
     setBusy(true);
     try {
-      await vault.updatePile(pile.id, text);
+      await vault.updatePile(pile.id, text, base);
+      setBase(text.trim());
       toast('Note saved. Bower reads it in the next tidy-up.');
     } catch (e) {
       report(e, 'The note did not save. Try again.');

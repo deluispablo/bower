@@ -799,7 +799,7 @@ export class DriveVault implements VaultSource {
     this.emit();
   }
 
-  async updatePile(id: string, input: string, _base?: string): Promise<Pile> {
+  async updatePile(id: string, input: string, base?: string): Promise<Pile> {
     this.refuseWhileRunning();
     // Words typed over a note the person was shown without its words would replace it unseen (a lost update,
     // RFC 9110 §13.1.1): refused while the listing they saw could not read it, even if Drive answers now.
@@ -807,6 +807,12 @@ export class DriveVault implements VaultSource {
     if (seen) throw new BowerError('conflict', seen);
     const pile = await this.pile(id);
     if (pile.noteLocked) throw new BowerError('conflict', this.lockedNotes.get(id) ?? NOTE_LOCKED);
+    // A draft is saved only over the words it started from (RFC 9110 §13.1.1, If-Match): words changed elsewhere
+    // since are never replaced unseen; the person looks again, and their draft stays on the screen.
+    if (base !== undefined && pile.text !== base.trim()) {
+      void this.refresh();
+      throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
+    }
     const text = input.trim();
     if (!pile.items.length && !text) throw new BowerError('conflict', 'A pile with no files needs its note.');
     const ix = await this.index();
