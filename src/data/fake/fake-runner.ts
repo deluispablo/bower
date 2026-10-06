@@ -25,7 +25,7 @@ import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type R
 import { ruleLike } from '../rules';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
-import { noteRefusal, parseNote, serializeNote } from '../vault/note-format';
+import { noteRefusal, parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { NOT_FILED, canonical, grounded, groundedKeys, seen } from './fake-run-records';
@@ -794,6 +794,32 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
     generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
   }
+  // A comparison request (C08, TL-P2-40 (1)): a generated note under a main folder (TL-P2-17) with a GFM table of
+  // the notes it compares, read now, and the list of those sources. Only when every one is there and can be read.
+  const compared = new Map<string, { to: string; name: string; text: string; what: string }>();
+  for (const l of journal.filter((x) => x.rec.kind === 'request')) {
+    const scripted = scriptedRequest(l.rec.text ?? l.rec.what);
+    if (scripted?.kind !== 'compare' || !generatedPlace(scripted.note.to)) continue;
+    const read: ParsedNote[] = [];
+    for (const path of scripted.uses) {
+      const f = ix.file(path);
+      if (!f || f.folder) break;
+      try {
+        read.push(parseNote(path, await drive.readText(f.id)));
+      } catch (e) {
+        // A note that cannot be read now leaves the request with its plain line; a sign-out stops the run.
+        if (e instanceof BowerError && e.code === 'auth') throw e;
+        console.error(e);
+        break;
+      }
+    }
+    if (read.length !== scripted.uses.length) continue;
+    const { to, title, what } = scripted.note;
+    destination(to);
+    const name = freeName(planned, to, generatedName(title));
+    plannedFile(join(to, name));
+    compared.set(l.rec.id, { to, name, text: comparisonNote(read, what, noteDate), what });
+  }
   // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
   // goes into that same write (TL-P2-37 Q1 (a)), asked at `requestedAt`, unless it is open already or answered now.
   const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
@@ -960,13 +986,25 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
     // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
     if (scripted?.kind === 'lookup') return !opts.allowWeb ? NOT_LOOKED_UP : lookups.has(l.rec.id) ? scripted.answer : REQUEST_DONE;
+    // A comparison names the note it wrote (C08).
+    const note = compared.get(l.rec.id);
+    if (scripted?.kind === 'compare') return note ? scripted.answer.replace('{note}', displayName(note.name)) : REQUEST_DONE;
     return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
   };
   let requestsOp: string | null = null;
   if (asked.length) {
     const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answerOf(l) }));
-    // An answer that names what a request did is written once that is done (a lookup's Timeline line).
-    const answered = [...new Set(asked.flatMap((l) => editsFrom.get(l.rec.id) ?? []))];
+    // A comparison's note, before the answer that links it; claimed by its one created row (C08).
+    const notes: string[] = [];
+    for (const l of asked) {
+      const note = compared.get(l.rec.id);
+      if (!note) continue;
+      const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: mintKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' });
+      reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), created: [{ path: join(note.to, note.name), what: note.what }] } });
+      notes.push(op);
+    }
+    // An answer that names what a request did is written once that is done (a lookup's Timeline line, a note).
+    const answered = [...new Set([...asked.flatMap((l) => editsFrom.get(l.rec.id) ?? []), ...notes])];
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
     const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
@@ -1312,6 +1350,19 @@ export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it st
 const MAIN_FOLDERS: readonly string[] = PARA_ROOTS.filter((root) => root !== 'Inbox');
 function generatedPlace(to: string): boolean {
   return MAIN_FOLDERS.includes(to.split('/')[0] ?? '');
+}
+
+/**
+ * A comparison's note (C08): a GFM table (https://github.github.com/gfm/#tables-extension-), one row per note with
+ * its rent, commute and status as that note says them, then the list of those notes as its sources. A cell never
+ * holds a pipe, which would end it.
+ */
+function comparisonNote(notes: readonly ParsedNote[], what: string, date: string): string {
+  const cell = (value: string | undefined): string => (value ?? '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
+  const prop = (n: ParsedNote, key: string): string | undefined => n.properties.find((p) => p.key === key)?.value;
+  const rows = notes.map((n) => `| [[${n.title}]] | ${cell(prop(n, 'rent'))} | ${cell(prop(n, 'commute'))} | ${cell(n.status)} |`);
+  const body = ['| Flat | Rent | Commute | Status |', '| --- | --- | --- | --- |', ...rows, '', '## Sources', '', ...notes.map((n) => `- [[${n.title}]]`)].join('\n');
+  return serializeNote({ summary: what, properties: [{ key: 'kind', label: 'Kind', value: 'Comparison' }], tags: [], currentState: [], body, timeline: [{ date, text: 'Written for a request you made.' }], byBower: true });
 }
 
 /** A generated note's name from its authored title, by the Inbox's naming rules, as `.md`. */

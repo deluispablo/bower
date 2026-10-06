@@ -171,7 +171,8 @@ test('C08: a comparison request makes a note with a table and its sources', asyn
   await expect(table.getByRole('columnheader')).toHaveText(['Flat', 'Rent', 'Commute', 'Status']);
   await expect(table.getByRole('row')).toHaveCount(4);
   await expect(table.getByRole('row').filter({ hasText: 'Flat 7, Cobble Row' })).toContainText('18 min');
-  const sources = page.getByRole('main').getByRole('list').filter({ has: page.getByRole('link', { name: 'Flat 2, 40 Tanners Walk' }) });
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Sources' })).toBeVisible();
+  const sources = page.getByRole('main').locator('h2#h-sources + ul');
   await expect(sources.getByRole('link')).toHaveText(['Flat 3, 12 Larkspur Lane', 'Flat 7, Cobble Row', 'Flat 2, 40 Tanners Walk']);
   await sources.getByRole('link', { name: 'Flat 2, 40 Tanners Walk' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Flat 2, 40 Tanners Walk' })).toBeVisible();

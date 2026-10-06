@@ -183,9 +183,12 @@ export function citedName(plan: { title: string; note?: string }): string {
  * - `lookup` (C10): with the web allowed, a scripted web result goes into `uses[0]`'s Timeline, its address as the
  *   line's source and its day as the line's date (the derivation, its source and when, after W3C PROV); with the
  *   web off, the answer says honestly that nothing was looked up (`NOT_LOOKED_UP`).
+ * - `compare` (C08): a generated note in `note.to`, a GFM table with one row per note it `uses` (rent, commute and
+ *   status, read from each note) and the list of those sources; `{note}` in the answer is the note's name.
  */
 export type ScriptedRequest =
   | { kind: 'answer'; asks: RegExp; uses: readonly string[]; answer: string }
+  | { kind: 'compare'; asks: RegExp; uses: readonly string[]; note: { to: string; title: string; what: string }; answer: string }
   | { kind: 'lookup'; asks: RegExp; uses: readonly [string]; found: { text: string; url: string }; answer: string };
 
 /** What a lookup says when the web is off in Settings: nothing was looked up. */
@@ -197,6 +200,13 @@ export const SCRIPTED_REQUESTS: readonly ScriptedRequest[] = [
     asks: /\bwhich flat\b.*\bclosest\b.*\bferrowick\b/i,
     uses: ['Projects/Flat hunt/Flat 7, Cobble Row.md', 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md'],
     answer: '[[Flat 7, Cobble Row]] has the shortest commute, 18 minutes. The [[Industrial Designer, Ferrowick]] job is fully remote, so no flat is closer to it.',
+  },
+  {
+    kind: 'compare',
+    asks: /\bcompare\b.*\bflats\b.*\bshortlist\b/i,
+    uses: ['Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', 'Projects/Flat hunt/Flat 7, Cobble Row.md', 'Projects/Flat hunt/Flat 2, 40 Tanners Walk.md'],
+    note: { to: 'Projects/Flat hunt', title: 'Flats on the shortlist, compared', what: 'A comparison you asked for.' },
+    answer: 'Compared the three flats on the shortlist in [[{note}]].',
   },
   {
     kind: 'lookup',

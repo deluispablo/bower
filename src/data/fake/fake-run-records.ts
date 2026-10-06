@@ -292,9 +292,12 @@ export function grounded(manifest: RunManifest): boolean {
   // link's filed row (`noteGrounded`), not by rows of its own.
   const linkNote = (o: OperationV2): boolean => manifest.operations.some((m) => m.effect.kind === 'move' && members.has(m.effect.before.fileId) && m.dependsOn.includes(o.operationId));
   // Rules.md made at the root is Bower's rule list, not a generated note: its rows are rule rows (TL-P2-20 R3-4).
+  // A request's note (C08, TL-P2-40 (1)): the requests.json write answering it waits for it.
+  const requestNote = (o: OperationV2): boolean => manifest.operations.some((w) => requestsOf(w) !== null && w.dependsOn.includes(o.operationId));
   const generatedOps = manifest.operations.filter((o): o is OperationV2 & { effect: CreateText } => o.effect.kind === 'create-text' && o.effect.purpose === 'generated' && !wordsRules(o));
-  const notes = generatedOps.filter((o) => !linkNote(o));
+  const notes = generatedOps.filter((o) => !linkNote(o) && !requestNote(o));
   const linkNotes = generatedOps.filter(linkNote);
+  const requestNotes = generatedOps.filter((o) => !linkNote(o) && requestNote(o));
   const forOf = (o: OperationV2): string | null => {
     const [after, ...others] = o.dependsOn;
     if (after !== undefined && !others.length) {
@@ -321,6 +324,7 @@ export function grounded(manifest: RunManifest): boolean {
     const op = id === undefined ? undefined : ops.get(id);
     if (!op || op.effect.kind !== 'create-text' || op.effect.purpose !== 'generated') return false;
     const e = op.effect;
+    if (requestNote(op)) return requestNoteRow(c, op, e, rest);
     const aside = forOf(op);
     const parent = pathOf(e.parent);
     if (aside === null || parent === null || v.updated.length || v.questions.length || v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) return false;
@@ -357,6 +361,25 @@ export function grounded(manifest: RunManifest): boolean {
       return parent !== null && join(parent, o.effect.name) === note;
     });
   };
+  /**
+   * A request's note's one row (C08): applied, one `created` row with its resolved path under a main folder (TL-P2-17),
+   * requiring its create and every folder made for it; claimed once. The requests.json write after it names it as a
+   * [[link]] in a done line. A note not written leaves the request for the next tidy-up, so it has no set-aside row.
+   */
+  function requestNoteRow(c: ReportContribution, op: OperationV2, e: CreateText, rest: string[]): boolean {
+    const v = c.value;
+    const parent = pathOf(e.parent);
+    if (c.when !== 'applied' || parent === null || !MAIN_FOLDERS.includes(parent.split('/')[0] ?? '')) return false;
+    if (v.filed.length || v.setAside.length || v.updated.length || v.questions.length || v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) return false;
+    const [made, ...others] = v.created;
+    if (!made || others.length || made.path !== join(parent, e.name) || !made.what || written.has(op.operationId)) return false;
+    const chain = chainOf(e.parent);
+    if (rest.length !== chain.length || !chain.every((x) => rest.includes(x))) return false;
+    const named = `[[${displayName(e.name)}]]`;
+    if (!manifest.operations.some((w) => w.dependsOn.includes(op.operationId) && (doneLines(requestsOf(w)) ?? []).some((line) => line.includes(named)))) return false;
+    written.add(op.operationId);
+    return true;
+  }
   const filed = new Set<string>();
   const setAside = new Set<string>();
   const claimedNotes = new Set<string>();
@@ -433,6 +456,7 @@ export function grounded(manifest: RunManifest): boolean {
   return [...members.keys()].every((id) => filed.has(id) && setAside.has(id))
     && manifest.capture.journal.every((j) => claimed.has(j.recordId))
     && notes.every((o) => written.has(o.operationId) && unwritten.has(o.operationId))
+    && requestNotes.every((o) => written.has(o.operationId))
     && linkNotes.every((o) => manifest.reportPlan.some((c) => c.when === 'applied' && c.requires.includes(o.operationId) && c.value.filed.some((r) => r.note !== undefined)));
 }
 
@@ -566,6 +590,20 @@ function requestsDone(text: string): Map<string, string> | null {
     return null;
   }
   return isRunnerFile(SYSTEM.requests, value) ? new Map(value.done.map((r) => [r.id, r.text])) : null;
+}
+
+/** The done lines a requests.json text holds; null when there is none or it is not a valid requests file. */
+function doneLines(text: string | null): string[] | null {
+  if (text === null) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    console.error(e);
+    return null;
+  }
+  return isRunnerFile(SYSTEM.requests, value) ? value.done.flatMap((r) => (r.done === undefined ? [] : [r.done])) : null;
 }
 
 /** The questions a questions.json text holds; null when it is not a valid questions file. */
