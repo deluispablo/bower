@@ -50,3 +50,5 @@ From the P2 evaluation at `4d7ab08` ([report](2026-10-06-p2-evaluation-4d7ab08.m
 Flaky under the full `e2e:fake` load at `3e6e7da` (each 6/6 alone, green on the next full run):
 - `e2e/qa10.spec.ts:165` [phone] "one thing, one name": reads the tidy-up sheet's list with `allTextContents()` right after the click, without waiting, and got an empty list once.
 - `e2e/robustness.spec.ts:11` [phone] "a failed tidy-up says why…": "15 things filed" not visible within 30 s once (the test takes about 53 s).
+
+From the supplemental walk at `3e6e7da` ([report](2026-10-06-p2-supplemental-walk-3e6e7da.md)): answering a Home question leaves focus on the container, not the next question; the inbox confirmation is not found as a `status` role right after "Put the note in the inbox"; demo sign-in "Demo" + Enter stays on `/sign-in`.
