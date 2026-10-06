@@ -223,6 +223,33 @@ export function scriptedRequest(text: string): ScriptedRequest | null {
   return SCRIPTED_REQUESTS.find((r) => r.asks.test(text)) ?? null;
 }
 
+/**
+ * What a note you add can disagree with (C07, the stand-in for Claude): words matching `words` that give a different
+ * amount from the stored note's property. The amount is the first `£` figure in each.
+ */
+export const DISAGREEMENTS: ReadonlyArray<{ id: string; words: RegExp; note: string; property: string; label: string }> = [
+  { id: 'flat-3-rent', words: /\bflat 3\b.*\brent\b/i, note: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', property: 'rent', label: 'the rent' },
+];
+
+/**
+ * The question a tidy-up asks when a note you added (named `added`) disagrees with a stored one: its text links both
+ * notes; null when they agree, or either gives no amount.
+ */
+export function disagreement(words: string, added: string, stored: { name: string; value: string | undefined }, rule: (typeof DISAGREEMENTS)[number], now: number): Question | null {
+  const amount = (text: string | undefined): string | null => /£\s?\d[\d,]*(?:\.\d+)?/.exec(text ?? '')?.[0].replace(/\s/g, '') ?? null;
+  const said = amount(words);
+  const kept = amount(stored.value);
+  if (!rule.words.test(words) || !said || !kept || said === kept) return null;
+  return {
+    id: `q-${rule.id}-${said.replace(/\D/g, '')}`,
+    text: `[[${added}]] says ${rule.label} is ${said}, but [[${stored.name}]] says ${kept}. Is ${said} right?`,
+    yes: `Yes, ${said}`,
+    no: `No, ${kept}`,
+    about: rule.note,
+    askedAt: now,
+  };
+}
+
 /** The question a tidy-up asks when it files the Saltmere receipts (the stand-in for Claude asking). */
 export function saltmereQuestion(now: number): Question {
   return {

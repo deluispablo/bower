@@ -14,7 +14,7 @@ import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import type { DeclarationResult } from '../contracts/pile-declaration';
-import { FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
+import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, disagreement, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordablePile, recordedNote, sameText, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -794,6 +794,27 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
     generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
   }
+  // Words you added that disagree with a stored note (C07): the question linking both, asked once the note written
+  // from those words is there. The stored note is read now; one that cannot be read asks nothing.
+  const disagreeing: Array<{ pileId: string; question: Question }> = [];
+  for (const note of generated) {
+    const words = note.pileId === null ? '' : (fromWords.find((w) => w.pileId === note.pileId)?.words ?? '');
+    for (const rule of note.pileId === null ? [] : DISAGREEMENTS.filter((r) => r.words.test(words))) {
+      const f = ix.file(rule.note);
+      if (!f || f.folder) continue;
+      let stored: ParsedNote;
+      try {
+        stored = parseNote(rule.note, await drive.readText(f.id));
+      } catch (e) {
+        if (e instanceof BowerError && e.code === 'auth') throw e;
+        console.error(e);
+        continue;
+      }
+      const value = stored.properties.find((p) => p.key === rule.property)?.value;
+      const question = disagreement(words, displayName(note.name), { name: displayName(nameOf(rule.note)), value }, rule, opts.requestedAt);
+      if (question && note.pileId !== null) disagreeing.push({ pileId: note.pileId, question });
+    }
+  }
   // A comparison request (C08, TL-P2-40 (1)): a generated note under a main folder (TL-P2-17) with a GFM table of
   // the notes it compares, read now, and the list of those sources. Only when every one is there and can be read.
   const compared = new Map<string, { to: string; name: string; text: string; what: string }>();
@@ -823,7 +844,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
   // goes into that same write (TL-P2-37 Q1 (a)), asked at `requestedAt`, unless it is open already or answered now.
   const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
-  const toAsk = asking.size ? [saltmereQuestion(opts.requestedAt)].filter((q) => !answered.has(q.id)) : [];
+  const toAsk = [...(asking.size ? [saltmereQuestion(opts.requestedAt)] : []), ...disagreeing.map((d) => d.question)]
+    .filter((q, i, all) => !answered.has(q.id) && all.findIndex((x) => x.id === q.id) === i);
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
   let fresh: Question[] = [];
@@ -1025,6 +1047,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const derived = [
       ...journal.flatMap((l) => (l.rec.kind === 'answer' ? fromAnswer.get(l.rec.id) ?? [] : [])),
       ...(fresh.length ? [...asking].flatMap((id) => movesOf.get(id) ?? []) : []),
+      // A disagreement is asked once the note it links is written (C07).
+      ...disagreeing.filter((d) => fresh.some((q) => q.id === d.question.id)).flatMap((d) => notesOf.get(d.pileId) ?? []),
     ];
     if (questionsFile) {
       const before = await ownVerified(questionsFile);
