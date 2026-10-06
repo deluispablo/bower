@@ -1,0 +1,9 @@
+entry,role,model,attempt,tokens,outcome,date
+o5-final (b-path-asked-question+legacy-runner-write-removal+o5-no-legacy-run-path),implementer,opus,1,482630,delivered,2026-10-06
+o5-final,reviewer,opus,1,203731,clean,2026-10-06
+o5-final,implementer (pace fix),opus,2,549761,delivered (cumulative session total),2026-10-06
+journeys-a (run-result-links+journeys-existing-effects),implementer,opus,1,234991,delivered,2026-10-06
+journeys-a,reviewer,opus,1,161053,changes requested,2026-10-06
+journeys-a,implementer,opus,2,289752,delivered (cumulative session total),2026-10-06
+journeys-b (journeys-cites-and-answers+c10+c08+c07),implementer,opus,1,339798,delivered,2026-10-06
+capability-audit,analyst,opus,1,164345,report,2026-10-06
