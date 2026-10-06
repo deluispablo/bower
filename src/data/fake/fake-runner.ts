@@ -27,7 +27,7 @@ import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
-import { canonical, grounded, groundedKeys, seen } from './fake-run-records';
+import { NOT_FILED, canonical, grounded, groundedKeys, seen } from './fake-run-records';
 
 export interface FakeRunOptions {
   scope: 'all' | 'instructions';
@@ -643,13 +643,13 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
         ? { name: thing.file.name, title: displayName(nameOf(merge.into)), kind: thing.item.kind, to, note: merge.into }
         : { name: thing.file.name, title: thingName(name), kind: thing.item.kind, to };
       reportPlan.push({ requires: [...(line ? [line] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [row] } });
-      reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED_AGAIN }] } });
+      reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
       return;
     }
     if (note) {
       // R3-5: filed only with every operation for it; a rejected move (or its note's) leaves it to the next run.
       reportPlan.push({ requires: [...(created ? [created] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(note.name), kind: thing.item.kind, to, note: join(to, note.name) }] } });
-      reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED_AGAIN }] } });
+      reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
       return;
     }
     reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(name), kind: thing.item.kind, to }] } });
@@ -872,10 +872,6 @@ function generatedName(title: string): string {
   return `${safeInboxName({ name: safe, kind: 'note' })}.md`;
 }
 
-/** Why a thing the run captured was not filed (a rejected move). */
-export const NOT_FILED = 'It was moved, renamed or removed before Bower could file it.';
-/** Why a saved link filed with a note, or a merged thing, was not filed: it may have been moved already (R4-3 m-c). */
-export const NOT_FILED_AGAIN = "It couldn't be filed this time.";
 
 /** A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), a hub's row wording. */
 type WantedLine = { entry: EditEntry; record: string | null; what: string | null };

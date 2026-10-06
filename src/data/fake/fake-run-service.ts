@@ -28,7 +28,7 @@ import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { BowerError, type RunReport } from '../types';
 import { SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { RunWire } from '../worker/worker-api';
-import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, textHash, toEvidence, type RunManifest } from './fake-run-records';
+import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, SOURCE_NOT_AS_SEEN, textHash, toEvidence, type RunManifest } from './fake-run-records';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
 export interface Binding {
@@ -122,7 +122,9 @@ const SIGNED_OUT = 'Sign in again to keep going.';
 const NOT_YOURS = 'This tidy-up belongs to another account or folder.';
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
-const NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
+const NOT_AS_SEEN = SOURCE_NOT_AS_SEEN;
+/** A reused note no longer where, or what, the plan saw: not the thing's own cause (TL-P2-34). */
+const NOTE_NOT_AS_SEEN = 'The note it goes beside is not where Bower left it.';
 const NOTE_CHANGED = 'The note changed before Bower could add to it.';
 const NOTE_THERE = 'A note with that name was already there, so Bower did not write it.';
 /** Attempts in a row before this instance stops retrying a run that keeps failing; it stays saving. */
@@ -627,7 +629,7 @@ export class FakeRunService {
       const note = peek(reused.file.fileId);
       const there = !!note && !note.trashed && note.file.name === reused.file.name && note.file.parents.length === reused.file.parents.length
         && note.file.parents.every((p, i) => p === reused.file.parents[i]) && note.file.appProperties?.bowerItem === reused.key;
-      if (!there) return { code: 'conflict', message: NOT_AS_SEEN };
+      if (!there) return { code: 'conflict', message: NOTE_NOT_AS_SEEN };
     }
     const now = peek(e.before.fileId);
     const same = !!now && !now.trashed && now.file.name === e.before.name && now.file.parents.length === e.before.parents.length && now.file.parents.every((p, i) => p === e.before.parents[i]);

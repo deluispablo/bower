@@ -97,13 +97,25 @@ export function shows(effect: Effect, ev: StoredEvidence, parentId: string | nul
   }
 }
 
+/** Why a captured thing whose move was rejected stays (TL-P2-34): the precondition found it moved, renamed or removed. */
+export const MOVED_AWAY = 'It was moved, renamed or removed before Bower could file it.';
+/** Why it stays for any other rejection, a failed dependency included: a sentence that promises nothing. */
+export const NOT_FILED = "It couldn't be filed this time.";
+/** The failure a move's own precondition gives when its source is not as captured; the service is its only author. */
+export const SOURCE_NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
+
 /**
  * The report from the fixed plan and the resolved outcomes: each contribution
  * exactly when all it requires reached its state. Null while any required
- * operation is unresolved: no row is invented for it.
+ * operation is unresolved: no row is invented for it. A thing set aside for a
+ * rejected move says why by the move's cause (TL-P2-34), for every consumer:
+ * the specific sentence when the move's own precondition found it moved,
+ * renamed or removed, the general one for anything else.
  */
 export function materialize(manifest: RunManifest, manifestHash: string, outcomes: readonly Outcome[]): ReportRecord | null {
   const state = new Map(outcomes.map((o) => [o.operationId, o.state]));
+  const byId = new Map(outcomes.map((o) => [o.operationId, o]));
+  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [] };
   for (const c of manifest.reportPlan) {
     const states = c.requires.map((id) => state.get(id));
@@ -112,7 +124,12 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     report.filed.push(...c.value.filed);
     report.created.push(...c.value.created);
     report.updated.push(...c.value.updated);
-    report.setAside.push(...c.value.setAside);
+    const moves = c.when === 'rejected' && c.requires.every((id) => ops.get(id)?.effect.kind === 'move');
+    const moved = c.requires.every((id) => {
+      const o = byId.get(id);
+      return o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN;
+    });
+    report.setAside.push(...(moves ? c.value.setAside.map((row) => ({ ...row, why: moved ? MOVED_AWAY : NOT_FILED })) : c.value.setAside));
     report.questions.push(...c.value.questions);
     if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
