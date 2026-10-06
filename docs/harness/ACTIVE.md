@@ -1,4 +1,13 @@
-# Active coordination: outgoing coordinator stopped and released
+# Active coordination
+
+## Current coordinator (2026-10-06)
+
+- Coordinator: Claude Code (Opus 5.5), session `claude-orchestrator-2026-10-06-e759b272`, appointed by the owner's replacement instruction of 2026-10-06. Assumes integration/shared-record writing and main-backup integrator responsibility from the released root below. Integration `/Users/deluisp/Projects/bower-app`, branch `codex/close-phase-2`, base `9b5caba52dbe45dcfb024cd2fa18beda918c54e7`; contracts-2 / main `10ca886`, matching `main:docs/harness/PLAN_REVISION`. P2 OPEN 217/221; P4 not authorized.
+- Startup check: all nine worktrees clean at their inventoried SHAs; no listeners on 5190/5191/5192/8788; no vitest/vite/wrangler process. Capabilities: shell, Git, Node/pnpm, Claude subagents, Codex CLI 0.160.1 (`codex exec`/`codex review`; no MCP server mode). Claude and Codex workers are mixed; a stalled worker is retried with a stronger model/effort or handed to the other tool.
+- Backup: coordinator assumes main-backup responsibility. Preflight 2026-10-06 verified private repo, owner, destination `https://github.com/deluispablo/bower-app.git` and local=remote main `10ca886626206e0d4d880d6679dd4f57adcafcee`, zero outgoing objects, no issues. Registration gate `pnpm check` 730/55 exit0 at `9b5caba` + this record.
+- Assignment R-decl-1: independent read-only review of `pile-declaration-authority` (qa21, P2 O3 C02/C12/C14). Reviewer: Claude subagent `decl-review-1` (cross-tool; implementer was Codex). Target `/private/tmp/bower-p2-declaration-guards`, base `87cafb7`, stub `b20c618`, candidate `4052532b482e69f5945e19fc3aaba7f4fbbfff3d`, packet [B2](2026-10-06-b2-declaration-unit.md), evidence `evidence/2026-10-06-qa21/declaration`. Read-only: no init, gates, edits or Git mutation; report returned to the coordinator. No browser/provider reservation.
+
+# Previous coordinator: stopped and released
 
 ## Current authority and recovery point
 
