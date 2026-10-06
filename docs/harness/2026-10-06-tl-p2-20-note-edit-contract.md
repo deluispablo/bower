@@ -1,6 +1,6 @@
-# Technical-lead decision TL-P2-2026-10-06-20: the note-edit contract (B.2), revision 4
+# Technical-lead decision TL-P2-2026-10-06-20: the note-edit contract (B.2), RATIFIED
 
-Lead: Claude `Planificador`. This is a **contract proposal**, not yet ratified. Revision 2 answers independent review `b2-contract-review-1`; revisions 3 and 4 (the last sections, which override earlier text where they differ) answer its delta reviews: 2 Critical, 12 Important and 8 Minor findings, each listed by ID at the end. Adopted revision stays `2026-10-05-contracts-2`.
+Lead: Claude `Planificador`. **Ratified 2026-10-06** after a third delta review returned 0 Critical and 0 Important; its six Minor findings are folded in under "Ratification" at the end. Revision 2 answers independent review `b2-contract-review-1`; revisions 3 and 4 (the last sections, which override earlier text where they differ) answer its delta reviews: 2 Critical, 12 Important and 8 Minor findings, each listed by ID at the end. Adopted revision stays `2026-10-05-contracts-2`.
 
 Contract B's records and rules are unchanged except where extended here. This proposal adds one effect to TL-P2-06's list of B effects. Ownership/2 (TL-P2-03 and the final grammar) governs every byte range named below.
 
@@ -340,3 +340,16 @@ The move's destination is that note's folder. If the check before dispatch fails
   - `since` > 0.
 - **m-f: the stable key.** `createKey` is the SHA-256, in lowercase hex, of the UTF-8 bytes of `<fileId>:saved-link-note`. Fixture of the reuse.
 - **m-g: a faulty splice.** A fixture injects a faulty splice, and `applyChanges` must refuse it through the re-parse invariant (R3-1).
+
+## Ratification (2026-10-06)
+
+Delta review of revision 4: READY FOR RATIFICATION, with 0 Critical, 0 Important and 6 Minor findings. The lead ratifies B.2 with these Minor findings folded in. They override earlier text.
+
+1. **Hidden, not shown.** The app *hides* a question while its answer is pending (`DriveVault.questions()`). R4-1's test asserts that the question is hidden and never asked again. It does not assert that the answer is shown.
+2. **Answers and the questions write.** The questions write is a single write that removes every answered question. So **every** answer's archive `dependsOn` the `questions.json` write that removes its question. If that write is rejected because of a different answer, no answer is archived, and none of their questions are asked again.
+3. **Re-planning new questions.** "Not lost" holds for a new question only when the next run derives it again from the inputs that remain. A question that came from an input the run did consume is re-derived only if its source is still captured. The contract promises no more than that.
+4. **Line endings for v2.** m-a's rule (CRLF if the file contains any CRLF, otherwise LF) applies to v2 and legacy alike, replacing revision 2's neighbour rule.
+5. **Paths.** `path` uses B's full path rule (`run-manifest.ts` `path()`), including the backslash and control-character checks, not the shorter list in m-e.
+6. **The reused note's key.** For R4-2, the validator recomputes the stable key from the move's `before.fileId`, because `SeenFile` carries no `appProperties`. The note's folder must be a captured place. In the fake, the check happens in the same serialized step as the move.
+
+**Next:** register `note-edit-contract`: the v2 guard, `applyChanges`, R3-8's fixtures, R4-3's fixtures and these six points. It goes through test-first implementation and independent review. Afterwards the o5 entries and `b-path-merges` consume it. B.2 activation stays fake-only until the raw-byte adapter (rule 6).
