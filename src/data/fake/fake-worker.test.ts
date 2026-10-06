@@ -2228,6 +2228,27 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await inbox()).map((p) => [p.text, p.setAside])).toEqual([['Papers about the lease', undefined]]);
     });
 
+    it('holds a pile whose recorded note fails to read only when the plan captures it, and plans the others', async () => {
+      const w = await bWorld();
+      const lease = await parentOfFile(w, 'lease.pdf');
+      const note = (await w.drive.listAll(w.rootId)).find((f) => f.parents[0] === lease && f.name === 'Pile note.md');
+      if (!note) throw new Error('missing pile note');
+      const real = w.drive.readText.bind(w.drive);
+      // The Inbox listing reads it; the next read, the capture's, fails; any later one reads again.
+      let reads = 0;
+      vi.spyOn(w.drive, 'readText').mockImplementation(async (id) => {
+        if (id === note.id && ++reads === 2) throw driveError('offline');
+        return real(id);
+      });
+      const planning = runPlan(w);
+      await expect(planning).resolves.toMatchObject({ path: 'b' });
+      const planned = await planning;
+      if (planned.path !== 'b') return;
+      expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(lease);
+      expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      expect(reads).toBe(2);
+    });
+
     it('holds a declared pile whose bound note, not listed first, cannot be read, and plans the others', async () => {
       const w = await bWorld({ declared: true });
       const { folder, keyed } = await leasePile(w);
