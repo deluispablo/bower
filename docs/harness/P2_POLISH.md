@@ -32,3 +32,15 @@ TL-P2-38: minors never become entries; they wait here for after the freeze. Link
 - With web on but the Flat 3 note missing, the lookup answers with the generic line; two same-named notes in different folders resolve to the last found.
 - Run records: `putNew` keeps the cached folder if read-back throws after a create (a retry may write an identical second copy); `put`'s read-back by id no longer confirms the record sits in its run folder; the held-pile test lost its Inbox-side assertion; the pace test bound is loose.
 - `PileScreen.test.tsx` "a draft whose note changed elsewhere…" fails about 1 run in 3 under full `pnpm check` load, and passes 5/5 alone (journeys B, 2026-10-06).
+
+From the P2 batch review at `4d7ab08` (TL-P2-46, clean):
+
+- Pile screen: any conflict reads as a clash. Clearing a words-only pile's note and saving hits "A pile with no files needs its note." but the screen says "This note changed elsewhere…" (`PileScreen.tsx:412`).
+- Note: "New" marks one Timeline line per note even when a run added two (`NoteScreen.tsx:219`).
+- Held piles: "Couldn't tidy this up yet" can be permanent (a Drive-added name with `/` or `\`, a pile note starting with a BOM, a file with no checksum); Try again never clears it and the Inbox offers no Remove for that reason (`PileScreen.tsx:103`).
+- Runner: the bound note is parsed again without a catch, so a rare race refuses the whole run instead of holding one pile (`fake-runner.ts:417`).
+- Runner: a C07 answer or C10 lookup whose line is refused waits forever; "Let Bower do it now" then says there is nothing new (P4 depth).
+- Vault: a Remove failing halfway leaves the pile without its declaration, so it becomes ordinary (`drive-vault.ts:341, 610`; accepted in a comment).
+- P3 cost: every old declaration is read once per session (`pile-readiness.ts:81`); a loose file trashed outside Bower costs one Bin lookup per 300 ms listing.
+- Home: a C07 question shows two identical links to the same note (`Home.tsx:283`).
+- Run links: report paths are fixed at run time, so a note renamed afterwards gives a dead link (`RunLinks.tsx`).

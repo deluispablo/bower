@@ -14,3 +14,4 @@ journeys-b,implementer,claude,opus,,3,389505,,,,,,,,rebased onto A (cumulative s
 o5-final-fix (I1 uncheckable thing),implementer,claude,opus,,2,582844,,,,,,40,13,delivered (cumulative session total),2026-10-06
 coordinator (session e759b272 through batch 5),coordinator,claude,opus,,1,1541779425,13620,32016085,1503963900,5785820,580.82,,,cumulative ccusage session incl. subagents,2026-10-06
 staging-deploy-b5,mechanical,claude,haiku,low,1,49875,,,,,,12,1.1,delivered,2026-10-06
+p2-batch-review-4d7ab08,reviewer,claude,opus,,1,237653,,,,,,42,6.6,clean (TL-P2-46 fallback; general-purpose agent with model pinned),2026-10-06
