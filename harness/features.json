@@ -3178,8 +3178,8 @@
       "No run of a folder with only leftovers sends the whole plan to legacy."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"leftovers of a held pile take the recoverable path\"",
-    "passes": false,
-    "note": "Remaining legacy route found by the b-path-held-piles review (declared pile with no members left → legacy('member key')). Before P2-H; part of o5-no-legacy-run-path's mapping. Planned, not implemented. TL-P2-29 (4): interim legacy only (o5-no-legacy-run-path must prove no plan reaches legacy); lead default: the leftover is an ordinary pile for the next run (TL-P2-21). CONFIRMED (TL-P2-29 amendment, main 5217fbd): a declared pile whose keys are all accounted for (consumed dispositions from the earlier B run, or arrived-and-left by lookup after legacy) is, for what is left in its folder, an ordinary observed pile: null memberKeys, context = bound note else first, filed on B; no new disposition for keys already disposed; declaration file stays as history. No legacy, no new mechanism."
+    "passes": true,
+    "note": "Remaining legacy route found by the b-path-held-piles review (declared pile with no members left → legacy('member key')). Before P2-H; part of o5-no-legacy-run-path's mapping. TL-P2-29 (4): interim legacy only (o5-no-legacy-run-path must prove no plan reaches legacy); lead default: the leftover is an ordinary pile for the next run (TL-P2-21). CONFIRMED (TL-P2-29 amendment, main 5217fbd): a declared pile whose keys are all accounted for (consumed dispositions from the earlier B run, or arrived-and-left by lookup after legacy) is, for what is left in its folder, an ordinary observed pile: null memberKeys, context = bound note else first, filed on B; no new disposition for keys already disposed; declaration file stays as history. No legacy, no new mechanism. Integrated in fce3593 from claude/p2-leftover 3afb673; review CLEAN after delta (I1 fixed by pile-accounting-shared on the same branch; Minor: a disposed member moved back into a partly filed pile stays an extra and is filed next run, converges). Gates check 3342, e2e:fake 214."
   },
   {
     "id": "session-signout-state",
