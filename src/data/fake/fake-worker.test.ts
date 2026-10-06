@@ -3720,6 +3720,37 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await notesOf(v)).toHaveLength(1);
     });
 
+    // Review at r1 9e57a33: a saved link's note is placed as every generated note is (TL-P2-17), main folders only.
+    it("grounds a saved link's note only under a main folder, never in the inbox, Bower's own files or the root", async () => {
+      const { w, link } = await linkWorld();
+      const { manifest } = await tidy(w);
+      if (!manifest) return;
+      expect(grounded(manifest)).toBe(true);
+      const ops = manifest.operations as OperationV2[];
+      const create = ops.find((o) => o.effect.kind === 'create-text');
+      const move = ops.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === link.id);
+      if (create?.effect.kind !== 'create-text' || move?.effect.kind !== 'move') throw new Error('no saved-link note planned');
+      const name = create.effect.name;
+      const listing = await w.drive.listAll(w.rootId);
+      /** The note and the link both put in `path` (`fileId` that folder), recorded as a captured place. */
+      const moved = (fileId: string, path: string): AnyManifest => {
+        const to = { fileId };
+        const operations = ops.map((o) => (o === create || o === move ? { ...o, effect: { ...o.effect, parent: to } } : o));
+        const reportPlan = manifest.reportPlan.map((c) => (c.when === 'applied' && c.requires.includes(move.operationId)
+          ? { ...c, requires: c.requires.filter((id) => operations.some((o) => o.operationId === id && o.effect.kind !== 'create-folder')), value: { ...c.value, filed: c.value.filed.map((r) => (r.name === link.name ? { ...r, to: path, note: path ? `${path}/${name}` : name } : r)) } }
+          : c));
+        const folder = listing.find((f) => f.id === fileId);
+        const places = folder ? [...manifest.capture.places, { file: { fileId: folder.id, name: folder.name, parents: folder.parents, folder: true, modifiedTime: folder.modifiedTime }, path }] : manifest.capture.places;
+        return { ...manifest, operations, reportPlan, capture: { ...manifest.capture, places } } as AnyManifest;
+      };
+      for (const path of ['Inbox', SYSTEM.dir]) {
+        const folder = listing.find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === path);
+        expect(folder, path).toBeDefined();
+        expect(grounded(moved(folder?.id ?? '', path)), path).toBe(false);
+      }
+      expect(grounded(moved(w.rootId, '')), 'the root').toBe(false);
+    });
+
     it('a saved link is set aside by its cause: moved away, or not filed this time', async () => {
       // A conflict: the link file is renamed right before its move.
       const moved = await linkWorld();
