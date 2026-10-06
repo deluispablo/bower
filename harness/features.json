@@ -3236,5 +3236,19 @@
     "verify": "pnpm vitest run src/data/session.test.ts -t \"a page restored from the back/forward cache reloads\"",
     "passes": false,
     "note": "Owner rule (simplest proven approach) + TL-P2-28 (main 9a72c1f): pageshow persisted → location.reload() (web.dev pattern) replaces the custom rejoin; one e2e back → reload → no stale-epoch write. Planned, not implemented."
+  },
+  {
+    "id": "pile-accounting-shared",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "The Inbox and the tidy-up account for filed pile members with the same rule, so they never disagree about a pile.",
+    "steps": [
+      "File a declared pile's members on the recoverable path, then edit one filed member in Drive.",
+      "The Inbox shows the same state for what is left as the next tidy-up uses (filed members accounted for by their disposition).",
+      "Both call one shared accounting function in pile-readiness (dispositions, then the lookup)."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"the inbox accounts for filed members like the tidy-up\"",
+    "passes": false,
+    "note": "Second amendment to TL-P2-29 (main 07ba2b6): one shared function in pile-readiness.ts used by the runner and DriveVault. Internal to contract B; no external standard. Planned, not implemented."
   }
 ]
