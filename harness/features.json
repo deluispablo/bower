@@ -2542,7 +2542,7 @@
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"an incomplete pile retains every member across tidy-up and retry\"",
     "task": "qa-13",
     "passes": false,
-    "note": "Historical 143ae2b reproduction corroborated on current source1dc7f64 by a separate-reader public-API probe with BowerError offline: missing member disappears after scripted consumption. See docs/harness/2026-10-05-readiness-current-reproduction.md. Named regression/retry recovery remain planned, not executed or passed; lead readiness/capture contract pending."
+    "note": "Historical 143ae2b reproduction corroborated on current source1dc7f64 by a separate-reader public-API probe with BowerError offline: missing member disappears after scripted consumption. See docs/harness/2026-10-05-readiness-current-reproduction.md. Named regression/retry recovery remain planned, not executed or passed; lead readiness/capture contract pending. TL-P2-08 (b) context-arrival rules are folded into this entry; the separate declared-pile-context-arrival entry was withdrawn before any work, per the lead's 'add it to partial-pile-readiness if it fits'. Review ready-review-1 BLOCKED 0C/3I/5M (docs/harness/2026-10-06-readiness-review.md); rework in progress."
   },
   {
     "id": "protected-current-prose",
@@ -2814,7 +2814,7 @@
     ],
     "verify": "pnpm vitest run src/data/contracts/run-manifest.test.ts -t \"run manifests keep captured and written text consistent\"",
     "passes": false,
-    "note": "Guard 6 and effect-consistency follow-ups from reviews R-man-1/R-man-2, packet docs/harness/2026-10-06-run-record-units.md unit G. Planned, not implemented."
+    "note": "Claude candidate 9235536/e21a777 + rework 71badc0/4b8259d; review g6-review-1 BLOCKED (test power) then delta CLEAN (docs/harness/2026-10-06-manifest-g6-review.md). Follow-ups: context version vs file, remaining membership references, blob beforeContent on write-runner-json."
   },
   {
     "id": "run-checkpoint-monotonic",
@@ -2969,19 +2969,5 @@
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"an unreadable declaration affects only its own pile\"",
     "passes": false,
     "note": "TL-P2-08 (a), main c759ce1. Planned, not implemented."
-  },
-  {
-    "id": "declared-pile-context-arrival",
-    "task": "qa-23",
-    "category": "bug",
-    "what": "A declared pile's note only has to have arrived: edited, removed through Bower or lost, the pile never stays set aside for ever.",
-    "steps": [
-      "A declared pile whose note text was edited is ready once its members are; the run captures the current text.",
-      "A note the person removed through Bower makes the pile ready without context; with no members left it is empty, offered for removal and never counted as filed.",
-      "A note missing without the person removing it is written again from the declaration's original text; every set-aside pile shows its reason and an action."
-    ],
-    "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"a declared pile note only has to have arrived\"",
-    "passes": false,
-    "note": "TL-P2-08 (b), main c759ce1. No declaration field changes. Planned, not implemented."
   }
 ]
