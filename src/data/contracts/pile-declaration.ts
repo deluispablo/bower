@@ -1,5 +1,5 @@
 /** Immutable declaration validation only; no readiness or permission authority. */
-import { sha256 } from '../vault/hashes';
+import { sha256 } from './hashes';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };

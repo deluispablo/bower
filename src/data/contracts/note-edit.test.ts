@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import type { ChangeEntry } from '../types';
+import type { ChangeEntry } from './types';
 import { parseNote } from '../vault/note-format';
 import { parseOwnership, type Owner } from '../vault/ownership-format';
 import { parseRules } from '../vault/rules-format';

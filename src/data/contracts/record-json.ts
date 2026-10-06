@@ -1,5 +1,5 @@
 /** Strict record JSON and canonical identities; no schema or permission authority. */
-import { sha256 } from '../vault/hashes';
+import { sha256 } from './hashes';
 
 export type RecordJsonValue = null | boolean | number | string | RecordJsonValue[] | { [key: string]: RecordJsonValue };
 export type RecordJsonFailure = { ok: false; reason: 'encoding' | 'syntax' | 'duplicate-key' | 'unicode' | 'number' | 'value' };

@@ -99,4 +99,67 @@ describe('the shape of the code', () => {
     }
     expect(bad, 'Say what went wrong: console.error with the details (and a toast with one sentence for the person), or rethrow. If ignoring is really right, say why in a comment that starts "expected:".').toEqual([]);
   });
+
+  describe('the shared core', () => {
+    const CONTRACTS = join(SRC, 'data', 'contracts');
+    /** Pure libraries a contract may import. None today: the contracts need only the platform (Web Crypto, TextEncoder). */
+    const ALLOWLIST: Record<string, string> = {};
+    const FORBIDDEN = /\b(window|document|localStorage|sessionStorage|indexedDB|fetch|React|import\.meta\.env|process\.env)\b|from 'react/;
+    const specs = (text: string): string[] =>
+      [...text.matchAll(/(?:^|\n)\s*(?:import|export)\b[^'"]*?from\s+'([^']+)'|import\(\s*'([^']+)'\s*\)|(?:^|\n)\s*import\s+'([^']+)'/g)].map((m) => m[1] ?? m[2] ?? m[3] ?? '');
+    const resolve = (from: string, spec: string): string | null => {
+      const base = spec.startsWith('@/') ? join(SRC, spec.slice(2)) : spec.startsWith('.') ? join(dirname(from), spec) : null;
+      if (base === null) return null;
+      for (const c of [base + '.ts', base + '.tsx', join(base, 'index.ts')]) {
+        try {
+          if (statSync(c).isFile()) return c;
+        } catch {
+          // expected: the candidate path does not exist, try the next one
+        }
+      }
+      return null;
+    };
+    /** Every file reachable from the contracts, with the files that import it. */
+    const closure = (roots: string[]): { seen: Set<string>; external: string[] } => {
+      const seen = new Set<string>();
+      const external: string[] = [];
+      const stack = [...roots];
+      while (stack.length) {
+        const f = stack.pop() as string;
+        if (seen.has(f)) continue;
+        seen.add(f);
+        for (const spec of specs(readFileSync(f, 'utf8'))) {
+          const r = resolve(f, spec);
+          if (r) stack.push(r);
+          else if (!(spec in ALLOWLIST)) external.push(`${relative(SRC, f)} imports '${spec}'`);
+        }
+      }
+      return { seen, external };
+    };
+
+    it('contracts import only themselves and allowlisted pure libraries', () => {
+      const { seen, external } = closure(files(CONTRACTS));
+      const outside = [...seen].filter((f) => !f.startsWith(CONTRACTS + '/')).map((f) => relative(SRC, f));
+      const impure = [...seen].filter((f) => FORBIDDEN.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, ''))).map((f) => relative(SRC, f));
+      expect({ outside, external, impure }, 'The contracts run in the Worker too. Move the pure helper under src/data/contracts/ (leave a re-export at the old path), or split the module so only its pure part moves.').toEqual({ outside: [], external: [], impure: [] });
+    });
+
+    it('api imports nothing from src except contracts', () => {
+      const API = join(SRC, '..', 'api');
+      let exists = true;
+      try {
+        statSync(API);
+      } catch {
+        exists = false; // expected: api/ is added by the other P3-2 entry
+      }
+      if (!exists) return;
+      const bad: string[] = [];
+      for (const f of files(API)) {
+        for (const spec of specs(readFileSync(f, 'utf8'))) {
+          if (/(^|\/)src\//.test(spec) && !/src\/data\/contracts(\/|$)/.test(spec)) bad.push(`${relative(API, f)} imports '${spec}'`);
+        }
+      }
+      expect(bad, 'api/ may import only src/data/contracts.').toEqual([]);
+    });
+  });
 });
