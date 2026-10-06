@@ -15,7 +15,7 @@ import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { join, thingName } from '../tree';
-import { BowerError, type RunReport } from '../types';
+import { BowerError, PARA_ROOTS, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 
@@ -239,6 +239,8 @@ export function grounded(manifest: RunManifest): boolean {
       unwritten.add(op.operationId);
       return true;
     }
+    // TL-P2-17: only under a main folder, never Inbox, .bower/ or the root (runner JSON is another purpose).
+    if (!MAIN_FOLDERS.includes(parent.split('/')[0] ?? '')) return false;
     const chain = chainOf(e.parent);
     const path = join(parent, e.name);
     const [made, ...others] = v.created;
@@ -299,6 +301,8 @@ export function grounded(manifest: RunManifest): boolean {
 
 type MoveEffect = Extract<Effect, { kind: 'move' }>;
 type CreateText = Extract<Effect, { kind: 'create-text' }>;
+/** Where a generated note may be (TL-P2-17): the main folders, never Inbox. */
+const MAIN_FOLDERS: readonly string[] = PARA_ROOTS.filter((root) => root !== 'Inbox');
 
 /** The done requests a requests.json text holds, by id; null when it is not a valid requests file. */
 function requestsDone(text: string): Map<string, string> | null {
