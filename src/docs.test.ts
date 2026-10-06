@@ -69,5 +69,7 @@ describe('what the repository promises', () => {
     expect(config).not.toMatch(/"name":\s*"bower-api"/);
     expect(config).toMatch(/"name":\s*"bower-staging"/);
     expect(config).toMatch(/"not_found_handling":\s*"single-page-application"/);
+    expect(config).not.toContain('dedd167004be415cbd90c4b154b1f4e2');
+    expect(config).toMatch(/"binding":\s*"BOWER_KV",\s*"id":\s*"6969d46bffdb4b1e90d068f84235fbec"/);
   });
 });
