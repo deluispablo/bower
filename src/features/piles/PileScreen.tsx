@@ -102,7 +102,7 @@ export function PileScreen() {
 /** Reasons whose action is the pile's own Remove. */
 const REMOVE_IT: ReadonlySet<SetAside> = new Set(['changed', 'declaration', 'empty', 'note-format', 'note-damaged']);
 /** Reasons whose action is Try again: send it again, or check (or read the pile's list) again now. */
-const TRY_AGAIN: ReadonlySet<SetAside> = new Set(['not-arrived', 'not-checked', 'unreadable']);
+const TRY_AGAIN: ReadonlySet<SetAside> = new Set(['not-arrived', 'not-checked', 'unreadable', 'not-tidied']);
 
 /**
  * Why a tidy-up leaves this pile in the inbox, and what to do: Try again for

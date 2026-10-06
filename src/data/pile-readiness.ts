@@ -9,10 +9,12 @@ import type { DriveFile } from './drive/drive-api';
 import { parsePileDeclaration, type Declaration, type DeclarationResult, type Member } from './contracts/pile-declaration';
 import { parsePileDisposition, type DispositionResult } from './contracts/pile-disposition';
 import { canonicalRecordJson, hashRecordJson } from './contracts/record-json';
+import { recordableId, recordableName } from './contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from './piles';
 import { isJournalRecord } from './vault/journal';
 import { PROP, SYSTEM } from './vault/layout';
 import { BowerError, type SetAside } from './types';
+import { sha256 } from './vault/hashes';
 
 export type ReadBytes = (id: string) => Promise<Uint8Array>;
 
@@ -375,6 +377,7 @@ export const SET_ASIDE_TEXT: Readonly<Record<SetAside, string>> = {
   empty: 'Nothing is left in it. Remove it from your inbox.',
   'note-format': "This pile's note needs a newer Bower.",
   'note-damaged': "Bower can't read this pile's note.",
+  'not-tidied': "Bower couldn't tidy this up yet. Try again.",
 };
 
 /**
@@ -400,6 +403,35 @@ export function setAsideOf(lookup: DeclarationLookup['state'], blocked: Blocked,
  */
 export function writable(texts: readonly string[]): boolean {
   return canonicalRecordJson(texts).ok;
+}
+
+/**
+ * What a tidy-up that takes a pile writes down about it, by the rules the Inbox and the run share (TL-P2-38): a pile
+ * one of these says no to is held, not tidied, with Try again, and the rest of the run goes on. Its id must be a
+ * logical id and every name (its folder's, its files') one a run record can carry.
+ */
+export function recordablePile(pileId: string, names: readonly string[]): boolean {
+  return recordableId(pileId) && names.every(recordableName);
+}
+
+/**
+ * Whether a text read is exactly the bytes stored for it, so the one note a run records is taken from one read: a
+ * note whose bytes do not come back as its text (a byte order mark, bytes that are not UTF-8, a change in between)
+ * cannot be recorded as read. Null (the bytes could not be checked) is not the same.
+ */
+export async function sameText(text: string, digest: Digest | null): Promise<boolean> {
+  if (!digest) return false;
+  const raw = new TextEncoder().encode(text);
+  return digest.size === raw.byteLength && digest.sha256 === (await sha256(new Blob([raw])));
+}
+
+/**
+ * Whether a declared pile's first pile note is one of its members still to file: read as the pile's note, it would
+ * never be filed as a thing, so the run cannot account for it.
+ */
+export function memberAsNote(children: readonly DriveFile[], remaining: readonly string[]): boolean {
+  const key = children.find((f) => !f.folder && f.name === PILE_NOTE)?.appProperties?.[PROP.item];
+  return key !== undefined && remaining.includes(key);
 }
 
 /**

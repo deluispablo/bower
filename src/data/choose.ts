@@ -76,6 +76,6 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   // The pretend Worker's session lease, shared by this browser's tabs as devices share the real Worker's.
   const world = `fake:${scenario}`;
   const lease = new FakeLease({ key: leaseKey(world, await uploadAccount(ALEX.email)) });
-  const worker = new FakeWorker({ drive, scenario, scale, rootId, fresh, offline: scenario === 'offline', runs, lease });
+  const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease });
   return { sources: makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, uploadQueue: true, place: { world } }) };
 }

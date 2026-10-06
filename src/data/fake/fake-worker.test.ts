@@ -10,7 +10,7 @@ import type { LastRunFile, QuestionsFile, RequestsFile } from '../vault/layout';
 import type { JournalRecord } from '../vault/journal';
 import { driveError, type DriveFile } from '../drive/drive-api';
 import { LiveRuns } from '../live/runs';
-import { FAILURE, planRun, type HubUpdate } from './fake-runner';
+import { planRun, type HubUpdate } from './fake-runner';
 import type { RunWire } from '../worker/worker-api';
 import { B_FAILURE, CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type FakeRunServiceOptions } from './fake-run-service';
 import type { FaultAction, FencedCall } from '../drive/fake-drive';
@@ -35,7 +35,7 @@ async function world(scenario: Scenario) {
   localStorage.clear();
   const drive = new FakeDrive();
   const rootId = await seedFakeDrive(drive, scenario, Date.now());
-  return { drive, rootId, worker: new FakeWorker({ drive, scenario, scale: 'instant', rootId }) };
+  return { drive, rootId, worker: new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario, rootId }) };
 }
 
 const until = async (worker: FakeWorker, phase: string): Promise<void> => {
@@ -84,7 +84,7 @@ describe('the fake Worker', () => {
     const { worker } = await world('fail-run');
     await worker.process('all');
     await until(worker, 'failed');
-    expect((await worker.status())?.failure).toMatch(/Nothing was moved/);
+    expect((await worker.status())?.failure).toBe(B_FAILURE);
     await worker.process('all');
     await until(worker, 'done');
     expect((await worker.status())?.phase).toBe('done');
@@ -104,22 +104,6 @@ describe('the fake Worker', () => {
     expect((await worker.status())?.phase).toBe('done');
   });
 
-  it('a run cut short by a reload shows as stopped, with the inbox as it was', async () => {
-    localStorage.clear();
-    const drive = new FakeDrive();
-    const rootId = await seedFakeDrive(drive, 'default', Date.now());
-    const before = new FakeWorker({ drive, scenario: 'default', scale: 'demo', rootId });
-    await before.process('all');
-    await new Promise((r) => setTimeout(r, 50));
-    // The page reloads: a new Worker on the same Drive.
-    const after = new FakeWorker({ drive, scenario: 'default', scale: 'demo', rootId, fresh: false });
-    const run = await after.status();
-    expect(run?.phase).toBe('failed');
-    expect(run?.failure).toMatch(/reload/);
-    const piles = await new DriveVault({ drive, rootId: async () => rootId ?? '', runningPiles: () => new Set() }).piles();
-    expect(piles.length).toBeGreaterThan(0);
-  });
-
   it('a reload during filing does not say nothing was moved; before filing it does', async () => {
     for (const [phase, says] of [
       ['saving', /some things may be in their new places/i],
@@ -132,7 +116,7 @@ describe('the fake Worker', () => {
       const sys = all.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === rootId);
       const run = { id: 'run-1', scope: 'all', phase, requestedAt: Date.now() - 60_000, phaseAt: Date.now() - 1000 };
       await drive.createText(sys?.id ?? '', 'last-run.json', JSON.stringify({ v: 1, run }));
-      const after = new FakeWorker({ drive, scenario: 'default', scale: 'instant', rootId, fresh: false });
+      const after = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario: 'default', rootId, fresh: false });
       const out = await after.status();
       expect(out?.phase, phase).toBe('failed');
       expect(out?.failure, phase).toMatch(says);
@@ -144,7 +128,7 @@ describe('the fake Worker', () => {
     localStorage.clear();
     const drive = new FakeDrive();
     const rootId = await seedFakeDrive(drive, 'running', Date.now());
-    const reloaded = new FakeWorker({ drive, scenario: 'running', scale: 'demo', rootId, fresh: false });
+    const reloaded = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario: 'running', rootId, fresh: false });
     expect((await reloaded.status())?.phase ?? 'none').not.toMatch(/queued|reading|writing|saving/);
   });
 });
@@ -178,7 +162,7 @@ async function savedRun(text?: string) {
   await drive.createText(changes, 'change-A.json', '{ "v": 1, "id": "CHANGE_A", "device": "DEVICE_A", "at": 1, "kind": "task", "what": "Completed the example task.", "path": "Resources/Example.md", "text": "Done" }\n');
   const file = text === undefined ? null : await drive.createText(sys, 'last-run.json', text);
   const vault = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_A' });
-  const reopen = (scenario: Scenario = 'default', fresh = false) => new FakeWorker({ drive, rootId, scenario, scale: 'instant', fresh });
+  const reopen = (scenario: Scenario = 'default', fresh = false) => new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), rootId, scenario, fresh });
   return { drive, rootId, file, vault, reopen };
 }
 
@@ -307,296 +291,37 @@ describe('persisted v1 run fixtures agree across current recovery consumers', ()
   });
 });
 
-// Vitest 5 joins suite names with ' > ', so a nested 'on the legacy path' suite could not match the verify pattern;
-// one suite carries the whole name, which the parent entry's shorter pattern also selects.
+// The legacy runner is gone (TL-P2-38): what is left of this suite pins how a view it left behind is read. Its terminal
+// barrier for the B path is the next suite, which the parent entry's shorter pattern also selects.
 describe('report save failure cannot publish done or repeat effects on the legacy path', () => {
-  type Stored = LastRunFile['run'];
-  const LAST_RUN = 'last-run.json';
-
-  /** True only for the terminal view: `last-run.json` saying done with its report, or failed. */
-  const terminal = (text: string, phase: 'done' | 'failed'): boolean => {
-    try {
-      const body = JSON.parse(text) as Partial<LastRunFile>;
-      return phase === 'done' ? body.run?.phase === 'done' && body.run.report !== undefined : body.run?.phase === 'failed';
-    } catch {
-      // expected: not JSON, so not the terminal view.
-      return false;
-    }
-  };
-
-  interface Fault {
-    scenario?: Scenario;
-    /** Which terminal view the fault hits. */
-    phase?: 'done' | 'failed';
-    /** `refuse`: no effect, as with no network; `lose-reply`: the write lands, then its answer is lost. */
-    mode?: 'refuse' | 'lose-reply';
-  }
-
-  async function refusingWorld({ scenario = 'default', phase = 'done', mode = 'refuse' }: Fault = {}) {
-    const { drive, rootId: seeded, worker } = await world(scenario);
-    const rootId = seeded ?? '';
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const refused: string[] = [];
-    const fault = { on: true };
-    const writeText = drive.writeText.bind(drive);
-    const createText = drive.createText.bind(drive);
-    vi.spyOn(drive, 'writeText').mockImplementation(async (id, text, ifModified) => {
-      if (fault.on && drive.pathOf(id, rootId) === SYSTEM.lastRun && terminal(text, phase)) {
-        refused.push(text);
-        if (mode === 'lose-reply') await writeText(id, text, ifModified);
-        throw driveError('offline');
-      }
-      return writeText(id, text, ifModified);
-    });
-    vi.spyOn(drive, 'createText').mockImplementation(async (parentId, name, text, props) => {
-      if (fault.on && name === LAST_RUN && terminal(text, phase)) {
-        refused.push(text);
-        if (mode === 'lose-reply') await createText(parentId, name, text, props);
-        throw driveError('offline');
-      }
-      return createText(parentId, name, text, props);
-    });
-    const inputs = (await drive.listAll(rootId)).filter((f) => !f.folder && drive.pathOf(f.id, rootId).startsWith('Inbox/')).map((f) => f.id);
-    let mutations = 0;
-    drive.onChange = () => { mutations++; };
-    const vault = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_A' });
-    return { drive, rootId, worker, errors, refused, fault, inputs, vault, writeText, mutations: () => mutations };
-  }
-
-  /** Waits for the first refusal and lets the run's own handling of it settle, without asking for status. */
-  async function untilRefused(refused: readonly string[]): Promise<void> {
-    for (let i = 0; i < 500 && refused.length === 0; i++) await new Promise((r) => setTimeout(r, 1));
-    expect(refused.length, 'the terminal report write was refused').toBeGreaterThan(0);
-    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
-  }
-
-  /** Everything in the folder but the run's own view: names, places, ids and texts. */
-  async function domain(drive: FakeDrive, rootId: string): Promise<string> {
-    const files = (await drive.listAll(rootId))
-      .filter((f) => drive.pathOf(f.id, rootId) !== SYSTEM.lastRun)
-      .map((f) => ({ id: f.id, name: f.name, parents: f.parents, folder: f.folder, path: drive.pathOf(f.id, rootId) }))
-      .sort((a, b) => a.id.localeCompare(b.id));
-    const texts = [...drive.dump(rootId)].filter(([path]) => path !== SYSTEM.lastRun).sort(([a], [b]) => a.localeCompare(b));
-    return JSON.stringify({ files, texts });
-  }
-
-  const storedView = (drive: FakeDrive, rootId: string): Stored => (JSON.parse(drive.dump(rootId).get(SYSTEM.lastRun) ?? '{}') as LastRunFile).run;
-
-  it('terminal report refusal keeps saving after actual filing', async () => {
-    const w = await refusingWorld();
-    expect(w.inputs.length).toBeGreaterThan(0);
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-
-    // The run really filed: none of the inputs is in the Inbox and some are live in other places.
-    const after = await w.drive.listAll(w.rootId);
-    const live = w.inputs.filter((id) => after.some((f) => f.id === id));
-    expect(live.length).toBeGreaterThan(0);
-    expect(w.inputs.filter((id) => after.some((f) => f.id === id) && w.drive.pathOf(id, w.rootId).startsWith('Inbox/'))).toEqual([]);
-
-    // No public done and no finish time while the report is not saved.
-    const before = w.mutations();
-    for (let i = 0; i < 3; i++) {
-      const status = await w.worker.status();
-      expect(status).toMatchObject({ id: admitted.id, phase: 'saving' });
-      expect(status?.finishedAt).toBeUndefined();
-      await new Promise((r) => setTimeout(r, 1));
-    }
-    // Asking again returns the same run and never files again.
-    const again = await w.worker.process('all');
-    expect(again).toMatchObject({ id: admitted.id, phase: 'saving' });
-    expect(again.finishedAt).toBeUndefined();
-    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 1));
-    expect(w.mutations() - before).toBe(0);
-
-    // The stored view is this run, still saving, with no report and no finish time.
-    const stored = storedView(w.drive, w.rootId);
-    expect(stored).toMatchObject({ id: admitted.id, phase: 'saving' });
-    expect(stored.report).toBeUndefined();
-    expect(stored.finishedAt).toBeUndefined();
-
-    // The refusal is logged as a BowerError, not swallowed.
-    const logged = w.errors.mock.calls.map((c) => c[0]).filter((e): e is BowerError => e instanceof BowerError);
-    expect(logged.some((e) => e.code === 'offline')).toBe(true);
-  });
-
-  it('same-session retry publishes the same report without refiling', async () => {
-    const w = await refusingWorld();
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-    const refused = JSON.parse(w.refused[0] ?? '{}') as LastRunFile;
-    expect(refused.run).toMatchObject({ id: admitted.id, phase: 'done' });
-    expect(refused.run.finishedAt).toBeGreaterThan(0);
-    const rest = await domain(w.drive, w.rootId);
-    const before = w.mutations();
-
-    // Saving works again: the next status call saves the very report that was refused.
-    w.fault.on = false;
-    const status = await w.worker.status();
-    expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: refused.run.finishedAt });
-    expect(JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.lastRun) ?? '{}')).toEqual(refused);
-    expect(w.refused.every((text) => JSON.stringify(JSON.parse(text)) === JSON.stringify(refused))).toBe(true);
-
-    // Nothing was filed again: only the run's view changed, once.
-    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 1));
-    expect(await domain(w.drive, w.rootId)).toBe(rest);
-    expect(w.mutations() - before).toBe(1);
-    expect(await w.worker.status()).toEqual(status);
-
-    // Fresh readers retrieve it: the folder, the screens' run reader and another client.
-    const vault = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
-    expect((await vault.lastRun())?.run).toEqual(refused.run);
-    const runs = new LiveRuns(w.worker, vault);
-    try {
-      const current = await runs.current();
-      expect(current).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: refused.run.finishedAt });
-      expect(current?.report).toEqual(refused.run.report);
-    } finally {
-      runs.dispose();
-    }
-    const other = new FakeWorker({ drive: w.drive, scenario: 'default', scale: 'instant', rootId: w.rootId, fresh: false });
-    const { report: _report, ...wire } = refused.run;
-    expect(await other.status()).toEqual(wire);
-    expect(await domain(w.drive, w.rootId)).toBe(rest);
-  });
-
   it('after reload the cut-off saving run fails honestly and nothing is refiled', async () => {
-    const w = await refusingWorld();
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-    // The page that ran it never said done.
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
-    const rest = await domain(w.drive, w.rootId);
-    const before = w.mutations();
-
-    // The page reloads, with saving working again: a new Worker on the same Drive.
-    w.fault.on = false;
-    const reloaded = new FakeWorker({ drive: w.drive, scenario: 'default', scale: 'instant', rootId: w.rootId, fresh: false });
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const rootId = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+    // The view a legacy run left when a reload cut it off while it was filing.
+    const sys = (await drive.listAll(rootId)).find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === rootId);
+    await drive.createText(sys?.id ?? '', 'last-run.json', JSON.stringify({ v: 1, run: { id: 'run-legacy', scope: 'all', phase: 'saving', requestedAt: Date.now() - 60_000, phaseAt: Date.now() - 1000 } }));
+    const own = (path: string): boolean => path === SYSTEM.lastRun || path.startsWith('.bower/runs');
+    const rest = (): string => JSON.stringify([...drive.dump(rootId)].filter(([path]) => !own(path)));
+    const before = rest();
+    const runs = new FakeRunService({ drive, scale: 'instant' });
+    const reloaded = new FakeWorker({ drive, runs, scenario: 'default', rootId, fresh: false });
     const status = await reloaded.status();
-    expect(status).toMatchObject({ id: admitted.id, phase: 'failed' });
+    expect(status).toMatchObject({ id: 'run-legacy', phase: 'failed' });
     expect(status?.failure).toMatch(/Some things may be in their new places already/);
     expect(status?.failure).not.toMatch(/Nothing was moved/);
     expect(status?.finishedAt).toBeGreaterThan(0);
-    const stored = storedView(w.drive, w.rootId);
+    const stored = (JSON.parse(drive.dump(rootId).get(SYSTEM.lastRun) ?? '{}') as LastRunFile).run;
     expect(stored).toEqual(status);
-    expect(stored.report).toBeUndefined();
 
-    // Never done, never filed again: the Inbox is empty, so asking again is refused, and only the view changed.
-    for (let i = 0; i < 3; i++) {
-      expect((await reloaded.status())?.phase).toBe('failed');
-      await new Promise((r) => setTimeout(r, 1));
-    }
-    await expect(reloaded.process('all')).rejects.toMatchObject({ code: 'conflict' });
-    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 1));
-    expect(await domain(w.drive, w.rootId)).toBe(rest);
-    expect(w.mutations() - before).toBe(1);
-    expect(storedView(w.drive, w.rootId)).toEqual(stored);
-  });
-
-  const later = (): void => { vi.setSystemTime(Date.now() + 5_001); };
-  const loggedBowerErrors = (errors: { mock: { calls: unknown[][] } }): BowerError[] => errors.mock.calls.map((c) => c[0]).filter((e): e is BowerError => e instanceof BowerError);
-
-  it('a failed run shows its failure at once and saves the same failed view on retry', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    const w = await refusingWorld({ scenario: 'fail-run', phase: 'failed' });
-    const rest = await domain(w.drive, w.rootId);
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-    const refused = JSON.parse(w.refused[0] ?? '{}') as LastRunFile;
-    expect(refused.run).toMatchObject({ id: admitted.id, phase: 'failed', failure: FAILURE });
-
-    // The failure shows at once, with its own words, while the folder still shows the run going.
-    expect(await w.worker.status()).toEqual(refused.run);
-    expect(storedView(w.drive, w.rootId)).toMatchObject({ id: admitted.id, phase: 'writing' });
-
-    // Saving works again: a later status call saves the very same failed view, once.
-    w.fault.on = false;
-    later();
-    const before = w.mutations();
-    expect(await w.worker.status()).toEqual(refused.run);
-    expect(JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.lastRun) ?? '{}')).toEqual(refused);
-    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 1));
-    expect(w.mutations() - before).toBe(1);
-    expect(await domain(w.drive, w.rootId)).toBe(rest);
-
-    // A fresh reader sees the run's own failure, not the reload wording.
-    const vault = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
-    expect((await vault.lastRun())?.run).toEqual(refused.run);
-    const other = await new FakeWorker({ drive: w.drive, scenario: 'default', scale: 'instant', rootId: w.rootId, fresh: false }).status();
-    expect(other).toEqual(refused.run);
-    expect(other?.failure).not.toMatch(/reload/);
-    expect(await domain(w.drive, w.rootId)).toBe(rest);
-  });
-
-  it('a done view that landed with its answer lost is taken as saved, not written again', async () => {
-    const w = await refusingWorld({ mode: 'lose-reply' });
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-    const landed = JSON.parse(w.refused[0] ?? '{}') as LastRunFile;
-    expect(storedView(w.drive, w.rootId)).toEqual(landed.run);
-    const rest = await domain(w.drive, w.rootId);
-    const before = w.mutations();
-
-    const status = await w.worker.status();
-    expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: landed.run.finishedAt });
-    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 1));
-    expect(w.refused).toHaveLength(1);
-    expect(w.mutations() - before).toBe(0);
-    expect(storedView(w.drive, w.rootId)).toEqual(landed.run);
-    expect(await domain(w.drive, w.rootId)).toBe(rest);
-  });
-
-  it('retries at most once every 5 seconds while saving keeps failing', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    const w = await refusingWorld();
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-    expect(w.refused).toHaveLength(1);
-    const lists = vi.spyOn(w.drive, 'listAll');
-
-    // The first call after the failure tries once; the polls right after it do not touch the folder.
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
-    expect(w.refused).toHaveLength(2);
-    const looked = lists.mock.calls.length;
-    for (let i = 0; i < 5; i++) expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
-    expect(await w.worker.process('all')).toMatchObject({ id: admitted.id, phase: 'saving' });
-    expect(w.refused).toHaveLength(2);
-    expect(lists.mock.calls.length).toBe(looked);
-
-    // Five seconds on, it tries once more; when saving works again, the next try saves it.
-    later();
-    expect(await w.worker.status()).toMatchObject({ phase: 'saving' });
-    expect(w.refused).toHaveLength(3);
-    w.fault.on = false;
-    expect(await w.worker.status()).toMatchObject({ phase: 'saving' });
-    later();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
-  });
-
-  it('concurrent status and process calls share one retry', async () => {
-    const w = await refusingWorld();
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-    const calls = await Promise.all([w.worker.status(), w.worker.process('all'), w.worker.status(), w.worker.process('all')]);
-    for (const call of calls) expect(call).toMatchObject({ id: admitted.id, phase: 'saving' });
-    expect(w.refused).toHaveLength(2);
-  });
-
-  it('a malformed stored view is reported as a BowerError and never written over', async () => {
-    const w = await refusingWorld();
-    const admitted = await w.worker.process('all');
-    await untilRefused(w.refused);
-    const file = (await w.drive.listAll(w.rootId)).find((f) => w.drive.pathOf(f.id, w.rootId) === SYSTEM.lastRun);
-    const malformed = '{ "v": 1, "run":\n';
-    await w.writeText(file?.id ?? '', malformed, file?.modifiedTime ?? '');
-    w.fault.on = false;
-    w.errors.mockClear();
-    const before = w.mutations();
-
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
-    expect(loggedBowerErrors(w.errors)).toContainEqual(expect.objectContaining({ code: 'unknown', message: readMessage }));
-    expect(w.drive.dump(w.rootId).get(SYSTEM.lastRun)).toBe(malformed);
-    expect(w.mutations() - before).toBe(0);
+    // Never done, never filed again by the runner that is gone: only the view changed, and a new tidy-up is a B run.
+    for (let i = 0; i < 3; i++) expect((await reloaded.status())?.phase).toBe('failed');
+    expect(rest()).toBe(before);
+    const next = await reloaded.process('all');
+    expect(next.id).not.toBe('run-legacy');
+    await runs.settled();
+    expect(await reloaded.status()).toMatchObject({ id: next.id, phase: 'done' });
+    expect([...drive.dump(rootId).keys()].some((path) => path.startsWith(`.bower/runs/${next.id}/manifest-`))).toBe(true);
   });
 });
 
@@ -618,7 +343,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const clock = { now: (): number => now, later: (ms = RETRY_MS + 1): void => { now += ms; } };
     const drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: clock.now, scale: 'instant', ...(o.hooks ? { hooks: o.hooks } : {}) });
-    const worker = new FakeWorker({ drive, scenario: o.scenario ?? 'first', scale: 'instant', rootId: null, runs, ...(o.updates ? { updates: o.updates } : {}) });
+    const worker = new FakeWorker({ drive, scenario: o.scenario ?? 'first', rootId: null, runs, ...(o.updates ? { updates: o.updates } : {}) });
     const rootId = (await worker.createFolder()).id;
     const uploader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), declarePiles: !!o.declared, device: 'DEVICE_A' });
     await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
@@ -833,7 +558,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     w.rules.length = 0;
     w.clock.later();
 
-    const second = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+    const second = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
     // Asking does not wait for the recovery: it starts it and answers with the run as it stands.
     expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
     await w.runs.settled();
@@ -877,7 +602,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const applied: FencedCall[] = [];
     drive.fault = { applied: (call) => { applied.push(call); } };
     const runs = FakeRunService.restore(json, { drive, clock: w.clock.now, scale: 'instant' });
-    const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+    const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
     const status = await after(worker, runs);
     expect(status).toMatchObject({ id: admitted.id, phase: 'done' });
     expect(applied.map((c) => c.op)).toEqual(['create-text']);
@@ -975,7 +700,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     // The paused attempt's claim lapses; another client asks, and the service recovers under a newer epoch.
     w.clock.later(CLAIM_MS + 1);
-    const second = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+    const second = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
     await until(second, 'done');
     expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'done' });
     expect((await checkpointsOf(w, admitted.id)).at(-1)?.epoch).toBeGreaterThan(at.epoch);
@@ -1217,7 +942,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     const drive = FakeDrive.restore(await w.drive.snapshot());
     const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
-    const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+    const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
     expect(await after(worker, runs)).toMatchObject({ id: admitted.id, phase: 'done' });
     const kept = (await checkpointsOf({ drive, rootId: w.rootId }, admitted.id)).filter((c) => c.report.state === 'pending');
     expect(kept.map((c) => c.epoch)).toEqual([3]);
@@ -1229,7 +954,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const first = await pretendDrive('first');
     const runs = pretendRuns('first', first.drive, first.fresh, 'instant');
-    const worker = new FakeWorker({ drive: first.drive, scenario: 'first', scale: 'instant', rootId: null, runs });
+    const worker = new FakeWorker({ drive: first.drive, scenario: 'first', rootId: null, runs });
     const rootId = (await worker.createFolder()).id;
     const uploader = new DriveVault({ drive: first.drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_A' });
     await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
@@ -1246,7 +971,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect(again.fresh).toBe(false);
     expect(again.rootId).toBe(rootId);
     const reloadedRuns = pretendRuns('first', again.drive, again.fresh, 'instant');
-    const reloaded = new FakeWorker({ drive: again.drive, scenario: 'first', scale: 'instant', rootId: again.rootId, runs: reloadedRuns, fresh: false });
+    const reloaded = new FakeWorker({ drive: again.drive, scenario: 'first', rootId: again.rootId, runs: reloadedRuns, fresh: false });
     expect(await after(reloaded, reloadedRuns)).toMatchObject({ id: admitted.id, phase: 'done' });
     expect(sources).toHaveLength(4);
     for (const id of sources) {
@@ -1265,7 +990,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const { snapshot, alongside } = await w.drive.snapshotWith(() => w.runs.toJSON());
     const drive = FakeDrive.restore(snapshot);
     const runs = FakeRunService.restore(alongside, { drive, clock: w.clock.now, scale: 'instant' });
-    const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+    const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
     expect(await after(worker, runs)).toMatchObject({ id: first.id, phase: 'done' });
     expect(drive.dump(w.rootId).get(SYSTEM.lastRun)).toBe(text);
 
@@ -1302,7 +1027,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       drive.fault = { applied: (call) => { applied.push(call); } };
       const runs = FakeRunService.restore(moment.alongside, { drive, clock: w.clock.now, scale: 'instant' });
       const rootId = (await drive.listAll('root')).find((f) => f.folder && f.parents[0] === 'root')?.id ?? null;
-      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId, runs, fresh: false });
+      const worker = new FakeWorker({ drive, scenario: 'first', rootId, runs, fresh: false });
       const status = await after(worker, runs);
       const earlier = w.applied.slice(0, appliedAt[i]);
       if (status === null) {
@@ -1321,7 +1046,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
   it('returns the same admitted run to quick repeated asks from one or two clients', async () => {
     const w = await bWorld();
-    const other = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+    const other = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
     const asks = await Promise.all([w.worker.process('all'), w.worker.process('all'), other.process('all')]);
     expect(new Set(asks.map((a) => a.id)).size).toBe(1);
     await w.runs.settled();
@@ -1444,7 +1169,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const RUNS_KEY = 'bower:fake:first:runs';
     const first = await pretendDrive('first');
     const runs = pretendRuns('first', first.drive, first.fresh, 'instant');
-    const worker = new FakeWorker({ drive: first.drive, scenario: 'first', scale: 'instant', rootId: null, runs });
+    const worker = new FakeWorker({ drive: first.drive, scenario: 'first', rootId: null, runs });
     const rootId = (await worker.createFolder()).id;
     const uploader = new DriveVault({ drive: first.drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_A' });
     await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
@@ -1480,7 +1205,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     if (kept.drive === null) return;
     const again = await pretendDrive('first');
     const reloadedRuns = pretendRuns('first', again.drive, again.fresh, 'instant');
-    const reloaded = new FakeWorker({ drive: again.drive, scenario: 'first', scale: 'instant', rootId: again.rootId, runs: reloadedRuns, fresh: false });
+    const reloaded = new FakeWorker({ drive: again.drive, scenario: 'first', rootId: again.rootId, runs: reloadedRuns, fresh: false });
     const applied: FencedCall[] = [];
     again.drive.fault = { applied: (call) => { applied.push(call); } };
     expect(await after(reloaded, reloadedRuns)).toMatchObject({ id: admitted.id, phase: 'done' });
@@ -3132,7 +2857,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // The paused attempt's claim lapses; another client asks, and the service recovers under a newer epoch.
       w.clock.later(CLAIM_MS + 1);
-      const second = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+      const second = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
       await until(second, 'done');
       expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'done' });
       expect((await checkpointsOf(w, admitted.id)).at(-1)?.epoch).toBeGreaterThan(at.epoch);
@@ -3146,7 +2871,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const applied: FencedCall[] = [];
       drive.fault = { applied: (call) => { applied.push(call); } };
       const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
-      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+      const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
       expect(await after(worker, runs)).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(applied.filter(touches(held.ids))).toEqual([]);
       expect(await stateOf({ drive, rootId: w.rootId }, held.ids)).toBe(before);
@@ -3292,25 +3017,29 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await dispositions(w)).toEqual(w.disposed);
     });
 
+    /**
+     * Members a legacy run filed, as it left them: moved out of the inbox under their names, with no disposition. A
+     * pile folder left empty went to the Bin. The legacy runner is gone (TL-P2-38); folders keep its work.
+     */
+    async function asALegacyRunLeftIt(w: World, ids: readonly string[]): Promise<void> {
+      const resources = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Resources' && f.parents[0] === w.rootId);
+      const folders = new Set<string>();
+      for (const id of ids) {
+        const f = await w.drive.get(id);
+        folders.add(f.parents[0] ?? '');
+        await w.drive.update(id, { addParent: resources?.id ?? '', removeParent: f.parents[0] ?? '', appProperties: { bowerNew: '1', asAdded: null, origin: null, kind: null, pile: null } });
+      }
+      for (const folder of folders) if (!(await w.drive.listAll(folder)).some((f) => f.parents[0] === folder)) await w.drive.trash(folder);
+    }
+
     it('accounts for members a legacy run filed by looking them up, and files what is left on the B path', async () => {
       const w = await bWorld({ declared: true });
       const { folder, keyed } = await leasePile(w);
-      const lease = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'lease.pdf')?.id ?? '';
-      // A client with no run service takes the first run down the legacy path, which writes no disposition.
-      const legacy = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, fresh: false });
-      // Alex adds a thing to the lease pile once the legacy run has moved its first member.
-      const late: { file: Promise<DriveFile> | null } = { file: null };
-      const counted = w.drive.onChange;
-      w.drive.onChange = () => {
-        counted?.();
-        if (!late.file && !w.drive.pathOf(lease, w.rootId).startsWith('Inbox/')) late.file = w.drive.createText(folder, 'later.txt', 'arrived late');
-      };
-      const first = await legacy.process('all');
-      await until(legacy, 'done');
-      expect(await legacy.status()).toMatchObject({ id: first.id, phase: 'done' });
+      // What a legacy run left, which wrote no disposition and can no longer run (TL-P2-38): every member filed, the
+      // ideas pile's folder in the Bin, and a thing Alex added to the lease pile while it ran.
+      await asALegacyRunLeftIt(w, w.sources);
+      const lateId = (await w.drive.createText(folder, 'later.txt', 'arrived late')).id;
       expect(await recordsOf(w)).toEqual([]);
-      expect(late.file).not.toBeNull();
-      const lateId = (await late.file)?.id ?? '';
       expect(await childNames(w, folder)).toEqual(['Pile note.md', 'later.txt']);
       expect(await dispositions(w)).toEqual([]);
       for (const id of w.sources) expect(inInbox(w, id), `${id} still in the Inbox`).toBe(false);
@@ -3378,21 +3107,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const byName = async (name: string): Promise<DriveFile | undefined> => (await w.drive.listAll(w.rootId)).find((f) => f.name === name);
       const lease = (await byName('lease.pdf'))?.id ?? '';
       const inventory = (await byName('inventory.pdf'))?.id ?? '';
-      // A legacy run (a client with no run service) stops at the next Drive call after it moved the lease.
-      const cut = { done: false };
-      const counted = w.drive.onChange;
-      w.drive.onChange = () => {
-        counted?.();
-        if (cut.done || w.drive.pathOf(lease, w.rootId).startsWith('Inbox/')) return;
-        cut.done = true;
-        w.drive.failNext('offline');
-      };
-      const legacy = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, fresh: false });
-      await legacy.process('all');
-      await until(legacy, 'failed');
-      expect(await legacy.status()).toMatchObject({ phase: 'failed' });
-      w.drive.onChange = counted;
-      expect(cut.done).toBe(true);
+      // What a legacy run cut off right after it moved the lease left (it wrote no disposition, TL-P2-38).
+      await asALegacyRunLeftIt(w, [lease]);
       expect(inInbox(w, lease)).toBe(false);
       expect(w.drive.pathOf(inventory, w.rootId).startsWith('Inbox/')).toBe(true);
       const leaseAt = await w.drive.evidence(lease);
@@ -3495,7 +3211,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // The paused attempt's claim lapses; another client asks, and the service recovers under a newer epoch.
       w.clock.later(CLAIM_MS + 1);
-      const other = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+      const other = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
       await until(other, 'done');
       expect(await other.status()).toMatchObject({ id: admitted.id, phase: 'done' });
       release();
@@ -3510,7 +3226,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const applied: FencedCall[] = [];
       drive.fault = { applied: (call) => { applied.push(call); } };
       const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
-      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+      const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
       expect(await after(worker, runs)).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(applied).toEqual([]);
       for (const id of w.sources) expect(movesOf(w, id), `moves of ${id}`).toBe(1);
@@ -4232,7 +3948,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const applied: FencedCall[] = [];
         drive.fault = { applied: (call) => { applied.push(call); } };
         const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
-        const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+        const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
         return { drive, rootId: w.rootId, runs, worker, applied };
       }
       async function expectOneLine(r: Awaited<ReturnType<typeof restored>>, id: string, runId: string): Promise<void> {
@@ -4419,7 +4135,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const applied: FencedCall[] = [];
         drive.fault = { applied: (call) => { applied.push(call); } };
         const runs = FakeRunService.restore(json, { drive, clock: w.clock.now, scale: 'instant' });
-        const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+        const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
         const asked = worker.status();
         await expect(asked).rejects.toBeInstanceOf(BowerError);
         const message = await asked.then(() => '', (e: unknown) => (e instanceof Error ? e.message : ''));
@@ -4441,7 +4157,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const value = { ...(JSON.parse(await drive.readText(record.id)) as Record<string, unknown>), v: 3 };
       await drive.writeText(record.id, (await canonical(value)).text, record.modifiedTime);
       const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
-      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+      const worker = new FakeWorker({ drive, scenario: 'first', rootId: w.rootId, runs, fresh: false });
       const asked = worker.status();
       await expect(asked).rejects.toBeInstanceOf(BowerError);
       await expect(asked).rejects.toThrow('Bower could not read what it did. Try again later.');
@@ -5294,7 +5010,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const sys = await fileAt(w, SYSTEM.dir);
       await w.drive.createText(sys.id, 'last-run.json', JSON.stringify({ v: 1, run: { id: 'run-legacy', scope: 'all', phase: 'saving', requestedAt: Date.now() - 60_000, phaseAt: Date.now() - 1000 } }));
       const before = await domain(w.drive, w.rootId);
-      const reopened = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+      const reopened = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
       const seen = await reopened.status();
       expect(seen).toMatchObject({ id: 'run-legacy', phase: 'failed' });
       expect(seen?.failure).toMatch(/Some things may be in their new places already/);
@@ -5459,7 +5175,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const pause = pauseFirstMove();
       const runs = new FakeRunService({ drive, scale: 'instant', hooks: pause.hooks });
       const before = Date.now();
-      const worker = new FakeWorker({ drive, scenario: 'running', scale: 'instant', rootId, runs });
+      const worker = new FakeWorker({ drive, scenario: 'running', rootId, runs });
       await worker.status();
       const at = await reached(pause.paused, runs);
       expect(at).not.toBeNull();
@@ -5478,7 +5194,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // A reload: the page that ran it is gone; the service comes back and recovers it like any other run.
       const drive2 = FakeDrive.restore(await drive.snapshot());
       const runs2 = FakeRunService.restore(runs.toJSON(), { drive: drive2, scale: 'instant' });
-      const reloaded = new FakeWorker({ drive: drive2, scenario: 'running', scale: 'instant', rootId, runs: runs2, fresh: false });
+      const reloaded = new FakeWorker({ drive: drive2, scenario: 'running', rootId, runs: runs2, fresh: false });
       expect(await after(reloaded, runs2)).toMatchObject({ id: at?.runId, phase: 'done' });
       expect(await manifestsOf({ drive: drive2, rootId })).toHaveLength(1);
       expect(JSON.parse(drive2.dump(rootId).get(SYSTEM.lastRun) ?? '{}')).toMatchObject({ run: { id: at?.runId, phase: 'done' } });

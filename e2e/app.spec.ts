@@ -36,7 +36,7 @@ test('a failed run says why and moves nothing', async ({ page }) => {
   await open(page, '/', 'fail-run');
   await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
-  await expect(page.getByRole('dialog').getByText(/Nothing was moved/)).toBeVisible();
+  await expect(page.getByRole('dialog').getByText(/Nothing was moved|The tidy-up stopped before changing anything/)).toBeVisible();
 });
 
 test('a note shows its properties, current state and timeline', async ({ page }) => {

@@ -3,6 +3,7 @@ import { keep as keepDraft, get as getDraft, forget as forgetDraft } from '../..
 import { FakeDrive } from '../drive/fake-drive';
 import { driveError, type DriveApi } from '../drive/drive-api';
 import { FakeWorker } from '../fake/fake-worker';
+import { B_FAILURE, FakeRunService } from '../fake/fake-run-service';
 import { seedFakeDrive } from '../fake/seed';
 import type { Scenario } from '../demo/scenario';
 import { BowerError, type RunReport, type RunState } from '../types';
@@ -44,7 +45,7 @@ describe('session and folder isolation', () => {
     const userB = samePerson ? userA : { name: 'Sam', email: 'sam@example.com' };
     let context: Me | null = { user: userA, folderId: a.id };
     let next: Me = { user: userB, folderId: b.id };
-    const worker = new FakeWorker({ drive, rootId: a.id, scenario: 'empty', scale: 'instant' });
+    const worker = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), rootId: a.id, scenario: 'empty' });
     vi.spyOn(worker, 'me').mockImplementation(async () => context);
     vi.spyOn(worker, 'signOut').mockImplementation(async () => { context = null; });
     vi.spyOn(worker, 'signIn').mockImplementation(async () => { context = next; });
@@ -562,7 +563,7 @@ async function open(scenario: Scenario = 'default'): Promise<LiveSources> {
   sessionStorage.clear();
   const drive = new FakeDrive();
   const rootId = await seedFakeDrive(drive, scenario, Date.now());
-  const worker = new FakeWorker({ drive, scenario, scale: 'instant', rootId });
+  const worker = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario, rootId });
   live = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles() });
   return live;
 }
@@ -959,7 +960,8 @@ describe('LiveRuns', () => {
     const piles = (await s.vault.piles()).length;
     await s.runs.start('all');
     const r = await until(s, (x) => x?.phase === 'failed');
-    expect(r?.failure).toMatch(/Nothing was moved/);
+    // The B path's honest failure: it stopped before any effect.
+    expect(r?.failure).toBe(B_FAILURE);
     expect(await s.vault.piles()).toHaveLength(piles);
   });
 
@@ -1027,14 +1029,16 @@ describe('asking the Worker', () => {
     sessionStorage.clear();
     const drive = new FakeDrive();
     const rootId = await seedFakeDrive(drive, 'running', Date.now());
-    const worker = new FakeWorker({ drive, scenario: 'running', scale: 'demo', rootId });
+    const worker = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario: 'running', rootId });
     const s = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 50 });
     const phases: string[] = [];
     s.runs.subscribe(() => void s.runs.current().then((r) => r && phases.push(r.phase)));
     await s.runs.current();
     await new Promise((r) => setTimeout(r, 400));
     s.dispose();
-    expect(phases).toContain('writing');
+    // Admitted on load on the B path (TL-P2-38), and followed from going to done within the fast pace's window.
+    expect(phases[0]).not.toBe('done');
+    expect(phases).toContain('done');
   });
 });
 
@@ -1150,8 +1154,8 @@ describe('foreground discovery', () => {
     const root = await seedFakeDrive(backend, 'default', Date.now());
     if (!root) throw new Error('The synthetic folder is missing');
     const file = await backend.createText(root, 'External.md', oldText);
-    const a = makeLiveSources({ drive: client(backend), worker: new FakeWorker({ drive: backend, rootId: root, scenario: 'default', scale: 'instant' }) });
-    const b = makeLiveSources({ drive: client(backend), worker: new FakeWorker({ drive: backend, rootId: root, scenario: 'default', scale: 'instant' }) });
+    const a = makeLiveSources({ drive: client(backend), worker: new FakeWorker({ drive: backend, runs: new FakeRunService({ drive: backend, scale: 'instant' }), rootId: root, scenario: 'default' }) });
+    const b = makeLiveSources({ drive: client(backend), worker: new FakeWorker({ drive: backend, runs: new FakeRunService({ drive: backend, scale: 'instant' }), rootId: root, scenario: 'default' }) });
     live = a;
     second = b;
     // B represents another device: its run observer does not receive A's document events.

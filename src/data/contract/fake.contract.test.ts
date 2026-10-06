@@ -1,5 +1,6 @@
 import { FakeDrive } from '../drive/fake-drive';
 import { FakeWorker } from '../fake/fake-worker';
+import { FakeRunService } from '../fake/fake-run-service';
 import { seedFakeDrive } from '../fake/seed';
 import { makeLiveSources } from '../live';
 import { describeVaultContract } from './vault-contract';
@@ -8,7 +9,7 @@ describeVaultContract('fake Drive', async () => {
   localStorage.clear();
   const drive = new FakeDrive();
   const rootId = await seedFakeDrive(drive, 'default', Date.now());
-  const worker = new FakeWorker({ drive, scenario: 'default', scale: 'instant', rootId });
+  const worker = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario: 'default', rootId });
   const live = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles() });
   return {
     sources: live,

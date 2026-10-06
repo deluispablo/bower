@@ -16,6 +16,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
       empty: SET_ASIDE.empty,
       'note-format': SET_ASIDE.noteFormat,
       'note-damaged': SET_ASIDE.noteDamaged,
+      'not-tidied': SET_ASIDE.notTidied,
     });
   });
 

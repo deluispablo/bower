@@ -13,7 +13,7 @@ test('a failed tidy-up says why, never freezes, and trying again works', async (
   await open(page, '/', 'fail-run');
   await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
-  await expect(page.getByRole('dialog').getByText(/Nothing was moved/)).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByRole('dialog').getByText(/Nothing was moved|The tidy-up stopped before changing anything/)).toBeVisible({ timeout: 25_000 });
   await page.waitForTimeout(5000);
   expect(await responsive(page)).toBe('ok');
   await page.keyboard.press('Escape');

@@ -5,7 +5,9 @@ import { findNode } from '../tree';
 import { BowerError } from '../types';
 import { DriveVault, NOT_THE_SAME_TEXT } from './drive-vault';
 import { noteRefusal } from './note-format';
-import { planRun, runFake } from '../fake/fake-runner';
+import { planRun } from '../fake/fake-runner';
+import { tidyUp } from '@/testing/tidy-up';
+import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
@@ -531,14 +533,15 @@ describe('what the code review found', () => {
       if (!line || !folders[1]) throw new Error('Missing change fixture');
       await create(folders[1].id, line.name, await fresh.readText(line.id));
       // Another device can process a write whose answer this browser lost.
-      const out = await runFake(fresh, r, { scope: 'instructions', scale: 'instant', failOnce: false, onPhase: () => undefined });
+      const out = await tidyUp(fresh, r, 'instructions');
       expect(out).toMatchObject({ phase: 'done', report: { rulesWorded: 2 } });
       await a.flushJournal();
       await Promise.all([a.refresh(), b.refresh()]);
       expect(await a.changes()).toEqual([]);
       expect(await b.changes()).toEqual([]);
       const after = await fresh.listAll(r);
-      const lines = after.filter((f) => !f.folder && f.name.endsWith('.json'));
+      // Your changes only: the run's own records live in `.bower/runs`.
+      const lines = after.filter((f) => !f.folder && f.name.endsWith('.json') && fresh.pathOf(f.id, r).startsWith('.bower/changes/'));
       expect(lines).toHaveLength(3);
       expect(lines.every((f) => after.find((parent) => parent.id === f.parents[0])?.name === 'archive')).toBe(true);
       expect(localStorage.getItem(`bower:outbox:${r}`)).toBeNull();
@@ -955,9 +958,11 @@ describe('pile declarations', () => {
     if (!folder) throw new Error('no pile folder');
     const mine = new Set((await drive.listAll(folder.id)).map((f) => f.id).concat(folder.id));
     const before = await drive.snapshot();
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    const out = await tidyUp(drive, root, 'all');
     if (out.phase !== 'done') throw new Error('failed');
-    expect(out.report.setAside).toContainEqual({ name: folder.name, why: 'Bower found two different lists of what is in this pile. Remove it and add it again.' });
+    // On the B path a run holds it and says nothing of it; the Inbox says why (TL-P2-21).
+    expect(out.manifest.capture.piles.map((p) => p.pileId)).not.toContain(pile.id);
+    expect((await second.piles()).find((p) => p.id === pile.id)?.setAside).toBe('declaration');
     expect(out.report.filed.map((f) => f.name)).not.toContain('a.pdf');
     const after = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string }; trashed: boolean }> };
     const was = JSON.parse(before) as { files: Array<{ meta: { id: string }; trashed: boolean }> };
@@ -1192,7 +1197,7 @@ describe('uploads survive a reload, through the vault', () => {
     const idb = new IDBFactory();
     const store = indexedDbUploadStore(idb);
     const queue = createUploadQueue({ drive: backend, store, chunkSize: 4 });
-    const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, rootId: backendRoot, scenario: 'default', scale: 'instant' }), declarePiles: true, uploadQueue: queue });
+    const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, runs: new FakeRunService({ drive: backend, scale: 'instant' }), rootId: backendRoot, scenario: 'default' }), declarePiles: true, uploadQueue: queue });
     const hold = holdAt(backend, 4);
     try {
       await live.vault.addPile({ text: 'Papers', items: [scan()] });
@@ -1323,7 +1328,7 @@ describe('uploads survive a reload, through the vault', () => {
       const backend = new FakeDrive();
       const backendRoot = (await seedFakeDrive(backend, 'default', Date.now())) ?? '';
       const upload = vi.spyOn(backend, 'upload');
-      const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, rootId: backendRoot, scenario: 'default', scale: 'instant' }), declarePiles: true, ...(uploadQueue === undefined ? {} : { uploadQueue }) });
+      const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, runs: new FakeRunService({ drive: backend, scale: 'instant' }), rootId: backendRoot, scenario: 'default' }), declarePiles: true, ...(uploadQueue === undefined ? {} : { uploadQueue }) });
       try {
         await live.vault.addPile({ text: 'Papers', items: [scan()] });
         await vi.waitFor(async () => expect(await scans(backend, backendRoot)).toHaveLength(1));
@@ -1389,8 +1394,14 @@ describe('uploads survive a reload, through the vault', () => {
     const pile = await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
     await reached(d, 4);
     vi.spyOn(d, 'trash').mockRejectedValueOnce(driveError('offline'));
+    // The chunk on hold goes on once the removal has stopped the thing's upload, however long the listing took.
+    const halt = tab.queue.halt.bind(tab.queue);
+    vi.spyOn(tab.queue, 'halt').mockImplementation((id) => {
+      const halted = halt(id);
+      hold.open();
+      return halted;
+    });
     const removing = tab.vault.removePile(pile.id);
-    hold.open();
     await expect(removing).rejects.toMatchObject({ code: 'offline' });
     expect(await indexedDbUploadStore(idb).list(ACCOUNT_A, root)).toHaveLength(1);
   });
@@ -1426,7 +1437,7 @@ describe('uploads survive a reload, through the vault', () => {
     const backendRoot = (await seedFakeDrive(backend, 'default', Date.now())) ?? '';
     const queue = createUploadQueue({ drive: backend, store: indexedDbUploadStore(new IDBFactory()), chunkSize: 4 });
     const retry = vi.spyOn(queue, 'retry');
-    const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, rootId: backendRoot, scenario: 'default', scale: 'instant' }), uploadQueue: queue });
+    const live = makeLiveSources({ drive: backend, worker: new FakeWorker({ drive: backend, runs: new FakeRunService({ drive: backend, scale: 'instant' }), rootId: backendRoot, scenario: 'default' }), uploadQueue: queue });
     try {
       window.dispatchEvent(new Event('online'));
       expect(retry).toHaveBeenCalledWith('offline');
@@ -1496,12 +1507,23 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     if (!f) throw new Error(`no ${name}`);
     return f;
   }
-  /** What a tidy-up says about the pile now: the reason it sets it aside for, or undefined when it takes it. */
+  /**
+   * What a tidy-up does with the pile now: undefined when it takes it; when it holds it, the reason the Inbox shows
+   * for it, since on the B path a run says nothing of a pile it holds (TL-P2-21).
+   */
   async function runnerSays(pileId: string): Promise<string | undefined> {
-    const name = (await folderOf(pileId)).name;
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
-    if (out.phase !== 'done') throw new Error('the tidy-up failed');
-    return out.report.setAside.find((s) => s.name === name)?.why;
+    let taken = false;
+    try {
+      const out = await tidyUp(drive, root, 'all');
+      if (out.phase !== 'done') throw new Error('the tidy-up failed');
+      taken = out.manifest.capture.piles.some((p) => p.pileId === pileId);
+    } catch (e) {
+      // Only held piles waiting: nothing is admitted, the run's own refusal (TL-P2-21).
+      if (!(e instanceof BowerError) || e.message !== 'Nothing in the inbox is ready yet.') throw e;
+    }
+    if (taken) return undefined;
+    const why = (await pileOn(declaring(), pileId))?.setAside;
+    return why ? SET_ASIDE_TEXT[why] : 'held, with no reason in the Inbox';
   }
   /** `name` does not get through until `heal` is called. */
   function failing(name: string): () => void {
@@ -1734,13 +1756,14 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     for (const f of folders) for (const k of await drive.listAll(f.id)) theirs.add(k.id);
     type Snap = { files: Array<{ meta: { id: string }; trashed: boolean }> };
     const before = (JSON.parse(await drive.snapshot()) as Snap).files.filter((f) => theirs.has(f.meta.id));
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    const out = await tidyUp(drive, root, 'all');
     expect(out.phase).toBe('done');
     if (out.phase !== 'done') return;
     expect(out.report.filed.map((f) => f.name)).toContain('a.pdf');
     expect(out.report.filed.map((f) => f.name)).not.toEqual(expect.arrayContaining(['b.pdf']));
     expect(out.report.filed.map((f) => f.name)).not.toEqual(expect.arrayContaining(['c.pdf']));
-    expect(names.map((n) => out.report.setAside.find((s) => s.name === n)?.why)).toEqual([SAID.unreadable, SAID.unreadable]);
+    expect(names).toHaveLength(2);
+    for (const id of [unreadable.id, damaged.id]) expect(out.manifest.capture.piles.map((p) => p.pileId)).not.toContain(id);
     expect((JSON.parse(await drive.snapshot()) as Snap).files.filter((f) => theirs.has(f.meta.id))).toEqual(before);
   });
 
@@ -1750,7 +1773,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     // A fresh Bower folder whose inbox a tidy-up can take on the B path.
     drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
-    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    root = (await new FakeWorker({ drive, scenario: 'first', rootId: null, runs }).createFolder()).id;
     const uploader = declaring();
     const ready = await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf')] });
     const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
@@ -1789,7 +1812,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(planned.manifest.capture.piles.flatMap((p) => p.memberKeys).filter((k) => k !== null && memberKeys.includes(k))).toEqual([]);
     expect(planned.manifest.capture.members.map((m) => m.file.fileId).filter((id) => id === folder.id || inside.includes(id))).toEqual([]);
     // A whole tidy-up files nothing of it, retires nothing, and brings nothing back.
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    const out = await tidyUp(drive, root, 'all');
     if (out.phase !== 'done') throw new Error('the tidy-up failed');
     expect(out.report.filed.map((f) => f.name)).toContain('lease.pdf');
     expect(out.report.filed.map((f) => f.name)).not.toContain('a.pdf');
@@ -1849,11 +1872,11 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(await real(leaseNote.id)).toBe('Papers about the lease');
 
     // A tidy-up holds that pile and takes the rest.
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    const out = await tidyUp(drive, root, 'all');
     if (out.phase !== 'done') throw new Error('the tidy-up failed');
     expect(out.report.filed.map((f) => f.name)).toContain('idea.pdf');
     expect(out.report.filed.map((f) => f.name)).not.toContain('lease.pdf');
-    expect(out.report.setAside).toContainEqual({ name: (await drive.get(lease.id)).name, why: 'Bower could not check some of its things. Try again.' });
+    expect(out.manifest.capture.piles.map((p) => p.pileId)).not.toContain(lease.id);
     expect((await drive.listAll(lease.id)).map((f) => f.name).sort()).toEqual(['Pile note.md', 'lease.pdf']);
 
     // A failed read is never kept: once Drive answers, the pile is itself again.
@@ -1914,7 +1937,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     localStorage.clear();
     drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
-    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    root = (await new FakeWorker({ drive, scenario: 'first', rootId: null, runs }).createFolder()).id;
     const pile = await declaring().addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
     await declaring().settled();
     const offline = driveError('offline');
@@ -1935,7 +1958,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     localStorage.clear();
     drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
-    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    root = (await new FakeWorker({ drive, scenario: 'first', rootId: null, runs }).createFolder()).id;
     const uploader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
     await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
     await uploader.settled();
@@ -1957,7 +1980,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     localStorage.clear();
     drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
-    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    root = (await new FakeWorker({ drive, scenario: 'first', rootId: null, runs }).createFolder()).id;
     const pile = await declaring().addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
     await declaring().settled();
     const folder = await folderOf(pile.id);
@@ -1981,7 +2004,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     localStorage.clear();
     drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
-    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    root = (await new FakeWorker({ drive, scenario: 'first', rootId: null, runs }).createFolder()).id;
     const uploader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
     const healthy = await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf')] });
     const newer = await uploader.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
@@ -2009,7 +2032,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     const planned = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
     if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
     expect(planned.manifest.capture.piles.map((p) => p.pileId)).toEqual([healthy.id]);
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    const out = await tidyUp(drive, root, 'all');
     if (out.phase !== 'done') throw new Error('the tidy-up failed');
     expect(out.report.filed.map((f) => f.name)).toEqual(['lease.pdf']);
     expect(await kept()).toEqual(before);
@@ -2069,8 +2092,9 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(errors.mock.calls).toHaveLength(2);
   });
 
-  // note-read-review-1, Minor 5: the Inbox and the tidy-up's report give the same reason, the refusal first.
-  it('a damaged pile note with text no record can carry says the same in the Inbox and the report', async () => {
+  // note-read-review-1, Minor 5: the Inbox gives the refusal first, and the tidy-up holds the pile (TL-P2-21: the B
+  // report says nothing of a pile it holds).
+  it('a damaged pile note with text no record can carry says the same in the Inbox and the run', async () => {
     const pile = await vault.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
     await vault.settled();
     const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
@@ -2079,10 +2103,10 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const reader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
     expect((await reader.piles()).find((p) => p.id === pile.id)?.setAside).toBe('note-damaged');
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    const out = await tidyUp(drive, root, 'all');
     if (out.phase !== 'done') throw new Error('the tidy-up failed');
-    const name = (await drive.get(pile.id)).name;
-    expect(out.report.setAside.find((r) => r.name === name)?.why).toBe("Bower can't read this pile's note.");
+    expect(out.manifest.capture.piles.map((p) => p.pileId)).not.toContain(pile.id);
+    expect((await reader.piles()).find((p) => p.id === pile.id)?.setAside).toBe('note-damaged');
   });
 
   // TL-P2-36 (9): a plain pile note with text no record can carry is a damaged note, in the Inbox and the run alike.
@@ -2100,10 +2124,10 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect((await reader.piles()).find((p) => p.id === pile.id)).toMatchObject({ setAside: 'note-damaged', noteLocked: true });
     await expect(reader.updatePile(pile.id, 'Fresh words')).rejects.toMatchObject({ message: "Bower can't read this pile's note." });
     expect(await drive.readText(note.id)).toBe(text);
-    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    const out = await tidyUp(drive, root, 'all');
     if (out.phase !== 'done') throw new Error('the tidy-up failed');
-    const name = (await drive.get(pile.id)).name;
-    expect(out.report.setAside.find((r) => r.name === name)?.why).toBe("Bower can't read this pile's note.");
+    expect(out.manifest.capture.piles.map((p) => p.pileId)).not.toContain(pile.id);
+    expect((await reader.piles()).find((p) => p.id === pile.id)?.setAside).toBe('note-damaged');
   });
 
   // Final delta review (Important): a draft is saved only over the words it started from (RFC 9110 §13.1.1).
@@ -2458,7 +2482,7 @@ describe('the inbox accounts for filed members like the tidy-up', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const fake = new FakeDrive();
     const runs = new FakeRunService({ drive: fake, clock: () => Date.now(), scale: 'instant' });
-    const worker = new FakeWorker({ drive: fake, scenario: 'first', scale: 'instant', rootId: null, runs });
+    const worker = new FakeWorker({ drive: fake, scenario: 'first', rootId: null, runs });
     const at = (await worker.createFolder()).id;
     const reader = (): DriveVault => new DriveVault({ drive: fake, rootId: async () => at, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
     const uploader = reader();

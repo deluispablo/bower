@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { Journal } from './journal';
-import { runFake } from '../fake/fake-runner';
+import { tidyUp } from '@/testing/tidy-up';
 
 let drive: FakeDrive;
 let root: string;
@@ -126,7 +126,8 @@ describe('when Drive does not answer', () => {
     for (const text of ['{broken', JSON.stringify({ v: 1, id: 'BAD_ID', device: 'device-a', at: Date.now(), what: 'Old rule', kind: 'rule', text: {} })]) {
       const file = await drive.createText(changes, 'bad.json', text);
       await expect(journal.list()).rejects.toMatchObject({ code: 'unknown', message: 'Bower could not read your changes.' });
-      await expect(runFake(drive, root, { scope: 'instructions', scale: 'instant', failOnce: false, onPhase: () => undefined })).rejects.toMatchObject({ code: 'unknown' });
+      // On the B path an unreadable line stays where it is, uncaptured (TL-P2-23): with nothing else, the run refuses.
+      await expect(tidyUp(drive, root, 'instructions')).rejects.toMatchObject({ code: 'conflict', message: 'There is nothing new for Bower to read.' });
       expect(await drive.readText(file.id)).toBe(text);
       expect((await drive.get(file.id)).parents).toEqual([changes]);
       await drive.trash(file.id);

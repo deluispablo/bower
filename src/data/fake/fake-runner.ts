@@ -1,25 +1,24 @@
 /**
- * The runner, faked: what a tidy-up does to the Bower folder, done on a
- * FakeDrive with no AI. It walks the real phases on the demo's clock, takes
- * the piles that were in the inbox when it started, files their things
- * where the demo would (the fixture's plan, else a guess from the pile's
- * words), words the rules you typed, marks requests done, drops answered
- * questions and archives the journal. It writes only what the real runner
- * writes (docs/specs/2026-10-04-worker-contract.md).
+ * The runner, faked: what a tidy-up plans for the Bower folder on a FakeDrive,
+ * with no AI. It plans one fixed contract B manifest from what it reads: the
+ * ready piles in the inbox, their things filed where the demo would (the
+ * fixture's plan, else a guess from the pile's words), the rules you typed,
+ * your requests, answered questions and the journal. The run service
+ * (`fake-run-service.ts`) applies it, recoverably. Nothing writes outside a
+ * manifest any more (TL-P2-38): the legacy runner that did is gone, and its
+ * records are only read (`fake-worker.ts`).
  */
 import type { DriveFile } from '../drive/drive-api';
 import { applyChanges, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
-import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
+import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import type { DeclarationResult } from '../contracts/pile-declaration';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
-import { PHASE_MS, type TimeScale } from '../demo/scenario';
-import { formerNames, rewriteLinks } from '../links';
-import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
-import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordedNote, writable, type Digest } from '../pile-readiness';
+import { PILE_NOTE, safeInboxName } from '../piles';
+import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordablePile, recordedNote, sameText, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport, type SetAside } from '../types';
+import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type SetAside } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
@@ -30,22 +29,7 @@ import { noteRefusal, parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { NOT_FILED, canonical, grounded, groundedKeys, seen } from './fake-run-records';
-
-export interface FakeRunOptions {
-  scope: 'all' | 'instructions';
-  scale: TimeScale;
-  /** Fails this run in the writing phase, leaving everything as it was. */
-  failOnce: boolean;
-  onPhase: (phase: RunPhase, total?: number) => void | Promise<void>;
-  /** Hears which piles the run took, as soon as it starts. */
-  took?: (pileIds: ReadonlySet<string>) => void;
-  /** Starts part-way through reading, as a run that was already going (the running situation). */
-  readingFor?: number;
-}
-
-export type FakeRunResult = { phase: 'done'; report: RunReport } | { phase: 'failed'; failure: string };
-
-export const FAILURE = 'Bower stopped while writing your notes. Nothing was moved; your inbox is as it was.';
+import { B_FAILURE } from './fake-run-service';
 
 /** The demo's plan for each sample inbox thing, by the name it was added under. */
 const PLAN_BY_NAME = new Map(
@@ -73,6 +57,7 @@ export const SET_ASIDE = {
   empty: 'Nothing is left in it. Remove it from your inbox.',
   noteFormat: "This pile's note needs a newer Bower.",
   noteDamaged: "Bower can't read this pile's note.",
+  notTidied: "Bower couldn't tidy this up yet. Try again.",
 } as const;
 
 /** The Inbox's refusals of a pile's note that hold it from a run, worded as the report says them. */
@@ -116,6 +101,11 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   const cache = new Map<string, DeclarationResult>();
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
+    // What a run record cannot carry holds only its pile, with the reason the Inbox shows too (TL-P2-38).
+    if (pile.setAside === 'not-tidied') {
+      out.set(pile.id, { blocked: SET_ASIDE.notTidied });
+      continue;
+    }
     if (folder && !folder.folder) {
       out.set(pile.id, await looseCapture(drive, rootId, listing, ix.file('Inbox'), folder, cache));
       continue;
@@ -237,8 +227,6 @@ async function looseCapture(drive: FakeDrive, rootId: string, listing: readonly 
   return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId: declaration.declarationId, sha256: hash }, contextKey: null, memberKeys: new Set(accounting.remaining) } };
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
-
 /** A run's classification, fixed before any effect: the B path with its manifest, or the legacy path and why. */
 export type RunPlan = { path: 'b'; manifest: Manifest | ManifestV2 } | { path: 'legacy'; why: string };
 
@@ -256,9 +244,11 @@ export interface PlanOptions {
 export type HubUpdate = { path: string; what: string };
 
 /**
- * Plans a run on the B path when every effect it needs is a B effect (move,
- * create-folder, a generated note's create-text (TL-P2-17), Bin, write-runner-json, and B.2's edit-text); otherwise the whole run is legacy,
- * with the reason. A runner file that cannot be read refuses the run before admission (TL-P2-17); a missing one is
+ * Plans a run on the B path: every effect it needs is a B effect (move, create-folder, a generated note's create-text
+ * (TL-P2-17), Bin, write-runner-json, and B.2's edit-text). A pile it cannot take as it read it (a race while it
+ * plans, a name or an id no record can carry, bytes it cannot check) is held with "Bower couldn't tidy this up yet.
+ * Try again." and the rest of the run goes on (TL-P2-38); a plan the manifest guard or grounding refuses is refused
+ * before admission and any effect. A runner file that cannot be read refuses the run before admission (TL-P2-17); a missing one is
  * made with create-text, and your rules are worded in Rules.md by one `rules-wording` edit, or a `create-text` when
  * it is missing. Decided from one capture before any effect, and never
  * changed during the run. The B plan fixes every operation and every report
@@ -368,13 +358,25 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
     const marks = { members: members.length, things: things.length };
+    /**
+     * A pile this plan cannot take as it read it is held (TL-P2-38): nothing of it is captured or written, and the
+     * rest of the run goes on. A race clears on the next run; what the Inbox can see, it shows (`untidied`).
+     */
+    const hold = (why: string): void => {
+      members.length = marks.members;
+      things.length = marks.things;
+      console.error(new BowerError('unknown', SET_ASIDE.notTidied), `A pile waits for the next tidy-up: ${why}`);
+    };
     const folder = pile.path ? ix.file(pile.path) : undefined;
     // Not in this listing (a loose thing not arrived, or one still on its way): nothing to capture (TL-P2-21).
     if (!folder) continue;
     // A loose pile (TL-P2-16 item 5) has no folder: its one file is its only child, and nothing goes to the Bin.
     const loose = !folder.folder;
     const cap = capture.get(pile.id);
-    if (!cap) return legacy('readiness');
+    if (!cap) {
+      hold('it changed while the run read the inbox');
+      continue;
+    }
     // A pile that is not ready is held (TL-P2-21): not captured, no effect, no report row; its reason shows in the Inbox.
     if (cap.blocked !== null) continue;
     // A pile whose merge line waits past the edit cap waits whole, with its answer (planned again without it).
@@ -385,8 +387,11 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       }
       continue;
     }
-    // A pile id no run record can carry is held, left for the next run (TL-P2-38).
-    if (!LOGICAL_ID.test(pile.id)) continue;
+    // A pile id no run record can carry is held (TL-P2-38); the Inbox holds it already, this keeps it so.
+    if (!recordableId(pile.id)) {
+      hold('its id cannot be recorded');
+      continue;
+    }
     const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
     const notes = loose ? [] : children.filter((f) => !f.folder && f.name === PILE_NOTE);
     const declared = cap.declared;
@@ -413,15 +418,22 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), noteText).body.trim();
     const keys: Array<string | null> = [];
     const taken: string[] = [];
+    let lost: string | null = null;
     for (const item of pile.items) {
       const file = children.find((f) => f.id === item.id);
       if (file && !file.folder && file.name === PILE_NOTE && file.id !== note?.id) continue;
-      if (!file || file.folder) return legacy('sending');
+      if (!file || file.folder) {
+        lost = 'one of its things changed while the run read it';
+        break;
+      }
       const key = declared ? (file.appProperties?.[PROP.item] ?? null) : null;
       // A file in a declared pile that is not one of its members stays there for the next run.
       if (declared && (key === null || !declared.memberKeys.has(key))) continue;
       const content = await verified(file, 'blob');
-      if (!content) return legacy('not checked');
+      if (!content) {
+        lost = 'the bytes of one of its things could not be checked';
+        break;
+      }
       keys.push(key);
       taken.push(file.id);
       members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
@@ -432,15 +444,23 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     // to write, so it is left as it is, untouched, like a held pile.
     const wordsOnly = !pile.items.length || (!taken.length && !declared);
     if (wordsOnly && (!words.trim() || !generatedPlace(guessFolder(words, 'note')))) continue;
-    if (!taken.length && !wordsOnly) return legacy('member key');
     // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
-    if (declared && keys.length !== declared.memberKeys.size) return legacy('member key');
+    if (!lost && ((!taken.length && !wordsOnly) || (declared && keys.length !== declared.memberKeys.size))) lost = 'one of its members is not among its things';
+    // Its names must be ones a run record can carry, as the Inbox checks them (`recordablePile`).
+    if (!lost && !recordablePile(pile.id, [folder.name, ...members.slice(marks.members).map((m) => m.file.name), ...(note ? [note.name] : [])])) lost = 'a name cannot be recorded';
+    if (lost) {
+      hold(lost);
+      continue;
+    }
     let context: CapturedPile['context'] = { kind: 'absent' };
     if (note) {
       const text = noteText;
       const stored = await verified(note, 'utf8');
-      const raw = new TextEncoder().encode(text);
-      if (!stored || stored.size !== raw.byteLength || stored.sha256 !== (await sha256(new Blob([raw])))) return legacy('context');
+      // The note is recorded as it was read: its text must be the very bytes stored (`sameText`, as in the Inbox).
+      if (!stored || !(await sameText(text, stored))) {
+        hold('its note is not the text the run read');
+        continue;
+      }
       // An observed pile invents no keys (guard 6): its context carries none.
       context = { kind: 'text', memberKey: declared ? contextKey : null, file: seen(note), text, content: stored };
     }
@@ -1003,14 +1023,20 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   if (!checked.ok) {
     // Past the guard's own size limit: the last edit in path order waits for the next run, and the run is planned again.
     if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return planRun(drive, rootId, opts, edits.length - 1, held);
-    console.error(`A B plan was refused by the manifest guard (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''}); the run takes the legacy path`);
-    return legacy('manifest');
+    return refused(`the manifest guard refused the plan (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''})`);
   }
-  if (!grounded(manifest) || !(await groundedKeys(manifest))) {
-    console.error('A B plan has report rows its effects do not ground; the run takes the legacy path');
-    return legacy('grounding');
-  }
+  if (!grounded(manifest) || !(await groundedKeys(manifest))) return refused('the plan has report rows its effects do not ground');
   return { path: 'b', manifest };
+}
+
+/**
+ * A plan Bower's own checks refuse fails closed (TL-P2-37 Q2, TL-P2-38): refused before admission and any effect,
+ * with no other path to run on, the way a failed check denies (OWASP, Fail securely).
+ */
+function refused(why: string): never {
+  const e = new BowerError('unknown', B_FAILURE);
+  console.error(e, `A tidy-up was refused before admission: ${why}`);
+  throw e;
 }
 
 /** A journal line as a B run captures it: the record, every file it was written to, and their one digest. */
@@ -1051,7 +1077,8 @@ async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[
       console.error(e);
       throw new BowerError('unknown', OWN_FILES);
     }
-    if (!isJournalRecord(rec) || !digest) {
+    // A line whose id no run record can carry (a control character, past 1024 bytes, half a character) stays.
+    if (!isJournalRecord(rec) || !recordableRecordId(rec.id) || !digest) {
       left++;
       continue;
     }
@@ -1283,8 +1310,6 @@ function mentions(bytes: Uint8Array, renames: readonly Rename[]): boolean {
 /** A saved link's note: its name, its stable key, and its text when the run writes it (null when one is reused). */
 type SavedNote = { name: string; key: string; text: string | null };
 
-const LOGICAL_ID = /^[A-Za-z0-9_-]{1,128}$/;
-
 /** Where the fixture or the pile's words send a thing. */
 function guessOf(words: string, item: PileItem): string {
   return PLAN_BY_NAME.get(item.name)?.to ?? guessFolder(`${words} ${item.name}`, item.kind);
@@ -1294,279 +1319,4 @@ function guessOf(words: string, item: PileItem): string {
 function mintKey(kind: string): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   return `${kind}-${[...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
-}
-
-export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOptions): Promise<FakeRunResult> {
-  const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });
-  const piles = opts.scope === 'all' ? await reader.piles() : [];
-  const capture = await captureOf(drive, rootId, piles);
-  // A pile that has not fully arrived is not taken: nothing of it moves, nothing goes to the Bin.
-  const blocked = piles.flatMap((p) => {
-    const why = capture.get(p.id)?.blocked;
-    return why ? [{ name: nameOf(p.path ?? ''), why }] : [];
-  });
-  const taken = new Set(piles.filter((p) => p.path && !capture.get(p.id)?.blocked).map((p) => p.id));
-  opts.took?.(taken);
-  const ms = PHASE_MS[opts.scale];
-  if (opts.readingFor === undefined) {
-    await opts.onPhase('queued');
-    await sleep(ms.queued);
-  }
-  await opts.onPhase('reading', piles.filter((p) => taken.has(p.id)).reduce((n, p) => n + thingsIn(p), 0));
-  await sleep(ms.reading - (opts.readingFor ?? 0));
-  await opts.onPhase('writing');
-  await sleep(ms.writing);
-  if (opts.failOnce) return { phase: 'failed', failure: FAILURE };
-  await opts.onPhase('saving');
-  await sleep(ms.saving);
-
-  const w = new Writer(drive, rootId, VaultIndex.build(rootId, await drive.listAll(rootId)));
-  const journal = await w.journal();
-  await w.requests();
-  await w.clearNew();
-  const report: RunReport = { filed: [], created: [], updated: [], setAside: blocked, questions: [], yourChanges: journal.length };
-  const saidYes = new Set(journal.filter((r) => r.kind === 'answer' && r.text === 'yes').map((r) => r.questionId ?? ''));
-  if (opts.scope === 'all') {
-    for (const pile of piles.filter((p) => taken.has(p.id))) await w.filePile(pile, report, saidYes, capture.get(pile.id));
-    for (const u of UPDATES) if (await w.addTimeline(u.path, u.what)) report.updated.push(u);
-  }
-  await w.followRenames(journal);
-  await w.wordRules(journal.filter((r) => r.kind === 'rule'));
-  await w.doRequests(journal.filter((r) => r.kind === 'request'));
-  const asked = journal.filter((r) => r.kind === 'request').map((r) => r.text ?? r.what);
-  const worded = journal.filter((r) => r.kind === 'rule' && !r.removes).length;
-  if (asked.length) report.requests = asked;
-  if (worded) report.rulesWorded = worded;
-  // Each change counts once: the requests and rules the report names are not among the rest.
-  report.yourChanges = journal.length - asked.length - worded;
-  // The report lists only the questions this run asked; the open ones stay in questions.json with them.
-  const filedSaltmere = opts.scope === 'all' && piles.some((p) => taken.has(p.id) && /saltmere/i.test(p.text));
-  report.questions = await w.questions(new Set(journal.filter((r) => r.kind === 'answer').map((r) => r.questionId ?? '')), filedSaltmere ? [saltmereQuestion(Date.now())] : []);
-  await w.archive(journal);
-  if (opts.scope === 'all') await w.hashes();
-  return { phase: 'done', report };
-}
-
-/** The runner's writes, one helper per step, over a listing it keeps true. */
-class Writer {
-  constructor(
-    private readonly drive: FakeDrive,
-    private readonly rootId: string,
-    private readonly ix: VaultIndex,
-  ) {}
-
-  /** Each change once, by its id (a line written twice is one change), with all its files. */
-  async journal(): Promise<Array<JournalRecord & { fileIds: string[] }>> {
-    const byId = new Map<string, JournalRecord & { fileIds: string[] }>();
-    for (const f of this.ix.journalFiles()) {
-      if (f.folder || !f.name.endsWith('.json')) continue;
-      try {
-        const rec: unknown = JSON.parse(await this.drive.readText(f.id));
-        if (!isJournalRecord(rec)) throw new BowerError('unknown', 'Bower could not read your changes.');
-        const had = byId.get(rec.id);
-        if (had) had.fileIds.push(f.id);
-        else byId.set(rec.id, { ...rec, fileIds: [f.id] });
-      } catch (e) {
-        console.error(e);
-        // Keep unreadable lines in place and stop before any writes: nothing may be skipped.
-        if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
-        throw e;
-      }
-    }
-    return [...byId.values()].sort((a, b) => a.at - b.at);
-  }
-
-  /** Last run's "new" marks go; this run's come next. */
-  async clearNew(): Promise<void> {
-    for (const f of await this.drive.listAll(this.rootId)) if (f.appProperties?.[PROP.isNew]) this.ix.put(await this.drive.update(f.id, { appProperties: { [PROP.isNew]: null } }));
-  }
-
-  async filePile(pile: Pile, report: RunReport, saidYes: ReadonlySet<string>, capture?: Capture): Promise<void> {
-    if (!pile.items.length) {
-      const to = guessFolder(pile.text, 'note');
-      const folder = await this.folder(to);
-      const name = freeName(this.ix.entries(), to, `${pile.text.slice(0, 48).replace(/[/\\:*?"<>|]+/g, ' ').trim()}.md`);
-      const text = serializeNote({ summary: pile.text, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: pile.text, timeline: [{ date: 'Today', text: 'Written from a note you added.' }], byBower: true });
-      this.ix.put(await this.drive.createText(folder, name, text, { [PROP.by]: 'bower', [PROP.isNew]: '1' }));
-      report.filed.push({ name: 'Your note', title: displayName(name), kind: 'note', to, note: join(to, name) });
-    } else {
-      for (const item of pile.items) {
-        const file = this.byId(item.id);
-        if (!file) continue;
-        const merge = MERGES.find((m) => m.item === item.name && saidYes.has(m.question));
-        if (merge) {
-          // You said yes to keeping one note: the thing joins that note instead of making its own.
-          const to = parentOf(merge.into);
-          const name = freeName(this.ix.entries(), to, merge.title);
-          this.ix.put(await this.drive.update(file.id, { name, addParent: await this.folder(to), ...(file.parents[0] ? { removeParent: file.parents[0] } : {}), appProperties: { [PROP.isNew]: '1', [PROP.asAdded]: null, [PROP.origin]: null, [PROP.kind]: null, [PROP.pile]: null } }));
-          await this.addTimeline(merge.into, merge.line);
-          report.filed.push({ name: item.name, title: displayName(nameOf(merge.into)), kind: item.kind, to, note: merge.into });
-          continue;
-        }
-        // A saved link with no plan is named from its address, as Bower would name it.
-        const linkName = !PLAN_BY_NAME.has(item.name) && item.kind === 'link' ? savedLinkUrl(await this.drive.readText(file.id)) : null;
-        const plan = PLAN_BY_NAME.get(item.name) ?? { title: linkName ? `${linkTitle(linkName)}.url` : file.name, to: guessFolder(`${pile.text} ${item.name}`, item.kind) };
-        const folder = await this.folder(plan.to);
-        const name = freeName(this.ix.entries(), plan.to, plan.title);
-        const isNote = kindOf(name) === 'note';
-        this.ix.put(
-          await this.drive.update(file.id, {
-            name,
-            addParent: folder,
-            ...(file.parents[0] ? { removeParent: file.parents[0] } : {}),
-            appProperties: { [PROP.isNew]: '1', ...(isNote ? { [PROP.by]: 'bower' } : {}), [PROP.asAdded]: null, [PROP.origin]: null, [PROP.kind]: null, [PROP.pile]: null },
-          }),
-        );
-        // A saved link filed as a note becomes a note about it, its address kept; never the link file's syntax.
-        if (isNote && item.kind === 'link') {
-          const address = savedLinkAddress(await this.drive.readText(file.id)) ?? item.name;
-          const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: address }], tags: [], currentState: [], body: `Saved from ${address}.`, timeline: [{ date: 'Today', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
-          const f = this.ix.file(join(plan.to, name));
-          if (f) this.ix.put(await this.drive.writeText(f.id, text, f.modifiedTime));
-        }
-        const filed: FiledItem = { name: item.name, title: thingName(name), kind: item.kind, to: plan.to };
-        if (plan.note && !this.ix.idOf(plan.note)) {
-          const at = await this.folder(parentOf(plan.note));
-          const text = serializeNote({ summary: `A note for ${displayName(name)}.`, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: 'Today', text: 'Filed by Bower.', source: name }], byBower: true });
-          this.ix.put(await this.drive.createText(at, nameOf(plan.note), text, { [PROP.by]: 'bower', [PROP.isNew]: '1' }));
-          filed.note = plan.note;
-          report.created.push({ path: plan.note, what: `A note for ${displayName(name)}.` });
-        }
-        report.filed.push(filed);
-      }
-    }
-    // What is left of the pile (its folder and note) goes to the Bin, where it can be found,
-    // unless something the run did not take arrived in it since: then the folder stays.
-    const top = pile.path ? this.ix.file(pile.path) : undefined;
-    if (top?.folder) {
-      const left = (await this.drive.listAll(top.id)).filter((f) => f.parents[0] === top.id);
-      if (capture?.blocked === null && left.some((f) => !capture.captured.has(f.id))) return;
-      await this.drive.trash(top.id);
-      this.ix.drop(top.id);
-    }
-  }
-
-  /** After renames, every [[link]] to an old name is written with the new one (a label after | stays). */
-  async followRenames(journal: JournalRecord[]): Promise<void> {
-    const taken = new Set([...this.ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
-    const former = formerNames(journal.map((r) => ({ id: r.id, at: r.at, kind: r.kind, what: r.what, ...(r.path ? { path: r.path } : {}), ...(r.from ? { from: r.from } : {}) })), taken);
-    if (!former.size) return;
-    for (const [path] of this.ix.entries()) {
-      const f = this.ix.file(path);
-      if (!f || f.folder || !path.endsWith('.md') || path.startsWith(`${SYSTEM.dir}/`)) continue;
-      const text = await this.drive.readText(f.id);
-      const next = rewriteLinks(text, former);
-      if (next !== text) this.ix.put(await this.drive.writeText(f.id, next, f.modifiedTime));
-    }
-  }
-
-  async addTimeline(path: string, what: string): Promise<boolean> {
-    const f = this.ix.file(path);
-    if (!f) return false;
-    const n = parseNote(path, await this.drive.readText(f.id));
-    const written = await this.drive.writeText(f.id, serializeNote({ ...n, timeline: [...n.timeline, { date: 'Today', text: what }] }), f.modifiedTime);
-    this.ix.put(await this.drive.update(written.id, { appProperties: { [PROP.isNew]: '1' } }));
-    return true;
-  }
-
-  async wordRules(lines: JournalRecord[]): Promise<void> {
-    if (!lines.length) return;
-    const typed = lines.filter((r) => !r.removes);
-    const removed = new Set(lines.map((r) => r.removes).filter(Boolean));
-    const f = this.ix.file('Rules.md');
-    const worded = (f ? parseRules(await this.drive.readText(f.id)) : []).filter((r) => !removed.has(r.text));
-    const added: Rule[] = [...typed].reverse().map((r) => ({ id: r.id, text: wordRule(r.text ?? r.what), yourWords: r.text ?? r.what, since: r.at }));
-    const text = serializeRules([...added, ...worded]);
-    if (f) this.ix.put(await this.drive.writeText(f.id, text, f.modifiedTime));
-    else this.ix.put(await this.drive.createText(this.rootId, 'Rules.md', text, { [PROP.by]: 'bower' }));
-  }
-
-  async doRequests(asked: JournalRecord[]): Promise<void> {
-    if (!asked.length) return;
-    const old = (await this.requests())?.done ?? [];
-    const done: Request[] = [...asked].reverse().map((r) => ({ id: r.id, text: r.text ?? r.what, at: r.at, done: REQUEST_DONE }));
-    await this.writeJson(SYSTEM.requests, { v: 1, done: [...done, ...old].slice(0, 20) } satisfies RequestsFile);
-  }
-
-  /** Drops the answered questions, adds the new ones; answers the new ones (what the report lists). */
-  async questions(answered: ReadonlySet<string>, asked: Question[]): Promise<Question[]> {
-    const all = (await this.json<QuestionsFile>(SYSTEM.questions))?.questions ?? [];
-    const fresh = asked.filter((q) => !all.some((x) => x.id === q.id));
-    const left = [...all.filter((q) => !answered.has(q.id)), ...fresh];
-    if (left.length !== all.length || fresh.length) await this.writeJson(SYSTEM.questions, { v: 1, questions: left } satisfies QuestionsFile);
-    return fresh;
-  }
-
-  async archive(records: Array<{ fileIds: string[] }>): Promise<void> {
-    if (!records.length) return;
-    const archive = await this.folder(SYSTEM.archive);
-    for (const id of records.flatMap((r) => r.fileIds)) {
-      const f = this.byId(id);
-      if (f) this.ix.put(await this.drive.update(f.id, { addParent: archive, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) }));
-    }
-  }
-
-  /** `.bower/hashes.json`: every file outside the inbox, by its content. */
-  async hashes(): Promise<void> {
-    const out: Record<string, string> = {};
-    for (const [path, e] of this.ix.entries()) {
-      const id = this.ix.idOf(path);
-      if (e.type !== 'file' || e.kind === 'note' || path.startsWith('Inbox/') || !id) continue;
-      out[await sha256(new Blob([await this.drive.readText(id)]))] = path;
-    }
-    await this.writeJson(SYSTEM.hashes, { v: 1, hashes: out } satisfies HashesFile);
-  }
-
-  private byId(id: string): DriveFile | undefined {
-    const path = this.ix.pathOf(id);
-    return path === undefined ? undefined : this.ix.file(path);
-  }
-
-  /** The id of a folder, made (with its parents) when missing. */
-  private async folder(path: string): Promise<string> {
-    if (!path) return this.rootId;
-    const known = this.ix.idOf(path);
-    if (known) return known;
-    const made = await this.drive.createFolder(await this.folder(parentOf(path)), nameOf(path));
-    this.ix.put(made);
-    return made.id;
-  }
-
-  private async json<T>(path: string): Promise<T | null> {
-    const id = this.ix.idOf(path);
-    if (!id) return null;
-    try {
-      return JSON.parse(await this.drive.readText(id)) as T;
-    } catch (e) {
-      // A file that is not JSON reads as missing; a Drive failure stops the run.
-      if (e instanceof SyntaxError) return null;
-      throw e;
-    }
-  }
-
-  /** Refuse unreadable history before any effects, including runs with no new requests. */
-  async requests(): Promise<RequestsFile | null> {
-    const id = this.ix.idOf(SYSTEM.requests);
-    if (!id) return null;
-    let value: unknown;
-    try {
-      value = JSON.parse(await this.drive.readText(id));
-    } catch (e) {
-      if (!(e instanceof SyntaxError)) throw e;
-      console.error(`${SYSTEM.requests} is not valid JSON`);
-      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
-    }
-    if (!isRunnerFile(SYSTEM.requests, value)) {
-      console.error(`${SYSTEM.requests} has an unsupported shape`);
-      throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
-    }
-    return value;
-  }
-
-  private async writeJson(path: string, body: unknown): Promise<void> {
-    const text = `${JSON.stringify(body, null, 2)}\n`;
-    const f = this.ix.file(path);
-    if (f) this.ix.put(await this.drive.writeText(f.id, text, f.modifiedTime));
-    else this.ix.put(await this.drive.createText(await this.folder(parentOf(path)), nameOf(path), text));
-  }
 }

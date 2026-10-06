@@ -3,6 +3,7 @@ import { FakeDrive } from './drive/fake-drive';
 import { driveError } from './drive/drive-api';
 import { FakeLease, leaseKey } from './fake/fake-lease';
 import { FakeWorker } from './fake/fake-worker';
+import { FakeRunService } from './fake/fake-run-service';
 import { makeLiveSources, uploadAccount, type LiveSources } from './live';
 import { IDBFactory } from 'fake-indexeddb';
 import { createUploadQueue } from './upload-queue';
@@ -196,7 +197,7 @@ function queueStub(log: string[]): UploadQueue & { start: ReturnType<typeof vi.f
 
 function page(w: World, place: string, hub: ReturnType<typeof browser>, uploadQueue?: UploadQueue, extra: { declarePiles?: boolean; reload?: () => void } = {}): { live: LiveSources; worker: FakeWorker; lease: FakeLease; target: EventTarget; place: PlaceGuard } {
   const lease = leaseOn(w.storage, w.clock);
-  const worker = new FakeWorker({ drive: w.drive, rootId: w.root, scenario: 'empty', scale: 'instant', lease });
+  const worker = new FakeWorker({ drive: w.drive, runs: new FakeRunService({ drive: w.drive, scale: 'instant' }), rootId: w.root, scenario: 'empty', lease });
   const target = new EventTarget();
   const { reload, ...more } = extra;
   const live = makeLiveSources({ drive: w.drive, worker, place: { place, locks: hub.locks, bus: hub.bus(), clock: w.clock, target, world: WORLD, ...(reload ? { reload } : {}) }, ...(uploadQueue ? { uploadQueue } : {}), ...more });
@@ -411,8 +412,8 @@ describe('one active session per person fences the old place', () => {
   it('the Worker refuses process, createFolder and deleteAccount from a place that is not active', async () => {
     const w = await world();
     const lease = leaseOn(w.storage, w.clock);
-    const a = new FakeWorker({ drive: w.drive, rootId: w.root, scenario: 'empty', scale: 'instant', lease });
-    const b = new FakeWorker({ drive: w.drive, rootId: w.root, scenario: 'empty', scale: 'instant', lease: leaseOn(w.storage, w.clock) });
+    const a = new FakeWorker({ drive: w.drive, runs: new FakeRunService({ drive: w.drive, scale: 'instant' }), rootId: w.root, scenario: 'empty', lease });
+    const b = new FakeWorker({ drive: w.drive, runs: new FakeRunService({ drive: w.drive, scale: 'instant' }), rootId: w.root, scenario: 'empty', lease: leaseOn(w.storage, w.clock) });
     expect(await a.session('laptop', 'check')).toEqual({ active: true, epoch: 1 });
     expect(await b.session('phone', 'check')).toEqual({ active: false, epoch: 1 });
     await expect(b.process('instructions')).rejects.toMatchObject(elsewhere);
@@ -424,7 +425,7 @@ describe('one active session per person fences the old place', () => {
     await expect(a.deleteAccount()).rejects.toMatchObject(elsewhere);
     expect(await b.createFolder()).toEqual({ id: w.root, found: false });
     // Without a lease (tests, older pages) nothing is fenced.
-    const plain = new FakeWorker({ drive: w.drive, rootId: w.root, scenario: 'empty', scale: 'instant' });
+    const plain = new FakeWorker({ drive: w.drive, runs: new FakeRunService({ drive: w.drive, scale: 'instant' }), rootId: w.root, scenario: 'empty' });
     expect(await plain.createFolder()).toEqual({ id: w.root, found: false });
   });
 
@@ -631,7 +632,7 @@ describe('Use here wording and things only on this page (TL-P2-24)', () => {
     expect(leaseOn(storage, clock, 'demo').read()).toMatchObject({ holder: 'tab-a', epoch: 1 });
     // The fake Worker always answers session; without a lease every place is active.
     const w = await world();
-    expect(await new FakeWorker({ drive: w.drive, rootId: w.root, scenario: 'empty', scale: 'instant' }).session('tab-a', 'check')).toEqual({ active: true, epoch: 0 });
+    expect(await new FakeWorker({ drive: w.drive, runs: new FakeRunService({ drive: w.drive, scale: 'instant' }), rootId: w.root, scenario: 'empty' }).session('tab-a', 'check')).toEqual({ active: true, epoch: 0 });
   });
 });
 
@@ -848,7 +849,7 @@ describe('review findings and TL-P2-25: blocked is not closed, nothing stale lan
   it('a Worker refusal blocks the place at once, and is told apart from other conflicts', async () => {
     const w = await world();
     const lease = leaseOn(w.storage, w.clock);
-    const worker = new FakeWorker({ drive: w.drive, rootId: w.root, scenario: 'empty', scale: 'instant', lease });
+    const worker = new FakeWorker({ drive: w.drive, runs: new FakeRunService({ drive: w.drive, scale: 'instant' }), rootId: w.root, scenario: 'empty', lease });
     const g = guardOn(browser(), 'laptop', lease, w.clock, undefined, { lease: (p, action) => worker.session(p, action) });
     await g.start();
     const fenced = fenceWorker(worker, g);

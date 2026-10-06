@@ -123,6 +123,19 @@ const path = (value: unknown): value is string => text(value) && value.split('/'
 // CapturedJournal.recordId keeps the existing opaque JournalRecord id rule, not the logical-Id grammar;
 // its contract bound is the opaque-identifier one (coordinator ruling): DriveId's 1024 UTF-8 bytes.
 const recordId = driveId;
+
+/** Whether a run record can carry this as a file or folder name (contract B's name grammar). */
+export function recordableName(value: string): boolean {
+  return name(value);
+}
+/** Whether a run record can carry this as a logical id (a pile id, a member key). */
+export function recordableId(value: string): boolean {
+  return id(value);
+}
+/** Whether a run record can carry this as a journal record id (the opaque-identifier rule). */
+export function recordableRecordId(value: string): boolean {
+  return recordId(value);
+}
 const integer = (value: unknown): value is number => typeof value === 'number'
   && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 const hash = (value: unknown): value is string => typeof value === 'string'
