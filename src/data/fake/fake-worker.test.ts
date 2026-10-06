@@ -1498,10 +1498,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await folderPile(w, 'Offer', [{ name: 'Offer_letter_final(2).pdf', text: '%PDF offer' }, { name: 'other.pdf', text: '%PDF other' }]);
       expect(await plan(w)).toMatchObject({ path: 'b', manifest: { operations: expect.arrayContaining([expect.objectContaining({ effect: expect.objectContaining({ kind: 'create-text', purpose: 'generated' }) })]) } });
     });
-    it('sends a run with a merge to the legacy path', async () => {
+    // b-path-merges: a thing that could be merged, with no "yes" to merging, is filed on the B path as usual.
+    it('takes the B path for a thing that could be merged when nobody said yes', async () => {
       const w = await bWorld();
       await folderPile(w, 'Listing', [{ name: 'listing-88213.example', text: 'a listing', props: { kind: 'other' } }, { name: 'other.pdf', text: '%PDF other' }]);
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'merge' });
+      expect((await plan(w)).path).toBe('b');
     });
     // TL-P2-21: a pile that has not fully arrived is held out of the capture; the run beside it takes the B path.
     it('takes the B path beside a pile that has not fully arrived, leaving that pile out of the capture', async () => {
@@ -3835,6 +3836,195 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(second.manifest?.capture.journal.map((j) => j.recordId)).toContain(line.id);
       expect(textAt(w, PLAN)).toBe(plan('Seed list'));
       expect(await pending(w)).toEqual([]);
+    });
+  });
+  // b-path-merges (TL-P2-20 I4, R3-4, R3-5, R4-1, Ratifications 1 and 2; TL-P2-26 C): a "yes" to keeping one note
+  // joins the thing to it: the note's Timeline line first (edit-text), then the thing's move depending on it; the
+  // questions.json write that drops the question waits for both, and the answer's archive for that write and both.
+  describe('a merge is applied once through the recoverable path', () => {
+    type Where = { drive: FakeDrive; rootId: string };
+    type Edit = OperationV2 & { effect: EditText };
+    const LISTING = { name: 'listing-88213.example', kind: 'link' as const, origin: 'Pasted', url: 'https://listing.example/88213' };
+    const INTO = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
+    const LINE = 'The Wrenfield Road listing is the same building; kept here, as you asked.';
+    const JOINED = 'Projects/Flat hunt/Wrenfield Road listing.url';
+    const AGAIN = "It couldn't be filed this time.";
+    const larkspur = (timeline: string[]): string => ['---', 'summary: A flat we liked.', 'by: bower', '---', '', 'Close to the station.', '', '## Timeline', '- 2026-09-20 · Viewed it.', ...timeline, ''].join('\n');
+    const question = (id: string) => ({ id, text: `Question ${id}?`, yes: 'Yes', no: 'No', askedAt: 1 });
+    const manifestsAll = async (w: Where): Promise<ManifestV2[]> =>
+      (await recordsOf(w)).filter((r) => r.name.startsWith('manifest-')).map((r) => JSON.parse(r.text) as ManifestV2);
+    const editsOf = (m: ManifestV2 | undefined): Edit[] => (m?.operations ?? []).filter((o): o is Edit => o.effect.kind === 'edit-text');
+    const textAt = (w: Where, path: string): string | undefined => w.drive.dump(w.rootId).get(path);
+    const at = async (w: Where, path: string): Promise<DriveFile | undefined> => (await w.drive.listAll(w.rootId)).find((f) => w.drive.pathOf(f.id, w.rootId) === path);
+    const folderAt = async (w: Where, path: string): Promise<string> => {
+      let parent = w.rootId;
+      for (const name of path.split('/')) {
+        const there = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === name && f.parents[0] === parent);
+        parent = there ? there.id : (await w.drive.createFolder(parent, name)).id;
+      }
+      return parent;
+    };
+    const vaultOf = (w: Where): DriveVault => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    const pendingAnswers = async (w: Where): Promise<JournalRecord[]> => {
+      const files = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.changes}/`) && !w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.archive}/`));
+      return (await Promise.all(files.map(async (f) => JSON.parse(await w.drive.readText(f.id)) as JournalRecord))).filter((r) => r.kind === 'answer');
+    };
+    const asked = (w: Where): string[] => (JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.questions) ?? '{"questions":[]}') as QuestionsFile).questions.map((q) => q.id);
+    /** A Bower note to keep, a question about it answered yes, and the listing waiting in a pile. */
+    async function merging(o: { person?: boolean; updates?: readonly HubUpdate[] } = {}) {
+      const act: { at: ((at: DispatchAt) => Promise<void>) | null } = { at: null };
+      const w = await bWorld({ hooks: { beforeDispatch: async (d) => { await act.at?.(d); } }, ...(o.updates ? { updates: o.updates } : {}) });
+      const before = o.person ? '# Flat 3, 12 Larkspur Lane\n\nMy own notes.\n' : larkspur([]);
+      const into = await w.drive.createText(await folderAt(w, 'Projects/Flat hunt'), 'Flat 3, 12 Larkspur Lane.md', before);
+      const questions = await at(w, SYSTEM.questions);
+      if (!questions) throw new Error('no questions file');
+      await w.drive.writeText(questions.id, `${JSON.stringify({ v: 1, questions: [question('q-keep'), question('q1')] }, null, 2)}\n`, questions.modifiedTime);
+      await vaultOf(w).answer('q1', true);
+      const [answer] = await pendingAnswers(w);
+      if (!answer) throw new Error('no answer');
+      await w.uploader.addPile({ text: 'The Wrenfield listing', items: [LISTING, pdf('floor plan.pdf')] });
+      await w.uploader.settled();
+      const link = (await w.drive.listAll(w.rootId)).find((f) => !f.folder && f.name.endsWith('.url'));
+      if (!link) throw new Error('the listing did not arrive');
+      return { w, act, into, before, answer, link };
+    }
+    async function tidy(w: World, n = 0): Promise<{ id: string; manifest: ManifestV2 | undefined }> {
+      if (n) {
+        await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
+        await w.uploader.settled();
+      }
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      const manifest = (await manifestsAll(w)).find((m) => m.runId === admitted.id);
+      expect(manifest, 'the run took the B path').toBeDefined();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      return { id: admitted.id, manifest };
+    }
+    const moveOf = (m: ManifestV2 | undefined, id: string): OperationV2 | undefined =>
+      (m?.operations ?? []).find((o) => o.effect.kind === 'move' && o.effect.before.fileId === id && !('fileId' in o.effect.parent && o.effect.before.parents[0] === o.effect.parent.fileId));
+    const questionsWrite = (m: ManifestV2 | undefined): OperationV2 | undefined => (m?.operations ?? []).find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
+    const archivesOf = (m: ManifestV2 | undefined, rec: JournalRecord): OperationV2[] => {
+      const files = m?.capture.journal.find((j) => j.recordId === rec.id)?.fileIds ?? [];
+      return (m?.operations ?? []).filter((o) => o.effect.kind === 'move' && files.includes(o.effect.before.fileId));
+    };
+
+    it('adds the Timeline line, then joins the thing to the note once, and drops the question after both', async () => {
+      const { w, into, answer, link } = await merging();
+      const { manifest } = await tidy(w);
+      const date = new Date(manifest?.requestedAt ?? 0).toISOString().slice(0, 10);
+      const [edit, ...others] = editsOf(manifest);
+      expect(others).toEqual([]);
+      expect(edit?.effect).toMatchObject({ path: INTO, before: { fileId: into.id }, changes: [{ kind: 'timeline-append', recordIds: [answer.id], entries: [{ date, text: LINE, source: null }] }] });
+      const move = moveOf(manifest, link.id);
+      expect(move?.effect).toMatchObject({ kind: 'move', parent: { fileId: into.parents[0] }, name: 'Wrenfield Road listing.url' });
+      expect(move?.dependsOn).toContain(edit?.operationId);
+      expect(edit?.ordinal ?? Infinity).toBeLessThan(move?.ordinal ?? -1);
+      // R4-1 and Ratification 2: the questions write waits for the line and the move; the answer's archive for all three.
+      const write = questionsWrite(manifest);
+      expect(write?.dependsOn).toEqual(expect.arrayContaining([edit?.operationId, move?.operationId]));
+      const archives = archivesOf(manifest, answer);
+      expect(archives).toHaveLength(1);
+      for (const a of archives) expect(a.dependsOn).toEqual(expect.arrayContaining([write?.operationId, edit?.operationId, move?.operationId]));
+      const filed = manifest?.reportPlan.find((c) => c.when === 'applied' && c.value.filed.some((r) => r.name === LISTING.name));
+      expect(filed?.value.filed).toEqual([{ name: LISTING.name, title: 'Flat 3, 12 Larkspur Lane', kind: 'link', to: 'Projects/Flat hunt', note: INTO }]);
+      expect(filed?.requires).toEqual(expect.arrayContaining([edit?.operationId, move?.operationId]));
+      expect(manifest?.reportPlan).toContainEqual({ requires: [move?.operationId], when: 'rejected', value: { filed: [], created: [], updated: [], setAside: [{ name: LISTING.name, why: AGAIN }], questions: [] } });
+      if (!manifest || !filed) return;
+      expect(grounded(manifest)).toBe(true);
+      // A note no applied Timeline line backs is never grounded.
+      const unbacked = { ...manifest, reportPlan: manifest.reportPlan.map((c) => (c === filed ? { ...c, requires: c.requires.filter((r) => r !== edit?.operationId) } : c)) };
+      expect(grounded(unbacked)).toBe(false);
+
+      expect(textAt(w, INTO)).toBe(larkspur([`- ${date} · ${LINE}`]));
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
+      expect(movesOf(w, link.id)).toBe(1);
+      expect(w.applied.filter((c) => c.op === 'write-text' && c.id === into.id)).toHaveLength(1);
+      expect(asked(w)).toEqual(['q-keep']);
+      expect(await pendingAnswers(w)).toEqual([]);
+      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: LISTING.name, title: 'Flat 3, 12 Larkspur Lane', kind: 'link', to: 'Projects/Flat hunt', note: INTO });
+      await expectFiledOnce(w);
+    });
+
+    it('reconciles lost replies of the line and the move without merging twice', async () => {
+      const { w, into, link } = await merging();
+      w.rules.push(once((c) => c.op === 'write-text' && c.id === into.id, 'lose-reply'), once(isMoveOf(link.id), 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      for (let i = 0; i < 6 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.calls.filter((c) => c.op === 'write-text' && c.id === into.id)).toHaveLength(1);
+      expect(w.calls.filter(isMoveOf(link.id))).toHaveLength(1);
+      expect(textAt(w, INTO)?.split(LINE)).toHaveLength(2);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
+      expect(asked(w)).toEqual(['q-keep']);
+    });
+
+    it('keeps the question hidden and the answer when the move is rejected, and the next run converges', async () => {
+      const { w, act, into, answer, link } = await merging();
+      act.at = async (d) => {
+        if (d.effect.kind !== 'move' || d.effect.before.fileId !== link.id || act.at === null) return;
+        act.at = null;
+        // Alex renames the listing after Bower checked it and before it moves.
+        await w.drive.update(link.id, { name: 'listing, mine.url' });
+      };
+      const first = await tidy(w);
+      const head = (await checkpointsOf(w, first.id)).at(-1);
+      const [edit] = editsOf(first.manifest);
+      expect(head?.outcomes[edit?.ordinal ?? -1]).toMatchObject({ state: 'applied' });
+      expect(head?.outcomes[moveOf(first.manifest, link.id)?.ordinal ?? -1]).toMatchObject({ state: 'rejected' });
+      expect(head?.outcomes[questionsWrite(first.manifest)?.ordinal ?? -1]).toMatchObject({ state: 'rejected' });
+      for (const a of archivesOf(first.manifest, answer)) expect(head?.outcomes[a.ordinal]).toMatchObject({ state: 'rejected' });
+      // The question stays in the file with its answer pending: the app hides it and never asks it again.
+      expect(asked(w)).toEqual(['q-keep', 'q1']);
+      expect((await pendingAnswers(w)).map((r) => r.id)).toEqual([answer.id]);
+      expect((await vaultOf(w).questions()).map((q) => q.id)).toEqual(['q-keep']);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: LISTING.name, why: AGAIN }]);
+      expect(viewOf(w)?.run.report?.filed.map((r) => r.name)).not.toContain(LISTING.name);
+      expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
+
+      // Named back, the next run plans the same merge: the line is there already, so only the move, then the question goes.
+      await w.drive.update(link.id, { name: link.name });
+      const second = await tidy(w, 1);
+      expect(editsOf(second.manifest).filter((o) => o.effect.before.fileId === into.id)).toEqual([]);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
+      expect(textAt(w, INTO)?.split(LINE)).toHaveLength(2);
+      expect(asked(w)).toEqual(['q-keep']);
+      expect(await pendingAnswers(w)).toEqual([]);
+      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: LISTING.name, title: 'Wrenfield Road listing', kind: 'link', to: 'Projects/Flat hunt' });
+    });
+
+    it("never merges into a person's own note: the thing is filed as usual and the answer archived", async () => {
+      const { w, into, before, answer, link } = await merging({ person: true });
+      const { manifest } = await tidy(w);
+      expect(editsOf(manifest)).toEqual([]);
+      expect(textAt(w, INTO)).toBe(before);
+      expect(w.calls.filter((c) => 'id' in c && c.id === into.id)).toEqual([]);
+      expect(w.drive.pathOf(link.id, w.rootId)).not.toBe(JOINED);
+      expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(false);
+      expect(asked(w)).toEqual(['q-keep']);
+      expect((await pendingAnswers(w)).map((r) => r.id)).not.toContain(answer.id);
+    });
+
+    it('holds the pile and its answer while the line waits past the edit cap, and merges on the next run', async () => {
+      const updates = Array.from({ length: 8 }, (_, i) => ({ path: `Projects/A ${i}/A ${i}.md`, what: `A ${i} brought up to date.` }));
+      const { w, into, answer, link } = await merging({ updates });
+      for (const u of updates) await w.drive.createText(await folderAt(w, u.path.split('/').slice(0, 2).join('/')), u.path.split('/')[2] ?? '', larkspur([]));
+      const first = await tidy(w);
+      expect(editsOf(first.manifest).map((o) => o.effect.path)).toEqual(updates.map((u) => u.path));
+      expect(first.manifest?.capture.members.map((m) => m.file.fileId)).not.toContain(link.id);
+      expect(first.manifest?.capture.journal.map((j) => j.recordId)).not.toContain(answer.id);
+      expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
+      expect(asked(w)).toEqual(['q-keep', 'q1']);
+      const second = await tidy(w, 1);
+      expect(editsOf(second.manifest).map((o) => o.effect.path)).toEqual([INTO]);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
+      expect(textAt(w, INTO)?.split(LINE)).toHaveLength(2);
+      expect(w.calls.filter((c) => c.op === 'write-text' && c.id === into.id)).toHaveLength(1);
+      expect(asked(w)).toEqual(['q-keep']);
+      expect(await pendingAnswers(w)).toEqual([]);
     });
   });
 });
