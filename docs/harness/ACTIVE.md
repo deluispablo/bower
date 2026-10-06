@@ -36,6 +36,8 @@
 - `run-manifest-content-consistency` CLOSED (`41717df`). 224/240. Readiness rework (`f5773c8`/`acd3ab1`/`3cff93f`/`222051d`) in delta review; upload queue phase 1 BLOCKED (`uq-review-1`, [report](2026-10-06-upload-queue-review.md)) and in rework.
 - O4 packet [2026-10-06-o4-unit-packet.md](2026-10-06-o4-unit-packet.md) with TL-P2-10 answers. Assignment I-u1: Claude `barrier-legacy-impl-1`, entry `run-report-save-barrier-legacy`, checkout `/private/tmp/bower-p2-barrier-legacy` (`claude/p2-report-barrier-legacy`) base `e102fcb`; owns only `fake-worker.ts` and its test. U2 waits for readiness.
 - TL-P2-10/11 (main `cf206a5`, backed up): registered `b-path-journal`, `b-path-generated-note`, `pile-set-aside-reason-visible`; readiness copy approved. Pending owner confirmation: one active session per person with takeover may replace app–app concurrency in C14; no NEW entries whose only purpose is two-app-session concurrency until the lead confirms.
+- TL-P2-12 (main `dfc1fe5`) and owner-confirmed TL-P2-13 one active session per person (main `7d92e73`) adopted and backed up. Registered `single-active-session` (early). Reviewed open entries: none exists only for two app sessions editing at once (the "another client/device" cases are sequential or runner-vs-app), so none is superseded. Upload-queue rework scoped down: two-active-tab fixes dropped, reload/lost-reply anti-duplicate protection kept.
+- U1 candidate `c6cd09a`/`5e75de7` under review `u1-review-1`. Readiness second rework (I4, M5, M6, M8, TL-P2-12) in progress.
 
 # Previous coordinator: stopped and released
 

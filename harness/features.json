@@ -3025,5 +3025,19 @@
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a set-aside pile shows its reason in the inbox\"",
     "passes": false,
     "note": "TL-P2-11 (2): field on Pile/PileItem plus a changed member state, minimal Inbox/PileScreen change with existing components, e2e demo + fake. After readiness, before P2-H. Planned, not implemented."
+  },
+  {
+    "id": "single-active-session",
+    "task": "qa-25",
+    "category": "feature",
+    "what": "Bower is active in one place per person: another tab, window or device shows that Bower is open elsewhere and offers Use here, and the old place stops writing.",
+    "steps": [
+      "Open Bower in two pages for the same account: the second shows \"Bower is open in another window.\" with \"Use here\"; nothing is taken over silently.",
+      "Use here moves the session; the previous page shows the same screen and writes nothing to Drive (no outbox flush, uploads or tidy-up requests); its outbox and pending uploads stay on that device and resume when it uses Bower again.",
+      "Every app write path checks the session epoch; offline changes go to the outbox and the session is checked again before flushing; a tidy-up keeps running for the person, not the session."
+    ],
+    "verify": "pnpm vitest run src/data/session.test.ts -t \"one active session per person fences the old place\"",
+    "passes": false,
+    "note": "Owner ruling TL-P2-13 (main 7d92e73): BroadcastChannel + existing Web Locks within one browser; across devices a Worker lease with increasing epoch (fake in P2; real Worker is a P3 obligation); no RunWire field, a small session call next to me(). A real Drive write already in flight is an accepted limitation. e2e on demo + fake with two pages. Planned, not implemented."
   }
 ]
