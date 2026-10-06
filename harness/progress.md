@@ -368,3 +368,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: record-json-authority passes — fix: proof-close strict record JSON authority
 
 - 2026-10-06: Owner-requested orchestrator replacement checkpoint. Archived all22 declaration artifacts/manifestafe61f47, candidate4052532 clean with330/1060green and90assertionred; independent review/rootintegration/proof pending. R4 independent document review27720282 clean0C/I/M frozen and archived; no execution claim. Rechecked32branches/nineworktrees/ports, no active child. Unique handoff and inventory written; all outgoing reservations and backup responsibility explicitly released. P2 remains217/221/open. Final handoff pnpm check730/55 exit0, log/hash archivedevidence/2026-10-06-replacement; diffcheckgreen, no source/contract/status mutation.
+- 2026-10-06: pile-declaration-authority passes — fix: proof-close immutable pile declaration authority

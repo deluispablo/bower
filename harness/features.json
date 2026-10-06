@@ -177,7 +177,7 @@
     "what": "After moving a note from the tree's menu, keyboard focus points at a row that no longer exists.",
     "steps": [
       "Desktop",
-      "Right-click a note, Move to\u2026, pick a folder",
+      "Right-click a note, Move to…, pick a folder",
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"after a move the tree keeps keyboard focus\"",
@@ -187,9 +187,9 @@
     "id": "move-keyboard",
     "task": "qa-5",
     "category": "bug",
-    "what": "Move to\u2026: Enter does not pick the only folder left and arrows do not walk the list.",
+    "what": "Move to…: Enter does not pick the only folder left and arrows do not walk the list.",
     "steps": [
-      "Move to\u2026",
+      "Move to…",
       "Type a folder name",
       "Enter"
     ],
@@ -223,9 +223,9 @@
     "id": "palette-search-text",
     "task": "qa-5",
     "category": "bug",
-    "what": "The \u2318K palette only matches names although the box says \"Search your notes and files\".",
+    "what": "The ⌘K palette only matches names although the box says \"Search your notes and files\".",
     "steps": [
-      "\u2318K",
+      "⌘K",
       "Type a word from inside a note"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa5.spec.ts -g \"the palette finds words inside notes\"",
@@ -377,7 +377,7 @@
     "id": "copy-sensor",
     "task": "qa-5",
     "category": "polish",
-    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this\u2026\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
+    "what": "Copy names files and mixes wording: Pile note.md, Rules.md in sentences; \"Bower reads this…\" then \"read them now\"; About five vs About 5 minutes; Obsidian named in the tour.",
     "steps": [
       "Pile screen, Bower tab, tour, Home"
     ],
@@ -494,7 +494,7 @@
     "id": "small-upload-progress",
     "task": "qa-5",
     "category": "polish",
-    "what": "Small files jump from 0% to 99%; show Sending\u2026 without a percentage unless it is known.",
+    "what": "Small files jump from 0% to 99%; show Sending… without a percentage unless it is known.",
     "steps": [
       "Add a small file"
     ],
@@ -743,7 +743,7 @@
     "what": "Move to: Enter with an empty search box moves the file to the first folder.",
     "steps": [
       "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
-      "In the folder tree, right-click Lease draft and choose \"Move to\u2026\"",
+      "In the folder tree, right-click Lease draft and choose \"Move to…\"",
       "Press Enter without typing anything",
       "The Move to dialog stays open and nothing is moved (no \"Moved Lease draft\" message)"
     ],
@@ -798,7 +798,7 @@
     "what": "The loading-states fix is pinned only by pure-function tests; reverting the components would stay green.",
     "steps": [
       "Open http://localhost:5190/?scenario=slow&time=instant&source=fake",
-      "While it loads, the bottom bar says \"Looking at the inbox\u2026\", never \"Nothing waiting\" or \"0 things\"",
+      "While it loads, the bottom bar says \"Looking at the inbox…\", never \"Nothing waiting\" or \"0 things\"",
       "From a terminal: pnpm vitest run src/features/tidy/StatusBar.test.tsx src/features/bower/BowerPanel.test.tsx -t \"loading\"",
       "Green now: the screens themselves are tested, so undoing the component fix turns them red"
     ],
@@ -835,11 +835,11 @@
     "id": "confirmbin-grammar",
     "task": "qa-6",
     "category": "polish",
-    "what": "ConfirmBin says \"The 1 thing inside go with it \u2026 get them back\".",
+    "what": "ConfirmBin says \"The 1 thing inside go with it … get them back\".",
     "steps": [
       "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
       "In the folder tree, right-click a folder with one thing in it and choose \"Move to Bin\"",
-      "The question now reads \"The thing inside goes with it. You can get it back\u2026\"; with 3 things it reads \"The 3 things inside go with it. You can get them back\u2026\""
+      "The question now reads \"The thing inside goes with it. You can get it back…\"; with 3 things it reads \"The 3 things inside go with it. You can get them back…\""
     ],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"agree\"",
     "passes": true
@@ -848,11 +848,11 @@
     "id": "palette-search-error",
     "task": "qa-6",
     "category": "polish",
-    "what": "If search fails, the palette says \"Looking in your notes\u2026\" forever.",
+    "what": "If search fails, the palette says \"Looking in your notes…\" forever.",
     "steps": [
       "In a terminal at the repo root, run: pnpm vitest run src/features/palette -t \"says when search fails\"",
       "The test opens search, makes it fail, and types \"Tally\"",
-      "Green now: the search says \"Search did not answer\u2026\" instead of \"Looking in your notes\u2026\" forever"
+      "Green now: the search says \"Search did not answer…\" instead of \"Looking in your notes…\" forever"
     ],
     "verify": "pnpm vitest run src/features/palette -t \"says when search fails\"",
     "passes": true
@@ -1092,7 +1092,7 @@
     "what": "After a move or a Bin from the tree, keyboard focus is lost (body), so the arrows do nothing.",
     "steps": [
       "Desktop",
-      "Click a note, Move to\u2026, type a folder, Enter",
+      "Click a note, Move to…, type a folder, Enter",
       "ArrowDown"
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa6.spec.ts -g \"after a move or a Bin the tree keeps the keyboard\"",
@@ -1155,7 +1155,7 @@
     "category": "bug",
     "what": "Move to: Enter with several matches moves to the first, with nothing showing which.",
     "steps": [
-      "Move to\u2026",
+      "Move to…",
       "Type re",
       "Enter"
     ],
@@ -1193,7 +1193,7 @@
     "steps": [
       "In a terminal at the repo root, run: pnpm vitest run src/app/words.test.ts -t \"one way to write a day\"",
       "In the app (http://localhost:5190/?scenario=default&time=instant), look at dates in Activity and note timelines",
-      "Every day reads one way, like \"28 Sep\"; today reads \"today, \u2026\""
+      "Every day reads one way, like \"28 Sep\"; today reads \"today, …\""
     ],
     "verify": "pnpm vitest run src/app/words.test.ts -t \"one way to write a day\"",
     "passes": true
@@ -1228,7 +1228,7 @@
     "id": "pile-folder-names",
     "task": "qa-6",
     "category": "polish",
-    "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts\u2026), Home by their notes.",
+    "what": "The tree shows inbox piles by their folder names (2026-10-03 Receipts…), Home by their notes.",
     "steps": [
       "Open http://localhost:5190/?scenario=default&time=instant (on a phone width, http://localhost:5190/files?scenario=default&time=instant)",
       "In the folder tree, open Inbox",
@@ -1524,7 +1524,7 @@
     "what": "Move to: with several matches, an exact folder name cannot be picked with Enter; Enter in an empty box says nothing.",
     "steps": [
       "On the desktop, open http://localhost:5190/?scenario=default&time=instant",
-      "In the folder tree, right-click Lease draft and choose \"Move to\u2026\"",
+      "In the folder tree, right-click Lease draft and choose \"Move to…\"",
       "Press Enter in the empty box: it says \"Type a folder name, or pick one with the arrows.\"",
       "Type \"areas\" and press Enter: \"Moved Lease draft.pdf to Areas\", though other folders match too"
     ],
@@ -1588,11 +1588,11 @@
     "id": "phone-page-menus",
     "task": "qa-8",
     "category": "bug",
-    "what": "On the phone, the \u22ef menu on note and folder pages: Rename does nothing, New note makes an unnamed Untitled and stays on the folder.",
+    "what": "On the phone, the ⋯ menu on note and folder pages: Rename does nothing, New note makes an unnamed Untitled and stays on the folder.",
     "steps": [
       "Open http://localhost:5190/?scenario=default&time=instant at phone width, open the note Flat 3, 12 Larkspur Lane.",
-      "Tap \u22ef (More for \u2026) and Rename: a name field appears; type a new name and confirm; the title changes.",
-      "On a folder page (Areas / Car), tap \u22ef then New note: a name is asked, then the new note opens."
+      "Tap ⋯ (More for …) and Rename: a name field appears; type a new name and confirm; the title changes.",
+      "On a folder page (Areas / Car), tap ⋯ then New note: a name is asked, then the new note opens."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa8.spec.ts -g \"page menu on the phone\"",
     "passes": true
@@ -1997,7 +1997,7 @@
     "category": "polish",
     "what": "The name sheet makes 'Tyres.md.md' from 'Tyres.md' and changes slashes without a word.",
     "steps": [
-      "Open http://localhost:5190/?scenario=default&time=instant at phone width, a folder page, \u22ef New note, type Tyres.md: the note is Tyres.",
+      "Open http://localhost:5190/?scenario=default&time=instant at phone width, a folder page, ⋯ New note, type Tyres.md: the note is Tyres.",
       "Type a/b: a toast says Bower used a dash."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"the name sheet takes a name as typed\"",
@@ -2009,7 +2009,7 @@
     "category": "polish",
     "what": "Move to: Enter with text that matches no folder says nothing.",
     "steps": [
-      "Open http://localhost:5190/?scenario=default&time=instant on desktop, Move to\u2026 on Lease draft, type zzz, Enter.",
+      "Open http://localhost:5190/?scenario=default&time=instant on desktop, Move to… on Lease draft, type zzz, Enter.",
       "A line says no folder has that name."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa9.spec.ts -g \"Enter with no folder that matches\"",
@@ -2084,7 +2084,7 @@
     "category": "polish",
     "what": "Undo after a move or after removing a rule brings the thing back without a word; Undo after the Bin says it is back.",
     "steps": [
-      "Open http://localhost:5190/?scenario=default&time=instant on desktop, Move to\u2026 Lease draft to Areas, press Undo: a toast says it is back where it was.",
+      "Open http://localhost:5190/?scenario=default&time=instant on desktop, Move to… Lease draft to Areas, press Undo: a toast says it is back where it was.",
       "Remove a rule, Undo: a toast says the rule is back."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"every Undo says what came back\"",
@@ -2156,7 +2156,7 @@
     "what": "The pretend tidy-up files a saved link under its raw address (with ?query) and the palette lists names with .url.",
     "steps": [
       "Open http://localhost:5190/?scenario=default&time=instant&source=fake, Add the link https://saved-page.example/article/42?ref=x, tidy up.",
-      "It is filed under a name that says what it is, no ?; \u2318K shows it without .url."
+      "It is filed under a name that says what it is, no ?; ⌘K shows it without .url."
     ],
     "verify": "pnpm vitest run src/data/fake src/features/palette -t \"a saved link is filed under a name|the palette names things as the tree does\"",
     "passes": true
@@ -2177,9 +2177,9 @@
     "id": "palette-inbox",
     "task": "qa-10",
     "category": "polish",
-    "what": "\u2318K does not find things waiting in the inbox and does not say it skipped them.",
+    "what": "⌘K does not find things waiting in the inbox and does not say it skipped them.",
     "steps": [
-      "Open http://localhost:5190/?scenario=default&time=instant, \u2318K, type dentist reminder.",
+      "Open http://localhost:5190/?scenario=default&time=instant, ⌘K, type dentist reminder.",
       "The inbox thing is found."
     ],
     "verify": "pnpm vitest run src/data -t \"search finds what waits in the inbox\"",
@@ -2251,7 +2251,7 @@
     "category": "polish",
     "what": "Wording: the footer says both 'Tidy-up stopped' and 'The tidy-up stopped'; the tour says Tap on the desktop; a rename has no confirmation; a slash in a tree rename is changed silently.",
     "steps": [
-      "Open http://localhost:5190/?scenario=default&time=instant on desktop: the tour says Click (or Press); a rename in the tree says Renamed \u2026; a slash says Bower used a dash.",
+      "Open http://localhost:5190/?scenario=default&time=instant on desktop: the tour says Click (or Press); a rename in the tree says Renamed …; a slash says Bower used a dash.",
       "After a stopped run the footer says one thing."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"words agree:\"",
@@ -2273,10 +2273,10 @@
     "id": "phone-more-faint",
     "task": "qa-10",
     "category": "polish",
-    "what": "On the phone, the \u22ef (More) button on a note page is very faint (seen by the qa-8 evaluator, not fixed in qa-10).",
+    "what": "On the phone, the ⋯ (More) button on a note page is very faint (seen by the qa-8 evaluator, not fixed in qa-10).",
     "steps": [
-      "Open http://localhost:5190/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md?scenario=default&time=instant at phone width (390\u00d7844).",
-      "The \u22ef button at the top right is as easy to see as the Back button beside it (same colour, contrast at least 3:1 against the page)."
+      "Open http://localhost:5190/note/Projects/Flat%20hunt/Flat%203%2C%2012%20Larkspur%20Lane.md?scenario=default&time=instant at phone width (390×844).",
+      "The ⋯ button at the top right is as easy to see as the Back button beside it (same colour, contrast at least 3:1 against the page)."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/qa10.spec.ts -g \"the phone page menu button is as clear as Back\"",
     "passes": true
@@ -2335,7 +2335,7 @@
     "id": "journal-separate-clients",
     "task": "qa-11",
     "category": "review",
-    "what": "Two clients making their first changes can create folders that hide one client\u2019s journal.",
+    "what": "Two clients making their first changes can create folders that hide one client’s journal.",
     "steps": [
       "Open the same fresh folder through two independent clients.",
       "Make the first change on each at the same time, then refresh.",
@@ -2474,7 +2474,7 @@
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"ticking your own task keeps its note seen\"",
     "passes": true,
-    "note": "Coverage-only: keepSeen already handles the person\u2019s task write. Close only after observing the regression fail with that preservation temporarily removed, then restoring the implementation."
+    "note": "Coverage-only: keepSeen already handles the person’s task write. Close only after observing the regression fail with that preservation temporarily removed, then restoring the implementation."
   },
   {
     "id": "journal-ack-content",
@@ -2509,7 +2509,7 @@
     "category": "bug",
     "what": "New notes and folders must refuse names that would immediately become hidden, on both sources.",
     "steps": [
-      "On phone, Files \u2192 Resources \u2192 Cooking \u2192 New note. Enter .Garden.md and make the note.",
+      "On phone, Files → Resources → Cooking → New note. Enter .Garden.md and make the note.",
       "Currently fake accepts the write then opens Not here any more; demo opens an accessible note.",
       "Repeat with New folder named .Garden.",
       "After the fix both sources explain the restriction before creating anything; ordinary dotted stems remain allowed."
@@ -2757,8 +2757,8 @@
       "Preserve source bytes and independent decoded values; expected member hashes never establish stored bytes, authentication, ancestry, readiness or recovery."
     ],
     "verify": "pnpm vitest run src/data/contracts/pile-declaration.test.ts -t \"pile declarations preserve immutable authority\"",
-    "passes": false,
-    "note": "Bounded exact Declaration subset under TL-P2-04/05 and B aede/3b954. Named assertions planned, not executed; separate loadable stub required. No shape/wire changes, producer/consumer activation, I/O, permissions, ready effects or whole capability acceptance."
+    "passes": true,
+    "note": "Codex candidate 4052532 (stub b20c618), independently reviewed CLEAN 0C/0I/3M by Claude decl-review-1 (docs/harness/2026-10-06-declaration-review.md). Root stub bc51cdf gate 730/55; fix ed5e965 equals reviewed file hashes 3d083768/4d6f0429. Pure guard only: no readiness, auth, ancestry, create uniqueness, CAS or recovery. Worker evidence archived qa21/declaration."
   },
   {
     "id": "run-manifest-authority",
