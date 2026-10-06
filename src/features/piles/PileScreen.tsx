@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { report } from '@/ui/report';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
-import type { Pile, SetAside } from '@/data/types';
+import { BowerError, type Pile, type SetAside } from '@/data/types';
 import { SET_ASIDE_TEXT } from '@/data/pile-readiness';
 import { isEmptyPile, thingsIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
@@ -374,12 +374,15 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   // only over that base (RFC 9110 §13.1.1), so words changed elsewhere are never replaced unseen.
   const [base, setBase] = useState(pile.text);
   const [seen, setSeen] = useState(pile.text);
+  // After a refused save the words now there are shown next to the draft and become its base: the next save is an
+  // informed overwrite (the usual edit-conflict pattern: look again, then retry against what is there now).
+  const [clash, setClash] = useState(false);
   if (pile.text !== seen) {
     setSeen(pile.text);
     if (text.trim() === base) {
       setText(pile.text);
       setBase(pile.text);
-    }
+    } else if (clash) setBase(pile.text);
   }
   const [busy, setBusy] = useState(false);
   // A note Bower could not read is shown, never typed over: Try again reads it (the reason above says so).
@@ -391,8 +394,13 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
     try {
       await vault.updatePile(pile.id, text, base);
       setBase(text.trim());
+      setClash(false);
       toast('Note saved. Bower reads it in the next tidy-up.');
     } catch (e) {
+      if (e instanceof BowerError && e.code === 'conflict') {
+        setClash(true);
+        setBase(pile.text);
+      }
       report(e, 'The note did not save. Try again.');
     } finally {
       setBusy(false);
@@ -416,6 +424,11 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
           if (changed && !off && (text.trim() || pile.items.length)) void save();
         }}
       />
+      {clash && changed && !off && pile.text && (
+        <p className="muted" role="status">
+          It now says: “{pile.text}”. Save the note to replace it with yours.
+        </p>
+      )}
       <div className={s.noteFoot}>
         {!held && <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>}
         {changed && !off && (
