@@ -1564,25 +1564,26 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const archiveMoves = (m: Manifest | undefined, fileId: string) => (m?.operations ?? []).filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === fileId);
     const question = (id: string) => ({ id, text: `Question ${id}?`, yes: 'Yes', no: 'No', askedAt: 1 });
 
-    it('keeps the whole plan on the legacy path for a rule, a rename or a move', async () => {
+    it('keeps the whole plan on the legacy path for a rule, and takes the B path for a rename or a move', async () => {
       const rule = await bWorld();
       await rule.uploader.addRule('Keep lease papers together');
       await rule.uploader.addRequest('Put the lease papers together');
       expect(await plan(rule)).toEqual({ path: 'legacy', why: 'rules' });
       expect(await plan(rule, 'instructions')).toEqual({ path: 'legacy', why: 'rules' });
 
+      // o5-rename-link-rewrite: a rename or a move takes the B path, its links rewritten by edit-text.
       const renamed = await bWorld();
       const projects = await fileAt(renamed, 'Projects');
       await renamed.drive.createFolder(projects.id, 'Garden');
       await vaultOf(renamed).rename('Projects/Garden', 'Garden plans');
       expect((await linesOf(renamed)).map((l) => l.rec.kind)).toEqual(['rename']);
-      expect(await plan(renamed)).toEqual({ path: 'legacy', why: 'renames' });
+      expect((await plan(renamed)).path).toBe('b');
 
       const moved = await bWorld();
       await moved.drive.createFolder((await fileAt(moved, 'Projects')).id, 'Garden');
       await vaultOf(moved).move('Projects/Garden', 'Areas');
       expect((await linesOf(moved)).map((l) => l.rec.kind)).toEqual(['move']);
-      expect(await plan(moved, 'instructions')).toEqual({ path: 'legacy', why: 'renames' });
+      expect((await plan(moved, 'instructions')).path).toBe('b');
 
       // The legacy path takes the rule's run whole: no run records, nothing through the B boundary.
       const admitted = await rule.worker.process('all');
@@ -1833,18 +1834,22 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await linesOf(w)).toEqual([]);
     });
 
-    it('keeps the whole plan legacy for a rule or rename line it cannot capture', async () => {
+    it('keeps the whole plan legacy for a rule line it cannot capture, and leaves a rename line it cannot capture in place', async () => {
       const at = (kind: JournalRecord['kind'], id: string): JournalRecord => ({ v: 1, id, at: 1, kind, what: `A ${kind}`, device: 'DEVICE_X', ...(kind === 'rule' ? { path: 'Rules.md', text: 'Keep lease papers together' } : { path: 'Projects/Garden plans', from: 'Projects/Garden' }) });
-      for (const [kind, why] of [['rule', 'rules'], ['rename', 'renames']] as const) {
+      for (const kind of ['rule', 'rename'] as const) {
         const w = await bWorld();
         await w.uploader.addRequest('Put the lease papers together');
         const [asked] = await linesOf(w);
         const changes = asked?.file.parents[0] ?? '';
         const rec = at(kind, `LINE_${kind.toUpperCase()}`);
-        // Two copies with other bytes: the line is left uncaptured, yet its kind still decides the path.
+        // Two copies with other bytes: the line is left uncaptured, yet a rule's kind still decides the path.
         await w.drive.createText(changes, `${rec.id}.json`, `${JSON.stringify(rec)}\n`);
         await w.drive.createText(changes, `${rec.id}.json`, `${JSON.stringify(rec, null, 1)}\n`);
-        expect(await plan(w), kind).toEqual({ path: 'legacy', why });
+        const out = await plan(w);
+        if (kind === 'rule') expect(out, kind).toEqual({ path: 'legacy', why: 'rules' });
+        // o5-rename-link-rewrite: a rename line takes the B path; one it cannot capture stays where it is.
+        else expect(out.path === 'b' && out.manifest.capture.journal.some((j) => j.recordId === rec.id), kind).toBe(false);
+        if (kind === 'rename') expect(out.path).toBe('b');
       }
     });
 
@@ -3659,6 +3664,177 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(movesOf(w, link.id)).toBe(0);
       expect(createsOf(w)).toHaveLength(1);
       expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: AGAIN }]);
+    });
+  });
+  // o5-rename-link-rewrite (TL-P2-20 link-rewrite, rule 7, C2/R3-4; TL-P2-29 (1)): after a rename every [[link]] to the
+  // old name is one edit-text per note, fixed with its precondition; the rename's line is archived only after every
+  // rewrite it needs applied, and stays when one is refused at plan time, rejected, or waits for a later run.
+  describe('link rewrites after a rename recover without repeating', () => {
+    type Where = { drive: FakeDrive; rootId: string };
+    type Edit = OperationV2 & { effect: EditText };
+    const WEEKEND = 'Areas/Home/Weekend.md';
+    const PLAN = 'Projects/Garden/Plan.md';
+    const PLAIN = 'Projects/Garden/Shopping.md';
+    /** A person's note: two links to Seeds, one in code, one Markdown link, and their own words. */
+    const weekend = (name: string): string => `# Weekend\n\nSow [[${name}]] first, then [[ ${name} #Tomatoes|the tomatoes]].\nKeep \`[[Seeds]]\` and [Seeds](Seeds.md) as they are.\n`;
+    const REWRITTEN = '# Weekend\n\nSow [[Seed list]] first, then [[ Seed list #Tomatoes|the tomatoes]].\nKeep `[[Seeds]]` and [Seeds](Seeds.md) as they are.\n';
+    /** A legacy note of Bower's, CRLF, a link in its frontmatter and in its Timeline. */
+    const plan = (name: string): string => ['---', `related: [[${name}]]`, 'by: bower', '---', '', 'Beds by the fence.', '', '## Timeline', `- 2026-10-01 · Bought [[${name}]].`, ''].join('\r\n');
+    const manifestsAll = async (w: Where): Promise<ManifestV2[]> =>
+      (await recordsOf(w)).filter((r) => r.name.startsWith('manifest-')).map((r) => JSON.parse(r.text) as ManifestV2);
+    const editsOf = (m: { operations: readonly OperationV2[] } | undefined): Edit[] => (m?.operations ?? []).filter((o): o is Edit => o.effect.kind === 'edit-text');
+    const textAt = (w: Where, path: string): string | undefined => w.drive.dump(w.rootId).get(path);
+    const writesTo = (calls: FencedCall[], id: string): FencedCall[] => calls.filter((c) => c.op === 'write-text' && c.id === id);
+    const folderAt = async (w: Where, path: string): Promise<string> => {
+      let parent = w.rootId;
+      for (const name of path.split('/')) {
+        const there = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === name && f.parents[0] === parent);
+        parent = there ? there.id : (await w.drive.createFolder(parent, name)).id;
+      }
+      return parent;
+    };
+    const note = async (w: Where, path: string, text: string): Promise<DriveFile> => w.drive.createText(await folderAt(w, parentPath(path)), path.split('/').at(-1) ?? '', text);
+    const parentPath = (path: string): string => path.split('/').slice(0, -1).join('/');
+    /** Unarchived journal lines. */
+    const pending = async (w: Where): Promise<JournalRecord[]> => {
+      const files = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.changes}/`) && !w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.archive}/`));
+      return Promise.all(files.map(async (f) => JSON.parse(await w.drive.readText(f.id)) as JournalRecord));
+    };
+    /** Seeds and the notes that link to it; then Alex renames Seeds to Seed list (one rename line). */
+    async function renamed(o: { hooks?: Hooks } = {}) {
+      const w = await bWorld(o);
+      await note(w, 'Projects/Garden/Seeds.md', '# Seeds\n');
+      const files = { weekend: await note(w, WEEKEND, weekend('Seeds')), plan: await note(w, PLAN, plan('seeds')), plain: await note(w, PLAIN, '# Shopping\n\nCompost and string.\n') };
+      const alex = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+      await alex.rename('Projects/Garden/Seeds.md', 'Seed list');
+      const [line, ...more] = await pending(w);
+      expect(more).toEqual([]);
+      expect(line?.kind).toBe('rename');
+      return { w, files, line: line as JournalRecord };
+    }
+    async function tidy(w: World, n = 0): Promise<{ id: string; manifest: ManifestV2 | undefined }> {
+      if (n) {
+        await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
+        await w.uploader.settled();
+      }
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      const manifest = (await manifestsAll(w)).find((m) => m.runId === admitted.id);
+      expect(manifest, 'the run took the B path').toBeDefined();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      return { id: admitted.id, manifest };
+    }
+    const archivesOf = (m: ManifestV2 | undefined, line: JournalRecord): OperationV2[] => {
+      const files = m?.capture.journal.find((j) => j.recordId === line.id)?.fileIds ?? [];
+      return (m?.operations ?? []).filter((o) => o.effect.kind === 'move' && files.includes(o.effect.before.fileId));
+    };
+
+    it('rewrites each linking note once, only inside its links, and archives the rename after every rewrite', async () => {
+      const { w, files, line } = await renamed();
+      const { manifest } = await tidy(w);
+      // One edit-text per linking note, in path order, with the rename's line as its record; nothing for the rest.
+      const edits = editsOf(manifest);
+      expect(edits.map((o) => ({ path: o.effect.path, fileId: o.effect.before.fileId, changes: o.effect.changes }))).toEqual([
+        { path: WEEKEND, fileId: files.weekend.id, changes: [{ kind: 'link-rewrite', recordIds: [line.id], renames: [{ from: 'seeds', to: 'Seed list' }] }] },
+        { path: PLAN, fileId: files.plan.id, changes: [{ kind: 'link-rewrite', recordIds: [line.id], renames: [{ from: 'seeds', to: 'Seed list' }] }] },
+      ]);
+      for (const edit of edits) {
+        expect(manifest?.capture.places).toContainEqual({ file: edit.effect.before, path: edit.effect.path });
+        // A link fix never marks a note new (m3): the edit is the only operation on it.
+        expect((manifest?.operations ?? []).filter((o) => 'before' in o.effect && o.effect.before.fileId === edit.effect.before.fileId)).toEqual([edit]);
+      }
+      expect((manifest?.operations ?? []).some((o) => 'before' in o.effect && o.effect.before.fileId === files.plain.id)).toBe(false);
+      const archives = archivesOf(manifest, line);
+      expect(archives).toHaveLength(1);
+      for (const archive of archives) expect(archive.dependsOn).toEqual(expect.arrayContaining(edits.map((e) => e.operationId)));
+      expect(manifest?.reportPlan.some((c) => c.value.updated.length)).toBe(false);
+      if (manifest) expect(grounded(manifest)).toBe(true);
+
+      // Only the link targets changed; code, the Markdown link, the alias, heading, spaces and line endings stay.
+      expect(textAt(w, WEEKEND)).toBe(REWRITTEN);
+      expect(textAt(w, PLAN)).toBe(plan('Seed list'));
+      expect(textAt(w, PLAIN)).toBe('# Shopping\n\nCompost and string.\n');
+      for (const f of [files.weekend, files.plan]) expect(writesTo(w.applied, f.id)).toHaveLength(1);
+      expect(await pending(w)).toEqual([]);
+      expect(viewOf(w)?.run.report).toMatchObject({ yourChanges: 1, updated: [] });
+      await expectFiledOnce(w);
+    });
+
+    it('reconciles a lost rewrite reply by reading it back, writing it once', async () => {
+      const { w, files } = await renamed();
+      w.rules.push(once((c) => c.op === 'write-text' && c.id === files.weekend.id, 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+      for (let i = 0; i < 4 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(writesTo(w.calls, files.weekend.id)).toHaveLength(1);
+      expect(textAt(w, WEEKEND)).toBe(REWRITTEN);
+      expect(await pending(w)).toEqual([]);
+    });
+
+    it("keeps the rename's line when a rewrite is rejected, keeping Alex's words, and the next run finishes it", async () => {
+      const act: { at: ((at: DispatchAt) => Promise<void>) | null } = { at: null };
+      const { w, files, line } = await renamed({ hooks: { beforeDispatch: async (at) => { await act.at?.(at); } } });
+      const theirs = weekend('Seeds').replace('# Weekend', '# Weekend, and more');
+      act.at = async (at) => {
+        if (at.effect.kind !== 'edit-text' || at.effect.path !== WEEKEND || act.at === null) return;
+        act.at = null;
+        await w.drive.writeText(files.weekend.id, theirs, (await w.drive.get(files.weekend.id)).modifiedTime);
+      };
+      const first = await tidy(w);
+      const [edit] = editsOf(first.manifest);
+      const head = (await checkpointsOf(w, first.id)).at(-1);
+      expect(head?.outcomes[edit?.ordinal ?? -1]).toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
+      for (const archive of archivesOf(first.manifest, line)) expect(head?.outcomes[archive.ordinal]).toMatchObject({ state: 'rejected' });
+      expect(textAt(w, WEEKEND)).toBe(theirs);
+      expect(textAt(w, PLAN)).toBe(plan('Seed list'));
+      expect((await pending(w)).map((l) => l.id)).toEqual([line.id]);
+      expect(viewOf(w)?.run.report?.yourChanges ?? 0).toBe(0);
+
+      // The next run rewrites what is left (the other note is done: no edit for it) and archives the line.
+      const second = await tidy(w, 1);
+      expect(editsOf(second.manifest).map((o) => o.effect.path)).toEqual([WEEKEND]);
+      expect(textAt(w, WEEKEND)).toBe(theirs.replace('Sow [[Seeds]]', 'Sow [[Seed list]]').replace('[[ Seeds #', '[[ Seed list #'));
+      expect(writesTo(w.applied, files.plan.id)).toHaveLength(1);
+      expect(await pending(w)).toEqual([]);
+    });
+
+    it('leaves the line unarchived when a linking note cannot be rewritten at plan time', async () => {
+      const { w, files, line } = await renamed();
+      const damaged = '---\nbower_format: ownership/9\n---\nSee [[Seeds]].\n';
+      const odd = await note(w, 'Projects/Garden/Odd.md', damaged);
+      const { manifest } = await tidy(w);
+      // The others are still rewritten, but no rewrite claims the line and its archive is not planned.
+      expect(editsOf(manifest).map((o) => o.effect.path)).toEqual([WEEKEND, PLAN]);
+      expect(editsOf(manifest).flatMap((o) => o.effect.changes.flatMap((c) => (c.kind === 'link-rewrite' ? c.recordIds : [])))).toEqual([]);
+      expect(manifest?.capture.journal.map((j) => j.recordId)).not.toContain(line.id);
+      expect((manifest?.operations ?? []).some((o) => 'before' in o.effect && o.effect.before.fileId === odd.id)).toBe(false);
+      expect(textAt(w, 'Projects/Garden/Odd.md')).toBe(damaged);
+      expect(textAt(w, WEEKEND)).toContain('Sow [[Seed list]]');
+      expect((await pending(w)).map((l) => l.id)).toEqual([line.id]);
+      expect(writesTo(w.applied, files.plan.id)).toHaveLength(1);
+    });
+
+    it('keeps the line unarchived while rewrites wait past the edit cap, and archives it once all are done', async () => {
+      const { w, line } = await renamed();
+      // Seven more linking notes: nine rewrites, so the last in path order waits.
+      for (let i = 1; i <= 7; i++) await note(w, `Areas/Notes ${i}/Notes ${i}.md`, `Bought [[Seeds]] (${i}).\n`);
+      const first = await tidy(w);
+      const paths = editsOf(first.manifest).map((o) => o.effect.path);
+      expect(paths).toHaveLength(8);
+      expect(paths).not.toContain(PLAN);
+      expect(first.manifest?.capture.journal.map((j) => j.recordId)).not.toContain(line.id);
+      expect((await pending(w)).map((l) => l.id)).toEqual([line.id]);
+      expect(textAt(w, PLAN)).toBe(plan('seeds'));
+      const second = await tidy(w, 1);
+      expect(editsOf(second.manifest).map((o) => o.effect.path)).toEqual([PLAN]);
+      expect(second.manifest?.capture.journal.map((j) => j.recordId)).toContain(line.id);
+      expect(textAt(w, PLAN)).toBe(plan('Seed list'));
+      expect(await pending(w)).toEqual([]);
     });
   });
 });
