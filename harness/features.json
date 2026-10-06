@@ -3234,8 +3234,8 @@
       "No write is made with a stale epoch; the outbox and durable uploads survive."
     ],
     "verify": "pnpm vitest run src/data/session.test.ts -t \"a page restored from the back/forward cache reloads\"",
-    "passes": false,
-    "note": "Owner rule (simplest proven approach) + TL-P2-28 (main 9a72c1f): pageshow persisted → location.reload() (web.dev pattern) replaces the custom rejoin; one e2e back → reload → no stale-epoch write. Planned, not implemented."
+    "passes": true,
+    "note": "Owner rule (simplest proven approach) + TL-P2-28 (main 9a72c1f): pageshow persisted → location.reload() (web.dev pattern) replaces the custom rejoin; one e2e back → reload → no stale-epoch write. Integrated: stub f429ed6, fix eac2d32 from claude/p2-bfcache b5b2d22; review CLEAN (3 Minors: e2e does not itself show no stale write, the unit test does; reload drops page-memory-only items; real gets it when P3 wires its place). Gates on 49681df (combined with the other three): check 3347, e2e 208, e2e:fake 218."
   },
   {
     "id": "pile-accounting-shared",
