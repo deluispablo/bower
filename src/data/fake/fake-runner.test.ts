@@ -211,6 +211,17 @@ describe('the fake runner', () => {
     expect(dump.get('Projects/Job hunt/Job hunt.md')).not.toContain('A flat from the same pile');
   });
 
+  it('a project note line said with its citation is not said again without it', async () => {
+    const first = await tidyUp(drive, root);
+    if (first.phase !== 'done') throw new Error('failed');
+    await vault.addPile({ text: 'Ask the landlord about the heating', items: [] });
+    const second = await tidyUp(drive, root);
+    if (second.phase !== 'done') throw new Error('failed');
+    expect(second.report.updated).toEqual([]);
+    const lines = (drive.dump(root).get('Projects/Flat hunt/Flat hunt.md') ?? '').split('\n').filter((l) => l.includes('A fourth flat added'));
+    expect(lines).toHaveLength(1);
+  });
+
   // journeys-cites-and-answers (C09): a question about stored notes is answered with links to them.
   it('a question about your notes is answered with links to them, and the inbox waits', async () => {
     const piles = (await vault.piles()).length;
