@@ -1,4 +1,4 @@
-# Current handoff: Claude coordinator, P2 fast close (TL-P2-38/39), 255/269
+# Current handoff: Claude coordinator, P2 fast close (TL-P2-38/39), 258/269
 
 Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`, integration `/Users/deluisp/Projects/bower-app`, branch `codex/close-phase-2`. Technical lead and planner: the Claude Planificador session (owner-appointed; direct lead–coordinator messaging authorized). Codex is out of usage until 2026-10-12; workers and reviewers are Claude.
 
@@ -22,6 +22,7 @@ P3 step recorded (owner request via the lead): when the P3 staging deployment (W
 - Vault: `removePile`'s memory of copies already binned is in memory only; after a reload between a failed Remove and its retry, Undo misses the first try's copies (pile comes back as ordinary, nothing lost).
 - Vault: the loose declaration scan skips an unreadable copy, so a never-arrived loose file can drop out of the Inbox for one listing.
 - Vault: a declaration naming another pile logs a plain string on every listing; the runner logs an unreadable declaration once per plan.
+- Vault: `updatePile` turning a single file into a folder: if moving the file into the new folder fails, an empty folder pile and the loose file both show under the same pile id, and a retry saves the note into the folder without moving the file (nothing lost).
 - UI: `Home.tsx` and `TidySheet.tsx` compute pile emptiness inline instead of `isEmptyPile` (the tidy sheet shows a note icon for an empty pile).
 - Session: the bfcache e2e does not itself show "no stale-epoch write" (the unit test does); the reload drops page-memory-only items (TL-P2-28 covers the notice).
 - Tests: `src/ui/focus.ts` `focusMain` timer can fire after jsdom teardown (seen once in `runner-errors.test.tsx` under load; two reruns clean).
