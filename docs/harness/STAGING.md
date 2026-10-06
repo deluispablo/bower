@@ -1,4 +1,8 @@
-# P2 staging preview
+# Staging
+
+> **From P3-4 ([TL-P3-06](2026-10-06-tl-p3-06-worker-staging.md), [TL-P3-08](2026-10-07-tl-p3-08-production-guard.md)), staging is the app plus the Worker on one origin.** Deploy: on the new `main`, run `pnpm install --frozen-lockfile` and `env -u VITE_API_URL pnpm build`, then scan `dist/` as below. Then, from `api/`, run `npx wrangler deploy --var APP_ORIGIN:<staging origin> --var API_ORIGIN:<staging origin>`. The output must name `bower-staging`, never `bower-api`. Check `/`, `/?source=fake`, a deep link, `/landing/`, `/health` and `/me`. Secrets and KV are set once, as TL-P3-06 says. The P2 static-preview steps below are history.
+
+## P2 static preview (history)
 
 [TL-P2-39](2026-10-06-tl-p2-39-main-and-staging.md) defines this. It is a static preview of `main`, so the owner can try the app and give feedback. It has no Worker, no secrets and no real Drive. It runs the demo by default, and `?source=fake` gives the full simulated app. It is separate from the original production app and its Pages project, which are never touched.
 
@@ -37,3 +41,4 @@ P3 replaces this preview with the real staging environment: Worker plus real ser
 - 2026-10-06, `main` `4d7ab08` (P2 batch 5), version `826a00ad`.
 - 2026-10-06, `main` `cc54d83` (P2 closed, dossier `3e6e7da`), version `0996fb05`.
 - 2026-10-06, `main` `605bbaa` (P2 re-closed, dossier `00ec9a5`), version `ec070ce8`.
+- 2026-10-07, `main` `d5e4a74` (P3-4, first app plus Worker deploy), version `082fbde9`. `/health` and `/me` answer 500 `internal` until the owner sets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
