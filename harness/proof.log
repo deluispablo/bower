@@ -286,3 +286,4 @@ focus-after-replay-and-route	92ae3986baecaa97	2026-10-06	red (fixed in 7334d1f)
 focus-note-link-and-sign-out	34a327ac49df52de	2026-10-06	red (fixed in cb9b7c9)
 c11-no-policy-from-documents	198aa433dd70dd00	2026-10-06	known-green: Test-only entry over unchanged code: the guard is structural; red shown by the worker with a temporary addPile→addRule bypass (Rules.md 4 vs 3 rules, fake-runner.test.ts:158)
 no-console-errors-on-journeys	ce82ea157fc3747f	2026-10-06	known-green: Test-infrastructure entry: the fixture and its self-tests live under e2e/, so done.sh sees no code change; without the fixture the spec fails (unknown parameter allowConsole), and the unexpected-error self-test is test.fail() so it passes only when the guard fails the test
+shared-domain-package	1057dd89372bdd4a	2026-10-06	red (fixed in f93f70a)
