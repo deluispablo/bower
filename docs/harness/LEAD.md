@@ -5,7 +5,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Role.** Claude session `Planificador`, technical lead and planner of the whole project ([GOVERNANCE](GOVERNANCE.md)). It talks to the coordinator `Orquestador` through cross-session messages, in 10 lines or fewer.
 - **Documentation checkout.** `/private/tmp/bower-tl-planning`, branch `claude/tl-planning`. Fast-forward it to `main` before each change. After `pnpm check`, or the docs test plus lint for documentation only, fast-forward local `main`. Then message the coordinator, who adopts the change and backs it up.
 - **Staging preview.** Redeploy after each main batch, following [STAGING.md](STAGING.md). Last deployed: `main` `4d7ab08`, batch 5, version `826a00ad`.
-- **Open with the owner:** none.
+- **Open with the owner:** start the coordinator from the bower-app folder at the next batch boundary, so the project agents and the hook load (TL-P2-44 adoption).
 - **Waiting on the coordinator:**
   - the Codex batch review of frozen `4d7ab08` against the P2 exit contract;
   - the phone/desktop evaluation, one Critical/Important round, and the P2 dossier.

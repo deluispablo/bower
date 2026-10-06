@@ -34,4 +34,6 @@ The research behind this ruling found that cost depends less on what an agent wr
 
 ## Adoption
 
+The project agents and the quiet-gates hook load only in a session whose working folder is the bower-app checkout. A coordinator started elsewhere dispatches general-purpose agents with the agent's own model passed explicitly, records the deviation in ACTIVE, and moves to a bower-app session at the next batch boundary.
+
 The coordinator adopts this at its next batch boundary: migrate the `tokens.csv` header, dispatch through the project agents, and delete its copy of `harness/token-baseline.md` (the lead keeps [token-baseline.md](token-baseline.md)).
