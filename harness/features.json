@@ -3031,15 +3031,15 @@
     "id": "single-active-session",
     "task": "qa-25",
     "category": "feature",
-    "what": "Bower is active in one place per person: another tab, window or device shows that Bower is open elsewhere and offers Use here, and the old place stops writing.",
+    "what": "One place per person holds the session: a fenced data layer refuses every app write from a place that does not hold the lease, and a blocked place keeps what it was sending until it is used again.",
     "steps": [
-      "Open Bower in two pages for the same account: the second shows \"Bower is open in another window.\" with \"Use here\"; nothing is taken over silently.",
-      "Use here moves the session; the previous page shows the same screen and writes nothing to Drive (no outbox flush, uploads or tidy-up requests); its outbox and pending uploads stay on that device and resume when it uses Bower again.",
-      "Every app write path checks the session epoch; offline changes go to the outbox and the session is checked again before flushing; a tidy-up keeps running for the person, not the session."
+      "A second place for the same person gets a live lease refused and takes nothing; an expired lease nobody took is re-taken silently with the same epoch, one someone took is blocked.",
+      "A blocked place writes nothing (Drive, outbox flush, uploads, tidy-up requests) and stops polling; its in-page and kept uploads, links and notes wait and go once after Use here; the Worker refuses a stale epoch.",
+      "Every app write path passes the fence; offline changes stay in the outbox and the session is checked again before flushing; a tidy-up keeps running for the person."
     ],
     "verify": "pnpm vitest run src/data/session.test.ts -t \"one active session per person fences the old place\"",
     "passes": false,
-    "note": "Owner ruling TL-P2-13 (main 7d92e73): BroadcastChannel + existing Web Locks within one browser; across devices a Worker lease with increasing epoch (fake in P2; real Worker is a P3 obligation); no RunWire field, a small session call next to me(). A real Drive write already in flight is an accepted limitation. e2e on demo + fake with two pages. Planned, not implemented."
+    "note": "Narrowed 2026-10-06 (lead-agreed split) to S1: lease + fence + data layer, exactly what the verify proves. The block screen, wiring and two-page e2e are single-active-session-screen; until it closes, C14/C16 count the session capability as partial. TL-P2-13/14/24/25."
   },
   {
     "id": "b-path-unreadable-runner-files",
@@ -3152,5 +3152,19 @@
     "verify": "pnpm vitest run src/data/contracts/note-edit.test.ts -t \"note edits change only what the contract allows\"",
     "passes": false,
     "note": "B.2 ratified by the technical lead (TL-P2-20 rev 1-4 + Ratification, main d40e5b9); independent document review b2-contract-review-1 READY after three deltas (docs/harness/2026-10-06-b2-contract-review.md). Assignment I-ne-1: Claude note-edit-impl-1, checkout /private/tmp/bower-p2-note-edit. Planned, in implementation."
+  },
+  {
+    "id": "single-active-session-screen",
+    "task": "qa-25",
+    "category": "feature",
+    "what": "Another tab, window or device shows that Bower is open elsewhere and offers Use here; nothing is taken over silently.",
+    "steps": [
+      "Open Bower in two pages for the same person: the second shows \"Bower is open in another window.\" with \"Use here\", and, while it holds things only on that page, \"Some things you added here are only on this page. Use Bower here to send them.\"",
+      "Use here moves the session without a reload; the first page shows the same screen and its Use here moves it back; a reload of the active page stays active; closing the active page lets the next open without asking.",
+      "The fake and demo sources wire the session for every factory; the real source wires it with its own world; phone and desktop, accessibility clean."
+    ],
+    "verify": "pnpm vitest run src/app/OpenElsewhere.test.tsx -t \"Bower is open in another window\"",
+    "passes": false,
+    "note": "Split from single-active-session (S2a screen + Gatekeeper, S2b choose.ts wiring + e2e demo/fake two pages phone/desktop + axe). Before P2-H. Plan docs/harness/2026-10-06-single-session-plan.md. Planned, not implemented."
   }
 ]

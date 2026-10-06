@@ -1,0 +1,5 @@
+# Independent review (u2-review-1 reviewer): b-path-held-piles
+
+Target `/private/tmp/bower-p2-b-held-piles`, base `b83bbe5` → test `45116b9` → fix `0f5aee6`. **Verdict: CLEAN — 0 Critical, 0 Important, 3 Minor.** Judged against TL-P2-21. Reviewer ran fake-worker + fake-runner 146; red 5 genuine; U1/U2/journal verifies green. Held piles skipped before capture (no op, no row, no disposition, ids never in the manifest, untouched through claim lapse, recovery and restore); late child and second note per ruling (bound note by member key or first; extra note uncaptured child; Bin rejected, pile retained); only-held → refused in planRun before admission (no records, no fenced calls, view unchanged); authorized route test stricter. Legacy edge cases: `legacy('readiness')` unreachable; leftover with only pile notes → `legacy('generated note')` mapped to b-path-generated-note.
+
+Minor: M1 declared pile with a non-member file already in its folder sends the whole run to `legacy('member key')`; M2 `legacy('context')` when the bound note is gone but another pile note remains; M3 destination guess uses the first note's text rather than the keyed note.
