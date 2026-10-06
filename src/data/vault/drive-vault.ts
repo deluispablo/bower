@@ -28,7 +28,7 @@ import {
 } from '../types';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { SET_ASIDE_TEXT, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, hasStoredDigests, journalValues, recordedNote, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, hasStoredDigests, journalValues, looseSetAside, recordedNote, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -518,7 +518,10 @@ export class DriveVault implements VaultSource {
       const queued = this.queuedItems(id).filter((i) => !listed(i.reserved));
       const sending = [...(this.uploads.get(id)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
       if (!f.folder) {
-        out.push({ id, path, text: '', createdAt: Date.parse(f.createdTime), items: [itemOf(f)] });
+        // A declared loose file waits for the run's reason, by the rule the run shares (TL-P2-21, TL-P2-29).
+        const loose = f.appProperties?.[PROP.declaration] ? await this.looseState(f) : null;
+        const item = loose?.changed ? { ...itemOf(f), changed: true as const } : itemOf(f);
+        out.push({ id, path, text: '', createdAt: Date.parse(f.createdTime), items: [item], ...(loose?.setAside ? { setAside: loose.setAside } : {}) });
         continue;
       }
       const kids = ix.filesIn(path).filter((k) => !k.folder);
@@ -710,6 +713,19 @@ export class DriveVault implements VaultSource {
       .map((m) => ({ id: m.memberKey, name: shownName(m), kind: m.kind, origin: m.origin ?? 'Added in Drive', upload: -1, chooseAgain: true as const }));
     const changed = new Set(readiness.members.flatMap((m) => (m.state === 'changed' ? m.fileIds : [])));
     return { rows, contextKey, changed, lookup: found.state, blocked: readiness.blocked, missing: missing.map((m) => m.memberKey) };
+  }
+
+  /** An arrived declared loose file as the run takes it: why it waits, and whether its bytes changed. */
+  private async looseState(file: DriveFile): Promise<{ setAside: SetAside | null; changed: boolean }> {
+    const ix = await this.index();
+    const files = this.known(ix);
+    const drive = this.drive;
+    const root = await this.rootId();
+    const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
+    const loose = await accountLoose(await this.declarationOf(file, files), ix.file('Inbox'), files, (id) => drive.readBytes(id), (f) => this.digestOf(f), binned, this.dispositionCache);
+    this.checkCurrent();
+    const changed = loose.found?.accounting.members.some((m) => m.state === 'changed' && m.fileIds.includes(file.id)) ?? false;
+    return { setAside: looseSetAside(loose), changed };
   }
 
   /** Why a tidy-up would leave this declared pile in the inbox now, or null. */

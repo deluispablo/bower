@@ -17,7 +17,7 @@ import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } fr
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
-import { accountPile, contextRemoved, findDeclaration, journalValues, recordedNote, writable, type Digest } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordedNote, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport, type SetAside } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -222,19 +222,19 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
 }
 
 /**
- * A loose file (fixture 07), through the same lookup and accounting as a pile folder: observed when it carries no
- * declaration or every copy is gone; declared, it is ready when its one member is in the inbox with the declared
- * bytes, the inbox standing for its folder.
+ * A loose file (fixture 07), by the rule the Inbox shares (`accountLoose`): observed when it carries no declaration
+ * or every copy is gone; declared, it is ready when its one member is in the inbox with the declared bytes.
  */
 async function looseCapture(drive: FakeDrive, rootId: string, listing: readonly DriveFile[], inbox: DriveFile | undefined, file: DriveFile, cache: Map<string, DeclarationResult>): Promise<Capture> {
-  const found = await findDeclaration(listing, rootId, file, (id) => drive.readBytes(id), cache);
-  if (found.state === 'unmarked') return { blocked: null, captured: new Set([file.id]) };
-  if (found.state !== 'found' || !inbox) return { blocked: found.state === 'conflict' ? SET_ASIDE.declaration : found.state === 'unreadable' ? SET_ASIDE.unreadable : SET_ASIDE.notChecked };
-  const readiness = await accountPile(found.declaration, found.sha256, inbox, listing, (id) => drive.readBytes(id), (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
-  if (readiness.blocked) return { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked };
+  const lookup = await findDeclaration(listing, rootId, file, (id) => drive.readBytes(id), cache);
+  const loose = await accountLoose(lookup, inbox, listing, (id) => drive.readBytes(id), (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
+  const why = looseSetAside(loose);
+  if (why) return { blocked: SET_ASIDE_TEXT[why] };
+  if (!loose.found) return { blocked: null, captured: new Set([file.id]) };
+  const { declaration, sha256: hash, accounting } = loose.found;
   // Filed already (a consumed disposition) and put back in the inbox: an ordinary loose file now.
-  if (!readiness.remaining.length) return { blocked: null, captured: new Set([file.id]), leftover: { contextKey: null } };
-  return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId: found.declaration.declarationId, sha256: found.sha256 }, contextKey: null, memberKeys: new Set(readiness.remaining) } };
+  if (!accounting.remaining.length) return { blocked: null, captured: new Set([file.id]), leftover: { contextKey: null } };
+  return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId: declaration.declarationId, sha256: hash }, contextKey: null, memberKeys: new Set(accounting.remaining) } };
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));

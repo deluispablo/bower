@@ -336,6 +336,32 @@ export async function accountPile(declaration: Declaration, declarationSha256: s
   return { ...readiness, disposed, remaining: readiness.members.filter((m) => m.state === 'verified').map((m) => m.memberKey) };
 }
 
+/** A loose file's lookup and accounting, as the Inbox and the run both take them (`accountLoose`). */
+export interface LooseAccounting {
+  lookup: DeclarationLookup['state'];
+  /** Why it waits; null when it is ready, or not declared. */
+  blocked: Blocked;
+  /** The declaration and its accounting, when it was found and could be accounted for. */
+  found: { declaration: Declaration; sha256: string; accounting: Accounting } | null;
+}
+
+/**
+ * The one rule for an arrived loose file (fixture 07), shared by the Inbox and the run so they never disagree
+ * (TL-P2-21, TL-P2-29): its lookup (`findDeclaration`, which the caller makes) and then the pile accounting with
+ * the inbox standing for its folder. The reason it waits comes from `setAsideOf`, as for a pile folder.
+ */
+export async function accountLoose(lookup: DeclarationLookup, inbox: DriveFile | undefined, files: readonly DriveFile[], read: ReadBytes, digest: DigestOf, binned?: BinnedOf, cache?: Map<string, DispositionResult>): Promise<LooseAccounting> {
+  if (lookup.state !== 'found') return { lookup: lookup.state, blocked: null, found: null };
+  if (!inbox) return { lookup: 'found', blocked: 'not-checked', found: null };
+  const accounting = await accountPile(lookup.declaration, lookup.sha256, inbox, files, read, digest, binned, cache);
+  return { lookup: 'found', blocked: accounting.blocked, found: { declaration: lookup.declaration, sha256: lookup.sha256, accounting } };
+}
+
+/** Why a tidy-up leaves a loose file in the inbox, by the same rule as a pile folder; null when it takes it. */
+export function looseSetAside(loose: LooseAccounting): SetAside | null {
+  return setAsideOf(loose.lookup, loose.blocked, { things: 1, text: '', restore: false });
+}
+
 /**
  * The approved sentence for each reason (TL-P2-11 (1), TL-P2-19, TL-P2-30); the same
  * words the tidy-up's report gives. "Remove" names the pile's own Remove button.
