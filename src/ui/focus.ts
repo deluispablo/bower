@@ -75,8 +75,22 @@ export function focusRouteHeading(): () => void {
   // The old view's heading may still be on screen while the new view loads; wait for it
   // to go, unless it is reused (the same screen showing another note).
   const old = heading();
+  // Focus placed after the change, by the view or the person (a field, a menu that
+  // opened and closed), ends the rule: what they placed, or what a closing menu hands
+  // back, is never taken. Only the rule's own moves to a heading do not count.
+  let placed = false;
+  let mine: EventTarget | null = null;
+  const onIn = (e: FocusEvent): void => {
+    if (e.target !== mine) placed = true;
+  };
+  document.addEventListener('focusin', onIn, true);
+  const leaveAlone = (): boolean => placed || Boolean(document.querySelector(OPEN_LAYER));
+  const move = (h1: HTMLElement): void => {
+    mine = h1;
+    toHeading(h1);
+  };
   const step = (): void => {
-    if (document.querySelector(OPEN_LAYER)) return;
+    if (leaveAlone()) return;
     const h1 = heading();
     // Still on something on screen: wait while the old view may yet go, then leave it.
     if (!fallen()) {
@@ -84,7 +98,7 @@ export function focusRouteHeading(): () => void {
       return;
     }
     if (h1 && (h1 !== old || tries >= 4)) {
-      toHeading(h1);
+      move(h1);
       keep(h1);
       return;
     }
@@ -97,17 +111,21 @@ export function focusRouteHeading(): () => void {
   let stop = 0;
   const keep = (focused: HTMLElement): void => {
     watch = new MutationObserver(() => {
-      if (focused.isConnected || !fallen() || document.querySelector(OPEN_LAYER)) return;
+      if (leaveAlone() || focused.isConnected || !fallen()) return;
       const next = heading();
-      if (next) toHeading(next);
+      if (next) move(next);
     });
     watch.observe(document.body, { childList: true, subtree: true });
-    stop = window.setTimeout(() => watch?.disconnect(), 1000);
   };
   timer = window.setTimeout(step, 50);
+  stop = window.setTimeout(() => {
+    watch?.disconnect();
+    document.removeEventListener('focusin', onIn, true);
+  }, 1600);
   return () => {
     clearTimeout(timer);
     clearTimeout(stop);
     watch?.disconnect();
+    document.removeEventListener('focusin', onIn, true);
   };
 }

@@ -82,4 +82,16 @@ describe('focusRouteHeading', () => {
     expect(document.activeElement?.tagName).not.toBe('H1');
     cancel();
   });
+
+  it('stops once focus is placed after the change, even when a menu closes between checks', async () => {
+    document.body.innerHTML = '<main><h1>Files</h1><div role="tree" tabindex="0" id="t"></div></main>';
+    document.getElementById('t')?.focus();
+    const cancel = focusRouteHeading();
+    document.body.innerHTML = '<main><h1>Lease draft</h1><button id="m">Move to</button></main>';
+    document.getElementById('m')?.focus();
+    (document.activeElement as HTMLElement | null)?.blur();
+    await wait(300);
+    expect(document.activeElement?.tagName).not.toBe('H1');
+    cancel();
+  });
 });
