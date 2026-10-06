@@ -59,3 +59,6 @@ From P3-1:
 From P3-2:
 - `pnpm check` once failed with an unhandled `document is not defined` from a `src/ui/focus.ts` timer firing after a jsdom test environment was torn down (focusRouteHeading/returnFocusTo timers not cancelled in unit tests). Passed on rerun; if it recurs, cancel the timers in the tests or guard the callbacks.
 - The architecture purity scan strips `//` comments naively, so a string containing `//` is skipped (rare gap).
+
+From the worker-skeleton review (CLEAN): Hono cors sends Allow-Credentials/Expose-Headers and a 204 preflight to other origins (no Allow-Origin, so browsers block; tighten the test or the wording) · a misconfigured deploy answers anyone a 500 naming the missing key (env.ts:90,128) · the app-origin 404 lacks Vary: Origin (no-store makes it harmless) · **allowHeaders lacks x-bower-place and x-bower-epoch: worker-session-lease must add them** · `@cloudflare/workers-types` added; api lint uses undeclared root packages · **error codes are snake_case (not_found, internal) while the spec uses kebab-case: align when the first spec route lands** · the thrown-error test uses app.request, not SELF.
+- Tooling: `harness/done.sh` code paths (`paths=` line 49) do not include `api/`, so `--fixed-in` and red mode cannot show a red for Worker entries.
