@@ -9,6 +9,7 @@
  */
 import type { DriveFile } from '../drive/drive-api';
 import { applyChanges, timelineDate } from '../contracts/note-edit';
+import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
@@ -257,6 +258,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string }> = [];
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
+    const marks = { members: members.length, things: things.length };
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!folder?.folder) return legacy('loose pile');
     const cap = capture.get(pile.id);
@@ -310,6 +312,15 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       if (!stored || stored.size !== raw.byteLength || stored.sha256 !== (await sha256(new Blob([raw])))) return legacy('context');
       // An observed pile invents no keys (guard 6): its context carries none.
       context = { kind: 'text', memberKey: declared ? contextKey : null, file: seen(note), text, content: stored };
+    }
+    // Everything this pile puts in the plan must be text a record can carry; a pile whose words or names cannot
+    // (half of a character) is held alone, untouched, and the rest of the run goes on (review b-dest-review-1).
+    const written = { folder: folder.name, words, context: context.kind === 'text' ? context.text : null, names: members.slice(marks.members).map((m) => m.file.name), note: wordsOnly ? generatedName(words) : null };
+    if (!canonicalRecordJson(written).ok) {
+      members.length = marks.members;
+      things.length = marks.things;
+      console.error(new BowerError('unknown', NOT_WRITABLE), 'A pile has text no run record can carry; it waits for the next tidy-up');
+      continue;
     }
     capturedPiles.push({
       pileId: pile.id,
@@ -642,6 +653,9 @@ async function utf8(text: string): Promise<{ encoding: 'utf8'; size: number; sha
 /** The line a request done by a tidy-up carries in requests.json. */
 export const REQUEST_DONE = 'Done. See what changed in your folders.';
 
+/** Logged when a pile holds text no run record can carry: it waits in the inbox. */
+const NOT_WRITABLE = 'Bower could not write down one of your piles; it stays in your inbox.';
+
 /** Why a filed thing has no note of its own (its note was not written: a lookalike was there, or its thing stayed). */
 export const NOTE_NOT_WRITTEN = 'Bower did not write a note for it.';
 /** Why a pile of words stays in the inbox (its generated note was not written). */
@@ -657,7 +671,9 @@ function generatedPlace(to: string): boolean {
 function generatedName(title: string): string {
   // Control characters (a line break in the words) never reach a name: the manifest refuses them (C0 and DEL).
   const plain = [...title].map((char) => (char.charCodeAt(0) <= 0x1f || char.charCodeAt(0) === 0x7f ? ' ' : char)).join('');
-  const safe = plain.replace(/[:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').slice(0, 48).trim();
+  // Cut by whole characters (grapheme clusters), never inside one: half an emoji is no text a record can carry.
+  const graphemes = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(plain.replace(/[:*?"<>|]+/g, ' ').replace(/\s+/g, ' '))];
+  const safe = graphemes.slice(0, 48).map((g) => g.segment).join('').trim();
   return `${safeInboxName({ name: safe, kind: 'note' })}.md`;
 }
 
