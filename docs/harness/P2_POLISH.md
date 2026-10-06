@@ -31,3 +31,4 @@ TL-P2-38: minors never become entries; they wait here for after the freeze. Link
 - `citedName` cites the plan's title, not the final name; the Job hunt line waits only for the offer's move, not its note; "A flat from the same pile…" is written even when the offer wasn't in that pile.
 - With web on but the Flat 3 note missing, the lookup answers with the generic line; two same-named notes in different folders resolve to the last found.
 - Run records: `putNew` keeps the cached folder if read-back throws after a create (a retry may write an identical second copy); `put`'s read-back by id no longer confirms the record sits in its run folder; the held-pile test lost its Inbox-side assertion; the pace test bound is loose.
+- `PileScreen.test.tsx` "a draft whose note changed elsewhere…" fails about 1 run in 3 under full `pnpm check` load, and passes 5/5 alone (journeys B, 2026-10-06).
