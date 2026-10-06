@@ -247,3 +247,4 @@ session-signout-helper	187926f71ba2e925	2026-10-06	red (fixed in a640e8f)
 note-edit-consumer-limits	704f84f2cad87635	2026-10-06	red (fixed in 8e63d4d)
 declaration-read-isolation	358c287bfa83b21a	2026-10-06	red (fixed in bacfc7a)
 declared-pile-folder-lost	c717780c8f02a9f2	2026-10-06	known-green: Superseded by TL-P2-30; the verify pins the ruled behaviour and was shown to bite by skipping the move
+fake-drive-reservation-saved	63e0a068175342f9	2026-10-06	red (fixed in b23bc30)

@@ -393,3 +393,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: note-edit-consumer-limits passes — fix: proof-close the note edit cap
 - 2026-10-06: declaration-read-isolation passes — fix: proof-close declaration read isolation
 - 2026-10-06: declared-pile-folder-lost passes — test: close declared-pile-folder-lost as superseded by TL-P2-30
+- 2026-10-06: fake-drive-reservation-saved passes — fix: proof-close the pretend Drive saving a reservation before answering
