@@ -3320,5 +3320,117 @@
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a pile whose note Bower cannot parse stays visible\"",
     "passes": false,
     "note": "TL-P2-08 + TL-P2-11 applied TL-P2-36 (main 2d794de). Found by note-read-review-1: drive-vault.ts skipped such a pile (if (note && !parsed && !unread) continue). Planned, not implemented."
+  },
+  {
+    "id": "b-path-one-snapshot",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A tidy-up plans from one listing, so things that arrive, vanish or change while it plans never send it down the legacy path.",
+    "steps": [
+      "Add a file to a pile, remove a pile folder and change a thing while a run plans.",
+      "A thing that arrives later is a late child or a later pile; one that vanished is not captured (TL-P2-30); one that changed is rejected when applied (TL-P2-34).",
+      "The run stays on the B path; the legacy reasons readiness and sending and the race halves of loose pile and member key are gone."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a change during planning never sends a run down the legacy path\"",
+    "passes": false,
+    "note": "Removes legacy 'readiness', 'sending' and the race halves of 'loose pile' and 'member key'. TL-P2-37 (main d6dca4b). Planned, not implemented."
+  },
+  {
+    "id": "b-path-asked-question",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A question the tidy-up asks is written once through the recoverable path.",
+    "steps": [
+      "Plan a run whose pile needs a question (the demo Saltmere pile).",
+      "The question goes into the B questions.json write (or a runner-json create-text when the file is missing); its questions row is grounded by that write, with the same fields and askedAt = requestedAt.",
+      "Recovery never asks it twice; the legacy reason question is gone."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a question the run asks is written once through the recoverable path\"",
+    "passes": false,
+    "note": "Q1 (a). TL-P2-37 (main d6dca4b). Planned, not implemented."
+  },
+  {
+    "id": "b-path-capture-reads",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A run reads each pile note once and recognises only the context-keyed file as a declared pile's note.",
+    "steps": [
+      "Declare a pile with no words and a member named Pile note.md; give another pile a note starting with a BOM; edit a note between its read and its digest.",
+      "Only the context-keyed file is a declared pile's note, so the member is filed as a thing; the note's text and digest come from one byte read decoded with fatal and ignoreBOM.",
+      "The legacy reasons member key and context are gone; a refused decode holds the pile per TL-P2-36."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile note is captured from one read\"",
+    "passes": false,
+    "note": "Merges the proposed declared-member-named-pile-note and b-path-context-one-read. TL-P2-37 (main d6dca4b). Planned, not implemented."
+  },
+  {
+    "id": "b-path-capture-holds",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Piles and journal lines a run record cannot carry are held or left in place instead of sending the run down the legacy path.",
+    "steps": [
+      "Give a pile a name with a control character, backslash or '..'; make one member's digest unreadable; add a journal line whose id has a control character, is over 1024 bytes or holds a lone surrogate.",
+      "The pile with the name is held in the Inbox and the run with \"Bower can't file something with this name. Rename it in Google Drive, or remove the pile.\" and Remove, no Try again; the unreadable digest holds only its pile with not-checked; the journal line stays uncaptured with one BowerError.",
+      "The legacy reasons not checked and manifest (for these causes) are gone."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile whose names no run record can carry is held, not sent down the legacy path\"",
+    "passes": false,
+    "note": "Merges the proposed b-path-unrecordable-names, b-path-unverifiable-member and journal-record-grammar; Q4 copy approved. Also covers a request with a lone surrogate (stays uncaptured, never throws at planning). TL-P2-37 (main d6dca4b). Planned, not implemented."
+  },
+  {
+    "id": "b-plan-guard-refusal",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A plan the manifest guard or grounding refuses is refused before any effect, never run on the legacy path.",
+    "steps": [
+      "Make the guard refuse a plan (a tampered manifest) and grounding fail.",
+      "The run is refused before admission with \"The tidy-up stopped before changing anything. Try again.\" and a console BowerError.",
+      "No effect is made; the legacy reasons manifest and grounding are gone."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a plan the guard refuses is refused before any effect\"",
+    "passes": false,
+    "note": "Q2 approved. TL-P2-37 (main d6dca4b). Planned, not implemented."
+  },
+  {
+    "id": "running-scenario-on-b",
+    "task": "qa-24",
+    "category": "data",
+    "what": "The running situation is a recoverable run, not a legacy run started on load.",
+    "steps": [
+      "Open the app with scenario=running on the fake source.",
+      "The running run is seeded as an admitted B run in the run service and recovers like any other.",
+      "No legacy run is started on load."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"the running situation is a recoverable run\"",
+    "passes": false,
+    "note": "TL-P2-37 (main d6dca4b). Planned, not implemented."
+  },
+  {
+    "id": "legacy-runner-write-removal",
+    "task": "qa-24",
+    "category": "data",
+    "what": "The legacy runner only reads legacy records; no tidy-up can write through it.",
+    "steps": [
+      "Build the fake worker for every source and test.",
+      "The run service is required; the legacy write path (runFake writes, start/run/saveUnsaved and their wiring) is gone; tests migrate to the B path.",
+      "A legacy last-run.json is still read and repaired as before."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"the legacy runner only reads legacy records\"",
+    "passes": false,
+    "note": "Q5: o5-no-legacy-run-path depends on this and on running-scenario-on-b. The demo world's own run is outside O5. TL-P2-37 (main d6dca4b). Planned, not implemented."
+  },
+  {
+    "id": "remove-bins-declarations",
+    "task": "qa-23",
+    "category": "data",
+    "what": "Removing a declared pile sends its folder and every copy of its declaration to the Bin, recoverably, and a pile restored from the Bin comes back as an ordinary pile.",
+    "steps": [
+      "Remove a declared folder pile and a declared loose file, from the pile screen and by binning from the Inbox.",
+      "The folder (if any) and every declaration copy go to the Bin, never hard-deleted; a copy found in the Bin is ignored and logged once.",
+      "Restore the folder from Drive's Bin: with all declaration copies missing or in the Bin the pile is an ordinary observed pile in the Inbox and the run alike; an unreadable or damaged declaration is still held (TL-P2-08 a)."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"removing a declared pile bins its declaration copies too\"",
+    "passes": false,
+    "note": "TL-P2-31 (main 2a85144) and its amendment (main 11bdfc9, option b: all copies gone → ordinary observed pile, shared accounting). Implemented in the loose-pile lane (claude/p2-loose-pile). Planned, not implemented."
   }
 ]
