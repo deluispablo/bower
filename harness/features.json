@@ -3110,5 +3110,19 @@
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"destinations are planned once on the recoverable path\"",
     "passes": false,
     "note": "TL-P2-17: groups name mismatch + new-folder chain. Planned, not implemented."
+  },
+  {
+    "id": "fake-drive-reservation-saved",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "In the pretend Drive a reserved file ID and a partial upload are saved at once, so a reload right after reserving never loses the reservation.",
+    "steps": [
+      "Reserve an ID and send part of a file in the pretend Drive with nothing else changing.",
+      "Reload before any other Drive change.",
+      "The upload resumes under the same reserved ID and ends as one file."
+    ],
+    "verify": "pnpm vitest run src/data/upload-queue.test.ts -t \"a reservation survives an immediate reload\"",
+    "passes": false,
+    "note": "Found by u2-review-1 during the U2 rebase review: generateIds and a partial putChunk do not notify the pretend Drive of a change, so they are saved only with the next real change (pre-existing at e20a05c). Planned, not implemented."
   }
 ]

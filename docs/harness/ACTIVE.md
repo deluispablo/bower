@@ -41,6 +41,8 @@
 - `run-report-save-barrier-legacy` CLOSED (fix `…`, proof `48c644c`), review [u1-review-1](2026-10-06-u1-review.md) CLEAN after delta. `partial-pile-readiness` CLOSED: candidate integrated `a8b31d7`, proof `e7b0d75`, gates check 3014 / e2e 198 / e2e:fake 198 (evidence/2026-10-06-readiness); reviews [first](2026-10-06-readiness-review.md) and [deltas](2026-10-06-readiness-review-delta.md). 226/241. Browser ports released.
 - Upload queue phase 1 CLEAN after delta (`ef9bd3a` incl. N1). Single-session plan archived [2026-10-06-single-session-plan.md](2026-10-06-single-session-plan.md) with TL-P2-14 answers (main `6af8ba6`, backed up).
 - Next lanes: I-uq2 upload-queue phase 2 (rebase onto integration; owns `drive-vault.ts` + test, `live/index.ts` queue construction, fake-drive snapshot of reserved ids); I-u2 O4 U2 B path (owns new `fake-run-service.ts`, `fake-run-records.ts`, `fake-runner.ts`, `fake-worker.ts`, `pretend.ts`, `choose.ts`, additive `fenced`/`fault`/`evidence` in `fake-drive.ts`). Shared file `fake-drive.ts`: additive grouped blocks only; coordinator integrates one at a time and the second rebases.
+- CLOSED: `upload-queue-persistent` (stub `e7c9c72`, fix `e6a097d`, proof `e20a05c`), `run-report-save-barrier` with U2 (stub `c6b7483`, fix `b0b54ab`, proof `92a9756`); gates check 3088/3121, e2e 198, e2e:fake 198. All four entries open at the 2026-10-06 handover are now closed. 228/247.
+- TL-P2-16..19 adopted (main up to `9cc09cb`, backed up). Inbox entry widened (set-aside reasons + queue notices); candidate `785a884` under review `inbox-review-1`; TL-P2-19 copy changes pending for its rework. Registered `fake-drive-reservation-saved` (u2-review-1 observation).
 
 # Previous coordinator: stopped and released
 

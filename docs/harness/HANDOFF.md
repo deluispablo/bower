@@ -6,6 +6,8 @@ Closed today with independent review and `done.sh --fixed-in`: pile-declaration-
 
 Open: partial-pile-readiness (in implementation), run-report-save-barrier (next, after readiness), run-manifest-content-consistency and run-checkpoint-monotonic (in implementation), loose-pile-declaration, declared-pile-folder-lost, pile-member-reselection (D02), four O5 non-B effect entries and o5-no-legacy-run-path. O5 semantic capabilities, O6, O7 and O8 remain. No P2 acceptance, no P3/P4 work.
 
+P3 step recorded for the coordinator (owner request via the lead, 2026-10-06): when the P3 staging deployment (Worker + app) is up and working, send the staging URL and the deployed SHA to the technical lead, who tells the owner. The owner has run `wrangler login` on this machine; staging gets its own allowlist, filled by the lead with both test accounts when it exists. Not before P2 closes.
+
 # Historical handoffs (provenance only)
 
 # Superseded handoff (2026-10-06 replacement): outgoing orchestrator released for replacement
