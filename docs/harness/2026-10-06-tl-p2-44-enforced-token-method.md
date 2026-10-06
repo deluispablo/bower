@@ -24,7 +24,7 @@ The research behind this ruling found that cost depends less on what an agent wr
    ```
 
    Unknown fields stay empty; the existing rows are migrated with empty new fields.
-9. **Long sessions stay short.** The lead and the coordinator clear at batch boundaries (TL-P2-43). As a backstop the owner starts them with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000`, so they compact at 200k tokens instead of near the 1M window ([model config](https://code.claude.com/docs/en/model-config)); this replaces the percentage override in TL-P2-43. Workers keep the default.
+9. **Long sessions stay short.** Amended by [TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md): no session clears itself; the owner compacts the lead and the coordinator by hand. As an optional backstop the owner may start them with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000`, so they compact at 200k tokens instead of near the 1M window ([model config](https://code.claude.com/docs/en/model-config)); this replaces the percentage override in TL-P2-43. Workers keep the default.
 
 ## Left out
 

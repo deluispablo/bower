@@ -1,5 +1,7 @@
 # Technical-lead decision TL-P2-2026-10-06-43: every session documents its own state
 
+> Amended by [TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md): sessions still write their state, but none clears itself; the owner compacts by hand.
+
 **Owner ruling, 2026-10-06:** each session must document its own state in the repository, so that nothing is lost when a session is cleared, compacted, interrupted or replaced. Together with [TL-P2-41](2026-10-06-tl-p2-41-token-budget.md) rule 8, this makes clearing sessions safe, and it is what lets a session clear itself automatically.
 
 ## Where each session keeps its state

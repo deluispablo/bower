@@ -7,7 +7,7 @@ The Bower app rebuild. Owner authorization and roles: `docs/harness/GOVERNANCE.m
 - **Worker** (implementer, reviewer, evaluator): read `docs/harness/WORKER.md` and your packet. Nothing else unless the packet names it.
 - **Coordinator**: `docs/harness/HANDOFF.md` (current state, kept short) and the current `docs/harness/ACTIVE.md`; `harness/briefs/coordinator.md` once per session.
 - **Technical lead**: `docs/harness/LEAD.md` (its own state), `docs/harness/DECISIONS.md` (one line per ruling) and `harness/briefs/technical-lead.md`; open a full planning doc only for the section in question.
-- Every session writes its own state to these files before clearing, at batch boundaries and after decisions (TL-P2-43); nothing important lives only in chat.
+- Every session writes its own state to these files at batch boundaries and after decisions (TL-P2-43); no session clears itself, the owner compacts by hand (TL-P2-45); nothing important lives only in chat.
 - Never read `harness/features.json` whole (query it with `jq`), archives, history files or old reviews unless the task is about them.
 
 ## Where things are
