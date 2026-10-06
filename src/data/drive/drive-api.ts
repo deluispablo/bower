@@ -18,6 +18,12 @@ export interface DriveFile {
   appProperties?: Record<string, string>;
   /** SHA-256 of the content, hex; only from `ResumableDrive.getUploaded`. */
   sha256?: string;
+  /**
+   * Drive keeps no checksum of its content, so no run can check its bytes without reading them: in the pretend
+   * Drive, a big file reloaded with neither its bytes nor its hash. On Google Drive the same is a file listed with no
+   * `sha256Checksum` or `size` (Docs Editors files, shortcuts); the P3 listing asks for those fields and sets it.
+   */
+  unchecked?: true;
 }
 
 export interface DrivePatch {

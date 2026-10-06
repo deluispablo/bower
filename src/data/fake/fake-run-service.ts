@@ -428,7 +428,7 @@ export class FakeRunService {
     const ms = PHASE_MS[this.scale];
     // The pace a person watches, on the scenario's clock. A run waits in the queue from when it was asked for, so the
     // time it took to plan counts; the effects take their own time inside the putting-away pace, never after it.
-    const queued = Math.max(0, ms.queued - (this.clock() - manifest.requestedAt));
+    const queued = Math.min(ms.queued, Math.max(0, ms.queued - (this.clock() - manifest.requestedAt)));
     const walk: Array<['reading' | 'writing' | 'saving', number]> = [['reading', queued], ['writing', ms.reading], ['saving', ms.writing]];
     for (const [phase, wait] of walk) {
       if (!['queued', 'reading', 'writing'].includes(head.phase) || rank(head.phase) >= rank(phase)) continue;

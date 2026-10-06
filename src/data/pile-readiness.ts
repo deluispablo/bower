@@ -426,6 +426,14 @@ export async function sameText(text: string, digest: Digest | null): Promise<boo
 }
 
 /**
+ * Whether a run can check a thing's bytes, from its listing alone (no byte is read): a thing Drive keeps no checksum
+ * of holds its pile, with Try again, in the Inbox and the run alike (TL-P2-38).
+ */
+export function checkable(file: DriveFile): boolean {
+  return !file.unchecked;
+}
+
+/**
  * Whether a declared pile's first pile note is one of its members still to file: read as the pile's note, it would
  * never be filed as a thing, so the run cannot account for it.
  */

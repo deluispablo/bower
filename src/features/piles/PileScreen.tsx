@@ -392,6 +392,10 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       setText(pile.text);
       setBase(pile.text);
     } else if (clash) setBase(pile.text);
+  } else if (clash && base !== pile.text) {
+    // A refused save takes the words now listed as its base, even when they were listed before it was refused (its
+    // own `pile` is the one it began with): the next save is the informed overwrite the sentence offers.
+    setBase(pile.text);
   }
   const [busy, setBusy] = useState(false);
   // A note Bower could not read is shown, never typed over: Try again reads it (the reason above says so).

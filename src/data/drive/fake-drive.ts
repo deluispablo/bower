@@ -140,12 +140,17 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
 
   async listAll(rootId: string): Promise<DriveFile[]> {
     await this.gate();
-    return this.live(rootId).map((f) => this.copy(f.meta));
+    return this.live(rootId).map((f) => this.listed(f));
   }
 
   async get(id: string): Promise<DriveFile> {
     await this.gate();
-    return this.copy(this.find(id).meta);
+    return this.listed(this.find(id));
+  }
+
+  /** A file as a listing gives it: its metadata, and whether a checksum of its content is kept (`unchecked`). */
+  private listed(f: Stored): DriveFile {
+    return { ...this.copy(f.meta), ...(f.bytesUnavailable && f.sha256 === undefined ? { unchecked: true as const } : {}) };
   }
 
   async readText(id: string): Promise<string> {
