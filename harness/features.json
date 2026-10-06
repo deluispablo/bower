@@ -2855,8 +2855,8 @@
       "A person-bin disposition retires it explicitly."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a declared pile whose folder vanished is not silently retired\"",
-    "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Before P2-H. TL-P2-29 (2): no new mechanism — a declared pile whose folder vanished shows the existing reason \"Nothing is left in it. Remove it from your inbox.\" with Remove, which retires the declaration through the person's removal."
+    "passes": true,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Before P2-H. TL-P2-29 (2): no new mechanism — a declared pile whose folder vanished shows the existing reason \"Nothing is left in it. Remove it from your inbox.\" with Remove, which retires the declaration through the person's removal. SUPERSEDED by TL-P2-30 (main ffeb57f): not implemented; no behaviour claimed. A folder moved, hard-deleted or purged outside Bower is the person's decision: the pile simply stops showing and its declaration stays inert. The verify (test 4a1e4f2 from claude/p2-decl-isolation 9a9deb3) pins that: for a moved-out and a hard-deleted folder, the pile is neither listed nor captured, the run stays on the B path and the declaration is untouched. Closed per METHOD (lead, 2026-10-06). Gates on 4a1e4f2: check 3353, e2e 208, e2e:fake 218."
   },
   {
     "id": "pile-member-reselection",
