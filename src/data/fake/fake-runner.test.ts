@@ -185,6 +185,54 @@ describe('the fake runner', () => {
     expect(await after.piles()).toHaveLength(piles);
   });
 
+  // journeys-cites-and-answers (C06, TL-P2-40): a hub's Timeline line cites what this run filed for it.
+  it('a project note cites the thing this tidy-up filed for it, across projects too', async () => {
+    const out = await tidyUp(drive, root);
+    if (out.phase !== 'done') throw new Error('failed');
+    const dump = drive.dump(root);
+    expect(dump.get('Projects/Flat hunt/Flat hunt.md')).toMatch(/ · A fourth flat added; the shortlist compared by commute\. · \[\[Flat 9, Wrenfield Road\]\]\n/);
+    const job = dump.get('Projects/Job hunt/Job hunt.md') ?? '';
+    expect(job).toMatch(/ · New offer from Ferrowick, scored 7 out of 10 against your CV\. · \[\[Industrial Designer, Ferrowick\]\]\n/);
+    expect(job).toMatch(/ · A flat from the same pile went to the flat hunt\. · \[\[Flat 9, Wrenfield Road\]\]\n/);
+    // The cited note links back: it is among the notes linking to the flat.
+    expect((await fresh().note('Projects/Flat hunt/Flat 9, Wrenfield Road.md')).backlinks).toEqual(expect.arrayContaining(['Projects/Flat hunt/Flat hunt.md', 'Projects/Job hunt/Job hunt.md']));
+  });
+
+  it('a project note cites nothing when what it is about was not filed in this run', async () => {
+    const p1 = (await vault.piles()).find((p) => p.id === 'p1');
+    if (!p1) throw new Error('no pile');
+    await vault.removePile(p1.id);
+    const out = await tidyUp(drive, root);
+    if (out.phase !== 'done') throw new Error('failed');
+    const dump = drive.dump(root);
+    expect(dump.get('Projects/Flat hunt/Flat hunt.md')).toMatch(/ · A fourth flat added; the shortlist compared by commute\.\n/);
+    expect(dump.get('Projects/Job hunt/Job hunt.md')).not.toContain('A flat from the same pile');
+  });
+
+  // journeys-cites-and-answers (C09): a question about stored notes is answered with links to them.
+  it('a question about your notes is answered with links to them, and the inbox waits', async () => {
+    const piles = (await vault.piles()).length;
+    await vault.addRequest('Which flat is closest to Ferrowick?');
+    await vault.addRequest('Put my id papers together');
+    const out = await tidyUp(drive, root, 'instructions');
+    if (out.phase !== 'done') throw new Error('failed');
+    const [chore, question] = await fresh().requests();
+    expect(question?.text).toBe('Which flat is closest to Ferrowick?');
+    expect(question?.done).toContain('[[Flat 7, Cobble Row]] has the shortest commute, 18 minutes');
+    expect(question?.done).toContain('[[Industrial Designer, Ferrowick]]');
+    expect(chore?.done).toBe('Done. See what changed in your folders.');
+    expect(out.report.requests).toEqual(['Which flat is closest to Ferrowick?', 'Put my id papers together']);
+    expect(await fresh().piles()).toHaveLength(piles);
+  });
+
+  it('a question about notes that are not there gets the plain line', async () => {
+    await vault.trash('Projects/Flat hunt/Flat 7, Cobble Row.md');
+    await vault.addRequest('Which flat is closest to Ferrowick?');
+    const out = await tidyUp(drive, root, 'instructions');
+    if (out.phase !== 'done') throw new Error('failed');
+    expect((await fresh().requests())[0]?.done).toBe('Done. See what changed in your folders.');
+  });
+
   it('answered questions leave the list for good', async () => {
     const q = (await vault.questions())[0];
     if (!q) throw new Error('no question');
