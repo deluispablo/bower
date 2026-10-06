@@ -42,3 +42,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: c11-no-policy-from-documents passes — chore(harness): c11-no-policy-from-documents passes (P3-1)
 - 2026-10-06: no-console-errors-on-journeys passes — chore(harness): no-console-errors-on-journeys passes (P3-1)
 - 2026-10-06: shared-domain-package passes — chore(harness): shared-domain-package passes (P3-2)
+- 2026-10-06: worker-skeleton passes — chore(harness): worker-skeleton passes (P3-2)

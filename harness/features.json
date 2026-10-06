@@ -3650,7 +3650,7 @@
       "A request from the app origin gets CORS headers; any other origin gets none."
     ],
     "verify": "pnpm -C api exec vitest run -t \"GET /health answers ok|an unknown path answers the JSON error format|CORS allows only the app origin\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-02 (main 54620a9). Reuses the original api's security.ts, errors.ts and env.ts as they are."
   },
   {
