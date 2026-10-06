@@ -11,7 +11,7 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
 - Only you maintain the live implementation backlog, proofs, progress, handoff status and phase execution ledgers. The technical lead owns adopted planning/method definitions on main under GOVERNANCE. Distinguish candidate, integrated-open and closed states. Report blocked checks honestly and keep product rulings for the owner.
 - Token budget ([TL-P2-41](../../docs/harness/2026-10-06-tl-p2-41-token-budget.md)):
   - one-page packets that point workers to `WORKER.md` only, each with an acceptance contract: named tests, observable behaviours, files in scope;
-  - dispatch Claude workers only as the project agents (`bower-implementer`, `bower-reviewer`, `bower-mechanical`, `bower-escalated`) and never pass `model`; Codex workers through `codex exec --json` with an explicit reasoning effort ([TL-P2-44](../../docs/harness/2026-10-06-tl-p2-44-enforced-token-method.md));
+  - dispatch Claude workers only as the project agents (`bower-implementer`, `bower-reviewer`, `bower-evaluator`, `bower-mechanical`, `bower-escalated`) and never pass `model`; Codex workers through `codex exec --json` with an explicit reasoning effort ([TL-P2-44](../../docs/harness/2026-10-06-tl-p2-44-enforced-token-method.md));
   - one review from the other provider, against the contract, only for contracts, data safety and shared persistence, plus one batch review at the freeze; every fix round and every climb is a fresh session, never a resumed worker;
   - logs to files;
   - messages of 10 lines at most;

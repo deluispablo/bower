@@ -30,7 +30,7 @@ The owner authorizes the named coordinator to delegate independent entries concu
 | Proofs | `harness/proof.log` | One line per closed entry, written by `harness/done.sh`: the hash of the `verify` that passed, and whether it was red first. `pnpm check` refuses an entry that passes without one. |
 | Sensors | `.claude/settings.json` hooks, `pnpm check`, `pnpm e2e`, `pnpm e2e:fake`, `pnpm e2e:pwa`, `src/architecture.test.ts` | Machines that say when something is wrong, and how to fix it. |
 | Briefs | `harness/briefs/` | What to hand a subagent: implementer, evaluator (tester), reviewer. |
-| Project agents | `.claude/agents/` | Claude workers with their model and effort pinned: implementer, reviewer, mechanical, escalated ([TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md)). |
+| Project agents | `.claude/agents/` | Claude workers with their model and effort pinned: implementer, reviewer, evaluator, mechanical, escalated ([TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md)). |
 | Token ledger | `harness/tokens.csv`, [token-baseline.md](token-baseline.md) | Billed tokens per agent run, and the baseline and targets each method change is compared with. |
 
 ## Phase acceptance before feature counts
