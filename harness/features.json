@@ -2969,5 +2969,61 @@
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"an unreadable declaration affects only its own pile\"",
     "passes": false,
     "note": "TL-P2-08 (a), main c759ce1. Planned, not implemented."
+  },
+  {
+    "id": "run-report-save-barrier-legacy",
+    "task": "qa-24",
+    "category": "review",
+    "what": "On the legacy path a tidy-up never shows done before its report is saved, never files again and fails honestly after a reload.",
+    "steps": [
+      "Refuse only the terminal done view with its report after the run has filed.",
+      "The run stays saving without a finish time and logs the error; the next status call in the same session saves the same report without filing again.",
+      "After a reload the cut-off run reads as failed with the honest wording and nothing is filed again."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"report save failure cannot publish done or repeat effects on the legacy path\"",
+    "passes": false,
+    "note": "TL-P2-06 item 1 legacy path; U1 of docs/harness/2026-10-06-o4-unit-packet.md. Parent run-report-save-barrier closes after U2 (B path). Planned, not implemented."
+  },
+  {
+    "id": "b-path-journal",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Runs that apply the person's changes from the journal take the recoverable path with grounded report rows.",
+    "steps": [
+      "Plan a run with journal records to archive.",
+      "Archive operations and request rows are fixed in the manifest and grounded by B's existing rules.",
+      "Recovery never archives twice or reports an unarchived change."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"journal changes take the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-10 item 3. Planned, not implemented."
+  },
+  {
+    "id": "b-path-generated-note",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Runs that create a generated note (an empty pile's words, a pile note) take the recoverable path.",
+    "steps": [
+      "Plan a run that needs a generated note.",
+      "Its create-text operation has a validated destination rule (lead decision pending) and a create key.",
+      "Recovery never creates it twice."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a generated note is created once through the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-10 item 3; destination rule to come as its own TL decision. Planned, not implemented."
+  },
+  {
+    "id": "pile-set-aside-reason-visible",
+    "task": "qa-23",
+    "category": "feature",
+    "what": "A pile that a tidy-up set aside shows its reason and the action to take in the Inbox, not only in the report.",
+    "steps": [
+      "Leave a declared pile unready, changed or empty and run a tidy-up.",
+      "The Inbox pile and its screen show the approved sentence and the action (Try again, Remove), and a changed member shows as changed.",
+      "The reason stays after the next run and clears once the pile is ready or removed."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a set-aside pile shows its reason in the inbox\"",
+    "passes": false,
+    "note": "TL-P2-11 (2): field on Pile/PileItem plus a changed member state, minimal Inbox/PileScreen change with existing components, e2e demo + fake. After readiness, before P2-H. Planned, not implemented."
   }
 ]

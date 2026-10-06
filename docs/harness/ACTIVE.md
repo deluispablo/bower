@@ -33,6 +33,9 @@
 - Monotonic candidate `c3f2b3e`/`e3a0dbc` under review `mono-review-1`; guard-6 candidate `9235536`/`e21a777` under review `g6-review-1`.
 - `run-checkpoint-monotonic` CLOSED (`26c8dc9`), review [mono-review-1](2026-10-06-checkpoint-monotonic-review.md) CLEAN. Readiness candidate `3e8f154`/`d3a4830`/`8fd40b9`/`7e74934` (producer on for `?source=fake`, off for real) under review `ready-review-1`. Upload queue phase 1 in implementation ([packet](2026-10-06-upload-queue-unit.md)).
 - TL-P2-08 (main `c759ce1`) registered as `declaration-read-isolation` and `declared-pile-context-arrival` (own entries; readiness candidate already under review). Main `c759ce1` backed up and verified private.
+- `run-manifest-content-consistency` CLOSED (`41717df`). 224/240. Readiness rework (`f5773c8`/`acd3ab1`/`3cff93f`/`222051d`) in delta review; upload queue phase 1 BLOCKED (`uq-review-1`, [report](2026-10-06-upload-queue-review.md)) and in rework.
+- O4 packet [2026-10-06-o4-unit-packet.md](2026-10-06-o4-unit-packet.md) with TL-P2-10 answers. Assignment I-u1: Claude `barrier-legacy-impl-1`, entry `run-report-save-barrier-legacy`, checkout `/private/tmp/bower-p2-barrier-legacy` (`claude/p2-report-barrier-legacy`) base `e102fcb`; owns only `fake-worker.ts` and its test. U2 waits for readiness.
+- TL-P2-10/11 (main `cf206a5`, backed up): registered `b-path-journal`, `b-path-generated-note`, `pile-set-aside-reason-visible`; readiness copy approved. Pending owner confirmation: one active session per person with takeover may replace app–app concurrency in C14; no NEW entries whose only purpose is two-app-session concurrency until the lead confirms.
 
 # Previous coordinator: stopped and released
 
