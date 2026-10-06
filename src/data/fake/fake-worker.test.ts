@@ -4215,6 +4215,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(filed).toHaveLength(1);
       expect(filed[0]?.value.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE }]);
       expect(filed[0]?.requires).toEqual(expect.arrayContaining([create.operationId, move.operationId]));
+      // TL-P2-40: the note it wrote is listed with the notes the run made.
+      expect(filed[0]?.value.created).toEqual([{ path: NOTE, what: expect.stringContaining('curry.example/weeknight') }]);
       expect(manifest.reportPlan).toContainEqual({ requires: [move.operationId], when: 'rejected', value: { filed: [], created: [], updated: [], setAside: [{ name: CURRY.name, why: AGAIN }], questions: [] } });
       expect(grounded(manifest)).toBe(true);
       expect(await groundedKeys(manifest)).toBe(true);
@@ -4223,6 +4225,12 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const plan = (patch: (c: ReportContribution) => ReportContribution): AnyManifest => ({ ...manifest, reportPlan: manifest.reportPlan.map((c, i) => (i === at ? patch(c) : c)) }) as AnyManifest;
       expect(grounded(plan((c) => ({ ...c, requires: c.requires.filter((r) => r !== create.operationId) })))).toBe(false);
       expect(grounded(plan((c) => ({ ...c, value: { ...c.value, filed: c.value.filed.map((r) => ({ ...r, note: 'Resources/Cooking/Elsewhere.md' })) } })))).toBe(false);
+      // Its made row names that very note, once, with words; a filed row that wrote no note lists none.
+      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, created: [{ path: 'Resources/Cooking/Elsewhere.md', what: 'A note.' }] } })))).toBe(false);
+      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, created: [...c.value.created, ...c.value.created] } })))).toBe(false);
+      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, created: c.value.created.map((r) => ({ ...r, what: '' })) } })))).toBe(false);
+      const rejectedAt = manifest.reportPlan.findIndex((c) => c.when === 'rejected' && c.requires.includes(move.operationId));
+      expect(grounded({ ...manifest, reportPlan: manifest.reportPlan.map((c, i) => (i === rejectedAt ? { ...c, value: { ...c.value, created: [{ path: NOTE, what: 'A note.' }] } } : c)) } as AnyManifest)).toBe(false);
       const rekeyed = { ...manifest, operations: (manifest.operations as OperationV2[]).map((o) => (o === create && o.effect.kind === 'create-text' ? { ...o, effect: { ...o.effect, createKey: 'another-key' } } : o)) } as AnyManifest;
       expect(await groundedKeys(rekeyed)).toBe(false);
 
@@ -4291,6 +4299,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await notesOf(w)).toHaveLength(1);
       expect(w.drive.pathOf(link.id, w.rootId)).toBe(`Resources/Cooking/${link.name}`);
       expect(viewOf(w)?.run.report?.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE }]);
+      // A note reused is not one this run made.
+      expect(viewOf(w)?.run.report?.created.map((c) => c.path)).not.toContain(NOTE);
     });
 
     it('checks a reused note again in the same step as the move, and sets the link aside when it is no longer the one', async () => {
@@ -4671,6 +4681,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(asked(w)).toEqual(['q-keep']);
       expect(await pendingAnswers(w)).toEqual([]);
       expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: LISTING.name, title: 'Flat 3, 12 Larkspur Lane', kind: 'link', to: 'Projects/Flat hunt', note: INTO });
+      // TL-P2-40: the note the thing joined is listed as brought up to date, by its line.
+      expect(manifest.reportPlan).toContainEqual({ requires: [edit?.operationId], when: 'applied', value: { filed: [], created: [], updated: [{ path: INTO, what: LINE }], setAside: [], questions: [] } });
+      expect(viewOf(w)?.run.report?.updated).toContainEqual({ path: INTO, what: LINE });
       await expectFiledOnce(w);
     });
 
@@ -4723,6 +4736,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(asked(w)).toEqual(['q-keep']);
       expect(await pendingAnswers(w)).toEqual([]);
       expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: LISTING.name, title: 'Wrenfield Road listing', kind: 'link', to: 'Projects/Flat hunt' });
+      expect(viewOf(w)?.run.report?.updated.map((u) => u.path)).not.toContain(INTO);
     });
 
     it("never merges into a person's own note: the thing is filed as usual and the answer archived", async () => {

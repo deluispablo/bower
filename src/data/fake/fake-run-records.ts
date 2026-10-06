@@ -343,6 +343,20 @@ export function grounded(manifest: RunManifest): boolean {
     written.add(op.operationId);
     return true;
   };
+  /**
+   * A saved link's filed row lists its note as made (TL-P2-40) only when the run writes it: one `created` row with
+   * that note's resolved path and some wording, the note's create in the row's requires. A reused note has none.
+   */
+  const linkNoteMade = (c: ReportContribution, note: string | undefined): boolean => {
+    const [made, ...more] = c.value.created;
+    if (!made || more.length || note === undefined || made.path !== note || !made.what) return false;
+    return c.requires.some((id) => {
+      const o = ops.get(id);
+      if (o?.effect.kind !== 'create-text' || o.effect.purpose !== 'generated' || !linkNote(o)) return false;
+      const parent = pathOf(o.effect.parent);
+      return parent !== null && join(parent, o.effect.name) === note;
+    });
+  };
   const filed = new Set<string>();
   const setAside = new Set<string>();
   const claimedNotes = new Set<string>();
@@ -365,7 +379,7 @@ export function grounded(manifest: RunManifest): boolean {
       if (!updatedRow(c)) return false;
       continue;
     }
-    if (v.created.length || v.updated.length || v.questions.length || v.rulesWorded !== undefined) return false;
+    if (v.updated.length || v.questions.length || v.rulesWorded !== undefined) return false;
     const moves = c.requires.flatMap((id) => {
       const op = ops.get(id);
       return op?.effect.kind === 'move' && members.has(op.effect.before.fileId) ? [{ ...op, effect: op.effect }] : [];
@@ -375,6 +389,8 @@ export function grounded(manifest: RunManifest): boolean {
     if (!moveOp || !move || more.length) return false;
     const member = members.get(move.before.fileId);
     if (!member) return false;
+    // Only a saved link's filed row may list a note as made: the one it wrote, below.
+    if (v.created.length && (c.when !== 'applied' || !v.filed.length)) return false;
     if (c.when === 'rejected') {
       const [row, ...rest] = v.setAside;
       if (v.filed.length || !row || rest.length || row.name !== member.file.name || setAside.has(member.file.fileId)) return false;
@@ -394,6 +410,7 @@ export function grounded(manifest: RunManifest): boolean {
     if (row.name !== member.file.name || row.to !== pathOf(move.parent) || filed.has(member.file.fileId)) return false;
     if (!chainOf(move.parent).every((id) => c.requires.includes(id))) return false;
     if (row.note !== undefined && !noteGrounded(manifest, c, moveOp, row.note, claimedNotes)) return false;
+    if (v.created.length && !linkNoteMade(c, row.note)) return false;
     filed.add(member.file.fileId);
   }
   // Every captured line's every file is moved once, into the archive, and the line is claimed by one row.

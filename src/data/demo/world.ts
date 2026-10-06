@@ -442,6 +442,18 @@ export class DemoWorld {
     const filed: FiledItem[] = [];
     // The notes this run wrote, worded as the run over Drive words them; a note a thing joined is not one of them.
     const created: RunReport['created'] = [];
+    // The notes this run brought up to date: a Timeline line added once, the note marked new, a row for it.
+    // A line already there (from any run) is not added, marked or reported again, as the run over Drive does.
+    const updated: RunReport['updated'] = [];
+    const addLine = (path: string, what: string): void => {
+      const e = this.entries.get(path);
+      if (!e) return;
+      const n = this.noteFor(path);
+      if (n.timeline.some((t) => t.text === what)) return;
+      this.notes.set(path, { ...n, timeline: [...n.timeline, { date: 'Today', text: what }] });
+      this.entries.set(path, { ...e, modified: at, isNew: true });
+      updated.push({ path, what });
+    };
     // A pile set aside stays in the inbox, with its reason, as a tidy-up over Drive leaves it.
     const aside = this.piles.filter((p) => p.setAside);
     const taken = this.piles.filter((p) => !p.setAside && (!this.runPiles.size || this.runPiles.has(p.id)));
@@ -477,8 +489,7 @@ export class DemoWorld {
           const name = freeName(this.entries, folder, merge.title);
           this.entries.set(join(folder, name), { path: join(folder, name), type: 'file', kind: item.kind, modified: at, created: at, isNew: true });
           if (item.kind === 'link') this.links.set(join(folder, name), `https://${item.name}`);
-          const n = this.noteFor(merge.into);
-          this.notes.set(merge.into, { ...n, timeline: [...n.timeline, { date: 'Today', text: merge.line }] });
+          addLine(merge.into, merge.line);
           filed.push({ name: item.name, title: displayName(nameOf(merge.into)), kind: item.kind, to: folder, note: merge.into });
           continue;
         }
@@ -490,6 +501,8 @@ export class DemoWorld {
         const path = join(folder, name);
         this.entries.set(path, { path, type: 'file', kind: kindOf(name), modified: at, created: at, isNew: true, byBower: kindOf(name) === 'note' });
         if (item.kind === 'link') this.links.set(path, `https://${item.name}`);
+        // A saved link filed as a note is a note this run wrote, as over Drive.
+        if (item.kind === 'link' && kindOf(name) === 'note') created.push({ path, what: `Saved from ${item.name}.` });
         const f: FiledItem = { name: item.name, title: thingName(name), kind: item.kind, to: folder };
         if (plan.note) {
           this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
@@ -502,20 +515,10 @@ export class DemoWorld {
     this.piles = this.piles.filter((p) => !taken.includes(p));
     this.runPiles = new Set();
     this.syncInbox();
-    const touch = (p: string): void => {
-      const e = this.entries.get(p);
-      if (e) this.entries.set(p, { ...e, modified: at, isNew: true });
-    };
-    const updated = [
-      { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },
-      { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.' },
-    ];
-    updated.forEach((u) => {
-      touch(u.path);
-      if (!this.entries.has(u.path)) return;
-      const n = this.noteFor(u.path);
-      this.notes.set(u.path, { ...n, timeline: [...n.timeline, { date: 'Today', text: u.what }] });
-    });
+    addLine('Projects/Flat hunt/Flat hunt.md', 'A fourth flat added; the shortlist compared by commute.');
+    addLine('Projects/Job hunt/Job hunt.md', 'New offer from Ferrowick, scored 7 out of 10 against your CV.');
+    // In path order, as the run over Drive plans its note edits.
+    updated.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     // Only the questions this tidy-up asked; the open ones stay on Home.
     const asked = taken.some((p) => /saltmere/i.test(p.text)) && !this.questions.some((q) => q.id === 'q-saltmere') ? [saltmereQuestion(at)] : [];
     this.questions = [...this.questions, ...asked];

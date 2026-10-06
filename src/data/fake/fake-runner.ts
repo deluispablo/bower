@@ -533,7 +533,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const m = thing.merge;
     const f = m && date ? ix.file(m.into) : undefined;
     if (!m || !f || f.folder || !m.into.endsWith('.md') || m.into.startsWith('Inbox/') || m.into.startsWith(`${SYSTEM.dir}/`)) continue;
-    want(f, m.into).lines.push({ entry: { date: date ?? '', text: m.line, source: null }, record: m.answer, what: null });
+    want(f, m.into).lines.push({ entry: { date: date ?? '', text: m.line, source: null }, record: m.answer, what: m.line });
   }
   // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
   const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
@@ -723,7 +723,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
         places.set(keptIn.id, keptIn);
         const name = freeName(planned, to, thing.file.name);
         plannedFile(join(to, name));
-        filing.push({ thing, to, name, note: { name: kept.name, key, text: null } });
+        filing.push({ thing, to, name, note: { name: kept.name, key, text: null, what: null } });
         continue;
       }
       const address = savedLinkAddress(linkText) ?? thing.item.name;
@@ -734,7 +734,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       plannedFile(join(to, noteName));
       const name = freeName(planned, to, thing.file.name);
       plannedFile(join(to, name));
-      filing.push({ thing, to, name, note: { name: noteName, key, text } });
+      filing.push({ thing, to, name, note: { name: noteName, key, text, what: `Saved from ${address}.` } });
       continue;
     }
     const to = guessOf(thing.words, thing.item);
@@ -878,7 +878,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }
     if (note) {
       // R3-5: filed only with every operation for it; a rejected move (or its note's) leaves it to the next run.
-      reportPlan.push({ requires: [...(created ? [created] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(note.name), kind: thing.item.kind, to, note: join(to, note.name) }] } });
+      // The note it wrote is listed with the notes the run made; one reused is not (R4-2).
+      const made = created && note.what !== null ? [{ path: join(to, note.name), what: note.what }] : [];
+      reportPlan.push({ requires: [...(created ? [created] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(note.name), kind: thing.item.kind, to, note: join(to, note.name) }], created: made } });
       reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
       return;
     }
@@ -1281,7 +1283,7 @@ function generatedName(title: string): string {
 }
 
 
-/** A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), a hub's row wording. */
+/** A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), its note's updated row wording. */
 type WantedLine = { entry: EditEntry; record: string | null; what: string | null };
 /** What a run wants to change in one note, before applyChanges decides what it may. */
 type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null; rules: RulesWording | null };
@@ -1312,8 +1314,8 @@ function mentions(bytes: Uint8Array, renames: readonly Rename[]): boolean {
   });
 }
 
-/** A saved link's note: its name, its stable key, and its text when the run writes it (null when one is reused). */
-type SavedNote = { name: string; key: string; text: string | null };
+/** A saved link's note: its name, its stable key, its text and its created row's wording when the run writes it (null when one is reused). */
+type SavedNote = { name: string; key: string; text: string | null; what: string | null };
 
 /** Where the fixture or the pile's words send a thing. */
 function guessOf(words: string, item: PileItem): string {
