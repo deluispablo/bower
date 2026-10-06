@@ -11,7 +11,7 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## The plan, in order
 
-1. Lead adopts the P3 plan (P3_DRAFT is not adopted until P2 closes). Optional, lead's call: a supplemental walk of the NOT RUN cells listed in the dossier.
+1. [TL-P2-47](DECISIONS.md): one supplemental walk on 3e6e7da before P3 implementation (see ACTIVE); P3 planning runs in parallel. First P3 batch entries: C11 "no policy change from documents" and an app console-error e2e check.
 2. Coordinator resumes from HANDOFF/ACTIVE and runs P3 batches under the same method. Codex is back as reviewer from 2026-10-12 (no re-review of 4d7ab08, TL-P2-46).
 
 ## How to run a round

@@ -20,3 +20,4 @@ focus-after-replay-and-route,implementer,claude,sonnet,,1,99448,,,,,,36,14.4,del
 replay-f1-f2-3e6e7da,mechanical,claude,haiku,,1,55576,,,,,,32,2.5,stalled: never reached the replay dialog (climb to Sonnet),2026-10-06
 p2-dossier-map,documenter,claude,sonnet,,1,126019,,,,,,20,2.1,delivered (read-only map),2026-10-06
 replay-f1-f2-3e6e7da,evaluator,claude,sonnet,,2,84544,,,,,,20,4.0,reported FAIL; not reproduced by Playwright on the same build (13 runs, fake and demo, phone and desktop) or by hand (coordinator),2026-10-06
+staging-deploy-p2close,mechanical,claude,haiku,low,1,45819,,,,,,13,1.4,delivered,2026-10-06
