@@ -39,6 +39,8 @@ export type Where = { runId: string } | 'piles';
 
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
 const READ_FAILED = 'Bower could not read what it did. Try again later.';
+/** A manifest version later than this build reads (TL-P2-20 R3-7 m9): the run stays saving. */
+const NEWER_BOWER = 'This tidy-up needs a newer Bower.';
 
 /** Canonical text and identity of a record; a value outside the record domain is refused, never written. */
 export async function canonical(value: unknown): Promise<{ text: string; bytes: Uint8Array; hash: string }> {
@@ -361,7 +363,9 @@ export class RunRecords {
     const parsed = bytes ? await parseRunManifestV2(bytes, this.rootId) : null;
     if (!parsed?.ok || parsed.sha256 !== hash || parsed.value.runId !== runId) {
       console.error(`The manifest of run ${runId} is ${parsed ? (parsed.ok ? 'another run' : parsed.reason) : 'missing'}`);
-      throw new BowerError('unknown', READ_FAILED);
+      // A later version is named only for the very bytes the run recorded; damaged bytes stay a read failure.
+      const later = bytes !== null && parsed?.ok === false && parsed.reason === 'version' && (await sha256(new Blob([bytes.slice()]))) === hash;
+      throw new BowerError('unknown', later ? NEWER_BOWER : READ_FAILED);
     }
     return parsed.value;
   }

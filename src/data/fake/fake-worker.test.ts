@@ -10,12 +10,13 @@ import type { LastRunFile, QuestionsFile, RequestsFile } from '../vault/layout';
 import type { JournalRecord } from '../vault/journal';
 import { driveError, type DriveFile } from '../drive/drive-api';
 import { LiveRuns } from '../live/runs';
-import { FAILURE, planRun } from './fake-runner';
+import { FAILURE, planRun, type HubUpdate } from './fake-runner';
 import type { RunWire } from '../worker/worker-api';
 import { CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type FakeRunServiceOptions } from './fake-run-service';
 import type { FaultAction, FencedCall } from '../drive/fake-drive';
-import type { EditText, Manifest, ManifestV2, OperationV2, ReportContribution } from '../contracts/run-manifest';
-import { grounded } from './fake-run-records';
+import { MANIFEST_V2_LIMIT, type EditText, type Manifest, type ManifestV2, type OperationV2, type ReportContribution } from '../contracts/run-manifest';
+import { EDIT_FILE_LIMIT } from '../contracts/note-edit';
+import { canonical, grounded } from './fake-run-records';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
@@ -604,14 +605,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
    * The template folder with two ready piles of plain files (one with a line, one without): only B effects.
    * Every fenced write is seen by `calls`; the ones that changed the Drive by `applied`.
    */
-  async function bWorld(o: { declared?: boolean; scenario?: Scenario; hooks?: Hooks } = {}) {
+  async function bWorld(o: { declared?: boolean; scenario?: Scenario; hooks?: Hooks; updates?: readonly HubUpdate[] } = {}) {
     localStorage.clear();
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     let now = Date.now();
     const clock = { now: (): number => now, later: (ms = RETRY_MS + 1): void => { now += ms; } };
     const drive = new FakeDrive();
     const runs = new FakeRunService({ drive, clock: clock.now, scale: 'instant', ...(o.hooks ? { hooks: o.hooks } : {}) });
-    const worker = new FakeWorker({ drive, scenario: o.scenario ?? 'first', scale: 'instant', rootId: null, runs });
+    const worker = new FakeWorker({ drive, scenario: o.scenario ?? 'first', scale: 'instant', rootId: null, runs, ...(o.updates ? { updates: o.updates } : {}) });
     const rootId = (await worker.createFolder()).id;
     const uploader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), declarePiles: !!o.declared, device: 'DEVICE_A' });
     await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
@@ -2878,6 +2879,139 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(await outcomeOf(run.w, run.admitted.id, run.edit)).toMatchObject({ state: 'possible-effect' });
         expect(reads(run.w, state)).toBe(true);
       }
+    });
+
+    // note-edit-consumer-limits (TL-P2-29 (1), corrected): at most 8 edit-text per run in code-point path order, then
+    // fewer from the end of that order until the manifest fits the guard's 8 MiB; the rest wait for the next run.
+    it('note edits past the size cap wait for the next run', async () => {
+      /** Code-point order, the same everywhere (not the locale's). */
+      const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+      /** A world with these hub notes to bring up to date, each with these bytes. */
+      async function hubs(names: string[], text: string) {
+        const updates = names.map((n) => ({ path: `Projects/${n}/${n}.md`, what: `${n} brought up to date.` }));
+        const w = await bWorld({ updates });
+        const files = new Map<string, DriveFile>();
+        for (const u of updates) files.set(u.path, await hub(w, u.path, text));
+        const sorted = updates.map((u) => u.path).sort(byCodePoint);
+        return { w, sorted, idOf: (path: string): string => files.get(path)?.id ?? '', whatOf: (path: string): string => updates.find((u) => u.path === path)?.what ?? '' };
+      }
+      /** One more full tidy-up, with a pile to take: done on the B path, its v2 manifest's edit paths. */
+      async function tidy(w: World, n: number): Promise<{ manifest: ManifestV2 | undefined; paths: string[] }> {
+        if (n) {
+          await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
+          await w.uploader.settled();
+        }
+        const admitted = await w.worker.process('all');
+        await w.runs.settled();
+        expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+        const manifest = (await manifestsV2(w)).find((m) => m.runId === admitted.id);
+        expect(manifest, 'the run took the B path').toBeDefined();
+        return { manifest, paths: editsOf(manifest).map((o) => o.effect.path) };
+      }
+
+      // Ten small notes: exactly the first 8 in code-point path order ('Hub B' before 'Hub a').
+      const names = ['Hub d', 'Hub 03', 'Hub a', 'Hub 01', 'Hub c', 'Hub 05', 'Hub 02', 'Hub B', 'Hub 04', 'Hub 06'];
+      const { w, sorted, idOf, whatOf } = await hubs(names, FLAT_BEFORE);
+      const first = sorted.slice(0, 8);
+      const rest = sorted.slice(8);
+      expect(first.slice(6)).toEqual(['Projects/Hub B/Hub B.md', 'Projects/Hub a/Hub a.md']);
+      const one = await tidy(w, 0);
+      expect(one.manifest?.v).toBe(2);
+      expect(one.paths).toEqual(first);
+      // The deferred notes: no operation, no captured place, no call at all, no row; their bytes as they were.
+      for (const path of rest) {
+        expect(touching(one.manifest, idOf(path))).toEqual([]);
+        expect(one.manifest?.capture.places.map((p) => p.path)).not.toContain(path);
+        expect(w.calls.filter((c) => 'id' in c && c.id === idOf(path))).toEqual([]);
+        expect(textAt(w, path)).toBe(FLAT_BEFORE);
+      }
+      expect(viewOf(w)?.run.report?.updated).toEqual(first.map((path) => ({ path, what: whatOf(path) })));
+      await expectFiledOnce(w);
+      // The next tidy-up skips the 8 lines already there and adds the rest: every note has its line once.
+      const two = await tidy(w, 1);
+      expect(two.paths).toEqual(rest);
+      for (const path of sorted) {
+        expect(writesTo(w.calls, idOf(path))).toHaveLength(1);
+        expect(textAt(w, path)?.split(whatOf(path))).toHaveLength(2);
+      }
+      expect(viewOf(w)?.run.report?.updated).toEqual(rest.map((path) => ({ path, what: whatOf(path) })));
+
+      // Ten notes just under 1 MiB, full of quotes and backslashes that JSON escapes: 8 would pass the guard's 8 MiB,
+      // so each run takes fewer, from the start of the path order, stays on the B path, and later runs converge.
+      const filler = 'She wrote "keep C:\\notes\\flats" and \\"quoted\\" it twice.\n';
+      const personal = filler.repeat(Math.floor((EDIT_FILE_LIMIT - FLAT_BEFORE.length - 1024) / filler.length));
+      const big = FLAT_BEFORE.replace('Your own words about the flats.\n', `Your own words about the flats.\n${personal}`);
+      expect(new TextEncoder().encode(big).byteLength).toBeLessThan(EDIT_FILE_LIMIT);
+      expect(new TextEncoder().encode(big).byteLength).toBeGreaterThan(EDIT_FILE_LIMIT - 2048);
+      const large = await hubs(['Big 07', 'Big 02', 'Big 10', 'Big 05', 'Big 01', 'Big 09', 'Big 04', 'Big 08', 'Big 03', 'Big 06'], big);
+      const done: string[] = [];
+      for (let n = 0; done.length < large.sorted.length && n < 10; n++) {
+        const run = await tidy(large.w, n);
+        expect(run.manifest?.v).toBe(2);
+        expect(run.paths.length).toBeGreaterThan(0);
+        expect(run.paths.length).toBeLessThan(8);
+        expect(run.paths).toEqual(large.sorted.filter((p) => !done.includes(p)).slice(0, run.paths.length));
+        expect(new TextEncoder().encode(JSON.stringify(run.manifest)).byteLength).toBeLessThanOrEqual(MANIFEST_V2_LIMIT);
+        done.push(...run.paths);
+        for (const path of large.sorted.filter((p) => !done.includes(p))) expect(writesTo(large.w.calls, large.idOf(path))).toEqual([]);
+      }
+      expect(done).toEqual(large.sorted);
+      for (const path of large.sorted) {
+        expect(writesTo(large.w.calls, large.idOf(path))).toHaveLength(1);
+        expect(textAt(large.w, path)?.split(large.whatOf(path))).toHaveLength(2);
+      }
+      // Several runs over ten notes of about 1 MiB, each manifest near 8 MiB: hashing takes seconds.
+    }, 30_000);
+
+    // TL-P2-20 R3-7 m9: a build that reads manifest versions names a later one plainly, and leaves the run saving;
+    // only for the very bytes the run recorded (their digest is the name's), never for damaged ones.
+    it('an unknown later manifest version says this tidy-up needs a newer Bower', async () => {
+      /** A saving run reloaded on a Drive whose manifest now says v: 3, renamed to its digest when `matching`. */
+      async function later(matching: boolean) {
+        const w = await refusedView();
+        expect(await w.worker.status()).toMatchObject({ id: w.admitted.id, phase: 'saving' });
+        const drive = FakeDrive.restore(await w.drive.snapshot());
+        const [record] = (await drive.listAll(w.rootId)).filter((f) => !f.folder && f.name.startsWith('manifest-'));
+        if (!record) throw new Error('no manifest record');
+        const oldHash = record.name.slice('manifest-'.length, -'.json'.length);
+        const next = await canonical({ ...(JSON.parse(await drive.readText(record.id)) as Record<string, unknown>), v: 3 });
+        await drive.writeText(record.id, next.text, record.modifiedTime);
+        let json = w.runs.toJSON();
+        if (matching) {
+          await drive.update(record.id, { name: `manifest-${next.hash}.json` });
+          json = json.split(oldHash).join(next.hash);
+        }
+        const view = drive.dump(w.rootId).get(SYSTEM.lastRun);
+        const applied: FencedCall[] = [];
+        drive.fault = { applied: (call) => { applied.push(call); } };
+        const runs = FakeRunService.restore(json, { drive, clock: w.clock.now, scale: 'instant' });
+        const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+        const asked = worker.status();
+        await expect(asked).rejects.toBeInstanceOf(BowerError);
+        const message = await asked.then(() => '', (e: unknown) => (e instanceof Error ? e.message : ''));
+        await runs.settled();
+        expect(applied).toEqual([]);
+        expect(drive.dump(w.rootId).get(SYSTEM.lastRun)).toBe(view);
+        expect(w.errors.mock.calls.some((c) => String(c[0]).includes('version'))).toBe(true);
+        return message;
+      }
+      expect(await later(true)).toBe('This tidy-up needs a newer Bower.');
+    });
+
+    it('a damaged manifest that says a later version keeps the read failure', async () => {
+      const w = await refusedView();
+      const drive = FakeDrive.restore(await w.drive.snapshot());
+      const [record] = (await drive.listAll(w.rootId)).filter((f) => !f.folder && f.name.startsWith('manifest-'));
+      if (!record) throw new Error('no manifest record');
+      // The name keeps the old digest: these bytes are not the ones the run recorded.
+      const value = { ...(JSON.parse(await drive.readText(record.id)) as Record<string, unknown>), v: 3 };
+      await drive.writeText(record.id, (await canonical(value)).text, record.modifiedTime);
+      const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
+      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+      const asked = worker.status();
+      await expect(asked).rejects.toBeInstanceOf(BowerError);
+      await expect(asked).rejects.toThrow('Bower could not read what it did. Try again later.');
+      await runs.settled();
     });
   });
 });

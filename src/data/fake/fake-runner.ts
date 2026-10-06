@@ -195,8 +195,10 @@ export type HubUpdate = { path: string; what: string };
  * `requestedAt`: only on Bower's notes (ownership/2, or `by: bower`), never
  * when the line is already there, and with the in-place "new" move after it.
  * The manifest is v2 only when it holds an edit; otherwise it stays v1.
+ * At most `editCap` edits are planned, in code-point path order (TL-P2-29 (1)); when the manifest guard
+ * refuses the plan as too big, it is planned again with one edit fewer. The rest wait for the next run.
  */
-export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions): Promise<RunPlan> {
+export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions, editCap = EDITS_PER_RUN): Promise<RunPlan> {
   const legacy = (why: string): RunPlan => ({ path: 'legacy', why });
   const all = opts.scope === 'all';
   const listing = await drive.listAll(rootId);
@@ -339,7 +341,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // the line is already there (from any day), so nothing is planned for that note and the run goes on without it.
   const edits: Array<{ file: DriveFile; path: string; what: string; before: VerifiedContent; changes: Change[]; text: string }> = [];
   const date = timelineDate(opts.requestedAt);
-  for (const u of all && date ? [...(opts.updates ?? UPDATES)].sort((a, b) => a.path.localeCompare(b.path)) : []) {
+  for (const u of all && date ? [...(opts.updates ?? UPDATES)].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) : []) {
+    // At most editCap edits, in path order; the rest wait for the next run, which skips the lines already there.
+    if (edits.length >= editCap) break;
     const f = ix.file(u.path);
     if (!f || f.folder) continue;
     const before = await verified(f, 'utf8');
@@ -489,6 +493,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const manifest: Manifest | ManifestV2 = v1.length === operations.length ? { v: 1, ...head, operations: v1 } : { v: 2, ...head, operations };
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId);
   if (!checked.ok) {
+    // Past the guard's own size limit: the last edit in path order waits for the next run, and the run is planned again.
+    if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return planRun(drive, rootId, opts, edits.length - 1);
     console.error(`A B plan was refused by the manifest guard (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''}); the run takes the legacy path`);
     return legacy('manifest');
   }
@@ -557,6 +563,11 @@ async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[
 
 /** Requests a run takes at most, the oldest first: requests.json keeps the last 20 done. */
 const REQUESTS_PER_RUN = 20;
+/**
+ * Note edits a run plans at most, in path order (TL-P2-29 (1)); fewer when the manifest would pass the guard's
+ * 8 MiB. Nothing is written for the rest; they stay as they are and the next run plans them.
+ */
+const EDITS_PER_RUN = 8;
 /** The fake Worker's refusal of an instructions run with nothing new (409). */
 const NOTHING_TO_READ = 'There is nothing new for Bower to read.';
 /** The same refusal of a full run when every waiting pile is held for readiness (409 `nothing`, TL-P2-21). */
