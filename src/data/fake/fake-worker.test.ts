@@ -2319,6 +2319,26 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await linesOf(w)).toEqual([]);
     });
 
+    // TL-P2-20 I10: what is counted is what the written edit words, its link rewrite applied first.
+    it('never counts a rule the link rewrite makes a repeat of one already there', async () => {
+      const w = await bWorld();
+      const rules = await fileAt(w, RULES);
+      await w.drive.writeText(rules.id, serializeRules([{ id: 'rule-1', text: 'Keep [[Garden]] receipts together.', yourWords: 'keep garden receipts together', since: Date.parse('2026-10-01T00:00:00Z') }]), rules.modifiedTime);
+      await w.drive.createText((await fileAt(w, 'Projects')).id, 'Garden.md', '# Garden\n');
+      await vaultOf(w).rename('Projects/Garden.md', 'Garden plans');
+      await vaultOf(w).addRule('Keep [[Garden plans]] receipts together');
+      const line = (await linesOf(w)).find((l) => l.rec.kind === 'rule');
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const files = manifest?.capture.journal.find((j) => j.recordId === line?.rec.id)?.fileIds ?? [];
+      const archives = new Set(files.flatMap((id) => archivesOf(manifest, id).map((o) => o.operationId)));
+      expect(manifest?.reportPlan.find((c) => c.requires.some((id) => archives.has(id)))?.value).toMatchObject({ yourChanges: 0 });
+      expect(parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => r.text)).toEqual(['Keep [[Garden plans]] receipts together.']);
+      expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
+      expect(await linesOf(w)).toEqual([]);
+    });
+
     it("leaves rules pending when Rules.md is not Bower's, and files the rest on the recoverable path", async () => {
       const w = await bWorld();
       const rules = await fileAt(w, RULES);
