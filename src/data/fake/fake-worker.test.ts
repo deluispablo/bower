@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
-import { SYSTEM } from '../vault/layout';
+import { PROP, SYSTEM } from '../vault/layout';
 import { FakeWorker } from './fake-worker';
 import { seedFakeDrive } from './seed';
 import { DriveVault } from '../vault/drive-vault';
@@ -12,7 +12,7 @@ import { driveError, type DriveFile } from '../drive/drive-api';
 import { LiveRuns } from '../live/runs';
 import { FAILURE, planRun, type HubUpdate } from './fake-runner';
 import type { RunWire } from '../worker/worker-api';
-import { CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type FakeRunServiceOptions } from './fake-run-service';
+import { B_FAILURE, CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type FakeRunServiceOptions } from './fake-run-service';
 import type { FaultAction, FencedCall } from '../drive/fake-drive';
 import { MANIFEST_V2_LIMIT, type EditText, type Manifest, type ManifestV2, type OperationV2, type ReportContribution } from '../contracts/run-manifest';
 import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
@@ -24,6 +24,10 @@ import { ALEX, saltmereQuestion, wordRule } from '../demo/fixture';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { nameOf } from '../tree';
 import { pretendDrive, pretendRuns } from './pretend';
+import { SET_ASIDE_TEXT } from '../pile-readiness';
+import * as runner from './fake-runner';
+import * as runManifest from '../contracts/run-manifest';
+import * as runRecords from './fake-run-records';
 
 afterEach(() => vi.useRealTimers());
 
@@ -5234,6 +5238,250 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(w.calls.filter((c) => c.op === 'write-text' && c.id === into.id)).toHaveLength(1);
       expect(asked(w)).toEqual(['q-keep']);
       expect(await pendingAnswers(w)).toEqual([]);
+    });
+  });
+
+  // legacy-runner-write-removal (TL-P2-38): no tidy-up writes through the legacy runner. A pile a plan cannot take is
+  // held with "Bower couldn't tidy this up yet. Try again.", in the Inbox and the run alike; the rest of the run takes
+  // the B path. The five TL-P2-37 entries it supersedes are pinned here, each by its own verify name.
+  describe('no tidy-up takes the legacy path', () => {
+    const NOT_TIDIED = "Bower couldn't tidy this up yet. Try again.";
+    const plan = async (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    const vaultOf = (w: { drive: FakeDrive; rootId: string }): DriveVault => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    const fileAt = async (w: { drive: FakeDrive; rootId: string }, path: string): Promise<DriveFile> => {
+      const f = (await w.drive.listAll(w.rootId)).find((x) => w.drive.pathOf(x.id, w.rootId) === path);
+      if (!f) throw new Error(`${path} is missing`);
+      return f;
+    };
+    /** The piles a plan captured, by id; it must be a B plan. */
+    async function captured(w: { drive: FakeDrive; rootId: string }): Promise<string[]> {
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      return out.path === 'b' ? out.manifest.capture.piles.map((p) => p.pileId).sort() : [];
+    }
+    async function pilesOf(w: { drive: FakeDrive; rootId: string }): Promise<{ lease: Pile; ideas: Pile }> {
+      const piles = await vaultOf(w).piles();
+      const lease = piles.find((p) => p.text === 'Papers about the lease');
+      const ideas = piles.find((p) => p.items.some((i) => i.name === 'idea one.pdf'));
+      if (!lease || !ideas) throw new Error('the two piles are missing');
+      return { lease, ideas };
+    }
+    /** A pile folder made by hand in the inbox, with its files. */
+    async function handPile(w: { drive: FakeDrive; rootId: string }, name: string, files: Array<{ name: string; body: Blob }>, props?: Record<string, string>): Promise<DriveFile> {
+      const inbox = await fileAt(w, 'Inbox');
+      const folder = await w.drive.createFolder(inbox.id, name, props);
+      for (const f of files) await w.drive.upload(folder.id, f.name, f.body);
+      return folder;
+    }
+    const pileIdOf = (f: DriveFile): string => f.appProperties?.[PROP.pile] ?? f.id;
+    const held = async (w: { drive: FakeDrive; rootId: string }, id: string): Promise<Pile | undefined> => (await vaultOf(w).piles()).find((p) => p.id === id);
+    /** Runs the next tidy-up to its end on the B path, and checks it was recorded there. */
+    async function tidy(w: World): Promise<Manifest> {
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const manifest = (await manifestsOf(w)).find((m) => m.runId === admitted.id);
+      if (!manifest) throw new Error('the run has no manifest: it did not take the B path');
+      return manifest;
+    }
+
+    it('the legacy runner only reads legacy records', async () => {
+      // Only the planner is left of the legacy runner: nothing can write through it.
+      expect(Object.keys(runner)).not.toContain('runFake');
+      const w = await bWorld();
+      // A legacy view a reload cut off while filing is read and repaired as before: failed, honest, never done.
+      const sys = await fileAt(w, SYSTEM.dir);
+      await w.drive.createText(sys.id, 'last-run.json', JSON.stringify({ v: 1, run: { id: 'run-legacy', scope: 'all', phase: 'saving', requestedAt: Date.now() - 60_000, phaseAt: Date.now() - 1000 } }));
+      const before = await domain(w.drive, w.rootId);
+      const reopened = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+      const seen = await reopened.status();
+      expect(seen).toMatchObject({ id: 'run-legacy', phase: 'failed' });
+      expect(seen?.failure).toMatch(/Some things may be in their new places already/);
+      expect(viewOf(w)?.run).toMatchObject({ id: 'run-legacy', phase: 'failed' });
+      expect(await domain(w.drive, w.rootId)).toBe(before);
+      expect(await recordsOf(w)).toEqual([]);
+
+      // One pile's thing cannot be checked: that pile is held, in the Inbox and the run alike; the rest goes on, on B.
+      const { lease, ideas } = await pilesOf(w);
+      const stored = w.drive.storedDigest.bind(w.drive);
+      const unchecked = vi.spyOn(w.drive, 'storedDigest').mockImplementation(async (id) => (id === lease.items[0]?.id ? null : stored(id)));
+      expect((await held(w, lease.id))?.setAside).toBe('not-tidied');
+      expect((SET_ASIDE_TEXT as Readonly<Record<string, string>>)['not-tidied']).toBe(NOT_TIDIED);
+      const manifest = await tidy({ ...w, worker: reopened });
+      unchecked.mockRestore();
+      expect(manifest.capture.piles.map((p) => p.pileId)).toEqual([ideas.id]);
+      for (const item of lease.items) expect(w.drive.pathOf(item.id, w.rootId).startsWith('Inbox/'), item.name).toBe(true);
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+
+      // Once its thing can be checked, the next tidy-up takes it.
+      expect((await held(w, lease.id))?.setAside).toBeUndefined();
+      expect((await tidy({ ...w, worker: reopened })).capture.piles.map((p) => p.pileId)).toEqual([lease.id]);
+    });
+
+    // b-path-one-snapshot, superseded by TL-P2-38: a race while a run plans holds or skips that pile, never legacy.
+    it('a change during planning never sends a run down the legacy path', async () => {
+      const piles = DriveVault.prototype.piles;
+      type Race = (w: World, listed: Pile[]) => Promise<Pile[]>;
+      const races: Array<[string, boolean, Race]> = [
+        // A thing arrives in the lease pile after the run listed its folder.
+        ['a thing arrives', false, async (_w, listed) => listed.map((p) => (p.text === 'Papers about the lease' ? { ...p, items: [...p.items, { id: 'arrived-later', name: 'late.pdf', kind: 'pdf', origin: 'Added in Drive' }] } : p))],
+        // The lease pile's folder goes after the run read the inbox.
+        ['a pile vanishes', true, async (w, listed) => {
+          const lease = listed.find((p) => p.text === 'Papers about the lease');
+          const folder = lease?.path ? await fileAt(w, lease.path) : undefined;
+          if (folder) await w.drive.trash(folder.id);
+          return listed;
+        }],
+      ];
+      for (const [what, gone, race] of races) {
+        const w = await bWorld();
+        const { lease, ideas } = await pilesOf(w);
+        let raced = false;
+        const spy = vi.spyOn(DriveVault.prototype, 'piles').mockImplementation(async function (this: DriveVault) {
+          const listed = await piles.call(this);
+          if (raced) return listed;
+          raced = true;
+          return race(w, listed);
+        });
+        expect(await captured(w), what).toEqual([ideas.id]);
+        spy.mockRestore();
+        // The race clears on the next run: what is still there is taken.
+        expect(await captured(w), what).toEqual(gone ? [ideas.id] : [ideas.id, lease.id].sort());
+      }
+      // A declared member missing from the run's own listing of its pile.
+      const w = await bWorld({ declared: true });
+      const { lease, ideas } = await pilesOf(w);
+      const spy = vi.spyOn(DriveVault.prototype, 'piles').mockImplementation(async function (this: DriveVault) {
+        return (await piles.call(this)).map((p) => (p.id === lease.id ? { ...p, items: p.items.slice(1) } : p));
+      });
+      expect(await captured(w)).toEqual([ideas.id]);
+      spy.mockRestore();
+      // The run still takes the B path whole and files the rest.
+      const manifest = await tidy(w);
+      expect(manifest.capture.piles.map((p) => p.pileId).sort()).toEqual([ideas.id, lease.id].sort());
+    });
+
+    // b-path-capture-reads, superseded by TL-P2-38: a pile note the run cannot take from one read holds its pile.
+    it('a pile note is captured from one read', async () => {
+      const w = await bWorld({ declared: true });
+      const { lease, ideas } = await pilesOf(w);
+      // A declared pile with no words whose member is named like a pile note.
+      const named = await w.uploader.addPile({ text: '', items: [{ name: 'Pile note.md', kind: 'note', origin: 'From this computer', body: new Blob(['# A member\n']) }, pdf('beside.pdf')] });
+      await w.uploader.settled();
+      // A pile whose note starts with a byte order mark: its text is not the bytes stored.
+      const bom = await handPile(w, 'Garden', [{ name: 'Pile note.md', body: new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), 'Garden papers\n']) }, { name: 'garden.pdf', body: new Blob(['%PDF garden']) }]);
+      for (const id of [named.id, pileIdOf(bom)]) {
+        const pile = await held(w, id);
+        expect(pile?.setAside, id).toBe('not-tidied');
+      }
+      expect(await captured(w)).toEqual([ideas.id, lease.id].sort());
+      // A note changed between its read and its digest: held for this run only.
+      const note = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'Pile note.md' && w.drive.pathOf(f.id, w.rootId) === `${lease.path ?? ''}/Pile note.md`);
+      const stored = w.drive.storedDigest.bind(w.drive);
+      const changed = vi.spyOn(w.drive, 'storedDigest').mockImplementation(async (id) => (id === note?.id ? { size: 1, sha256: '0'.repeat(64) } : stored(id)));
+      expect(await captured(w)).toEqual([ideas.id]);
+      changed.mockRestore();
+      // The run takes the B path and files what it can; the held piles stay as they are.
+      const manifest = await tidy(w);
+      expect(manifest.capture.piles.map((p) => p.pileId).sort()).toEqual([ideas.id, lease.id].sort());
+      expect((await held(w, named.id))?.setAside).toBe('not-tidied');
+      expect((await held(w, pileIdOf(bom)))?.setAside).toBe('not-tidied');
+    });
+
+    // b-path-capture-holds, superseded by TL-P2-38: what a run record cannot carry is held or left, never legacy.
+    it('a pile whose names no run record can carry is held, not sent down the legacy path', async () => {
+      const w = await bWorld();
+      const { lease, ideas } = await pilesOf(w);
+      const pdfBody = (name: string): { name: string; body: Blob } => ({ name, body: new Blob([`%PDF ${name}`]) });
+      const slash = await handPile(w, 'Back\\slash', [pdfBody('one.pdf')]);
+      const control = await handPile(w, 'Bell', [pdfBody('ring\u0007.pdf')]);
+      const dots = await handPile(w, 'Dots', [pdfBody('..')]);
+      const badId = await handPile(w, 'Odd id', [pdfBody('two.pdf')], { [PROP.pile]: 'not a logical id' });
+      const unrecordable = [slash, control, dots, badId].map(pileIdOf);
+      for (const id of unrecordable) {
+        const pile = await held(w, id);
+        expect(pile?.setAside, id).toBe('not-tidied');
+      }
+      // Journal lines a run record cannot carry stay where they are, uncaptured, with one BowerError.
+      const changes = await fileAt(w, SYSTEM.changes);
+      const line = (id: string): string => `{ "v": 1, "id": ${id}, "device": "DEVICE_A", "at": 1, "kind": "task", "what": "Completed the example task.", "path": "Resources/Example.md", "text": "Done" }\n`;
+      await w.drive.createText(changes.id, 'bell.json', line('"BELL\\u0007"'));
+      await w.drive.createText(changes.id, 'long.json', line(JSON.stringify('L'.repeat(1025))));
+      await w.drive.createText(changes.id, 'half.json', line('"HALF\\ud800"'));
+      await w.drive.createText(changes.id, 'fine.json', line('"FINE"'));
+      w.errors.mockClear();
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      expect(out.manifest.capture.piles.map((p) => p.pileId).sort()).toEqual([ideas.id, lease.id].sort());
+      expect(out.manifest.capture.journal.map((j) => j.recordId)).toEqual(['FINE']);
+      expect(bowerErrors(w).filter((e) => /some of your changes/.test(e.message))).toHaveLength(1);
+      // The run goes on, on the B path; the held piles and the lines stay as they are.
+      const manifest = await tidy(w);
+      expect(manifest.capture.piles.map((p) => p.pileId).sort()).toEqual([ideas.id, lease.id].sort());
+      for (const id of unrecordable) expect((await held(w, id))?.setAside, id).toBe('not-tidied');
+      const left = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.changes}/`) && !w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.archive}/`));
+      expect(left.map((f) => f.name).sort()).toEqual(['bell.json', 'half.json', 'long.json']);
+    });
+
+    // b-plan-guard-refusal (TL-P2-37 Q2), superseded by TL-P2-38: a plan the guard or grounding refuses fails closed.
+    it.each(['the manifest guard', 'grounding'] as const)('a plan the guard refuses is refused before any effect (%s)', async (cause) => {
+      const w = await bWorld();
+      const before = await domain(w.drive, w.rootId);
+      const refuse = cause === 'the manifest guard'
+        ? vi.spyOn(runManifest, 'parseRunManifestV2').mockResolvedValue({ ok: false, reason: 'shape' })
+        : vi.spyOn(runRecords, 'grounded').mockReturnValue(false);
+      const refusal = await w.worker.process('all').then(() => null, (e: unknown) => e);
+      const checks = refuse.mock.calls.length;
+      refuse.mockRestore();
+      expect(refusal).toBeInstanceOf(BowerError);
+      expect(refusal).toMatchObject({ message: B_FAILURE });
+      await w.runs.settled();
+      expect(checks).toBeGreaterThan(0);
+      // Nothing was admitted or changed: no records, no view, no write of any kind.
+      expect(await recordsOf(w)).toEqual([]);
+      expect(viewOf(w)).toBeNull();
+      expect(w.calls).toEqual([]);
+      expect(w.mutations()).toBe(0);
+      expect(await domain(w.drive, w.rootId)).toBe(before);
+      expect(await w.worker.status()).toBeNull();
+      expect(bowerErrors(w).map((e) => e.message)).toContain(B_FAILURE);
+    });
+
+    // running-scenario-on-b, superseded by TL-P2-38: the running situation's run is admitted on B on load.
+    it('the running situation is a recoverable run', async () => {
+      localStorage.clear();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const drive = new FakeDrive();
+      const rootId = (await seedFakeDrive(drive, 'running', Date.now())) ?? '';
+      const seeded = drive.dump(rootId).get(SYSTEM.lastRun);
+      const pause = pauseFirstMove();
+      const runs = new FakeRunService({ drive, scale: 'instant', hooks: pause.hooks });
+      const before = Date.now();
+      const worker = new FakeWorker({ drive, scenario: 'running', scale: 'instant', rootId, runs });
+      await worker.status();
+      const at = await reached(pause.paused, runs);
+      expect(at).not.toBeNull();
+      const admitted = await runs.status({ account: ALEX.email, rootId });
+      expect(admitted).toMatchObject({ id: at?.runId, phase: 'saving' });
+      expect(await worker.status()).toEqual(admitted);
+      // As on the demo: a run asked for 70 s ago.
+      expect(admitted?.requestedAt).toBeGreaterThanOrEqual(before - 70_000);
+      expect(admitted?.requestedAt).toBeLessThanOrEqual(Date.now() - 70_000);
+      expect(worker.runningPiles().size).toBeGreaterThan(0);
+      expect((await manifestsOf({ drive, rootId })).map((m) => m.runId)).toEqual([at?.runId]);
+      // No legacy run: the folder's view is still the one the situation started with, and asking joins the run.
+      expect(drive.dump(rootId).get(SYSTEM.lastRun)).toBe(seeded);
+      expect((await worker.process('all')).id).toBe(at?.runId);
+
+      // A reload: the page that ran it is gone; the service comes back and recovers it like any other run.
+      const drive2 = FakeDrive.restore(await drive.snapshot());
+      const runs2 = FakeRunService.restore(runs.toJSON(), { drive: drive2, scale: 'instant' });
+      const reloaded = new FakeWorker({ drive: drive2, scenario: 'running', scale: 'instant', rootId, runs: runs2, fresh: false });
+      expect(await after(reloaded, runs2)).toMatchObject({ id: at?.runId, phase: 'done' });
+      expect(await manifestsOf({ drive: drive2, rootId })).toHaveLength(1);
+      expect(JSON.parse(drive2.dump(rootId).get(SYSTEM.lastRun) ?? '{}')).toMatchObject({ run: { id: at?.runId, phase: 'done' } });
     });
   });
 });
