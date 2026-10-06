@@ -37,3 +37,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: c08-generated-comparison passes — chore(harness): c08-generated-comparison passes (batch 5)
 - 2026-10-06: journeys-existing-effects passes — chore(harness): journeys-existing-effects passes (batch 5)
 - 2026-10-06: journeys-cites-and-answers passes — chore(harness): journeys-cites-and-answers passes (batch 5)
+- 2026-10-06: focus-after-replay-and-route passes — chore(harness): focus-after-replay-and-route passes (P2 C/I round)

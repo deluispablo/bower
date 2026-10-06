@@ -3597,7 +3597,7 @@
       "Press Enter on Home 'Add a pile', then on 'Put the note in the inbox': after each route change focus is on the new page's main region."
     ],
     "verify": "pnpm exec playwright test e2e/focus-after-close.spec.ts -g \"F1: closing the replay from the Home card keeps the keyboard on the page|F2: a button that changes the page moves the keyboard to the new page\"",
-    "passes": false,
+    "passes": true,
     "note": "Important findings F1, F2 of the P2 evaluation at 4d7ab08 (docs/harness/2026-10-06-p2-evaluation-4d7ab08.md). The one C/I round of TL-P2-38 section 4."
   }
 ]
