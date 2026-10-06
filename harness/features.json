@@ -3262,8 +3262,8 @@
       "No plan takes the legacy path for it and the runner writes nothing into the Inbox."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile waiting for its context note is held, never restored by the runner\"",
-    "passes": false,
-    "note": "TL-P2-32 (1) (main 936cbb0), no exception to TL-P2-17: restoring is the app's job (TL-P2-08b, from originalText); held per TL-P2-21. Removes the legacy reason 'context restore' found by the b-path-generated-note lane. Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-32 (1) (main 936cbb0), no exception to TL-P2-17: restoring is the app's job (TL-P2-08b, from originalText); held per TL-P2-21. Removes the legacy reason 'context restore' found by the b-path-generated-note lane. TL-P2-32 (1), TL-P2-34 (2). Integrated by cherry-pick of claude/p2-b-dest (fa629c1 → 84853f4); review CLEAN. Gates on 38a3dbc: check 3393, e2e 208, e2e:fake 218 (run 15:23-15:33 with the display awake)."
   },
   {
     "id": "b-path-pile-notes-only",

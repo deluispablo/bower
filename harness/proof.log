@@ -250,3 +250,4 @@ declared-pile-folder-lost	c717780c8f02a9f2	2026-10-06	known-green: Superseded by
 fake-drive-reservation-saved	63e0a068175342f9	2026-10-06	red (fixed in b23bc30)
 b-path-destinations	e0d66a331cfa874d	2026-10-06	known-green: red shown by b-dest-review-1 at test 2e4ae5c (assertion: path legacy 'name')
 b-path-generated-note	0fe298d6e2686c70	2026-10-06	known-green: red shown by b-dest-review-1 at test 9f32bbc (assertion: path legacy 'note')
+b-path-context-restore	9c2820a9eb10f747	2026-10-06	known-green: red shown by b-dest-review-1 at test b35e792 (assertion: path legacy 'context restore')
