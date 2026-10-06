@@ -1982,6 +1982,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       return f;
     };
     const saying = (w: Pick<World, 'errors'>, message: string): BowerError[] => bowerErrors(w).filter((e) => e.message === message);
+    const operationsOf = (m: Manifest | ManifestV2 | undefined): OperationV2[] => (m?.operations ?? []) as OperationV2[];
     const writeOf = (m: Manifest | undefined, path: string): Extract<OperationV2['effect'], { kind: 'write-runner-json' }> | undefined => {
       const effect = m?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === path)?.effect;
       return effect?.kind === 'write-runner-json' ? effect : undefined;
@@ -2057,6 +2058,63 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.runs.settled();
       expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
       expect((await manifestsOf(w)).some((m) => m.runId === next.id)).toBe(true);
+    });
+
+    // b-path-missing-journal (TL-P2-33 §1).
+    it('a missing journal plans as an empty one on the recoverable path', async () => {
+      /** The journal's own folders a plan makes: `.bower/changes` or its archive. */
+      const folders = (m: Manifest | ManifestV2 | undefined): string[] => operationsOf(m).flatMap((o) => (o.effect.kind === 'create-folder' && ['changes', 'archive'].includes(o.effect.name) ? [o.effect.name] : []));
+      const isFolderMade = (name: string) => (c: FencedCall): boolean => c.op === 'create-folder' && c.name === name;
+
+      // Neither `.bower/changes` nor its archive: the journal is empty, the run is B, and neither folder is made.
+      const gone = await bWorld();
+      await gone.drive.trash((await fileAt(gone, SYSTEM.changes)).id);
+      const planned = await plan(gone);
+      expect(planned).toMatchObject({ path: 'b' });
+      if (planned.path !== 'b') return;
+      expect(planned.manifest.capture.journal).toEqual([]);
+      expect(folders(planned.manifest)).toEqual([]);
+      const admitted = await gone.worker.process('all');
+      await gone.runs.settled();
+      expect(await gone.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(gone.calls.filter((c) => isFolderMade('changes')(c) || isFolderMade('archive')(c))).toEqual([]);
+      expect(viewOf(gone)?.run.report?.yourChanges).toBeUndefined();
+      await expectFiledOnce(gone);
+
+      // No archive and no line to put in it: no folder is made for it.
+      const none = await bWorld();
+      const quiet = await plan(none);
+      expect(quiet.path === 'b' ? folders(quiet.manifest) : null).toEqual([]);
+      // A line to archive: the archive is made once, with its key, for that line only.
+      const one = await bWorld();
+      await one.uploader.addRequest(LEASE);
+      const out = await plan(one);
+      expect(out.path === 'b' ? operationsOf(out.manifest).filter((o) => o.effect.kind === 'create-folder' && o.effect.name === 'archive').map((o) => o.effect) : null).toEqual([
+        { kind: 'create-folder', parent: { fileId: (await fileAt(one, SYSTEM.changes)).id }, name: 'archive', createKey: expect.stringMatching(/^folder-[0-9a-f]{24}$/) },
+      ]);
+
+      // A journal read that fails refuses before admission and before any effect, with one plain sentence.
+      for (const how of ['text', 'digest'] as const) {
+        const w = await bWorld();
+        await w.uploader.addRequest(LEASE);
+        const line = (await w.drive.listAll(w.rootId)).find((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.changes}/`));
+        const before = await domain(w.drive, w.rootId);
+        if (how === 'text') {
+          const readText = w.drive.readText.bind(w.drive);
+          w.drive.readText = async (id) => (id === line?.id ? Promise.reject(driveError('offline')) : readText(id));
+        } else {
+          const storedDigest = w.drive.storedDigest.bind(w.drive);
+          w.drive.storedDigest = async (id) => (id === line?.id ? Promise.reject(driveError('offline')) : storedDigest(id));
+        }
+        for (const scope of ['all', 'instructions'] as const) {
+          await expect(w.worker.process(scope), `${how}, ${scope}`).rejects.toMatchObject({ message: OWN_FILES });
+        }
+        await w.runs.settled();
+        expect(await recordsOf(w), how).toEqual([]);
+        expect(w.calls, how).toEqual([]);
+        expect(viewOf(w), how).toBeNull();
+        expect(await domain(w.drive, w.rootId), how).toBe(before);
+      }
     });
 
     it('makes a missing runner file again on the recoverable path', async () => {
