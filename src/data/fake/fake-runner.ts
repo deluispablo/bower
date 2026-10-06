@@ -8,9 +8,9 @@
  * writes (docs/specs/2026-10-04-worker-contract.md).
  */
 import type { DriveFile } from '../drive/drive-api';
-import { applyChanges, renameOk, renamesFor, savedLinkKey, timelineDate } from '../contracts/note-edit';
+import { applyChanges, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
-import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
+import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
@@ -22,6 +22,7 @@ import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type 
 import { DriveVault } from '../vault/drive-vault';
 import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
+import { ruleLike } from '../rules';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
 import { noteRefusal, parseNote, serializeNote } from '../vault/note-format';
@@ -234,7 +235,9 @@ export type HubUpdate = { path: string; what: string };
 /**
  * Plans a run on the B path when every effect it needs is a B effect (move,
  * create-folder, a generated note's create-text (TL-P2-17), Bin, write-runner-json, and B.2's edit-text); otherwise the whole run is legacy,
- * with the reason. Decided from one capture before any effect, and never
+ * with the reason. A runner file that cannot be read refuses the run before admission (TL-P2-17); a missing one is
+ * made with create-text, and your rules are worded in Rules.md by one `rules-wording` edit, or a `create-text` when
+ * it is missing. Decided from one capture before any effect, and never
  * changed during the run. The B plan fixes every operation and every report
  * row (TL-P2-06 §1, contract B guards 7 and 9) and reuses the readiness
  * capture: only ready piles are captured, and their folders go to the Bin
@@ -276,6 +279,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const lines = await journalOf(drive, ix);
   if (!Array.isArray(lines)) return legacy(lines.why);
   let journal = lines;
+  // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
+  // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
+  const ruleWords = ruleChangesOf(journal);
   // An instructions run with no line it can take has nothing to read: the existing refusal, before admission.
   if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
   // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
@@ -461,7 +467,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const want = (f: DriveFile, path: string): Wanted => {
     const had = wanted.get(f.id);
     if (had) return had;
-    const made: Wanted = { file: f, path, lines: [], renames: null };
+    const made: Wanted = { file: f, path, lines: [], renames: null, rules: null };
     wanted.set(f.id, made);
     return made;
   };
@@ -492,6 +498,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       if (f && !f.folder) want(f, path).renames = renames;
     }
   }
+  // Rules.md takes its rules-wording change in its one edit (TL-P2-20 rule 3), within the edit cap.
+  const rulesFile = ix.file(RULES_PATH);
+  if (ruleWords.change && rulesFile && !rulesFile.folder) want(rulesFile, RULES_PATH).rules = ruleWords.change;
+  /** Where the rules ended up: worded in Rules.md's edit, already there (nothing to write), or left pending. */
+  let rulesState: 'planned' | 'present' | 'left' = 'left';
+  let rulesWorded: ReadonlySet<string> = new Set();
   /**
    * Each Timeline line wanted: written by this run, there already, refused as a person's note (I7), refused for any
    * other reason at plan time (too big, unknown format, not UTF-8, refused when authored), or deferred (past the
@@ -500,7 +512,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const lineState = new Map<WantedLine, LineState>();
   /** A line wanted twice in one note (the same words): written once, and it goes as its twin goes. */
   const twins = new Map<WantedLine, WantedLine>();
-  const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[] }> = [];
+  const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[]; rules: RulesWording | null }> = [];
   for (const w of [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path))) {
     const f = w.file;
     for (const l of w.lines) lineState.set(l, 'refused');
@@ -534,7 +546,19 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       else if (!result.ok && result.reason === 'not-bower') lineState.set(l, 'person');
       else if (!result.ok) console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
     }
-    if (rewrite || lines.length) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines });
+    // The rules, as applyChanges words them on these bytes: nothing to write when every one is there already, and a
+    // refusal (not Bower's, damaged, too big) leaves them pending (rule 7).
+    let rules: RulesWording | null = null;
+    if (w.rules) {
+      const result = applyChanges(bytes, [w.rules]);
+      const worded = result.ok ? wordedBy(new TextDecoder().decode(bytes), w.rules, result.text) : null;
+      if (worded) {
+        rules = w.rules;
+        rulesWorded = worded;
+      } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
+      else console.error(new BowerError('unknown', RULES_LEFT), `${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
+    }
+    if (rewrite || lines.length || rules) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules });
   }
   // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
   // stay unarchived meanwhile (TL-P2-29 (1)).
@@ -545,7 +569,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
     : []);
   const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
-    [...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...appendOf(c.lines)];
+    [...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...appendOf(c.lines), ...(c.rules ? [c.rules] : [])];
   const authored = candidates.slice(0, editCap).flatMap((c) => {
     const result = applyChanges(c.bytes, changesOf(c, []));
     if (result.ok) return [{ c, text: result.text }];
@@ -557,6 +581,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; changes: Change[]; text: string }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
+    if (c.rules) rulesState = 'planned';
     const what = c.lines.find((l) => l.what !== null)?.what ?? null;
     edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, changes: changesOf(c, renameIds), text });
     places.set(c.file.id, c.file);
@@ -591,6 +616,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // Lines held back stay where they are, uncaptured, for the next run (rule 7).
   if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
   if (heldAnswers.size) journal = journal.filter((l) => !heldAnswers.has(l.rec.id));
+  const rules = rulesPlanOf(ruleWords, rulesFile, rulesState, rulesWorded);
+  if (rules.left.size) journal = journal.filter((l) => !rules.left.has(l.rec.id));
   const edited = new Set(edits.map((e) => e.file.id));
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote; merge?: MergeState }> = [];
   for (const thing of things) {
@@ -795,7 +822,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   for (const edit of edits) {
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text) });
     editOf.set(edit.file.id, op);
-    for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [] : c.recordIds))) editsFrom.set(id, [...(editsFrom.get(id) ?? []), op]);
+    for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [...c.add, ...c.remove].map((r) => r.recordId) : c.recordIds))) editsFrom.set(id, [...(editsFrom.get(id) ?? []), op]);
     // Only a Timeline line marks a note new (m3); a link fix never does.
     if (edit.changes.some((c) => c.kind === 'timeline-append')) {
       await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
@@ -833,6 +860,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const derived = journal.flatMap((l) => (l.rec.kind === 'answer' ? fromAnswer.get(l.rec.id) ?? [] : []));
     questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
   }
+  // Rules.md made from the template's empty one when it is missing (R3-4); every rule line it words waits for it.
+  // When it is there, its rules are worded by its one note edit above, which their archives wait for (rule 7).
+  const rulesMade = rules.made !== null
+    ? await add({ kind: 'create-text', parent: { fileId: rootId }, name: RULES_PATH, createKey: mintKey('rules'), text: rules.made, content: await utf8(rules.made), purpose: 'generated' })
+    : null;
+  const rulesOp = rulesMade ?? (rulesState === 'planned' && rulesFile ? editOf.get(rulesFile.id) ?? null : null);
   const archiveChain: string[] = [];
   let archiveTo: Target | null = archiveFolder?.folder ? { fileId: archiveFolder.id } : null;
   if (journal.length && !archiveTo && changesFolder) {
@@ -843,10 +876,13 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   for (const line of journal) {
     if (!archiveTo) return legacy('journal');
     const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
-    const derived = [...new Set([...(write ? [write] : []), ...(editsFrom.get(line.rec.id) ?? []), ...(fromAnswer.get(line.rec.id) ?? [])])];
+    const derived = [...new Set([...(write ? [write] : []), ...(editsFrom.get(line.rec.id) ?? []), ...(fromAnswer.get(line.rec.id) ?? []), ...(rulesMade && rules.held.has(line.rec.id) ? [rulesMade] : [])])];
     const moves: string[] = [];
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
-    if (line.rec.kind === 'request' && requestsOp) {
+    if (rulesOp && rules.worded.has(line.rec.id)) {
+      // A rule this run words: counted once it and its line's archive applied.
+      reportPlan.push({ requires: [rulesOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), rulesWorded: 1 } });
+    } else if (line.rec.kind === 'request' && requestsOp) {
       reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what] } });
     } else {
       reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 1 } });
@@ -911,10 +947,9 @@ type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string };
 /**
  * Your changes since the last tidy-up, each once by its id with all its
  * files, when every one can take the B path: a request (completed in
- * requests.json), an answer (dropped from questions.json) or a change that
- * needs nothing but archiving, or a rename or a move (archived after the
- * link rewrites it needs). A rule needs rule wording, which B does not do
- * yet, so its whole run stays legacy. Your changes are never replaced or discarded (TL-P2-23): a line
+ * requests.json), an answer (dropped from questions.json), a rule (worded
+ * in Rules.md), a change that needs nothing but archiving, or a rename or a
+ * move (archived after the link rewrites it needs). Your changes are never replaced or discarded (TL-P2-23): a line
  * that cannot be read, a line whose copies differ and a line in more than
  * one place stay where they are, uncaptured, with one BowerError for all of
  * them; the run goes on with the rest. At most the 20 oldest requests are
@@ -953,12 +988,96 @@ async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[
   }
   lines.sort((a, b) => a.rec.at - b.rec.at || a.rec.id.localeCompare(b.rec.id));
   if (left) console.error(new BowerError('unknown', JOURNAL_LEFT), `${left} journal files left uncaptured`);
-  // Every readable line decides the path, captured or not: a rule left behind must not let runs take B.
-  const kinds = new Set([...copies.values()].flat().map((c) => c.rec.kind));
-  if (kinds.has('rule')) return { why: 'rules' };
   const requests = lines.filter((l) => l.rec.kind === 'request').slice(0, REQUESTS_PER_RUN);
   return lines.filter((l) => l.rec.kind !== 'request' || requests.includes(l));
 }
+
+type RulesWording = Extract<Change, { kind: 'rules-wording' }>;
+
+/**
+ * Your rule lines as one `rules-wording` change (TL-P2-20, TL-P2-26), removals and adds alike; a line whose words
+ * cannot be worded is `left` pending, uncaptured, with one BowerError.
+ */
+function ruleChangesOf(lines: readonly JournalLine[]): { change: RulesWording | null; left: ReadonlySet<string> } {
+  const left = new Set<string>();
+  const add: RuleAdd[] = [];
+  const remove: RuleRemove[] = [];
+  for (const { rec } of lines) {
+    if (rec.kind !== 'rule') continue;
+    if (rec.removes) {
+      const out: RuleRemove = { recordId: rec.id, text: rec.removes };
+      if (ruleRemoveOk(out)) remove.push(out);
+      else left.add(rec.id);
+      continue;
+    }
+    const words = rec.text ?? rec.what;
+    const worded: RuleAdd = { recordId: rec.id, text: wordRule(words), yourWords: words, since: rec.at };
+    if (ruleAddOk(worded)) add.push(worded);
+    else left.add(rec.id);
+  }
+  if (left.size) console.error(new BowerError('unknown', RULES_LEFT), `${left.size} rule lines cannot be worded`);
+  return { change: add.length || remove.length ? { kind: 'rules-wording', add, remove } : null, left };
+}
+
+/**
+ * The rule lines an applied change words, as `applyChanges` decides them: removals first, then each add unless it
+ * repeats a rule (an add that repeats one is satisfied and not counted). Null when the text after it would not hold
+ * exactly those rules (R3-4: what is counted is what the written text holds).
+ */
+function wordedBy(before: string, change: RulesWording, after: string): ReadonlySet<string> | null {
+  const removed = new Set(change.remove.map((r) => r.text));
+  const known = parseRules(before).filter((r) => !removed.has(r.text));
+  const kept = known.length;
+  const worded = new Set<string>();
+  for (const a of [...change.add].sort((x, y) => x.since - y.since)) {
+    if (ruleLike(known, a.text) || (a.yourWords.trim() && ruleLike(known, a.yourWords))) continue;
+    known.push({ id: '', text: a.text, yourWords: a.yourWords, since: a.since });
+    worded.add(a.recordId);
+  }
+  return parseRules(after).length === kept + worded.size ? worded : null;
+}
+
+/**
+ * How a run words your rules. `worded` are the lines whose rule is written, `held` the lines whose archive waits
+ * for that write, `left` the lines that stay pending, uncaptured: a line whose words cannot be worded, or every rule
+ * line when Rules.md is not Bower's, is damaged, too big, changed while read or past the edit cap (rule 7). `made`
+ * is Rules.md's text when it is missing: authored by `applyChanges` on the template's empty one (R3-4).
+ */
+type RulesPlan = { worded: ReadonlySet<string>; held: ReadonlySet<string>; left: ReadonlySet<string>; made: string | null };
+
+function rulesPlanOf(
+  words: { change: RulesWording | null; left: ReadonlySet<string> }, file: DriveFile | undefined,
+  state: 'planned' | 'present' | 'left', worded: ReadonlySet<string>,
+): RulesPlan {
+  const { change, left } = words;
+  const ids = change ? [...change.add, ...change.remove].map((r) => r.recordId) : [];
+  const none: RulesPlan = { worded: new Set(), held: new Set(), left, made: null };
+  if (!change) return none;
+  if (file?.folder) {
+    console.error(new BowerError('unknown', RULES_LEFT), `${RULES_PATH} is a folder`);
+    return { ...none, left: new Set([...left, ...ids]) };
+  }
+  if (file) {
+    if (state === 'planned') return { worded, held: new Set(ids), left, made: null };
+    // Every rule there already and none to take out: nothing to write, and each line is satisfied as it is.
+    if (state === 'present') return none;
+    return { ...none, left: new Set([...left, ...ids]) };
+  }
+  // A missing Rules.md has no rule to take out; it is made only to word new ones.
+  if (!change.add.length) return none;
+  const empty = serializeRules([]);
+  const adds: RulesWording = { ...change, remove: [] };
+  const result = applyChanges(new TextEncoder().encode(empty), [adds]);
+  const made = result.ok ? wordedBy(empty, adds, result.text) : null;
+  if (!result.ok || !made) {
+    console.error(new BowerError('unknown', RULES_LEFT), `${RULES_PATH} could not be made (${result.ok ? 'count' : result.reason})`);
+    return { ...none, left: new Set([...left, ...change.add.map((r) => r.recordId)]) };
+  }
+  return { worded: made, held: new Set(change.add.map((r) => r.recordId)), left, made: result.text };
+}
+
+const RULES_PATH = 'Rules.md';
+const RULES_LEFT = 'Bower could not word some of your rules; they wait for the next tidy-up.';
 
 /** Requests a run takes at most, the oldest first: requests.json keeps the last 20 done. */
 const REQUESTS_PER_RUN = 20;
@@ -1025,7 +1144,7 @@ function generatedName(title: string): string {
 /** A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), a hub's row wording. */
 type WantedLine = { entry: EditEntry; record: string | null; what: string | null };
 /** What a run wants to change in one note, before applyChanges decides what it may. */
-type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null };
+type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null; rules: RulesWording | null };
 /** A thing joining a note you said yes to keeping (MERGES), with the answer that says so. */
 type Merge = { into: string; title: string; line: string; answer: string };
 /** Where a wanted Timeline line ended up at plan time. */

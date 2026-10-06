@@ -19,9 +19,12 @@ import { displayName, join, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
+import { parseRules } from '../vault/rules-format';
 
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
+/** The one note rules are worded in, at the root of the Bower folder. */
+const RULES = 'Rules.md';
 const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
 
 export const manifestName = (hash: string): string => `manifest-${hash}.json`;
@@ -152,7 +155,12 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
  * with a Timeline line, names that edit's path and says what one of its lines
  * says; each edit is claimed once. A generated note (TL-P2-17) is claimed by
  * one applied row naming its resolved path and one set-aside row for what it
- * was for (see `noteRow`). Nothing else (questions, rules worded) is claimed.
+ * was for (see `noteRow`). A rule worded (`rulesWorded: 1`) is one captured
+ * line's row: it requires the one operation that words Rules.md (its edit
+ * naming that line's add, or Rules.md made at the root, whose rows number what
+ * parseRules reads from it) and every archive move of the line, each depending
+ * on it. A request's write may be requests.json made again in `.bower`.
+ * Nothing else (questions) is claimed.
  */
 export function grounded(manifest: RunManifest): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
@@ -192,10 +200,18 @@ export function grounded(manifest: RunManifest): boolean {
     if (!done) return false;
     for (const [id, text] of done) completed.set(id, text);
   }
+  /** Whether an operation words rules: the edit of the root Rules.md, or Rules.md made at the root (TL-P2-20). */
+  const wordsRules = (o: OperationV2 | undefined): boolean => {
+    const e = o?.effect;
+    if (e?.kind === 'edit-text') return e.path === RULES && e.changes.some((change) => change.kind === 'rules-wording');
+    return e?.kind === 'create-text' && e.purpose === 'generated' && e.name === RULES && 'fileId' in e.parent && e.parent.fileId === manifest.scope.rootId;
+  };
+  /** Rule rows per operation that words them. */
+  const worded = new Map<string, number>();
   const claimed = new Set<string>();
   const journalRow = (c: ReportContribution): boolean => {
     const v = c.value;
-    if (c.when !== 'applied' || v.filed.length || v.created.length || v.updated.length || v.setAside.length || v.questions.length || v.rulesWorded !== undefined) return false;
+    if (c.when !== 'applied' || v.filed.length || v.created.length || v.updated.length || v.setAside.length || v.questions.length) return false;
     const required = c.requires.map((id) => ops.get(id));
     const moves = required.filter((o): o is OperationV2 & { effect: MoveEffect } => !!o && isArchive(o));
     const line = moves[0] ? lineOf.get(moves[0].effect.before.fileId) : undefined;
@@ -204,10 +220,18 @@ export function grounded(manifest: RunManifest): boolean {
     if (files.length !== line.fileIds.length || !line.fileIds.every((id) => files.includes(id))) return false;
     const chain = new Set(moves.flatMap((o) => chainOf(o.effect.parent)));
     if (![...chain].every((id) => c.requires.includes(id))) return false;
-    const writes = required.filter((o): o is OperationV2 => o?.effect.kind === 'write-runner-json' || requestsOf(o) !== null);
+    const writes = required.filter((o): o is OperationV2 => o?.effect.kind === 'write-runner-json' || requestsOf(o) !== null || wordsRules(o));
     const allowed = new Set([...moves, ...writes].map((o) => o.operationId));
     if (required.some((o) => !o || (!allowed.has(o.operationId) && !chain.has(o.operationId)))) return false;
-    if (v.requests !== undefined) {
+    if (v.rulesWorded !== undefined) {
+      // A rule worded (TL-P2-20 I10): one row per line, requiring the one operation that words it, which the
+      // line's archive waits for; an edit names the line's add, a made Rules.md is counted against its text below.
+      const [op, ...more] = writes;
+      if (v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== 1 || !op || more.length || !wordsRules(op)) return false;
+      if (op.effect.kind === 'edit-text' && !op.effect.changes.some((change) => change.kind === 'rules-wording' && change.add.some((a) => a.recordId === line.recordId))) return false;
+      if (!moves.every((o) => o.dependsOn.includes(op.operationId))) return false;
+      worded.set(op.operationId, (worded.get(op.operationId) ?? 0) + 1);
+    } else if (v.requests !== undefined) {
       const [write, ...more] = writes;
       const [text, ...rest] = v.requests;
       if (v.yourChanges !== undefined || !write || more.length || text === undefined || rest.length) return false;
@@ -235,7 +259,8 @@ export function grounded(manifest: RunManifest): boolean {
   // A saved link's note (TL-P2-20 M5, R3-6) comes before the link's move, which depends on it: it is claimed by that
   // link's filed row (`noteGrounded`), not by rows of its own.
   const linkNote = (o: OperationV2): boolean => manifest.operations.some((m) => m.effect.kind === 'move' && members.has(m.effect.before.fileId) && m.dependsOn.includes(o.operationId));
-  const generatedOps = manifest.operations.filter((o): o is OperationV2 & { effect: CreateText } => o.effect.kind === 'create-text' && o.effect.purpose === 'generated');
+  // Rules.md made at the root is Bower's rule list, not a generated note: its rows are rule rows (TL-P2-20 R3-4).
+  const generatedOps = manifest.operations.filter((o): o is OperationV2 & { effect: CreateText } => o.effect.kind === 'create-text' && o.effect.purpose === 'generated' && !wordsRules(o));
   const notes = generatedOps.filter((o) => !linkNote(o));
   const linkNotes = generatedOps.filter(linkNote);
   const forOf = (o: OperationV2): string | null => {
@@ -292,7 +317,7 @@ export function grounded(manifest: RunManifest): boolean {
   const alone = new Set<string>();
   for (const c of manifest.reportPlan) {
     const v = c.value;
-    if (v.requests !== undefined || v.yourChanges !== undefined) {
+    if (v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) {
       if (!journalRow(c)) return false;
       continue;
     }
@@ -339,6 +364,10 @@ export function grounded(manifest: RunManifest): boolean {
   for (const id of lineOf.keys()) {
     const touching = manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id);
     if (touching.length !== 1 || !touching[0] || !isArchive(touching[0])) return false;
+  }
+  // A made Rules.md is counted as what parseRules reads from it (R3-4).
+  for (const o of manifest.operations) {
+    if (o.effect.kind === 'create-text' && wordsRules(o) && (worded.get(o.operationId) ?? 0) !== parseRules(o.effect.text).length) return false;
   }
   return [...members.keys()].every((id) => filed.has(id) && setAside.has(id))
     && manifest.capture.journal.every((j) => claimed.has(j.recordId))

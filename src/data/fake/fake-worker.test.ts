@@ -21,7 +21,7 @@ import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
 import { ALEX, wordRule } from '../demo/fixture';
-import { parseRules } from '../vault/rules-format';
+import { parseRules, serializeRules } from '../vault/rules-format';
 import { pretendDrive, pretendRuns } from './pretend';
 
 afterEach(() => vi.useRealTimers());
@@ -769,13 +769,15 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
   it('sends a plan with an effect outside B down the legacy path, whole', async () => {
     const w = await bWorld();
-    await w.uploader.addRule('Keep lease papers together');
+    // A rule is worded on the B path now (o5-rules-wording); a pile that asks a question still is not.
+    await w.uploader.addPile({ text: 'Saltmere weekend receipts', items: [pdf('taxi.pdf'), pdf('hotel.pdf')] });
+    await w.uploader.settled();
     const admitted = await w.worker.process('all');
     await until(w.worker, 'done');
     expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
     expect(await recordsOf(w)).toEqual([]);
     expect(w.calls).toEqual([]);
-    expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
+    expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['hotel.pdf', 'idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf', 'taxi.pdf']);
   });
 
   it('fixes its classification before any effect', async () => {
@@ -788,7 +790,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect((await checkpointsOf(w, admitted.id)).map((c) => [c.revision, c.phase])).toContainEqual([0, 'queued']);
     expect(w.applied.filter((c) => c.op === 'update' || c.op === 'trash' || c.op === 'write-text')).toEqual([]);
 
-    // Input arrives while the run goes: a typed rule and a saved link.
+    // Input the plan did not capture arrives while the run goes: a typed rule and a saved link.
     await w.uploader.addRule('Keep lease papers together');
     await w.uploader.addPile({ text: '', items: [link] });
     const lines = async (): Promise<string[]> => (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.changes}/`) && !w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.archive}/`)).map((f) => f.id);
@@ -1508,10 +1510,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('takes the B path for ready plain files', async () => {
       expect((await plan(await bWorld())).path).toBe('b');
     });
-    it('sends a run with a rule to word to the legacy path', async () => {
+    // o5-rules-wording: a rule to word is a B.2 edit of Rules.md now.
+    it('takes the B path for a rule to word', async () => {
       const w = await bWorld();
       await w.uploader.addRule('Keep lease papers together');
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'rules' });
+      expect(await plan(w)).toMatchObject({ path: 'b', manifest: { v: 2 } });
     });
     // o5-timeline-append: hub Timeline lines are B.2 edits now, and a person's hub note gets none.
     it("takes the B path beside a person's hub note, planning no Timeline line for it", async () => {
@@ -1594,14 +1597,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const archiveMoves = (m: Manifest | undefined, fileId: string) => (m?.operations ?? []).filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === fileId);
     const question = (id: string) => ({ id, text: `Question ${id}?`, yes: 'Yes', no: 'No', askedAt: 1 });
 
-    it('keeps the whole plan on the legacy path for a rule, and takes the B path for a rename or a move', async () => {
+    // o5-rules-wording and o5-rename-link-rewrite: a rule, a rename or a move takes the B path.
+    it('takes the B path for a rule, a rename or a move', async () => {
       const rule = await bWorld();
       await rule.uploader.addRule('Keep lease papers together');
       await rule.uploader.addRequest('Put the lease papers together');
-      expect(await plan(rule)).toEqual({ path: 'legacy', why: 'rules' });
-      expect(await plan(rule, 'instructions')).toEqual({ path: 'legacy', why: 'rules' });
+      expect(await plan(rule)).toMatchObject({ path: 'b' });
+      expect(await plan(rule, 'instructions')).toMatchObject({ path: 'b' });
 
-      // o5-rename-link-rewrite: a rename or a move takes the B path, its links rewritten by edit-text.
       const renamed = await bWorld();
       const projects = await fileAt(renamed, 'Projects');
       await renamed.drive.createFolder(projects.id, 'Garden');
@@ -1615,12 +1618,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await linesOf(moved)).map((l) => l.rec.kind)).toEqual(['move']);
       expect((await plan(moved, 'instructions')).path).toBe('b');
 
-      // The legacy path takes the rule's run whole: no run records, nothing through the B boundary.
+      // The rule's run takes the B path whole: its manifest is recorded and it ends done.
       const admitted = await rule.worker.process('all');
-      await until(rule.worker, 'done');
+      await rule.runs.settled();
       expect(await rule.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
-      expect(await recordsOf(rule)).toEqual([]);
-      expect(rule.calls).toEqual([]);
+      expect((await manifestsOf(rule)).some((m) => m.runId === admitted.id)).toBe(true);
     });
 
     it('completes a request through requests.json and archives its line only after that write', async () => {
@@ -1864,7 +1866,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await linesOf(w)).toEqual([]);
     });
 
-    it('keeps the whole plan legacy for a rule line it cannot capture, and leaves a rename line it cannot capture in place', async () => {
+    it('leaves a rule or rename line it cannot capture in place, on the B path', async () => {
       const at = (kind: JournalRecord['kind'], id: string): JournalRecord => ({ v: 1, id, at: 1, kind, what: `A ${kind}`, device: 'DEVICE_X', ...(kind === 'rule' ? { path: 'Rules.md', text: 'Keep lease papers together' } : { path: 'Projects/Garden plans', from: 'Projects/Garden' }) });
       for (const kind of ['rule', 'rename'] as const) {
         const w = await bWorld();
@@ -1876,10 +1878,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         await w.drive.createText(changes, `${rec.id}.json`, `${JSON.stringify(rec)}\n`);
         await w.drive.createText(changes, `${rec.id}.json`, `${JSON.stringify(rec, null, 1)}\n`);
         const out = await plan(w);
-        if (kind === 'rule') expect(out, kind).toEqual({ path: 'legacy', why: 'rules' });
-        // o5-rename-link-rewrite: a rename line takes the B path; one it cannot capture stays where it is.
-        else expect(out.path === 'b' && out.manifest.capture.journal.some((j) => j.recordId === rec.id), kind).toBe(false);
-        if (kind === 'rename') expect(out.path).toBe('b');
+        // o5-rules-wording, o5-rename-link-rewrite: a rule or rename line it cannot capture stays where it is, on B.
+        expect(out.path, kind).toBe('b');
+        expect(out.path === 'b' ? out.manifest.capture.journal.map((j) => j.recordId) : null, kind).toEqual([asked?.rec.id]);
       }
     });
 
@@ -2101,7 +2102,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const out = await Promise.all(files.map(async (file) => ({ file, rec: JSON.parse(await w.drive.readText(file.id)) as JournalRecord })));
       return out.sort((a, b) => a.rec.at - b.rec.at || a.file.id.localeCompare(b.file.id));
     }
-    const operationsOf = (m: Manifest | undefined): OperationV2[] => (m?.operations ?? []) as OperationV2[];
+    const operationsOf = (m: Manifest | ManifestV2 | undefined): OperationV2[] => (m?.operations ?? []) as OperationV2[];
     const archivesOf = (m: Manifest | undefined, fileId: string): OperationV2[] => operationsOf(m).filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === fileId);
     const isRulesWrite = (w: { drive: FakeDrive; rootId: string }) => (c: FencedCall): boolean => c.op === 'write-text' && w.drive.pathOf(c.id, w.rootId) === RULES;
     const isRulesMade = (w: { rootId: string }) => (c: FencedCall): boolean => c.op === 'create-text' && c.parentId === w.rootId && c.name === RULES;
@@ -2193,6 +2194,27 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(parseRules(text).map((r) => r.yourWords)).toEqual([RECEIPTS_RULE, LEASE_RULE]);
       expect(viewOf(m)?.run.report?.rulesWorded).toBe(parseRules(text).length);
       expect(await linesOf(m)).toEqual([]);
+    });
+
+    // TL-P2-20 rule 3: Rules.md gets one edit per run, its link rewrite and its rules together, within the edit cap.
+    it('words a rule and rewrites the links in Rules.md in one edit', async () => {
+      const w = await bWorld();
+      const rules = await fileAt(w, RULES);
+      await w.drive.writeText(rules.id, serializeRules([{ id: 'rule-1', text: 'Keep [[Garden]] receipts together.', yourWords: 'keep garden receipts together', since: Date.parse('2026-10-01T00:00:00Z') }]), rules.modifiedTime);
+      await w.drive.createText((await fileAt(w, 'Projects')).id, 'Garden.md', '# Garden\n');
+      await vaultOf(w).rename('Projects/Garden.md', 'Garden plans');
+      await vaultOf(w).addRule(LEASE_RULE);
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      const edits = operationsOf(out.manifest).flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === RULES ? [o.effect] : []));
+      expect(edits.map((e) => e.changes.map((c) => c.kind))).toEqual([['link-rewrite', 'rules-wording']]);
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      const text = w.drive.dump(w.rootId).get(RULES) ?? '';
+      expect(parseRules(text).map((r) => r.text)).toEqual([wordRule(LEASE_RULE), 'Keep [[Garden plans]] receipts together.']);
+      expect(viewOf(w)?.run.report?.rulesWorded).toBe(1);
+      expect(await linesOf(w)).toEqual([]);
     });
 
     it("leaves rules pending when Rules.md is not Bower's, and files the rest on the recoverable path", async () => {
@@ -2806,9 +2828,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld({ declared: true });
       const { folder, keyed } = await leasePile(w);
       const lease = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'lease.pdf')?.id ?? '';
-      // A rule to word sends the first run down the legacy path, which writes no disposition.
-      await w.uploader.addRule('Keep lease papers together');
-      expect(await runPlan(w)).toEqual({ path: 'legacy', why: 'rules' });
+      // A client with no run service takes the first run down the legacy path, which writes no disposition.
+      const legacy = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, fresh: false });
       // Alex adds a thing to the lease pile once the legacy run has moved its first member.
       const late: { file: Promise<DriveFile> | null } = { file: null };
       const counted = w.drive.onChange;
@@ -2816,9 +2837,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         counted?.();
         if (!late.file && !w.drive.pathOf(lease, w.rootId).startsWith('Inbox/')) late.file = w.drive.createText(folder, 'later.txt', 'arrived late');
       };
-      const first = await w.worker.process('all');
-      await until(w.worker, 'done');
-      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      const first = await legacy.process('all');
+      await until(legacy, 'done');
+      expect(await legacy.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect(await recordsOf(w)).toEqual([]);
       expect(late.file).not.toBeNull();
       const lateId = (await late.file)?.id ?? '';
       expect(await childNames(w, folder)).toEqual(['Pile note.md', 'later.txt']);
