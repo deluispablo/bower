@@ -1,3 +1,11 @@
+# Current handoff: outgoing orchestrator released for replacement
+
+Read [the unique replacement handoff](2026-10-06-orchestrator-replacement.md) and [all branches/worktrees/open tasks](2026-10-06-replacement-inventory.md). Root and children stopped; integration/shared-record/browser/provider/backup reservations RELEASED; successor not yet registered. Resume codex/close-phase-2 only after recording the successor assignment. Final delivery SHA is the handoff documentation commit in git log above c41e600; branch is clean before release. Adopted contracts-2/main10ca886, P2 OPEN217/221.
+
+Declaration4052532 candidate is clean,330 named/1060 full green with preserved genuine stub red, but independent review/root integration/inverse are pending. R4 document review27720282 is clean0C/I/M; no instrument or execution/preflight evidence. Root accepted source gate730/55. All actual artifacts are archived. R1 actual loss remains an acceptance blocker; O3–O8/full capabilities/real premises remain. No P3/P4 or unfinished main merge. Main backup10ca886 verified; outgoing responsibility released and lead heartbeat paused. This current handoff/ACTIVE/Next supersede all historical reservations below.
+
+# Historical handoffs (provenance only)
+
 # Current handoff: canonical JSON closed; declaration validation assigned
 
 Root remains sole integration/shared-record coordinator, contracts-2 / main10ca886. Canonical stub96a688b, complete reviewed fixed7203d and proofdd7909b are closed: full730/55 and final99 verify green, genuine loadable-stub inverse assertion red. M01 independently resolved by b51007b8; original5e3/report082 retained. Raw and ownership parser foundations also remain closed. Registered217/221 includes three original defects plus new pile-declaration-authority, not capability/P2 acceptance.

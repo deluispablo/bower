@@ -1,29 +1,31 @@
-# Active coordination batch
+# Active coordination: outgoing coordinator stopped and released
 
-Only the named coordinator writes this live record. Root maintains implementation reservations and evidence; Planificador owns architecture, planning and method. Follow COORDINATION and STARTUP.
+## Current authority and recovery point
 
-## Current state and authority
+- Outgoing root session p2-orchestrator-2026-10-05-01a10bbd is STOPPED/RELEASED after the final handoff commit. No successor is registered. Owner's replacement instruction was verified in human turn01a10fe8-54fd-70f3-8a6f-71cdcbd4ca89 in Planificador. No new work is assigned by the historical packets below.
+- Unique current handoff: [2026-10-06-orchestrator-replacement.md](2026-10-06-orchestrator-replacement.md). Complete [32 branches / nine worktrees inventory](2026-10-06-replacement-inventory.md); exact machine snapshot evidence/2026-10-06-replacement-inventory.json. Final integration SHA is this handoff delivery commit in git log, above c41e600. Branch codex/close-phase-2, /Users/deluisp/Projects/bower-app; root handoff changes committed and clean before release.
+- Adopted contracts-2 / main10ca886626206e0d4d880d6679dd4f57adcafcee. P2 OPEN,217/221. Four entries false: partial-pile-readiness, protected-current-prose, run-report-save-barrier, pile-declaration-authority. No capability/phase acceptance or P3/P4 implementation.
+- Parser257f904/proof5242808, raw read ec8eef7/proofd1361fa, canonical JSON ed7203d/proofdd7909b accepted. Root product gate730/55; named JSON99 green and actual inverse. Final documentation gate is recorded in the handoff evidence. Do not mix candidate1060 with root730.
+- Declaration candidate4052532b482e69f5945e19fc3aaba7f4fbbfff3d/stubb20c618 is frozen clean,330 named/1060 full green,90 genuine assertion reds. Twenty-two artifacts archivedqa21/declaration. Independent review, root integration and root inverse remain pending. FIRST successor task: independently review this exact candidate with bounded B2 packet, after registering authority.
+- R4 doc spec8221621b/manifest0f5a14ab independently reviewed: zero C/I/M, report27720282 archived2026-10-06-r4-reserved-id-spec-review.md. No instrument/provider result; validated principal/preflight/runtime proof absent. Document review does not authorize dispatch.
+- Planificador retains planning/method ownership. TL04 exact B/TL05 unchanged. R1-OBS01 actual loss is unresolved, ETag line ended; Save a copy is a pending product decision. Real R2/R3/R4 and full O3–O8/D01/D02 implementation/acceptance remain.
+- Main backup10ca886 actually verified private/local=remote; latest check2026-10-06 03:36 UTC. Root backup responsibility RELEASED, no further periodic checks. Planificador reports heartbeat PAUSED. Candidate branches remain local.
+- No root/child process, browser/provider or server reservation remains. Ports5190/5191/5192/8788 have no observed listeners. Preserve owner tabs, disabled private manifests and all worktrees. Technical-lead/design ownership is not root's to release.
 
-- Coordinator: Codex /root, session p2-orchestrator-2026-10-05-01a10bbd; explicit owner assignment and standing delegation authority.
-- Integration: /Users/deluisp/Projects/bower-app, branch codex/close-phase-2, registration checkpoint87cafb7c3317d0a15f2b1a41fe9802117c3fc920. Sole root writer. No code/gate/proof mutation currently in flight.
-- Adopted planning: 2026-10-05-contracts-2 / main10ca886626206e0d4d880d6679dd4f57adcafcee. P2 remains open,217/221. Counts do not accept capabilities.
-- Verified foundations: ownership parser257f904/proof5242808; raw read ec8eef7/proofd1361fa; canonical JSON ed7203d/proofdd7909b. Root check730/55, named JSON99 green, real loadable-stub inverse assertion reds. All immutable source/review/proof archives retained.
-- Open entries: partial-pile-readiness, protected-current-prose, run-report-save-barrier, pile-declaration-authority. Frozen O1 at source1dc records12 partial,4 absent and0 complete rows; additive foundations do not complete a row.
-- Technical lead: Planificador, thread01a10b2a-e851-7bc2-b49f-8845262acfdb. Owner authorizes ongoing P2 technical messages. TL04 exact B contractaede6ef2 / original manifest3b954ed6 is ratified; TL05 follows without shape changes.
-- Direct owner unattended authority permits P3 only after complete objective P2 acceptance and validated release, not early P3/P4/spend/production overwrite. Source and conditions:2026-10-05-owner-autonomy.md and adopted GOVERNANCE.
-- Backup: root alone is main backup integrator. Actual private GitHub main backup and latest periodic check both verify local=remote10ca886; latest check2026-10-06 03:36 UTC, zero outgoing objects. No candidate/product release pushed. Check hourly and after validated main integration, following BACKUP.
-- Browser/provider: no reservation or listener; no worker authority. Preserve the owner tab. All earlier synthetic resources raw-Binned/no residual, authority disabled and private manifests retained. R1 ETag line ended; no fourth variant. R1-OBS01 remains a real acceptance blocker.
-- Independent work: D01/D02 policies approved but behavior incomplete. O3–O8/full capabilities/recovery/semantic effects/Undo/preparation/measurements/final independent phone/desktop/PWA evaluation remain. Real R2/R3/R4 observations are incomplete.
+## Reservation release
 
-## Live reservations
+| Scope | Former owner | State / successor requirement |
+| --- | --- | --- |
+| Integration and shared records | Root | RELEASED; successor must register explicit owner assignment before writing |
+| Declaration checkout | declaration_implementer | COMPLETED/RELEASED, clean4052532, unreviewed/unintegrated candidate |
+| Previous declaration session | prerequisites_review | STOPPED after remote compaction transport failure; no declaration work |
+| R4 specification | r4_reserved_id_specs | COMPLETED/RELEASED, frozen documentation archive only |
+| R4 independent document review | r4_spec_review | COMPLETED/RELEASED, frozen27720282; no active review |
+| Other root implementers/reviewers | Prior completed children | RELEASED/read-only immutable candidates and reports |
+| Browser/provider/server resources | Root | RELEASED, no dispatch/listener; private authority disabled/expired |
+| Main backup integrator | Root | RELEASED, verified10ca886; successor must assume responsibility explicitly |
 
-| Scope | Owner | Checkout/output | Exact target/dependency | State |
-| --- | --- | --- | --- | --- |
-| Integration and shared records | Root | bower-app/codex/close-phase-2 |87cafb7; contracts-2/main10ca886 | sole writer; source clean |
-| Declaration guard | declaration_implementer, fresh replacement | /private/tmp/bower-p2-declaration-guards; two new paths only |87cafb7; canonical proofdd7909b; exact B subset | stub b20c618; recovered730/55;90 assertion reds/240 controls;330 named green; full check pending |
-| Previous declaration writer | prerequisites_review | same checkout, reservation handed off | remote compaction transport error; clean87cafb7 | stopped; no declaration files/evidence/commit |
-| R4 specification | r4_reserved_id_specs | NEW/private/tmp/bower-r4-reserved-id-spec only | frozen bff11798; TL05 official ID recommendation | frozen spec8221621b/manifest0f5a14ab; independent review assigned; no execution |
-| Independent review capacity | record_json_review, released | frozen reports and candidates read-only | JSON reviews082ed5f2 / clean delta b51007b8 | no active review; fresh guard review follows candidate |
+The following packets preserve past assignments and chronology. They are historical and do not reserve writers or authorize resumption. Current handoff and release table supersede their future-tense instructions.
 
 ## Continuity archive
 
