@@ -3705,5 +3705,18 @@
     "verify": "pnpm -C api exec vitest run -t \"one person's calls run one at a time|two people never see each other's rows\"",
     "passes": false,
     "note": "TL-P3-04 (main 8feb090). TL-P2-05: people are keyed by sub."
+  },
+  {
+    "id": "focus-timers-after-teardown",
+    "task": "p3-3",
+    "category": "fix",
+    "what": "pnpm check never fails on a src/ui/focus.ts timer that fires after a jsdom test environment is torn down (\"document is not defined\").",
+    "steps": [
+      "Every timer and observer focus.ts starts is cancelled or guarded so it does nothing once document is gone.",
+      "A unit test schedules the route focus, removes document, runs the timers, and sees no throw."
+    ],
+    "verify": "pnpm exec vitest run src/ui/focus.test.ts -t \"focus timers do nothing once the page is gone\"",
+    "passes": false,
+    "note": "Seen twice in pnpm check (P3-2 worker-skeleton, P3-3 person-object): src/data/runner-errors.test.tsx and others. Gate reliability."
   }
 ]
