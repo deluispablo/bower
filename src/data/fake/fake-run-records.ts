@@ -88,9 +88,9 @@ export function shows(effect: Effect, ev: StoredEvidence, parentId: string | nul
     case 'write-runner-json':
       return !ev.trashed && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256;
     case 'create-text':
-      // A generated note (TL-P2-17): its create key, place, name and exact bytes; new runner files stay legacy. The
-      // "new" mark is not evidence: it may be cleared (the note opened) between a lost reply and recovery.
-      return effect.purpose === 'generated' && !ev.trashed && !f.folder && f.parents.length === 1 && f.parents[0] === parentId
+      // A made file, a generated note or a runner file (TL-P2-17, TL-P2-33 §2a): its create key, place, name and exact
+      // bytes. The "new" mark is not evidence: it may be cleared (the note opened) between a lost reply and recovery.
+      return !ev.trashed && !f.folder && f.parents.length === 1 && f.parents[0] === parentId
         && f.name === effect.name && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256
         && f.appProperties?.bowerItem === effect.createKey;
   }
@@ -176,10 +176,19 @@ export function grounded(manifest: RunManifest): boolean {
   const lineOf = new Map(manifest.capture.journal.flatMap((j) => j.fileIds.map((id) => [id, j] as const)));
   const isArchive = (o: OperationV2): o is OperationV2 & { effect: MoveEffect } => o.effect.kind === 'move' && lineOf.has(o.effect.before.fileId)
     && pathOf(o.effect.parent) === SYSTEM.archive && o.effect.name === o.effect.before.name && Object.keys(o.effect.properties).length === 0;
+  /** The requests.json text an operation writes: its write, or the file made again in `.bower` (TL-P2-17). */
+  const requestsOf = (o: OperationV2 | undefined): string | null => {
+    const e = o?.effect;
+    if (e?.kind === 'write-runner-json') return e.path === SYSTEM.requests ? e.text : null;
+    if (e?.kind !== 'create-text' || e.purpose !== 'runner-json') return null;
+    const parent = pathOf(e.parent);
+    return parent !== null && join(parent, e.name) === SYSTEM.requests ? e.text : null;
+  };
   const completed = new Map<string, string>();
   for (const o of manifest.operations) {
-    if (o.effect.kind !== 'write-runner-json' || o.effect.path !== SYSTEM.requests) continue;
-    const done = requestsDone(o.effect.text);
+    const text = requestsOf(o);
+    if (text === null) continue;
+    const done = requestsDone(text);
     if (!done) return false;
     for (const [id, text] of done) completed.set(id, text);
   }
@@ -195,14 +204,15 @@ export function grounded(manifest: RunManifest): boolean {
     if (files.length !== line.fileIds.length || !line.fileIds.every((id) => files.includes(id))) return false;
     const chain = new Set(moves.flatMap((o) => chainOf(o.effect.parent)));
     if (![...chain].every((id) => c.requires.includes(id))) return false;
-    const writes = required.filter((o): o is OperationV2 => o?.effect.kind === 'write-runner-json');
+    const writes = required.filter((o): o is OperationV2 => o?.effect.kind === 'write-runner-json' || requestsOf(o) !== null);
     const allowed = new Set([...moves, ...writes].map((o) => o.operationId));
     if (required.some((o) => !o || (!allowed.has(o.operationId) && !chain.has(o.operationId)))) return false;
     if (v.requests !== undefined) {
       const [write, ...more] = writes;
       const [text, ...rest] = v.requests;
       if (v.yourChanges !== undefined || !write || more.length || text === undefined || rest.length) return false;
-      if (write.effect.kind !== 'write-runner-json' || write.effect.path !== SYSTEM.requests || requestsDone(write.effect.text)?.get(line.recordId) !== text) return false;
+      const written = requestsOf(write);
+      if (written === null || requestsDone(written)?.get(line.recordId) !== text) return false;
       if (!moves.every((o) => o.dependsOn.includes(write.operationId))) return false;
     } else if (v.yourChanges !== 1 || writes.length || completed.has(line.recordId)) return false;
     claimed.add(line.recordId);

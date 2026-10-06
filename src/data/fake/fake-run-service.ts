@@ -127,6 +127,7 @@ const NOT_AS_SEEN = SOURCE_NOT_AS_SEEN;
 const NOTE_NOT_AS_SEEN = 'The note it goes beside is not where Bower left it.';
 const NOTE_CHANGED = 'The note changed before Bower could add to it.';
 const NOTE_THERE = 'A note with that name was already there, so Bower did not write it.';
+const NAME_TAKEN = 'Something else has that name there, so Bower left it as it was.';
 /** Attempts in a row before this instance stops retrying a run that keeps failing; it stays saving. */
 const MAX_TRIES = 5;
 
@@ -582,7 +583,6 @@ export class FakeRunService {
    */
   private async precheck(head: Checkpoint, op: OperationV2): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string | null }> {
     const e = op.effect;
-    if (e.kind === 'create-text' && e.purpose !== 'generated') return { failure: { code: 'conflict', message: 'Bower does not write new runner files on this path.' } };
     // What it depends on must have happened: a pile folder whose things did not all go stays, and so do the hashes.
     if (op.dependsOn.some((id) => head.outcomes.find((o) => o.operationId === id)?.state !== 'applied')) return { failure: { code: 'conflict', message: 'Some of its things stayed where they were, so it stays too.' } };
     if (e.kind !== 'bin' && e.kind !== 'write-runner-json' && e.kind !== 'edit-text' && !this.parentOf(head, op)) return { failure: { code: 'not-found', message: 'The folder for it could not be made.' } };
@@ -618,10 +618,10 @@ export class FakeRunService {
       const parent = peek(parentId);
       if (!parent || parent.trashed) return { code: 'not-found', message: 'The folder for it could not be made.' };
       if (e.kind === 'create-folder') return null;
-      // Any file or folder already at a generated note's path is a lookalike, never overwritten (TL-P2-17).
+      // Any file or folder already at a made file's path is a lookalike, never overwritten (TL-P2-17).
       if (e.kind === 'create-text') {
         const taken = parent.children.some((id) => peek(id)?.file.name.toLowerCase() === e.name.toLowerCase());
-        return taken ? { code: 'conflict', message: NOTE_THERE } : null;
+        return taken ? { code: 'conflict', message: e.purpose === 'generated' ? NOTE_THERE : NAME_TAKEN } : null;
       }
     }
     if (reused) {
@@ -681,8 +681,9 @@ export class FakeRunService {
         await w.writeText(e.before.fileId, e.text, modifiedTime);
         return;
       case 'create-text':
-        // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17).
-        await w.createText(parentId, e.name, e.text, { by: 'bower', bowerNew: '1', bowerItem: e.createKey });
+        // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17); a runner file
+        // made again (TL-P2-33 §2a) only with its create key. Either way a lost reply is found again by that key.
+        await w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey } : { bowerItem: e.createKey });
         return;
     }
   }

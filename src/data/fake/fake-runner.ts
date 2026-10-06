@@ -278,9 +278,11 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   let journal = lines;
   // An instructions run with no line it can take has nothing to read: the existing refusal, before admission.
   if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
+  // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
+  // replaced when the run writes it, its old entries never claimed; a missing one is made again.
+  const sys = ix.file(SYSTEM.dir);
   const requests = ix.file(SYSTEM.requests);
   const hashesFile = ix.file(SYSTEM.hashes);
-  if (!requests || !hashesFile) return legacy('runner files');
   const parsed = (text: string): unknown => {
     try {
       return JSON.parse(text);
@@ -290,10 +292,11 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       return null;
     }
   };
-  const requestsValue = parsed(await drive.readText(requests.id));
-  if (!isRunnerFile(SYSTEM.requests, requestsValue)) return legacy('requests');
-  const hashesText = await drive.readText(hashesFile.id);
-  if (!isRunnerFile(SYSTEM.hashes, parsed(hashesText))) return legacy('hashes');
+  const requestsValue = requests ? parsed(await ownText(drive, requests)) : null;
+  const requestsBroken = !!requests && !isRunnerFile(SYSTEM.requests, requestsValue);
+  const requestsDone = isRunnerFile(SYSTEM.requests, requestsValue) ? requestsValue.done : [];
+  const hashesText = hashesFile ? await ownText(drive, hashesFile) : null;
+  const hashesBroken = hashesText !== null && !isRunnerFile(SYSTEM.hashes, parsed(hashesText));
   // A "yes" to keeping one note joins the thing it is about to that note (MERGES), by the answer's line.
   const yes = new Map(journal.filter((l) => l.rec.kind === 'answer' && l.rec.text === 'yes').map((l) => [l.rec.questionId ?? '', l.rec.id]));
   // Its note is followed through the renames and moves since the last tidy-up, as the resolver follows a link.
@@ -321,6 +324,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const verified = async (f: DriveFile, encoding: 'utf8' | 'blob'): Promise<VerifiedContent | null> => {
     const d = await storedDigest(drive, f);
     return d ? { encoding, size: d.size, sha256: d.sha256, provenance: 'fake-stored', observedModifiedTime: f.modifiedTime } : null;
+  };
+  /** A runner file's stored content as planned on; one that cannot be read refuses the run before admission. */
+  const ownVerified = async (f: DriveFile): Promise<VerifiedContent> => {
+    const v = await verified(f, 'utf8');
+    if (!v) throw new BowerError('unknown', OWN_FILES);
+    return v;
   };
 
   // The ready piles and their things, exactly as captured.
@@ -666,7 +675,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
   if (answered.size && questionsFile) {
-    const value = parsed(await drive.readText(questionsFile.id));
+    const value = parsed(await ownText(drive, questionsFile));
     const readable = isRunnerFile(SYSTEM.questions, value);
     // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
     if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
@@ -683,6 +692,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (!place?.folder) return legacy('journal');
     places.set(place.id, place);
   }
+  // A runner file made again goes into `.bower`, a captured place.
+  if ((!requests || !hashesFile) && sys?.folder) places.set(sys.id, sys);
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
@@ -801,18 +812,23 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const asked = journal.filter((l) => l.rec.kind === 'request');
   let requestsOp: string | null = null;
   if (asked.length) {
-    const before = await verified(requests, 'utf8');
-    if (!before) return legacy('requests');
     const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: REQUEST_DONE }));
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
-    const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsValue.done.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
-    requestsOp = await add({ kind: 'write-runner-json', before: seen(requests), beforeContent: before, path: SYSTEM.requests, text, content: await utf8(text) });
+    const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
+    if (requests) {
+      const before = await ownVerified(requests);
+      if (requestsBroken) console.error(new BowerError('unknown', REQUESTS_REPLACED), `${SYSTEM.requests} is not a valid requests file`);
+      requestsOp = await add({ kind: 'write-runner-json', before: seen(requests), beforeContent: before, path: SYSTEM.requests, text, content: await utf8(text) });
+    } else {
+      // Your changes live in `.bower`, so it is there; made again without it would leave the requests undone.
+      if (!sys?.folder) throw new BowerError('unknown', OWN_FILES);
+      requestsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.requests), createKey: mintKey('runner'), text, content: await utf8(text), purpose: 'runner-json' });
+    }
   }
   let questionsOp: string | null = null;
   if (questionsText !== null && questionsFile) {
-    const before = await verified(questionsFile, 'utf8');
-    if (!before) return legacy('questions');
+    const before = await ownVerified(questionsFile);
     // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done.
     const derived = journal.flatMap((l) => (l.rec.kind === 'answer' ? fromAnswer.get(l.rec.id) ?? [] : []));
     questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
@@ -847,14 +863,24 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       const id = finalPaths.get(path) ?? ix.idOf(path);
       const f = id ? listing.find((x) => x.id === id) : undefined;
       const hash = (id && digests.get(id)) ?? (f ? (await storedDigest(drive, f))?.sha256 : undefined);
-      if (!hash) return legacy('hashes');
+      // A derived list: a file whose bytes cannot be checked now is left out of it, and the next full run adds it.
+      if (!hash) {
+        console.error(`A file's content could not be checked; ${SYSTEM.hashes} leaves it out this time`);
+        continue;
+      }
       hashes[hash] = path;
     }
     const text = `${JSON.stringify({ v: 1, hashes } satisfies HashesFile, null, 2)}\n`;
-    if (text !== hashesText) {
-      const before = await verified(hashesFile, 'utf8');
-      if (!before) return legacy('hashes');
-      await add({ kind: 'write-runner-json', before: seen(hashesFile), beforeContent: before, path: SYSTEM.hashes, text, content: await utf8(text) }, [...movesOf.values()].flat());
+    const after = [...movesOf.values()].flat();
+    if (hashesFile && text !== hashesText) {
+      const before = await ownVerified(hashesFile);
+      if (hashesBroken) console.error(new BowerError('unknown', HASHES_REPLACED), `${SYSTEM.hashes} is not a valid hashes file`);
+      await add({ kind: 'write-runner-json', before: seen(hashesFile), beforeContent: before, path: SYSTEM.hashes, text, content: await utf8(text) }, after);
+    } else if (!hashesFile && sys?.folder) {
+      await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.hashes), createKey: mintKey('runner'), text, content: await utf8(text), purpose: 'runner-json' }, after);
+    } else if (!hashesFile) {
+      // No `.bower` yet: the run's own records make it, and the next full run writes the list there.
+      console.error(`${SYSTEM.dir} is missing; ${SYSTEM.hashes} is written by the next full run`);
     }
   }
 
@@ -947,6 +973,20 @@ const NOTHING_TO_READ = 'There is nothing new for Bower to read.';
 const NOTHING_READY = 'Nothing in the inbox is ready yet.';
 const JOURNAL_LEFT = 'Bower could not read some of your changes; they stay for the next tidy-up.';
 const QUESTIONS_REPLACED = 'Bower replaced its list of questions, which it could not read.';
+const REQUESTS_REPLACED = 'Bower replaced its list of done requests, which it could not read.';
+const HASHES_REPLACED = 'Bower replaced its list of your files, which it could not read.';
+/** A run refused before admission because one of Bower's own files could not be read (TL-P2-17). */
+export const OWN_FILES = "Bower couldn't read its own files. Try again.";
+
+/** A runner file's text; a Drive read that fails refuses the run before admission and any effect (TL-P2-17). */
+async function ownText(drive: FakeDrive, f: DriveFile): Promise<string> {
+  try {
+    return await drive.readText(f.id);
+  } catch (e) {
+    console.error(e);
+    throw new BowerError('unknown', OWN_FILES);
+  }
+}
 
 /** A text's content as contract B describes it: its exact UTF-8 size and SHA-256. */
 async function utf8(text: string): Promise<{ encoding: 'utf8'; size: number; sha256: string }> {
