@@ -2939,7 +2939,7 @@
       "A plan needing a non-B effect is refused before any effect."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"every tidy-up plan takes the recoverable path\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Closes O5; P2 cannot close while any plan reaches the legacy path."
   },
   {

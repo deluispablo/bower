@@ -18,3 +18,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: loose-pile-declaration passes — fix: proof-close a declared loose file staying pending until it arrives
 - 2026-10-06: remove-bins-declarations passes — fix: proof-close Remove binning a pile's declaration copies
 - 2026-10-06: b-path-loose-piles passes — fix: proof-close loose piles on the recoverable path
+- 2026-10-06: o5-no-legacy-run-path passes — chore(harness): o5-no-legacy-run-path passes (batch 5)
