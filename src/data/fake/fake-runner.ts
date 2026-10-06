@@ -163,7 +163,12 @@ export interface PlanOptions {
   runId: string;
   requestId: string;
   requestedAt: number;
+  /** The hub notes a full run brings up to date; the demo's two by default. */
+  updates?: readonly HubUpdate[];
 }
+
+/** A hub note a full run brings up to date, and the Timeline line it gets. */
+export type HubUpdate = { path: string; what: string };
 
 /**
  * Plans a run on the B path when every effect it needs is a B effect (move,
@@ -334,7 +339,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // the line is already there (from any day), so nothing is planned for that note and the run goes on without it.
   const edits: Array<{ file: DriveFile; path: string; what: string; before: VerifiedContent; changes: Change[]; text: string }> = [];
   const date = timelineDate(opts.requestedAt);
-  for (const u of all && date ? [...UPDATES].sort((a, b) => a.path.localeCompare(b.path)) : []) {
+  for (const u of all && date ? [...(opts.updates ?? UPDATES)].sort((a, b) => a.path.localeCompare(b.path)) : []) {
     const f = ix.file(u.path);
     if (!f || f.folder) continue;
     const before = await verified(f, 'utf8');

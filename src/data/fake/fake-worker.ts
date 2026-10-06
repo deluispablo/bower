@@ -14,7 +14,7 @@ import { BOWER_FOLDER, PROP, SYSTEM, isRunnerFile, type LastRunFile } from '../v
 import { serializeNote } from '../vault/note-format';
 import { serializeRules } from '../vault/rules-format';
 import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
-import { planRun, runFake } from './fake-runner';
+import { planRun, runFake, type HubUpdate } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
 import { openElsewhere, type LeaseReply, type SessionAction } from '../session';
@@ -34,6 +34,8 @@ export interface FakeWorkerOptions {
   account?: string;
   /** The person's session lease (TL-P2-14); without it this client is never fenced. */
   lease?: FakeLease;
+  /** The hub notes a full B run brings up to date; the demo's two by default. */
+  updates?: readonly HubUpdate[];
 }
 
 export class FakeWorker implements WorkerApi {
@@ -59,6 +61,7 @@ export class FakeWorker implements WorkerApi {
   /** Which path the latest run here took: the service's B path, or the legacy runner in this page. */
   private via: 'b' | 'legacy' | null = null;
   private readonly lease: FakeLease | null;
+  private readonly updates: readonly HubUpdate[] | undefined;
   /** The place this client last held the lease for, and its epoch: what the real Worker reads from the request. */
   private holder: { place: string; epoch: number } | null = null;
 
@@ -72,6 +75,7 @@ export class FakeWorker implements WorkerApi {
     this.runs = opts.runs ?? null;
     this.account = opts.account ?? ALEX.email;
     this.lease = opts.lease ?? null;
+    this.updates = opts.updates;
     // Offline, the folder cannot be read now; every call says so on its own.
     this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario, opts.fresh ?? true).catch((e: unknown) => {
       console.error(e);
@@ -198,7 +202,7 @@ export class FakeWorker implements WorkerApi {
     if (this.runs) {
       // Classified once, before any effect: the whole run is B or the whole run is legacy.
       const { runId, requestId } = this.runs.ids();
-      const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now() });
+      const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(this.updates ? { updates: this.updates } : {}) });
       if (plan.path === 'b') {
         const failAt = this.failOnce;
         this.failOnce = false;
