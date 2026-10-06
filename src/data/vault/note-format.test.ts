@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NOTES } from '../demo/notes';
 import { BowerError } from '../types';
-import { parseNote, serializeNote, toggleTaskInText } from './note-format';
+import { noteRefusal, parseNote, serializeNote, toggleTaskInText } from './note-format';
 
 describe('the note file format', () => {
   it('round-trips every demo note', () => {
@@ -247,5 +247,28 @@ describe('protected sections retain prose and tasks outside the personal body', 
     const serialized = serializeNote(parseNote('Synthetic.md', raw));
     expect(serialized).not.toContain('bower_format:');
     expect(serialized).not.toContain('<!-- bower:ownership');
+  });
+});
+
+// note-read-review-1, Minor 7: a refusal is told by its typed cause, never by its words.
+describe('a note Bower refuses to parse', () => {
+  const refusal = (text: string): unknown => {
+    try {
+      parseNote('Inbox/Pile/Pile note.md', text);
+    } catch (e) {
+      return e;
+    }
+    throw new Error('not refused');
+  };
+  it('carries why in its cause', () => {
+    const newer = refusal('---\nbower_format: ownership/9\n---\nWords\n');
+    const damaged = refusal('---\nbower_format: ownership/2\n---\nWords\n');
+    expect(newer).toMatchObject({ name: 'BowerError', cause: { kind: 'note-refused', refusal: 'newer' } });
+    expect(damaged).toMatchObject({ name: 'BowerError', cause: { kind: 'note-refused', refusal: 'damaged' } });
+    expect([noteRefusal(newer), noteRefusal(damaged)]).toEqual(['newer', 'damaged']);
+  });
+  it('is never told by its words alone', () => {
+    expect(noteRefusal(new BowerError('unknown', 'This note uses an unsupported format.'))).toBeNull();
+    expect(noteRefusal(new BowerError('unknown', 'This note cannot be read safely.'))).toBeNull();
   });
 });

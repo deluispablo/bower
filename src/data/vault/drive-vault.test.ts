@@ -2033,6 +2033,25 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(seen?.items.map((i) => i.name)).toEqual(['a.pdf']);
   });
 
+  // note-read-review-1, Minor 6 (TL-P2-08): a note Bower refuses is logged once per pile until it changes.
+  it('a pile note Bower cannot parse is logged once until it changes', async () => {
+    const pile = await vault.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
+    await vault.settled();
+    const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+    if (!note) throw new Error('no pile note');
+    const written = await drive.writeText(note.id, '---\nbower_format: ownership/9\n---\nReceipts from Alex\n', note.modifiedTime);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    for (let i = 0; i < 3; i++) expect((await reader.piles()).find((p) => p.id === pile.id)?.setAside).toBe('note-format');
+    expect(errors.mock.calls).toHaveLength(1);
+    expect(errors.mock.calls[0]?.[0]).toMatchObject({ name: 'BowerError', cause: { refusal: 'newer' } });
+    // Changed, and still refused: logged once more.
+    await drive.writeText(note.id, '---\nbower_format: ownership/2\n---\nReceipts from Alex\n', written.modifiedTime);
+    await reader.refresh();
+    for (let i = 0; i < 3; i++) expect((await reader.piles()).find((p) => p.id === pile.id)?.setAside).toBe('note-damaged');
+    expect(errors.mock.calls).toHaveLength(2);
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();
