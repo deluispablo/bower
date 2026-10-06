@@ -46,7 +46,8 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 - **Leaving Bower.** `DELETE /me` releases the person's lease.
 - **Coming back.** A holder whose lease expired, and that nobody took, takes it again without asking.
 - **Checking after leaving.** A `check` by the same place right after its own `leave`, with no grant in between, returns the same epoch. Any other grant raises it.
-- **Late replies.** The client ignores replies to checks that started before its latest `leave`.
+- **Stale checks.** The client ignores replies to checks that started before its latest `leave`. Each `check` and `leave` carries the place's leave generation. The Worker discards a `check` with an older generation than that place's last `leave`, so a stale check never grants the lease.
+- **Wiring.** The real source is wired to the session only once the Worker has `POST /session`. Fake and demo are wired already.
 
 ```ts
 interface RunWire {
