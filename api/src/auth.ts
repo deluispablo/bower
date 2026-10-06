@@ -1,21 +1,276 @@
-/** Stub (METHOD step 6): sign-in routes; the implementation follows. */
+/**
+ * Sign-in with Google and the session it creates: `GET /auth/login`,
+ * `GET /auth/callback`, `POST /auth/logout`, `GET /me`, and the
+ * `requireSession` check later routes reuse. Adapted from the original
+ * app's `auth.ts`: people are keyed by their OIDC `sub` in their own person
+ * object, and the session generation lives there too.
+ *
+ * Nothing here logs addresses, codes or tokens; every error is a contract
+ * code, its cause for the log only.
+ */
+
 import { Hono } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import type { JWTVerifyGetKey } from 'jose';
 
-import type { AppEnv } from './env.js';
+import { encrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
+import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
+import {
+  buildAuthUrl,
+  codeChallenge,
+  createCodeVerifier,
+  createNonce,
+  createState,
+  exchangeCode,
+  googleKeys,
+  verifyIdToken,
+} from './google.js';
 import type { FetchLike } from './google.js';
+import type { PersonAccount } from './person.js';
+import { requireSameOrigin } from './security.js';
+import {
+  SESSION_TTL_SECONDS,
+  SessionError,
+  assertCurrentGeneration,
+  clearSessionCookie,
+  readCookie,
+  readSessionCookie,
+  sessionCookie,
+  signSession,
+  signToken,
+  verifySession,
+  verifyToken,
+} from './session.js';
+import type { SessionClaims } from './session.js';
+import { isAllowed } from './store.js';
 
+/** Cookie holding the OAuth `state`, `nonce` and PKCE verifier between login and callback. */
 export const OAUTH_COOKIE = 'bower_oauth';
 
-export interface AuthDeps { fetchImpl?: FetchLike; keys?: JWTVerifyGetKey }
+/** The OAuth cookie lives 10 minutes: long enough to click through consent. */
+const OAUTH_TTL_SECONDS = 10 * 60;
 
-export function createAuthRoutes(_deps: AuthDeps = {}): Hono<AppEnv> {
+function oauthCookie(token: string, maxAgeSeconds: number): string {
+  return `${OAUTH_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=${maxAgeSeconds}`;
+}
+
+function redirectUri(env: Env): string {
+  return `${env.API_ORIGIN}/auth/callback`;
+}
+
+function signedOut(cause: string, error?: unknown): HttpError {
+  return new HttpError(401, 'signed-out', undefined, {
+    cause: error === undefined ? new Error(cause) : new Error(cause, { cause: error }),
+  });
+}
+
+/** The person object for `sub` (TL-P2-05: one per person, keyed by OIDC sub). */
+function personFor(env: Env, sub: string) {
+  return env.PERSON.get(env.PERSON.idFromName(sub));
+}
+
+/**
+ * Calls the person object. Any failure on the way is `internal` with no
+ * cause: the error is logged here and never travels further.
+ */
+async function reachPerson<T>(what: string, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    console.error(`person object: ${what} failed`, err);
+    throw new HttpError(500, 'internal');
+  }
+}
+
+/** A request's verified session and the account it belongs to. */
+interface Authenticated {
+  claims: SessionClaims;
+  account: PersonAccount;
+}
+
+/**
+ * The session a request's cookie carries, checked against the person's
+ * stored generation: no cookie, a bad one (signature with `SESSION_SECRET`
+ * or, during a rotation, `SESSION_SECRET_PREVIOUS`), an expired one, a
+ * person with no account, or a retired generation are all `signed-out`.
+ */
+async function authenticate(cookieHeader: string | undefined, env: Env): Promise<Authenticated> {
+  const token = readSessionCookie(cookieHeader);
+  if (token === undefined) throw signedOut('no session cookie');
+  let claims: SessionClaims;
+  try {
+    claims = await verifySession(token, env.SESSION_SECRET, undefined, env.SESSION_SECRET_PREVIOUS);
+  } catch (err) {
+    throw signedOut('session refused', err);
+  }
+  const account = await reachPerson('account', () => personFor(env, claims.sub).account());
+  if (account === null) throw signedOut('no account for this session');
+  try {
+    assertCurrentGeneration(claims, account.generation);
+  } catch (err) {
+    if (err instanceof SessionError) throw signedOut('session retired', err);
+    throw err;
+  }
+  return { claims, account };
+}
+
+/** Clears a session cookie the request carried but that was refused, then rethrows. */
+function rejectSession<E extends AppEnv>(c: Context<E>, err: unknown): never {
+  if (err instanceof HttpError && err.code === 'signed-out' && readSessionCookie(c.req.header('cookie')) !== undefined) {
+    c.header('Set-Cookie', clearSessionCookie(), { append: true });
+  }
+  throw err;
+}
+
+/**
+ * Requires a valid, current session and sets `userId` (the person's `sub`)
+ * and `account`. A refused session is 401 `signed-out` and clears the cookie.
+ */
+export const requireSession: MiddlewareHandler<AppEnv> = async (c, next) => {
+  let session: Authenticated;
+  try {
+    session = await authenticate(c.req.header('cookie'), c.get('env'));
+  } catch (err) {
+    rejectSession(c, err);
+  }
+  c.set('userId', session.claims.sub);
+  c.set('account', session.account);
+  await next();
+};
+
+/** Reads and checks the OAuth cookie against Google's `state`; `signed-out` on any failure. */
+async function readOAuthCookie(
+  cookieHeader: string | undefined,
+  secret: string,
+  state: string,
+): Promise<{ verifier: string; nonce: string }> {
+  const token = readCookie(cookieHeader, OAUTH_COOKIE);
+  if (token === undefined) throw signedOut('no OAuth cookie');
+  let claims: Record<string, unknown>;
+  try {
+    claims = await verifyToken(token, secret);
+  } catch (err) {
+    throw signedOut('OAuth cookie refused', err);
+  }
+  const { state: expected, verifier, nonce } = claims;
+  if (
+    typeof expected !== 'string' ||
+    typeof verifier !== 'string' ||
+    typeof nonce !== 'string' ||
+    !timingSafeEqual(state, expected)
+  ) {
+    throw signedOut('OAuth state does not match');
+  }
+  return { verifier, nonce };
+}
+
+export interface AuthDeps {
+  /** Used for every call to Google; tests pass a stub. Defaults to `fetch`. */
+  fetchImpl?: FetchLike;
+  /** Google's signing keys; tests pass a local key set. Defaults to Google's JWKS. */
+  keys?: JWTVerifyGetKey;
+}
+
+/** The sign-in routes and `GET /me`, mounted at `/` by `index.ts`. */
+export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
+  const fetchImpl: FetchLike = deps.fetchImpl ?? ((input, init) => fetch(input, init));
+  const keys = deps.keys ?? googleKeys(deps.fetchImpl);
   const auth = new Hono<AppEnv>();
-  const todo = (): never => { throw new HttpError(500, 'internal'); };
-  auth.get('/auth/login', todo);
-  auth.get('/auth/callback', todo);
-  auth.post('/auth/logout', todo);
-  auth.get('/me', todo);
+
+  auth.get('/auth/login', async (c) => {
+    const env = c.get('env');
+    const state = createState();
+    const nonce = createNonce();
+    const verifier = createCodeVerifier();
+    const token = await signToken({ state, nonce, verifier }, env.SESSION_SECRET, OAUTH_TTL_SECONDS);
+    c.header('Set-Cookie', oauthCookie(token, OAUTH_TTL_SECONDS));
+    return c.redirect(
+      buildAuthUrl({
+        clientId: env.GOOGLE_CLIENT_ID,
+        redirectUri: redirectUri(env),
+        state,
+        nonce,
+        codeChallenge: await codeChallenge(verifier),
+        // Only this exact value asks again: the callback sends it when no refresh token is kept.
+        consent: c.req.query('consent') === '1',
+      }),
+      302,
+    );
+  });
+
+  auth.get('/auth/callback', async (c) => {
+    const env = c.get('env');
+    if (c.req.query('error') !== undefined) throw signedOut('Google returned an error');
+    const code = c.req.query('code');
+    const state = c.req.query('state');
+    if (code === undefined || code === '' || state === undefined) throw signedOut('callback without code or state');
+    const { verifier, nonce } = await readOAuthCookie(c.req.header('cookie'), env.SESSION_SECRET, state);
+
+    const tokens = await exchangeCode(
+      {
+        code,
+        codeVerifier: verifier,
+        clientId: env.GOOGLE_CLIENT_ID,
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+        redirectUri: redirectUri(env),
+      },
+      fetchImpl,
+    );
+    const identity = await verifyIdToken(tokens.idToken, { clientId: env.GOOGLE_CLIENT_ID, nonce, keys });
+    // An unproven address is never matched against the allowlist (Google: use email only when email_verified).
+    if (!identity.emailVerified || !(await isAllowed(env.BOWER_KV, identity.email))) {
+      // Nothing is kept for someone who was not invited.
+      c.header('Set-Cookie', oauthCookie('', 0));
+      throw new HttpError(403, 'forbidden');
+    }
+
+    const encRefreshToken =
+      tokens.refreshToken === null
+        ? null
+        : await encrypt(tokens.refreshToken, await importEncryptionKey(env.TOKEN_ENC_KEY));
+    const person = personFor(env, identity.sub);
+    const signedIn = await reachPerson('signIn', () =>
+      person.signIn({ email: identity.email, name: identity.name, encRefreshToken }),
+    );
+    c.header('Set-Cookie', oauthCookie('', 0));
+    if (!signedIn.hasRefreshToken) {
+      // Google sends a refresh token only at consent: ask once more, with consent.
+      return c.redirect(`${env.API_ORIGIN}/auth/login?consent=1`, 302);
+    }
+
+    // Always a brand-new session (fresh `sid` and `iat`, OWASP: renew the session at sign-in),
+    // carrying the person's current generation.
+    const session = await signSession({ sub: identity.sub, gen: signedIn.generation }, env.SESSION_SECRET);
+    c.header('Set-Cookie', sessionCookie(session, SESSION_TTL_SECONDS), { append: true });
+    return c.redirect(env.APP_ORIGIN, 302);
+  });
+
+  // Signing out retires every session of the person (the stored generation moves on),
+  // so a copied or forgotten cookie on another device stops working too.
+  auth.post('/auth/logout', requireSameOrigin, async (c) => {
+    const env = c.get('env');
+    let session: Authenticated | undefined;
+    try {
+      session = await authenticate(c.req.header('cookie'), env);
+    } catch (err) {
+      // Already signed out: there is nothing to retire, only the cookie to clear.
+      if (!(err instanceof HttpError && err.code === 'signed-out')) throw err;
+    }
+    if (session !== undefined) {
+      const sub = session.claims.sub;
+      await reachPerson('retireSessions', () => personFor(env, sub).retireSessions());
+    }
+    c.header('Set-Cookie', clearSessionCookie());
+    return c.body(null, 204);
+  });
+
+  auth.get('/me', requireSession, (c) => {
+    const account = c.get('account');
+    if (account === undefined) throw new HttpError(500, 'internal');
+    // The folder pointer comes with its own entry (worker-vault-pointer).
+    return c.json({ user: { name: account.name, email: account.email }, folderId: null });
+  });
+
   return auth;
 }

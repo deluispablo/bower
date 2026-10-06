@@ -52,6 +52,7 @@ describe('person object', () => {
         'run-1',
         2,
       );
+      sql.exec('INSERT INTO account (id, email, name, enc_refresh_token) VALUES (1, ?, ?, ?)', 'you@example.com', 'Alex', 'v1.a.b');
     });
 
     // Sam's first call sees a fresh counter, and none of Alex's rows.
@@ -66,6 +67,7 @@ describe('person object', () => {
       quota: 1,
       control: 0,
       run_ticket: 0,
+      account: 0,
     });
     // Alex's rows are still all there, untouched by Sam.
     const alexCounts = await runInDurableObject(alex, (_instance, state) =>
@@ -78,6 +80,7 @@ describe('person object', () => {
       quota: 1,
       control: 1,
       run_ticket: 1,
+      account: 1,
     });
     expect(await alex.countQuota('2026-10-06')).toBe(3);
   });

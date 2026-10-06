@@ -1,9 +1,9 @@
 import { HttpError } from './errors.js';
-import type { Person } from './person.js';
+import type { Person, PersonAccount } from './person.js';
 
 /**
  * The Worker's full binding contract: every secret (`wrangler secret put`)
- * and every var (`[vars]` in `wrangler.toml`), plus the KV namespace.
+ * and every var (`vars` in `wrangler.jsonc`), plus the KV namespace.
  * Secrets and vars are always strings on a Cloudflare Worker; `assertEnv`
  * is what turns "the type says string" into "it actually is one, and it
  * looks valid" at runtime.
@@ -14,14 +14,17 @@ export interface Env {
   PERSON: DurableObjectNamespace<Person>;
 
   // Secrets (wrangler secret put / .dev.vars) — no defaults, ever.
-  GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
   TOKEN_ENC_KEY: string;
-  GITHUB_TOKEN: string;
-  ADMIN_KEY: string;
-  VAPID_PUBLIC_KEY: string;
-  VAPID_PRIVATE_KEY: string;
+  /**
+   * Not required at this stage (TL-P3-06): each becomes required with the
+   * entry that first uses it (dispatch, admin, push).
+   */
+  GITHUB_TOKEN?: string;
+  ADMIN_KEY?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
   /**
    * Optional: when set, `verifySession` also accepts a session cookie
    * signed with this value, giving a `SESSION_SECRET` rotation a grace
@@ -32,6 +35,8 @@ export interface Env {
   SESSION_SECRET_PREVIOUS?: string;
 
   // Vars without a default: required, but not secret.
+  /** Public: it travels in every sign-in address (TL-P3-06). */
+  GOOGLE_CLIENT_ID: string;
   APP_ORIGIN: string;
   API_ORIGIN: string;
   GITHUB_REPO: string;
@@ -58,16 +63,23 @@ export interface AppEnv {
   Variables: {
     requestId: string;
     env: Env;
-    /** The signed-in user's id; set by `requireSession` (`auth.ts`) only. */
+    /** The signed-in person's OIDC `sub`; set by `requireSession` (`auth.ts`) only. */
     userId?: string;
+    /** The signed-in person's account, read once by `requireSession`. */
+    account?: PersonAccount;
   };
 }
 
-const REQUIRED_SECRETS = [
-  'GOOGLE_CLIENT_ID',
+/** The secrets this stage requires (TL-P3-06); a test pins the list. */
+export const REQUIRED_SECRETS = [
   'GOOGLE_CLIENT_SECRET',
   'SESSION_SECRET',
   'TOKEN_ENC_KEY',
+] as const satisfies readonly (keyof Env)[];
+
+/** Secrets read when present, required by no route yet. */
+export const OPTIONAL_SECRETS = [
+  'SESSION_SECRET_PREVIOUS',
   'GITHUB_TOKEN',
   'ADMIN_KEY',
   'VAPID_PUBLIC_KEY',
@@ -75,6 +87,7 @@ const REQUIRED_SECRETS = [
 ] as const satisfies readonly (keyof Env)[];
 
 const REQUIRED_VARS = [
+  'GOOGLE_CLIENT_ID',
   'APP_ORIGIN',
   'API_ORIGIN',
   'GITHUB_REPO',
@@ -207,10 +220,10 @@ export function assertEnv(env: unknown): Env {
     GOOGLE_CLIENT_SECRET: requireString(source, 'GOOGLE_CLIENT_SECRET'),
     SESSION_SECRET: sessionSecret,
     TOKEN_ENC_KEY: tokenEncKey,
-    GITHUB_TOKEN: requireString(source, 'GITHUB_TOKEN'),
-    ADMIN_KEY: requireString(source, 'ADMIN_KEY'),
-    VAPID_PUBLIC_KEY: requireString(source, 'VAPID_PUBLIC_KEY'),
-    VAPID_PRIVATE_KEY: requireString(source, 'VAPID_PRIVATE_KEY'),
+    GITHUB_TOKEN: optionalString(source, 'GITHUB_TOKEN'),
+    ADMIN_KEY: optionalString(source, 'ADMIN_KEY'),
+    VAPID_PUBLIC_KEY: optionalString(source, 'VAPID_PUBLIC_KEY'),
+    VAPID_PRIVATE_KEY: optionalString(source, 'VAPID_PRIVATE_KEY'),
     SESSION_SECRET_PREVIOUS: optionalString(source, 'SESSION_SECRET_PREVIOUS'),
 
     APP_ORIGIN: requireString(source, 'APP_ORIGIN'),
