@@ -129,3 +129,5 @@ Judge the ONE fixed ordinary-file reserved-ID case, honest observer-confirmed bu
 
 
 Latest guard milestone: recovered full STUB check730/55 exit0; unchanged named330 gives90 actual assertion reds and240 controls, then implementation330 green. First implementation full check failed at lint only (20 new-file issues); no unit/build stages ran. Writer preserves failures and assertions, fixes only allowed files, and has sole heavy-check reservation after root doccheck730/55 completed. Root integration remains code-clean.
+- R-u2 delta result: `b-path-leftover-piles` CLEAN and `pile-accounting-shared` CLEAN (0C/0I/1M, converging moved-back disposed member; closure note). Integrate after reselection: leftover pair then accounting pair, full browser gates.
+- Assignment I-bfc: Claude `bfcache-impl-1`, entries `bfcache-reload` (TL-P2-28) then `session-signout-helper`, checkout `/private/tmp/bower-p2-bfcache` (`claude/p2-bfcache`) base `570becb`, init exit0. Owns `session.ts` + test, `App.tsx` pageshow branch, `choose.ts` leavingLetsGo, `live/index.ts` sign-out lease. Research-first packet.
