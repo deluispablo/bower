@@ -2884,7 +2884,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a saved link note is written once through a recoverable operation\"",
     "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; one entry per non-B effect."
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; one entry per non-B effect. B.2 consumer obligations: reused-note grounding and key re-check against the move's before.fileId in the same serialized step (R4-2, Ratification 6); rejected-move fixture where the record stays (TL-P2-26 C)."
   },
   {
     "id": "o5-rename-link-rewrite",
@@ -2898,7 +2898,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"link rewrites after a rename recover without repeating\"",
     "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5."
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5. B.2 consumer obligations: a plan-time refusal leaves its archive unplanned; rename records archived only after every derived link-rewrite applies (C2/R3-4)."
   },
   {
     "id": "o5-timeline-append",
@@ -2912,7 +2912,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a Timeline line is added once and keeps the rest of the note\"",
     "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; also resolves the fake runner v2 downgrade."
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; also resolves the fake runner v2 downgrade. B.2 consumer obligations: grounded() updated.path for an applied append; adapter precondition when the hash is the same but modifiedTime changed (rule 4); YYYY-MM-DD shown as \"6 Oct\" (m8)."
   },
   {
     "id": "o5-rules-wording",
@@ -2926,7 +2926,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a rule is worded once through a recoverable operation\"",
     "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5."
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5. B.2 consumer obligations (note-edit-contract review M1): missing Rules.md create-text — rule archives dependsOn it and rulesWorded = parseRules of the created text; grounded() rulesWorded row."
   },
   {
     "id": "o5-no-legacy-run-path",
@@ -3081,7 +3081,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a merge is applied once through the recoverable path\"",
     "passes": false,
-    "note": "TL-P2-16 item 5: a reason the O4 U2 classifier sends a plan to the legacy path; o5-no-legacy-run-path proves the list empty. Planned, not implemented."
+    "note": "TL-P2-16 item 5: a reason the O4 U2 classifier sends a plan to the legacy path; o5-no-legacy-run-path proves the list empty. Planned, not implemented. B.2 consumer obligations: questions.json removal write dependsOn every operation derived from the answer and every answer's archive dependsOn that write (R4-1, Ratification 2); hidden-question test (Ratification 1); rejected-move fixture where the record stays (TL-P2-26 C); grounded() filed.note via an applied append."
   },
   {
     "id": "b-path-held-piles",
@@ -3094,8 +3094,8 @@
       "Recovery never touches the held piles."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"held piles stay untouched on the recoverable path\"",
-    "passes": false,
-    "note": "TL-P2-17: groups blocked piles + uncaptured child. Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-21 (option B, contract unchanged). Claude candidate claude/p2-b-held-piles head 72afbc0; review CLEAN after delta (docs/harness/2026-10-06-held-piles-review.md). Root gates check 3171, e2e 200, e2e:fake 202. Remaining legacy routes: declared pile with no members left → b-path-leftover-piles; only pile notes / missing never-removed context → b-path-generated-note."
   },
   {
     "id": "b-path-destinations",
