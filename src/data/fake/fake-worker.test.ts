@@ -1968,6 +1968,116 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
   });
 
+  // TL-P2-17 and TL-P2-23: Bower's own files never send a run down the legacy path.
+  describe("Bower's own files take the recoverable path", () => {
+    const OWN_FILES = "Bower couldn't read its own files. Try again.";
+    const LEASE = 'Put the lease papers together';
+    const plan = async (w: { drive: FakeDrive; rootId: string }, scope: 'all' | 'instructions' = 'all') =>
+      planRun(w.drive, w.rootId, { scope, allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    const fileAt = async (w: { drive: FakeDrive; rootId: string }, path: string): Promise<DriveFile> => {
+      const f = (await w.drive.listAll(w.rootId)).find((x) => w.drive.pathOf(x.id, w.rootId) === path);
+      if (!f) throw new Error(`${path} is missing`);
+      return f;
+    };
+    const saying = (w: Pick<World, 'errors'>, message: string): BowerError[] => bowerErrors(w).filter((e) => e.message === message);
+    const writeOf = (m: Manifest | undefined, path: string): Extract<OperationV2['effect'], { kind: 'write-runner-json' }> | undefined => {
+      const effect = m?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === path)?.effect;
+      return effect?.kind === 'write-runner-json' ? effect : undefined;
+    };
+    /** A world whose run needs all three runner files: a request to complete and an answer to drop. */
+    async function needingAll(): Promise<World> {
+      const w = await bWorld();
+      const questions = await fileAt(w, SYSTEM.questions);
+      await w.drive.writeText(questions.id, `${JSON.stringify({ v: 1, questions: [{ id: 'q-answered', text: 'Question?', yes: 'Yes', no: 'No', askedAt: 1 }] }, null, 2)}\n`, questions.modifiedTime);
+      await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).answer('q-answered', true);
+      await w.uploader.addRequest(LEASE);
+      return w;
+    }
+
+    it('unreadable runner files never send a run down the legacy path', async () => {
+      // A read that fails refuses before admission and before any effect, with one plain sentence and no manifest.
+      for (const [path, how] of [[SYSTEM.requests, 'text'], [SYSTEM.hashes, 'text'], [SYSTEM.questions, 'text'], [SYSTEM.requests, 'digest'], [SYSTEM.hashes, 'digest']] as const) {
+        const w = await needingAll();
+        const target = await fileAt(w, path);
+        const before = await domain(w.drive, w.rootId);
+        if (how === 'text') {
+          const readText = w.drive.readText.bind(w.drive);
+          w.drive.readText = async (id) => (id === target.id ? Promise.reject(driveError('offline')) : readText(id));
+        } else {
+          const storedDigest = w.drive.storedDigest.bind(w.drive);
+          w.drive.storedDigest = async (id) => (id === target.id ? Promise.reject(driveError('offline')) : storedDigest(id));
+        }
+        await expect(w.worker.process('all'), `${how} of ${path}`).rejects.toMatchObject({ message: OWN_FILES });
+        await w.runs.settled();
+        expect(await recordsOf(w), `${how} of ${path}`).toEqual([]);
+        expect(w.calls, `${how} of ${path}`).toEqual([]);
+        expect(viewOf(w), `${how} of ${path}`).toBeNull();
+        expect(await domain(w.drive, w.rootId), `${how} of ${path}`).toBe(before);
+      }
+
+      // A runner file that reads but is malformed is Bower's own: replaced through write-runner-json on the B path.
+      const w = await needingAll();
+      const broken: Record<string, string> = { [SYSTEM.requests]: '{ "v": 1, "done": [', [SYSTEM.hashes]: '{ "v": 1, "hashes": { "nope": 3 } }\n', [SYSTEM.questions]: '{ "v": 1, "questions": [' };
+      const digests = new Map<string, string | undefined>();
+      for (const [path, text] of Object.entries(broken)) {
+        const f = await fileAt(w, path);
+        await w.drive.writeText(f.id, text, f.modifiedTime);
+        digests.set(path, (await w.drive.storedDigest(f.id))?.sha256);
+      }
+      expect(await plan(w)).toMatchObject({ path: 'b' });
+      // Only the run's own planning counts below.
+      w.errors.mockClear();
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest, ...others] = await manifestsOf(w);
+      expect(others).toEqual([]);
+      // Each write records the hash of the bytes it could not parse; Drive keeps that revision.
+      for (const path of Object.keys(broken)) expect(writeOf(manifest, path)?.beforeContent.sha256, path).toBe(digests.get(path));
+      const dump = w.drive.dump(w.rootId);
+      // The fresh files hold only what this run knows: the old entries are never claimed.
+      expect((JSON.parse(dump.get(SYSTEM.requests) ?? '') as RequestsFile).done.map((r) => r.text)).toEqual([LEASE]);
+      expect(JSON.parse(dump.get(SYSTEM.questions) ?? '')).toEqual({ v: 1, questions: [] });
+      const hashes = JSON.parse(dump.get(SYSTEM.hashes) ?? '') as { v: number; hashes: Record<string, string> };
+      expect(hashes.v).toBe(1);
+      expect(Object.keys(hashes.hashes).every((h) => /^[0-9a-f]{64}$/.test(h))).toBe(true);
+      for (const id of w.sources) expect(Object.values(hashes.hashes)).toContain(w.drive.pathOf(id, w.rootId));
+      expect(viewOf(w)?.run.report).toMatchObject({ requests: [LEASE], yourChanges: 1 });
+      expect(saying(w, 'Bower replaced its list of done requests, which it could not read.')).toHaveLength(1);
+      expect(saying(w, 'Bower replaced its list of your files, which it could not read.')).toHaveLength(1);
+      expect(saying(w, 'Bower replaced its list of questions, which it could not read.')).toHaveLength(1);
+      await expectFiledOnce(w);
+
+      // A malformed file never blocks a later run: the next one is on the B path too.
+      await w.uploader.addPile({ text: 'Papers about the car', items: [pdf('insurance.pdf'), pdf('service.pdf')] });
+      await w.uploader.settled();
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await manifestsOf(w)).some((m) => m.runId === next.id)).toBe(true);
+    });
+
+    it('makes a missing runner file again on the recoverable path', async () => {
+      const w = await bWorld();
+      await w.uploader.addRequest(LEASE);
+      for (const path of [SYSTEM.requests, SYSTEM.hashes]) await w.drive.trash((await fileAt(w, path)).id);
+      expect(await plan(w)).toMatchObject({ path: 'b' });
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const made = (manifest?.operations ?? []).flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect] : []));
+      expect(made.map((e) => [e.name, e.purpose]).sort()).toEqual([['hashes.json', 'runner-json'], ['requests.json', 'runner-json']]);
+      const dump = w.drive.dump(w.rootId);
+      expect((JSON.parse(dump.get(SYSTEM.requests) ?? '') as RequestsFile).done.map((r) => r.text)).toEqual([LEASE]);
+      expect(Object.values((JSON.parse(dump.get(SYSTEM.hashes) ?? '') as { hashes: Record<string, string> }).hashes)).toHaveLength(4);
+      expect(viewOf(w)?.run.report?.requests).toEqual([LEASE]);
+      // One file each, made once.
+      for (const name of ['requests.json', 'hashes.json']) expect(w.calls.filter((c) => c.op === 'create-text' && c.name === name)).toHaveLength(1);
+      await expectFiledOnce(w);
+    });
+  });
+
   describe('held piles stay untouched on the recoverable path', () => {
     const FOUR = ['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf'];
     const DIDNT = 'missing.pdf';
