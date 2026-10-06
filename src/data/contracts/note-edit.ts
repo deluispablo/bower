@@ -186,7 +186,7 @@ function frontmatterLines(text: string): Line[] {
 function byBower(text: string): boolean {
   try { return parseNote('note.md', text).byBower; }
   catch (error) {
-    // expected: an unreadable note is not Bower's; parseNote already logged why.
+    // expected: an unreadable note is not Bower's; logged here, its cause says why.
     console.error('A note could not be read for an edit:', error);
     return false;
   }
@@ -418,7 +418,7 @@ function insertionOnly(before: string, after: string): boolean {
 function timelineOf(text: string): unknown[] | null {
   try { return parseNote('note.md', text).timeline; }
   catch (error) {
-    // expected: a result that cannot be read back fails the invariant; parseNote already logged why.
+    // expected: a result that cannot be read back fails the invariant; logged here, its cause says why.
     console.error('An edited note could not be read back:', error);
     return null;
   }

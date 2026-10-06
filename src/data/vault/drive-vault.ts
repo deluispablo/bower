@@ -211,7 +211,17 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const f = ix.file(path);
     if (!f || f.folder) throw new BowerError('not-found', 'That note is no longer there.');
-    const parsed = await this.parsed(f, path);
+    let parsed: ParsedNote;
+    try {
+      parsed = await this.parsed(f, path);
+    } catch (e) {
+      // A note Bower refuses says so on its screen; its cause reaches the console once until it changes.
+      if (noteRefusal(e) && !this.refusalsLogged.has(`${f.id}@${f.modifiedTime}`)) {
+        this.refusalsLogged.add(`${f.id}@${f.modifiedTime}`);
+        console.error(e);
+      }
+      throw e;
+    }
     const byName = new Map<string, string>();
     for (const p of ix.entries().keys()) if (p.endsWith('.md')) {
       const key = displayName(nameOf(p)).toLowerCase();
