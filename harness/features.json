@@ -3388,7 +3388,7 @@
       "No effect is made; the legacy reasons manifest and grounding are gone."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a plan the guard refuses is refused before any effect\"",
-    "passes": false,
+    "passes": true,
     "note": "Q2 approved. TL-P2-37 (main d6dca4b). Planned, not implemented."
   },
   {
