@@ -42,3 +42,4 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
 - TL-P2-40: the C04–C11 journeys — [2026-10-06-tl-p2-40-capability-journeys.md](2026-10-06-tl-p2-40-capability-journeys.md)
 - TL-P2-41: token budget: role-based reading, small records, Sonnet/Haiku workers, fewer reviews, short messages — [2026-10-06-tl-p2-41-token-budget.md](2026-10-06-tl-p2-41-token-budget.md)
 - TL-P2-42: token ledger per entry, pre-analysed starting model, Haiku→Sonnet→Opus ladder — [2026-10-06-tl-p2-42-model-ladder.md](2026-10-06-tl-p2-42-model-ladder.md)
+- TL-P2-43: every session writes its state (LEAD.md / HANDOFF+ACTIVE / deliveries) and clears itself at batch boundaries — [2026-10-06-tl-p2-43-session-state.md](2026-10-06-tl-p2-43-session-state.md)

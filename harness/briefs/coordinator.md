@@ -17,6 +17,7 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - messages of 10 lines at most;
   - keep HANDOFF at 5 KB or less and ACTIVE at 3 KB or less, archiving the rest;
   - compact at batch boundaries.
+- Session state ([TL-P2-43](../../docs/harness/2026-10-06-tl-p2-43-session-state.md)): at each batch boundary commit the exact resume state in HANDOFF and ACTIVE, then clear your own session and resume from them.
 - The model ladder ([TL-P2-42](../../docs/harness/2026-10-06-tl-p2-42-model-ladder.md)):
   - every packet states its starting model and a one-line reason;
   - climb Haiku → Sonnet → Opus on the ladder's triggers;
