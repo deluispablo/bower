@@ -158,3 +158,8 @@ Latest guard milestone: recovered full STUB check730/55 exit0; unchanged named33
 - Lead: TL-P2-34 (`e61a6d6`, amended `4060322`) and TL-P2-35 (`e0dd1f1`) backed up and verified private. Registered `pile-note-read-isolation` (TL-P2-08 (a) for pile notes); assigned to `decl-isolation-impl-1` in `/private/tmp/bower-p2-note-read` (`claude/p2-note-read`) base `b23bc30`.
 - R-dest: destinations, context-restore and pile-notes-only CLEAN; generated-note CLEAN at `9889d42`, then front-matter pair `11e1a76` over-reached (reads every pile note) → rework to check only the recorded note.
 - R-o5c delta: saved-link-note and rename-link-rewrite CLEAN at `0bc48f6`; merges BLOCKED (held pile with no reason) → TL-P2-35: refused merge files on its own with a setAside row; follow `into` through renames.
+- I-dest integrated by cherry-pick `4a1e4f2..175ba13` onto `7277ab1` → HEAD `a776def`, check 3366 green. All four entries CLEAN (destinations, generated-note, context-restore, pile-notes-only). Closures wait for e2e (display asleep) together with `fake-drive-reservation-saved`.
+- I-rf asked to rebase onto `a776def` as `claude/p2-b-runner-files-r1`; I-o5c and I-loose follow after their reviews; I-note-read rebases last.
+- Lead: TL-P2-36 (`2d794de`) backed up and verified private; registered `pile-note-format-visible` (assigned to I-note-read after its rework).
+- R-o5c final: `o5-saved-link-note`, `o5-rename-link-rewrite`, `b-path-merges` CLEAN at `claude/p2-o5-consumers-r1` `c09b4f8` (check 3393). Integrating by cherry-pick onto `a776def`.
+- R-note-read: BLOCKED (data loss: an unread note was editable; fix = read-only flag until Try again, plus guard tests, log-once for declared piles, isEmptyPile).

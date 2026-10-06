@@ -3306,5 +3306,19 @@
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"an unreadable pile note affects only its own pile\"",
     "passes": false,
     "note": "TL-P2-08 (a) applied to pile notes (lead, 2026-10-06, no new TL doc). Found by the b-path-generated-note review: one failed pile-note read made the Inbox listing throw for every pile and refused the whole tidy-up. Planned, not implemented."
+  },
+  {
+    "id": "pile-note-format-visible",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "A pile whose note Bower cannot parse stays in the Inbox with a plain reason and Remove, instead of disappearing.",
+    "steps": [
+      "Give one pile a note with a future bower_format, another a note with a damaged boundary or invalid encoding, next to healthy piles.",
+      "Both piles stay listed: \"This pile's note needs a newer Bower.\" or \"Bower can't read this pile's note.\", with Remove (recoverable, TL-P2-31) and no Try again; their notes are read-only.",
+      "A tidy-up holds both piles and plans the rest; nothing writes over either note."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a pile whose note Bower cannot parse stays visible\"",
+    "passes": false,
+    "note": "TL-P2-08 + TL-P2-11 applied TL-P2-36 (main 2d794de). Found by note-read-review-1: drive-vault.ts skipped such a pile (if (note && !parsed && !unread) continue). Planned, not implemented."
   }
 ]
