@@ -15,9 +15,12 @@ export function thingsIn(p: Pile): number {
   return p.items.length || (p.text.trim() ? 1 : 0);
 }
 
-/** A pile with no things and no words: nothing to file and no note to keep (TL-P2-22). */
+/**
+ * A pile with no things and no words: nothing to file and no note to keep (TL-P2-22). A note Bower could not
+ * read still has its words, unseen: that pile is a note, never empty.
+ */
 export function isEmptyPile(p: Pick<Pile, 'items' | 'text' | 'noteLocked'>): boolean {
-  return !p.items.length && !p.text.trim();
+  return !p.noteLocked && !p.items.length && !p.text.trim();
 }
 
 export function waitingIn(piles: readonly Pile[] | undefined): number {
