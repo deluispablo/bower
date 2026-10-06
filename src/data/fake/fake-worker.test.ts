@@ -2638,6 +2638,103 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
   });
 
+  // b-path-generated-note (TL-P2-17): an empty pile's words and a filed thing's own note are B create-text operations.
+  describe('generated notes take the recoverable path', () => {
+    const WORDS = 'Bins go out on Tuesday nights';
+    const OFFER = 'Offer_letter_final(2).pdf';
+    const COMPANION = 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md';
+    const plan = (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    type CreateText = Extract<OperationV2['effect'], { kind: 'create-text' }>;
+    const createsOf = (ops: readonly OperationV2[]): Array<OperationV2 & { effect: CreateText }> =>
+      ops.filter((o): o is OperationV2 & { effect: CreateText } => o.effect.kind === 'create-text');
+    const isCreateOf = (name: string) => (call: FencedCall): boolean => call.op === 'create-text' && call.name === name;
+    const folderAt = async (w: { drive: FakeDrive; rootId: string }, path: string): Promise<DriveFile | undefined> =>
+      (await w.drive.listAll(w.rootId)).find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === path);
+
+    /** The template with a pile of words only, a pile holding the offer letter, and a note of Alex's where the words would go. */
+    async function generating(o: { hooks?: Hooks } = {}) {
+      const w = await bWorld(o);
+      const pile = await w.uploader.addPile({ text: WORDS, items: [] });
+      await w.uploader.settled();
+      const inbox = await folderAt(w, 'Inbox');
+      const offer = await w.drive.createFolder(inbox?.id ?? '', 'Offer');
+      await w.drive.createText(offer.id, OFFER, '%PDF offer');
+      await w.drive.createText(offer.id, 'other.pdf', '%PDF other');
+      const resources = await folderAt(w, 'Resources');
+      const ideas = await w.drive.createFolder(resources?.id ?? '', 'Ideas');
+      const alex = await w.drive.createText(ideas.id, `${WORDS}.md`, 'Alex wrote this one.');
+      return { ...w, pileId: pile.id, ideas, alex };
+    }
+
+    it('a generated note is created once through the recoverable path', async () => {
+      const w = await generating();
+      const out = await plan(w);
+      expect(out).toMatchObject({ path: 'b' });
+      if (out.path !== 'b') return;
+      const creates = createsOf(out.manifest.operations);
+      // The words get a name of their own beside Alex's note; the offer letter gets its note; both keyed, both generated.
+      expect(creates.map((o) => [o.effect.name, o.effect.purpose]).sort()).toEqual([[`${WORDS} (2).md`, 'generated'], ['Industrial Designer, Ferrowick.md', 'generated']]);
+      expect(new Set(creates.map((o) => o.effect.createKey)).size).toBe(2);
+      const words = creates.find((o) => o.effect.name === `${WORDS} (2).md`);
+      expect(words?.effect.parent).toEqual({ fileId: w.ideas.id });
+      // The pile's folder goes to the Bin only after its words are written.
+      const bin = out.manifest.operations.find((o) => o.effect.kind === 'bin' && o.effect.capturedChildIds.length === 1);
+      expect(bin?.dependsOn).toContain(words?.operationId);
+
+      // Both replies are lost: recovery finds each note by its key and never writes it again.
+      w.rules.push(once(isCreateOf(`${WORDS} (2).md`), 'lose-reply'), once(isCreateOf('Industrial Designer, Ferrowick.md'), 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      for (let i = 0; i < 8 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      for (const op of createsOf(manifest?.operations ?? [])) {
+        expect(w.calls.filter(isCreateOf(op.effect.name)), op.effect.name).toHaveLength(1);
+        const made = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === op.effect.name);
+        expect(made, op.effect.name).toHaveLength(1);
+        expect(made[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: op.effect.createKey });
+        expect(w.drive.dump(w.rootId).get(w.drive.pathOf(made[0]?.id ?? '', w.rootId))).toBe(op.effect.text);
+      }
+      expect(w.drive.dump(w.rootId).get(`Resources/Ideas/${WORDS}.md`)).toBe('Alex wrote this one.');
+      const report = viewOf(w)?.run.report;
+      expect(report?.created).toEqual(expect.arrayContaining([
+        { path: `Resources/Ideas/${WORDS} (2).md`, what: 'Written from a note you added.' },
+        { path: COMPANION, what: 'A note for Offer, Industrial Designer, Ferrowick.pdf.' },
+      ]));
+      expect(report?.filed).toContainEqual({ name: 'Your note', title: `${WORDS} (2)`, kind: 'note', to: 'Resources/Ideas', note: `Resources/Ideas/${WORDS} (2).md` });
+      expect(report?.filed.find((f) => f.name === OFFER)).toMatchObject({ to: 'Projects/Job hunt/Applications' });
+      expect((await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles()).some((p) => p.id === w.pileId)).toBe(false);
+    });
+
+    it('a lookalike note at the planned place is never taken as ours: the words stay in the inbox', async () => {
+      let drive: FakeDrive | null = null;
+      let ideas = '';
+      const hooks: Hooks = {
+        beforeDispatch: async (at) => {
+          if (!drive || at.effect.kind !== 'create-text' || at.effect.name !== `${WORDS} (2).md`) return;
+          // Alex makes a note with that very name after Bower planned it.
+          await drive.createText(ideas, at.effect.name, 'Alex got there first.');
+        },
+      };
+      const w = await generating({ hooks });
+      drive = w.drive;
+      ideas = w.ideas.id;
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.drive.dump(w.rootId).get(`Resources/Ideas/${WORDS} (2).md`)).toBe('Alex got there first.');
+      expect(w.applied.filter(isCreateOf(`${WORDS} (2).md`))).toEqual([]);
+      const report = viewOf(w)?.run.report;
+      expect(report?.filed.map((f) => f.name)).not.toContain('Your note');
+      expect(report?.setAside.map((s) => s.why)).toContain('Bower could not write a note from it, so it stays in your inbox.');
+      expect((await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles()).some((p) => p.id === w.pileId)).toBe(true);
+    });
+  });
+
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
   describe('a Timeline line is added once and keeps the rest of the note', () => {
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';
