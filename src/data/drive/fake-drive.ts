@@ -66,6 +66,8 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
 
   /** Told after every change, so the fake source can keep the Drive across reloads. */
   onChange: (() => void) | null = null;
+  /** Makes this Drive durable now; awaited before a reserved id or a partial upload is answered. */
+  persist: (() => Promise<void>) | null = null;
 
   /** Everything, as JSON: files, the Bin, contents (blobs as base64) and the counters. */
   async snapshot(): Promise<string> {
@@ -293,6 +295,9 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
       this.reserved.add(id);
       ids.push(id);
     }
+    // Drive keeps a reservation at once, so it is answered only once the pretend Drive keeps it too.
+    this.changed(null);
+    await this.persist?.();
     return this.reply(ids);
   }
 
@@ -327,6 +332,10 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
       if (this.files.has(id)) throw driveError('conflict');
       s.file = { ...this.changed(this.add(parentId, name, false, content, appProperties, id)), sha256: hash };
       s.parts = [];
+    } else {
+      // Drive keeps the bytes it confirms, so they are confirmed only once kept: a reload right after resumes from them.
+      this.changed(null);
+      await this.persist?.();
     }
     return this.reply(this.statusOf(s));
   }

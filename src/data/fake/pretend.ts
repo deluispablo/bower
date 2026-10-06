@@ -31,6 +31,7 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
   const saver = new Saver(scenario, d);
   savers.set(d, saver);
   d.onChange = () => saver.schedule();
+  d.persist = () => saver.flush();
   saver.schedule();
   return { drive: d, rootId, fresh };
 }
@@ -125,6 +126,7 @@ export function pretendRuns(scenario: Scenario, drive: FakeDrive, fresh: boolean
   const service = runs ?? new FakeRunService(opts);
   saver.runs = service;
   drive.onChange = () => saver.schedule();
+  drive.persist = () => saver.flush();
   service.onChange = () => saver.schedule();
   saver.schedule();
   return service;

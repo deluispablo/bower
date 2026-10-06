@@ -6,9 +6,11 @@
  */
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { RESUMABLE_UNIT } from './drive/drive-api';
 import { FakeDrive } from './drive/fake-drive';
 import { MAX_RESTARTS } from './drive/resumable-upload';
 import { BowerError } from './types';
+import { pretendDrive } from './fake/pretend';
 import { createUploadQueue, KEEP_OPEN_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, type AddUpload, type LocksLike, type StorageLike, type UploadQueue } from './upload-queue';
 import { indexedDbUploadStore, type UploadStore } from './upload-store';
 import { sha256 } from './vault/hashes';
@@ -114,6 +116,8 @@ function brokenStore(env: Env, failing: Partial<Record<keyof UploadStore, boolea
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // A test on the pretend Drive leaves nothing of it for the next, even when it fails.
+  sessionStorage.clear();
 });
 
 describe('uploads survive a reload without a second file', () => {
@@ -240,6 +244,40 @@ describe('uploads survive a reload without a second file', () => {
     expect((await files(env)).map((f) => f.id)).toEqual([made[0]?.id]);
     expect(second.queue.items()[0]).toMatchObject({ state: 'done', file: { id: made[0]?.id } });
     expect(await second.store.list(ACCOUNT, FOLDER)).toEqual([]);
+  });
+
+  it('a reservation survives an immediate reload', async () => {
+    sessionStorage.clear();
+    // The reload comes before the pretend Drive's 250 ms save would: that timer never fires.
+    const wait = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => (ms === 250 ? wait(() => undefined, 0) : wait(fn, ms))) as typeof setTimeout);
+    const { drive } = await pretendDrive('default');
+    const inbox = (await drive.createFolder('root', 'Inbox')).id;
+    const env: Env = { drive, inbox, idb: new IDBFactory() };
+    const bytes = new Uint8Array(RESUMABLE_UNIT + 10).map((_, i) => i % 251);
+    const body = new Blob([bytes], { type: 'application/pdf' });
+    const tab = (): UploadQueue => createUploadQueue({ drive: env.drive, store: indexedDbUploadStore(env.idb), chunkSize: RESUMABLE_UNIT });
+    const hold = holdAt(env, RESUMABLE_UNIT);
+    const first = tab();
+    await first.start(ACCOUNT, FOLDER);
+    await first.add({ ...(await member(env)), body, sha256: await sha256(body) });
+    await reachedChunk(env, RESUMABLE_UNIT);
+    first.stop();
+    hold.open();
+    await first.idle();
+    const reserved = env.drive.resumableCalls.find((c) => c.op === 'open')?.id;
+    expect(reserved).toBeTruthy();
+
+    // Reload: the pretend Drive comes back from what this tab kept, with nothing else changed.
+    env.drive = (await pretendDrive('default')).drive;
+    const second = tab();
+    await second.start(ACCOUNT, FOLDER);
+    await second.idle();
+
+    expect(ops(env)).toEqual(['status', `put@${RESUMABLE_UNIT}`]);
+    expect((await files(env)).map((f) => f.id)).toEqual([reserved]);
+    expect([...(await env.drive.readBytes(reserved ?? ''))]).toEqual([...bytes]);
+    expect(second.items()[0]).toMatchObject({ state: 'done', sent: bytes.length, file: { id: reserved } });
   });
 
   it('keeps the bytes on the device until Drive confirms, then deletes them', async () => {
