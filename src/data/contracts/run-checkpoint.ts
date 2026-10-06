@@ -1,5 +1,5 @@
 /** Run checkpoint and report record validation only; no claim, dispatch or permission authority. */
-import type { RunReport } from '../types';
+import type { RunReport } from './types';
 import { canonicalRecordJson, hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };

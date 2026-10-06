@@ -1,5 +1,5 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
-import { sha256 } from '../vault/hashes';
+import { sha256 } from './hashes';
 import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 

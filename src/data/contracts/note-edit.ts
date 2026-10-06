@@ -8,14 +8,14 @@
  * last non-blank line" splice adapt `app/src/history.ts` `appendHistoryLine`; the literal, regex-free token
  * replacement follows `agent/run.sh` `sheet_relink`, without its path and stem forms (TL-P2-20 never rewrites them).
  */
-import { formerNames, linkTarget } from '../links';
-import { ruleLike } from '../rules';
-import { displayName, nameOf } from '../tree';
-import type { ChangeEntry, Rule } from '../types';
-import { sha256 } from '../vault/hashes';
-import { parseNote } from '../vault/note-format';
-import { parseOwnership, type ByteSpan, type OwnershipFailure } from '../vault/ownership-format';
-import { parseRules } from '../vault/rules-format';
+import { formerNames, linkTarget } from './links';
+import { ruleLike } from './rules';
+import { displayName, nameOf } from './tree';
+import type { ChangeEntry, Rule } from './types';
+import { sha256 } from './hashes';
+import { parseNote } from './note-format';
+import { parseOwnership, type ByteSpan, type OwnershipFailure } from './ownership-format';
+import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove } from './run-manifest';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
