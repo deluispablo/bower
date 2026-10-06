@@ -204,11 +204,32 @@ it.each(['reads it again', 'cannot read it again, then Try again reads it'] as c
   expect(field()).toHaveValue('My unsaved draft');
   expect(await real(note.id)).toBe('Changed elsewhere');
   // Final review (R4): the words now there are shown next to the draft, and saving again is an informed overwrite.
-  expect(await screen.findByText('It now says: “Changed elsewhere”. Save the note to replace it with yours.')).toBeVisible();
+  expect(await screen.findByText('This note changed elsewhere. It now says “Changed elsewhere”. Save again to replace it with yours.')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Save the note' }));
   await waitFor(async () => expect(await real(note.id)).toBe('My unsaved draft'));
   await waitFor(() => expect(screen.queryByText(/It now says/)).toBeNull());
   expect(field()).toHaveValue('My unsaved draft');
+});
+
+it('a long note changed elsewhere is shown cut at a word, about 80 characters in', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const drive = new FakeDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  await drive.createFolder(root.id, 'Inbox');
+  vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const pile = await vault.addPile({ text: 'Papers about the lease', items: [{ name: 'lease.pdf', kind: 'pdf', origin: 'This device', body: new Blob(['lease']) }] });
+  await vault.settled();
+  const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+  if (!note) throw new Error('no pile note');
+  const base = loadingSources();
+  render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+  const field = (): HTMLElement => screen.getByRole('textbox', { name: 'What is this?' });
+  await waitFor(() => expect(field()).toHaveValue('Papers about the lease'));
+  fireEvent.change(field(), { target: { value: 'My unsaved draft' } });
+  await drive.writeText(note.id, 'Changed elsewhere by Alex with a much longer note about the lease, the deposit and the inventory list for the flat', note.modifiedTime);
+  await vault.refresh();
+  fireEvent.click(screen.getByRole('button', { name: 'Save the note' }));
+  expect(await screen.findByText('This note changed elsewhere. It now says “Changed elsewhere by Alex with a much longer note about the lease, the deposit…”. Save again to replace it with yours.')).toBeVisible();
 });
 
 it('a draft whose note did not change saves after a listing reads it again', async () => {
