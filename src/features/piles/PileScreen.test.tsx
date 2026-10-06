@@ -130,6 +130,17 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(await screen.findByText('The note goes to the Bin of your Drive.')).toBeVisible();
   });
 
+  it.each([
+    ['note-format', "This pile's note needs a newer Bower."],
+    ['note-damaged', "Bower can't read this pile's note."],
+  ] as const)('a pile note Bower cannot parse (%s): its reason, the note read-only, Remove and no Try again', async (why, said) => {
+    screenFor({ id: `p-${why}`, path: 'Inbox/2026-10-06 Bins', text: '', createdAt: Date.now(), setAside: why, noteLocked: true, items: [{ id: 'd', name: 'd.pdf', kind: 'pdf', origin: 'From this computer' }] });
+    expect(await screen.findByText(said)).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'What is this?' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^Remove/ }).map((b) => b.textContent)).toEqual(['Remove this pile']);
+  });
+
   it('an empty pile is called an empty pile, not your note', async () => {
     screenFor({ id: 'p-empty', path: 'Inbox/2026-10-06 Old', text: '', createdAt: Date.now(), setAside: 'empty', items: [] });
     expect(await screen.findByRole('heading', { level: 1, name: 'An empty pile' })).toBeVisible();

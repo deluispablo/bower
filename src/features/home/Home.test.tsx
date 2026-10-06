@@ -32,6 +32,8 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     { id: 'lists', path: 'Inbox/Letters', text: 'Letters', createdAt: at - 2, setAside: 'declaration', items: [thing('d')] },
     { id: 'unchecked', path: 'Inbox/Scans', text: 'Scans', createdAt: at - 3, setAside: 'not-checked', items: [thing('e')] },
     { id: 'unreadable', path: 'Inbox/Forms', text: 'Forms', createdAt: at - 3, setAside: 'unreadable', items: [thing('g')] },
+    { id: 'newer', path: 'Inbox/Bills', text: '', createdAt: at - 3, setAside: 'note-format', noteLocked: true, items: [thing('bills')] },
+    { id: 'damaged', path: 'Inbox/Postcards', text: '', createdAt: at - 3, setAside: 'note-damaged', noteLocked: true, items: [thing('postcards')] },
     { id: 'empty', path: 'Inbox/Old', text: '', createdAt: at - 4, setAside: 'empty', items: [] },
     { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: at - 5, items: [thing('f')] },
     { id: 'note', path: 'Inbox/Bins', text: 'Bins go out on Tuesday', createdAt: at - 6, items: [] },
@@ -81,6 +83,12 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     // A list Bower could not read is no dead end either: its Try again reads it again now (TL-P2-30).
     fireEvent.click(within(rowOf('Forms')).getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(retryPile).toHaveBeenCalledWith('unreadable'));
+    // A note Bower cannot parse: its reason and Remove, never Try again (a retry does not change a format).
+    for (const [name, said] of [['bills', "This pile's note needs a newer Bower."], ['postcards', "Bower can't read this pile's note."]] as const) {
+      expect(within(rowOf(name)).getByText(said)).toBeVisible();
+      expect(within(rowOf(name)).getByRole('button', { name: 'Remove this pile' })).toBeVisible();
+      expect(within(rowOf(name)).queryByRole('button', { name: 'Try again' })).toBeNull();
+    }
     // Remove is the pile's own Remove, with its question first.
     expect(within(rowOf('Letters')).getByRole('button', { name: 'Remove this pile' })).toBeVisible();
     fireEvent.click(within(rowOf('Papers from Alex')).getByRole('button', { name: 'Remove this pile' }));

@@ -753,8 +753,8 @@ describe('unreadable ownership notes do not block other notes', () => {
   const odd = 'Resources/Odd.md';
   const body = 'ownershipneedle [[Target]]';
   const formats = [
-    { name: 'unsupported format', text: `---\nbower_format: obsidian-thing\n---\n${body}`, message: 'This note uses an unsupported format.' },
-    { name: 'damaged ownership/2', text: `---\nbower_format: ownership/2\n---\n${body}`, message: 'This note cannot be read safely.' },
+    { name: 'unsupported format', text: `---\nbower_format: obsidian-thing\n---\n${body}`, message: 'This note uses an unsupported format.', reason: 'note-format' },
+    { name: 'damaged ownership/2', text: `---\nbower_format: ownership/2\n---\n${body}`, message: 'This note cannot be read safely.', reason: 'note-damaged' },
   ];
 
   beforeEach(() => { vi.spyOn(console, 'error').mockImplementation(() => undefined); });
@@ -790,11 +790,12 @@ describe('unreadable ownership notes do not block other notes', () => {
     expect(await drive.snapshot()).toBe(before);
   });
 
-  it.each(formats)('Inbox skips and logs a pile with $name without hiding readable piles', async ({ text }) => {
+  // pile-note-format-visible: the pile is no longer hidden; it stays, held, with its reason (TL-P2-08, TL-P2-11).
+  it.each(formats)('Inbox holds and logs a pile with $name without hiding readable piles', async ({ text, reason }) => {
     const { folder, good } = await addNotes(text);
     const before = await drive.snapshot();
     await expect(vault.piles().then((piles) => piles.find((pile) => pile.id === good.id)?.text)).resolves.toBe('Alex added readable context.');
-    expect((await vault.piles()).some((pile) => pile.id === folder.id)).toBe(false);
+    expect((await vault.piles()).find((pile) => pile.id === folder.id)).toMatchObject({ setAside: reason, noteLocked: true });
     expect(console.error).toHaveBeenCalledWith(expect.any(BowerError));
     expect(await drive.snapshot()).toBe(before);
   });
@@ -1956,6 +1957,45 @@ describe('a set-aside pile shows its reason in the inbox', () => {
       return real(id);
     });
     await expect(declaring().piles()).rejects.toBe(signedOut);
+  });
+
+  // pile-note-format-visible (TL-P2-08 + TL-P2-11): a note Bower refuses to parse no longer hides its pile.
+  it('a pile whose note Bower cannot parse stays visible', async () => {
+    localStorage.clear();
+    drive = new FakeDrive();
+    const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
+    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    const uploader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    const healthy = await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf')] });
+    const newer = await uploader.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
+    const damaged = await uploader.addPile({ text: 'Letters from Alex', items: [pdf('letter.pdf')] });
+    await uploader.settled();
+    const NOTES = { [newer.id]: '---\nbower_format: ownership/9\n---\nReceipts from Alex\n', [damaged.id]: '---\nbower_format: ownership/2\n---\nLetters from Alex\n' };
+    for (const [id, text] of Object.entries(NOTES)) {
+      const note = (await drive.listAll(id)).find((f) => f.name === 'Pile note.md');
+      if (!note) throw new Error('no pile note');
+      await drive.writeText(note.id, text, note.modifiedTime);
+    }
+    const kept = async () => Promise.all([newer.id, damaged.id].map(async (id) => Promise.all((await drive.listAll(id)).map(async (f) => [f.name, f.modifiedTime, await drive.readText(f.id)]))));
+    const before = await kept();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    const listed = await reader.piles();
+    expect([healthy.id, newer.id, damaged.id].map((id) => listed.find((p) => p.id === id)?.setAside)).toEqual([undefined, 'note-format', 'note-damaged']);
+    expect(listed.find((p) => p.id === newer.id)).toMatchObject({ noteLocked: true, items: [expect.objectContaining({ name: 'receipt.pdf' })] });
+    expect(listed.find((p) => p.id === damaged.id)).toMatchObject({ noteLocked: true, items: [expect.objectContaining({ name: 'letter.pdf' })] });
+    expect(listed.find((p) => p.id === healthy.id)).toMatchObject({ text: 'Papers about the lease' });
+    // Nothing writes over it: retrying does not change a format, so the reason itself is the refusal.
+    await expect(reader.updatePile(newer.id, 'Fresh words')).rejects.toMatchObject({ message: "This pile's note needs a newer Bower." });
+    await expect(reader.updatePile(damaged.id, 'Fresh words')).rejects.toMatchObject({ message: "Bower can't read this pile's note." });
+    // The tidy-up plans the rest and holds both.
+    const planned = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
+    expect(planned.manifest.capture.piles.map((p) => p.pileId)).toEqual([healthy.id]);
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    expect(out.report.filed.map((f) => f.name)).toEqual(['lease.pdf']);
+    expect(await kept()).toEqual(before);
   });
 
   it('a pile with no declaration, and a ready one, have no reason', async () => {

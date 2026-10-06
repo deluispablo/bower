@@ -92,7 +92,7 @@ export interface ChosenAgain {
  * bytes Bower could not check, a thing that changed, two different lists of
  * the pile, or nothing left in it.
  */
-export type SetAside = 'not-arrived' | 'not-checked' | 'unreadable' | 'changed' | 'declaration' | 'empty';
+export type SetAside = 'not-arrived' | 'not-checked' | 'unreadable' | 'changed' | 'declaration' | 'empty' | 'note-format' | 'note-damaged';
 
 export interface Pile {
   id: string;
