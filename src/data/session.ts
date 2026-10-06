@@ -12,7 +12,7 @@
  * (accepted, TL-P2-13). The runner's own effects are never fenced here.
  */
 import { BowerError } from './types';
-import type { Sources, Unsubscribe } from './sources';
+import type { Session, Sources, Unsubscribe } from './sources';
 import type { WorkerApi } from './worker/worker-api';
 
 /** Approved copy (TL-P2-13): the block screen's heading and the refusal of a fenced write. */
@@ -626,6 +626,29 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
     },
   };
   return guard;
+}
+
+/**
+ * Signing out and leaving Bower let the session lease go one way on every source (demo, fake, real when
+ * wired), so no source can drift. Signing out goes through `leaveFor`: the lease goes first, the place
+ * shows nothing else until the sign-out is done, and a failed one keeps it as it was (an active place
+ * takes its lease back, a blocked one stays blocked). Leaving Bower keeps the lease while the account is
+ * deleted (the Worker checks it), then lets it go, so the next place or person starts without asking.
+ */
+export function leavingLetsGo<T extends Pick<Session, 'signOut' | 'deleteAccount'>>(door: T, place: PlaceGuard): T {
+  return new Proxy(door, {
+    get(target, key, receiver) {
+      if (key === 'signOut') return (): Promise<void> => place.leaveFor(() => target.signOut());
+      if (key === 'deleteAccount')
+        return async (): Promise<void> => {
+          await target.deleteAccount();
+          // The account is gone either way: a lease left behind (the Worker drops it with the account) ends with its TTL.
+          await place.leave().catch((e: unknown) => console.error(e));
+        };
+      const value: unknown = Reflect.get(target, key, receiver);
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+  });
 }
 
 /** Drive methods that only read; every other one is a write and is fenced (fail closed). */

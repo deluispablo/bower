@@ -11,8 +11,8 @@ import { DriveHttp } from './drive/drive-http';
 import type { DemoWorld } from './demo/world';
 import type { Scenario, TimeScale } from './demo/scenario';
 import { makeLiveSources, uploadAccount } from './live';
-import { fenceDoors, type PlaceGuard } from './session';
-import type { Session, Sources } from './sources';
+import { fenceDoors, leavingLetsGo } from './session';
+import type { Sources } from './sources';
 import { WorkerHttp } from './worker/worker-http';
 
 export type SourceKind = 'demo' | 'fake' | 'real';
@@ -48,37 +48,6 @@ export function chooseSource(kind: SourceKind): void {
   location.assign(url.toString());
 }
 
-/**
- * The demo's session door, letting the lease go when the person leaves, as the live sources do: signing
- * out or deleting the account lets the next place (or person) start without asking.
- */
-function leavingLetsGo(door: Session, place: PlaceGuard): Session {
-  return {
-    current: () => door.current(),
-    signIn: () => door.signIn(),
-    folderState: () => door.folderState(),
-    createFolder: (onStep) => door.createFolder(onStep),
-    subscribe: (cb) => door.subscribe(cb),
-    async signOut(): Promise<void> {
-      // Only an active place has a lease to let go; a blocked one stays blocked until signing out is done.
-      const was = place.state();
-      if (was === 'active') await place.leave().catch((e: unknown) => console.error(e));
-      try {
-        await door.signOut();
-      } catch (e) {
-        // Still signed in here: an active place takes its lease back.
-        if (was === 'active') void place.start().catch((err: unknown) => console.error(err));
-        throw e;
-      }
-      place.reset();
-    },
-    async deleteAccount(): Promise<void> {
-      await door.deleteAccount();
-      await place.leave().catch((e: unknown) => console.error(e));
-    },
-  };
-}
-
 export async function buildSources(kind: SourceKind, scenario: Scenario, scale: TimeScale): Promise<{ sources: Sources; world?: DemoWorld }> {
   // The demo and the pretend Drive load only when asked for: the real app never downloads them.
   // One active place per person (TL-P2-13) on demo and fake (real waits for P3, below): demo and each fake
@@ -89,6 +58,7 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     // The demo has no Worker: its lease lives in this browser, as the pretend Worker's does.
     const place = localPlace({ world: 'demo', person: await uploadAccount(ALEX.email) });
     const fenced = fenceDoors(world.sources(), place);
+    // Signing out and leaving Bower let the lease go as on every source.
     return { sources: { ...fenced, session: leavingLetsGo(fenced.session, place) }, world };
   }
   if (kind === 'real') {

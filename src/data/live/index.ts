@@ -14,7 +14,7 @@ import { indexedDbUploadStore } from '../upload-store';
 import { sha256 } from '../vault/hashes';
 import { LiveRuns } from './runs';
 import { LiveSession } from './session';
-import { createPlaceGuard, drivePolicy, fenceDrive, fenceWorker, isOpenElsewhere, placeId, sessionBus, type ActiveHow, type PlaceGuard, type PlaceOptions } from '../session';
+import { createPlaceGuard, drivePolicy, fenceDrive, fenceWorker, isOpenElsewhere, leavingLetsGo, placeId, sessionBus, type ActiveHow, type PlaceGuard, type PlaceOptions } from '../session';
 
 export interface LiveOptions {
   driveLinks?: boolean;
@@ -373,17 +373,8 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       await queue.forgetAccount(who).catch((e: unknown) => console.error(e));
     };
   }
-  if (guard) {
-    const signOut = session.signOut.bind(session);
-    // Signing out lets the lease go, so the next place (or person) starts without asking.
-    // A failed sign-out leaves the place as it was: active (its lease taken back) or blocked.
-    session.signOut = (): Promise<void> => guard.leaveFor(signOut);
-    const leaveBower = session.deleteAccount.bind(session);
-    session.deleteAccount = async (): Promise<void> => {
-      await leaveBower();
-      guard.reset();
-    };
-  }
+  // Signing out and leaving Bower let the lease go as on every source.
+  if (guard) session = leavingLetsGo(session, guard);
   fresh();
   const vault = door(v, () => v, vaultListeners, connectVault);
   vaultDoor = vault;

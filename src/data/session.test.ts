@@ -30,6 +30,8 @@ import {
 } from './session';
 import type { Sources } from './sources';
 import { ALEX } from './demo/fixture';
+import { buildSources, type SourceKind } from './choose';
+import type { DemoWorld } from './demo/world';
 import { BowerError } from './types';
 import type { QueueRole, UploadQueue } from './upload-queue';
 import type { WorkerApi } from './worker/worker-api';
@@ -1194,5 +1196,76 @@ describe('final delta: a file sent straight checks the lease afresh', () => {
     await a.live.vault.addPile({ text: '', items: [{ name: 'fresh.pdf', kind: 'pdf', origin: 'Added here', body: new Blob([new Uint8Array([1])], { type: 'application/pdf' }) }] });
     await vi.waitFor(() => expect(order).toContain('upload'));
     expect(order.slice(order.indexOf('upload') - 1, order.indexOf('upload') + 1)).toEqual(['check', 'upload']);
+  });
+});
+
+describe('one way to let the lease go (qa-25)', () => {
+  /** The holder of the one lease this browser keeps for the source's world. */
+  const holder = (): string | null => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('bower:lease:'));
+    const text = key ? localStorage.getItem(key) : null;
+    return text ? (JSON.parse(text) as { holder: string | null }).holder : null;
+  };
+  /** A tab of this browser on the source, as the app builds it; the next one is another tab. */
+  async function tab(kind: SourceKind): Promise<{ sources: Sources; place: PlaceGuard; world?: DemoWorld; close(): void }> {
+    sessionStorage.removeItem('bower:place');
+    const built = await buildSources(kind, 'default', 'instant');
+    const place = built.sources.place as PlaceGuard;
+    const close = (): void => {
+      const s = built.sources as Sources & { dispose?: () => void };
+      if (s.dispose) s.dispose();
+      else place.dispose();
+    };
+    return { sources: built.sources, place, ...(built.world ? { world: built.world } : {}), close };
+  }
+  /** The next sign-out of this tab fails as offline: the demo's world, or the pretend Worker. */
+  function failNextSignOut(t: { world?: DemoWorld }): void {
+    const offline = new BowerError('offline', "You're offline.");
+    if (t.world) vi.spyOn(t.world as unknown as { wait(fn: () => unknown): Promise<unknown> }, 'wait').mockRejectedValueOnce(offline);
+    else vi.spyOn(FakeWorker.prototype, 'signOut').mockRejectedValueOnce(offline);
+  }
+
+  it.each(['demo', 'fake'] as const)('every source lets the lease go the same way (%s)', async (kind) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const a = await tab(kind);
+    const b = await tab(kind);
+    try {
+      expect(await a.place.start()).toBe('active');
+      const first = a.place.epoch();
+      const seen: string[] = [];
+      a.place.subscribe(() => seen.push(a.place.state()));
+
+      // A failed sign-out from the active place: it stays active with its lease, not even for a moment otherwise.
+      failNextSignOut(a);
+      await expect(a.sources.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+      expect(a.place.state()).toBe('active');
+      expect(seen).not.toContain('starting');
+      expect(holder()).toBe(a.place.place);
+      expect(a.place.epoch()).toBe(first);
+
+      // A failed sign-out from a blocked place: it stays blocked, and the lease stays where it is.
+      expect(await b.place.start()).toBe('elsewhere');
+      await b.place.useHere();
+      await vi.waitFor(() => expect(a.place.state()).toBe('elsewhere'));
+      failNextSignOut(a);
+      await expect(a.sources.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+      expect(a.place.state()).toBe('elsewhere');
+      expect(holder()).toBe(b.place.place);
+
+      // Signing out lets the lease go: the place starts again with the next sign-in.
+      await b.sources.session.signOut();
+      expect(b.place.state()).toBe('starting');
+      expect(holder()).toBeNull();
+
+      // Leaving Bower lets it go too, once the account is gone.
+      await a.place.useHere();
+      expect(a.place.state()).toBe('active');
+      await a.sources.session.deleteAccount();
+      expect(a.place.state()).toBe('starting');
+      expect(holder()).toBeNull();
+    } finally {
+      a.close();
+      b.close();
+    }
   });
 });
