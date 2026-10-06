@@ -2897,8 +2897,8 @@
       "A lost reply reconciles without rewriting twice or touching personal text."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"link rewrites after a rename recover without repeating\"",
-    "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5. B.2 consumer obligations: a plan-time refusal leaves its archive unplanned; rename records archived only after every derived link-rewrite applies (C2/R3-4)."
+    "passes": true,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). O5. B.2 consumer obligations: a plan-time refusal leaves its archive unplanned; rename records archived only after every derived link-rewrite applies (C2/R3-4). Integrated by cherry-pick of claude/p2-o5-consumers-r1 (fix 19b7660); review CLEAN. Gates on 38a3dbc: check 3393, e2e 208, e2e:fake 218 (run 15:23-15:33 with the display awake)."
   },
   {
     "id": "o5-timeline-append",
