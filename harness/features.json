@@ -3416,7 +3416,7 @@
       "A legacy last-run.json is still read and repaired as before."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"the legacy runner only reads legacy records\"",
-    "passes": false,
+    "passes": true,
     "note": "Q5: o5-no-legacy-run-path depends on this and on running-scenario-on-b. The demo world's own run is outside O5. TL-P2-37 (main d6dca4b). Planned, not implemented."
   },
   {
