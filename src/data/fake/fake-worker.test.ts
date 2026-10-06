@@ -2856,6 +2856,26 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await w.drive.evidence(broken.id))?.trashed).toBe(false);
       expect(bowerErrors(w).length).toBeGreaterThan(0);
     });
+
+    it('grounds the root only as the parent of a folder the run makes', async () => {
+      const w = await bWorld();
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      expect(grounded(out.manifest)).toBe(true);
+      // A filing move straight into the root, its row saying it went to '': never a verified destination.
+      const m = structuredClone(out.manifest);
+      const member = new Set(m.capture.members.map((x) => x.file.fileId));
+      const move = m.operations.find((o) => o.effect.kind === 'move' && member.has(o.effect.before.fileId));
+      if (!move || move.effect.kind !== 'move') throw new Error('no filing move');
+      move.effect.parent = { fileId: w.rootId };
+      const row = m.reportPlan.find((c) => c.when === 'applied' && c.requires[0] === move.operationId);
+      const filed = row?.value.filed[0];
+      if (!row || !filed) throw new Error('no filed row');
+      row.requires = [move.operationId];
+      filed.to = '';
+      expect(grounded(m)).toBe(false);
+    });
   });
 
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
