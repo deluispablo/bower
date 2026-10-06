@@ -1,10 +1,18 @@
-# Current handoff: outgoing orchestrator released for replacement
+# Current handoff: Claude coordinator, P2 222/234
+
+Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`, integration `/Users/deluisp/Projects/bower-app`, branch `codex/close-phase-2`. Technical lead and planner of the whole project: the Claude Planificador session (owner-appointed 2026-10-06; direct lead–coordinator messaging authorized, GOVERNANCE on main). Codex is out of usage until 2026-10-12; workers and reviewers are Claude meanwhile, with independent sessions for review. Adopted main `b95c4bb` (contracts-2), backed up privately and verified local=remote.
+
+Closed today with independent review and `done.sh --fixed-in`: pile-declaration-authority, protected-current-prose, pile-disposition-authority, run-checkpoint-authority, run-manifest-authority. Live assignments and evidence: `ACTIVE.md`. Decisions: TL-P2-06 (O4 option A; service-owned recovery; derived public done; recordId bound ratified; monotonic chains; readiness amendments) and the owner's rulings on main (R1-OBS01 accepted limitation, no in-app offline reading, uploads kept across reload so D02 is required, reuse before building).
+
+Open: partial-pile-readiness (in implementation), run-report-save-barrier (next, after readiness), run-manifest-content-consistency and run-checkpoint-monotonic (in implementation), loose-pile-declaration, declared-pile-folder-lost, pile-member-reselection (D02), four O5 non-B effect entries and o5-no-legacy-run-path. O5 semantic capabilities, O6, O7 and O8 remain. No P2 acceptance, no P3/P4 work.
+
+# Historical handoffs (provenance only)
+
+# Superseded handoff (2026-10-06 replacement): outgoing orchestrator released for replacement
 
 Read [the unique replacement handoff](2026-10-06-orchestrator-replacement.md) and [all branches/worktrees/open tasks](2026-10-06-replacement-inventory.md). Root and children stopped; integration/shared-record/browser/provider/backup reservations RELEASED; successor not yet registered. Resume codex/close-phase-2 only after recording the successor assignment. Final delivery SHA is the handoff documentation commit in git log above c41e600; branch is clean before release. Adopted contracts-2/main10ca886, P2 OPEN217/221.
 
 Declaration4052532 candidate is clean,330 named/1060 full green with preserved genuine stub red, but independent review/root integration/inverse are pending. R4 document review27720282 is clean0C/I/M; no instrument or execution/preflight evidence. Root accepted source gate730/55. All actual artifacts are archived. R1 actual loss remains an acceptance blocker; O3–O8/full capabilities/real premises remain. No P3/P4 or unfinished main merge. Main backup10ca886 verified; outgoing responsibility released and lead heartbeat paused. This current handoff/ACTIVE/Next supersede all historical reservations below.
-
-# Historical handoffs (provenance only)
 
 # Current handoff: canonical JSON closed; declaration validation assigned
 

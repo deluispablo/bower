@@ -2,13 +2,10 @@
 
 ## Next
 
-- OUTGOING ROOT STOPPED/RELEASED for owner-requested replacement. No successor registered. Read docs/harness/2026-10-06-orchestrator-replacement.md and complete32-branch/nine-worktree inventory2026-10-06-replacement-inventory.md. Integration/shared records/workers/browser/provider/backup reservations released; successor records its explicit assignment before writing. Historical packets do not retain reservations.
-- Resume clean codex/close-phase-2 at the final handoff documentation commit above c41e600; contracts-2/main10ca886. P2 OPEN217/221. Accepted parser257f904/proof5242808, rawec8eef7/proofd1361fa and JSONed7203d/proofdd7909b; current source730/55. No capability acceptance from count.
-- FIRST ready successor task: independent read-only review exact declaration4052532/stubb20c618 in /private/tmp/bower-p2-declaration-guards. Named330/full1060 green,90 genuine assertion reds;22 artifacts archivedqa21/declaration. Candidate remains unreviewed/unintegrated, qa21false. Root separate gated stub/fix and genuine final-fix-only inverse follow a clean review; worker proof does not close root entry.
-- R4 spec8221621b/manifest0f5a14ab reviewed0C/I/M, frozenreport27720282 archived. No instrument/provider result/validated principal/preflight; clean documentation does not authorize dispatch. No new preparation assigned during stop.
-- Remaining entries partial-pile-readiness, protected-current-prose, run-report-save-barrier and pile-declaration-authority. Preserve reproduced counterexamples, frozen O1 twelvepartial/fourabsent/zerocomplete. Ratified exact B/TL04/TL05 unchanged. O3remaining contracts/consumers -> O4durable browser-independent admission/effects/report recovery -> O5semantic effects/Undo -> O6preparation/D01/D02 -> O7quality/measurement -> fullO8fresh gates/independent evaluation remain.
-- R1-OBS01 real external-content loss remains Important acceptance blocker. ETaglineENDED; no fourthvariant, weakenedversionguards or CASclaim. Saveacopy is pending productchoice/notadopted. R2/R3/R4 real evidence incomplete. D01/D02policies approved/behaviorincomplete.
-- Private main backup actually verified local=remote10ca886, lastcheck2026-10-06 03:36UTC; no candidate push/mainunfinishedmerge. Root backup responsibility released; Planificador reports continuity heartbeatPAUSED. Preserve disabled private manifests, existing owner tabs and every worktree. No earlyP3/P4/spend/deploy. Owner's replacement instruction supersedes this outgoing session's unattended continuation.
+- Coordinator: Claude `claude-orchestrator-2026-10-06-e759b272`; technical lead: Claude Planificador. Codex out of usage until 2026-10-12. Read `docs/harness/HANDOFF.md` (current section) and `docs/harness/ACTIVE.md`.
+- Integration `codex/close-phase-2` with main `b95c4bb` adopted and backed up. P2 OPEN 222/234; five entries closed today with independent review and inverse proof.
+- In implementation: partial-pile-readiness (owns fake-runner.ts; amendments from TL-P2-06), run-manifest-content-consistency, run-checkpoint-monotonic. Next: run-report-save-barrier under TL-P2-06 option A, after readiness integrates.
+- Then: loose-pile-declaration, declared-pile-folder-lost, pile-member-reselection (D02 required), O5 non-B effect entries, O6/O7/O8. Reuse working code from the original Bower app where it fits contracts-2 (owner ruling). R1-OBS01 is an accepted documented limitation.
 
 ## Log
 
