@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { PROP, SYSTEM } from '../vault/layout';
@@ -20,7 +23,7 @@ import { canonical, grounded, groundedKeys } from './fake-run-records';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
-import { ALEX, saltmereQuestion, wordRule } from '../demo/fixture';
+import { ALEX, MERGES, saltmereQuestion, wordRule } from '../demo/fixture';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { nameOf } from '../tree';
 import { pretendDrive, pretendRuns } from './pretend';
@@ -5198,6 +5201,97 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await after(reloaded, runs2)).toMatchObject({ id: at?.runId, phase: 'done' });
       expect(await manifestsOf({ drive: drive2, rootId })).toHaveLength(1);
       expect(JSON.parse(drive2.dump(rootId).get(SYSTEM.lastRun) ?? '{}')).toMatchObject({ run: { id: at?.runId, phase: 'done' } });
+    });
+  });
+
+  // o5-no-legacy-run-path (TL-P2-06 §1, TL-P2-38): no tidy-up plan can take the legacy path; legacy records are read.
+  describe('every plan takes the recoverable path', () => {
+    /** Every source file of the app, by its path under `src`. */
+    const sources = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      return statSync(path).isDirectory() ? sources(path) : /\.(ts|tsx)$/.test(name) ? [path] : [];
+    });
+    const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const kindsOf = (m: Manifest | ManifestV2): string[] => [...new Set((m.operations as OperationV2[]).flatMap((o) => {
+      const e = o.effect;
+      if (e.kind === 'create-text') return [`create-text ${e.purpose}`];
+      if (e.kind === 'write-runner-json') return [`write-runner-json ${e.path}`];
+      if (e.kind === 'edit-text') return e.changes.map((c) => `edit-text ${c.kind}`);
+      return [e.kind];
+    }))].sort();
+
+    it('every tidy-up plan takes the recoverable path', async () => {
+      // No legacy reason is left in the app's code (its tests aside): the planner has no other path to send a run down.
+      const needle = ['legacy', '('].join('');
+      const app = sources(SRC).filter((path) => !/\.test\.tsx?$/.test(path));
+      expect(app.filter((path) => readFileSync(path, 'utf8').includes(needle)).map((path) => relative(SRC, path))).toEqual([]);
+
+      // A folder with every capability the fake runner supports, Alex's demo folder and more.
+      localStorage.clear();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const drive = new FakeDrive();
+      const rootId = (await seedFakeDrive(drive, 'default', Date.now())) ?? '';
+      const runs = new FakeRunService({ drive, scale: 'instant' });
+      const worker = new FakeWorker({ drive, scenario: 'default', rootId, runs, fresh: false });
+      const vault = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
+      const at = async (path: string): Promise<DriveFile> => {
+        const f = (await drive.listAll(rootId)).find((x) => drive.pathOf(x.id, rootId) === path);
+        if (!f) throw new Error(`${path} is missing`);
+        return f;
+      };
+      // Declared piles (a folder and a loose file), a pile of words, a saved link; the demo's folder piles, loose
+      // things, the pile that asks a question and the things with notes of their own come with the folder.
+      await vault.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
+      await vault.addPile({ text: '', items: [pdf('alone.pdf')] });
+      await vault.addPile({ text: 'Bins go out on Tuesday nights', items: [] });
+      await vault.addPile({ text: '', items: [link] });
+      await vault.settled();
+      // A rule, a request, a "yes" to a merge, and a rename whose links are rewritten; a runner file to make again.
+      await vault.addRule('Keep lease papers together');
+      await vault.addRequest('Put the lease papers together');
+      await vault.answer('q1', true);
+      await vault.rename('Projects/Flat hunt/Flat 7, Cobble Row.md', 'Cobble Row flat');
+      await drive.trash((await at(SYSTEM.hashes)).id);
+      // And one pile a run record cannot carry: held, only it.
+      const inbox = await at('Inbox');
+      const odd = await drive.createFolder(inbox.id, 'Back\\slash');
+      await drive.upload(odd.id, 'odd.pdf', new Blob(['%PDF odd']));
+      const piles = await new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles();
+      expect(piles.find((p) => p.id === odd.id)?.setAside).toBe('not-tidied');
+
+      const plan = (scope: 'all' | 'instructions') => planRun(drive, rootId, { scope, allowWeb: false, runId: `run-${scope}`, requestId: `request-${scope}`, requestedAt: Date.now() });
+      const all = await plan('all');
+      expect(all.path).toBe('b');
+      if (all.path !== 'b') return;
+      // Every pile but the one it cannot take: folder piles, loose ones and declared ones.
+      expect(all.manifest.capture.piles.map((p) => p.pileId).sort()).toEqual(piles.filter((p) => p.id !== odd.id).map((p) => p.id).sort());
+      expect(all.manifest.capture.piles.some((p) => p.source.kind === 'declared' && p.anchor !== null)).toBe(true);
+      expect(all.manifest.capture.piles.some((p) => p.source.kind === 'declared' && p.anchor === null)).toBe(true);
+      expect(all.manifest.capture.piles.some((p) => p.source.kind === 'observed' && p.anchor === null)).toBe(true);
+      // Every effect is a B effect: destinations, filing, generated notes, saved links, Timeline lines, merges, link
+      // rewrites, rules, questions, requests and runner files, the Bin.
+      expect(kindsOf(all.manifest)).toEqual([
+        'bin', 'create-folder', 'create-text generated', 'create-text runner-json',
+        'edit-text link-rewrite', 'edit-text rules-wording', 'edit-text timeline-append', 'move',
+        'write-runner-json .bower/questions.json', 'write-runner-json .bower/requests.json',
+      ]);
+      const edits = (all.manifest.operations as OperationV2[]).flatMap((o) => (o.effect.kind === 'edit-text' ? o.effect.changes : []));
+      expect(edits.some((c) => c.kind === 'timeline-append' && c.entries.some((e) => e.text === MERGES[0]?.line))).toBe(true);
+      expect(all.manifest.reportPlan.some((c) => c.value.questions.some((q) => q.id === 'q-saltmere'))).toBe(true);
+      expect(grounded(all.manifest)).toBe(true);
+      // An instructions run is planned on B too.
+      expect((await plan('instructions')).path).toBe('b');
+
+      // The run is admitted on B and ends done; only the held pile stays in the inbox.
+      const admitted = await worker.process('all');
+      await runs.settled();
+      expect(await worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect([...drive.dump(rootId).keys()].some((path) => path.startsWith(`.bower/runs/${admitted.id}/manifest-`))).toBe(true);
+      expect((await vault.piles()).map((p) => p.id)).toEqual([odd.id]);
+
+      // An inbox emptied while a run plans is the Worker's own refusal, before any effect.
+      for (const f of (await drive.listAll(rootId)).filter((x) => x.parents[0] === inbox.id)) await drive.trash(f.id);
+      await expect(plan('all')).rejects.toMatchObject({ code: 'conflict', message: 'Nothing is waiting in the inbox.' });
     });
   });
 });
