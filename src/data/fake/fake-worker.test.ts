@@ -2587,6 +2587,28 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await reader().piles()).some((p) => p.id === declaredPile.id)).toBe(false);
     });
 
+    // Final review of loose-pile-declaration: a declared single file given a note becomes an ordinary pile (TL-P2-31 amendment).
+    it('a declared single file given a note leaves no row behind once filed and deleted for good', async () => {
+      const w = await bWorld({ declared: true });
+      const pile = await w.uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+      await w.uploader.settled();
+      await w.uploader.updatePile(pile.id, 'About the flat');
+      const live = async (): Promise<number> => {
+        const copies = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith('.bower/piles/declaration-'));
+        const texts = await Promise.all(copies.map((f) => w.drive.readText(f.id)));
+        return texts.filter((t) => t.includes(pile.id)).length;
+      };
+      expect(await live()).toBe(0);
+      await w.worker.process('all');
+      await w.runs.settled();
+      const filed = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'loose.pdf');
+      expect(w.drive.pathOf(filed?.id ?? '', w.rootId).startsWith('Inbox/')).toBe(false);
+      // Deleted for good: gone from Drive, not in the Bin.
+      (w.drive as unknown as { files: Map<string, unknown> }).files.delete(filed?.id ?? '');
+      const reader = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set() });
+      expect((await reader.piles()).some((p) => p.id === pile.id)).toBe(false);
+    });
+
     it('a retired loose declaration costs the inbox no digest and no lookup of its member', async () => {
       const w = await bWorld({ declared: true });
       await w.uploader.addPile({ text: '', items: [pdf('declared loose.pdf')] });
