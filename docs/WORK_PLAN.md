@@ -86,6 +86,7 @@ One/two calls can be a target for ordinary ingestion. Task budgets adapt to requ
 | Durable execution independent of the browser | Adopted in contracts-2 | Simulate in P2, implement/prove deterministic spine in P3, reuse in P4. |
 | Specific model, latency/token budget, executor changes | Unmeasured | Decide using the shared quality/performance corpus; no arbitrary universal caps. |
 | Extra export formats, mail/connectors or scheduled processing | Not automatically in core scope | Separate requirements and owner scope decisions. |
+| Concurrent sessions of one person | Ruled by owner 2026-10-06: one active session, WhatsApp Web style | A second tab, window or device asks "Use here" before taking over; the blocked one writes nothing. Worker lease with an increasing epoch (fake in P2, real in P3). See TL-P2-13. |
 | Reuse the original Bower app | Adopted by owner 2026-10-06 | Features that already worked in the original repository are reused (code, tests, prompts) when they fit the new contracts, instead of being rewritten. Reused code passes the same tests, review and no-personal-data rule; old patches that conflict with contracts-2 are not carried over. |
 | Reuse before building | Adopted by owner 2026-10-06 | For a new feature or change, first look for a maintained library, official sample or other repository that already solves it, and use it when its license, cost (free tier) and size fit. Record the source and a one-line reason in the entry; new runtime dependencies still pass the bundle check. |
 
