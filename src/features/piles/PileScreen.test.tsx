@@ -203,6 +203,12 @@ it.each(['reads it again', 'cannot read it again, then Try again reads it'] as c
   await waitFor(() => expect(useToasts.getState().list.map((t) => t.text)).toContain('This changed somewhere else. Look again and try once more.'));
   expect(field()).toHaveValue('My unsaved draft');
   expect(await real(note.id)).toBe('Changed elsewhere');
+  // Final review (R4): the words now there are shown next to the draft, and saving again is an informed overwrite.
+  expect(await screen.findByText('It now says: “Changed elsewhere”. Save the note to replace it with yours.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Save the note' }));
+  await waitFor(async () => expect(await real(note.id)).toBe('My unsaved draft'));
+  await waitFor(() => expect(screen.queryByText(/It now says/)).toBeNull());
+  expect(field()).toHaveValue('My unsaved draft');
 });
 
 it('a draft whose note did not change saves after a listing reads it again', async () => {
