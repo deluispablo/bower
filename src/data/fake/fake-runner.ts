@@ -526,9 +526,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       continue;
     }
     let rewrite = false;
+    // The bytes the later changes of this one edit apply to: after its link rewrite, which goes first (R3-7 m4).
+    let rewritten = bytes;
     if (w.renames) {
       const result = applyChanges(bytes, [{ kind: 'link-rewrite', recordIds: [], renames: w.renames }]);
       rewrite = result.ok;
+      if (result.ok) rewritten = result.bytes;
       // A note that links to a former name but cannot be rewritten keeps the rename lines (rule 7).
       if (!result.ok && result.reason !== 'unchanged' && mentions(bytes, w.renames)) {
         console.error(`A note's links could not be rewritten (${result.reason}); the rename lines stay for the next tidy-up`);
@@ -546,12 +549,13 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       else if (!result.ok && result.reason === 'not-bower') lineState.set(l, 'person');
       else if (!result.ok) console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
     }
-    // The rules, as applyChanges words them on these bytes: nothing to write when every one is there already, and a
-    // refusal (not Bower's, damaged, too big) leaves them pending (rule 7).
+    // The rules, as applyChanges words them in this edit, after its link rewrite: a rule the rewrite makes a repeat
+    // of one there is not written (TL-P2-20 I10). Nothing to write when every one is there already, and a refusal
+    // (not Bower's, damaged, too big) leaves them pending (rule 7).
     let rules: RulesWording | null = null;
     if (w.rules) {
-      const result = applyChanges(bytes, [w.rules]);
-      const worded = result.ok ? wordedBy(new TextDecoder().decode(bytes), w.rules, result.text) : null;
+      const result = applyChanges(rewritten, [w.rules]);
+      const worded = result.ok ? wordedBy(new TextDecoder().decode(rewritten), w.rules, result.text) : null;
       if (worded) {
         rules = w.rules;
         rulesWorded = worded;
