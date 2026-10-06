@@ -408,3 +408,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: b-path-missing-journal passes — fix: proof-close a missing journal on the recoverable path
 - 2026-10-06: loose-pile-declaration passes — fix: proof-close a declared loose file staying pending until it arrives
 - 2026-10-06: remove-bins-declarations passes — fix: proof-close Remove binning a pile's declaration copies
+- 2026-10-06: b-path-loose-piles passes — fix: proof-close loose piles on the recoverable path

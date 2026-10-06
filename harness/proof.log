@@ -262,3 +262,4 @@ o5-rules-wording	eed9e51ab092e87b	2026-10-06	known-green: red shown by b-runner-
 b-path-missing-journal	16f8b6aa21a90be1	2026-10-06	red (fixed in bdeaf84)
 loose-pile-declaration	5fc11651aa95f100	2026-10-06	known-green: red shown by loose-pile-review-1 at test 8c78b43 (assertion: no declaration written)
 remove-bins-declarations	7a04b37423aca219	2026-10-06	known-green: red shown by loose-pile-review-1 at test 9165656 (assertion: copies still live after Remove)
+b-path-loose-piles	b91c4d43980841c6	2026-10-06	known-green: red shown by loose-pile-review-1 at test dc46638 (assertion: legacy instead of b)
