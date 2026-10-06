@@ -47,9 +47,9 @@ Drive remains the knowledge store. A version precheck is not a proven atomic tra
 
 ## Product continuity from the original Bower
 
-Preserve ingestion, requests about already filed items, useful comparisons and authored documents, knowledge updates, cross-project connections, contradiction checks, sources, explicit preferences and web enrichment. Reuse the original benchmark's synthetic scenarios as evidence inputs; do not copy its implementation or private content.
+Preserve ingestion, requests about already filed items, useful comparisons and authored documents, knowledge updates, cross-project connections, contradiction checks, sources, explicit preferences and web enrichment. Reuse the original benchmark's synthetic scenarios as evidence inputs. Since 2026-10-06 the owner wants features that already worked in the original app reused, code included, when they fit the new contracts and pass the same tests and review; never its private content. Prefer existing libraries and solutions over new code.
 
-Mail integration, shared-drive collaboration, broad offline note editing and arbitrary external actions are not implied by “second brain.” They need explicit scope decisions. Optional connector absence must not remove core note/document/research acceptance. Current offline-reading and durable-upload product questions stay recorded as unresolved until the owner makes a specific ruling; this general planning approval is not that ruling.
+Mail integration, shared-drive collaboration, broad offline note editing and arbitrary external actions are not implied by “second brain.” They need explicit scope decisions. Optional connector absence must not remove core note/document/research acceptance. Owner rulings of 2026-10-06: no in-app offline note reading (notes stay readable offline through the person's own local Drive sync); uploads in progress are kept across a reload; a rare same-file race with an external writer is an accepted, documented limitation. See the WORK_PLAN decision register.
 
 ## Superseded proposal
 

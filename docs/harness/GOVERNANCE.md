@@ -1,6 +1,6 @@
 # Technical leadership and planning authority
 
-Owner instruction dated 2026-10-05 appoints this Codex planning session as technical lead, currently limited to improving planning and the work method. This is a durable role assignment, not permission to implement product features, take another session's checkout or close a phase.
+Owner instruction dated 2026-10-06 appoints the Claude Code session `Planificador` (label `claude-planificador-2026-10-06-24fea5c3`) as technical lead and planner of the whole project, across all four phases. It replaces the Codex planning session appointed on 2026-10-05, whose rulings TL-P2-03 to TL-P2-05 remain in force until superseded. This is a durable role assignment, not permission to implement product features, take another session's checkout or close a phase: implementation, integration and proofs stay with the named coordinator, so independent review keeps its meaning.
 
 ## Owner authorization for unattended continuation (2026-10-05)
 
@@ -22,7 +22,7 @@ Back up validated main after each integration and check for pending backups hour
 | Implementer | One assigned entry in an owned checkout | Shared plan/proof edits or unrelated file reservations |
 | Reviewer/evaluator | Independent findings on a fixed target | Source changes, backlog closure or unassigned delegation |
 
-Technical lead and coordinator can both be Codex or Claude in future assignments, but their session identities and authority must be explicit. The current owner appointment does not rename or replace the ongoing implementation coordinator. A lead can review planning, but independent behavioral acceptance remains a separate role.
+Technical lead and coordinator can both be Codex or Claude in future assignments, but their session identities and authority must be explicit. The lead appointment does not rename or replace the ongoing implementation coordinator. A lead can review planning, but independent behavioral acceptance remains a separate role.
 
 ## Sources of authority
 
@@ -44,7 +44,7 @@ Documentation changes may be committed with documentation/skill validation and p
 
 ## Handoff across sessions and tools
 
-Use the shared repository and assignment packet; do not depend on Claude private memory, Codex chat history or plugins being installed. Include a unique session/thread label (not only `/root`), plan revision, phase, capability/entry, exact SHAs, owned paths, checks and next action. Messaging another user-owned chat requires explicit authorization; a document assignment does not create that permission. The owner explicitly authorized the named coordinator on 2026-10-05 to spawn and assign subagents for independent parallel work within the accepted scope, as COORDINATION defines. Workers may not recursively expand that delegation. This does not grant permission to message unrelated user-owned chats.
+Use the shared repository and assignment packet; do not depend on Claude private memory, Codex chat history or plugins being installed. Include a unique session/thread label (not only `/root`), plan revision, phase, capability/entry, exact SHAs, owned paths, checks and next action. Messaging another user-owned chat requires explicit authorization; a document assignment does not create that permission. The owner explicitly authorized the named coordinator on 2026-10-05 to spawn and assign subagents for independent parallel work within the accepted scope, as COORDINATION defines. Workers may not recursively expand that delegation. This does not grant permission to message unrelated user-owned chats. On 2026-10-06 the owner authorized the technical lead and the named coordinator to message each other directly (Claude cross-session messages) to resolve the coordinator's questions and blockers; rulings exchanged that way are recorded in a committed decision document before the coordinator relies on them.
 
 On context compaction/resume, refresh main's plan revision and the live ACTIVE record before changing files. A lost session does not release ownership automatically. Keep browser gates serialized under the current configuration. Native multi-agent features or a Claude-to-Codex bridge are optional transports; they do not replace ownership, proof or independent review.
 
@@ -59,3 +59,6 @@ On context compaction/resume, refresh main's plan revision and the live ACTIVE r
 - 2026-10-05: owner authorized coordinator-managed parallel work. One active entry applies per worker, not project-wide; isolated ownership, accepted dependencies, independent review and serialized integration/browser gates remain. This method-only update preserves contracts-2 product requirements, current reservations and phase boundaries.
 
 - 2026-10-05: owner authorized unattended completion of P2, conditional acceptance and progression into P3, plus periodic private main backups. The conditions above supersede historical wait-for-owner wording without waiving evidence or authorizing P4.
+
+- 2026-10-06: owner appointed the Claude Code session `Planificador` as technical lead and planner of the whole project, replacing the Codex lead (Codex usage is unavailable until 2026-10-12). Same authority as above: planning, method, contracts and technical rulings on main; no implementation, integration or proof closure. Owner authorized direct lead–coordinator messaging. First decisions: [TL-P2-06](2026-10-06-tl-p2-06-decision.md). Contracts-2 stays the adopted revision.
+- 2026-10-06: owner ruled R1 (keep the modifiedTime check, accept the rare residual race), offline reading (none in app; local Drive sync) and uploads in progress (kept across a reload), and adopted reuse of the original app's working features and of existing solutions. Recorded in the WORK_PLAN decision register and TL-P2-06.

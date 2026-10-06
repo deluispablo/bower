@@ -6,7 +6,7 @@ Current planning revision: `2026-10-05-contracts-2`. Read [PRODUCT.md](PRODUCT.m
 
 ## Why a rebuild
 
-Bower is a complete web second brain in the person's own Google Drive: understand incoming material, create and update documents, connect knowledge, detect contradictions, answer requests and enrich with permitted web research. The original system's tidy-ups are too slow. Reduce repeated preparation, unnecessary reads, mechanical model work and redundant output while preserving those capabilities. Use the original project for behavior and synthetic benchmark references, never copied implementation or private data.
+Bower is a complete web second brain in the person's own Google Drive: understand incoming material, create and update documents, connect knowledge, detect contradictions, answer requests and enrich with permitted web research. The original system's tidy-ups are too slow. Reduce repeated preparation, unnecessary reads, mechanical model work and redundant output while preserving those capabilities. Reuse the original project's working features (code included) where they fit the new contracts, and its synthetic benchmark; never its private data. Prefer existing libraries and solutions over reinventing them (owner, 2026-10-06).
 
 The owner requires phase-by-phase development: a finished UI, then a fully functional app on a simulated backend, then real backend services, then real reasoning. No next-phase implementation until the current phase is accepted. Planning interfaces and bounded P2 integration-premise probes are allowed; they do not begin P3 implementation. Declaring simulated model quality or unobserved provider guarantees is not. See [ARCHITECTURE](ARCHITECTURE.md).
 
@@ -37,7 +37,7 @@ The [original phase-2 recipe](superpowers/plans/2026-10-04-phase-2-app-logic.md)
 
 Replace simulated service boundaries with a small Worker and real Drive integration while preserving the accepted app. Own sign-in, encrypted credentials, folder pointer, run admission/limits, dispatch, authenticated runner access and ordered status. Test concurrency/recovery and actual Drive behavior using synthetic data. The app retains direct Drive mechanics; no default central content/write service.
 
-A production deterministic execution spine with a scripted semantic-provider double proves the backend path before Claude is introduced. It persists admission, applies/reconciles operations and recovers without the originating browser. P4 reuses it instead of building a second mutation engine. Pick storage/coordination based on invariants, not a predetermined list of services. Close only after real-service gates, independent review/evaluation and owner acceptance. Offline/read-reload policy needs an actual owner ruling; do not silently move a P2 defect into this phase.
+A production deterministic execution spine with a scripted semantic-provider double proves the backend path before Claude is introduced. It persists admission, applies/reconciles operations and recovers without the originating browser. P4 reuses it instead of building a second mutation engine. Pick storage/coordination based on invariants, not a predetermined list of services. Close only after real-service gates, independent review/evaluation and owner acceptance. Offline reading and upload-across-reload were ruled by the owner on 2026-10-06 (WORK_PLAN decision register); do not silently move a P2 defect into this phase.
 
 ## Phase 4: runner and complete second brain
 
