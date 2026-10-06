@@ -1,4 +1,5 @@
 import { HttpError } from './errors.js';
+import type { Person } from './person.js';
 
 /**
  * The Worker's full binding contract: every secret (`wrangler secret put`)
@@ -9,6 +10,8 @@ import { HttpError } from './errors.js';
  */
 export interface Env {
   BOWER_KV: KVNamespace;
+  /** One Durable Object per person, addressed by `idFromName(sub)`. */
+  PERSON: DurableObjectNamespace<Person>;
 
   // Secrets (wrangler secret put / .dev.vars) — no defaults, ever.
   GOOGLE_CLIENT_ID: string;
@@ -188,6 +191,7 @@ export function assertEnv(env: unknown): Env {
 
   return {
     BOWER_KV: source.BOWER_KV as KVNamespace,
+    PERSON: source.PERSON as DurableObjectNamespace<Person>,
 
     GOOGLE_CLIENT_ID: requireString(source, 'GOOGLE_CLIENT_ID'),
     GOOGLE_CLIENT_SECRET: requireString(source, 'GOOGLE_CLIENT_SECRET'),
