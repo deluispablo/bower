@@ -3304,8 +3304,8 @@
       "A failed read is never cached; a sign-out still stops everything; when the whole app is offline every pile may show the reason, with one error per pile and listing, never per render."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"an unreadable pile note affects only its own pile\"",
-    "passes": false,
-    "note": "TL-P2-08 (a) applied to pile notes (lead, 2026-10-06, no new TL doc). Found by the b-path-generated-note review: one failed pile-note read made the Inbox listing throw for every pile and refused the whole tidy-up. Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-08 (a) applied to pile notes (lead, 2026-10-06, no new TL doc). Found by the b-path-generated-note review: one failed pile-note read made the Inbox listing throw for every pile and refused the whole tidy-up. Integrated by cherry-pick of claude/p2-note-read-r2 (fix 0ee0d58, then a7501aa, 6ef9ecc, 00f9288, 3775dce, f7ea7e8, b56576f, 1e20fc6, fb7e257, 4cd624c); TL-P2-36 amendments (copy 'Bower could not read this pile's note. Try again.' and 'This note changed elsewhere. It now says “…”. Save again to replace it with yours.'); review note-read-review-1 CLEAN after deltas. Gates on 4cd624c: check 3432, e2e 208, e2e:fake 218."
   },
   {
     "id": "pile-note-format-visible",
