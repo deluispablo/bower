@@ -17,7 +17,7 @@ describe('worker skeleton', () => {
     const res = await SELF.fetch('https://api.example.com/nope');
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string; message: string } };
-    expect(body.error.code).toBe('not_found');
+    expect(body.error.code).toBe('not-found');
     expect(typeof body.error.message).toBe('string');
   });
 
@@ -41,5 +41,20 @@ describe('worker skeleton', () => {
       headers: { origin: 'https://evil.example.org' },
     });
     expect(other.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('a preflight from the app origin allows x-bower-place and x-bower-epoch', async () => {
+    const res = await SELF.fetch('https://api.example.com/health', {
+      method: 'OPTIONS',
+      headers: {
+        origin: APP,
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'x-bower-place,x-bower-epoch,content-type',
+      },
+    });
+    expect(res.headers.get('access-control-allow-origin')).toBe(APP);
+    const allowed = (res.headers.get('access-control-allow-headers') ?? '').toLowerCase();
+    expect(allowed).toContain('x-bower-place');
+    expect(allowed).toContain('x-bower-epoch');
   });
 });
