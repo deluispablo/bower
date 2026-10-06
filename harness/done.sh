@@ -45,12 +45,11 @@ others=$(node --input-type=module -e '
 [ -n "$others" ] && { echo "Other entries changed passes in this change: $others. One entry per commit."; exit 1; }
 
 # 2. Red before green.
-excl='\.test\.tsx?$|^e2e/|^src/data/contract/|^src/testing/'
-paths="src public index.html vite.config.ts scripts package.json AGENTS.md docs"
 # Changed or new code (tests and the harness's own records stay): the change being proved.
+# The selection (paths and test exclusions) lives in scripts/harness-git.mjs, where it is tested.
 cp scripts/harness-git.mjs "$(dirname "$HARNESS_RULES")/harness-git.mjs"
 export HARNESS_GIT="$(dirname "$HARNESS_RULES")/harness-git.mjs"
-code=$(git status --porcelain --untracked-files=all -- $paths | node --input-type=module -e 'const { statusPaths } = await import(process.env.HARNESS_GIT); let t = ""; for await (const c of process.stdin) t += c; console.log(statusPaths(t).join("\n"));' | grep -vE "$excl" || true)
+code=$(node --input-type=module -e 'const { codeInWorktree } = await import(process.env.HARNESS_GIT); console.log(codeInWorktree().join("\n"));')
 expect_red() {
   if bash -c "$verify" >"$log" 2>&1; then
     echo "The verify passes without the change: it does not pin it. Fix the test."; exit 1
@@ -76,7 +75,7 @@ case "$mode" in
   fixed-in)
     how="red (fixed in $sha)"
     [ -n "$code" ] && { echo "Uncommitted code: commit it, or close without --fixed-in."; exit 1; }
-    fix=$(git diff --name-only "$sha^" "$sha" -- $paths | grep -vE "$excl" || true)
+    fix=$(node --input-type=module -e 'const { codeInCommit } = await import(process.env.HARNESS_GIT); console.log(codeInCommit(process.argv[1]).join("\n"));' "$sha")
     [ -z "$fix" ] && { echo "$sha changes no code."; exit 1; }
     echo "red: putting back $(echo "$fix" | wc -l | tr -d ' ') file(s) as they were before $sha and running the verify…"
     trap 'git checkout --quiet HEAD -- $fix 2>/dev/null; git clean -fq -- $fix' EXIT

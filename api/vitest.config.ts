@@ -21,4 +21,6 @@ export default defineConfig({
       },
     }),
   ],
+  // The harness check reads this report to match a verify's titles (scripts/harness-rules.mjs apiTests).
+  test: { reporters: ['default', 'json'], outputFile: { json: 'test-results/unit.json' } },
 });

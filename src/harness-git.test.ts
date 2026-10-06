@@ -1,12 +1,12 @@
 /// <reference types="node" />
 /** done.sh's git steps (scripts/harness-git.mjs), on a throwaway repository. */
 import { execSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { statusPaths, undoCommit } from '../scripts/harness-git.mjs';
+import { codeInCommit, codeInWorktree, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
 
 const repo = (): { dir: string; git: (c: string) => string } => {
   const dir = mkdtempSync(join(tmpdir(), 'harness-'));
@@ -33,5 +33,21 @@ describe('the harness and git', () => {
 
   it('fixed-in reads renamed paths by their new name', () => {
     expect(statusPaths('R  src/old.ts -> src/new.ts\nM  src/a.ts\n?? src/b.ts\n')).toEqual(['src/new.ts', 'src/a.ts', 'src/b.ts']);
+  });
+
+  it('done.sh sees a change under api/ as code and api tests as tests', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'api/src'), { recursive: true });
+    mkdirSync(join(dir, 'api/test'), { recursive: true });
+    writeFileSync(join(dir, 'api/src/x.ts'), 'export const x = 1;\n');
+    writeFileSync(join(dir, 'api/test/x.test.ts'), 'old\n');
+    git('add -A && git commit -qm base');
+    writeFileSync(join(dir, 'api/src/x.ts'), 'export const x = 2;\n');
+    writeFileSync(join(dir, 'api/test/x.test.ts'), 'new\n');
+    // Staged or not, in the working tree: the code, not its test.
+    expect(codeInWorktree(dir)).toEqual(['api/src/x.ts']);
+    git('commit -qam change');
+    // In a commit (fixed-in): the same selection.
+    expect(codeInCommit('HEAD', dir)).toEqual(['api/src/x.ts']);
   });
 });

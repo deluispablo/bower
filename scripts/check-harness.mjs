@@ -4,7 +4,8 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import { hashOf, LEGACY_HASH, nextProblems, problems, readProofs } from './harness-rules.mjs';
+import { fileURLToPath } from 'node:url';
+import { apiTests, hashOf, LEGACY_HASH, nextProblems, problems, readProofs } from './harness-rules.mjs';
 
 const root = new URL('..', import.meta.url);
 const features = JSON.parse(readFileSync(new URL('harness/features.json', root), 'utf8'));
@@ -28,11 +29,11 @@ const e2e = [...e2eTitles(), ...e2eTitles('e2e/pwa.config.ts')];
 
 const legacyText = readFileSync(new URL('harness/proof-legacy.txt', root), 'utf8');
 const legacy = new Set(legacyText.split('\n').filter(Boolean));
-const bad = problems(features, proofs, unit.length ? { unit, e2e } : undefined, legacy);
+const bad = problems(features, proofs, unit.length ? { unit, e2e, api: apiTests(fileURLToPath(root)) } : undefined, legacy);
 const next = nextProblems(readFileSync(new URL('harness/progress.md', root), 'utf8'));
 if (next) bad.push(next);
 if (hashOf(legacyText) !== LEGACY_HASH) bad.push('harness/proof-legacy.txt changed: the entries proved before the proof rule are frozen');
-if (!unit.length) bad.push('no unit test names found: run pnpm test first (it writes test-results/unit.json)');
+if (!unit.length) bad.push('no unit test names found: run pnpm test and pnpm -C api test first (they write test-results/unit.json)');
 if (bad.length) {
   console.error(`The harness is not honest yet:\n  ${bad.join('\n  ')}`);
   process.exit(1);

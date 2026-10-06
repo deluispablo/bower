@@ -1,7 +1,8 @@
 // The harness's rules, pure, so they are tested (src/harness.test.ts) and used by
 // scripts/check-harness.mjs and harness/done.sh alike.
 import { createHash } from 'node:crypto';
-import { relative, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 
 /** The hash a proof line keeps for a verify command. */
 export const hashOf = (verify) => createHash('sha256').update(verify).digest('hex').slice(0, 16);
@@ -16,10 +17,20 @@ export function readProofs(text) {
   return out;
 }
 
-/** The test patterns a verify names: vitest -t "…" and playwright -g "…". */
+/** The api's unit tests, from the JSON report its vitest run writes (api/test-results/unit.json, see api/vitest.config.ts). */
+export function apiTests(root, cwd = process.cwd()) {
+  const file = join(root, 'api/test-results/unit.json');
+  if (!existsSync(file)) return [];
+  return JSON.parse(readFileSync(file, 'utf8')).testResults.flatMap((r) =>
+    r.assertionResults.map((a) => ({ name: a.fullName, file: relative(cwd, r.name).replaceAll('\\', '/'), config: 'api/vitest.config.ts', project: r.projectName ?? '' })));
+}
+
+/** The test patterns a verify names: vitest -t "…" and playwright -g "…"; `pnpm -C api …` runs the api's own tests. */
 function patterns(part) {
   const m = / -(t|g) "([^"]*)"/.exec(part);
-  return m ? { kind: m[1] === 't' ? 'unit' : 'e2e', pattern: m[2] } : null;
+  if (!m) return null;
+  const kind = m[1] === 'g' ? 'e2e' : /\bpnpm\s+(-C|--dir)\s+api\b/.test(part) ? 'api' : 'unit';
+  return { kind, pattern: m[2] };
 }
 
 /** "a|b(c|d)" → ["a", "b(c|d)"]: the alternatives at the top level of a pattern. */
@@ -44,7 +55,7 @@ function topLevelParts(pattern) {
 /** The files/config/projects a named verify actually selects, before its name filter. */
 function selectedTests(command, kind, tests) {
   const words = [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
-  const start = kind === 'unit' ? words.indexOf('run') : words.findIndex((w) => w.endsWith('e2e-both.sh'));
+  const start = kind !== 'e2e' ? words.indexOf('run') : words.findIndex((w) => w.endsWith('e2e-both.sh'));
   const at = start >= 0 ? start : words.indexOf('test');
   const filters = [];
   const projects = [];
@@ -72,7 +83,7 @@ function selectedTests(command, kind, tests) {
       return new RegExp(`^${pattern}$`).test(test.project ?? '');
     })) return false;
     const file = test.file.replaceAll('\\', '/');
-    return !filters.length || filters.some((filter) => kind === 'unit' ? file.includes(filter.replace(/^\.\//, '')) : new RegExp(filter).test(file));
+    return !filters.length || filters.some((filter) => kind !== 'e2e' ? file.includes(filter.replace(/^\.\//, '')) : new RegExp(filter).test(file));
   });
 }
 
@@ -105,7 +116,7 @@ export function problems(features, proofs, tests, legacy = new Set()) {
         continue;
       }
       if (tests && f.passes) {
-        const selected = selectedTests(p, pat.kind, tests[pat.kind]);
+        const selected = selectedTests(p, pat.kind, tests[pat.kind] ?? []);
         // Each name the pattern lists (a|b|c at the top level) must match a test of its own.
         for (const part of topLevelParts(pat.pattern)) {
           let re;
