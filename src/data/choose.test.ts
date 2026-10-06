@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildSources, readSource } from './choose';
+import { apiBase, buildSources, readSource } from './choose';
 import { OPEN_ELSEWHERE_TEXT, type PlaceGuard } from './session';
 import type { Sources } from './sources';
 
@@ -29,6 +29,23 @@ describe('choosing where the data comes from', () => {
     expect(readSource()).toBe('real');
     history.replaceState(null, '', '/?source=demo');
     expect(readSource()).toBe('demo');
+  });
+
+  it("the Worker is at the app's own origin when VITE_API_URL is unset", async () => {
+    vi.stubEnv('VITE_API_URL', '');
+    expect(apiBase()).toBe(location.origin);
+    history.replaceState(null, '', '/?source=real');
+    expect(readSource()).toBe('real');
+    const fetchFn = vi.fn(async (_url: RequestInfo | URL): Promise<Response> => {
+      throw new TypeError('Failed to fetch');
+    });
+    vi.stubGlobal('fetch', fetchFn);
+    const { sources } = await buildSources('real', 'default', 'instant');
+    await sources.session.current().catch(() => undefined);
+    expect(fetchFn.mock.calls.map(([u]) => String(u))).toContain(`${location.origin}/me`);
+    vi.stubEnv('VITE_API_URL', 'https://api.example');
+    expect(apiBase()).toBe('https://api.example');
+    if ('dispose' in sources && typeof sources.dispose === 'function') (sources as { dispose(): void }).dispose();
   });
 
   it('an unknown source is the demo', () => {

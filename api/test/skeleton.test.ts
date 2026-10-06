@@ -7,14 +7,14 @@ const APP = 'https://app.example.com';
 
 describe('worker skeleton', () => {
   it('GET /health answers ok', async () => {
-    const res = await SELF.fetch('https://api.example.com/health');
+    const res = await SELF.fetch('https://app.example.com/health');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
     expect(await res.json()).toMatchObject({ ok: true });
   });
 
   it('an unknown path answers the JSON error format', async () => {
-    const res = await SELF.fetch('https://api.example.com/nope');
+    const res = await SELF.fetch('https://app.example.com/nope');
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe('not-found');
@@ -34,17 +34,17 @@ describe('worker skeleton', () => {
   });
 
   it('CORS allows only the app origin', async () => {
-    const ok = await SELF.fetch('https://api.example.com/health', { headers: { origin: APP } });
+    const ok = await SELF.fetch('https://app.example.com/health', { headers: { origin: APP } });
     expect(ok.headers.get('access-control-allow-origin')).toBe(APP);
     expect(ok.headers.get('access-control-allow-credentials')).toBe('true');
-    const other = await SELF.fetch('https://api.example.com/health', {
+    const other = await SELF.fetch('https://app.example.com/health', {
       headers: { origin: 'https://evil.example.org' },
     });
     expect(other.headers.get('access-control-allow-origin')).toBeNull();
   });
 
   it('a preflight from the app origin allows x-bower-place and x-bower-epoch', async () => {
-    const res = await SELF.fetch('https://api.example.com/health', {
+    const res = await SELF.fetch('https://app.example.com/health', {
       method: 'OPTIONS',
       headers: {
         origin: APP,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useSources } from '@/data/provider';
 import { PoseBower } from '@/bird/Bower';
 import { BowerMark } from '@/ui/Icon';
@@ -17,10 +17,25 @@ function GoogleG() {
   );
 }
 
+/** What the Worker's callback says, as one word in the address (TL-P3-07). */
+const SIGNIN_SENTENCES: Record<string, string> = {
+  cancelled: 'Sign-in was cancelled.',
+  failed: "Bower couldn't sign you in. Try again.",
+};
+
 export function SignIn() {
+  const [params, setParams] = useSearchParams();
   const { session } = useSources();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Said once, then the parameter leaves the address so a reload does not repeat it.
+  const [returned] = useState(() => SIGNIN_SENTENCES[params.get('signin') ?? ''] ?? null);
+  useEffect(() => {
+    if (!params.has('signin')) return;
+    const next = new URLSearchParams(params);
+    next.delete('signin');
+    setParams(next, { replace: true });
+  }, [params, setParams]);
   // Arriving from "Delete my account": said once.
   const [bye] = useState(() => {
     try {
@@ -74,9 +89,9 @@ export function SignIn() {
           <GoogleG />
           {busy ? 'Opening Google…' : 'Continue with Google'}
         </button>
-        {error && (
+        {(error ?? returned) && (
           <p role="alert" className={s.error}>
-            {error}
+            {error ?? returned}
           </p>
         )}
         <p className={s.small}>Bower makes one folder in your Drive and works only there. Only people invited to this Bower can sign in.</p>

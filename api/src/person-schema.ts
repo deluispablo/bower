@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -18,6 +18,7 @@ export const PERSON_TABLES = [
   'quota',
   'control',
   'run_ticket',
+  'account',
 ] as const;
 
 export type PersonTable = (typeof PERSON_TABLES)[number];
@@ -56,6 +57,17 @@ const STEPS: readonly (readonly string[])[] = [
       run_id TEXT NOT NULL,
       epoch INTEGER NOT NULL CHECK (epoch >= 0),
       retired INTEGER NOT NULL DEFAULT 0 CHECK (retired IN (0, 1))
+    )`,
+  ],
+  [
+    // Who the person is (from their ID token), their encrypted refresh token (crypto.ts
+    // envelope, never plain) and the session generation that sign-out bumps.
+    `CREATE TABLE account (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      email TEXT NOT NULL,
+      name TEXT NOT NULL,
+      enc_refresh_token TEXT,
+      session_generation INTEGER NOT NULL DEFAULT 0 CHECK (session_generation >= 0)
     )`,
   ],
 ];
