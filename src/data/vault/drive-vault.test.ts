@@ -2068,6 +2068,27 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(out.report.setAside.find((r) => r.name === name)?.why).toBe("Bower can't read this pile's note.");
   });
 
+  // TL-P2-36 (9): a plain pile note with text no record can carry is a damaged note, in the Inbox and the run alike.
+  it.each([
+    ['in its words', 'Receipts \ud800 from Alex\n'],
+    ['in its front matter', '---\nsummary: Receipts \ud800\n---\nReceipts from Alex\n'],
+  ])('a plain pile note with a lone surrogate %s is a damaged note, with Remove and no Try again', async (_where, text) => {
+    const pile = await vault.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
+    await vault.settled();
+    const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+    if (!note) throw new Error('no pile note');
+    await drive.writeText(note.id, text, note.modifiedTime);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    expect((await reader.piles()).find((p) => p.id === pile.id)).toMatchObject({ setAside: 'note-damaged', noteLocked: true });
+    await expect(reader.updatePile(pile.id, 'Fresh words')).rejects.toMatchObject({ message: "Bower can't read this pile's note." });
+    expect(await drive.readText(note.id)).toBe(text);
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    const name = (await drive.get(pile.id)).name;
+    expect(out.report.setAside.find((r) => r.name === name)?.why).toBe("Bower can't read this pile's note.");
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();

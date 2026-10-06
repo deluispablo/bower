@@ -3067,13 +3067,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const w = await bWorld();
         const broken = await brokenPile(w, where);
         const before = await stateOf(w, broken.id);
-        expect((await inboxOf(w)).find((p) => p.path === `Inbox/${broken.name}`)?.setAside, where).toBe('not-checked');
+        // TL-P2-36 (9): a note no record can carry is a damaged note (it was not-checked before).
+        expect((await inboxOf(w)).find((p) => p.path === `Inbox/${broken.name}`)?.setAside, where).toBe('note-damaged');
         const admitted = await w.worker.process('all');
         await w.runs.settled();
         expect(await w.worker.status(), where).toMatchObject({ id: admitted.id, phase: 'done' });
         expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort(), where).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
         expect(await stateOf(w, broken.id), where).toBe(before);
-        expect((await inboxOf(w)).find((p) => p.path === `Inbox/${broken.name}`)?.setAside, where).toBe('not-checked');
+        expect((await inboxOf(w)).find((p) => p.path === `Inbox/${broken.name}`)?.setAside, where).toBe('note-damaged');
 
         // Alone: the Inbox shows the reason, and the tidy-up says honestly that nothing is ready, touching nothing.
         const alone = await bWorld();
@@ -3084,7 +3085,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         }
         const only = await brokenPile(alone, where);
         const kept = await stateOf(alone, only.id);
-        expect((await inboxOf(alone)).map((p) => [p.path, p.setAside]), where).toEqual([[`Inbox/${only.name}`, 'not-checked']]);
+        expect((await inboxOf(alone)).map((p) => [p.path, p.setAside]), where).toEqual([[`Inbox/${only.name}`, 'note-damaged']]);
         await expect(alone.worker.process('all'), where).rejects.toThrow('Nothing in the inbox is ready yet.');
         expect(await stateOf(alone, only.id), where).toBe(kept);
       }
@@ -3133,7 +3134,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await declared.drive.createText(c.folder.id, 'Pile note.md', 'an unbound note, listed first');
       await declared.drive.trash(context.id);
       await declared.drive.createText(c.folder.id, 'Pile note.md', '---\nsummary: Papers \ud800\n---\nPapers about the lease', { bowerItem: key });
-      expect((await inboxOf(declared)).find((p) => p.id === c.pileId)?.setAside, 'declared context, Inbox').toBe('not-checked');
+      // TL-P2-36 (9): a context note no record can carry is a damaged note (it was not-checked before).
+      expect((await inboxOf(declared)).find((p) => p.id === c.pileId)?.setAside, 'declared context, Inbox').toBe('note-damaged');
       expect(captured(await plan(declared), c.folder), 'declared context, tidy-up').toBe(false);
     });
 
