@@ -710,13 +710,15 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const left = all.filter((q) => !answered.has(q.id));
     if (!readable || left.length !== all.length) questionsText = `${JSON.stringify({ v: 1, questions: left } satisfies QuestionsFile, null, 2)}\n`;
   }
-
-  // Your changes go to the archive the legacy runner uses, made in `.bower/changes` when missing.
-  const changesFolder = ix.file(SYSTEM.changes);
-  const archiveFolder = ix.file(SYSTEM.archive);
+  // Your changes go to the archive the legacy runner uses, made in `.bower/changes` only when a line needs it
+  // (TL-P2-33 §1). With no `.bower/changes` there is no line: the journal is empty and no folder is made. A line
+  // is always in a changes folder (`journalFiles`), so its own folder is the place when the path names another.
+  const named = ix.file(SYSTEM.changes);
+  const changesFolder = named?.folder ? named : listing.find((f) => f.folder && f.id === journal[0]?.files[0]?.parents[0]);
+  const archiveFolder = changesFolder && listing.find((f) => f.folder && f.name === nameOf(SYSTEM.archive) && f.parents.length === 1 && f.parents[0] === changesFolder.id);
   if (journal.length) {
-    const place = archiveFolder?.folder ? archiveFolder : changesFolder;
-    if (!place?.folder) return legacy('journal');
+    const place = archiveFolder ?? changesFolder;
+    if (!place) throw new BowerError('unknown', OWN_FILES);
     places.set(place.id, place);
   }
   // A runner file made again goes into `.bower`, a captured place.
@@ -867,14 +869,15 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     : null;
   const rulesOp = rulesMade ?? (rulesState === 'planned' && rulesFile ? editOf.get(rulesFile.id) ?? null : null);
   const archiveChain: string[] = [];
-  let archiveTo: Target | null = archiveFolder?.folder ? { fileId: archiveFolder.id } : null;
+  let archiveTo: Target | null = archiveFolder ? { fileId: archiveFolder.id } : null;
   if (journal.length && !archiveTo && changesFolder) {
     const made = await add({ kind: 'create-folder', parent: { fileId: changesFolder.id }, name: nameOf(SYSTEM.archive), createKey: mintKey('folder') });
     archiveChain.push(made);
     archiveTo = { createdBy: made };
   }
   for (const line of journal) {
-    if (!archiveTo) return legacy('journal');
+    // Unreachable: a captured line has its changes folder, so its archive is there or planned above.
+    if (!archiveTo) throw new BowerError('unknown', OWN_FILES);
     const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
     const derived = [...new Set([...(write ? [write] : []), ...(editsFrom.get(line.rec.id) ?? []), ...(fromAnswer.get(line.rec.id) ?? []), ...(rulesMade && rules.held.has(line.rec.id) ? [rulesMade] : [])])];
     const moves: string[] = [];
@@ -963,15 +966,23 @@ async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[
   for (const f of ix.journalFiles()) {
     if (f.folder || !f.name.endsWith('.json')) continue;
     let rec: unknown;
+    const text = await ownText(drive, f);
     try {
-      rec = JSON.parse(await drive.readText(f.id));
+      rec = JSON.parse(text);
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
       console.error(e);
       left++;
       continue;
     }
-    const digest = await drive.storedDigest(f.id);
+    let digest: Digest | null;
+    try {
+      digest = await drive.storedDigest(f.id);
+    } catch (e) {
+      // A Drive read that fails refuses the run before admission (TL-P2-17, TL-P2-33 §1).
+      console.error(e);
+      throw new BowerError('unknown', OWN_FILES);
+    }
     if (!isJournalRecord(rec) || !digest) {
       left++;
       continue;

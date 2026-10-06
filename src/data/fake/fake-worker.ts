@@ -198,7 +198,8 @@ export class FakeWorker implements WorkerApi {
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
     const vault = new DriveVault({ drive: this.drive, rootId: async () => root, runningPiles: () => new Set(), device: 'worker' });
     if (scope === 'all' && !(await vault.piles()).reduce((n, p) => n + thingsIn(p), 0)) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
-    if (scope === 'instructions' && !(await vault.changes()).length) throw new BowerError('conflict', 'There is nothing new for Bower to read.');
+    // With a run service, planning reads your changes itself and refuses the same way, or says it could not read them.
+    if (scope === 'instructions' && !this.runs && !(await vault.changes()).length) throw new BowerError('conflict', 'There is nothing new for Bower to read.');
     if (this.runs) {
       // Classified once, before any effect: the whole run is B or the whole run is legacy.
       const { runId, requestId } = this.runs.ids();
