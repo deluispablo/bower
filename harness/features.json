@@ -3192,8 +3192,8 @@
       "A blocked place that fails to sign out stays blocked; writes during sign-out wait."
     ],
     "verify": "pnpm vitest run src/data/session.test.ts -t \"a failed sign-out never shows another state\"",
-    "passes": false,
-    "note": "Race found as a full-suite flake after single-active-session closed; root cause in the failed-sign-out path. Candidate claude/p2-session-flake 49edf2f (test 54fddd5)."
+    "passes": true,
+    "note": "Race found as a full-suite flake after single-active-session closed. Claude candidate claude/p2-session-flake (54fddd5..448c318); review CLEAN after three deltas (R1 fresh takeBack, R2 reload on moved epoch, S2 generation counter). P3 rules recorded by the lead (same epoch after own leave; Worker discards checks older than the last leave). Root gates check 3275, e2e 200, e2e:fake 202."
   },
   {
     "id": "note-edit-consumer-limits",
