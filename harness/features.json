@@ -3010,21 +3010,22 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a generated note is created once through the recoverable path\"",
     "passes": false,
-    "note": "TL-P2-10 item 3; destination rule to come as its own TL decision. Planned, not implemented."
+    "note": "TL-P2-10 item 3; destination rule to come as its own TL decision. Planned, not implemented. TL-P2-17 destination rule: under a main folder or a folder the same plan creates there (never Inbox, .bower/ or root); authored title with existing naming rules + .md, unique at plan time via freeName against captured places; an existing file at the path is ours only with bowerItem=createKey, otherwise conflict → rejected + setAside; marks by=bower, bowerNew=1, bowerItem=createKey; created.path resolved path, what authored wording; filed.note only if its create applied in the same requires set. Also covers plan.note. C08 revisions need their own ownership decision."
   },
   {
     "id": "pile-set-aside-reason-visible",
     "task": "qa-23",
     "category": "feature",
-    "what": "A pile that a tidy-up set aside shows its reason and the action to take in the Inbox, not only in the report.",
+    "what": "The Inbox tells the person what needs them: a set-aside pile shows its reason and action, and the upload queue's notices (no copy kept on this device, storage refused, keep Bower open) show as one plain sentence each.",
     "steps": [
       "Leave a declared pile unready, changed or empty and run a tidy-up.",
       "The Inbox pile and its screen show the approved sentence and the action (Try again, Remove), and a changed member shows as changed.",
-      "The reason stays after the next run and clears once the pile is ready or removed."
+      "The reason stays after the next run and clears once the pile is ready or removed.",
+      "When the device could not keep a copy, refused persistent storage or could not read kept uploads, the Inbox shows the matching sentence once; the keep-open notice is global for the Inbox, not per pile."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a set-aside pile shows its reason in the inbox\"",
     "passes": false,
-    "note": "TL-P2-11 (2): field on Pile/PileItem plus a changed member state, minimal Inbox/PileScreen change with existing components, e2e demo + fake. After readiness, before P2-H. Planned, not implemented."
+    "note": "TL-P2-11 (2): field on Pile/PileItem plus a changed member state, minimal Inbox/PileScreen change with existing components, e2e demo + fake. After readiness, before P2-H. Planned, not implemented. Widened 2026-10-06 by lead decision (no TL doc): merged with the upload-queue notices into one Inbox UI entry; queue copy sent to the lead for review."
   },
   {
     "id": "single-active-session",
@@ -3039,5 +3040,75 @@
     "verify": "pnpm vitest run src/data/session.test.ts -t \"one active session per person fences the old place\"",
     "passes": false,
     "note": "Owner ruling TL-P2-13 (main 7d92e73): BroadcastChannel + existing Web Locks within one browser; across devices a Worker lease with increasing epoch (fake in P2; real Worker is a P3 obligation); no RunWire field, a small session call next to me(). A real Drive write already in flight is an accepted limitation. e2e on demo + fake with two pages. Planned, not implemented."
+  },
+  {
+    "id": "b-path-unreadable-runner-files",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A run whose runner files cannot be read refuses honestly before any effect instead of falling back to the legacy path.",
+    "steps": [
+      "Make a runner JSON file unreadable before a tidy-up.",
+      "The run is refused before any effect with one plain sentence, or admitted on the B path without that write, as the lead rules.",
+      "Nothing is filed by the legacy path."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"unreadable runner files never send a run down the legacy path\"",
+    "passes": false,
+    "note": "TL-P2-16 item 5: a reason the O4 U2 classifier sends a plan to the legacy path; o5-no-legacy-run-path proves the list empty. Planned, not implemented. TL-P2-17: a failed READ refuses before admission and any effect with \"Bower couldn't read its own files. Try again.\" (no manifest); a MALFORMED runner file is replaced on the B path via write-runner-json recording the beforeContent hash, the report never claims old entries, BowerError to console; never blocks future runs."
+  },
+  {
+    "id": "b-path-loose-piles",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A loose pile (one file in the Inbox) takes the recoverable path.",
+    "steps": [
+      "Plan a run with a loose declared or observed file.",
+      "Its move is a B operation with the file as seen; no folder Bin.",
+      "Recovery never moves it twice."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a loose pile is filed through the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-16 item 5: a reason the O4 U2 classifier sends a plan to the legacy path; o5-no-legacy-run-path proves the list empty. Planned, not implemented."
+  },
+  {
+    "id": "b-path-merges",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A merge of a pile into an existing note takes the recoverable path.",
+    "steps": [
+      "Plan a run that merges a pile into an existing note.",
+      "The merge is a fixed operation with its read precondition and evidence (with the Timeline operation from o5-timeline-append).",
+      "Recovery never merges twice."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a merge is applied once through the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-16 item 5: a reason the O4 U2 classifier sends a plan to the legacy path; o5-no-legacy-run-path proves the list empty. Planned, not implemented."
+  },
+  {
+    "id": "b-path-held-piles",
+    "task": "qa-24",
+    "category": "data",
+    "what": "A tidy-up with a blocked pile or a pile that gained a late child still takes the recoverable path, leaving that pile untouched with its reason set aside.",
+    "steps": [
+      "Plan a run where one pile is not ready and another gains a child after capture.",
+      "The run is admitted on the B path; ready members move as B operations; the blocked pile and the late child are untouched; the folder with a late child is not Binned.",
+      "Recovery never touches the held piles."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"held piles stay untouched on the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-17: groups blocked piles + uncaptured child. Planned, not implemented."
+  },
+  {
+    "id": "b-path-destinations",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Destinations that need a different file name or a chain of new folders are planned on the recoverable path, each folder created once.",
+    "steps": [
+      "Plan a run with an item whose shown name differs from its file name and a destination with no existing ancestor below the root.",
+      "The move carries the intended name; each folder is a create-folder operation depending on its parent, keyed by createKey.",
+      "A lost reply on any of them reconciles without a second folder or a wrong name."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"destinations are planned once on the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-17: groups name mismatch + new-folder chain. Planned, not implemented."
   }
 ]
