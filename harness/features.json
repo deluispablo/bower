@@ -3220,8 +3220,8 @@
       "A failed sign-out keeps the same state rules on every source."
     ],
     "verify": "pnpm vitest run src/data/session.test.ts -t \"every source lets the lease go the same way\"",
-    "passes": false,
-    "note": "Minor M4 from screen-review-1: choose.ts leavingLetsGo duplicates live/index.ts sign-out lease logic. Planned, not implemented."
+    "passes": true,
+    "note": "Minor M4 from screen-review-1: choose.ts leavingLetsGo duplicates live/index.ts sign-out lease logic. Integrated in a640e8f from claude/p2-bfcache 0a4110a; review CLEAN. P3 contract note: a leave after DELETE /me must be answered harmlessly by the real Worker. Gates on 49681df (combined with the other three): check 3347, e2e 208, e2e:fake 218."
   },
   {
     "id": "bfcache-reload",
