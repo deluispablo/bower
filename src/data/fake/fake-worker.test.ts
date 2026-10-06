@@ -2781,6 +2781,49 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
   });
 
+  // b-path-pile-notes-only (TL-P2-32 1): a pile of notes only is an ordinary note pile on the B path.
+  describe('a pile of notes only takes the recoverable path', () => {
+    const plan = (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    const generatedNotes = async (w: { drive: FakeDrive; rootId: string }): Promise<string[]> =>
+      (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.appProperties?.by === 'bower' && w.drive.pathOf(f.id, w.rootId).startsWith('Resources/')).map((f) => w.drive.pathOf(f.id, w.rootId)).sort();
+
+    it('a pile of notes only is filed through the recoverable path', async () => {
+      const w = await bWorld();
+      const inbox = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Inbox' && f.parents[0] === w.rootId);
+      const folder = await w.drive.createFolder(inbox?.id ?? '', 'Notes');
+      const first = await w.drive.createText(folder.id, 'Pile note.md', 'Bins go out on Tuesday nights');
+      const second = await w.drive.createText(folder.id, 'Pile note.md', 'Recycling on Fridays');
+
+      const out = await plan(w);
+      expect(out.path === 'legacy' ? out.why : out.path).toBe('b');
+      if (out.path !== 'b') return;
+      // The first note is the context, written as one generated note; the other is an uncaptured child.
+      const pile = out.manifest.capture.piles.find((p) => p.anchor?.fileId === folder.id);
+      expect(pile?.childFileIds).toEqual([first.id]);
+      const creates = out.manifest.operations.filter((o) => o.effect.kind === 'create-text');
+      expect(creates.map((o) => (o.effect.kind === 'create-text' ? [o.effect.name, o.effect.purpose] : []))).toEqual([['Bins go out on Tuesday nights.md', 'generated']]);
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(await generatedNotes(w)).toEqual(['Resources/Ideas/Bins go out on Tuesday nights.md']);
+      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: 'Your note', title: 'Bins go out on Tuesday nights', kind: 'note', to: 'Resources/Ideas', note: 'Resources/Ideas/Bins go out on Tuesday nights.md' });
+      // The folder stays with the other note (late-child rule); the words it filed are not in it any more.
+      expect((await w.drive.evidence(folder.id))?.trashed).toBe(false);
+      expect((await w.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id).map((f) => f.id)).toEqual([second.id]);
+      expect(await w.drive.readText(second.id)).toBe('Recycling on Fridays');
+
+      // The next run files the other note's words once, and never the first ones again.
+      w.clock.later();
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(await generatedNotes(w)).toEqual(['Resources/Ideas/Bins go out on Tuesday nights.md', 'Resources/Ideas/Recycling on Fridays.md']);
+      expect((await w.drive.evidence(folder.id))?.trashed).toBe(true);
+    });
+  });
+
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
   describe('a Timeline line is added once and keeps the rest of the note', () => {
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';
