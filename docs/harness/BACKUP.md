@@ -4,7 +4,7 @@ Owner authorization, 2026-10-05: development remains local; changes accepted int
 
 ## Scope and process
 
-- Only the main integrator owns backup pushes. Workers, design experiments, candidate branches and uncommitted work remain local. A push is not deployment or phase acceptance. Never merge incomplete work merely to back it up.
+- Only the main integrator owns backup pushes. Workers, design experiments, candidate branches and uncommitted work remain local. A push is not deployment or phase acceptance. Never merge incomplete work merely to back it up. Since 2026-10-06 ([TL-P2-39](2026-10-06-tl-p2-39-main-and-staging.md)) every green integration batch goes to main and is pushed; main means "latest green integrated app", not an accepted phase.
 - Use a named backup remote pointing exactly to `https://github.com/deluispablo/bower-app.git`; verify the repository is private and owner is correct. Do not replace another remote or embed credentials in its URL.
 - After an authorized main integration and its required gates, inspect the actual main commit and newly reachable history for secrets/personal data. Do not upload environment files, secret files, credentials, generated private evidence or another branch's content.
 - Push one explicit ref: `git push backup refs/heads/main:refs/heads/main`. Never use --all, --mirror, --tags, --force or implicit current-branch pushes. Verify remote main equals the intended local SHA. If remote history diverges, stop and investigate; never overwrite it.
