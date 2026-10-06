@@ -547,9 +547,10 @@ export class DriveVault implements VaultSource {
     // Things still on their way from this device have not failed to arrive: they say Sending….
     const onTheirWay = new Set(sending.filter((i) => i.upload !== -1).map((i) => i.id));
     if (d.blocked === 'not-arrived' && d.missing.every((k) => onTheirWay.has(k))) return null;
-    // A note missing though you never removed it is written again, so the pile is not empty.
+    // A note missing though you never removed it has not arrived: the tidy-up holds the pile (TL-P2-32), and Try
+    // again writes it again from its first words, so the pile is not empty either.
     const key = d.contextKey;
-    if (d.lookup !== 'found' || d.blocked || things || text || !key || kids.some((k) => k.appProperties?.[PROP.item] === key)) return setAsideOf(d.lookup, d.blocked, { things, text, restore: false });
+    if (d.lookup !== 'found' || d.blocked || !key || kids.some((k) => k.appProperties?.[PROP.item] === key)) return setAsideOf(d.lookup, d.blocked, { things, text, restore: false });
     let records: unknown[];
     try {
       records = await changes();
@@ -558,7 +559,7 @@ export class DriveVault implements VaultSource {
       return 'not-checked';
     }
     this.checkCurrent();
-    return setAsideOf(d.lookup, d.blocked, { things, text, restore: !contextRemoved(records, path) });
+    return contextRemoved(records, path) ? setAsideOf(d.lookup, d.blocked, { things, text, restore: false }) : 'not-arrived';
   }
 
   private async declarationOf(folder: DriveFile, files: readonly DriveFile[]): Promise<DeclarationLookup> {

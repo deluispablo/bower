@@ -75,7 +75,7 @@ export const SET_ASIDE = {
  * accounts for, and a declared note to write again first. The folder goes to
  * the Bin only when nothing else is left in it.
  */
-type Capture = { blocked: string } | { blocked: null; captured: Set<string>; restore?: { key: string; text: string }; declared?: Declared; leftover?: Leftover };
+type Capture = { blocked: string } | { blocked: null; captured: Set<string>; declared?: Declared; leftover?: Leftover };
 /**
  * A ready declared pile's declaration, as the B path captures it. `memberKeys` are the members still in its
  * folder: those accounted for (disposed of, or arrived and left) count as filed (TL-P2-29 second amendment).
@@ -126,14 +126,16 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked });
       continue;
     }
-    // The context only has to have arrived: any note is the person's words. Missing though never
-    // removed through Bower, it is written again from its first words.
+    // The context only has to have arrived: any note is the person's words. Missing though never removed
+    // through Bower, the pile waits, held (TL-P2-21): the runner never writes into the Inbox (TL-P2-32); Try
+    // again in the app writes it again from its first words (TL-P2-08 b).
     const context = found.declaration.context;
-    const restore = context.kind === 'text' && !children.some((f) => f.appProperties?.[PROP.item] === context.memberKey) && !contextRemoved(await journal(), pile.path)
-      ? { key: context.memberKey, text: context.originalText }
-      : undefined;
+    if (context.kind === 'text' && !children.some((f) => f.appProperties?.[PROP.item] === context.memberKey) && !contextRemoved(await journal(), pile.path)) {
+      out.set(pile.id, { blocked: SET_ASIDE.notArrived });
+      continue;
+    }
     // A blank note is context removed: with no member left, the pile is empty.
-    if (!present.length && !pile.text.trim() && !restore) {
+    if (!present.length && !pile.text.trim()) {
       out.set(pile.id, { blocked: SET_ASIDE.empty });
       continue;
     }
@@ -141,7 +143,7 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
     const remaining = readiness.remaining;
     // Every declared member accounted for: what is left is an ordinary pile (TL-P2-29).
     if (found.declaration.members.length && !remaining.length) {
-      out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}), leftover: { contextKey: context.kind === 'text' ? context.memberKey : null } });
+      out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), leftover: { contextKey: context.kind === 'text' ? context.memberKey : null } });
       continue;
     }
     const declared: Declared = {
@@ -149,7 +151,7 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       contextKey: context.kind === 'text' ? context.memberKey : null,
       memberKeys: new Set(remaining),
     };
-    out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}), declared });
+    out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), declared });
   }
   return out;
 }
@@ -261,8 +263,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (!cap) return legacy('readiness');
     // A pile that is not ready is held (TL-P2-21): not captured, no effect, no report row; its reason shows in the Inbox.
     if (cap.blocked !== null) continue;
-    // A declared context written again before filing is a note in the Inbox, which no generated note may be (TL-P2-17).
-    if (cap.restore) return legacy('context restore');
     if (!LOGICAL_ID.test(pile.id) || /saltmere/i.test(pile.text)) return legacy('question');
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE);
@@ -758,18 +758,7 @@ class Writer {
     for (const f of await this.drive.listAll(this.rootId)) if (f.appProperties?.[PROP.isNew]) this.ix.put(await this.drive.update(f.id, { appProperties: { [PROP.isNew]: null } }));
   }
 
-  async filePile(taken: Pile, report: RunReport, saidYes: ReadonlySet<string>, capture?: Capture): Promise<void> {
-    let pile = taken;
-    const restore = capture?.blocked === null ? capture.restore : undefined;
-    const at = pile.path ? this.ix.file(pile.path) : undefined;
-    if (restore && at && capture?.blocked === null) {
-      // Look again right before writing: Try again elsewhere may have written it already.
-      const there = (await this.drive.listAll(at.id)).find((f) => f.parents[0] === at.id && f.appProperties?.[PROP.item] === restore.key);
-      const note = there ?? (await this.drive.createText(at.id, PILE_NOTE, restore.text, { [PROP.item]: restore.key }));
-      this.ix.put(note);
-      capture.captured.add(note.id);
-      pile = { ...pile, text: there ? (await this.drive.readText(there.id)).trim() : restore.text.trim() };
-    }
+  async filePile(pile: Pile, report: RunReport, saidYes: ReadonlySet<string>, capture?: Capture): Promise<void> {
     if (!pile.items.length) {
       const to = guessFolder(pile.text, 'note');
       const folder = await this.folder(to);

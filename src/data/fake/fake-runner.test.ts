@@ -588,19 +588,22 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(true);
   });
 
-  it('a note missing for no reason you gave is written again from its first words', async () => {
+  // TL-P2-32: the runner never writes into the Inbox; the pile waits until the app writes its note again (TL-P2-08 b).
+  it('a note missing for no reason you gave holds the pile until it is written again', async () => {
     const { folder } = await readyPile();
     const note = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
     if (!note) throw new Error('no note');
-    const key = note.appProperties?.[PROP.item];
     await drive.trash(note.id);
+    const before = await stateOf(folder.id);
     const createText = vi.spyOn(drive, 'createText');
     const trash = vi.spyOn(drive, 'trash');
     const out = await runFake(drive, root, opts());
     if (out.phase !== 'done') throw new Error('failed');
-    expect(createText.mock.calls.filter((c) => c[0] === folder.id).map((c) => [c[1], c[2], c[3]?.[PROP.item]])).toEqual([['Pile note.md', 'Papers from Alex', key]]);
-    expect(out.report.filed.filter((f) => f.name === 'arrived.pdf' || f.name === 'missing.pdf')).toHaveLength(2);
-    expect(trash.mock.calls.filter(([id]) => id === folder.id)).toHaveLength(1);
+    expect(createText.mock.calls.filter((c) => c[0] === folder.id)).toEqual([]);
+    expect(out.report.filed.filter((f) => f.name === 'arrived.pdf' || f.name === 'missing.pdf')).toEqual([]);
+    expect(out.report.setAside).toContainEqual({ name: folder.name, why: 'Some of its things have not arrived yet.' });
+    expect(trash.mock.calls.filter(([id]) => id === folder.id)).toEqual([]);
+    expect(await stateOf(folder.id)).toEqual(before);
   });
 
   it('a big declared file is still checked after the pretend Drive is reloaded', async () => {
@@ -660,10 +663,13 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     let other = '';
     const out = await runFake(drive, root, opts({ onPhase: async (p) => { if (p === 'writing') other = (await drive.createText(folder.id, 'Pile note.md', 'Papers from Alex', { [PROP.item]: key })).id; } }));
     if (out.phase !== 'done') throw new Error('failed');
-    expect(out.report.filed.filter((f) => f.name === 'arrived.pdf' || f.name === 'missing.pdf')).toHaveLength(2);
+    // The run held the pile: the one note is the one written meanwhile, and the next run files the pile with it.
+    expect(out.report.filed.filter((f) => f.name === 'arrived.pdf' || f.name === 'missing.pdf')).toEqual([]);
     const notes = (await drive.listAll(root)).filter((f) => f.name === 'Pile note.md' && f.appProperties?.[PROP.item] === key);
-    expect(notes).toEqual([]);
-    expect(other).not.toBe('');
+    expect(notes.map((f) => f.id)).toEqual([other]);
+    const next = await runFake(drive, root, opts());
+    if (next.phase !== 'done') throw new Error('failed');
+    expect(next.report.filed.filter((f) => f.name === 'arrived.pdf' || f.name === 'missing.pdf')).toHaveLength(2);
   });
 
   it('an unmarked pile is filed as before', async () => {

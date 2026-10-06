@@ -1609,12 +1609,13 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     return pile;
   }
 
+  // TL-P2-32: a note to write again has not arrived; the tidy-up holds the pile until Try again writes it.
   it('a note to write again is not an empty pile, for the inbox and the tidy-up alike', async () => {
     const pile = await noteToWriteAgain('Papers from Alex');
     const seen = await pileOn(declaring(), pile.id);
     expect(seen?.items).toEqual([]);
-    expect(seen?.setAside).toBeUndefined();
-    expect(await runnerSays(pile.id)).toBeUndefined();
+    expect(seen?.setAside).toBe('not-arrived');
+    expect(await runnerSays(pile.id)).toBe(SAID['not-arrived']);
   });
 
   it('your changes are read once per listing, and one that cannot be read affects only its pile', async () => {
@@ -1627,7 +1628,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     const readText = vi.spyOn(drive, 'readText');
     const reads = (): number => readText.mock.calls.filter(([id]) => changes.has(id)).length;
     const listed = await declaring().piles();
-    expect([first.id, second.id].map((id) => listed.find((p) => p.id === id)?.setAside)).toEqual([undefined, undefined]);
+    expect([first.id, second.id].map((id) => listed.find((p) => p.id === id)?.setAside)).toEqual(['not-arrived', 'not-arrived']);
     expect(reads()).toBe(changes.size);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     readText.mockImplementation(async (id) => {
