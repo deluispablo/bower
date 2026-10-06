@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { findNode } from '../tree';
 import { DemoWorld } from './world';
+import type { RunState } from '../types';
 
 afterEach(() => vi.useRealTimers());
 
@@ -369,4 +370,39 @@ it('search finds a full file name while showing its plain name', async () => {
     const hits = await vault.search('Lease draft.pdf');
     expect(hits.find((h) => h.path === 'Projects/Flat hunt/Lease draft.pdf')?.title).toBe('Lease draft');
   } finally { world.dispose(); }
+});
+
+describe('what a tidy-up reports, as the run over Drive does', () => {
+  const run = async (w: DemoWorld): Promise<NonNullable<RunState['report']>> => {
+    const { runs } = w.sources();
+    await runs.start('all');
+    await vi.runAllTimersAsync();
+    const r = await runs.current();
+    if (!r?.report) throw new Error('no report');
+    await runs.markSeen(r.id);
+    return r.report;
+  };
+
+  it('lists a saved link written as a note, and the note a thing joined; a line already there is never added or reported again', async () => {
+    vi.useFakeTimers();
+    const w = new DemoWorld({ scenario: 'default', scale: 'demo', latency: 0 });
+    const { vault } = w.sources();
+    try {
+      await vault.answer('q1', true);
+      const first = await run(w);
+      expect(first.created.map((c) => c.path)).toContain('Resources/Cooking/Weeknight curry, clipping.md');
+      expect(first.updated).toEqual([
+        { path: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', what: 'The Wrenfield Road listing is the same building; kept here, as you asked.' },
+        { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },
+        { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.' },
+      ]);
+      await vault.addPile({ text: 'Ask the landlord about the heating', items: [] });
+      const second = await run(w);
+      expect(second.updated).toEqual([]);
+      const hub = await vault.note('Projects/Flat hunt/Flat hunt.md');
+      expect(hub.timeline.filter((t) => t.text === 'A fourth flat added; the shortlist compared by commute.')).toHaveLength(1);
+    } finally {
+      w.dispose();
+    }
+  });
 });

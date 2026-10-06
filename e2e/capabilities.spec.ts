@@ -8,6 +8,9 @@ import type { Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 
 const NOTE_WORDS = 'Ask the landlord about the heating';
+const HUB_LINE = 'A fourth flat added; the shortlist compared by commute.';
+const MERGE_LINE = 'The Wrenfield Road listing is the same building; kept here, as you asked.';
+const MERGED_INTO = 'Flat 3, 12 Larkspur Lane';
 
 const open = async (page: Page, path: string, scenario = 'empty', time = 'instant'): Promise<void> => {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}scenario=${scenario}&time=${time}`);
@@ -56,6 +59,35 @@ test('the result links what it made', async ({ page }) => {
   await expect(page.getByRole('main')).toContainText('Written from a note you added.');
 });
 
+test('the result links what it made, once: a second tidy-up lists only the note it changed', async ({ page }) => {
+  test.setTimeout(90_000);
+  await addNote(page, NOTE_WORDS);
+  await tidyUp(page);
+  await expect(page.getByRole('dialog').getByRole('list', { name: 'Brought up to date' }).getByRole('link')).toHaveText(['Flat hunt', 'Job hunt']);
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // A second tidy-up: the thing a question is about arrives, and the answer is Yes.
+  await addLink(page, 'listing-88213.example');
+  const question = page.getByRole('region', { name: /questions? for you/ }).getByRole('listitem').filter({ hasText: 'Keep one note for both?' });
+  await question.getByRole('button', { name: 'Yes, merge' }).click();
+  await expect(question).toHaveCount(0);
+  await tidyUp(page);
+  // Only the note this run changed is listed: the project notes already hold their lines, and get none again.
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByRole('list', { name: 'Brought up to date' }).getByRole('link')).toHaveText([MERGED_INTO]);
+  await expect(sheet.getByRole('list', { name: 'New notes' })).toHaveCount(0);
+  await sheet.getByRole('link', { name: MERGED_INTO, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: MERGED_INTO })).toBeVisible();
+  await expect(timeline(page).filter({ hasText: MERGE_LINE })).toHaveCount(1);
+  // Its project note, reached through its folder (a new address would start the demo afresh).
+  await page.getByRole('main').getByRole('link', { name: 'Projects / Flat hunt', exact: true }).click();
+  // The folder's own note, shown at the top of its folder by its summary.
+  await page.getByRole('main').locator('a[href="/note/Projects/Flat%20hunt/Flat%20hunt.md"]').first().click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat hunt' })).toBeVisible();
+  await expect(timeline(page).filter({ hasText: HUB_LINE })).toHaveCount(1);
+  await expect(page.getByRole('region', { name: 'Timeline' }).getByText('New', { exact: true })).toHaveCount(0);
+});
+
 /** Puts a pasted link in the inbox, from Add, reached inside the app so nothing waiting is cut short by a reload. */
 async function addLink(page: Page, address: string): Promise<void> {
   await home(page);
@@ -80,9 +112,11 @@ test('C04: a note added to the inbox becomes a note reached by a link', async ({
   await expect(page.getByRole('main').getByText(NOTE_WORDS, { exact: true }).first()).toBeVisible();
   await expect(timeline(page)).toHaveCount(1);
   await expect(timeline(page).first()).toContainText('Written from a note you added.');
-  // The saved link got its own note, filed where it belongs; its Source opens the saved page.
+  // The saved link got its own note, filed where it belongs and listed with the new notes; its Source opens the saved page.
   await home(page);
-  await page.getByRole('region', { name: 'Just filed' }).getByRole('link', { name: /^Weeknight curry, clipping/ }).click();
+  const linkNote = page.getByRole('region', { name: /filed/ }).getByRole('list', { name: 'New notes' }).getByRole('link', { name: 'Weeknight curry, clipping', exact: true });
+  await expect(linkNote).toBeVisible();
+  await linkNote.click();
   await expect(page.getByRole('heading', { level: 1, name: 'Weeknight curry, clipping' })).toBeVisible();
   const saved = timeline(page).filter({ hasText: 'Saved by you, filed by Bower.' });
   const source = saved.getByRole('link', { name: 'curry-clipping.example', exact: true });
@@ -94,7 +128,7 @@ test('C04: a note added to the inbox becomes a note reached by a link', async ({
 test('C05: a tidy-up brings a project note up to date', async ({ page }) => {
   test.skip(!isFake, FAKE_ONLY);
   test.setTimeout(60_000);
-  const LINE = 'A fourth flat added; the shortlist compared by commute.';
+  const LINE = HUB_LINE;
   // The project note as it is before the tidy-up: its words and its timeline.
   await open(page, '/note/Projects/Flat%20hunt/Flat%20hunt.md');
   await expect(page.getByRole('heading', { level: 1, name: 'Flat hunt' })).toBeVisible();
@@ -121,8 +155,7 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   test.setTimeout(90_000);
   const RULE = 'anything from the dentist goes in health';
   const WORDED = 'Letters, reminders and invoices from the dentist go to Areas / Health; add the appointment date to Health.';
-  const MERGE_LINE = 'The Wrenfield Road listing is the same building; kept here, as you asked.';
-  const NOTE = 'Flat 3, 12 Larkspur Lane';
+  const NOTE = MERGED_INTO;
   await open(page, '/');
   // The question links the note it is about.
   const question = page.getByRole('region', { name: /questions? for you/ }).getByRole('listitem').filter({ hasText: 'Keep one note for both?' });
@@ -130,7 +163,6 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   await expect(about).toBeVisible();
   await about.click();
   await expect(page.getByRole('heading', { level: 1, name: NOTE })).toBeVisible();
-  const noteAddress = page.url();
   await expect(timeline(page).filter({ hasText: MERGE_LINE })).toHaveCount(0);
   // A rule, kept: it waits for the next tidy-up at once, in your words.
   await page.getByRole('link', { name: /^(Bower|Talk to Bower)$/ }).first().click();
@@ -146,15 +178,20 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Since the last tidy-up' })).toContainText('Answered "Yes, merge" to a question');
   await expect(question).toHaveCount(0);
   await tidyUp(page);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  // The question stays gone; the rule is in Bower's words with yours kept; the note holds the merge line.
+  // The result links the note the thing joined; it holds the merge line once, marked New.
+  const joined = page.getByRole('dialog').getByRole('list', { name: 'Brought up to date' }).getByRole('link', { name: NOTE, exact: true });
+  await expect(joined).toBeVisible();
+  await joined.click();
+  await expect(page.getByRole('heading', { level: 1, name: NOTE })).toBeVisible();
+  const merged = timeline(page).filter({ hasText: MERGE_LINE });
+  await expect(merged).toHaveCount(1);
+  await expect(merged.getByText('New', { exact: true })).toBeVisible();
+  // The question stays gone; the rule is in Bower's words with yours kept.
+  await home(page);
+  await expect(page.getByRole('heading', { level: 1, name: /G'day/ })).toBeVisible();
   await expect(page.getByText('Keep one note for both?')).toHaveCount(0);
   await page.getByRole('link', { name: /^(Bower|Talk to Bower)$/ }).first().click();
   const worded = page.getByRole('main').getByRole('listitem').filter({ hasText: WORDED });
   await expect(worded).toContainText(`You wrote: "${RULE}"`);
   await expect(page.getByText('Waiting for the next tidy-up, where Bower words it clearly.')).toHaveCount(0);
-  await page.goto(noteAddress);
-  await expect(page.getByRole('heading', { level: 1, name: NOTE })).toBeVisible();
-  await expect(timeline(page).filter({ hasText: MERGE_LINE })).toHaveCount(1);
 });
