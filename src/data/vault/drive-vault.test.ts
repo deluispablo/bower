@@ -1826,7 +1826,8 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     // One BowerError per pile and listing.
     expect(logged()).toBe(1);
     // Words it could not read are never saved over.
-    await expect(reader.updatePile(lease.id, 'New words')).rejects.toBe(failure);
+    expect(held?.noteLocked).toBe(true);
+    await expect(reader.updatePile(lease.id, 'New words')).rejects.toMatchObject({ name: 'BowerError', message: "Bower could not read this pile's note. Try again." });
     expect(await real(leaseNote.id)).toBe('Papers about the lease');
 
     // A tidy-up holds that pile and takes the rest.
@@ -1860,6 +1861,34 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     failure = driveError('auth');
     await expect(fresh.piles()).rejects.toBe(failure);
     readText.mockRestore();
+  });
+
+  // note-read-review-1 (Important): words typed over a note Bower never read would replace it once Drive answers.
+  it('a pile note Bower could not read is never written over, even after Drive answers', async () => {
+    const lease = await vault.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf')] });
+    await vault.settled();
+    const note = (await drive.listAll(lease.id)).find((f) => f.name === 'Pile note.md');
+    if (!note) throw new Error('no pile note');
+    const real = drive.readText.bind(drive);
+    let failing = true;
+    vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+      if (failing && id === note.id) throw driveError('offline');
+      return real(id);
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    expect((await reader.piles()).find((p) => p.id === lease.id)).toMatchObject({ text: '', setAside: 'not-checked', noteLocked: true });
+    // Drive answers again, but the person only ever saw no words: the edit is refused, the note kept.
+    failing = false;
+    await expect(reader.updatePile(lease.id, 'Fresh words')).rejects.toMatchObject({ name: 'BowerError', message: "Bower could not read this pile's note. Try again." });
+    expect(await real(note.id)).toBe('Papers about the lease');
+    // Try again reads it: the real words show, and the note can be edited again.
+    await reader.retryPile(lease.id);
+    const healed = (await reader.piles()).find((p) => p.id === lease.id);
+    expect(healed).toMatchObject({ text: 'Papers about the lease' });
+    expect(healed?.noteLocked).toBeUndefined();
+    await reader.updatePile(lease.id, 'Papers about the new lease');
+    expect(await real(note.id)).toBe('Papers about the new lease');
   });
 
   it('a pile with no declaration, and a ready one, have no reason', async () => {

@@ -104,6 +104,11 @@ export interface Pile {
   items: PileItem[];
   /** Set while a tidy-up would leave it in the inbox; cleared once it is ready or removed. */
   setAside?: SetAside;
+  /**
+   * Its note is there but Bower could not read it: shown read-only and never written over (RFC 9110 §13.1.1,
+   * a lost update), until a listing reads it again.
+   */
+  noteLocked?: true;
 }
 
 export interface NewPile {

@@ -44,6 +44,43 @@ it('the pile retry button sends only failed uploads', async () => {
   expect(files.filter((f) => f.name === 'two.png')).toHaveLength(1);
 });
 
+// note-read-review-1 (Important): a note Bower could not read is shown read-only, never typed over.
+it('a pile note Bower could not read cannot be edited until Try again reads it', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const drive = new FakeDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  await drive.createFolder(root.id, 'Inbox');
+  vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const pile = await vault.addPile({ text: 'Papers about the lease', items: [{ name: 'lease.pdf', kind: 'pdf', origin: 'This device', body: new Blob(['lease']) }] });
+  await vault.settled();
+  const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+  const real = drive.readText.bind(drive);
+  let failing = true;
+  vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+    if (failing && id === note?.id) throw new BowerError('offline', 'You are offline.');
+    return real(id);
+  });
+  const fresh = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const updatePile = vi.spyOn(fresh, 'updatePile');
+  const base = loadingSources();
+  render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault: fresh, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+  expect(await screen.findByText('Bower could not check some of its things. Try again.')).toBeVisible();
+  const field = screen.getByRole('textbox', { name: 'What is this?' });
+  expect(field).toBeDisabled();
+  expect(screen.queryByText('No note yet.')).toBeNull();
+  fireEvent.change(field, { target: { value: 'Fresh words' } });
+  fireEvent.blur(field);
+  expect(screen.queryByRole('button', { name: 'Save the note' })).toBeNull();
+  expect(updatePile).not.toHaveBeenCalled();
+  // Drive answers again; Try again reads the note, and its real words show, editable.
+  failing = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'What is this?' })).toHaveValue('Papers about the lease'));
+  expect(screen.getByRole('textbox', { name: 'What is this?' })).toBeEnabled();
+  expect(await real(note?.id ?? '')).toBe('Papers about the lease');
+  fresh.dispose();
+});
+
 describe('a set-aside pile shows its reason in the inbox', () => {
   const changed: Pile = {
     id: 'p-changed', path: 'Inbox/2026-10-06 Papers from Alex', text: 'Papers from Alex', createdAt: Date.now(), setAside: 'changed',
