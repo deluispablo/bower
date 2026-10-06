@@ -4109,32 +4109,77 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(other.w.drive.pathOf(other.link.id, other.w.rootId).startsWith('Inbox/')).toBe(true);
     });
 
-    // Review o5-consumers-review-1 I2 (rule 7, R4-1): a merge line refused at plan time holds the pile and its answer.
-    it('holds the pile, its answer and its question when the merge line cannot be planned, and files nothing of it', async () => {
-      const big = larkspur([]).replace('Close to the station.', `Close to the station.\n${'A long note about the flat.\n'.repeat(Math.ceil(EDIT_FILE_LIMIT / 27))}`);
-      const causes: Array<[string, (w: World, into: DriveFile) => Promise<void>]> = [
-        ['too big', async (w, into) => { await w.drive.writeText(into.id, big, (await w.drive.get(into.id)).modifiedTime); }],
-        ['unknown format', async (w, into) => { await w.drive.writeText(into.id, '---\nbower_format: ownership/9\nby: bower\n---\n## Timeline\n', (await w.drive.get(into.id)).modifiedTime); }],
-        ['changed while read', async (w, into) => {
-          const read = w.drive.readBytes.bind(w.drive);
-          w.drive.readBytes = async (id) => (id === into.id ? new TextEncoder().encode(larkspur(['- 2026-09-22 · Changed meanwhile.'])) : read(id));
-        }],
-      ];
-      for (const [cause, make] of causes) {
+    // TL-P2-35 (replaces the hold of review I2): a merge line refused at plan time files the thing on its own, with a
+    // row saying so; the answer is archived and the question dropped once that filing applied (R4-1).
+    const ALONE = "Bower couldn't add it to Flat 3, 12 Larkspur Lane, so it was filed on its own.";
+    const big = larkspur([]).replace('Close to the station.', `Close to the station.\n${'A long note about the flat.\n'.repeat(Math.ceil(EDIT_FILE_LIMIT / 27))}`);
+    const refusals: Array<[string, (w: World, into: DriveFile) => Promise<void>]> = [
+      ['too big', async (w, into) => { await w.drive.writeText(into.id, big, (await w.drive.get(into.id)).modifiedTime); }],
+      ['unknown format', async (w, into) => { await w.drive.writeText(into.id, '---\nbower_format: ownership/9\nby: bower\n---\n## Timeline\n', (await w.drive.get(into.id)).modifiedTime); }],
+      ['invalid UTF-8', async (w, into) => {
+        await w.drive.trash(into.id);
+        await w.drive.upload(into.parents[0] ?? '', 'Flat 3, 12 Larkspur Lane.md', new Blob([new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0x62, 0x79, 0x3a, 0x20, 0xff, 0xfe, 0x0a])]), () => undefined);
+      }],
+      ['changed while read', async (w, into) => {
+        const read = w.drive.readBytes.bind(w.drive);
+        w.drive.readBytes = async (id) => (id === into.id ? new TextEncoder().encode(larkspur(['- 2026-09-22 · Changed meanwhile.'])) : read(id));
+      }],
+    ];
+    it('files the thing on its own when the merge line cannot be planned, says so, and settles the answer', async () => {
+      for (const [cause, make] of refusals) {
         const { w, into, answer, link } = await merging();
         await make(w, into);
         const before = textAt(w, INTO);
         const { manifest } = await tidy(w);
         expect(editsOf(manifest), cause).toEqual([]);
-        expect(manifest?.capture.members.map((m) => m.file.fileId), cause).not.toContain(link.id);
-        expect(manifest?.capture.journal.map((j) => j.recordId), cause).not.toContain(answer.id);
-        expect(questionsWrite(manifest), cause).toBeUndefined();
-        expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/'), cause).toBe(true);
         expect(textAt(w, INTO), cause).toBe(before);
-        expect(asked(w), cause).toEqual(['q-keep', 'q1']);
-        expect((await pendingAnswers(w)).map((r) => r.id), cause).toEqual([answer.id]);
+        // Filed as an ordinary thing would be (here a saved link with its own note), plus the row saying why.
+        expect(w.drive.pathOf(link.id, w.rootId), cause).toBe(`Projects/Flat hunt/${link.name}`);
+        const report = viewOf(w)?.run.report;
+        expect(report?.filed, cause).toContainEqual({ name: link.name, title: 'Flat 9, Wrenfield Road', kind: 'link', to: 'Projects/Flat hunt', note: 'Projects/Flat hunt/Flat 9, Wrenfield Road.md' });
+        expect(report?.setAside, cause).toEqual([{ name: link.name, why: ALONE }]);
+        const move = moveOf(manifest, link.id);
+        expect(manifest?.reportPlan, cause).toContainEqual({ requires: [move?.operationId], when: 'applied', value: { filed: [], created: [], updated: [], setAside: [{ name: link.name, why: ALONE }], questions: [] } });
+        if (manifest) expect(grounded(manifest), cause).toBe(true);
+        // R4-1: the question's write and the answer's archive wait for that filing, and both went.
+        expect(questionsWrite(manifest)?.dependsOn, cause).toContain(move?.operationId);
+        for (const a of archivesOf(manifest, answer)) expect(a.dependsOn, cause).toContain(move?.operationId);
+        expect(asked(w), cause).toEqual(['q-keep']);
+        expect(await pendingAnswers(w), cause).toEqual([]);
         await expectFiledOnce(w);
       }
+    });
+
+    it('keeps the answer and the question when a thing filed on its own is not moved after all', async () => {
+      const { w, act, into, answer, link } = await merging();
+      await refusals[1]?.[1](w, into);
+      act.at = async (d) => {
+        if (d.effect.kind !== 'move' || d.effect.before.fileId !== link.id || act.at === null) return;
+        act.at = null;
+        await w.drive.update(link.id, { name: 'listing, mine.url' });
+      };
+      await tidy(w);
+      expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: link.name, why: MOVED }]);
+      expect(asked(w)).toEqual(['q-keep', 'q1']);
+      expect((await pendingAnswers(w)).map((r) => r.id)).toEqual([answer.id]);
+    });
+
+    // TL-P2-35 minor: the target is followed through the run's renames, as the resolver follows a link.
+    it('adds the line to the note under its new name when it was renamed before the run', async () => {
+      const { w, into, answer, link } = await merging();
+      await vaultOf(w).rename(INTO, 'Flat 3, renamed');
+      const NOW = 'Projects/Flat hunt/Flat 3, renamed.md';
+      const { manifest } = await tidy(w);
+      const [edit, ...others] = editsOf(manifest);
+      expect(others).toEqual([]);
+      expect(edit?.effect).toMatchObject({ path: NOW, before: { fileId: into.id } });
+      expect(edit?.effect.changes.find((c) => c.kind === 'timeline-append')?.recordIds).toEqual([answer.id]);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
+      expect(textAt(w, NOW)?.split(LINE)).toHaveLength(2);
+      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: link.name, title: 'Flat 3, renamed', kind: 'link', to: 'Projects/Flat hunt', note: NOW });
+      expect(asked(w)).toEqual(['q-keep']);
+      expect(await pendingAnswers(w)).toEqual([]);
     });
 
     // Review o5-consumers-review-1 minor (a): a merge row's note is backed only by a line that names the answer.
