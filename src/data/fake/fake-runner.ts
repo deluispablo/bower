@@ -885,7 +885,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     } else if (line.rec.kind === 'request' && requestsOp) {
       reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what] } });
     } else {
-      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: 1 } });
+      // A rule taken out or already there is a rule record, not one of your other changes (TL-P2-23, TL-P2-33 §3).
+      reportPlan.push({ requires: [...moves, ...archiveChain], when: 'applied', value: { ...empty(), yourChanges: line.rec.kind === 'rule' ? 0 : 1 } });
     }
   }
 

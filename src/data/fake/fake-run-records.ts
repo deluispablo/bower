@@ -137,6 +137,8 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
     if (c.value.rulesWorded !== undefined) report.rulesWorded = (report.rulesWorded ?? 0) + c.value.rulesWorded;
   }
+  // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
+  if (report.yourChanges === 0) delete report.yourChanges;
   return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
 }
 
@@ -149,7 +151,9 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
  * requests.json write that persists that captured line's completion with the
  * same wording, and the archive moves of every file of that line, each
  * depending on the write; a `yourChanges` row counts one captured line that is
- * not a completed request, archived by all its moves. Every captured line is
+ * not a completed request, archived by all its moves; a rule line not worded
+ * (taken out, or already there) counts 0, since only records that are not
+ * requests or rules are counted (TL-P2-23, TL-P2-33 §3). Every captured line is
  * archived once and claimed by exactly one row. A hub note brought up to date
  * (TL-P2-20 I10): an applied `updated` row requires exactly one `edit-text`
  * with a Timeline line, names that edit's path and says what one of its lines
@@ -238,7 +242,7 @@ export function grounded(manifest: RunManifest): boolean {
       const written = requestsOf(write);
       if (written === null || requestsDone(written)?.get(line.recordId) !== text) return false;
       if (!moves.every((o) => o.dependsOn.includes(write.operationId))) return false;
-    } else if (v.yourChanges !== 1 || writes.length || completed.has(line.recordId)) return false;
+    } else if ((v.yourChanges !== 1 && v.yourChanges !== 0) || writes.length || completed.has(line.recordId)) return false;
     claimed.add(line.recordId);
     return true;
   };
