@@ -17,6 +17,10 @@
 - I-prose-1 rework: test `b3fcd07`, fix `5d521f1` (drive-vault isolation), worker check 761/55; delta review sent to `prose-review-1`.
 - I-disp-1 delivered: stub `a3be188`, tests `d123944`, fix `a0791155bc45b80bcd00ea631d48be9d2579a603`; 44 assertion reds, green 283, worker check 1343/57. Assignment R-disp-1: Claude `disp-review-1` read-only.
 - R-prose-1 delta: CLEAN 0C/0I/2M (unreadable pile hidden from Inbox; repeated logging). Coordinator integrates `protected-current-prose` as one candidate commit (tests + fix from `5d521f1`) then `done.sh --fixed-in`.
+- `pile-disposition-authority` CLOSED: stub `5a33be3` (gate 1091), fix `7f5252a`, proof `bc7884e`; 220/224. Review [R-disp-1](2026-10-06-disposition-review.md) CLEAN.
+- R-chk-1 (Codex) BLOCKED 0C/2I/1M and R-man-1 (Codex) BLOCKED 0C/2I/6M; reports with coordinator rulings archived. Both reworked by their Claude implementers: checkpoint `e5ab68a`/`1f95721` (881/56), manifest `6d4e685`/`79ca5f5` (2021/56). Journal recordId bound 1024 UTF-8 bytes is a coordinator ruling pending technical-lead ratification.
+- Codex usage limit reached 2026-10-06 (unavailable until 2026-10-12). Delta reviews reassigned to fresh Claude sessions `chk-review-2` and `man-review-2` (independent of the Claude implementers). Readiness planning reassigned to a Claude planner.
+- O4 `run-report-save-barrier` plan archived [2026-10-06-o4-report-barrier-plan.md](2026-10-06-o4-report-barrier-plan.md); blocked on a technical-lead decision about non-B effects (options A/B/C, coordinator recommends A). Escalated to the owner.
 
 # Previous coordinator: stopped and released
 
