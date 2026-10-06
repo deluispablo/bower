@@ -286,7 +286,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       if (item.kind === 'link') return legacy('link');
       if (PLAN_BY_NAME.get(item.name)?.note) return legacy('note');
       if (MERGES.some((m) => m.item === item.name)) return legacy('merge');
-      if (item.name !== file.name) return legacy('name');
       const content = await verified(file, 'blob');
       if (!content) return legacy('not checked');
       keys.push(key);
@@ -415,8 +414,10 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       properties: { bowerNew: '1', ...(isNote ? { by: 'bower' as const } : {}), asAdded: null, origin: null, kind: null, pile: null },
     });
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
-    reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.item.name, title: thingName(name), kind: thing.item.kind, to }] } });
-    reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.item.name, why: NOT_FILED }] } });
+    // Rows name the thing as captured (its file name), which grounding checks; a name shown in the Inbox that a
+    // file cannot carry (a slash, a clash) is not captured, so the report never claims it.
+    reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(name), kind: thing.item.kind, to }] } });
+    reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
   }
   for (const pile of capturedPiles) {
     if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, movesOf.get(pile.pileId) ?? []);
