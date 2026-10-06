@@ -28,14 +28,14 @@ import {
 } from '../types';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { accountPile, contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, recordedNote, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountPile, contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, recordedNote, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, type RunnerFiles, type LastRunFile } from './layout';
 import { sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
-import { parseNote, toggleTaskInText, type ParsedNote } from './note-format';
+import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
 import { parseRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
@@ -101,8 +101,11 @@ export class DriveVault implements VaultSource {
   private dispositionCache = new Map<string, DispositionResult>();
   /** Pile folders whose declaration could not be read, already logged: once per failure, not per listing. */
   private unreadableLogged = new Set<string>();
-  /** Piles whose note the latest listing could not read: the person saw no words, so none are written over them. */
-  private lockedNotes = new Set<string>();
+  /**
+   * Piles whose note the latest listing could not read, or will not parse, with why: the person saw no words,
+   * so none are written over them.
+   */
+  private lockedNotes = new Map<string, string>();
   /** Sizes and hashes of files already checked, by file id and modified time. */
   private digests = new Map<string, Digest>();
   private ix: Promise<VaultIndex> | null = null;
@@ -494,24 +497,28 @@ export class DriveVault implements VaultSource {
       const note = kids.find((k) => k.name === PILE_NOTE);
       let parsed: ParsedNote | null = null;
       let unread = false;
+      let refused: SetAside | null = null;
       try {
-        parsed = note ? await this.parsed(note, `${path}/${PILE_NOTE}`, true) : null;
+        parsed = note ? await this.parsed(note, `${path}/${PILE_NOTE}`) : null;
       } catch (e) {
         // A note Drive cannot give back now holds only its own pile (TL-P2-08 (a)): logged once for this pile and
         // listing, never kept, so the next listing reads it again. Signed out, or a session that changed, stops all.
         if (!(e instanceof BowerError) || e.code === 'auth' || !this.current()) throw e;
         console.error(e);
-        unread = true;
+        // A note Bower will not parse keeps its pile visible and held, with why; a retry does not change a format.
+        const format = noteRefusal(e);
+        if (format) refused = format === 'newer' ? 'note-format' : 'note-damaged';
+        else unread = true;
       }
-      // Pile.text is editable context, so a refusal must not masquerade as saved text.
-      if (note && !parsed && !unread) continue;
+      // Pile.text is editable context, so a refusal must not masquerade as saved text: the note is locked instead.
+      const locked = unread || refused !== null;
       const text = parsed?.body.trim() ?? '';
       // A pile whose note could not be read already waits, logged: nothing more of it is read (or logged) now.
       const marked = !!f.appProperties?.[PROP.declaration];
-      const declared = marked && !unread ? await this.declaredState(f, this.uploads.get(id), queued.map((i) => i.memberKey)) : null;
+      const declared = marked && !locked ? await this.declaredState(f, this.uploads.get(id), queued.map((i) => i.memberKey)) : null;
       const contextKey = declared?.contextKey ?? null;
       // Every note with the pile's context key is its context, never a thing to file; unread, any keyed pile note.
-      const bound = (k: DriveFile): boolean => (contextKey ? k.appProperties?.[PROP.item] === contextKey : marked && unread && k.name === PILE_NOTE && !!k.appProperties?.[PROP.item]);
+      const bound = (k: DriveFile): boolean => (contextKey ? k.appProperties?.[PROP.item] === contextKey : marked && locked && k.name === PILE_NOTE && !!k.appProperties?.[PROP.item]);
       const things = kids.filter((k) => k !== note && !bound(k));
       // A changed thing shows as changed; one that has left the pile is not listed again, and the reason says so.
       const items = [...things.map((k) => (declared?.changed.has(k.id) ? { ...itemOf(k), changed: true as const } : itemOf(k))), ...sending, ...(declared?.rows ?? [])];
@@ -519,12 +526,12 @@ export class DriveVault implements VaultSource {
       // the names, and the raw text (front matter included) of the one note it records (`recordedNote`).
       const recorded = recordedNote(kids, contextKey);
       // A note already found unreadable in this listing is not read (nor logged) again.
-      const raw = unread && recorded === note ? null : recorded ? await this.rawText(recorded) : '';
-      const setAside = unread || raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
+      const raw = locked && recorded === note ? null : recorded ? await this.rawText(recorded) : '';
+      const setAside = refused ?? (unread || raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null);
       // Its note is shown read-only until a listing reads it (RFC 9110 §13.1.1: no update over an unseen version).
-      if (unread) this.lockedNotes.add(id);
+      if (locked) this.lockedNotes.set(id, refused ? SET_ASIDE_TEXT[refused] : NOTE_LOCKED);
       else this.lockedNotes.delete(id);
-      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(unread ? { noteLocked: true as const } : {}) });
+      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(locked ? { noteLocked: true as const } : {}) });
     }
     // A lone thing still on its way has no file yet: show it from here.
     for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
@@ -779,9 +786,10 @@ export class DriveVault implements VaultSource {
     this.refuseWhileRunning();
     // Words typed over a note the person was shown without its words would replace it unseen (a lost update,
     // RFC 9110 §13.1.1): refused while the listing they saw could not read it, even if Drive answers now.
-    if (this.lockedNotes.has(id)) throw new BowerError('conflict', NOTE_LOCKED);
+    const seen = this.lockedNotes.get(id);
+    if (seen) throw new BowerError('conflict', seen);
     const pile = await this.pile(id);
-    if (pile.noteLocked) throw new BowerError('conflict', NOTE_LOCKED);
+    if (pile.noteLocked) throw new BowerError('conflict', this.lockedNotes.get(id) ?? NOTE_LOCKED);
     const text = input.trim();
     if (!pile.items.length && !text) throw new BowerError('conflict', 'A pile with no files needs its note.');
     const ix = await this.index();

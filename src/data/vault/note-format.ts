@@ -44,11 +44,18 @@ const trimLines = (s: string): string => s.replace(/^\n+|\n+$/g, '');
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
+/** The two refusals of a note Bower will not parse: a format it does not know yet, or a damaged one. */
+export const NOTE_REFUSED = { newer: 'This note uses an unsupported format.', damaged: 'This note cannot be read safely.' } as const;
+
+/** Which refusal an error is, or null when it is not a refusal to parse a note (a Drive read failure, say). */
+export function noteRefusal(e: unknown): keyof typeof NOTE_REFUSED | null {
+  if (!(e instanceof BowerError)) return null;
+  return e.message === NOTE_REFUSED.newer ? 'newer' : e.message === NOTE_REFUSED.damaged ? 'damaged' : null;
+}
+
 function ownershipError(reason: string): BowerError {
   console.error('Cannot read note ownership:', reason);
-  return new BowerError('unknown', reason === 'unsupported-version'
-    ? 'This note uses an unsupported format.'
-    : 'This note cannot be read safely.');
+  return new BowerError('unknown', reason === 'unsupported-version' ? NOTE_REFUSED.newer : NOTE_REFUSED.damaged);
 }
 
 function ownershipOf(raw: string) {

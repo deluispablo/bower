@@ -18,7 +18,7 @@ import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
 import { accountPile, contextRemoved, findDeclaration, journalValues, recordedNote, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
+import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport, type SetAside } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
@@ -72,6 +72,9 @@ export const SET_ASIDE = {
   noteFormat: "This pile's note needs a newer Bower.",
   noteDamaged: "Bower can't read this pile's note.",
 } as const;
+
+/** The Inbox's reasons about a pile's note that hold it from a run, worded as the report says them. */
+const HELD_BY_INBOX: Partial<Record<SetAside, string>> = { 'not-checked': SET_ASIDE.notChecked, 'note-format': SET_ASIDE.noteFormat, 'note-damaged': SET_ASIDE.noteDamaged };
 
 /**
  * What a run takes of a pile folder, fixed when it starts: every child it
@@ -133,9 +136,11 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;
     }
-    // A pile the Inbox could not check (its note could not be read there) is held too, and only it (TL-P2-08 (a)).
-    if (pile.setAside === 'not-checked') {
-      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
+    // A pile the Inbox could not check (its note could not be read there), or whose note Bower will not parse, is
+    // held too, and only it (TL-P2-08 (a), pile-note-format-visible).
+    const heldBy = pile.setAside ? HELD_BY_INBOX[pile.setAside] : undefined;
+    if (heldBy) {
+      out.set(pile.id, { blocked: heldBy });
       continue;
     }
     if (found.state === 'unmarked') {
