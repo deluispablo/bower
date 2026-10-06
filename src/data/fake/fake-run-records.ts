@@ -373,11 +373,14 @@ function noteGrounded(manifest: RunManifest, c: ReportContribution, moveOp: Oper
     const same = JSON.stringify(create.effect.parent) === JSON.stringify(move.parent);
     if (!same || create.effect.purpose !== 'generated' || !moveOp.dependsOn.includes(create.op.operationId)) return false;
     if (join(placePath(manifest, move.parent) ?? '\u0000', create.effect.name) !== note) return false;
+    // A generated note's place (TL-P2-17): under a main folder only, never Inbox, `.bower/` or the root.
+    if (!MAIN_FOLDERS.includes(placePath(manifest, move.parent)?.split('/')[0] ?? '')) return false;
   } else {
     // A note already there backs no line and no create: the move depends on neither.
     if (moveOp.dependsOn.some((id) => ['edit-text', 'create-text'].includes(ops.get(id)?.effect.kind ?? ''))) return false;
     const place = manifest.capture.places.find((p) => p.path === note);
     if (!place || place.file.folder || !note.endsWith('.md') || parentOf(note) !== placePath(manifest, move.parent)) return false;
+    if (!MAIN_FOLDERS.includes(note.split('/')[0] ?? '') || !note.includes('/')) return false;
     if (manifest.capture.members.some((m) => m.file.fileId === place.file.fileId)) return false;
   }
   claimed.add(note);
