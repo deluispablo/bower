@@ -258,6 +258,37 @@ describe('the fake runner', () => {
     expect(out.report.requests).toEqual([LOOKUP]);
   });
 
+  // c08-generated-comparison (TL-P2-40 (1)): a comparison request makes a note with a table and its sources.
+  it('a comparison request makes a note with a table and its sources, and the answer links it', async () => {
+    await vault.addRequest('Compare the flats on the shortlist');
+    const out = await tidyUp(drive, root, 'instructions');
+    if (out.phase !== 'done') throw new Error('failed');
+    const path = 'Projects/Flat hunt/Flats on the shortlist, compared.md';
+    const text = drive.dump(root).get(path) ?? '';
+    // A GFM table (https://github.github.com/gfm/#tables-extension-), one row per flat, from each flat's own note.
+    expect(text).toContain('| Flat | Rent | Commute | Status |\n| --- | --- | --- | --- |\n');
+    expect(text).toContain('| [[Flat 3, 12 Larkspur Lane]] | £1,450 a month | 24 min | viewing done |');
+    expect(text).toContain('| [[Flat 7, Cobble Row]] | £1,580 a month | 18 min | viewing booked |');
+    expect(text).toContain('| [[Flat 2, 40 Tanners Walk]] | £1,390 a month | 35 min | maybe |');
+    expect(text).toMatch(/## Sources\n\n- \[\[Flat 3, 12 Larkspur Lane\]\]\n- \[\[Flat 7, Cobble Row\]\]\n- \[\[Flat 2, 40 Tanners Walk\]\]\n/);
+    // Bower's note, marked new, where TL-P2-17 puts a generated note.
+    const made = (await drive.listAll(root)).find((f) => f.name === 'Flats on the shortlist, compared.md');
+    expect(made?.appProperties).toMatchObject({ [PROP.by]: 'bower', [PROP.isNew]: '1' });
+    expect(out.manifest.operations.filter((o) => o.effect.kind === 'create-text' && o.effect.purpose === 'generated')).toHaveLength(1);
+    expect(out.report.created).toEqual([{ path, what: 'A comparison you asked for.' }]);
+    expect((await fresh().requests())[0]?.done).toBe('Compared the three flats on the shortlist in [[Flats on the shortlist, compared]].');
+    expect((await fresh().note(path)).body).toContain('| [[Flat 7, Cobble Row]] |');
+  });
+
+  it('a comparison of flats that are not all there gets the plain line and writes nothing', async () => {
+    await vault.trash('Projects/Flat hunt/Flat 2, 40 Tanners Walk.md');
+    await vault.addRequest('Compare the flats on the shortlist');
+    const out = await tidyUp(drive, root, 'instructions');
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.manifest.operations.some((o) => o.effect.kind === 'create-text' && o.effect.purpose === 'generated')).toBe(false);
+    expect((await fresh().requests())[0]?.done).toBe('Done. See what changed in your folders.');
+  });
+
   it('answered questions leave the list for good', async () => {
     const q = (await vault.questions())[0];
     if (!q) throw new Error('no question');

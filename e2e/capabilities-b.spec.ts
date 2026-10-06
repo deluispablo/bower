@@ -152,3 +152,27 @@ test('C10: web lookups say what they did, off and on', async ({ page }) => {
   const found = lineOf(page, 'Council tax band C, looked up on the web.');
   await expect(found.getByRole('link', { name: 'council-tax.example/bands/12-larkspur-lane' })).toHaveAttribute('href', 'https://council-tax.example/bands/12-larkspur-lane');
 });
+
+test('C08: a comparison request makes a note with a table and its sources', async ({ page }) => {
+  test.skip(!isFake, 'the scripted journeys run on the pretend Drive and Worker');
+  test.setTimeout(60_000);
+  const compare = 'Compare the flats on the shortlist';
+  await open(page, '/');
+  await ask(page, compare);
+
+  // The request's done line links the new note.
+  const answer = answerTo(page, compare);
+  await expect(answer).toContainText('Compared the three flats on the shortlist in Flats on the shortlist, compared.');
+  await answer.getByRole('link', { name: 'Flats on the shortlist, compared' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flats on the shortlist, compared' })).toBeVisible();
+
+  // The note shows a table, one row per flat, and links to its sources.
+  const table = page.getByRole('main').getByRole('table');
+  await expect(table.getByRole('columnheader')).toHaveText(['Flat', 'Rent', 'Commute', 'Status']);
+  await expect(table.getByRole('row')).toHaveCount(4);
+  await expect(table.getByRole('row').filter({ hasText: 'Flat 7, Cobble Row' })).toContainText('18 min');
+  const sources = page.getByRole('main').getByRole('list').filter({ has: page.getByRole('link', { name: 'Flat 2, 40 Tanners Walk' }) });
+  await expect(sources.getByRole('link')).toHaveText(['Flat 3, 12 Larkspur Lane', 'Flat 7, Cobble Row', 'Flat 2, 40 Tanners Walk']);
+  await sources.getByRole('link', { name: 'Flat 2, 40 Tanners Walk' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat 2, 40 Tanners Walk' })).toBeVisible();
+});
