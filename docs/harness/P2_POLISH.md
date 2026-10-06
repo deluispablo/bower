@@ -44,3 +44,5 @@ From the P2 batch review at `4d7ab08` (TL-P2-46, clean):
 - P3 cost: every old declaration is read once per session (`pile-readiness.ts:81`); a loose file trashed outside Bower costs one Bin lookup per 300 ms listing.
 - Home: a C07 question shows two identical links to the same note (`Home.tsx:283`).
 - Run links: report paths are fixed at run time, so a note renamed afterwards gives a dead link (`RunLinks.tsx`).
+
+From the P2 evaluation at `4d7ab08` ([report](2026-10-06-p2-evaluation-4d7ab08.md)): M1–M10 there (sheet focus to `main`; Try again console error; fake 300 ms reload loss; fake/demo generic "Done" for comparisons after a rename; answered rent not applied to the property; phone touch targets under 44 px; "do it now" only on Home; demo menu drops `source=fake`; sign out leaves local keys; 16 vs 15 things).
