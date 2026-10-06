@@ -55,3 +55,7 @@ From the supplemental walk at `3e6e7da` ([report](2026-10-06-p2-supplemental-wal
 
 From P3-1:
 - `c11-no-policy-from-documents` test seeds a made-up `bower.allowWeb` localStorage key; the real per-device prefs key is `bower:prefs` (still covered, since the test snapshots all of localStorage). The web setting becomes a Worker account setting in P3; the test should then assert that setting.
+
+From P3-2:
+- `pnpm check` once failed with an unhandled `document is not defined` from a `src/ui/focus.ts` timer firing after a jsdom test environment was torn down (focusRouteHeading/returnFocusTo timers not cancelled in unit tests). Passed on rerun; if it recurs, cancel the timers in the tests or guard the callbacks.
+- The architecture purity scan strips `//` comments naively, so a string containing `//` is skipped (rare gap).
