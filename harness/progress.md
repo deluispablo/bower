@@ -379,3 +379,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: pile-set-aside-reason-visible passes — feat: proof-close inbox set-aside reasons and notices
 - 2026-10-06: b-path-journal passes — feat: proof-close journal on the recoverable path
 - 2026-10-06: b-path-held-piles passes — feat: proof-close held piles on the recoverable path
+- 2026-10-06: single-active-session passes — feat: proof-close single active session data layer

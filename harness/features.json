@@ -3038,8 +3038,8 @@
       "Every app write path passes the fence; offline changes stay in the outbox and the session is checked again before flushing; a tidy-up keeps running for the person."
     ],
     "verify": "pnpm vitest run src/data/session.test.ts -t \"one active session per person fences the old place\"",
-    "passes": false,
-    "note": "Narrowed 2026-10-06 (lead-agreed split) to S1: lease + fence + data layer, exactly what the verify proves. The block screen, wiring and two-page e2e are single-active-session-screen; until it closes, C14/C16 count the session capability as partial. TL-P2-13/14/24/25."
+    "passes": true,
+    "note": "Narrowed 2026-10-06 (lead-agreed split) to S1: lease + fence + data layer, exactly what the verify proves. The block screen, wiring and two-page e2e are single-active-session-screen; until it closes, C14/C16 count the session capability as partial. TL-P2-13/14/24/25. Claude candidate claude/p2-single-session (S1 + TL-P2-24/25 reworks), integrated as stub 608a560 + final 59d56fb; review s1-review-1 BLOCKED (I1 dropped in-page uploads; residual for links/direct uploads) then CLEAN after four deltas. Root gates check 3216, e2e 200, e2e:fake 202. Not wired into choose.ts yet (screen entry)."
   },
   {
     "id": "b-path-unreadable-runner-files",

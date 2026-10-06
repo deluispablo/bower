@@ -233,3 +233,4 @@ run-report-save-barrier	d4e1706895b1af8f	2026-10-06	red (fixed in b0b54ab6313429
 pile-set-aside-reason-visible	7ac0e1ee3f3e9042	2026-10-06	red (fixed in a06bb16bea48a639d93e22e611f59eee2ac4d2cc)
 b-path-journal	e2b8b250400a47f8	2026-10-06	red (fixed in b2e6cda3365e17ea9b0d9cd8f5cf4e7eaf0270ce)
 b-path-held-piles	f3cecfc28fa21cf3	2026-10-06	red (fixed in 5ede6e6b99ac0d9cd7c6f5a56065845a5e9e0e8b)
+single-active-session	976ee4169f966b6a	2026-10-06	red (fixed in 051d3ae21cdc5e3920482354aa3750bdbf4e0d97)
