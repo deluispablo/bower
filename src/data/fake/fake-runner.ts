@@ -427,8 +427,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   }
   /**
    * Each Timeline line wanted: written by this run, there already, refused as a person's note (I7), refused for any
-   * other reason at plan time (too big, unknown format, not UTF-8, changed while read, refused when authored), or
-   * deferred past the edit cap, so whatever derives from it waits for the next run.
+   * other reason at plan time (too big, unknown format, not UTF-8, refused when authored), or deferred (past the
+   * edit cap, or the note changed while it was read), so whatever derives from it waits for the next run.
    */
   const lineState = new Map<WantedLine, LineState>();
   /** A line wanted twice in one note (the same words): written once, and it goes as its twin goes. */
@@ -442,6 +442,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
       console.error('A note changed while it was read; no edit is planned for it this time');
       if (w.renames) holdRenames = true;
+      // A passing race, not a refusal: its lines wait for the next run, like those past the cap.
+      for (const l of w.lines) lineState.set(l, 'deferred');
       continue;
     }
     let rewrite = false;
@@ -517,7 +519,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const fallbackOf = (thing: (typeof things)[number]): Fallback | null => {
     const m = thing.merge;
     if (!m || mergeState(thing)) return null;
-    return { answer: m.answer, alone: stateOf(m) === 'refused' ? displayName(nameOf(m.into)) : null };
+    return { answer: m.answer, into: m.into, alone: stateOf(m) === 'refused' ? displayName(nameOf(m.into)) : null };
   };
   // Lines held back stay where they are, uncaptured, for the next run (rule 7).
   if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
@@ -525,6 +527,10 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const edited = new Set(edits.map((e) => e.file.id));
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote; merge?: MergeState }> = [];
   for (const thing of things) {
+    // A merge that fell back on a refused line: the note it could not join is captured, grounding its row's name.
+    const fell = fallbackOf(thing);
+    const target = fell && fell.alone !== null ? ix.file(fell.into) : undefined;
+    if (target && !target.folder) places.set(target.id, target);
     // A merge (TL-P2-20 I4): the thing joins the note's folder under the merge's title.
     const merge = mergeState(thing);
     if (merge) {
@@ -927,7 +933,7 @@ type Merge = { into: string; title: string; line: string; answer: string };
 /** Where a wanted Timeline line ended up at plan time. */
 type LineState = 'planned' | 'present' | 'person' | 'refused' | 'deferred';
 /** A merge filed as usual instead: the answer it settles, and the shown name of the note it could not join, if refused. */
-type Fallback = { answer: string; alone: string | null };
+type Fallback = { answer: string; into: string; alone: string | null };
 /** A merge as planned: after its Timeline line, or beside a line already there from an earlier run. */
 type MergeState = Omit<Merge, 'line'> & { line: 'planned' | 'present' };
 

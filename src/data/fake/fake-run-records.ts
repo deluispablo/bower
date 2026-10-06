@@ -15,7 +15,7 @@ import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
-import { join, parentOf, thingName } from '../tree';
+import { displayName, join, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
@@ -314,6 +314,7 @@ export function grounded(manifest: RunManifest): boolean {
       // TL-P2-35: a thing filed on its own, as its merge could not be planned, says so once its move applied.
       const [row, ...others] = v.setAside;
       if (!row || others.length || c.requires.length !== 1 || row.name !== member.file.name || alone.has(member.file.fileId)) return false;
+      if (!onItsOwn(manifest, moveOp, row.why)) return false;
       alone.add(member.file.fileId);
       continue;
     }
@@ -381,6 +382,22 @@ function noteGrounded(manifest: RunManifest, c: ReportContribution, moveOp: Oper
   }
   claimed.add(note);
   return true;
+}
+
+/**
+ * A merge that fell back to ordinary filing (TL-P2-35): its move depends on no Timeline line (no merge was planned),
+ * a captured answer's archive waits on that move (the answer it settles), and the row says, word for word, that it
+ * could not be added to a captured note no operation touches, by that note's shown name.
+ */
+function onItsOwn(manifest: RunManifest, moveOp: OperationV2, why: string): boolean {
+  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
+  if (moveOp.dependsOn.some((id) => ops.get(id)?.effect.kind === 'edit-text')) return false;
+  const settles = manifest.capture.journal.some((j) => manifest.operations.some((o) => o.effect.kind === 'move'
+    && j.fileIds.includes(o.effect.before.fileId) && o.dependsOn.includes(moveOp.operationId)));
+  if (!settles) return false;
+  const touched = new Set(manifest.operations.flatMap((o) => ('before' in o.effect ? [o.effect.before.fileId] : [])));
+  return manifest.capture.places.some((p) => !p.file.folder && p.path.endsWith('.md') && !touched.has(p.file.fileId)
+    && why === `Bower couldn't add it to ${displayName(nameOf(p.path))}, so it was filed on its own.`);
 }
 
 /** The path a target resolves to: a captured place, or a folder a create-folder in the plan makes. */
