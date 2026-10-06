@@ -16,7 +16,7 @@ import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpo
 import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
 import { displayName, join, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type RunReport } from '../types';
+import { BowerError, PARA_ROOTS, type Question, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import { parseRules } from '../vault/rules-format';
@@ -24,7 +24,7 @@ import { parseRules } from '../vault/rules-format';
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
-const RUNNER_MADE: readonly string[] = [SYSTEM.requests, SYSTEM.hashes];
+const RUNNER_MADE: readonly string[] = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions];
 /** The one note rules are worded in, at the root of the Bower folder. */
 const RULES = 'Rules.md';
 const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
@@ -166,7 +166,10 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
  * naming that line's add, or Rules.md made at the root, whose rows number what
  * parseRules reads from it) and every archive move of the line, each depending
  * on it. A request's write may be requests.json made again in `.bower`.
- * Nothing else (questions) is claimed.
+ * A question the run asks (TL-P2-37 Q1 (a)) is one applied row requiring only
+ * the one operation that writes questions.json (its write, or the file made
+ * again in `.bower`): each question equals, field for field, an entry that
+ * operation writes, is asked at the run's `requestedAt`, and is claimed once.
  */
 export function grounded(manifest: RunManifest): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
@@ -248,6 +251,29 @@ export function grounded(manifest: RunManifest): boolean {
     claimed.add(line.recordId);
     return true;
   };
+  /** The questions.json text an operation writes: its write, or the file made again in `.bower` (TL-P2-37 Q1). */
+  const questionsOf = (o: OperationV2 | undefined): string | null => {
+    const e = o?.effect;
+    if (e?.kind === 'write-runner-json') return e.path === SYSTEM.questions ? e.text : null;
+    if (e?.kind !== 'create-text' || e.purpose !== 'runner-json') return null;
+    const parent = pathOf(e.parent);
+    return parent !== null && join(parent, e.name) === SYSTEM.questions ? e.text : null;
+  };
+  const asked = new Set<string>();
+  const questionRow = (c: ReportContribution): boolean => {
+    const v = c.value;
+    if (c.when !== 'applied' || v.filed.length || v.created.length || v.updated.length || v.setAside.length) return false;
+    if (v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) return false;
+    const [id, ...more] = c.requires;
+    const text = id === undefined || more.length ? null : questionsOf(ops.get(id));
+    const written = text === null ? null : questionsWritten(text);
+    if (!written) return false;
+    for (const q of v.questions) {
+      if (asked.has(q.id) || q.askedAt !== manifest.requestedAt || !written.some((w) => sameQuestion(w, q))) return false;
+      asked.add(q.id);
+    }
+    return true;
+  };
   const updated = new Set<string>();
   const updatedRow = (c: ReportContribution): boolean => {
     const v = c.value;
@@ -323,6 +349,10 @@ export function grounded(manifest: RunManifest): boolean {
   const alone = new Set<string>();
   for (const c of manifest.reportPlan) {
     const v = c.value;
+    if (v.questions.length) {
+      if (!questionRow(c)) return false;
+      continue;
+    }
     if (v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) {
       if (!journalRow(c)) return false;
       continue;
@@ -376,6 +406,8 @@ export function grounded(manifest: RunManifest): boolean {
     if (o.effect.kind !== 'create-text' || o.effect.purpose !== 'runner-json') continue;
     const parent = pathOf(o.effect.parent);
     if (parent !== SYSTEM.dir || !RUNNER_MADE.includes(join(parent, o.effect.name))) return false;
+    // A list of questions made again holds questions (TL-P2-37 Q1 (a)).
+    if (join(parent, o.effect.name) === SYSTEM.questions && !questionsWritten(o.effect.text)) return false;
   }
   // A made Rules.md is counted as what parseRules reads from it (R3-4).
   for (const o of manifest.operations) {
@@ -517,6 +549,24 @@ function requestsDone(text: string): Map<string, string> | null {
     return null;
   }
   return isRunnerFile(SYSTEM.requests, value) ? new Map(value.done.map((r) => [r.id, r.text])) : null;
+}
+
+/** The questions a questions.json text holds; null when it is not a valid questions file. */
+function questionsWritten(text: string): Question[] | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    if (!(e instanceof SyntaxError)) throw e;
+    console.error(e);
+    return null;
+  }
+  return isRunnerFile(SYSTEM.questions, value) ? value.questions : null;
+}
+
+/** The same question, field for field (contract B: a row equals the entry written). */
+function sameQuestion(a: Question, b: Question): boolean {
+  return a.id === b.id && a.text === b.text && a.yes === b.yes && a.no === b.no && a.about === b.about && a.askedAt === b.askedAt;
 }
 
 /** A filing move: a captured member going to another place (a cleared "new" mark stays where it is). */

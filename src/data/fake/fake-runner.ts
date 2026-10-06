@@ -363,6 +363,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const capturedPiles: CapturedPile[] = [];
   const members: CapturedMember[] = [];
   const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string; merge: Merge | null }> = [];
+  /** Captured piles the run asks a question about (TL-P2-37 Q1 (a)). */
+  const asking = new Set<string>();
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
     const marks = { members: members.length, things: things.length };
@@ -383,7 +385,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       }
       continue;
     }
-    if (!LOGICAL_ID.test(pile.id) || /saltmere/i.test(pile.text)) return legacy('question');
+    // A pile id no run record can carry is held, left for the next run (TL-P2-38).
+    if (!LOGICAL_ID.test(pile.id)) continue;
     const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
     const notes = loose ? [] : children.filter((f) => !f.folder && f.name === PILE_NOTE);
     const declared = cap.declared;
@@ -459,6 +462,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       context,
     });
     if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
+    // The question a run asks about this pile (the stand-in for Claude asking), asked once it is filed.
+    if (/saltmere/i.test(pile.text)) asking.add(pile.id);
   }
 
   // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal.
@@ -739,18 +744,29 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
     generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
   }
-  // Answers drop their questions from questions.json, as the legacy runner does; an answer held back keeps its own.
+  // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
+  // goes into that same write (TL-P2-37 Q1 (a)), asked at `requestedAt`, unless it is open already or answered now.
   const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
+  const toAsk = asking.size ? [saltmereQuestion(opts.requestedAt)].filter((q) => !answered.has(q.id)) : [];
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
-  if (answered.size && questionsFile) {
+  let fresh: Question[] = [];
+  if ((answered.size || toAsk.length) && questionsFile) {
     const value = parsed(await ownText(drive, questionsFile));
     const readable = isRunnerFile(SYSTEM.questions, value);
     // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
     if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
     const all = readable ? value.questions : [];
-    const left = all.filter((q) => !answered.has(q.id));
-    if (!readable || left.length !== all.length) questionsText = `${JSON.stringify({ v: 1, questions: left } satisfies QuestionsFile, null, 2)}\n`;
+    fresh = toAsk.filter((q) => !all.some((x) => x.id === q.id));
+    const left = [...all.filter((q) => !answered.has(q.id)), ...fresh];
+    if (!readable || left.length !== all.length || fresh.length) questionsText = questionsJson(left);
+  } else if (toAsk.length && sys?.folder) {
+    // A missing list is made again in `.bower` with the question (TL-P2-33 §2a).
+    fresh = toAsk;
+    questionsText = questionsJson(fresh);
+  } else if (toAsk.length) {
+    // No `.bower` yet: the run's own records make it; there is no list to ask in, so the question is not asked.
+    console.error(new BowerError('unknown', NOT_ASKED), `${SYSTEM.dir} is missing; the question is not asked`);
   }
   // Your changes go to the archive the legacy runner uses, made in `.bower/changes` only when a line needs it
   // (TL-P2-33 §1). With no `.bower/changes` there is no line: the journal is empty and no folder is made. A line
@@ -764,7 +780,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     places.set(place.id, place);
   }
   // A runner file made again goes into `.bower`, a captured place.
-  if ((!requests || !hashesFile) && sys?.folder) places.set(sys.id, sys);
+  if ((!requests || !hashesFile || (!questionsFile && questionsText !== null)) && sys?.folder) places.set(sys.id, sys);
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
@@ -898,11 +914,21 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }
   }
   let questionsOp: string | null = null;
-  if (questionsText !== null && questionsFile) {
-    const before = await ownVerified(questionsFile);
-    // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done.
-    const derived = journal.flatMap((l) => (l.rec.kind === 'answer' ? fromAnswer.get(l.rec.id) ?? [] : []));
-    questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
+  if (questionsText !== null) {
+    // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done,
+    // and for the moves of the piles its new question is about, so it is asked once they are filed.
+    const derived = [
+      ...journal.flatMap((l) => (l.rec.kind === 'answer' ? fromAnswer.get(l.rec.id) ?? [] : [])),
+      ...(fresh.length ? [...asking].flatMap((id) => movesOf.get(id) ?? []) : []),
+    ];
+    if (questionsFile) {
+      const before = await ownVerified(questionsFile);
+      questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
+    } else if (sys?.folder) {
+      questionsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.questions), createKey: mintKey('runner'), text: questionsText, content: await utf8(questionsText), purpose: 'runner-json' }, derived);
+    }
+    // The question's row is grounded by that one write, with the same fields (contract B).
+    if (questionsOp && fresh.length) reportPlan.push({ requires: [questionsOp], when: 'applied', value: { ...empty(), questions: fresh } });
   }
   // Rules.md made from the template's empty one when it is missing (R3-4); every rule line it words waits for it.
   // When it is there, its rules are worded by its one note edit above, which their archives wait for (rule 7).
@@ -1168,6 +1194,12 @@ const NOTHING_TO_READ = 'There is nothing new for Bower to read.';
 const NOTHING_READY = 'Nothing in the inbox is ready yet.';
 const JOURNAL_LEFT = 'Bower could not read some of your changes; they stay for the next tidy-up.';
 const QUESTIONS_REPLACED = 'Bower replaced its list of questions, which it could not read.';
+const NOT_ASKED = 'Bower could not ask its question this time.';
+
+/** questions.json's text, as the runner writes it. */
+function questionsJson(questions: Question[]): string {
+  return `${JSON.stringify({ v: 1, questions } satisfies QuestionsFile, null, 2)}\n`;
+}
 const REQUESTS_REPLACED = 'Bower replaced its list of done requests, which it could not read.';
 const HASHES_REPLACED = 'Bower replaced its list of your files, which it could not read.';
 /** A run refused before admission because one of Bower's own files could not be read (TL-P2-17). */

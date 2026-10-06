@@ -768,19 +768,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     return Promise.race([paused, none]);
   }
 
-  it('sends a plan with an effect outside B down the legacy path, whole', async () => {
-    const w = await bWorld();
-    // A rule is worded on the B path now (o5-rules-wording); a pile that asks a question still is not.
-    await w.uploader.addPile({ text: 'Saltmere weekend receipts', items: [pdf('taxi.pdf'), pdf('hotel.pdf')] });
-    await w.uploader.settled();
-    const admitted = await w.worker.process('all');
-    await until(w.worker, 'done');
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
-    expect(await recordsOf(w)).toEqual([]);
-    expect(w.calls).toEqual([]);
-    expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['hotel.pdf', 'idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf', 'taxi.pdf']);
-  });
-
   it('fixes its classification before any effect', async () => {
     const w = await bWorld();
     const admitted = await w.worker.process('all');
@@ -1565,11 +1552,12 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.addPile({ text: 'Bins go out on Tuesday nights', items: [] });
       expect(await plan(w)).toMatchObject({ path: 'b', manifest: { operations: expect.arrayContaining([expect.objectContaining({ effect: expect.objectContaining({ kind: 'create-text', purpose: 'generated' }) })]) } });
     });
-    it('sends a run that asks a question to the legacy path', async () => {
+    // b-path-asked-question (TL-P2-37 Q1 (a)): the run's question is a B questions.json write.
+    it('takes the B path for a run that asks a question', async () => {
       const w = await bWorld();
       await w.uploader.addPile({ text: 'Saltmere weekend receipts', items: [pdf('taxi.pdf'), pdf('hotel.pdf')] });
       await w.uploader.settled();
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'question' });
+      expect(await plan(w)).toMatchObject({ path: 'b', manifest: { operations: expect.arrayContaining([expect.objectContaining({ effect: expect.objectContaining({ kind: 'write-runner-json', path: SYSTEM.questions }) })]) } });
     });
   });
 
