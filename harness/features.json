@@ -3472,7 +3472,7 @@
       "See the new timeline line marked New and the earlier text unchanged."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05: a tidy-up brings a project note up to date\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {
