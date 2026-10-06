@@ -2771,8 +2771,8 @@
       "Preserve source bytes; a valid manifest establishes fixed intent only, never effects, readiness, claims or recovery."
     ],
     "verify": "pnpm vitest run src/data/contracts/run-manifest.test.ts -t \"run manifests fix capture and operation identity\"",
-    "passes": false,
-    "note": "Pure O3 slice of ratified B contract aede6ef2 (TL-P2-03/04), packet docs/harness/2026-10-06-run-record-units.md unit M. Planned, not implemented."
+    "passes": true,
+    "note": "Claude candidate 1d8780a/be2a758/c041f2c + rework 6d4e685/79ca5f5; Codex review R-man-1 BLOCKED 0C/2I/6M (duplicate capture identities; unbounded journal IDs), Claude delta R-man-2 CLEAN 0C/0I/1M (docs/harness/2026-10-06-run-manifest-review.md). Journal recordId bound 1024 UTF-8 bytes is a coordinator ruling pending lead ratification. Follow-ups before consumers: guard 6 content consistency incl. (pileId, memberKey) uniqueness, observed piles null keys, createdBy target kind, guard 9 report grounding."
   },
   {
     "id": "run-checkpoint-authority",
