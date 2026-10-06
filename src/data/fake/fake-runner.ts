@@ -212,10 +212,15 @@ export type HubUpdate = { path: string; what: string };
  * A saved link filed as a note gets a generated note (create-text, keyed by the link file's id) before the
  * link file moves beside it; a note with that key already there is reused and checked again at the move.
  * The manifest is v2 only when it holds an edit; otherwise it stays v1.
+ * A "yes" to keeping one note merges the thing into it: the note's Timeline line (an edit carrying the
+ * answer's record id), then the thing's move after it; the questions.json write that drops the question
+ * waits for both, and the answer's archive for all three (TL-P2-20 I4, R3-4, R4-1). A person's note is
+ * never merged into: the thing is filed as usual.
  * At most `editCap` edits are planned, in code-point path order (TL-P2-29 (1)); when the manifest guard
- * refuses the plan as too big, it is planned again with one edit fewer. The rest wait for the next run.
+ * refuses the plan as too big, it is planned again with one edit fewer. The rest wait for the next run;
+ * a pile whose merge line waits is planned again as `held`, left whole for the next run with its answer.
  */
-export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions, editCap = EDITS_PER_RUN): Promise<RunPlan> {
+export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions, editCap = EDITS_PER_RUN, held: ReadonlySet<string> = new Set()): Promise<RunPlan> {
   const legacy = (why: string): RunPlan => ({ path: 'legacy', why });
   const all = opts.scope === 'all';
   const listing = await drive.listAll(rootId);
@@ -241,19 +246,14 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   if (!isRunnerFile(SYSTEM.requests, requestsValue)) return legacy('requests');
   const hashesText = await drive.readText(hashesFile.id);
   if (!isRunnerFile(SYSTEM.hashes, parsed(hashesText))) return legacy('hashes');
-  // Answers drop their questions from questions.json, as the legacy runner does.
-  const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
-  const questionsFile = ix.file(SYSTEM.questions);
-  let questionsText: string | null = null;
-  if (answered.size && questionsFile) {
-    const value = parsed(await drive.readText(questionsFile.id));
-    const readable = isRunnerFile(SYSTEM.questions, value);
-    // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
-    if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
-    const all = readable ? value.questions : [];
-    const left = all.filter((q) => !answered.has(q.id));
-    if (!readable || left.length !== all.length) questionsText = `${JSON.stringify({ v: 1, questions: left } satisfies QuestionsFile, null, 2)}\n`;
-  }
+  // A "yes" to keeping one note joins the thing it is about to that note (MERGES), by the answer's line.
+  const yes = new Map(journal.filter((l) => l.rec.kind === 'answer' && l.rec.text === 'yes').map((l) => [l.rec.questionId ?? '', l.rec.id]));
+  const mergeOf = (item: PileItem): Merge | null => {
+    const m = MERGES.find((x) => x.item === item.name && yes.has(x.question));
+    return m ? { into: m.into, title: m.title, line: m.line, answer: yes.get(m.question) ?? '' } : null;
+  };
+  /** Answers whose merge waits with its pile: they stay unarchived and keep their question (R4-1). */
+  const heldAnswers = new Set<string>();
 
   const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });
   // An instructions run takes no pile: it reads only your changes.
@@ -268,7 +268,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // The ready piles and their things, exactly as captured.
   const capturedPiles: CapturedPile[] = [];
   const members: CapturedMember[] = [];
-  const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string }> = [];
+  const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string; merge: Merge | null }> = [];
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
     const marks = { members: members.length, things: things.length };
@@ -278,6 +278,14 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (!cap) return legacy('readiness');
     // A pile that is not ready is held (TL-P2-21): not captured, no effect, no report row; its reason shows in the Inbox.
     if (cap.blocked !== null) continue;
+    // A pile whose merge line waits past the edit cap waits whole, with its answer (planned again without it).
+    if (held.has(pile.id)) {
+      for (const item of pile.items) {
+        const m = mergeOf(item);
+        if (m) heldAnswers.add(m.answer);
+      }
+      continue;
+    }
     if (!LOGICAL_ID.test(pile.id) || /saltmere/i.test(pile.text)) return legacy('question');
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE);
@@ -300,13 +308,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       const key = declared ? (file.appProperties?.[PROP.item] ?? null) : null;
       // A file in a declared pile that is not one of its members stays there for the next run.
       if (declared && (key === null || !declared.memberKeys.has(key))) continue;
-      if (MERGES.some((m) => m.item === item.name)) return legacy('merge');
       const content = await verified(file, 'blob');
       if (!content) return legacy('not checked');
       keys.push(key);
       taken.push(file.id);
       members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
-      things.push({ pile, folder, item, file, content, words });
+      things.push({ pile, folder, item, file, content, words, merge: mergeOf(item) });
     }
     // A pile of words only, or of pile notes only (TL-P2-32), becomes a generated note from its context (TL-P2-17),
     // under a main folder; its other pile notes stay as uncaptured children. A pile with no words either has nothing
@@ -352,7 +359,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const planned = new Map(ix.entries());
   const places = new Map<string, DriveFile>();
   const missing: string[] = [];
-  const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote }> = [];
   // A destination's nearest existing folder is a captured place; every folder missing below it is made by the run.
   const destination = (to: string): void => {
     let at = to;
@@ -368,7 +374,131 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     planned.set(path, { path, type: 'file', kind: kindOf(path), modified: 0, created: 0 });
   };
   const date = timelineDate(opts.requestedAt);
+  // Note edits (TL-P2-20), one edit-text per note at most, planned on the bytes read now; applyChanges is the only
+  // author. A hub note a full run brings up to date gets its Timeline line, and so does a note a thing is merged
+  // into, only on Bower's notes and never twice (from any day). After a rename or a move, every note linking to a
+  // former name gets its links rewritten.
+  const wanted = new Map<string, Wanted>();
+  const want = (f: DriveFile, path: string): Wanted => {
+    const had = wanted.get(f.id);
+    if (had) return had;
+    const made: Wanted = { file: f, path, lines: [], renames: null };
+    wanted.set(f.id, made);
+    return made;
+  };
+  for (const u of all && date ? (opts.updates ?? UPDATES) : []) {
+    const f = ix.file(u.path);
+    if (!f || f.folder) continue;
+    want(f, u.path).lines.push({ entry: { date: date ?? '', text: u.what, source: null }, record: null, what: u.what });
+  }
+  // A merge's line, by its answer (R3-4): only into a note in a main folder, never the inbox or Bower's own files.
   for (const thing of things) {
+    const m = thing.merge;
+    const f = m && date ? ix.file(m.into) : undefined;
+    if (!m || !f || f.folder || !m.into.endsWith('.md') || m.into.startsWith('Inbox/') || m.into.startsWith(`${SYSTEM.dir}/`)) continue;
+    want(f, m.into).lines.push({ entry: { date: date ?? '', text: m.line, source: null }, record: m.answer, what: null });
+  }
+  // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
+  const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
+  const taken = new Set([...ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
+  const allRenames = renamesFor(moved.map((l) => ({ id: l.rec.id, at: l.rec.at, kind: l.rec.kind, what: l.rec.what, ...(l.rec.path ? { path: l.rec.path } : {}), ...(l.rec.from ? { from: l.rec.from } : {}) })), taken);
+  const renames = allRenames.filter(renameOk);
+  // A rename no link can be written with keeps its lines where they are, as the resolver still follows them (rule 7).
+  let holdRenames = renames.length !== allRenames.length;
+  if (holdRenames) console.error('A former name cannot be written into links; the rename lines stay for the next tidy-up');
+  if (renames.length) {
+    for (const [path, entry] of ix.entries()) {
+      if (entry.type !== 'file' || !path.endsWith('.md') || path.startsWith('Inbox/') || path.startsWith(`${SYSTEM.dir}/`)) continue;
+      const f = ix.file(path);
+      if (f && !f.folder) want(f, path).renames = renames;
+    }
+  }
+  /** Each Timeline line wanted: written by this run, there already, or not written (refused, deferred). */
+  const lineState = new Map<WantedLine, 'planned' | 'present' | 'not'>();
+  const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[] }> = [];
+  for (const w of [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path))) {
+    const f = w.file;
+    for (const l of w.lines) lineState.set(l, 'not');
+    const before = await verified(f, 'utf8');
+    const bytes = before ? await drive.readBytes(f.id) : null;
+    if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
+      console.error('A note changed while it was read; no edit is planned for it this time');
+      if (w.renames) holdRenames = true;
+      continue;
+    }
+    let rewrite = false;
+    if (w.renames) {
+      const result = applyChanges(bytes, [{ kind: 'link-rewrite', recordIds: [], renames: w.renames }]);
+      rewrite = result.ok;
+      // A note that links to a former name but cannot be rewritten keeps the rename lines (rule 7).
+      if (!result.ok && result.reason !== 'unchanged' && mentions(bytes, w.renames)) {
+        console.error(`A note's links could not be rewritten (${result.reason}); the rename lines stay for the next tidy-up`);
+        holdRenames = true;
+      }
+    }
+    // Each line on its own: one already there (from any day) is dropped; a person's note takes none.
+    const lines: WantedLine[] = [];
+    for (const l of w.lines) {
+      const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [], entries: [l.entry] }]);
+      if (result.ok && !lines.some((x) => x.entry.text === l.entry.text)) lines.push(l);
+      else if (!result.ok && result.reason === 'unchanged') lineState.set(l, 'present');
+      else if (!result.ok && result.reason !== 'not-bower') console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
+    }
+    if (rewrite || lines.length) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines });
+  }
+  // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
+  // stay unarchived meanwhile (TL-P2-29 (1)).
+  if (candidates.slice(editCap).some((c) => c.rewrite)) holdRenames = true;
+  // Each kept note's changes together, in the contract's order; the text never depends on the record ids.
+  const appendOf = (lines: WantedLine[]): Change[] => (lines.length
+    ? [{ kind: 'timeline-append', recordIds: [...new Set(lines.flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
+    : []);
+  const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
+    [...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...appendOf(c.lines)];
+  const authored = candidates.slice(0, editCap).flatMap((c) => {
+    const result = applyChanges(c.bytes, changesOf(c, []));
+    if (result.ok) return [{ c, text: result.text }];
+    console.error(`A note edit was refused (${result.reason}); none is planned for it`);
+    if (c.rewrite) holdRenames = true;
+    return [];
+  });
+  const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
+  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; changes: Change[]; text: string }> = [];
+  for (const { c, text } of authored) {
+    for (const l of c.lines) lineState.set(l, 'planned');
+    const what = c.lines.find((l) => l.what !== null)?.what ?? null;
+    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, changes: changesOf(c, renameIds), text });
+    places.set(c.file.id, c.file);
+  }
+  // A merge whose line waits past the cap waits with its whole pile: planned again with that pile held.
+  const waiting = candidates.slice(editCap).flatMap((c) => c.lines).filter((l) => l.record !== null);
+  const waitingPiles = things.filter((t) => t.merge && waiting.some((l) => l.record === t.merge?.answer && l.entry.text === t.merge.line)).map((t) => t.pile.id);
+  if (waitingPiles.length) return planRun(drive, rootId, opts, editCap, new Set([...held, ...waitingPiles]));
+  /** How each merge goes: after its line, beside a line already there, or not at all (filed as usual). */
+  const mergeState = (thing: (typeof things)[number]): MergeState | null => {
+    const m = thing.merge;
+    if (!m) return null;
+    const line = [...lineState.keys()].find((l) => l.record === m.answer && l.entry.text === m.line && wanted.get(ix.idOf(m.into) ?? '')?.lines.includes(l));
+    const state = line ? lineState.get(line) : undefined;
+    return state === 'planned' || state === 'present' ? { ...m, line: state } : null;
+  };
+  // Lines held back stay where they are, uncaptured, for the next run (rule 7).
+  if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
+  if (heldAnswers.size) journal = journal.filter((l) => !heldAnswers.has(l.rec.id));
+  const edited = new Set(edits.map((e) => e.file.id));
+  const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote; merge?: MergeState }> = [];
+  for (const thing of things) {
+    // A merge (TL-P2-20 I4): the thing joins the note's folder under the merge's title.
+    const merge = mergeState(thing);
+    if (merge) {
+      const to = parentOf(merge.into);
+      const folder = ix.file(to);
+      if (folder?.folder) places.set(folder.id, folder);
+      const name = freeName(planned, to, merge.title);
+      planned.set(join(to, name), { path: join(to, name), type: 'file', kind: kindOf(name), modified: 0, created: 0 });
+      filing.push({ thing, to, name, merge });
+      continue;
+    }
     // A saved link is named from its address unless the plan names it (as the legacy runner does).
     const linkText = thing.item.kind === 'link' ? await drive.readText(thing.file.id) : null;
     const url = linkText === null || PLAN_BY_NAME.has(thing.item.name) ? null : savedLinkUrl(linkText);
@@ -430,92 +560,20 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
     generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
   }
-  // Note edits (TL-P2-20), one edit-text per note at most, planned on the bytes read now; applyChanges is the only
-  // author. A hub note a full run brings up to date gets its Timeline line, only on Bower's notes and never twice
-  // (from any day). After a rename or a move, every note linking to a former name gets its links rewritten.
-  const wanted = new Map<string, Wanted>();
-  const want = (f: DriveFile, path: string): Wanted => {
-    const had = wanted.get(f.id);
-    if (had) return had;
-    const made: Wanted = { file: f, path, entries: [], appendRecords: [], what: null, renames: null };
-    wanted.set(f.id, made);
-    return made;
-  };
-  for (const u of all && date ? (opts.updates ?? UPDATES) : []) {
-    const f = ix.file(u.path);
-    if (!f || f.folder) continue;
-    const w = want(f, u.path);
-    w.entries.push({ date: date ?? '', text: u.what, source: null });
-    w.what ??= u.what;
+  // Answers drop their questions from questions.json, as the legacy runner does; an answer held back keeps its own.
+  const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
+  const questionsFile = ix.file(SYSTEM.questions);
+  let questionsText: string | null = null;
+  if (answered.size && questionsFile) {
+    const value = parsed(await drive.readText(questionsFile.id));
+    const readable = isRunnerFile(SYSTEM.questions, value);
+    // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
+    if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
+    const all = readable ? value.questions : [];
+    const left = all.filter((q) => !answered.has(q.id));
+    if (!readable || left.length !== all.length) questionsText = `${JSON.stringify({ v: 1, questions: left } satisfies QuestionsFile, null, 2)}\n`;
   }
-  // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
-  const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
-  const taken = new Set([...ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
-  const allRenames = renamesFor(moved.map((l) => ({ id: l.rec.id, at: l.rec.at, kind: l.rec.kind, what: l.rec.what, ...(l.rec.path ? { path: l.rec.path } : {}), ...(l.rec.from ? { from: l.rec.from } : {}) })), taken);
-  const renames = allRenames.filter(renameOk);
-  // A rename no link can be written with keeps its lines where they are, as the resolver still follows them (rule 7).
-  let holdRenames = renames.length !== allRenames.length;
-  if (holdRenames) console.error('A former name cannot be written into links; the rename lines stay for the next tidy-up');
-  if (renames.length) {
-    for (const [path, entry] of ix.entries()) {
-      if (entry.type !== 'file' || !path.endsWith('.md') || path.startsWith('Inbox/') || path.startsWith(`${SYSTEM.dir}/`)) continue;
-      const f = ix.file(path);
-      if (f && !f.folder) want(f, path).renames = renames;
-    }
-  }
-  const candidates: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; append: Change | null }> = [];
-  for (const w of [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path))) {
-    const f = w.file;
-    const before = await verified(f, 'utf8');
-    const bytes = before ? await drive.readBytes(f.id) : null;
-    if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
-      console.error('A note changed while it was read; no edit is planned for it this time');
-      if (w.renames) holdRenames = true;
-      continue;
-    }
-    let rewrite = false;
-    if (w.renames) {
-      const result = applyChanges(bytes, [{ kind: 'link-rewrite', recordIds: [], renames: w.renames }]);
-      rewrite = result.ok;
-      // A note that links to a former name but cannot be rewritten keeps the rename lines (rule 7).
-      if (!result.ok && result.reason !== 'unchanged' && mentions(bytes, w.renames)) {
-        console.error(`A note's links could not be rewritten (${result.reason}); the rename lines stay for the next tidy-up`);
-        holdRenames = true;
-      }
-    }
-    let append: Change | null = w.entries.length ? { kind: 'timeline-append', recordIds: w.appendRecords, entries: w.entries } : null;
-    if (append) {
-      const result = applyChanges(bytes, [append]);
-      if (!result.ok) {
-        // A person's note and a line already there are expected; anything else is logged with its reason.
-        if (result.reason !== 'not-bower' && result.reason !== 'unchanged') console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
-        append = null;
-      }
-    }
-    if (rewrite || append) candidates.push({ file: f, path: w.path, what: append ? w.what : null, before, bytes, rewrite, append });
-  }
-  // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
-  // stay unarchived meanwhile (TL-P2-29 (1)).
-  if (candidates.slice(editCap).some((c) => c.rewrite)) holdRenames = true;
-  // Each kept note's changes together, in the contract's order; the text never depends on the record ids.
-  const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
-    [...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...(c.append ? [c.append] : [])];
-  const authored = candidates.slice(0, editCap).flatMap((c) => {
-    const result = applyChanges(c.bytes, changesOf(c, []));
-    if (result.ok) return [{ c, text: result.text }];
-    console.error(`A note edit was refused (${result.reason}); none is planned for it`);
-    if (c.rewrite) holdRenames = true;
-    return [];
-  });
-  const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; changes: Change[]; text: string }> = [];
-  for (const { c, text } of authored) {
-    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what: c.what, before: c.before, changes: changesOf(c, renameIds), text });
-    places.set(c.file.id, c.file);
-  }
-  // Lines held back stay where they are, uncaptured, for the next run (rule 7).
-  if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
-  const edited = new Set(edits.map((e) => e.file.id));
+
   // Your changes go to the archive the legacy runner uses, made in `.bower/changes` when missing.
   const changesFolder = ix.file(SYSTEM.changes);
   const archiveFolder = ix.file(SYSTEM.archive);
@@ -530,7 +588,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const scope = { rootId };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
 
-  // The fixed operations, in order: clear last run's marks, make folders, file, Bin the piles, the Timeline lines, the hashes.
+  // The fixed operations, in order: clear last run's marks, make folders, file, the note edits, the merges, Bin the piles,
+  // your changes, the hashes.
   const operations: OperationV2[] = [];
   const add = async (effect: EffectV2, dependsOn: string[] = []): Promise<string> => {
     const ordinal = operations.length;
@@ -556,7 +615,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const movesOf = new Map<string, string[]>();
   const moveOf = new Map<string, string>();
   const empty = (): ManifestRunReport => ({ filed: [], created: [], updated: [], setAside: [], questions: [] });
-  for (const { thing, to, name, note } of filing) {
+  /** Each edit by the journal records it comes from (their archives wait for it, rule 7, R3-4), and by its note. */
+  const editsFrom = new Map<string, string[]>();
+  const editOf = new Map<string, string>();
+  /** The operations derived from each answer (R3-4, R4-1): its merge's line and move. */
+  const fromAnswer = new Map<string, string[]>();
+  const fileOne = async ({ thing, to, name, note, merge }: (typeof filing)[number]): Promise<void> => {
     const isNote = kindOf(name) === 'note';
     // A saved link's note first (R3-6): written once by its key, then the link file moves beside it.
     const created = note && note.text !== null
@@ -568,20 +632,30 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       parent: targetOf(to),
       name,
       properties: { bowerNew: '1', ...(isNote ? { by: 'bower' as const } : {}), asAdded: null, origin: null, kind: null, pile: null },
-    }, created ? [created] : []);
+    }, created ? [created] : merge?.line === 'planned' ? [editOf.get(ix.idOf(merge.into) ?? '') ?? ''] : []);
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
     moveOf.set(thing.file.id, move);
+    if (merge) {
+      // The line first, then the move after it; filed with the note only when both applied (I4, R3-5).
+      const line = merge.line === 'planned' ? editOf.get(ix.idOf(merge.into) ?? '') ?? null : null;
+      fromAnswer.set(merge.answer, [...(fromAnswer.get(merge.answer) ?? []), ...(line ? [line] : []), move]);
+      const row = line
+        ? { name: thing.file.name, title: displayName(nameOf(merge.into)), kind: thing.item.kind, to, note: merge.into }
+        : { name: thing.file.name, title: thingName(name), kind: thing.item.kind, to };
+      reportPlan.push({ requires: [...(line ? [line] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [row] } });
+      reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED_AGAIN }] } });
+      return;
+    }
     if (note) {
       // R3-5: filed only with every operation for it; a rejected move (or its note's) leaves it to the next run.
       reportPlan.push({ requires: [...(created ? [created] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(note.name), kind: thing.item.kind, to, note: join(to, note.name) }] } });
       reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED_AGAIN }] } });
-      continue;
+      return;
     }
-    // Rows name the thing as captured (its file name), which grounding checks; a name shown in the Inbox that a
-    // file cannot carry (a slash, a clash) is not captured, so the report never claims it.
     reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(name), kind: thing.item.kind, to }] } });
     reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
-  }
+  };
+  for (const f of filing.filter((x) => !x.merge)) await fileOne(f);
   // Each generated note, keyed by its own createKey; a pile of words goes to the Bin only after its note is written.
   const notesOf = new Map<string, string>();
   for (const note of generated) {
@@ -596,21 +670,22 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed, created: [{ path, what: note.what }] } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: note.pileId === null ? NOTE_NOT_WRITTEN : WORDS_NOT_WRITTEN }] } });
   }
-  for (const pile of capturedPiles) {
-    const note = notesOf.get(pile.pileId);
-    if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : [])]);
-  }
-  // Each Timeline line: the edit, then the note marked new in place after it, and its updated row once it applied.
-  // Each edit by the journal records it comes from: their archives wait for it (rule 7, R3-4).
-  const editsFrom = new Map<string, string[]>();
+  // After the filing moves, each note edit (TL-P2-20), then the merges whose moves depend on their line. A Timeline
+  // line's note is marked new in place after its edit, and gets its updated row once it applied.
   for (const edit of edits) {
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text) });
+    editOf.set(edit.file.id, op);
     for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [] : c.recordIds))) editsFrom.set(id, [...(editsFrom.get(id) ?? []), op]);
     // Only a Timeline line marks a note new (m3); a link fix never does.
     if (edit.changes.some((c) => c.kind === 'timeline-append')) {
       await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
     }
     if (edit.what !== null) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: edit.what }] } });
+  }
+  for (const f of filing.filter((x) => x.merge)) await fileOne(f);
+  for (const pile of capturedPiles) {
+    const note = notesOf.get(pile.pileId);
+    if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : [])]);
   }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
@@ -629,7 +704,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   if (questionsText !== null && questionsFile) {
     const before = await verified(questionsFile, 'utf8');
     if (!before) return legacy('questions');
-    questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) });
+    // It waits for every operation derived from the answers it drops (R4-1), so a question stays until its work is done.
+    const derived = journal.flatMap((l) => (l.rec.kind === 'answer' ? fromAnswer.get(l.rec.id) ?? [] : []));
+    questionsOp = await add({ kind: 'write-runner-json', before: seen(questionsFile), beforeContent: before, path: SYSTEM.questions, text: questionsText, content: await utf8(questionsText) }, derived);
   }
   const archiveChain: string[] = [];
   let archiveTo: Target | null = archiveFolder?.folder ? { fileId: archiveFolder.id } : null;
@@ -641,7 +718,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   for (const line of journal) {
     if (!archiveTo) return legacy('journal');
     const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
-    const derived = [...(write ? [write] : []), ...(editsFrom.get(line.rec.id) ?? [])];
+    const derived = [...new Set([...(write ? [write] : []), ...(editsFrom.get(line.rec.id) ?? []), ...(fromAnswer.get(line.rec.id) ?? [])])];
     const moves: string[] = [];
     for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
     if (line.rec.kind === 'request' && requestsOp) {
@@ -682,7 +759,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId);
   if (!checked.ok) {
     // Past the guard's own size limit: the last edit in path order waits for the next run, and the run is planned again.
-    if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return planRun(drive, rootId, opts, edits.length - 1);
+    if (checked.reason === 'edit' && checked.rule === 'size' && edits.length) return planRun(drive, rootId, opts, edits.length - 1, held);
     console.error(`A B plan was refused by the manifest guard (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''}); the run takes the legacy path`);
     return legacy('manifest');
   }
@@ -800,8 +877,14 @@ export const NOT_FILED = 'It was moved, renamed or removed before Bower could fi
 /** Why a saved link filed with a note, or a merged thing, was not filed: it may have been moved already (R4-3 m-c). */
 export const NOT_FILED_AGAIN = "It couldn't be filed this time.";
 
+/** A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), a hub's row wording. */
+type WantedLine = { entry: EditEntry; record: string | null; what: string | null };
 /** What a run wants to change in one note, before applyChanges decides what it may. */
-type Wanted = { file: DriveFile; path: string; entries: EditEntry[]; appendRecords: string[]; what: string | null; renames: Rename[] | null };
+type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null };
+/** A thing joining a note you said yes to keeping (MERGES), with the answer that says so. */
+type Merge = { into: string; title: string; line: string; answer: string };
+/** A merge as planned: after its Timeline line, or beside a line already there from an earlier run. */
+type MergeState = Omit<Merge, 'line'> & { line: 'planned' | 'present' };
 
 /** Paths in code-point order, the same everywhere (TL-P2-29). */
 const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

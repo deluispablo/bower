@@ -3884,8 +3884,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (!answer) throw new Error('no answer');
       await w.uploader.addPile({ text: 'The Wrenfield listing', items: [LISTING, pdf('floor plan.pdf')] });
       await w.uploader.settled();
-      const link = (await w.drive.listAll(w.rootId)).find((f) => !f.folder && f.name.endsWith('.url'));
-      if (!link) throw new Error('the listing did not arrive');
+      const link = await plainName(w, (await w.drive.listAll(w.rootId)).find((f) => !f.folder && f.name.endsWith('.url')));
       return { w, act, into, before, answer, link };
     }
     async function tidy(w: World, n = 0): Promise<{ id: string; manifest: ManifestV2 | undefined }> {

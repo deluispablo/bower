@@ -322,8 +322,9 @@ export function shownAs(name: string, fileName: string): boolean {
 }
 
 /**
- * A filed row's `note` (TL-P2-20 M5, R4-2): the path of the generated note an applied create-text in the same
- * `requires` writes next to the move's destination, the move depending on it; or a note already there, recorded
+ * A filed row's `note` (TL-P2-20 M5, I4, R4-2): the path of the generated note an applied create-text in the same
+ * `requires` writes next to the move's destination, the move depending on it; the note an applied Timeline line in
+ * the same `requires` was added to (a merge), the move depending on it; or a note already there, recorded
  * in `capture.places` in the move's destination folder and checked again in the step of the move
  * (`reusedNoteOf`). Each note is claimed once.
  */
@@ -335,13 +336,24 @@ function noteGrounded(manifest: RunManifest, c: ReportContribution, moveOp: Oper
     const op = ops.get(id);
     return op?.effect.kind === 'create-text' ? [{ op, effect: op.effect }] : [];
   });
+  const lines = c.requires.flatMap((id) => {
+    const op = ops.get(id);
+    return op?.effect.kind === 'edit-text' ? [{ op, effect: op.effect }] : [];
+  });
   const [create, ...more] = creates;
-  if (more.length) return false;
-  if (create) {
+  const [line, ...others] = lines;
+  if (more.length || others.length || (create && line)) return false;
+  if (line) {
+    // A merge (I4): the applied Timeline line on that very note, the thing moved after it into the note's folder.
+    if (line.effect.path !== note || !line.effect.changes.some((ch) => ch.kind === 'timeline-append')) return false;
+    if (!moveOp.dependsOn.includes(line.op.operationId) || parentOf(note) !== placePath(manifest, move.parent)) return false;
+  } else if (create) {
     const same = JSON.stringify(create.effect.parent) === JSON.stringify(move.parent);
     if (!same || create.effect.purpose !== 'generated' || !moveOp.dependsOn.includes(create.op.operationId)) return false;
     if (join(placePath(manifest, move.parent) ?? '\u0000', create.effect.name) !== note) return false;
   } else {
+    // A note already there backs no line and no create: the move depends on neither.
+    if (moveOp.dependsOn.some((id) => ['edit-text', 'create-text'].includes(ops.get(id)?.effect.kind ?? ''))) return false;
     const place = manifest.capture.places.find((p) => p.path === note);
     if (!place || place.file.folder || !note.endsWith('.md') || parentOf(note) !== placePath(manifest, move.parent)) return false;
     if (manifest.capture.members.some((m) => m.file.fileId === place.file.fileId)) return false;
