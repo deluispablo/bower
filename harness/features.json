@@ -2759,5 +2759,33 @@
     "verify": "pnpm vitest run src/data/contracts/pile-declaration.test.ts -t \"pile declarations preserve immutable authority\"",
     "passes": false,
     "note": "Bounded exact Declaration subset under TL-P2-04/05 and B aede/3b954. Named assertions planned, not executed; separate loadable stub required. No shape/wire changes, producer/consumer activation, I/O, permissions, ready effects or whole capability acceptance."
+  },
+  {
+    "id": "run-manifest-authority",
+    "task": "qa-22",
+    "category": "data",
+    "what": "Run manifests refuse damaged shape, foreign scope and forged capture or operation identity before any effect.",
+    "steps": [
+      "Parse independent ratified run manifests with strict record JSON, an independently supplied scope and closed nested capture, operation, effect and report-plan shapes.",
+      "Recompute captureId and every operationId from canonical content; refuse mismatches, non-consecutive ordinals, forward or unknown dependencies and report contributions that name missing operations or repeat question IDs.",
+      "Preserve source bytes; a valid manifest establishes fixed intent only, never effects, readiness, claims or recovery."
+    ],
+    "verify": "pnpm vitest run src/data/contracts/run-manifest.test.ts -t \"run manifests fix capture and operation identity\"",
+    "passes": false,
+    "note": "Pure O3 slice of ratified B contract aede6ef2 (TL-P2-03/04), packet docs/harness/2026-10-06-run-record-units.md unit M. Planned, not implemented."
+  },
+  {
+    "id": "run-checkpoint-authority",
+    "task": "qa-22",
+    "category": "data",
+    "what": "Run checkpoints keep one honest recoverable chain: fixed outcomes, legal transitions and no done without a published report.",
+    "steps": [
+      "Parse independent ratified checkpoints and report records with strict record JSON against a supplied scope, manifest hash and fixed operation list.",
+      "Refuse broken revision/previous links, changed run identity, outcome regressions or skipped possible-effect, and done with unresolved outcomes or an unpublished report.",
+      "A pending report body must hash to its reportHash and bind the same run, capture and manifest; nothing here publishes, claims or recovers a run."
+    ],
+    "verify": "pnpm vitest run src/data/contracts/run-checkpoint.test.ts -t \"run checkpoints keep one honest recoverable chain\"",
+    "passes": false,
+    "note": "Pure O3 slice of ratified B contract aede6ef2 (TL-P2-03/04), packet docs/harness/2026-10-06-run-record-units.md unit C. Planned, not implemented."
   }
 ]
