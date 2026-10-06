@@ -17,3 +17,5 @@ staging-deploy-b5,mechanical,claude,haiku,low,1,49875,,,,,,12,1.1,delivered,2026
 p2-batch-review-4d7ab08,reviewer,claude,opus,,1,237653,,,,,,42,6.6,clean (TL-P2-46 fallback; general-purpose agent with model pinned),2026-10-06
 p2-evaluation-4d7ab08,evaluator,claude,sonnet,,1,221748,,,,,,150,19.7,2 Important (F1 F2 focus) + 10 minors (TL-P2-46 fallback; general-purpose agent with model pinned),2026-10-06
 focus-after-replay-and-route,implementer,claude,sonnet,,1,99448,,,,,,36,14.4,delivered (general-purpose agent with model pinned),2026-10-06
+replay-f1-f2-3e6e7da,mechanical,claude,haiku,,1,55576,,,,,,32,2.5,stalled: never reached the replay dialog (climb to Sonnet),2026-10-06
+p2-dossier-map,documenter,claude,sonnet,,1,126019,,,,,,20,2.1,delivered (read-only map),2026-10-06
