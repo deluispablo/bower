@@ -2204,6 +2204,351 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
   });
 
+  // b-path-leftover-piles (TL-P2-29 amendment, TL-P2-09, TL-P2-12, TL-P2-21): what a run leaves in a declared pile's
+  // folder, once every declared member is accounted for, is an ordinary observed pile for the next run, on the B path.
+  describe('leftovers of a held pile take the recoverable path', () => {
+    type Where = { drive: FakeDrive; rootId: string };
+    const runPlan = (w: Where) => planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    const parentOfFile = async (w: Where, name: string): Promise<string> => (await w.drive.listAll(w.rootId)).find((f) => f.name === name)?.parents[0] ?? '';
+    const dispositions = async (w: Where): Promise<string[]> => (await w.drive.listAll(w.rootId)).filter((f) => f.name.startsWith('disposition-')).map((f) => f.id).sort();
+    const childNames = async (w: Where, folder: string): Promise<string[]> => (await w.drive.listAll(w.rootId)).filter((f) => f.parents[0] === folder).map((f) => f.name).sort();
+    const inInbox = (w: Where, id: string): boolean => w.drive.pathOf(id, w.rootId).startsWith('Inbox/');
+    const touches = (ids: ReadonlySet<string>) => (call: FencedCall): boolean => ('id' in call && ids.has(call.id)) || ('parentId' in call && ids.has(call.parentId));
+
+    /** The lease pile's folder and its context note, bound by member key (a declared world). */
+    async function leasePile(w: World): Promise<{ folder: string; keyed: DriveFile }> {
+      const folder = await parentOfFile(w, 'lease.pdf');
+      const keyed = (await w.drive.listAll(w.rootId)).find((f) => f.parents[0] === folder && f.name === 'Pile note.md' && f.appProperties?.bowerItem);
+      if (!keyed) throw new Error('missing keyed pile note');
+      return { folder, keyed };
+    }
+
+    /** A first B run on a declared world that files every member and keeps the lease folder for a file it does not list. */
+    async function filedButKept(o: { hooks?: Hooks } = {}) {
+      const w = await bWorld({ declared: true, ...(o.hooks ? { hooks: o.hooks } : {}) });
+      const lease = await leasePile(w);
+      const stray = await w.drive.createText(lease.folder, 'stray.txt', 'not one of its things');
+      const leaseId = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'lease.pdf')?.id ?? '';
+      const first = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect(await childNames(w, lease.folder)).toEqual(['Pile note.md', 'stray.txt']);
+      await expectFiledOnce(w);
+      const disposed = await dispositions(w);
+      expect(disposed).toHaveLength(2);
+      return { ...w, ...lease, stray: stray.id, leaseId, first, disposed };
+    }
+
+    /** The plan of the next run: B, with the leftover captured as an ordinary observed pile. */
+    async function plannedLeftover(w: Where, folder: string, things: readonly string[], context: string) {
+      const planned = await runPlan(w);
+      expect(planned).toMatchObject({ path: 'b' });
+      if (planned.path !== 'b') return null;
+      const pile = planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder);
+      expect(pile).toMatchObject({ source: { kind: 'observed' }, memberKeys: things.map(() => null), context: { kind: 'text', memberKey: null, file: { fileId: context } } });
+      expect(pile?.childFileIds).toEqual([...things, context].sort());
+      expect(planned.manifest.capture.members.filter((m) => m.pileId === pile?.pileId).map((m) => ({ id: m.file.fileId, key: m.memberKey }))).toEqual(things.map((id) => ({ id, key: null })));
+      return planned;
+    }
+
+    it('files a late child left in a declared pile on the next run, as an ordinary pile with its bound note', async () => {
+      let drive: FakeDrive | null = null;
+      let into = '';
+      let late: string | null = null;
+      const hooks: Hooks = {
+        beforeDispatch: async (at) => {
+          if (late || !drive || !into || at.effect.kind !== 'move') return;
+          // Alex adds a thing to the lease pile after the first run captured it.
+          late = (await drive.createText(into, 'later.txt', 'arrived late')).id;
+        },
+      };
+      const w = await bWorld({ declared: true, hooks });
+      drive = w.drive;
+      const { folder, keyed } = await leasePile(w);
+      into = folder;
+      const first = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect(late).not.toBeNull();
+      const lateId = late ?? '';
+      expect(await childNames(w, folder)).toEqual(['Pile note.md', 'later.txt']);
+      const disposed = await dispositions(w);
+      expect(disposed).toHaveLength(2);
+
+      await plannedLeftover(w, folder, [lateId], keyed.id);
+      const second = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: second.id, phase: 'done' });
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'later.txt' }], setAside: [] });
+      expect(movesOf(w, lateId)).toBe(1);
+      expect(inInbox(w, lateId)).toBe(false);
+      expect((await w.drive.evidence(folder))?.trashed).toBe(true);
+      // The keys the first run disposed of need no new disposition; the declaration stays as history.
+      expect(await dispositions(w)).toEqual(disposed);
+      expect((await w.drive.listAll(w.rootId)).filter((f) => f.name.startsWith('declaration-'))).toHaveLength(2);
+      // Nothing is left to take, and nothing is filed again.
+      await expect(w.worker.process('all')).rejects.toMatchObject({ code: 'conflict' });
+      for (const id of w.sources) expect(movesOf(w, id), `moves of ${id}`).toBe(1);
+      expect(movesOf(w, lateId)).toBe(1);
+    });
+
+    it('files what is left beside a second unbound note, with the bound note as its context', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      const second = await w.drive.createText(folder, 'Pile note.md', 'A second note about the lease');
+      const first = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect(await childNames(w, folder)).toEqual(['Pile note.md', 'Pile note.md']);
+      const disposed = await dispositions(w);
+      expect(disposed).toHaveLength(2);
+      // Alex adds one more thing to the pile after it was tidied.
+      const later = await w.drive.createText(folder, 'later.txt', 'added later');
+      const kept = await w.drive.evidence(second.id);
+
+      const planned = await plannedLeftover(w, folder, [later.id], keyed.id);
+      expect(planned?.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(second.id);
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'later.txt' }], setAside: [] });
+      expect(inInbox(w, later.id)).toBe(false);
+      // The unbound note is an uncaptured child again (TL-P2-21): it stays, and so does the folder.
+      expect(await w.drive.evidence(second.id)).toEqual(kept);
+      expect((await w.drive.evidence(folder))?.trashed).toBe(false);
+      expect(await dispositions(w)).toEqual(disposed);
+    });
+
+    it('takes the first note as the context of what is left when the bound note was removed', async () => {
+      const w = await filedButKept();
+      // Alex removed the pile's note through Bower (a journaled Bin, already archived), then wrote a new one.
+      const path = w.drive.pathOf(w.folder, w.rootId);
+      const listing = await w.drive.listAll(w.rootId);
+      const archive = listing.find((f) => w.drive.pathOf(f.id, w.rootId) === SYSTEM.archive);
+      const changes = listing.find((f) => w.drive.pathOf(f.id, w.rootId) === SYSTEM.changes);
+      const into = archive ?? (await w.drive.createFolder(changes?.id ?? '', 'archive'));
+      const rec: JournalRecord = { v: 1, id: 'LINE_CONTEXT_GONE', at: 1, kind: 'trash', what: 'Removed the note of a pile', device: 'DEVICE_A', path: `${path}/Pile note.md` };
+      await w.drive.createText(into.id, 'LINE_CONTEXT_GONE.json', `${JSON.stringify(rec)}\n`);
+      await w.drive.trash(w.keyed.id);
+      const note = await w.drive.createText(w.folder, 'Pile note.md', 'Papers about the flat');
+
+      await plannedLeftover(w, w.folder, [w.stray], note.id);
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'stray.txt' }], setAside: [] });
+      expect((await w.drive.evidence(w.folder))?.trashed).toBe(true);
+      expect(await dispositions(w)).toEqual(w.disposed);
+    });
+
+    it('accounts for members a legacy run filed by looking them up, and files what is left on the B path', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      const lease = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'lease.pdf')?.id ?? '';
+      // A rule to word sends the first run down the legacy path, which writes no disposition.
+      await w.uploader.addRule('Keep lease papers together');
+      expect(await runPlan(w)).toEqual({ path: 'legacy', why: 'rules' });
+      // Alex adds a thing to the lease pile once the legacy run has moved its first member.
+      const late: { file: Promise<DriveFile> | null } = { file: null };
+      const counted = w.drive.onChange;
+      w.drive.onChange = () => {
+        counted?.();
+        if (!late.file && !w.drive.pathOf(lease, w.rootId).startsWith('Inbox/')) late.file = w.drive.createText(folder, 'later.txt', 'arrived late');
+      };
+      const first = await w.worker.process('all');
+      await until(w.worker, 'done');
+      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect(late.file).not.toBeNull();
+      const lateId = (await late.file)?.id ?? '';
+      expect(await childNames(w, folder)).toEqual(['Pile note.md', 'later.txt']);
+      expect(await dispositions(w)).toEqual([]);
+      for (const id of w.sources) expect(inInbox(w, id), `${id} still in the Inbox`).toBe(false);
+
+      await plannedLeftover(w, folder, [lateId], keyed.id);
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'later.txt' }], setAside: [] });
+      expect(inInbox(w, lateId)).toBe(false);
+      expect((await w.drive.evidence(folder))?.trashed).toBe(true);
+      // Lookup is a readiness fact: it never writes a disposition (TL-P2-09).
+      expect(await dispositions(w)).toEqual([]);
+    });
+
+    it('counts members a consumed disposition covers as accounted for, even when the filed file changed since', async () => {
+      const w = await filedButKept();
+      // Alex edits the filed lease afterwards: its bytes no longer match the declaration, but the disposition records it.
+      const lease = w.leaseId;
+      const file = await w.drive.get(lease);
+      await w.drive.writeText(lease, '%PDF lease, signed', file.modifiedTime);
+
+      await plannedLeftover(w, w.folder, [w.stray], w.keyed.id);
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'stray.txt' }], setAside: [] });
+      expect(movesOf(w, lease)).toBe(1);
+      expect(await dispositions(w)).toEqual(w.disposed);
+    });
+
+    it('still holds a declared pile while one of its keys is not accounted for', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder } = await leasePile(w);
+      const projects = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Projects' && f.parents[0] === w.rootId);
+      const byName = async (name: string): Promise<DriveFile | undefined> => (await w.drive.listAll(w.rootId)).find((f) => f.name === name);
+      // Moved out of the pile outside a run, with no disposition: the lease with its bytes, the inventory edited.
+      for (const name of ['lease.pdf', 'inventory.pdf']) {
+        const f = await byName(name);
+        await w.drive.update(f?.id ?? '', { addParent: projects?.id ?? '', removeParent: folder });
+      }
+      const inventory = await byName('inventory.pdf');
+      await w.drive.writeText(inventory?.id ?? '', '%PDF another inventory', inventory?.modifiedTime ?? '');
+      await w.drive.createText(folder, 'later.txt', 'arrived late');
+      const ids = new Set([folder, ...(await w.drive.listAll(w.rootId)).filter((f) => f.parents[0] === folder).map((f) => f.id)]);
+
+      const planned = await runPlan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      expect(planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder)).toBeUndefined();
+      const from = w.calls.length;
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      expect(w.calls.slice(from).filter(touches(ids))).toEqual([]);
+      expect(await childNames(w, folder)).toEqual(['Pile note.md', 'later.txt']);
+      expect(await dispositions(w)).toHaveLength(1);
+    });
+
+    // TL-P2-29 second amendment: members accounted for count as filed; the ones still inside are declared members of the same pile.
+    it('files the members still in a partly filed declared pile on the B path after a legacy run was cut off', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      const byName = async (name: string): Promise<DriveFile | undefined> => (await w.drive.listAll(w.rootId)).find((f) => f.name === name);
+      const lease = (await byName('lease.pdf'))?.id ?? '';
+      const inventory = (await byName('inventory.pdf'))?.id ?? '';
+      // A legacy run (a client with no run service) stops at the next Drive call after it moved the lease.
+      const cut = { done: false };
+      const counted = w.drive.onChange;
+      w.drive.onChange = () => {
+        counted?.();
+        if (cut.done || w.drive.pathOf(lease, w.rootId).startsWith('Inbox/')) return;
+        cut.done = true;
+        w.drive.failNext('offline');
+      };
+      const legacy = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, fresh: false });
+      await legacy.process('all');
+      await until(legacy, 'failed');
+      expect(await legacy.status()).toMatchObject({ phase: 'failed' });
+      w.drive.onChange = counted;
+      expect(cut.done).toBe(true);
+      expect(inInbox(w, lease)).toBe(false);
+      expect(w.drive.pathOf(inventory, w.rootId).startsWith('Inbox/')).toBe(true);
+      const leaseAt = await w.drive.evidence(lease);
+      const leaseKey = leaseAt?.file.appProperties?.bowerItem;
+      const inventoryKey = (await byName('inventory.pdf'))?.appProperties?.bowerItem;
+      expect(await dispositions(w)).toEqual([]);
+
+      const planned = await runPlan(w);
+      expect(planned).toMatchObject({ path: 'b' });
+      if (planned.path !== 'b') return;
+      const pile = planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder);
+      expect(pile).toMatchObject({ source: { kind: 'declared' }, memberKeys: [inventoryKey], context: { kind: 'text', file: { fileId: keyed.id } } });
+      expect(pile?.childFileIds).toEqual([inventory, keyed.id].sort());
+      expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(lease);
+
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).toContain('inventory.pdf');
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).not.toContain('lease.pdf');
+      expect(movesOf(w, inventory)).toBe(1);
+      expect(movesOf(w, lease)).toBe(0);
+      expect(inInbox(w, inventory)).toBe(false);
+      expect((await w.drive.evidence(lease))?.file).toMatchObject({ parents: leaseAt?.file.parents, name: leaseAt?.file.name });
+      expect((await w.drive.evidence(folder))?.trashed).toBe(true);
+      // The disposition records the members this run filed, under the pile's declaration.
+      const records = await Promise.all((await dispositions(w)).map(async (id) => JSON.parse(await w.drive.readText(id)) as { pileId: string; memberKeys: string[] }));
+      const mine = records.filter((d) => d.memberKeys.includes(inventoryKey ?? ''));
+      expect(mine).toHaveLength(1);
+      expect(mine[0]?.memberKeys).toEqual([inventoryKey]);
+      expect(records.some((d) => d.memberKeys.includes(leaseKey ?? ''))).toBe(false);
+      // Nothing is left to take, and nothing is filed again.
+      await expect(w.worker.process('all')).rejects.toMatchObject({ code: 'conflict' });
+      expect(movesOf(w, inventory)).toBe(1);
+    });
+
+    it('holds a partly filed declared pile while a member still in it is not ready', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder } = await leasePile(w);
+      const projects = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Projects' && f.parents[0] === w.rootId);
+      const byName = async (name: string): Promise<DriveFile | undefined> => (await w.drive.listAll(w.rootId)).find((f) => f.name === name);
+      // The lease was filed with its bytes; the inventory still in the pile changed after it was added.
+      await w.drive.update((await byName('lease.pdf'))?.id ?? '', { addParent: projects?.id ?? '', removeParent: folder });
+      const inventory = await byName('inventory.pdf');
+      await w.drive.writeText(inventory?.id ?? '', '%PDF another inventory', inventory?.modifiedTime ?? '');
+      const ids = new Set([folder, ...(await w.drive.listAll(w.rootId)).filter((f) => f.parents[0] === folder).map((f) => f.id)]);
+
+      const planned = await runPlan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      expect(planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder)).toBeUndefined();
+      const from = w.calls.length;
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      expect(w.calls.slice(from).filter(touches(ids))).toEqual([]);
+      expect(await childNames(w, folder)).toEqual(['Pile note.md', 'inventory.pdf']);
+      expect(await dispositions(w)).toHaveLength(1);
+    });
+
+    it('recovers the run that files what is left without repeating any effect', async () => {
+      let armed = false;
+      let held = false;
+      let release = (): void => undefined;
+      let reachedAt = (_at: DispatchAt): void => undefined;
+      const paused = new Promise<DispatchAt>((r) => { reachedAt = r; });
+      const gate = new Promise<void>((r) => { release = r; });
+      const hooks: Hooks = {
+        beforeDispatch: async (at) => {
+          if (!armed || held || at.effect.kind !== 'move') return;
+          held = true;
+          reachedAt(at);
+          await gate;
+        },
+      };
+      const w = await filedButKept({ hooks });
+      armed = true;
+      const admitted = await w.worker.process('all');
+      const at = await reached(paused, w.runs);
+      expect(at, 'the first move was paused before its dispatch').not.toBeNull();
+      if (!at) return;
+
+      // The paused attempt's claim lapses; another client asks, and the service recovers under a newer epoch.
+      w.clock.later(CLAIM_MS + 1);
+      const other = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+      await until(other, 'done');
+      expect(await other.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      release();
+      await w.runs.settled();
+      expect(movesOf(w, w.stray)).toBe(1);
+      expect(w.applied.filter((c) => c.op === 'trash' && c.id === w.folder)).toHaveLength(1);
+      expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'stray.txt' }], setAside: [] });
+      expect(await dispositions(w)).toEqual(w.disposed);
+
+      // After a reload of the service and the Drive, asking again applies nothing.
+      const drive = FakeDrive.restore(await w.drive.snapshot());
+      const applied: FencedCall[] = [];
+      drive.fault = { applied: (call) => { applied.push(call); } };
+      const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
+      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+      expect(await after(worker, runs)).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(applied).toEqual([]);
+      for (const id of w.sources) expect(movesOf(w, id), `moves of ${id}`).toBe(1);
+    });
+  });
+
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
   describe('a Timeline line is added once and keeps the rest of the note', () => {
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';

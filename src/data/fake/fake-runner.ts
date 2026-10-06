@@ -26,7 +26,8 @@ import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
-import { canonical, grounded, seen } from './fake-run-records';
+import { parsePileDisposition } from '../contracts/pile-disposition';
+import { canonical, dispositionName, grounded, seen } from './fake-run-records';
 
 export interface FakeRunOptions {
   scope: 'all' | 'instructions';
@@ -74,9 +75,41 @@ export const SET_ASIDE = {
  * accounts for, and a declared note to write again first. The folder goes to
  * the Bin only when nothing else is left in it.
  */
-type Capture = { blocked: string } | { blocked: null; captured: Set<string>; restore?: { key: string; text: string }; declared?: Declared };
-/** A ready declared pile's declaration, as the B path captures it. */
+type Capture = { blocked: string } | { blocked: null; captured: Set<string>; restore?: { key: string; text: string }; declared?: Declared; leftover?: Leftover };
+/**
+ * A ready declared pile's declaration, as the B path captures it. `memberKeys` are the members still in its
+ * folder: those accounted for (disposed of, or arrived and left) count as filed (TL-P2-29 second amendment).
+ */
 type Declared = { ref: { declarationId: string; sha256: string }; contextKey: string | null; memberKeys: ReadonlySet<string> };
+/**
+ * What is left in a declared pile's folder once every declared member is accounted for (TL-P2-29): an
+ * ordinary observed pile, whose context is the note bound by this key when it is there, otherwise the first.
+ */
+type Leftover = { contextKey: string | null };
+
+/**
+ * Member keys that consumed dispositions (guard 13) already record, by pile and declaration: the earlier
+ * B run filed them (TL-P2-09). A disposition that cannot be read records nothing and is logged.
+ */
+async function consumedKeys(drive: FakeDrive, rootId: string, listing: readonly DriveFile[]): Promise<Map<string, Set<string>>> {
+  const bower = new Set(listing.filter((f) => f.folder && f.name === SYSTEM.dir && f.parents.includes(rootId)).map((f) => f.id));
+  const piles = new Set(listing.filter((f) => f.folder && f.name === SYSTEM.piles.slice(SYSTEM.dir.length + 1) && f.parents.some((p) => bower.has(p))).map((f) => f.id));
+  const out = new Map<string, Set<string>>();
+  for (const f of listing) {
+    if (f.folder || !f.name.startsWith('disposition-') || !f.parents.some((p) => piles.has(p))) continue;
+    const parsed = await parsePileDisposition(await drive.readBytes(f.id), rootId);
+    if (!parsed.ok || f.name !== dispositionName(parsed.sha256)) {
+      console.error(`A pile disposition was refused (${parsed.ok ? 'name' : parsed.reason}).`);
+      continue;
+    }
+    const d = parsed.value;
+    if (d.action !== 'consumed' || !d.declaration) continue;
+    const key = disposedOf(d.pileId, d.declaration);
+    out.set(key, new Set([...(out.get(key) ?? []), ...d.memberKeys]));
+  }
+  return out;
+}
+const disposedOf = (pileId: string, ref: { declarationId: string; sha256: string }): string => JSON.stringify([pileId, ref.declarationId, ref.sha256]);
 
 /** A file's size and hash from the pretend Drive's stored bytes (`fake-stored`); null when they cannot be read. */
 async function storedDigest(drive: FakeDrive, f: DriveFile): Promise<Digest | null> {
@@ -94,6 +127,7 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   const ix = VaultIndex.build(rootId, listing);
   let records: Promise<unknown[]> | null = null;
   const journal = (): Promise<unknown[]> => (records ??= journalValues(ix.journalFiles(true), (id) => drive.readText(id)));
+  let consumed: Promise<Map<string, Set<string>>> | null = null;
   const out = new Map<string, Capture>();
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
@@ -111,8 +145,13 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       continue;
     }
     const readiness = await observePile(found.declaration, folder, listing, (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
-    if (readiness.blocked) {
-      out.set(pile.id, { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked });
+    // A member a consumed disposition records is accounted for, whatever its file is like now (TL-P2-09, TL-P2-29).
+    const disposed = (await (consumed ??= consumedKeys(drive, rootId, listing))).get(disposedOf(pile.id, { declarationId: found.declaration.declarationId, sha256: found.sha256 }));
+    const open = readiness.members.filter((m) => !disposed?.has(m.memberKey));
+    const has = (state: (typeof open)[number]['state']): boolean => open.some((m) => m.state === state);
+    const blocked = has('changed') ? SET_ASIDE.changed : has('missing') ? SET_ASIDE.notArrived : has('unchecked') ? SET_ASIDE.notChecked : null;
+    if (blocked) {
+      out.set(pile.id, { blocked });
       continue;
     }
     // The context only has to have arrived: any note is the person's words. Missing though never
@@ -126,10 +165,17 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: SET_ASIDE.empty });
       continue;
     }
+    // Ready, so every member not disposed of is either still in the folder or arrived and left (accounted for).
+    const remaining = open.filter((m) => m.state === 'verified').map((m) => m.memberKey);
+    // Every declared member accounted for: what is left is an ordinary pile (TL-P2-29).
+    if (found.declaration.members.length && !remaining.length) {
+      out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}), leftover: { contextKey: context.kind === 'text' ? context.memberKey : null } });
+      continue;
+    }
     const declared: Declared = {
       ref: { declarationId: found.declaration.declarationId, sha256: found.sha256 },
       contextKey: context.kind === 'text' ? context.memberKey : null,
-      memberKeys: new Set(found.declaration.members.map((m) => m.memberKey)),
+      memberKeys: new Set(remaining),
     };
     out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}), declared });
   }
@@ -162,7 +208,11 @@ export interface PlanOptions {
  * otherwise the first pile note); any other child (a late thing, a pile
  * note not bound to it, a file a declared pile does not list) is uncaptured,
  * stays for the next run, and keeps the folder out of the Bin: the Bin is
- * rejected at the boundary and the pile retained (guard 7). Your changes from the journal
+ * rejected at the boundary and the pile retained (guard 7). Once every member
+ * of a declared pile is accounted for (a consumed disposition, or arrived and
+ * left), what is left in its folder is an ordinary observed pile with no keys
+ * and no new disposition (TL-P2-29); when only some are, the members still in
+ * its folder are its declared members for this run. Your changes from the journal
  * are captured too (record id, digest, files) and archived by B moves into
  * `.bower/changes/archive`, after the runner-JSON writes derived from them.
  * A hub note a full run brings up to date gets its Timeline line as one
@@ -237,10 +287,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE);
     const declared = cap.declared;
     // The one context note bound to the pile (TL-P2-21): by its member key when declared, otherwise the first.
+    // What is left of a declared pile takes its bound note when it is there, otherwise the first (TL-P2-29).
     // Any other child (a second pile note, a folder) is uncaptured: guard 7 then keeps the folder out of the Bin.
-    const contextKey = declared?.contextKey ?? null;
+    const contextKey = declared?.contextKey ?? cap.leftover?.contextKey ?? null;
+    const bound = contextKey === null ? undefined : children.find((f) => !f.folder && f.appProperties?.[PROP.item] === contextKey);
     // A declared pile whose context was removed (TL-P2-08 b) has none: any pile note in it is unbound.
-    const note = declared ? children.find((f) => !f.folder && contextKey !== null && f.appProperties?.[PROP.item] === contextKey) : notes[0];
+    const note = declared ? bound : (bound ?? notes[0]);
     // Where its things go is guessed from the bound note's words only, never from an unbound note listed first.
     const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), await drive.readText(note.id)).body.trim();
     const keys: Array<string | null> = [];
@@ -264,6 +316,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       things.push({ pile, folder, item, file, content, words });
     }
     if (!taken.length) return legacy(declared ? 'member key' : 'generated note');
+    // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
     if (declared && keys.length !== declared.memberKeys.size) return legacy('member key');
     let context: CapturedPile['context'] = { kind: 'absent' };
     if (note) {
@@ -271,7 +324,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       const stored = await verified(note, 'utf8');
       const raw = new TextEncoder().encode(text);
       if (!stored || stored.size !== raw.byteLength || stored.sha256 !== (await sha256(new Blob([raw])))) return legacy('context');
-      context = { kind: 'text', memberKey: contextKey, file: seen(note), text, content: stored };
+      // An observed pile invents no keys (guard 6): its context carries none.
+      context = { kind: 'text', memberKey: declared ? contextKey : null, file: seen(note), text, content: stored };
     }
     capturedPiles.push({
       pileId: pile.id,
