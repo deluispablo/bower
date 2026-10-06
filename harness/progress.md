@@ -19,3 +19,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: remove-bins-declarations passes — fix: proof-close Remove binning a pile's declaration copies
 - 2026-10-06: b-path-loose-piles passes — fix: proof-close loose piles on the recoverable path
 - 2026-10-06: o5-no-legacy-run-path passes — chore(harness): o5-no-legacy-run-path passes (batch 5)
+- 2026-10-06: b-path-one-snapshot passes — chore(harness): b-path-one-snapshot passes (batch 5)

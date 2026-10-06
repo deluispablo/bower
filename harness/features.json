@@ -3332,7 +3332,7 @@
       "The run stays on the B path; the legacy reasons readiness and sending and the race halves of loose pile and member key are gone."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a change during planning never sends a run down the legacy path\"",
-    "passes": false,
+    "passes": true,
     "note": "Removes legacy 'readiness', 'sending' and the race halves of 'loose pile' and 'member key'. TL-P2-37 (main d6dca4b). Planned, not implemented."
   },
   {
