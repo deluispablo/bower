@@ -2925,6 +2925,53 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       }
     });
 
+    // Review of 11e1a76: only the note a run records is read and checked (an observed pile's first, a declared pile's
+    // context note), by the tidy-up and the Inbox alike; another pile note is an uncaptured child, never read.
+    it('checks only the pile note a tidy-up records, in the Inbox and the tidy-up alike', async () => {
+      const inboxOf = (w: World) => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_B' }).piles();
+      const leaseOf = async (w: World): Promise<{ pileId: string; folder: DriveFile }> => {
+        const pile = (await w.uploader.piles()).find((p) => p.text === 'Papers about the lease');
+        const folder = (await w.drive.listAll(w.rootId)).find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === pile?.path);
+        if (!pile || !folder) throw new Error('no lease pile');
+        return { pileId: pile.id, folder };
+      };
+      const captured = (out: Awaited<ReturnType<typeof plan>>, folder: DriveFile): boolean =>
+        out.path === 'b' && out.manifest.capture.piles.some((p) => p.anchor?.fileId === folder.id);
+
+      // A second pile note with half a character: the pile is filed, the second note stays in its folder.
+      const broken = await bWorld();
+      const a = await leaseOf(broken);
+      await broken.drive.createText(a.folder.id, 'Pile note.md', 'second \ud800 note');
+      expect((await inboxOf(broken)).find((p) => p.id === a.pileId)?.setAside, 'broken second note, Inbox').toBeUndefined();
+      expect(captured(await plan(broken), a.folder), 'broken second note, tidy-up').toBe(true);
+      await broken.worker.process('all');
+      await broken.runs.settled();
+      expect(viewOf(broken)?.run.report?.filed.map((f) => f.name), 'broken second note, filed').toEqual(expect.arrayContaining(['lease.pdf', 'inventory.pdf']));
+
+      // A second pile note that cannot be read: it is never read, so the run goes on.
+      const unread = await bWorld();
+      const b = await leaseOf(unread);
+      const second = await unread.drive.createText(b.folder.id, 'Pile note.md', 'second note');
+      const real = unread.drive.readText.bind(unread.drive);
+      vi.spyOn(unread.drive, 'readText').mockImplementation(async (id) => {
+        if (id === second.id) throw driveError('offline');
+        return real(id);
+      });
+      expect(captured(await plan(unread), b.folder), 'unreadable second note').toBe(true);
+
+      // A declared pile whose context note is not the first: checked on its context note, in both places.
+      const declared = await bWorld({ declared: true });
+      const c = await leaseOf(declared);
+      const context = (await declared.drive.listAll(c.folder.id)).find((f) => f.parents[0] === c.folder.id && f.name === 'Pile note.md');
+      const key = context?.appProperties?.bowerItem;
+      if (!context || !key) throw new Error('no context note');
+      await declared.drive.createText(c.folder.id, 'Pile note.md', 'an unbound note, listed first');
+      await declared.drive.trash(context.id);
+      await declared.drive.createText(c.folder.id, 'Pile note.md', '---\nsummary: Papers \ud800\n---\nPapers about the lease', { bowerItem: key });
+      expect((await inboxOf(declared)).find((p) => p.id === c.pileId)?.setAside, 'declared context, Inbox').toBe('not-checked');
+      expect(captured(await plan(declared), c.folder), 'declared context, tidy-up').toBe(false);
+    });
+
     it('grounds the root only as the parent of a folder the run makes', async () => {
       const w = await bWorld();
       const out = await plan(w);
