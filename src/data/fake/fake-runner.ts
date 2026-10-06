@@ -277,7 +277,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const listing = await drive.listAll(rootId);
   const ix = VaultIndex.build(rootId, listing);
   const lines = await journalOf(drive, ix);
-  if (!Array.isArray(lines)) return legacy(lines.why);
   let journal = lines;
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
@@ -974,7 +973,7 @@ type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string };
  * taken; the others wait for the next run. A Drive read failure refuses the
  * plan before admission.
  */
-async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[] | { why: string }> {
+async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[]> {
   const copies = new Map<string, Array<{ rec: JournalRecord; file: DriveFile; sha256: string }>>();
   let left = 0;
   for (const f of ix.journalFiles()) {
