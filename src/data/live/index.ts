@@ -375,19 +375,8 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   if (guard) {
     const signOut = session.signOut.bind(session);
     // Signing out lets the lease go, so the next place (or person) starts without asking.
-    session.signOut = async (): Promise<void> => {
-      // Only an active place has a lease to let go; a blocked one stays blocked until signing out is done.
-      const was = guard.state();
-      if (was === 'active') await guard.leave().catch((e: unknown) => console.error(e));
-      try {
-        await signOut();
-      } catch (e) {
-        // Still signed in here: an active place takes its lease back.
-        if (was === 'active') void guard.start().catch((err: unknown) => console.error(err));
-        throw e;
-      }
-      guard.reset();
-    };
+    // A failed sign-out leaves the place as it was: active (its lease taken back) or blocked.
+    session.signOut = (): Promise<void> => guard.leaveFor(signOut);
     const leaveBower = session.deleteAccount.bind(session);
     session.deleteAccount = async (): Promise<void> => {
       await leaveBower();

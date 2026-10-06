@@ -8,7 +8,9 @@
  *   another place let expire, is granted to whoever checks, with a higher
  *   epoch; a live lease held by another place answers `active: false`.
  * - `take` always moves the lease to the place, with a higher epoch.
- * - `leave` by the holder frees it at once (the epoch stays).
+ * - `leave` by the holder frees it at once (the epoch stays). A `check` by
+ *   the place that left, with nobody in between, takes it back with the
+ *   same epoch (a failed sign-out, a reload); any other grant raises it.
  */
 import { LEASE_TTL_MS, createPlaceGuard, sessionBus, type LeaseReply, type PlaceDeps, type PlaceGuard, type PlaceOptions, type SessionAction } from '../session';
 
@@ -16,6 +18,8 @@ export interface LeaseRecord {
   holder: string | null;
   epoch: number;
   beatAt: number;
+  /** The place that let it go, while nobody else has had it since. */
+  left?: string;
 }
 
 export interface FakeLeaseOptions {
@@ -36,7 +40,7 @@ const FREE: LeaseRecord = { holder: null, epoch: 0, beatAt: 0 };
 const isRecord = (v: unknown): v is LeaseRecord => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const r = v as Record<string, unknown>;
-  return (r.holder === null || typeof r.holder === 'string') && typeof r.epoch === 'number' && Number.isSafeInteger(r.epoch) && r.epoch >= 0 && typeof r.beatAt === 'number' && Number.isFinite(r.beatAt);
+  return (r.holder === null || typeof r.holder === 'string') && typeof r.epoch === 'number' && Number.isSafeInteger(r.epoch) && r.epoch >= 0 && typeof r.beatAt === 'number' && Number.isFinite(r.beatAt) && (r.left === undefined || typeof r.left === 'string');
 };
 
 export class FakeLease {
@@ -54,12 +58,12 @@ export class FakeLease {
     const lease = this.read();
     const live = this.live(lease);
     if (action === 'leave') {
-      if (lease.holder === place) this.write({ ...lease, holder: null });
+      if (lease.holder === place) this.write({ holder: null, epoch: lease.epoch, beatAt: lease.beatAt, left: place });
       return { active: false, epoch: lease.epoch };
     }
-    // Back after the TTL with nobody in between: the same epoch carries on (TL-P2-25).
-    if (action === 'check' && lease.holder === place) {
-      this.write({ ...lease, beatAt: this.now() });
+    // Back after the TTL with nobody in between, or back after letting it go: the same epoch carries on (TL-P2-25).
+    if (action === 'check' && (lease.holder === place || (lease.holder === null && lease.left === place))) {
+      this.write({ holder: place, epoch: lease.epoch, beatAt: this.now() });
       return { active: true, epoch: lease.epoch };
     }
     if (action === 'take' || !live) {

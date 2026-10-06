@@ -887,6 +887,130 @@ describe('review findings and TL-P2-25: blocked is not closed, nothing stale lan
     expect(leaseOn(w.storage, w.clock).read().holder).toBeNull();
   });
 
+  it('a failed sign-out never shows another state, not even for a moment', async () => {
+    const w = await world();
+    const a = page(w, 'laptop', browser());
+    await a.place.start();
+    await drain();
+    const seen: string[] = [];
+    a.place.subscribe(() => seen.push(a.place.state()));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(a.worker, 'signOut').mockRejectedValueOnce(new BowerError('offline', "You're offline."));
+    await expect(a.live.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+    // Settled with the rejection itself: nothing left to happen later.
+    expect(a.place.state()).toBe('active');
+    expect(seen).not.toContain('starting');
+    expect(leaseOn(w.storage, w.clock).read().holder).toBe('laptop');
+    await expect(a.place.verify(true)).resolves.toBeUndefined();
+    await a.live.session.signOut();
+    expect(a.place.state()).toBe('starting');
+    expect(leaseOn(w.storage, w.clock).read().holder).toBeNull();
+  });
+
+  it('a failed sign-out asks the lease afresh, never trusting a check that began before it let go', async () => {
+    const w = await world();
+    const a = page(w, 'laptop', browser());
+    await a.place.start();
+    await drain();
+    const order: string[] = [];
+    const real = a.worker.session.bind(a.worker);
+    let hold: ((r: { active: boolean; epoch: number }) => void) | null = null;
+    vi.spyOn(a.worker, 'session').mockImplementation(async (p, action) => {
+      order.push(action);
+      if (action === 'check' && !hold && order.length === 1) return new Promise((r) => (hold = r));
+      return real(p, action);
+    });
+    // A heartbeat check starts and is slow to answer.
+    await w.clock.advance(HEARTBEAT_MS);
+    expect(order).toEqual(['check']);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(a.worker, 'signOut').mockImplementationOnce(async () => {
+      // Its stale answer (from before the lease was let go) arrives only after the failure.
+      setTimeout(() => hold?.({ active: true, epoch: 1 }), 5);
+      throw new BowerError('offline', "You're offline.");
+    });
+    await expect(a.live.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+    expect(order.slice(order.indexOf('leave'))).toEqual(['leave', 'check']);
+    expect(a.place.state()).toBe('active');
+  });
+
+  it('a failed sign-out keeps the same epoch when nobody took the lease, and reads everything again when someone did', async () => {
+    const w = await world();
+    const a = page(w, 'laptop', browser());
+    await a.place.start();
+    await drain();
+    const first = a.place.epoch();
+    const refresh = vi.spyOn(a.live.vault, 'refresh');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(a.worker, 'signOut').mockRejectedValueOnce(new BowerError('offline', "You're offline."));
+    await expect(a.live.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+    expect(a.place.state()).toBe('active');
+    expect(a.place.epoch()).toBe(first);
+    expect(refresh).not.toHaveBeenCalled();
+    vi.spyOn(a.worker, 'signOut').mockImplementationOnce(async () => {
+      // Meanwhile the phone took the lease and let it go again.
+      await leaseOn(w.storage, w.clock).session('phone', 'take');
+      await leaseOn(w.storage, w.clock).session('phone', 'leave');
+      throw new BowerError('offline', "You're offline.");
+    });
+    await expect(a.live.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+    expect(a.place.state()).toBe('active');
+    expect(a.place.epoch()).not.toBe(first);
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it.each(['succeeds', 'fails'] as const)('a heartbeat check that began before a sign-out that %s is ignored when it answers', async (outcome) => {
+    const w = await world();
+    const a = page(w, 'laptop', browser());
+    await a.place.start();
+    await drain();
+    const first = a.place.epoch() ?? 0;
+    const real = a.worker.session.bind(a.worker);
+    let answer: ((r: { active: boolean; epoch: number }) => void) | null = null;
+    vi.spyOn(a.worker, 'session').mockImplementation(async (p, action) => {
+      if (action === 'check' && answer === null) return new Promise((r) => (answer = r));
+      return real(p, action);
+    });
+    // A heartbeat check starts and is slow to answer.
+    await w.clock.advance(HEARTBEAT_MS);
+    expect(answer).not.toBeNull();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const told: string[] = [];
+    a.place.subscribe(() => told.push(a.place.state()));
+    const remembered = (): string[] => Object.keys(sessionStorage).filter((k) => k.startsWith('bower:place-epoch:'));
+    const signOut = a.worker.signOut.bind(a.worker);
+    // It answers for before (the lease was this place's, at the first epoch) while signing out.
+    const late = (): void => void setTimeout(() => answer?.({ active: true, epoch: first }), 0);
+    if (outcome === 'succeeds') {
+      vi.spyOn(a.worker, 'signOut').mockImplementationOnce(async () => {
+        late();
+        await new Promise((r) => setTimeout(r, 10));
+        return signOut();
+      });
+      await a.live.session.signOut();
+      await drain();
+      expect(a.place.state()).toBe('starting');
+      expect(a.place.epoch()).toBeNull();
+      expect(remembered()).toEqual([]);
+      expect(told).not.toContain('elsewhere');
+    } else {
+      // Someone took the lease and let it go while signing out: the take-back has a new epoch.
+      vi.spyOn(a.worker, 'signOut').mockImplementationOnce(async () => {
+        await leaseOn(w.storage, w.clock).session('phone', 'take');
+        await leaseOn(w.storage, w.clock).session('phone', 'leave');
+        late();
+        throw new BowerError('offline', "You're offline.");
+      });
+      await expect(a.live.session.signOut()).rejects.toMatchObject({ code: 'offline' });
+      await drain();
+      const now = a.place.epoch();
+      expect(now).not.toBe(first);
+      expect(a.place.state()).toBe('active');
+      expect(told).not.toContain('elsewhere');
+      expect(leaseOn(w.storage, w.clock).read()).toMatchObject({ holder: 'laptop', epoch: now });
+    }
+  });
+
   it('leaving Bower lets the lease go and the place starts again', async () => {
     const w = await world();
     const a = page(w, 'laptop', browser());

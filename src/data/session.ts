@@ -177,6 +177,11 @@ export interface PlaceGuard extends PlaceSource {
   verify(fresh?: boolean): Promise<void>;
   /** Lets the lease go (closing page, sign-out); the place starts again later. */
   leave(): Promise<void>;
+  /**
+   * Signing out: lets the lease go, runs `work`, and only then forgets this place. When `work` fails the
+   * place stays as it was (an active one takes its lease back before the failure is heard).
+   */
+  leaveFor<T>(work: () => Promise<T>): Promise<T>;
   /** Forgets this place's state without asking the Worker (the person is gone). */
   reset(): void;
   /** The Worker refused this place because another one is active: it blocks at once. */
@@ -207,6 +212,10 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
   /** Bumped on every lock request and release, so a late steal of an old lock blocks nothing. */
   let lockGen = 0;
   let disposed = false;
+  /** A sign-out in progress from this active place (see `leaveFor`). */
+  let leaving: Promise<unknown> | null = null;
+  /** Bumped whenever this place lets its lease go (sign-out, leave, reset): an answer to a check begun before says nothing now. */
+  let leaveGen = 0;
 
   const emit = (): void => listeners.forEach((l) => l());
   const lockName = (s: string): string => `bower-place:${s}`;
@@ -338,18 +347,30 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
     block();
   }
 
+  /** Renews the lease every HEARTBEAT_MS while this place is active. */
+  function beat(): void {
+    stopBeat();
+    stopBeat = clock.every(HEARTBEAT_MS, () => {
+      const gen = leaveGen;
+      void ask('check').then(
+        (reply) => {
+          // Begun before a leave: its answer says nothing about the lease now.
+          if (gen === leaveGen) judge(reply);
+        },
+        (e: unknown) => {
+          // expected: offline, a place keeps working into its outbox; the next beat asks again.
+          if (!(e instanceof BowerError && e.code === 'offline')) console.error(e);
+        },
+      );
+    });
+  }
+
   async function activate(epoch: number | null, confirmed: boolean, how: ActiveHow): Promise<void> {
     state = 'active';
     held = epoch;
     confirmedAt = confirmed ? clock.now() : Number.NEGATIVE_INFINITY;
     if (confirmed && epoch !== null) remember(epoch);
-    stopBeat();
-    stopBeat = clock.every(HEARTBEAT_MS, () => {
-      void verify(true).catch((e: unknown) => {
-        // expected: offline, a place keeps working into its outbox; a lost lease has blocked it already.
-        if (!(e instanceof BowerError && (e.code === 'offline' || isOpenElsewhere(e)))) console.error(e);
-      });
-    });
+    beat();
     emit();
     try {
       await deps.onActive?.(how);
@@ -364,15 +385,51 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
     }
   }
 
+  /**
+   * Still signed in after all: the lease this place let go comes back, or another place has it now. It asks
+   * afresh (a check that began before the lease was let go may answer for then); a different epoch means
+   * another place had it meanwhile, so the data is read again as after Use here.
+   */
+  /** Answers whether the data must be read again (the epoch moved on); the caller does it once signing out is over. */
+  async function takeBack(before: number | null): Promise<boolean> {
+    if (state !== 'active' || disposed) return false;
+    let moved = false;
+    try {
+      const reply = await deps.lease(place, 'check');
+      if (state !== 'active' || disposed) return false;
+      if (!reply.active) {
+        block();
+        return false;
+      }
+      held = reply.epoch;
+      confirmedAt = clock.now();
+      remember(reply.epoch);
+      moved = before !== null && reply.epoch !== before;
+    } catch (e) {
+      // Offline: it carries on unconfirmed; the next check takes the lease back or finds it taken.
+      if (!(e instanceof BowerError && e.code === 'offline')) console.error(e);
+      held = null;
+      confirmedAt = Number.NEGATIVE_INFINITY;
+    }
+    beat();
+    return moved;
+  }
+
   async function verify(fresh = false): Promise<void> {
     if (disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
+    // Signing out: a write waits for how it ends (gone, or this place carries on with its lease taken back).
+    // expected: leaving's own caller hears its failure; here only the outcome matters.
+    if (leaving) await leaving.then(() => undefined, () => undefined);
     if (state === 'starting') {
       if (!starting) throw NOT_READY();
       await starting;
     }
     if (state !== 'active') throw openElsewhere();
     if (!fresh && clock.now() - confirmedAt < TRUST_MS) return;
+    const gen = leaveGen;
     const reply = await ask('check');
+    // Begun before a leave: ask again for how things stand now.
+    if (gen !== leaveGen) return verify(fresh);
     judge(reply);
     if (state !== 'active') throw openElsewhere();
   }
@@ -390,6 +447,7 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
           return state;
         }
         let reply: LeaseReply | null = null;
+        const gen = leaveGen;
         try {
           reply = await ask('check');
         } catch (e) {
@@ -399,8 +457,8 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
             throw e;
           }
         }
-        // Disposed meanwhile, or another start/reset decided: this answer activates nothing.
-        if (disposed || state !== 'starting') {
+        // Disposed meanwhile, another start/reset decided, or a leave since: this answer activates nothing.
+        if (disposed || state !== 'starting' || gen !== leaveGen) {
           if (disposed) letGo();
           return state;
         }
@@ -481,6 +539,60 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
         waiters.add({ resolve, reject });
       });
     },
+    async leaveFor<T>(work: () => Promise<T>): Promise<T> {
+      if (state !== 'active') {
+        // A blocked or starting place has no lease to let go: it stays as it is until the work is done.
+        const out = await work();
+        guard.reset();
+        return out;
+      }
+      // Active throughout: the lease goes first (the Worker may not hear this place after), the state and
+      // this browser's lock stay, so a failed sign-out never shows anything else (not even for a moment).
+      stopBeat();
+      stopBeat = () => undefined;
+      // Checks already on their way answer for before the leave: forget them.
+      leaveGen++;
+      checking = null;
+      const before = held;
+      /** This sign-out, so its own failure path can stop writes waiting for it. */
+      const mine: { p: Promise<unknown> | null } = { p: null };
+      const p = (async (): Promise<T> => {
+        try {
+          await deps.lease(place, 'leave');
+        } catch (e) {
+          // The TTL lets it go instead.
+          console.error(e);
+        }
+        forget();
+        let out: T;
+        try {
+          out = await work();
+        } catch (e) {
+          const moved = await takeBack(before);
+          // Signing out is over: writes stop waiting, and the reload below may write (the outbox).
+          if (leaving === mine.p) leaving = null;
+          if (moved && state === 'active') {
+            try {
+              await deps.onActive?.('take');
+            } catch (err) {
+              // The place is active; what failed to load says so on its own screen.
+              console.error(err);
+            }
+          }
+          throw e;
+        }
+        guard.reset();
+        return out;
+      })();
+      mine.p = p;
+      leaving = p;
+      const done = (): void => {
+        if (leaving === p) leaving = null;
+      };
+      // expected: only forgets the pending sign-out; its caller hears the failure.
+      p.then(done, done);
+      return p;
+    },
     async leave(): Promise<void> {
       const was = state;
       guard.reset();
@@ -489,6 +601,8 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
       await deps.lease(place, 'leave');
     },
     reset(): void {
+      leaveGen++;
+      checking = null;
       letGo();
       const changed = state !== 'starting';
       state = 'starting';
