@@ -45,3 +45,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: worker-skeleton passes — chore(harness): worker-skeleton passes (P3-2)
 - 2026-10-06: done-sh-api-paths passes — chore(harness): done-sh-api-paths passes (TL-P3-03)
 - 2026-10-06: focus-timers-after-teardown passes — chore(harness): focus-timers-after-teardown passes (P3-3)
+- 2026-10-06: worker-crypto-session passes — chore(harness): worker-crypto-session passes (P3-3)

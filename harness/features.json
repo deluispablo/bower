@@ -3690,7 +3690,7 @@
       "Every error code the Worker emits is listed in the contract and is kebab-case; a preflight with x-bower-place and x-bower-epoch from the app origin is allowed."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the envelope round-trips and refuses a tampered byte|a session cookie signed with the old secret is accepted after rotation|every error code the Worker emits is in the contract and kebab-case\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-04 (main 8feb090) with TL-P3-03 folded in."
   },
   {
