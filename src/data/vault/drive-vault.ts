@@ -533,11 +533,22 @@ export class DriveVault implements VaultSource {
       const recorded = recordedNote(kids, contextKey);
       // A note already found unreadable in this listing is not read (nor logged) again.
       const raw = locked && recorded === note ? null : recorded ? await this.rawText(recorded) : '';
+      // A note with text no record can carry is a damaged note (TL-P2-36 (9)): Remove, no Try again, never written
+      // over; logged once until it changes.
+      if (refused === null && raw !== null && !writable([raw])) {
+        refused = 'note-damaged';
+        const seen = recorded ? `${recorded.id}@${recorded.modifiedTime}` : '';
+        if (!this.refusalsLogged.has(seen)) {
+          this.refusalsLogged.add(seen);
+          console.error(new BowerError('unknown', SET_ASIDE_TEXT['note-damaged'], undefined, { cause: { kind: 'note-refused', refusal: 'damaged', reason: 'text-cannot-be-recorded' } }));
+        }
+      }
+      const noteLocked = locked || refused !== null;
       const setAside = refused ?? (unread || raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null);
       // Its note is shown read-only until a listing reads it (RFC 9110 §13.1.1: no update over an unseen version).
-      if (locked) this.lockedNotes.set(id, refused ? SET_ASIDE_TEXT[refused] : NOTE_LOCKED);
+      if (noteLocked) this.lockedNotes.set(id, refused ? SET_ASIDE_TEXT[refused] : NOTE_LOCKED);
       else this.lockedNotes.delete(id);
-      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(locked ? { noteLocked: true as const } : {}) });
+      out.push({ id, path, text: refused ? '' : text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(noteLocked ? { noteLocked: true as const } : {}) });
     }
     // A lone thing still on its way has no file yet: show it from here.
     for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });

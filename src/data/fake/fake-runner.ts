@@ -137,7 +137,13 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;
     }
-    if (!writable([folder.name, raw, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
+    // A note with text no record can carry is a damaged note, as in the Inbox (TL-P2-36 (9)).
+    if (!writable([raw])) {
+      console.error(new BowerError('unknown', SET_ASIDE.noteDamaged), 'A pile note has text no run record can carry');
+      out.set(pile.id, { blocked: SET_ASIDE.noteDamaged });
+      continue;
+    }
+    if (!writable([folder.name, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
       console.error(new BowerError('unknown', SET_ASIDE.notChecked), 'A pile has text no run record can carry; it waits as not checked');
       out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;
