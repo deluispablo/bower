@@ -390,7 +390,8 @@ function noteGrounded(manifest: RunManifest, c: ReportContribution, moveOp: Oper
 /**
  * A merge that fell back to ordinary filing (TL-P2-35): its move depends on no Timeline line (no merge was planned),
  * a captured answer's archive waits on that move (the answer it settles), and the row says, word for word, that it
- * could not be added to a captured note no operation touches, by that note's shown name.
+ * could not be added to a captured note no operation touches (but for clearing its "new" mark in place), by that
+ * note's shown name.
  */
 function onItsOwn(manifest: RunManifest, moveOp: OperationV2, why: string): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
@@ -398,7 +399,10 @@ function onItsOwn(manifest: RunManifest, moveOp: OperationV2, why: string): bool
   const settles = manifest.capture.journal.some((j) => manifest.operations.some((o) => o.effect.kind === 'move'
     && j.fileIds.includes(o.effect.before.fileId) && o.dependsOn.includes(moveOp.operationId)));
   if (!settles) return false;
-  const touched = new Set(manifest.operations.flatMap((o) => ('before' in o.effect ? [o.effect.before.fileId] : [])));
+  // Clearing last run's "new" mark in place (same parent and name, only that mark) leaves the note as it is.
+  const markOnly = (o: OperationV2): boolean => o.effect.kind === 'move' && 'fileId' in o.effect.parent && o.effect.parent.fileId === o.effect.before.parents[0]
+    && o.effect.name === o.effect.before.name && Object.keys(o.effect.properties).length === 1 && Object.hasOwn(o.effect.properties, 'bowerNew');
+  const touched = new Set(manifest.operations.flatMap((o) => ('before' in o.effect && !markOnly(o) ? [o.effect.before.fileId] : [])));
   return manifest.capture.places.some((p) => !p.file.folder && p.path.endsWith('.md') && !touched.has(p.file.fileId)
     && why === `Bower couldn't add it to ${displayName(nameOf(p.path))}, so it was filed on its own.`);
 }
