@@ -12,6 +12,7 @@ import { Icon } from '@/ui/Icon';
 import { useIsDesktop } from '@/ui/media';
 import { landedSummary } from './run-words';
 import { useBackCloses } from '@/ui/back';
+import { returnFocusTo } from '@/ui/focus';
 import s from './replay.module.css';
 
 /**
@@ -141,8 +142,7 @@ function Court({ items, summary, updated, onClose }: { items: FiledItem[]; summa
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      if (opener && document.contains(opener) && opener !== document.body) opener.focus();
-      else document.getElementById('main')?.focus();
+      returnFocusTo(opener);
     };
   }, [onClose]);
 
