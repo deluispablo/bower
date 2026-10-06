@@ -4,6 +4,8 @@ Current owner authorization: autonomous P2 completion, conditional P2 acceptance
 
 Revision: `2026-10-05-contracts-2`. Phase 2 delivers the complete app over simulated backend behavior. Its fake stack uses production app data logic and realistic persistence/failure contracts; the demo illustrates the experience. P3 supplies real backend services, and P4 supplies real semantic reasoning and research. A scripted result proves the app can carry and present a capability, not that a model can perform it well.
 
+**Owner fast-close ruling (2026-10-06):** [TL-P2-38](harness/2026-10-06-tl-p2-38-fast-close.md) narrows this contract. C04–C11 need one scripted journey each. C13, C15 and the quality corpus move to P4, and the R2–R4 real probes to P3. Minor findings do not block closure. Where this document differs, TL-P2-38 governs.
+
 ## Capability matrix
 
 Every row is a P2 acceptance obligation unless the owner explicitly narrows it in the decision register. “Planned” is not “passed.” Implementation coordinator maps rows to actual code, harness entries, named tests and frozen evaluation evidence. Existing green features may satisfy parts of a row; reuse valid evidence after checking interactions.
@@ -69,7 +71,7 @@ Observe contract-threatening real provider/executor assumptions through the boun
 ## P2 exit checklist
 
 - All C01–C16 rows have an explicit supported scope, named automated regressions, outcome evidence and applicable user evaluation. No untracked gap behind a green historical feature count.
-- All registered P2 entries pass with valid proofs; all reproduced findings are resolved or formally disproved. No known Critical, Important or Minor defect remains open. A scope removal requires an explicit owner decision; it is not a way to relabel a defect as passed.
+- All registered P2 entries pass with valid proofs; all reproduced findings are resolved or formally disproved. No known Critical or Important defect remains open; Minor findings go to the P2 polish list (TL-P2-38). A scope removal requires an explicit owner decision; it is not a way to relabel a defect as passed.
 - The four independent-review concerns are triaged on the current target: incomplete-pile loss, protected-section parsing, external-change refresh and stale run responses. Preserve their reproduction evidence.
 - `pnpm check`, full `pnpm e2e`, full `pnpm e2e:fake` and `pnpm e2e:pwa` pass on the same frozen implementation SHA. Explain each skip; no skipped required journey counts as coverage.
 - Independent reviewer and evaluator certify their stated scope on that SHA. Phone/desktop and console/error paths are covered; later relevant changes invalidate the affected evidence.
