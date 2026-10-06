@@ -307,6 +307,15 @@ export function writable(texts: readonly string[]): boolean {
   return canonicalRecordJson(texts).ok;
 }
 
+/**
+ * The one pile note a tidy-up records for a pile, and so the only one it reads: the note bound by the pile's context
+ * key when it is there, otherwise the first pile note. Any other pile note is an uncaptured child, never read.
+ */
+export function recordedNote(children: readonly DriveFile[], contextKey: string | null): DriveFile | undefined {
+  const bound = contextKey === null ? undefined : children.find((f) => !f.folder && f.appProperties?.[PROP.item] === contextKey);
+  return bound ?? children.find((f) => !f.folder && f.name === PILE_NOTE);
+}
+
 /** Whether the person put the pile's note in the Bin through Bower: a `trash` change for it in your changes. */
 export function contextRemoved(records: readonly unknown[], folderPath: string): boolean {
   return records.some((r) => isJournalRecord(r) && r.kind === 'trash' && r.path === `${folderPath}/${PILE_NOTE}`);

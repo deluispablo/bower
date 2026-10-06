@@ -16,7 +16,7 @@ import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } fr
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
-import { accountPile, contextRemoved, findDeclaration, journalValues, writable, type Digest } from '../pile-readiness';
+import { accountPile, contextRemoved, findDeclaration, journalValues, recordedNote, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -109,18 +109,19 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!pile.path || !folder?.folder) continue;
     const children = listing.filter((f) => f.parents[0] === folder.id);
-    // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21): names, words, and each
-    // pile note's raw text, front matter included, as the capture records it.
-    const raw: string[] = [];
-    for (const f of children) if (!f.folder && f.name === PILE_NOTE) raw.push(await drive.readText(f.id));
-    if (!writable([folder.name, pile.text, ...raw, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
+    const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
+    const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
+    const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id));
+    // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21): the names, and the raw
+    // text (front matter included) of the one note the run records. Another pile note is never read here.
+    const contextKey = found.state === 'found' && found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
+    const recorded = recordedNote(children, contextKey);
+    const raw = recorded ? await drive.readText(recorded.id) : '';
+    if (!writable([folder.name, raw, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
       console.error(new BowerError('unknown', SET_ASIDE.notChecked), 'A pile has text no run record can carry; it waits as not checked');
       out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;
     }
-    const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
-    const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
-    const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id));
     if (found.state === 'unmarked') {
       out.set(pile.id, { blocked: null, captured: new Set([...pile.items.map((i) => i.id), ...notes]) });
       continue;
