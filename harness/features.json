@@ -3612,5 +3612,31 @@
     "verify": "pnpm exec playwright test e2e/focus-after-close.spec.ts -g \"G1: a link from one note to another moves the keyboard to the new note|G2: signing out moves the keyboard to the sign-in page|focus: every route lands the keyboard on its h1\"",
     "passes": true,
     "note": "Important findings G1, G2 of the TL-P2-47 supplemental walk at 3e6e7da (docs/harness/2026-10-06-p2-supplemental-walk-3e6e7da.md). One P2 fix round. Lead amendment (main cc22bea): one router-level fix for every route change, plus a sensor over every route on demo and fake."
+  },
+  {
+    "id": "c11-no-policy-from-documents",
+    "task": "p3-1",
+    "category": "test",
+    "what": "C11: a source document whose text tells Bower to change a rule, preference or policy changes nothing; the document is filed as content.",
+    "steps": [
+      "Feed the fake runner a pile whose document says to add or remove a rule and change a preference.",
+      "Run the tidy-up: Rules.md and the preferences are byte-identical; the document is filed like any other source."
+    ],
+    "verify": "pnpm exec vitest run src/data/fake/fake-runner.test.ts -t \"a source document that tells Bower to change a rule is filed as content and changes nothing\"",
+    "passes": false,
+    "note": "TL-P3-01 batch P3-1. Red first on an assertion with the guard removed."
+  },
+  {
+    "id": "no-console-errors-on-journeys",
+    "task": "p3-1",
+    "category": "test",
+    "what": "C16: the C04–C11 journeys and the route-focus sensor fail on any console.error or pageerror not on a short, named allowlist, on demo and fake.",
+    "steps": [
+      "An e2e fixture collects console.error and pageerror for every test that uses it.",
+      "An unexpected error fails the test with the message; allowlisted entries carry a reason; expected BowerError logs are allowed only inside their own failure-path tests."
+    ],
+    "verify": "pnpm exec playwright test e2e/console-guard.spec.ts -g \"console guard: an unexpected console error fails the test|console guard: an allowlisted error passes with its reason\"",
+    "passes": false,
+    "note": "TL-P3-01 batch P3-1. The C04–C11 journeys (e2e/capabilities*.spec.ts) and e2e/focus-after-close.spec.ts adopt the fixture."
   }
 ]
