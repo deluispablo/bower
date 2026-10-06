@@ -3703,7 +3703,7 @@
       "Two people's objects never see each other's rows."
     ],
     "verify": "pnpm -C api exec vitest run -t \"one person's calls run one at a time|two people never see each other's rows\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-04 (main 8feb090). TL-P2-05: people are keyed by sub."
   },
   {
