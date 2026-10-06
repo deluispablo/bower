@@ -1442,6 +1442,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
   const SAID = {
     'not-arrived': 'Some of its things have not arrived yet.',
     'not-checked': 'Bower could not check some of its things. Try again.',
+    unreadable: 'Bower could not read the list of what is in this pile. Try again.',
     changed: 'Some of its things changed after they were added. Remove it and add them again.',
     declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
     empty: 'Nothing is left in it. Remove it from your inbox.',
@@ -1651,6 +1652,62 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(seen?.setAside).toBe('empty');
     expect(seen?.items).toEqual([]);
     expect(await runnerSays(pile.id)).toBe(SAID.empty);
+  });
+
+  // declaration-read-isolation (TL-P2-08 (a)): one list that cannot be read, or is damaged, is a bulkhead of its own pile.
+  it('an unreadable declaration affects only its own pile', async () => {
+    const uploader = declaring();
+    const healthy = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    const unreadable = await uploader.addPile({ text: 'Letters from Alex', items: [pdf('b.pdf')] });
+    const damaged = await uploader.addPile({ text: 'Receipts from Alex', items: [pdf('c.pdf')] });
+    await uploader.settled();
+    const declarationOf = async (pileId: string) => {
+      const id = (await folderOf(pileId)).appProperties?.bowerDeclaration;
+      const f = (await drive.listAll(root)).find((x) => !x.folder && drive.pathOf(x.id, root).startsWith('.bower/piles/') && x.name.startsWith(`declaration-${id}-`));
+      if (!id || !f) throw new Error('no declaration');
+      return f;
+    };
+    const failure = driveError('offline');
+    const unreadableId = (await declarationOf(unreadable.id)).id;
+    const damagedFile = await declarationOf(damaged.id);
+    await drive.writeText(damagedFile.id, '{"v":1,', damagedFile.modifiedTime);
+    const real = drive.readBytes.bind(drive);
+    vi.spyOn(drive, 'readBytes').mockImplementation(async (id) => {
+      if (id === unreadableId) throw failure;
+      return real(id);
+    });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const other = declaring();
+    const listing = other.piles();
+    // The Inbox lists every pile: one list that cannot be read never fails the whole listing.
+    await expect(listing).resolves.toBeInstanceOf(Array);
+    const listed = await listing;
+    expect([healthy.id, unreadable.id, damaged.id].map((id) => listed.find((p) => p.id === id)?.setAside)).toEqual([undefined, 'unreadable', 'unreadable']);
+    // Never treated as undeclared: their things are listed as they are, with the reason and Try again.
+    expect(listed.find((p) => p.id === unreadable.id)?.items.map((i) => [i.name, i.upload])).toEqual([['b.pdf', undefined]]);
+    expect(listed.find((p) => p.id === damaged.id)?.items.map((i) => [i.name, i.upload])).toEqual([['c.pdf', undefined]]);
+    // Listed again, and checked again on Try again: each failure is logged once, not on every listing.
+    await other.refresh();
+    await other.piles();
+    await other.retryPile(unreadable.id);
+    expect((await pileOn(other, unreadable.id))?.setAside).toBe('unreadable');
+    expect(errors.mock.calls.filter(([e]) => e === failure)).toHaveLength(1);
+    expect(errors.mock.calls.filter(([e]) => e instanceof BowerError && e !== failure && /declaration/.test(e.message))).toHaveLength(1);
+    // A tidy-up takes the healthy pile, and leaves the two others and their things exactly as they were.
+    const names = await Promise.all([unreadable.id, damaged.id].map(async (id) => (await folderOf(id)).name));
+    const folders = await Promise.all([unreadable.id, damaged.id].map(folderOf));
+    const theirs = new Set(folders.map((f) => f.id));
+    for (const f of folders) for (const k of await drive.listAll(f.id)) theirs.add(k.id);
+    type Snap = { files: Array<{ meta: { id: string }; trashed: boolean }> };
+    const before = (JSON.parse(await drive.snapshot()) as Snap).files.filter((f) => theirs.has(f.meta.id));
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    expect(out.phase).toBe('done');
+    if (out.phase !== 'done') return;
+    expect(out.report.filed.map((f) => f.name)).toContain('a.pdf');
+    expect(out.report.filed.map((f) => f.name)).not.toEqual(expect.arrayContaining(['b.pdf']));
+    expect(out.report.filed.map((f) => f.name)).not.toEqual(expect.arrayContaining(['c.pdf']));
+    expect(names.map((n) => out.report.setAside.find((s) => s.name === n)?.why)).toEqual([SAID.unreadable, SAID.unreadable]);
+    expect((JSON.parse(await drive.snapshot()) as Snap).files.filter((f) => theirs.has(f.meta.id))).toEqual(before);
   });
 
   it('a pile with no declaration, and a ready one, have no reason', async () => {

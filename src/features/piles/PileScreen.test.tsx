@@ -77,6 +77,14 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     await waitFor(() => expect(retry).toHaveBeenCalledWith('p-unchecked'));
   });
 
+  it('a list Bower could not read: its own sentence and Try again, which reads it again now', async () => {
+    const retry = screenFor({ ...notArrived, id: 'p-unreadable', setAside: 'unreadable', items: [{ id: 'd', name: 'd.pdf', kind: 'pdf', origin: 'From this computer' }] });
+    expect(await screen.findByText('Bower could not read the list of what is in this pile. Try again.')).toBeVisible();
+    expect(screen.queryByText('Bower could not check some of its things. Try again.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(retry).toHaveBeenCalledWith('p-unreadable'));
+  });
+
   it('an empty pile is called an empty pile, not your note', async () => {
     screenFor({ id: 'p-empty', path: 'Inbox/2026-10-06 Old', text: '', createdAt: Date.now(), setAside: 'empty', items: [] });
     expect(await screen.findByRole('heading', { level: 1, name: 'An empty pile' })).toBeVisible();

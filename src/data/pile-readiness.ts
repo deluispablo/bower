@@ -12,7 +12,7 @@ import { canonicalRecordJson, hashRecordJson } from './contracts/record-json';
 import { PILE_NOTE, safeInboxName } from './piles';
 import { isJournalRecord } from './vault/journal';
 import { PROP, SYSTEM } from './vault/layout';
-import type { SetAside } from './types';
+import { BowerError, type SetAside } from './types';
 
 export type ReadBytes = (id: string) => Promise<Uint8Array>;
 
@@ -38,8 +38,13 @@ export type DeclarationLookup =
   | { state: 'unmarked' }
   /** Marked, but no copy of its declaration is there. */
   | { state: 'missing' }
-  /** Copies that differ, or one that does not match its name, its folder or the contract. */
-  | { state: 'conflict' };
+  /** Copies that differ, or a declaration about another pile or folder. */
+  | { state: 'conflict' }
+  /**
+   * A copy that could not be read, or whose bytes are not the declaration its name says (TL-P2-08 (a)).
+   * Only its own pile waits, and it is never taken for an undeclared one; `error` is for the console.
+   */
+  | { state: 'unreadable'; error: BowerError };
 
 export type MemberState =
   | { memberKey: string; state: 'missing' }
@@ -100,7 +105,11 @@ export function shownName(member: Pick<Member, 'name' | 'kind'>): string {
  * The declaration a pile folder names, found by real parents (`.bower` →
  * `piles`, duplicates included), never by a disambiguated path. Identical
  * copies are one; anything else refuses. Parsed copies are kept in `cache`
- * by file id and modified time, since a declaration never changes.
+ * by file id and modified time, since a declaration never changes. A copy
+ * that cannot be read, or is damaged, makes only this pile `unreadable` (a
+ * bulkhead: the rest of the inbox is still listed); a failed read is not kept,
+ * so the next look reads it again. Signed out is not a pile's problem: it is
+ * thrown.
  */
 export async function findDeclaration(files: readonly DriveFile[], rootId: string, folder: DriveFile, read: ReadBytes, cache?: Map<string, DeclarationResult>): Promise<DeclarationLookup> {
   const declarationId = folder.appProperties?.[PROP.declaration];
@@ -116,11 +125,20 @@ export async function findDeclaration(files: readonly DriveFile[], rootId: strin
     const key = `${copy.id}@${copy.modifiedTime}`;
     let parsed = cache?.get(key);
     if (!parsed) {
-      parsed = await parsePileDeclaration(await read(copy.id), rootId);
+      let bytes: Uint8Array;
+      try {
+        bytes = await read(copy.id);
+      } catch (e) {
+        if (e instanceof BowerError && e.code === 'auth') throw e;
+        return { state: 'unreadable', error: e instanceof BowerError ? e : new BowerError('unknown', `A pile declaration could not be read (${String(e)}).`) };
+      }
+      parsed = await parsePileDeclaration(bytes, rootId);
       cache?.set(key, parsed);
     }
-    if (!HASH.test(hash) || !parsed.ok || parsed.sha256 !== hash || parsed.value.declarationId !== declarationId) {
-      console.error(`A pile declaration copy was refused (${parsed.ok ? 'name' : parsed.reason}).`);
+    // Bytes that are not a declaration, or not the one the name hashes: a damaged copy.
+    if (!parsed.ok || !HASH.test(hash) || parsed.sha256 !== hash) return { state: 'unreadable', error: new BowerError('unknown', `A pile declaration copy was refused (${parsed.ok ? 'name' : parsed.reason}).`) };
+    if (parsed.value.declarationId !== declarationId) {
+      console.error('A pile declaration copy was refused (id).');
       return { state: 'conflict' };
     }
     found.set(parsed.sha256, parsed.value);
@@ -252,13 +270,13 @@ export async function accountPile(declaration: Declaration, declarationSha256: s
 }
 
 /**
- * The approved sentence for each reason (TL-P2-11 (1), TL-P2-19); the same
+ * The approved sentence for each reason (TL-P2-11 (1), TL-P2-19, TL-P2-30); the same
  * words the tidy-up's report gives. "Remove" names the pile's own Remove button.
  */
 export const SET_ASIDE_TEXT: Readonly<Record<SetAside, string>> = {
   'not-arrived': 'Some of its things have not arrived yet.',
   'not-checked': 'Bower could not check some of its things. Try again.',
-  unreadable: 'Bower could not check some of its things. Try again.',
+  unreadable: 'Bower could not read the list of what is in this pile. Try again.',
   changed: 'Some of its things changed after they were added. Remove it and add them again.',
   declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
   empty: 'Nothing is left in it. Remove it from your inbox.',
@@ -273,7 +291,8 @@ export const SET_ASIDE_TEXT: Readonly<Record<SetAside, string>> = {
 export function setAsideOf(lookup: DeclarationLookup['state'], blocked: Blocked, left: { things: number; text: string; restore: boolean }): SetAside | null {
   if (lookup === 'unmarked') return null;
   if (lookup === 'conflict') return 'declaration';
-  // Marked, but no list of it is there to check against.
+  // A list that cannot be read, or is damaged, says so (TL-P2-30 (b)); one not there to check against: Try again.
+  if (lookup === 'unreadable') return 'unreadable';
   if (lookup === 'missing') return 'not-checked';
   if (blocked) return blocked;
   return !left.things && !left.text.trim() && !left.restore ? 'empty' : null;

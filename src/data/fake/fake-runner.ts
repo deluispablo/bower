@@ -64,7 +64,7 @@ const UPDATES = [
 export const SET_ASIDE = {
   notArrived: 'Some of its things have not arrived yet.',
   notChecked: 'Bower could not check some of its things. Try again.',
-  unreadable: 'Bower could not check some of its things. Try again.',
+  unreadable: 'Bower could not read the list of what is in this pile. Try again.',
   changed: 'Some of its things changed after they were added. Remove it and add them again.',
   declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
   empty: 'Nothing is left in it. Remove it from your inbox.',
@@ -115,8 +115,9 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: null, captured: new Set([...pile.items.map((i) => i.id), ...notes]) });
       continue;
     }
+    // A list that cannot be read holds only its own pile (TL-P2-08 (a)); the reader's listing logged it once.
     if (found.state !== 'found') {
-      out.set(pile.id, { blocked: found.state === 'conflict' ? SET_ASIDE.declaration : SET_ASIDE.notChecked });
+      out.set(pile.id, { blocked: found.state === 'conflict' ? SET_ASIDE.declaration : found.state === 'unreadable' ? SET_ASIDE.unreadable : SET_ASIDE.notChecked });
       continue;
     }
     // The accounting the Inbox shares: disposed members are filed, the rest looked up (TL-P2-29 second amendment).

@@ -96,6 +96,8 @@ export class DriveVault implements VaultSource {
   /** Declarations never change: each copy is read once, by file id and modified time. */
   private declarationCache = new Map<string, DeclarationResult>();
   private dispositionCache = new Map<string, DispositionResult>();
+  /** Pile folders whose declaration could not be read, already logged: once per failure, not per listing. */
+  private unreadableLogged = new Set<string>();
   /** Sizes and hashes of files already checked, by file id and modified time. */
   private digests = new Map<string, Digest>();
   private ix: Promise<VaultIndex> | null = null;
@@ -562,6 +564,12 @@ export class DriveVault implements VaultSource {
   private async declarationOf(folder: DriveFile, files: readonly DriveFile[]): Promise<DeclarationLookup> {
     const found = await findDeclaration(files, await this.rootId(), folder, (id) => this.drive.readBytes(id), this.declarationCache);
     this.checkCurrent();
+    // Only this pile waits (TL-P2-08 (a)); its failure is logged once, until its list can be read again.
+    if (found.state !== 'unreadable') this.unreadableLogged.delete(folder.id);
+    else if (!this.unreadableLogged.has(folder.id)) {
+      this.unreadableLogged.add(folder.id);
+      console.error(found.error);
+    }
     return found;
   }
 

@@ -31,6 +31,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     { id: 'missing', path: 'Inbox/Receipts', text: 'Receipts', createdAt: at - 1, setAside: 'not-arrived', items: [thing('c', { upload: -1 })] },
     { id: 'lists', path: 'Inbox/Letters', text: 'Letters', createdAt: at - 2, setAside: 'declaration', items: [thing('d')] },
     { id: 'unchecked', path: 'Inbox/Scans', text: 'Scans', createdAt: at - 3, setAside: 'not-checked', items: [thing('e')] },
+    { id: 'unreadable', path: 'Inbox/Forms', text: 'Forms', createdAt: at - 3, setAside: 'unreadable', items: [thing('g')] },
     { id: 'empty', path: 'Inbox/Old', text: '', createdAt: at - 4, setAside: 'empty', items: [] },
     { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: at - 5, items: [thing('f')] },
     { id: 'note', path: 'Inbox/Bins', text: 'Bins go out on Tuesday', createdAt: at - 6, items: [] },
@@ -70,12 +71,16 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(within(rowOf('Receipts')).getByText('Some of its things have not arrived yet.')).toBeVisible();
     expect(within(rowOf('Letters')).getByText('Bower found two different lists of what is in this pile. Remove it and add it again.')).toBeVisible();
     expect(within(rowOf('Scans')).getByText('Bower could not check some of its things. Try again.')).toBeVisible();
+    expect(within(rowOf('Forms')).getByText('Bower could not read the list of what is in this pile. Try again.')).toBeVisible();
     expect(screen.getByText('Nothing is left in it. Remove it from your inbox.')).toBeVisible();
     expect(rowOf('Ready to file').textContent).not.toMatch(/Remove|Try again/);
     // Could not check is no dead end: Try again checks again now (TL-P2-19).
     expect(within(rowOf('Scans')).queryByRole('button', { name: 'Remove this pile' })).toBeNull();
     fireEvent.click(within(rowOf('Scans')).getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(retryPile).toHaveBeenCalledWith('unchecked'));
+    // A list Bower could not read is no dead end either: its Try again reads it again now (TL-P2-30).
+    fireEvent.click(within(rowOf('Forms')).getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(retryPile).toHaveBeenCalledWith('unreadable'));
     // Remove is the pile's own Remove, with its question first.
     expect(within(rowOf('Letters')).getByRole('button', { name: 'Remove this pile' })).toBeVisible();
     fireEvent.click(within(rowOf('Papers from Alex')).getByRole('button', { name: 'Remove this pile' }));

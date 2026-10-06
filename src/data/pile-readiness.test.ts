@@ -7,6 +7,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(SET_ASIDE_TEXT).toEqual({
       'not-arrived': SET_ASIDE.notArrived,
       'not-checked': SET_ASIDE.notChecked,
+      unreadable: SET_ASIDE.unreadable,
       changed: SET_ASIDE.changed,
       declaration: SET_ASIDE.declaration,
       empty: SET_ASIDE.empty,
@@ -19,6 +20,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(setAsideOf('unmarked', null, none)).toBeNull();
     expect(setAsideOf('conflict', null, some)).toBe('declaration');
     expect(setAsideOf('missing', null, some)).toBe('not-checked');
+    expect(setAsideOf('unreadable', null, none)).toBe('unreadable');
     expect(setAsideOf('found', 'changed', none)).toBe('changed');
     expect(setAsideOf('found', 'not-arrived', some)).toBe('not-arrived');
     expect(setAsideOf('found', 'not-checked', some)).toBe('not-checked');
