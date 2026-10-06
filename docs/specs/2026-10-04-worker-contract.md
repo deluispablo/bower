@@ -45,6 +45,8 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 - **Leaving.** The app sends `leave` on `pagehide` with `fetch(..., { keepalive: true })`.
 - **Leaving Bower.** `DELETE /me` releases the person's lease.
 - **Coming back.** A holder whose lease expired, and that nobody took, takes it again without asking.
+- **Checking after leaving.** A `check` by the same place right after its own `leave`, with no grant in between, returns the same epoch. Any other grant raises it.
+- **Late replies.** The client ignores replies to checks that started before its latest `leave`.
 
 ```ts
 interface RunWire {
