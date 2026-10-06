@@ -4228,6 +4228,20 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await pendingAnswers(w)).toEqual([]);
     });
 
+    // Review at r1 9e57a33: the note marked new by the last run gets its mark cleared in place; that is no touch.
+    it('files the thing on its own beside a refused note still marked new from the last run, on the B path', async () => {
+      const { w, into, link } = await merging();
+      await refusals[0]?.[1](w, into);
+      await w.drive.update(into.id, { appProperties: { bowerNew: '1' } });
+      const { manifest } = await tidy(w);
+      if (!manifest) return;
+      expect(grounded(manifest)).toBe(true);
+      expect((manifest.operations as OperationV2[]).some((o) => o.effect.kind === 'move' && o.effect.before.fileId === into.id && o.effect.properties.bowerNew === null)).toBe(true);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(`Projects/Flat hunt/${link.name}`);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: link.name, why: ALONE }]);
+      expect(asked(w)).toEqual(['q-keep']);
+    });
+
     it('keeps the answer and the question when a thing filed on its own is not moved after all', async () => {
       const { w, act, into, answer, link } = await merging();
       await refusals[1]?.[1](w, into);
