@@ -3208,5 +3208,19 @@
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"note edits past the size cap wait for the next run\"",
     "passes": false,
     "note": "From the o5-timeline-append review (M3 m7 8 MiB deferral, M4 m9 newer-Bower message). Needed before consumers with unbounded edits (link rewrites, merges). Planned, not implemented."
+  },
+  {
+    "id": "session-signout-helper",
+    "task": "qa-25",
+    "category": "bug",
+    "what": "Sign-out and leaving Bower release the session lease through one shared helper for every source, so demo and live cannot drift apart.",
+    "steps": [
+      "Sign out and leave Bower on demo, fake and (when wired) real.",
+      "The lease is released the same way on each, through one helper in the session module.",
+      "A failed sign-out keeps the same state rules on every source."
+    ],
+    "verify": "pnpm vitest run src/data/session.test.ts -t \"every source lets the lease go the same way\"",
+    "passes": false,
+    "note": "Minor M4 from screen-review-1: choose.ts leavingLetsGo duplicates live/index.ts sign-out lease logic. Planned, not implemented."
   }
 ]
