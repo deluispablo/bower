@@ -3108,8 +3108,8 @@
       "A lost reply on any of them reconciles without a second folder or a wrong name."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"destinations are planned once on the recoverable path\"",
-    "passes": false,
-    "note": "TL-P2-17: groups name mismatch + new-folder chain. Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-17: groups name mismatch + new-folder chain. Integrated by cherry-pick of claude/p2-b-dest (fix 04a8cd6 → bd48ad2; root grounding fc3da29 → ef685dd); review b-dest-review-1 CLEAN. Gates on 38a3dbc: check 3393, e2e 208, e2e:fake 218 (run 15:23-15:33 with the display awake)."
   },
   {
     "id": "fake-drive-reservation-saved",
