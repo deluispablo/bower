@@ -3500,7 +3500,7 @@
       "See the backlink in the cited note's Linked notes."
     ],
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C06: a project note cites what it is about\"",
-    "passes": false,
+    "passes": true,
     "note": "Plus e2e -g C06. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {
