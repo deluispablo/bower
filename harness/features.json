@@ -2555,8 +2555,8 @@
     ],
     "verify": "pnpm vitest run src/data/vault/note-format.test.ts -t \"protected sections retain prose and tasks outside the personal body\"",
     "task": "qa-13",
-    "passes": false,
-    "note": "Reproduced on 143ae2b by the O1 synthetic probe; named regression is planned, not implemented or executed. See docs/harness/evidence/2026-10-05-o1."
+    "passes": true,
+    "note": "Codex candidate 1015265/ca594e1/ed7d919/b3fcd07/5d521f1 integrated as 03cc5b1; review R-prose-1 BLOCKED (search/backlinks/Inbox broken by one unreadable note) then delta CLEAN 0C/0I/2M (docs/harness/2026-10-06-protected-prose-review.md). Ownership/2 (TL-P2-03) protected spans honoured by the shared reader; legacy/no-frontmatter unchanged; no v2 producer. Limits: raw-byte encoding detection, rich-state serialization, fake Timeline append downgrades v2, unreadable pile hidden from Inbox, Drive write safety."
   },
   {
     "id": "external-change-refresh",
