@@ -31,3 +31,4 @@ P3 replaces this preview with the real staging environment: Worker plus real ser
 **Deployments:**
 
 - 2026-10-06, `main` `457b7d3` (P2 batch 1), version `987a46aa`.
+- 2026-10-06, `main` `2d92e96` (P2 batch 2), version `458b556c`.
