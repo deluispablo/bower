@@ -46,3 +46,7 @@ From the P2 batch review at `4d7ab08` (TL-P2-46, clean):
 - Run links: report paths are fixed at run time, so a note renamed afterwards gives a dead link (`RunLinks.tsx`).
 
 From the P2 evaluation at `4d7ab08` ([report](2026-10-06-p2-evaluation-4d7ab08.md)): M1–M10 there (sheet focus to `main`; Try again console error; fake 300 ms reload loss; fake/demo generic "Done" for comparisons after a rename; answered rent not applied to the property; phone touch targets under 44 px; "do it now" only on Home; demo menu drops `source=fake`; sign out leaves local keys; 16 vs 15 things).
+
+Flaky under the full `e2e:fake` load at `3e6e7da` (each 6/6 alone, green on the next full run):
+- `e2e/qa10.spec.ts:165` [phone] "one thing, one name": reads the tidy-up sheet's list with `allTextContents()` right after the click, without waiting, and got an empty list once.
+- `e2e/robustness.spec.ts:11` [phone] "a failed tidy-up says why…": "15 things filed" not visible within 30 s once (the test takes about 53 s).
