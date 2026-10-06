@@ -21,3 +21,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: o5-no-legacy-run-path passes — chore(harness): o5-no-legacy-run-path passes (batch 5)
 - 2026-10-06: b-path-one-snapshot passes — chore(harness): b-path-one-snapshot passes (batch 5)
 - 2026-10-06: b-path-asked-question passes — chore(harness): b-path-asked-question passes (batch 5)
+- 2026-10-06: b-path-capture-reads passes — chore(harness): b-path-capture-reads passes (batch 5)

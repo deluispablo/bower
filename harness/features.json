@@ -3360,7 +3360,7 @@
       "The legacy reasons member key and context are gone; a refused decode holds the pile per TL-P2-36."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile note is captured from one read\"",
-    "passes": false,
+    "passes": true,
     "note": "Merges the proposed declared-member-named-pile-note and b-path-context-one-read. TL-P2-37 (main d6dca4b). Planned, not implemented."
   },
   {
