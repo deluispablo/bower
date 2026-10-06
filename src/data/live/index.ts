@@ -160,6 +160,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       ...(locks ? { locks } : {}),
       ...(bus ? { bus } : {}),
       ...(o.clock ? { clock: o.clock } : {}),
+      ...(o.reload ? { reload: o.reload } : {}),
       ...(target ? { target } : {}),
       lease: (place, action) => authed.session(place, action),
       // The world and a hash of the person: demo, each fake scenario and real never block each other.

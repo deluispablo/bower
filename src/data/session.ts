@@ -143,13 +143,15 @@ const realClock: PlaceClock = {
   },
 };
 
-/** What a page can replace (tests): its place id, locks, bus, clock, and where `pagehide` is heard. */
+/** What a page can replace (tests): its place id, locks, bus, clock, where `pagehide` and `pageshow` are heard, and how it reloads. */
 export interface PlaceOptions {
   place?: string;
   locks?: PlaceLocks;
   bus?: SessionBus;
   clock?: PlaceClock;
   target?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
+  /** Reloads the page (default `location.reload()`). */
+  reload?: () => void;
 }
 
 export interface PlaceDeps extends PlaceOptions {

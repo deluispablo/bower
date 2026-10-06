@@ -134,6 +134,7 @@ export function localPlace(opts: LocalPlaceOptions): PlaceGuard {
     ...(locks ? { locks } : {}),
     ...(bus ? { bus } : {}),
     ...(opts.clock ? { clock: opts.clock } : {}),
+    ...(opts.reload ? { reload: opts.reload } : {}),
     ...(target ? { target } : {}),
     ...(opts.onActive ? { onActive: opts.onActive } : {}),
     ...(opts.onBlocked ? { onBlocked: opts.onBlocked } : {}),
