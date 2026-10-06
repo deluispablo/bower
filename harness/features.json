@@ -2801,5 +2801,19 @@
     "verify": "pnpm vitest run src/data/contracts/pile-disposition.test.ts -t \"pile dispositions retire piles only with matching authority\"",
     "passes": true,
     "note": "Codex candidate a3be188/d123944/a079115; review R-disp-1 CLEAN 0C/0I/3M (docs/harness/2026-10-06-disposition-review.md). Root stub gate 1091; fix 7f5252a equals reviewed blobs. Structural guard only: publication, effects, auth Bin intent and Undo stay caller/consumer work; consumers must supply the full member key set for declared piles."
+  },
+  {
+    "id": "run-manifest-content-consistency",
+    "task": "qa-22",
+    "category": "data",
+    "what": "Run manifests refuse captured or written text that disagrees with its declared content, invented member keys and folder targets that are not folders.",
+    "steps": [
+      "Reseal independent manifests whose captured context, create-text or runner JSON text differs from its utf8 size or SHA256.",
+      "Refuse observed piles carrying member keys, repeated or undeclared (pile, member key) pairs and createdBy targets that are not an earlier create-folder.",
+      "Valid fixtures still parse unchanged; this checks intent consistency only, not stored bytes or effects."
+    ],
+    "verify": "pnpm vitest run src/data/contracts/run-manifest.test.ts -t \"run manifests keep captured and written text consistent\"",
+    "passes": false,
+    "note": "Guard 6 and effect-consistency follow-ups from reviews R-man-1/R-man-2, packet docs/harness/2026-10-06-run-record-units.md unit G. Planned, not implemented."
   }
 ]

@@ -134,3 +134,9 @@ exit=0
 - Finding 2: the contract requires "bounded" but gives no number. Coordinator applies the contract's existing bound for opaque identifiers, the DriveId rule: at most 1024 UTF-8 bytes, nonempty, control-free, punctuation preserved. Recorded for technical-lead ratification; a different ratified bound would be a one-line follow-up.
 - Fix the RFC3339 leap-second Minor in the same rework (seconds 60 only at 23:59:60 on a UTC month end, as the disposition sibling does) and replace the invalid positive control.
 - Remaining Minors (guard 6 context/effect text-content consistency, observed piles with non-null keys, createdBy target kind, guard 9 report grounding) are registered follow-ups before any consumer depends on them; not part of this entry.
+
+## Delta review R-man-2 (fresh Claude `man-review-2`; Codex unavailable)
+
+Range `c041f2c` → rework test `6d4e685` → rework fix `79ca5f5`. **Verdict: CLEAN — 0 Critical, 0 Important, 1 Minor.** Only the two paths changed. Duplicate `pileId`, member and place `file.fileId`, journal `recordId` refused (`run-manifest.ts:169-177`) incl. conflicting bodies with resealed identities; legitimate distinct entries accepted. Journal `recordId` follows the DriveId rule (`:84-91`), 1024-byte boundaries in ASCII/2/3/4-byte/mixed spellings; punctuation and C1 kept. Leap second only 23:59:60 UTC month end after offset (`:99-123`); replaced positive controls truly valid. No assertion weakened (be2a758..6d4e685). Evidence: rework red 32 genuine assertion failures, green 1291, check 2021/56; reviewer's verify 1291.
+
+Minor (new, guard 6 follow-up): two captured members of one pile may share a non-null `memberKey` if their file IDs differ (`run-manifest.ts:174`). Refuse duplicate non-null `(pileId, memberKey)` pairs when guard 6 consistency is implemented.

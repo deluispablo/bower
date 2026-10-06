@@ -21,6 +21,10 @@
 - R-chk-1 (Codex) BLOCKED 0C/2I/1M and R-man-1 (Codex) BLOCKED 0C/2I/6M; reports with coordinator rulings archived. Both reworked by their Claude implementers: checkpoint `e5ab68a`/`1f95721` (881/56), manifest `6d4e685`/`79ca5f5` (2021/56). Journal recordId bound 1024 UTF-8 bytes is a coordinator ruling pending technical-lead ratification.
 - Codex usage limit reached 2026-10-06 (unavailable until 2026-10-12). Delta reviews reassigned to fresh Claude sessions `chk-review-2` and `man-review-2` (independent of the Claude implementers). Readiness planning reassigned to a Claude planner.
 - O4 `run-report-save-barrier` plan archived [2026-10-06-o4-report-barrier-plan.md](2026-10-06-o4-report-barrier-plan.md); blocked on a technical-lead decision about non-B effects (options A/B/C, coordinator recommends A). Escalated to the owner.
+- `run-checkpoint-authority` CLOSED (stub/fix → `b4724fe`, proof `4b4dd75`) and `run-manifest-authority` CLOSED (stub `330b133`, fix `7abc8c9`, proof `8dcf8de`). 222/224. Delta reviews R-chk-2/R-man-2 CLEAN.
+- Technical lead: a Claude Planificador session (owner-appointed 2026-10-06 while Codex is out of usage) contacted the coordinator. Pending TL-P2-06: O4 non-B effects (A/B/C), recovery mechanism, journal bound ratification, checkpoint monotonicity, readiness provisional rulings 1–6.
+- Assignment I-ready-1: Claude `readiness-impl-1` for `partial-pile-readiness`, packet [readiness unit](2026-10-06-readiness-unit.md), checkout `/private/tmp/bower-p2-readiness` (`claude/p2-readiness`) base `8dcf8de`. Owns `fake-runner.ts`; `run-report-save-barrier` waits for it. Browser gates at closure run by the coordinator (5190–5192 reserved then).
+- Assignment I-g6-1: Claude `manifest-g6-impl-1`, new entry `run-manifest-content-consistency` (qa-22, unit G), checkout `/private/tmp/bower-p2-manifest-g6` (`claude/p2-manifest-g6`). Owns `run-manifest.ts` and its test only; disjoint from readiness.
 
 # Previous coordinator: stopped and released
 
