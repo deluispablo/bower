@@ -4120,10 +4120,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         await w.drive.trash(into.id);
         await w.drive.upload(into.parents[0] ?? '', 'Flat 3, 12 Larkspur Lane.md', new Blob([new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0x62, 0x79, 0x3a, 0x20, 0xff, 0xfe, 0x0a])]), () => undefined);
       }],
-      ['changed while read', async (w, into) => {
-        const read = w.drive.readBytes.bind(w.drive);
-        w.drive.readBytes = async (id) => (id === into.id ? new TextEncoder().encode(larkspur(['- 2026-09-22 · Changed meanwhile.'])) : read(id));
-      }],
     ];
     it('files the thing on its own when the merge line cannot be planned, says so, and settles the answer', async () => {
       for (const [cause, make] of refusals) {
@@ -4148,6 +4144,57 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(await pendingAnswers(w), cause).toEqual([]);
         await expectFiledOnce(w);
       }
+    });
+
+    // Delta review of 58082c2: the row is grounded only for a merge that fell back, with its answer, word for word.
+    it('refuses the filed-on-its-own row anywhere but on a merge that fell back, and in any other words', async () => {
+      const { w, into, link } = await merging();
+      await refusals[1]?.[1](w, into);
+      const { manifest } = await tidy(w);
+      if (!manifest) return;
+      expect(grounded(manifest)).toBe(true);
+      const row = manifest.reportPlan.find((c) => c.when === 'applied' && !c.value.filed.length && c.value.setAside.length);
+      if (!row) throw new Error('no filed-on-its-own row');
+      const plus = (m: ManifestV2, extra: ReportContribution): ManifestV2 => ({ ...m, reportPlan: [...m.reportPlan, extra] });
+      const swap = (m: ManifestV2, next: ReportContribution): ManifestV2 => ({ ...m, reportPlan: m.reportPlan.map((c) => (c === row ? next : c)) });
+      // Other words, or another note's name.
+      for (const why of ['It was filed on its own.', "Bower couldn't add it to Flat hunt, so it was filed on its own."]) {
+        expect(grounded(swap(manifest, { ...row, value: { ...row.value, setAside: [{ name: link.name, why }] } })), why).toBe(false);
+      }
+      // On an item with no merge: the pdf beside it.
+      const pdfMove = (manifest.operations as OperationV2[]).find((o) => o.effect.kind === 'move' && o.effect.name === 'floor plan.pdf');
+      const pdfMember = manifest.capture.members.find((m) => m.file.fileId === (pdfMove?.effect.kind === 'move' ? pdfMove.effect.before.fileId : ''));
+      expect(grounded(plus(manifest, { requires: [pdfMove?.operationId ?? ''], when: 'applied', value: { ...row.value, setAside: [{ name: pdfMember?.file.name ?? '', why: row.value.setAside[0]?.why ?? '' }] } }))).toBe(false);
+      // On a merge that was planned and applied.
+      const merged = await merging();
+      const planned = await tidy(merged.w);
+      if (!planned.manifest) return;
+      const mergeMove = moveOf(planned.manifest, merged.link.id);
+      expect(grounded(plus(planned.manifest, { requires: [mergeMove?.operationId ?? ''], when: 'applied', value: { filed: [], created: [], updated: [], setAside: [{ name: merged.link.name, why: ALONE }], questions: [] } }))).toBe(false);
+    });
+
+    // Coordinator ruling on the delta review: a note changed while read is a passing race, held like the cap deferral.
+    it('holds the pile and its answer when the note changed while read, and merges on the next run', async () => {
+      const { w, into, answer, link } = await merging();
+      const read = w.drive.readBytes.bind(w.drive);
+      let once = true;
+      w.drive.readBytes = async (id) => {
+        if (id !== into.id || !once) return read(id);
+        once = false;
+        return new TextEncoder().encode(larkspur(['- 2026-09-22 · Changed meanwhile.']));
+      };
+      const first = await tidy(w);
+      expect(editsOf(first.manifest)).toEqual([]);
+      expect(first.manifest?.capture.members.map((m) => m.file.fileId)).not.toContain(link.id);
+      expect(first.manifest?.capture.journal.map((j) => j.recordId)).not.toContain(answer.id);
+      expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
+      expect(asked(w)).toEqual(['q-keep', 'q1']);
+      const second = await tidy(w, 1);
+      expect(editsOf(second.manifest).map((o) => o.effect.path)).toEqual([INTO]);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
+      expect(textAt(w, INTO)?.split(LINE)).toHaveLength(2);
+      expect(asked(w)).toEqual(['q-keep']);
+      expect(await pendingAnswers(w)).toEqual([]);
     });
 
     it('keeps the answer and the question when a thing filed on its own is not moved after all', async () => {
