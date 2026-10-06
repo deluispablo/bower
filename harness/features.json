@@ -2799,7 +2799,7 @@
       "A valid disposition records claimed retirement only; it never proves a published report, actual effects or Undo."
     ],
     "verify": "pnpm vitest run src/data/contracts/pile-disposition.test.ts -t \"pile dispositions retire piles only with matching authority\"",
-    "passes": false,
-    "note": "Pure O3 slice of ratified B contract aede6ef2 (TL-P2-03/04), packet docs/harness/2026-10-06-run-record-units.md unit D. Planned, not implemented."
+    "passes": true,
+    "note": "Codex candidate a3be188/d123944/a079115; review R-disp-1 CLEAN 0C/0I/3M (docs/harness/2026-10-06-disposition-review.md). Root stub gate 1091; fix 7f5252a equals reviewed blobs. Structural guard only: publication, effects, auth Bin intent and Undo stay caller/consumer work; consumers must supply the full member key set for declared piles."
   }
 ]
