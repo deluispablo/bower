@@ -3136,8 +3136,8 @@
       "The confirmation shows only the buttons, with no note sentence; a pile that is a note still says the note goes to the Bin."
     ],
     "verify": "pnpm vitest run src/features/piles/PileScreen.test.tsx -t \"an empty pile's removal never mentions a note\"",
-    "passes": false,
-    "note": "Minor from inbox-review-1 final delta: RemovePile keeps its own onlyNote = !pile.items.length (PileScreen.tsx:150). Planned, not implemented."
+    "passes": true,
+    "note": "Minor from inbox-review-1 final delta: RemovePile keeps its own onlyNote = !pile.items.length (PileScreen.tsx:150). Integrated in 7e66cf6 from claude/p2-empty-pile 870ef3f; review CLEAN (2 Minors out of scope: Home.tsx and TidySheet.tsx compute emptiness inline). Gates on 49681df (combined with the other three): check 3347, e2e 208, e2e:fake 218."
   },
   {
     "id": "note-edit-contract",

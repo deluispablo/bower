@@ -241,3 +241,4 @@ single-active-session-screen	6956bc68d927e6aa	2026-10-06	red (fixed in cd4acf07c
 pile-member-reselection	a9112c7e5fa82530	2026-10-06	red (fixed in 1deb3dd)
 b-path-leftover-piles	42f0f2c36d1a905d	2026-10-06	red (fixed in fce3593)
 pile-accounting-shared	b7a266cc23e74513	2026-10-06	red (fixed in 54e7212)
+empty-pile-remove-copy	e9b187adc388d8c2	2026-10-06	red (fixed in 7e66cf6)

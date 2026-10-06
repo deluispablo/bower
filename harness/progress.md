@@ -387,3 +387,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: pile-member-reselection passes — feat: proof-close member reselection
 - 2026-10-06: b-path-leftover-piles passes — feat: proof-close leftover piles on the B path
 - 2026-10-06: pile-accounting-shared passes — fix: proof-close one accounting rule for filed members
+- 2026-10-06: empty-pile-remove-copy passes — fix: proof-close an empty pile's removal copy
