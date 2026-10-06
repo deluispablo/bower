@@ -46,6 +46,7 @@ import {
   HUB_UPDATES,
   MERGES,
   NOT_LOOKED_UP,
+  NOTHING_LOOKED_UP,
   saltmereQuestion,
   scriptedRequest,
   guessFolder,
@@ -446,9 +447,11 @@ export class DemoWorld {
   private answerOf(text: string): string {
     const scripted = scriptedRequest(text);
     const there = (path: string): boolean => this.entries.get(path)?.type === 'file';
-    // The demo never looks anything up: with the web off it says so, as the pretend runner does (C10).
-    if (scripted?.kind === 'lookup') return this.allowWeb ? 'Done. See what changed in your folders.' : NOT_LOOKED_UP;
-    return scripted && scripted.uses.every(there) ? scripted.answer : 'Done. See what changed in your folders.';
+    // The demo never looks anything up, so it says so, web on or off (C10).
+    if (scripted?.kind === 'lookup') return this.allowWeb ? NOTHING_LOOKED_UP : NOT_LOOKED_UP;
+    // Nor does it write a comparison (C08): it never names a note it did not write.
+    if (scripted?.kind !== 'answer') return 'Done. See what changed in your folders.';
+    return scripted.uses.every(there) ? scripted.answer : 'Done. See what changed in your folders.';
   }
 
   /** Files every inbox thing as the run would, and returns the report. */
