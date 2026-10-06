@@ -282,8 +282,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal);
-  // An instructions run with no line it can take has nothing to read: the existing refusal, before admission.
-  if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
   // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
   // replaced when the run writes it, its old entries never claimed; a missing one is made again.
   const sys = ix.file(SYSTEM.dir);
@@ -622,6 +620,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   if (heldAnswers.size) journal = journal.filter((l) => !heldAnswers.has(l.rec.id));
   const rules = rulesPlanOf(ruleWords, rulesFile, rulesState, rulesWorded);
   if (rules.left.size) journal = journal.filter((l) => !rules.left.has(l.rec.id));
+  // An instructions run with no line it can take, once every held line is left out, has nothing to read: the
+  // existing refusal, before admission.
+  if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
   const edited = new Set(edits.map((e) => e.file.id));
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote; merge?: MergeState }> = [];
   for (const thing of things) {
