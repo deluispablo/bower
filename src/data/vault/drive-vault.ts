@@ -639,16 +639,23 @@ export class DriveVault implements VaultSource {
     const marked = new Set(files.flatMap((f) => f.appProperties?.[PROP.declaration] ?? []));
     const found = await findLooseDeclarations(files, root, inbox.id, (id) => drive.readBytes(id), this.declarationCache, marked);
     this.checkCurrent();
-    const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
     const out: Pile[] = [];
     for (const { declaration, sha256: hash } of found) {
       const [member] = declaration.members;
       if (!member || listed.has(declaration.pileId)) continue;
+      // The accounting's one Bin lookup, kept: a copy Binned from the inbox is the person removing it.
+      let inBin = false;
+      const binned = hasBinLookup(drive)
+        ? async (keys: readonly string[]) => {
+          const hits = await drive.binnedByItem(root, keys);
+          inBin = hits.length > 0;
+          return hits;
+        }
+        : undefined;
+      // A consumed disposition retires it first: no digest and no lookup of its member.
       const readiness = await accountPile(declaration, hash, inbox, files, (id) => drive.readBytes(id), (f) => this.digestOf(f), binned, this.dispositionCache);
       this.checkCurrent();
-      if (readiness.members[0]?.state !== 'missing') continue;
-      // Binned from the inbox is you removing it, as a pile folder in the Bin is.
-      if (binned && (await binned([member.memberKey])).length) continue;
+      if (readiness.members[0]?.state !== 'missing' || inBin) continue;
       out.push({ id: declaration.pileId, text: '', createdAt: declaration.createdAt, items: [{ id: member.memberKey, name: shownName(member), kind: member.kind, origin: member.origin ?? 'Added in Drive', upload: -1, chooseAgain: true }] });
     }
     return out;
