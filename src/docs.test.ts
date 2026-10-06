@@ -63,5 +63,11 @@ describe('what the repository promises', () => {
     const handoff = read('docs/harness/HANDOFF.md');
     for (const part of ['## Where things stand', '## The plan, in order', '## How to run a round', '## Traps on this machine', '## Decisions taken in phase 2']) expect(handoff, part).toContain(part);
   });
-});
 
+  it('the Worker config never targets the original production Worker, and serves the app as a single-page app (TL-P3-08)', () => {
+    const config = read('api/wrangler.jsonc');
+    expect(config).not.toMatch(/"name":\s*"bower-api"/);
+    expect(config).toMatch(/"name":\s*"bower-staging"/);
+    expect(config).toMatch(/"not_found_handling":\s*"single-page-application"/);
+  });
+});
