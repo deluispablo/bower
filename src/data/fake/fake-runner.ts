@@ -14,7 +14,7 @@ import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import type { DeclarationResult } from '../contracts/pile-declaration';
-import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, disagreement, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
+import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordablePile, recordedNote, sameText, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -555,6 +555,24 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     want(f, path).lines.push(line);
     lookups.set(l.rec.id, line);
   }
+  // A disagreement's answer (C07, TL-P2-40): what you said goes on the stored note's Timeline, naming the answer, and
+  // its question goes once that line is there (R4-1). The note's Current state waits for P4. The question is read
+  // from Bower's questions.json, as it was asked.
+  const answerLines = new Map<string, { fileId: string; line: WantedLine }>();
+  const disagreed = journal.filter((l) => l.rec.kind === 'answer' && DISAGREEMENTS.some((r) => (l.rec.questionId ?? '').startsWith(`q-${r.id}-`)));
+  const openFile = disagreed.length && date ? ix.file(SYSTEM.questions) : undefined;
+  const openValue = openFile && !openFile.folder ? parsed(await ownText(drive, openFile)) : null;
+  const open = isRunnerFile(SYSTEM.questions, openValue) ? openValue.questions : [];
+  for (const l of disagreed) {
+    const q = open.find((x) => x.id === l.rec.questionId);
+    const said = q ? disagreementAnswer(q, l.rec.text === 'yes') : null;
+    const path = said ? follow(said.note) : '';
+    const f = said ? ix.file(path) : undefined;
+    if (!said || !f || f.folder || !path.endsWith('.md')) continue;
+    const line: WantedLine = { entry: { date: date ?? '', text: said.line, source: null }, record: l.rec.id, what: said.line, after: null };
+    want(f, path).lines.push(line);
+    answerLines.set(l.rec.id, { fileId: f.id, line });
+  }
   // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
   const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
   const taken = new Set([...ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
@@ -703,6 +721,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   };
   // Lines held back stay where they are, uncaptured, for the next run (rule 7).
   if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
+  // An answer whose line is not written waits for the next run with its question, as a merge's does (R4-1).
+  const heldSaid = new Set([...answerLines].filter(([, a]) => !['planned', 'present'].includes(lineState.get(a.line) ?? '')).map(([id]) => id));
+  if (heldSaid.size) {
+    console.error(`${heldSaid.size} answers wait for the next tidy-up: what you said could not be written now`);
+    journal = journal.filter((l) => !heldSaid.has(l.rec.id));
+  }
   // A lookup whose line is not written (past the cap, a note changed while read, refused) waits for the next run.
   const heldLookups = new Set([...lookups].filter(([, line]) => !['planned', 'present'].includes(lineState.get(line) ?? '')).map(([id]) => id));
   if (heldLookups.size) {
@@ -990,6 +1014,11 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
     }
     if (edit.what !== null) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: edit.what }] } });
+  }
+  // What a disagreement's answer derives (R4-1): its Timeline line, which the question's removal waits for.
+  for (const [id, a] of answerLines) {
+    const op = lineState.get(a.line) === 'planned' ? editOf.get(a.fileId) : undefined;
+    if (op) fromAnswer.set(id, [...(fromAnswer.get(id) ?? []), op]);
   }
   for (const f of filing.filter((x) => x.merge)) await fileOne(f);
   for (const pile of capturedPiles) {

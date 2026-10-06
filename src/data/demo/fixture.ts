@@ -252,6 +252,16 @@ export function disagreement(words: string, added: string, stored: { name: strin
   };
 }
 
+/**
+ * The Timeline line answering a disagreement's question adds to the stored note (TL-P2-40, main 479d305): what you
+ * said, never a revision of the note (that is P4). Null for any other question.
+ */
+export function disagreementAnswer(q: Pick<Question, 'id' | 'yes' | 'no'>, yes: boolean): { note: string; line: string } | null {
+  const rule = DISAGREEMENTS.find((r) => q.id.startsWith(`q-${r.id}-`));
+  const said = /£\s?\d[\d,]*(?:\.\d+)?/.exec(yes ? q.yes : q.no)?.[0].replace(/\s/g, '');
+  return rule && said ? { note: rule.note, line: `You said ${rule.label} is ${yes ? 'now' : 'still'} ${said}.` } : null;
+}
+
 /** The question a tidy-up asks when it files the Saltmere receipts (the stand-in for Claude asking). */
 export function saltmereQuestion(now: number): Question {
   return {
