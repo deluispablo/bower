@@ -2249,6 +2249,44 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(reads).toBe(2);
     });
 
+    // note-read-review-1, Minor 2: each read of the recorded note, listing, capture and plan, holds only its pile.
+    const failingRead = async (w: World, failAt: number, error: BowerError): Promise<{ lease: string; reads: () => number }> => {
+      const lease = await parentOfFile(w, 'lease.pdf');
+      const note = (await w.drive.listAll(w.rootId)).find((f) => f.parents[0] === lease && f.name === 'Pile note.md');
+      if (!note) throw new Error('missing pile note');
+      const real = w.drive.readText.bind(w.drive);
+      let reads = 0;
+      vi.spyOn(w.drive, 'readText').mockImplementation(async (id) => {
+        if (id === note.id && ++reads === failAt) throw error;
+        return real(id);
+      });
+      return { lease, reads: () => reads };
+    };
+
+    it('holds a pile the Inbox could not check even when the capture reads its note', async () => {
+      const w = await bWorld();
+      const { lease, reads } = await failingRead(w, 1, driveError('offline'));
+      const planned = await runPlan(w);
+      if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
+      expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(lease);
+      expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      expect(reads()).toBe(2);
+    });
+
+    it('holds a pile whose note fails to read only when the plan records it, and a sign-out there stops the plan', async () => {
+      const w = await bWorld();
+      const { lease, reads } = await failingRead(w, 3, driveError('offline'));
+      const planned = await runPlan(w);
+      if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
+      expect(reads()).toBe(3);
+      expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(lease);
+      expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      vi.restoreAllMocks();
+      const signedOut = driveError('auth');
+      await failingRead(w, 3, signedOut);
+      await expect(runPlan(w)).rejects.toBe(signedOut);
+    });
+
     it('holds a declared pile whose bound note, not listed first, cannot be read, and plans the others', async () => {
       const w = await bWorld({ declared: true });
       const { folder, keyed } = await leasePile(w);

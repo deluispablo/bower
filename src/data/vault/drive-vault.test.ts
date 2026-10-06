@@ -1912,6 +1912,52 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(errors.mock.calls).toHaveLength(2);
   });
 
+  // note-read-review-1, Minor 2: the guards that keep a sign-out, or a session that changed, stopping the listing.
+  it('a note read that fails as the session changes stops the listing', async () => {
+    localStorage.clear();
+    drive = new FakeDrive();
+    const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
+    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    const uploader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
+    let alive = true;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const real = drive.readText.bind(drive);
+    vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+      if ((await drive.get(id)).name === 'Pile note.md') {
+        alive = false;
+        throw driveError('offline');
+      }
+      return real(id);
+    });
+    const fresh = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() }, () => alive);
+    await expect(fresh.piles()).rejects.toMatchObject({ name: 'BowerError' });
+  });
+
+  it('a sign-out on a bound pile note that is not listed first stops the listing', async () => {
+    localStorage.clear();
+    drive = new FakeDrive();
+    const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
+    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    const pile = await declaring().addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await declaring().settled();
+    const folder = await folderOf(pile.id);
+    const keyed = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
+    if (!keyed) throw new Error('no pile note');
+    await drive.createText(folder.id, 'Pile note.md', 'Soup recipes to try');
+    const bound = await drive.createText(folder.id, 'Pile note.md', 'Papers from Alex', { ...keyed.appProperties });
+    await drive.trash(keyed.id);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const real = drive.readText.bind(drive);
+    const signedOut = driveError('auth');
+    vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+      if (id === bound.id) throw signedOut;
+      return real(id);
+    });
+    await expect(declaring().piles()).rejects.toBe(signedOut);
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();
