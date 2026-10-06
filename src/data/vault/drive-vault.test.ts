@@ -2052,6 +2052,22 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(errors.mock.calls).toHaveLength(2);
   });
 
+  // note-read-review-1, Minor 5: the Inbox and the tidy-up's report give the same reason, the refusal first.
+  it('a damaged pile note with text no record can carry says the same in the Inbox and the report', async () => {
+    const pile = await vault.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
+    await vault.settled();
+    const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+    if (!note) throw new Error('no pile note');
+    await drive.writeText(note.id, '---\nbower_format: ownership/2\n---\nReceipts \ud800 from Alex\n', note.modifiedTime);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reader = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    expect((await reader.piles()).find((p) => p.id === pile.id)?.setAside).toBe('note-damaged');
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    const name = (await drive.get(pile.id)).name;
+    expect(out.report.setAside.find((r) => r.name === name)?.why).toBe("Bower can't read this pile's note.");
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();
