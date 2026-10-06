@@ -515,7 +515,16 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const f = w.file;
     for (const l of w.lines) lineState.set(l, 'refused');
     const before = await verified(f, 'utf8');
-    const bytes = before ? await drive.readBytes(f.id) : null;
+    // Rules.md is Bower's own file: when the run words rules in it, a read that fails refuses the run (TL-P2-17).
+    if (w.rules && !before) throw new BowerError('unknown', OWN_FILES);
+    let bytes: Uint8Array | null;
+    try {
+      bytes = before ? await drive.readBytes(f.id) : null;
+    } catch (e) {
+      if (!w.rules) throw e;
+      console.error(e);
+      throw new BowerError('unknown', OWN_FILES);
+    }
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
       console.error('A note changed while it was read; no edit is planned for it this time');
       if (w.renames) holdRenames = true;
@@ -558,7 +567,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
         rules = w.rules;
         rulesWorded = worded;
       } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
-      else console.error(new BowerError('unknown', RULES_LEFT), `${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
+      else console.error(`${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
     }
     if (rewrite || lines.length || rules) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules });
   }
@@ -1032,7 +1041,7 @@ function ruleChangesOf(lines: readonly JournalLine[]): { change: RulesWording | 
     if (ruleAddOk(worded)) add.push(worded);
     else left.add(rec.id);
   }
-  if (left.size) console.error(new BowerError('unknown', RULES_LEFT), `${left.size} rule lines cannot be worded`);
+  if (left.size) console.error(`${left.size} rule lines cannot be worded`);
   return { change: add.length || remove.length ? { kind: 'rules-wording', add, remove } : null, left };
 }
 
@@ -1066,12 +1075,22 @@ function rulesPlanOf(
   words: { change: RulesWording | null; left: ReadonlySet<string> }, file: DriveFile | undefined,
   state: 'planned' | 'present' | 'left', worded: ReadonlySet<string>,
 ): RulesPlan {
+  const plan = rulesPlanBy(words, file, state, worded);
+  // One BowerError for every rule line left pending, whatever kept it (rule 7).
+  if (plan.left.size) console.error(new BowerError('unknown', RULES_LEFT), `${plan.left.size} rule lines wait for the next tidy-up`);
+  return plan;
+}
+
+function rulesPlanBy(
+  words: { change: RulesWording | null; left: ReadonlySet<string> }, file: DriveFile | undefined,
+  state: 'planned' | 'present' | 'left', worded: ReadonlySet<string>,
+): RulesPlan {
   const { change, left } = words;
   const ids = change ? [...change.add, ...change.remove].map((r) => r.recordId) : [];
   const none: RulesPlan = { worded: new Set(), held: new Set(), left, made: null };
   if (!change) return none;
   if (file?.folder) {
-    console.error(new BowerError('unknown', RULES_LEFT), `${RULES_PATH} is a folder`);
+    console.error(`${RULES_PATH} is a folder`);
     return { ...none, left: new Set([...left, ...ids]) };
   }
   if (file) {
@@ -1087,7 +1106,7 @@ function rulesPlanOf(
   const result = applyChanges(new TextEncoder().encode(empty), [adds]);
   const made = result.ok ? wordedBy(empty, adds, result.text) : null;
   if (!result.ok || !made) {
-    console.error(new BowerError('unknown', RULES_LEFT), `${RULES_PATH} could not be made (${result.ok ? 'count' : result.reason})`);
+    console.error(`${RULES_PATH} could not be made (${result.ok ? 'count' : result.reason})`);
     return { ...none, left: new Set([...left, ...change.add.map((r) => r.recordId)]) };
   }
   return { worded: made, held: new Set(change.add.map((r) => r.recordId)), left, made: result.text };
