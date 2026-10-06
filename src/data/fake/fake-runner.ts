@@ -109,8 +109,11 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!pile.path || !folder?.folder) continue;
     const children = listing.filter((f) => f.parents[0] === folder.id);
-    // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21).
-    if (!writable([folder.name, pile.text, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
+    // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21): names, words, and each
+    // pile note's raw text, front matter included, as the capture records it.
+    const raw: string[] = [];
+    for (const f of children) if (!f.folder && f.name === PILE_NOTE) raw.push(await drive.readText(f.id));
+    if (!writable([folder.name, pile.text, ...raw, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
       console.error(new BowerError('unknown', SET_ASIDE.notChecked), 'A pile has text no run record can carry; it waits as not checked');
       out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;

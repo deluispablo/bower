@@ -102,7 +102,8 @@ export class DriveVault implements VaultSource {
   private digests = new Map<string, Digest>();
   private ix: Promise<VaultIndex> | null = null;
   private listeners = new Set<() => void>();
-  private notes = new Map<string, { modified: string; note: ParsedNote }>();
+  /** Parsed notes by file id, with the raw text they were parsed from (front matter included). */
+  private notes = new Map<string, { modified: string; note: ParsedNote; text: string }>();
   /** What went to the Bin from here, by the path it had, so Undo can bring it back. */
   private bin = new Map<string, { id: string; change: string | null; top?: string; late?: string[]; pending?: Upload; pileKey?: string }>();
   private texts = new Map<string, { modified: string; text: string }>();
@@ -399,7 +400,7 @@ export class DriveVault implements VaultSource {
       throw e;
     }
     ix.put(this.keepSeen(f, written));
-    if (this.current()) this.notes.set(f.id, { modified: written.modifiedTime, note: parseNote(path, out.text) });
+    if (this.current()) this.notes.set(f.id, { modified: written.modifiedTime, note: parseNote(path, out.text), text: out.text });
     await this.journal.record('task', `${out.done ? 'Ticked' : 'Unticked'} "${out.label}" in ${displayName(nameOf(path))}`, { path, fileId: f.id });
     this.emit();
   }
@@ -497,7 +498,9 @@ export class DriveVault implements VaultSource {
       // A changed thing shows as changed; one that has left the pile is not listed again, and the reason says so.
       const items = [...things.map((k) => (declared?.changed.has(k.id) ? { ...itemOf(k), changed: true as const } : itemOf(k))), ...sending, ...(declared?.rows ?? [])];
       // What the tidy-up cannot write down waits, as not checked, here and in the tidy-up (pile-readiness `writable`).
-      const setAside = !writable([f.name, text, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
+      // The note's raw text too, front matter included: the tidy-up records all of it.
+      const raw = note ? (this.notes.get(note.id)?.text ?? '') : '';
+      const setAside = !writable([f.name, text, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
       out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}) });
     }
     // A lone thing still on its way has no file yet: show it from here.
@@ -1366,7 +1369,7 @@ export class DriveVault implements VaultSource {
       return null;
     }
     this.checkCurrent();
-    this.notes.set(f.id, { modified: f.modifiedTime, note });
+    this.notes.set(f.id, { modified: f.modifiedTime, note, text });
     return note;
   }
 
