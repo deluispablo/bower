@@ -3166,5 +3166,19 @@
     "verify": "pnpm vitest run src/app/OpenElsewhere.test.tsx -t \"Bower is open in another window\"",
     "passes": false,
     "note": "Split from single-active-session (S2a screen + Gatekeeper, S2b choose.ts wiring + e2e demo/fake two pages phone/desktop + axe). Before P2-H. Plan docs/harness/2026-10-06-single-session-plan.md. Planned, not implemented."
+  },
+  {
+    "id": "b-path-leftover-piles",
+    "task": "qa-24",
+    "category": "data",
+    "what": "What a recoverable run leaves in a declared pile folder (a late child or an unbound note) is filed by the next run on the recoverable path, not the legacy one.",
+    "steps": [
+      "Run a tidy-up that files a declared pile's members and keeps its folder for a late child or second note.",
+      "Run again: the leftover is captured as an ordinary input on the B path.",
+      "No run of a folder with only leftovers sends the whole plan to legacy."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"leftovers of a held pile take the recoverable path\"",
+    "passes": false,
+    "note": "Remaining legacy route found by the b-path-held-piles review (declared pile with no members left → legacy('member key')). Before P2-H; part of o5-no-legacy-run-path's mapping. Planned, not implemented."
   }
 ]
