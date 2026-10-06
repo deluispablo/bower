@@ -1,6 +1,6 @@
-# Technical-lead decision TL-P2-2026-10-06-20: the note-edit contract (B.2), revision 2
+# Technical-lead decision TL-P2-2026-10-06-20: the note-edit contract (B.2), revision 3
 
-Lead: Claude `Planificador`. This is a **contract proposal**, not yet ratified. Revision 2 answers independent review `b2-contract-review-1`: 2 Critical, 12 Important and 8 Minor findings, each listed by ID at the end. Adopted revision stays `2026-10-05-contracts-2`.
+Lead: Claude `Planificador`. This is a **contract proposal**, not yet ratified. Revision 2 answers independent review `b2-contract-review-1`; revision 3 (the last section, which overrides earlier text where they differ) answers its delta review: 2 Critical, 12 Important and 8 Minor findings, each listed by ID at the end. Adopted revision stays `2026-10-05-contracts-2`.
 
 Contract B's records and rules are unchanged except where extended here. This proposal adds one effect to TL-P2-06's list of B effects. Ownership/2 (TL-P2-03 and the final grammar) governs every byte range named below.
 
@@ -170,3 +170,127 @@ Then: delta review, ratification, consumers.
 ## Findings answered
 
 C1 → Where table. C2 → shared rule 7. I1 → rule 1. I2 → rule 2 and `path`. I3 → rule 3 and `changes[]`. I4 → Merge. I5 → rule 5. I6 → `timeline-append`. I7 → Bower's notes only. I8 → `link-rewrite`. I9 → `rules-wording`. I10 → rule 3 mark and grounding. I11 → rule 6. I12 → Format. M1, M2 → rule 4. M3 → rule 5. M4 → rule 6. M5 → saved link. M6 → `Rules.md` marks. M7 → rule 7. M8 → Format; TL-P2-06's effect list gains `edit-text`.
+
+## Revision 3: answers to the delta review (4 Important, 9 Minor)
+
+These rules override the sections above wherever they differ.
+
+### R3-1. Byte-preservation invariant, checked by the guard (N3, m5)
+
+`applyChanges` re-parses its own result and refuses unless every item below holds. The tests assert each one.
+
+- The ownership status is the same.
+- The frontmatter bytes are identical, except link targets (`link-rewrite`) and the `Rules.md` summary line (`rules-wording`).
+- The personal span's bytes and its tasks (index, label, done) are identical, except link targets.
+- Each v2 payload other than the one being changed is identical, except link targets.
+- `## Bower's note` and `## Current state` are identical, except link targets.
+
+`Rules.md` is Bower's own file, so for `rules-wording` the invariant is narrower. The bytes outside `## Rules` (up to the next heading) are identical, except the summary line.
+
+### R3-2. Exact legacy Timeline placement (N3)
+
+Let `eol` be the line ending detected from the file.
+
+- **With a Timeline section.** Each new line is inserted as `eol` + `- …` immediately after the section's last non-blank line.
+- **Without one, but with `## Bower's note`.** The string `eol` + `## Timeline` + `eol` + the lines joined by `eol`, with no trailing ending, is inserted at the byte offset of the line ending that precedes `## Bower's note`. That is exactly the legacy parser's boundary, so the personal span ends where it did.
+- **Without either, and the file ends with a line ending.** Append `eol` + `## Timeline` + `eol` + the lines + `eol`.
+- **Without either, and no final line ending.** Append `eol` + `## Timeline` + `eol` + the lines, with no final ending.
+
+These separators are chosen so that R3-1 holds. The tests cover each case with LF and CRLF.
+
+### R3-3. Timeline skip-if-present ignores the date (N1a)
+
+An entry counts as already present when a line in the region has the same `text` and the same `source`, whatever its date. A retry on another day never appends twice.
+
+### R3-4. Every operation derived from a journal record holds its archive (N1b, N2)
+
+Rule 7 is generalised. A record's archive `move` `dependsOn` **every** operation derived from that record: edits, moves and creates.
+
+- **A merge** comes from an `answer` record. Its `timeline-append` carries that record's id, and the answer's archive `dependsOn` both the append and the item's `move`. If the move is rejected, the answer stays. The next run plans the merge again: the line is skipped as already present, and the move is retried.
+- **A missing `Rules.md`.** Each rule record's archive `dependsOn` the `create-text`. `rulesWorded` for that path is the number of rules that `parseRules` reads from the created text, which is the number of distinct adds with duplicates removed.
+
+### R3-5. Report rows when a member's move fails (N1c)
+
+Each merged or saved-link member gets two contributions:
+
+- **`applied`.** Its `filed` row. It requires every operation for that member.
+- **`rejected`.** It requires the member's `move` and gives a `setAside` row: `{ name, why: "It couldn't be filed this time. It stays in your inbox for the next tidy-up." }`. A move rejected because its dependency failed counts as rejected.
+
+So an applied edit with a rejected move always yields a visible row and never a claim that the item was filed.
+
+### R3-6. Saved links: fixed order and reuse (N1d)
+
+- **Order.** `create-text` of the note first, then the original's `move`, which `dependsOn` it.
+- **The note's `createKey` is stable:** a digest of the link file's id plus `saved-link-note`.
+- **At plan time,** a file whose `bowerItem` equals that key is reused. A run that retries after a rejected move then moves the original next to the existing note, without creating another one.
+- The same reuse applies to any note created from a member when the key is stable.
+
+### R3-7. Minor answers
+
+- **m1: link tokens.** A token has no line break. A target with spaces around it, such as `[[ Old #h]]`, keeps those spaces: only the trimmed name is replaced.
+- **m2: frontmatter lists.** Link tokens inside YAML values are rewritten wherever they appear: inline lists `[a, [[X]]]` and `- [[X]]` list items alike. The `bower_format` line and key names are never touched.
+- **m3: the "new" mark.** Only an edit that contains a `timeline-append` gets the in-place `bowerNew: '1'` move. Link rewrites and rule wording never mark a note new, so a person's note is not flagged by a link fix.
+- **m4: order of changes.** `changes[]` holds at most one change of each kind, in this order: `link-rewrite`, `timeline-append`, `rules-wording`.
+- **m6: rules.**
+  - New rules are inserted right after the `## Rules` heading and the blank line that follows it, using the file's line ending.
+  - A removal whose rule is already gone does nothing, and its record still counts as satisfied.
+  - A removal deletes every rule with exactly that text.
+- **m7: deferring when the manifest is full.** The planner adds edits in path order and stops before the manifest would pass 8 MiB. The deferred edits' records are not archived.
+- **m8: dates on screen.** The note screen shows `YYYY-MM-DD` Timeline dates in the app's short form, as in "6 Oct". Older free-form dates stay as written. This UI obligation belongs to `o5-timeline-append`.
+- **m9: unknown manifest versions.** "This tidy-up needs a newer Bower." shows in builds that read v2 when they meet an unknown later version. A build older than v2 fails with its existing `BowerError`.
+
+### R3-8. Fixtures for `note-edit-contract` (N4)
+
+These are added to the list above.
+
+**Guard refusals:**
+
+- `edit-text` in v1;
+- each scope exclusion;
+- two edits to one file;
+- `text`/`content` mismatch;
+- `content` equal to `beforeContent`;
+- a record id not in the capture;
+- the 1 MiB and 8 MiB limits;
+- fields containing ` · `, `[[` or a line break;
+- v1 identities unchanged.
+
+**Timeline:**
+
+- every R3-2 case, with LF, CRLF and mixed endings;
+- no final line ending;
+- two `## Timeline` headings;
+- a `## X` heading inside the section;
+- a fence in the v2 payload;
+- each `OwnershipFailure`;
+- the date taken from `requestedAt`;
+- R3-1 asserted by re-parsing;
+- R3-3 with a different date.
+
+**Links:**
+
+- path and `.md` forms left intact;
+- an unclosed fence;
+- a token across a line break;
+- adjacent tokens;
+- `[[ Old #h]]` with spaces;
+- CRLF;
+- frontmatter list values.
+
+**Rules:**
+
+- CRLF;
+- removing an absent rule, and duplicate rules;
+- the person's text after the next heading left intact;
+- `create-text` with its count;
+- a skipped add still archived.
+
+**Recovery and grounding:**
+
+- a recomputation mismatch is rejected;
+- the hash changed;
+- the modifiedTime changed with the same hash;
+- a plan-time refusal leaves its archive unplanned;
+- the `bowerNew` move;
+- R3-4, R3-5 and R3-6;
+- `updated.path`, `filed.note` and `rulesWorded`.
