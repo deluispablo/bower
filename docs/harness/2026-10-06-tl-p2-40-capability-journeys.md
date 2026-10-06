@@ -26,3 +26,18 @@ The coordinator re-registers them that way, closing the merged originals as supe
 3. **The journeys run on fake only.** The demo stays an illustration, like its in-memory run. A demo screen must still never contradict what fake shows.
 
 A request answer must name what was done, with links. The generic "Done. See what changed in your folders." stays only when nothing specific can be named.
+
+**Labels approved (same day).**
+
+- **Result sections.** The finished tidy-up sheet and Home's result card have two section labels: "New notes" and "Brought up to date". Each lists links to the notes, with the run's line beside each one.
+- **Timeline lines.** A "New" mark appears on the Timeline lines the last tidy-up added. It reuses the existing note-level word.
+- **Home's question** shows its note's name as a link.
+
+**Journey copy approved (same day).** This covers the C06, C09, C10 and C08 sentences and note shape the coordinator proposed. All names in them are invented, and the web source uses a reserved RFC 2606 domain.
+
+**C07.** The question and its buttons stay as proposed: "Yes, £1,550" and "No, £1,450". Revising the note's text is P4, so in P2 the answer is recorded honestly with an existing B effect: a `timeline-append` on the Bower note.
+
+- "Yes" adds "You said the rent is now £1,550."
+- "No" adds "You said the rent is still £1,450."
+
+Nothing promises a change to the note's Current state. The question is then removed under R4-1. When P4 adds revision, the same answer will also update Current state.

@@ -9,6 +9,14 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
 - Assign disjoint deliverables and file/contract boundaries. Send the packet through the owner or an explicitly authorized channel. The owner has explicitly authorized you to spawn and assign subagents for parallel independent work under COORDINATION; do not ask again for routine assignments. Workers cannot recursively expand delegation.
 - Preserve other sessions' dirty work. Inspect and review candidates at immutable SHAs. Integrate one entry at a time in a clean, exclusively owned checkout; close with the existing `done.sh` proof flow.
 - Only you maintain the live implementation backlog, proofs, progress, handoff status and phase execution ledgers. The technical lead owns adopted planning/method definitions on main under GOVERNANCE. Distinguish candidate, integrated-open and closed states. Report blocked checks honestly and keep product rulings for the owner.
+- Token budget ([TL-P2-41](../../docs/harness/2026-10-06-tl-p2-41-token-budget.md)):
+  - one-page packets that point workers to `WORKER.md` only;
+  - Sonnet for workers, Haiku or scripts for mechanical work, Opus only for contracts and data-safety;
+  - independent review only for contracts, data safety and shared persistence, plus one batch review at the freeze;
+  - logs to files;
+  - messages of 10 lines at most;
+  - keep HANDOFF at 5 KB or less and ACTIVE at 3 KB or less, archiving the rest;
+  - compact at batch boundaries.
 - Research first, always (owner rule, 2026-10-06). Every packet tells the worker to look up the standard solution, recommended practice and specifications before designing a fix. The worker cites them in its delivery. A worker's own mechanism needs a stated reason why no standard approach fits.
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
