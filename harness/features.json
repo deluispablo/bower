@@ -2541,8 +2541,8 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"an incomplete pile retains every member across tidy-up and retry\"",
     "task": "qa-13",
-    "passes": false,
-    "note": "Historical 143ae2b reproduction corroborated on current source1dc7f64 by a separate-reader public-API probe with BowerError offline: missing member disappears after scripted consumption. See docs/harness/2026-10-05-readiness-current-reproduction.md. Named regression/retry recovery remain planned, not executed or passed; lead readiness/capture contract pending. TL-P2-08 (b) context-arrival rules are folded into this entry; the separate declared-pile-context-arrival entry was withdrawn before any work, per the lead's 'add it to partial-pile-readiness if it fits'. Review ready-review-1 BLOCKED 0C/3I/5M (docs/harness/2026-10-06-readiness-review.md); rework in progress."
+    "passes": true,
+    "note": "Claude candidate claude/p2-readiness 3e8f154..40105c5 under TL-P2-03/06/08b/09/11/12; review ready-review-1 BLOCKED twice (I1-I3, then I4) then CLEAN 0C/0I/3M (docs/harness/2026-10-06-readiness-review.md and -review-delta.md). Root gates check 3014, e2e 198/56 skipped, e2e:fake 198/56 skipped (evidence/2026-10-06-readiness). Folder piles only (loose deferred to loose-pile-declaration); producer off for the real source until the P3 runner consumes declarations; reasons shown in the report only (pile-set-aside-reason-visible). Interactive phone/desktop inspection of the reviewer's checklist is pending O8 evaluation."
   },
   {
     "id": "protected-current-prose",
