@@ -168,8 +168,8 @@ export interface PlaceDeps extends PlaceOptions {
   pageOnly?: { now(): boolean; subscribe(cb: () => void): Unsubscribe };
 }
 
-/** How a place became active: on a load, by Use here, or back from the back/forward cache (both reload the data). */
-export type ActiveHow = 'start' | 'take' | 'return';
+/** How a place became active: on a load, or by Use here (which reads the data again). */
+export type ActiveHow = 'start' | 'take';
 
 export interface PlaceGuard extends PlaceSource {
   readonly place: string;
@@ -436,8 +436,8 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
     if (state !== 'active') throw openElsewhere();
   }
 
-  /** Joins as on a page load (`start`) or a return from the back/forward cache (`return`, which reloads the data). */
-  function begin(how: 'start' | 'return'): Promise<PlaceState> {
+  /** Joins as on a page load. */
+  function begin(): Promise<PlaceState> {
     if (disposed) return Promise.reject(new BowerError('unknown', 'Bower is no longer open on this page.'));
     if (state !== 'starting') return Promise.resolve(state);
     starting ??= (async (): Promise<PlaceState> => {
@@ -469,7 +469,7 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
           return state;
         }
         // Offline, the epoch this tab last confirmed is the one it holds: a newer one blocks it once it can ask.
-        await activate(reply ? reply.epoch : remembered(s), reply !== null, how);
+        await activate(reply ? reply.epoch : remembered(s), reply !== null, 'start');
         return state;
       } finally {
         starting = null;
@@ -481,9 +481,11 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
   const onPageHide = (): void => {
     void guard.leave().catch((e: unknown) => console.error(e));
   };
-  // Back from the back/forward cache: the page joins again as on a load, and reads everything again.
+  // Restored from the back/forward cache, the page reloads: it starts afresh (lease, data, the queue from this
+  // device) and never writes with what it held before (web.dev/articles/bfcache). This is the only place that reacts.
+  const reload = deps.reload ?? ((): void => location.reload());
   const onPageShow = (e: Event): void => {
-    if ((e as PageTransitionEvent).persisted && state === 'starting') void begin('return').catch((err: unknown) => console.error(err));
+    if ((e as PageTransitionEvent).persisted) reload();
   };
   deps.target?.addEventListener('pagehide', onPageHide);
   deps.target?.addEventListener('pageshow', onPageShow);
@@ -494,7 +496,7 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
     epoch: () => held,
     pageOnly: () => deps.pageOnly?.now() ?? false,
     verify,
-    start: () => begin('start'),
+    start: begin,
     async useHere(): Promise<void> {
       if (disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
       if (state === 'active') return;

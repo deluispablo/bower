@@ -25,7 +25,6 @@ import {
   type PlaceClock,
   type PlaceGuard,
   type PlaceLocks,
-  type PlaceSource,
   type SessionBus,
   type SessionMessage,
 } from './session';
@@ -63,18 +62,6 @@ class TestClock implements PlaceClock {
     this.t = end;
     await drain();
   }
-}
-
-/** Settles once the place has decided (it told its listeners it is no longer starting). */
-function settled(place: PlaceSource): Promise<void> {
-  if (place.state() !== 'starting') return Promise.resolve();
-  return new Promise((resolve) => {
-    const off = place.subscribe(() => {
-      if (place.state() === 'starting') return;
-      off();
-      resolve();
-    });
-  });
 }
 
 async function drain(): Promise<void> {
@@ -205,11 +192,12 @@ function queueStub(log: string[]): UploadQueue & { start: ReturnType<typeof vi.f
   };
 }
 
-function page(w: World, place: string, hub: ReturnType<typeof browser>, uploadQueue?: UploadQueue, extra: { declarePiles?: boolean } = {}): { live: LiveSources; worker: FakeWorker; lease: FakeLease; target: EventTarget; place: PlaceGuard } {
+function page(w: World, place: string, hub: ReturnType<typeof browser>, uploadQueue?: UploadQueue, extra: { declarePiles?: boolean; reload?: () => void } = {}): { live: LiveSources; worker: FakeWorker; lease: FakeLease; target: EventTarget; place: PlaceGuard } {
   const lease = leaseOn(w.storage, w.clock);
   const worker = new FakeWorker({ drive: w.drive, rootId: w.root, scenario: 'empty', scale: 'instant', lease });
   const target = new EventTarget();
-  const live = makeLiveSources({ drive: w.drive, worker, place: { place, locks: hub.locks, bus: hub.bus(), clock: w.clock, target, world: WORLD }, ...(uploadQueue ? { uploadQueue } : {}), ...extra });
+  const { reload, ...more } = extra;
+  const live = makeLiveSources({ drive: w.drive, worker, place: { place, locks: hub.locks, bus: hub.bus(), clock: w.clock, target, world: WORLD, ...(reload ? { reload } : {}) }, ...(uploadQueue ? { uploadQueue } : {}), ...more });
   pages.push(live);
   expect(live.place).toBeDefined();
   return { live, worker, lease, target, place: live.place as PlaceGuard };
@@ -778,28 +766,38 @@ describe('review findings and TL-P2-25: blocked is not closed, nothing stale lan
     expect(lease.read()).toEqual({ holder: 'laptop', epoch: 1, beatAt: clock.t });
   });
 
-  it('back from the back/forward cache, a page joins again and reads everything again', async () => {
+  it('a page restored from the back/forward cache reloads', async () => {
     const w = await world();
-    const a = page(w, 'laptop', browser());
+    const reload = vi.fn();
+    const a = page(w, 'laptop', browser(), undefined, { reload });
     await a.place.start();
     await drain();
-    const refresh = vi.spyOn(a.live.vault, 'refresh');
+    const asked = vi.spyOn(a.worker, 'session');
+    // A page's first show is not a restore: nothing happens.
+    a.target.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: false }));
     a.target.dispatchEvent(new Event('pagehide'));
     await drain();
-    expect(a.place.state()).toBe('starting');
-    expect(leaseOn(w.storage, w.clock).read().holder).toBeNull();
-    // Rejoining hashes who is signed in (real async work): a busy machine makes it slow.
-    // The browser's own digest (not a spy someone else may have set), slowed down.
-    const digest = (Object.getPrototypeOf(crypto.subtle) as SubtleCrypto).digest;
-    vi.spyOn(crypto.subtle, 'digest').mockImplementation(async (...args: Parameters<SubtleCrypto['digest']>) => {
-      await new Promise((r) => setTimeout(r, 20));
-      return digest.apply(crypto.subtle, args);
-    });
     a.target.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
-    // The rejoin runs on its own (no caller awaits it): wait for the place to say how it stands.
-    await settled(a.place);
-    expect(a.place.state()).toBe('active');
-    expect(refresh).toHaveBeenCalled();
+    await drain();
+    expect(reload).toHaveBeenCalledTimes(1);
+    // The restored page joins nothing and writes nothing with what it held: the reload starts it afresh.
+    expect(asked.mock.calls.map(([, action]) => action)).toEqual(['leave']);
+    expect(a.place.state()).toBe('starting');
+    expect(a.place.epoch()).toBeNull();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(a.live.vault.flushJournal()).rejects.toBeInstanceOf(BowerError);
+
+    // The demo's place (no Worker) reacts the same way.
+    const demoReload = vi.fn();
+    const target = new EventTarget();
+    const demo = localPlace({ world: 'demo', person: PERSON, place: 'demo-tab', storage: w.storage, now: w.clock.now, clock: w.clock, target, reload: demoReload });
+    guards.push(demo);
+    await demo.start();
+    target.dispatchEvent(new Event('pagehide'));
+    target.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    await drain();
+    expect(demoReload).toHaveBeenCalledTimes(1);
+    expect(demo.state()).toBe('starting');
   });
 
   it('a resumed upload checks the lease before its first chunk', async () => {

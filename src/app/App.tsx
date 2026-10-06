@@ -100,19 +100,10 @@ function Gatekeeper() {
       place?.subscribe(() => {
         if (place.state() === 'elsewhere') setGate((g) => (g?.user && !g.elsewhere ? { ...g, elsewhere: true } : g));
       }) ?? ((): void => undefined);
-    // Back from the back/forward cache, the place joins again by itself; if that failed, it sits in
-    // 'starting' while someone is signed in, so it is started again here.
-    const onShow = (e: PageTransitionEvent): void => {
-      if (!e.persisted || !place) return;
-      const joined = place.state() === 'starting' ? place.start().then(() => undefined, (err: unknown) => console.error(err)) : Promise.resolve();
-      void joined.then(() => check());
-    };
-    window.addEventListener('pageshow', onShow);
     return () => {
       live = false;
       off();
       offPlace();
-      window.removeEventListener('pageshow', onShow);
     };
   }, [session, place, attempt]);
 

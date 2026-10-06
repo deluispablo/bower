@@ -20,7 +20,6 @@ const ALEX: User = { name: 'Alex', email: 'you@example.com' };
 function placeOf(initial: PlaceState, useHere?: () => Promise<void>) {
   let state: PlaceState = initial;
   let only = false;
-  let failStarts = 0;
   const listeners = new Set<() => void>();
   const emit = (): void => listeners.forEach((l) => l());
   const calls: string[] = [];
@@ -28,10 +27,6 @@ function placeOf(initial: PlaceState, useHere?: () => Promise<void>) {
     state: () => state,
     start: vi.fn(async () => {
       calls.push('start');
-      if (failStarts > 0) {
-        failStarts--;
-        throw new BowerError('unknown', COULD_NOT_OPEN_TEXT);
-      }
       if (state === 'starting') state = initial === 'starting' ? 'active' : initial;
       return state;
     }),
@@ -57,17 +52,7 @@ function placeOf(initial: PlaceState, useHere?: () => Promise<void>) {
       only = next;
       emit();
     },
-    failNextStart(): void {
-      failStarts++;
-    },
   };
-}
-
-/** Back from the back/forward cache. */
-function pageshow(): void {
-  const e = new Event('pageshow');
-  Object.defineProperty(e, 'persisted', { value: true });
-  window.dispatchEvent(e);
 }
 
 /** A signed-in (or not) person whose folder answers `folder`; every call is written down in `calls`. */
@@ -289,8 +274,7 @@ describe('Bower is open in another window', () => {
     expect(session.folderState).toHaveBeenCalledTimes(1);
   });
 
-  it('a place left starting after a return from the back/forward cache starts again; signing out does not', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('a place left starting by signing out is not started again', async () => {
     const p = placeOf('active');
     const session = sessionOf(p.calls, ALEX);
     app({ session, place: p.place });
@@ -303,11 +287,6 @@ describe('Bower is open in another window', () => {
       await Promise.resolve();
     });
     expect(p.place.start).toHaveBeenCalledTimes(before);
-    // Back from the cache, the place's own start failed: it is started again.
-    p.failNextStart();
-    await act(async () => pageshow());
-    await waitFor(() => expect(p.place.state()).toBe('active'));
-    expect(vi.mocked(p.place.start).mock.calls.length).toBeGreaterThanOrEqual(before + 2);
   });
 
   it('signed out while Use here works (the lease call says sign in again), the sign-in screen shows', async () => {
