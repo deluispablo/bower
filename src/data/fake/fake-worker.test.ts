@@ -561,6 +561,40 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect((await listed()).map((p) => p.id)).toEqual([]);
   });
 
+  // Review of 982a75c (I1): a thing whose bytes no run can ever check (kept by name only, with no hash) holds its pile
+  // with a reason the Inbox shows, from metadata alone; never a pile shown as ready that every tidy-up leaves.
+  it('a thing no run can check holds its pile with a reason, read from metadata only', async () => {
+    localStorage.clear();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const first = new FakeDrive();
+    const rootId = (await new FakeWorker({ drive: first, scenario: 'first', rootId: null, runs: new FakeRunService({ drive: first, scale: 'instant' }) }).createFolder()).id;
+    const up = new DriveVault({ drive: first, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_A' });
+    await up.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
+    await up.addPile({ text: '', items: [pdf('idea one.pdf')] });
+    await up.settled();
+    // An older snapshot kept lease.pdf by name and size only: its bytes are gone and no hash of them was kept.
+    const snap = JSON.parse(await first.snapshot()) as { files: Array<{ meta: { name: string; size?: number }; content: unknown; sha256?: string }> };
+    for (const f of snap.files) if (f.meta.name === 'lease.pdf') { f.content = { big: true, type: 'application/pdf' }; delete f.sha256; f.meta.size = 999_999; }
+    const drive = FakeDrive.restore(JSON.stringify(snap));
+    const listed = async (): Promise<Pile[]> => new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles();
+    const lease = (await listed()).find((p) => p.text === 'Papers about the lease');
+    // The Inbox says why, without reading any bytes.
+    const reads = [vi.spyOn(drive, 'storedDigest'), vi.spyOn(drive, 'readBytes')];
+    expect((await listed()).find((p) => p.id === lease?.id)?.setAside).toBe('not-tidied');
+    expect(reads.flatMap((r) => r.mock.calls.map(([id]) => id)).filter((id) => lease?.items.some((i) => i.id === id))).toEqual([]);
+    for (const r of reads) r.mockRestore();
+    // The run holds that pile and files the other; the reason stays, run after run.
+    const runs = new FakeRunService({ drive, scale: 'instant' });
+    const worker = new FakeWorker({ drive, scenario: 'first', rootId, runs, fresh: false });
+    const admitted = await worker.process('all');
+    await runs.settled();
+    expect(await worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    const after = await listed();
+    expect(after.map((p) => p.id)).toEqual([lease?.id]);
+    expect(after[0]?.setAside).toBe('not-tidied');
+    await expect(worker.process('all')).rejects.toMatchObject({ code: 'conflict', message: 'Nothing in the inbox is ready yet.' });
+  });
+
   it('fixes its classification before any effect', async () => {
     const w = await bWorld();
     const admitted = await w.worker.process('all');
