@@ -4,13 +4,13 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## Where things stand
 
-- `main` carries green batches 1–5 (batch 5: O5 final + pace fix, journeys A and B); 280/280 entries pass. Batch 5 gates: check 3478, e2e 212, e2e:fake 238.
-- No workers running. TL-P2-44 adopted: dispatch only through `.claude/agents/` (bower-implementer/reviewer Sonnet, bower-mechanical Haiku, bower-escalated Opus), never pass `model`; every fix round is a fresh session; one review from the other provider against the packet's acceptance contract; ledger has the new columns.
+- **P2 is closed** under the owner's conditional acceptance at dossier SHA `3e6e7da`: [2026-10-06-p2-dossier.md](2026-10-06-p2-dossier.md). Four full suites green there (check 3486, e2e 216, e2e:fake 240, e2e:pwa 4); review CLEAN (TL-P2-46 Opus fallback); evaluation's F1/F2 focus findings fixed in `focus-after-replay-and-route`; 281/281 entries pass. Minors in [P2_POLISH.md](P2_POLISH.md).
+- No workers running. This coordinator ran from `~/Projects/bower` (agents dispatched as general-purpose with the agent's model pinned, accepted by the lead); the owner restarts the coordinator from `/Users/deluisp/Projects/bower-app` at this boundary (TL-P2-45).
 
 ## The plan, in order
 
-1. Frozen at `4d7ab08`; the Codex batch review against the P2 exit contract is running (see ACTIVE).
-2. Phone/desktop evaluation → one C/I fix round → dossier (fresh C01–C16 row-to-evidence map) → close P2.
+1. Lead adopts the P3 plan (P3_DRAFT is not adopted until P2 closes). Optional, lead's call: a supplemental walk of the NOT RUN cells listed in the dossier.
+2. Coordinator resumes from HANDOFF/ACTIVE and runs P3 batches under the same method. Codex is back as reviewer from 2026-10-12 (no re-review of 4d7ab08, TL-P2-46).
 
 ## How to run a round
 
