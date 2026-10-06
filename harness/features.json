@@ -3733,5 +3733,20 @@
     "verify": "pnpm -C api exec vitest run -t \"a missing secret answers internal and names no cause|every error code the Worker emits is in the contract and kebab-case|a person object refuses storage from a newer build\"",
     "passes": true,
     "note": "TL-P3-05 (main a8e5d66) and the P3-3 Opus review minors."
+  },
+  {
+    "id": "worker-google-oidc",
+    "task": "p3-4",
+    "category": "feature",
+    "what": "P3-C: Google sign-in on the Worker: PKCE login, a callback that validates the ID token (jose, Google JWKS), keys the person by sub, checks the allowlist, stores the encrypted refresh token in the person object and issues the session; the stored session generation is checked on every request and bumped at logout; GET /me.",
+    "steps": [
+      "The callback refuses an ID token with the wrong audience or nonce.",
+      "A person not on the allowlist is refused at the callback with 403 forbidden.",
+      "Logout bumps the generation: every other cookie for that person stops working.",
+      "GET /me answers 401 signed-out without a session, and the person's name and email with one."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the callback refuses an ID token with the wrong audience or nonce|a person not on the allowlist is refused at the callback|logout retires every other cookie for that person|GET /me answers signed-out without a session\"",
+    "passes": false,
+    "note": "TL-P3-04 (P3-4) and its amendment: session generation store and check, SESSION_SECRET_PREVIOUS rotation; errors reaching the person object answer internal."
   }
 ]
