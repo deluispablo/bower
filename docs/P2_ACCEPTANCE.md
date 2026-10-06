@@ -23,7 +23,7 @@ Every row is a P2 acceptance obligation unless the owner explicitly narrows it i
 | C11 | Preferences, rules, requests and questions | Immediate pending state, scripted application, answer lifecycle, retained wording and no policy changes from source-document instructions | P4 correct interpretation and useful suggestions |
 | C12 | Tidy-up lifecycle | Captured ready inputs; later arrivals wait; coherent ordered phases, truthful partial/failure result, persisted report, replay and return after reload | P3 real dispatch/status; P4 actual application and completion barrier |
 | C13 | Undo supported tidy-up effects | App-side contract, preview/conflict behavior and scripted manifest reversal; later edits protected; partial recovery visible | P4 real manifest/application reversal |
-| C14 | Multi-device changes and recovery | Two fake clients, refresh/invalidation, overlap, stale replies, malformed backend files and journal recovery | P3 external Drive behavior; P4 runner concurrency |
+| C14 | One active session, outside changes and recovery | One active session per person with "Use here" takeover and fenced app writes (owner ruling 2026-10-06, TL-P2-13); runner and external Drive changes while the app is open, refresh/invalidation, stale replies, malformed backend files, journal recovery and recovery from another device after takeover | P3 real session lease and external Drive behavior; P4 runner concurrency |
 | C15 | Efficient preparation without blocking the person | Ready-input/context package, cached extraction metadata, bounded initial candidates, more-context request, fallback for unprepared inputs; app stays responsive | P3 actual transport; P4 model/extractor cost and quality |
 | C16 | Full product usability | Phone/desktop, keyboard, accessibility, all relevant scenarios, production PWA shell, no unexplained console failures or placeholder actions | P3/P4 same journeys against real services |
 
@@ -33,7 +33,7 @@ The established UI is the design baseline. Reuse its navigation, components and 
 
 Use made-up data, stable IDs and independent expected outcomes. Complete each relevant journey on fake first and confirm equivalent demo behavior. Never insert a report fixture that says an operation succeeded while the underlying fake files stayed unchanged.
 
-1. Add two files and a note; fail one upload; start from another client; the failed member stays visible/retryable and is not consumed. Retry it and complete exactly once.
+1. Add two files and a note; fail one upload; take over from another device and start there; the failed member stays visible/retryable and is not consumed. Retry it and complete exactly once.
 2. Add a new source about an existing project; scripted backend updates Current state, appends history, links the source and preserves all user-owned bytes.
 3. Ask for a comparison of already filed items; a generated document contains a table, its provenance and navigable links. Ask for a revision and see the persisted change.
 4. Add evidence that contradicts an existing note in another project; the scripted result exposes both sources and a concrete question. Answer it and verify the next run consumes the answer once.
