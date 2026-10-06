@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { report } from '@/ui/report';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
-import { useNote, useSources, useTree } from '@/data/provider';
+import { useNote, useRun, useSources, useTree } from '@/data/provider';
 import { thingName, findNode, nameOf, parentOf } from '@/data/tree';
 import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
@@ -75,9 +75,12 @@ function NoteView({ path }: { path: string }) {
   const resolve = useResolver();
   const { vault } = useSources();
   const folder = parentOf(path);
+  const fresh = useNewLines(path);
+  const opened = fresh?.path === path;
   useEffect(() => {
-    void vault.markSeen(path).catch((e: unknown) => console.error(e));
-  }, [path, vault]);
+    // Seen once what was new in it is known, so its new Timeline lines stay marked while it is open.
+    if (opened) void vault.markSeen(path).catch((e: unknown) => console.error(e));
+  }, [opened, path, vault]);
 
   if (error && !note) return <div className={s.page}><p>{error.message}</p></div>;
   if (!note || (loading && note.path !== path)) return <NoteSkeleton />;
@@ -174,6 +177,7 @@ function NoteView({ path }: { path: string }) {
                 <span className={s.when}>{timelineDay(t.date)}</span>
                 <span>
                   <Inline text={t.text} link={link} />
+                  {fresh?.lines.has(t.text) && <span className={s.new}>New</span>}
                   {t.source && (
                     <span className={s.from}>
                       {' '}
@@ -195,6 +199,28 @@ function NoteView({ path }: { path: string }) {
       )}
     </article>
   );
+}
+
+/**
+ * The Timeline lines the last tidy-up wrote into this note, when it was new
+ * as it opened (filed or changed since you last looked, as Home's New says).
+ * Kept while the note stays open, since opening it marks it seen.
+ */
+function useNewLines(path: string): { path: string; lines: ReadonlySet<string> } | null {
+  const treeState = useTree();
+  const runState = useRun();
+  const { data: tree } = treeState;
+  const { data: run } = runState;
+  const [kept, setKept] = useState<{ path: string; lines: ReadonlySet<string> } | null>(null);
+  // Known once both have loaded or failed; a failed load marks nothing new.
+  const known = (tree !== undefined || !!treeState.error) && (run !== undefined || !!runState.error);
+  if (known && kept?.path !== path) {
+    const isNew = !!(tree && findNode(tree, path)?.isNew);
+    const lines = isNew && run?.phase === 'done' ? (run.report?.updated ?? []).filter((u) => u.path === path).map((u) => u.what) : [];
+    // Adjusting state while rendering, from what the last render saw (React: storing information from previous renders).
+    setKept({ path, lines: new Set(lines) });
+  }
+  return kept;
 }
 
 function Properties({ note }: { note: Note }) {

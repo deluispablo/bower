@@ -8,10 +8,10 @@ import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
 import { useChanges, useLoad, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
-import { parentOf, thingName } from '@/data/tree';
+import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { ago, greeting, plural } from '@/app/words';
-import { crumbs, paraColor, routeFor } from '@/app/paths';
+import { crumbs, noteRoute, paraColor, routeFor } from '@/app/paths';
 import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
@@ -20,6 +20,8 @@ import { hasReplay, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDeta
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
+import { Inline, type LinkFn } from '@/features/note/markdown';
+import { resolverFor } from '@/features/note/resolve';
 import s from './home.module.css';
 
 /** One sentence about keeping uploads on this device, or null: said once, for the whole inbox. */
@@ -242,8 +244,22 @@ function Questions() {
   const questionsState = useQuestions();
   const { data: qs } = questionsState;
   const { vault } = useSources();
+  const { data: tree } = useTree();
+  // By today's names only: the journal is read once on Home, by Since the last tidy-up.
+  const resolve = useMemo(() => resolverFor(tree ?? [], []), [tree]);
   if (questionsState.error) return <LoadError state={questionsState} />;
   if (!qs?.length) return null;
+  // A [[note]] the question names opens it, as in a note; one not found reads as plain words.
+  const link: LinkFn = (target, label, key) => {
+    const path = resolve(target);
+    return path ? (
+      <Link key={key} to={noteRoute(path)}>
+        {label}
+      </Link>
+    ) : (
+      <span key={key}>{label}</span>
+    );
+  };
   const answer = (id: string, yes: boolean, label: string): void => {
     vault.answer(id, yes).then(
       () => {
@@ -261,7 +277,14 @@ function Questions() {
       <ul className={s.questions}>
         {qs.map((q) => (
           <li key={q.id} className={s.question}>
-            <p>{q.text}</p>
+            <p>
+              <Inline text={q.text} link={link} />
+            </p>
+            {q.about && (
+              <p className={s.about}>
+                <Link to={noteRoute(q.about)}>{displayName(nameOf(q.about))}</Link>
+              </p>
+            )}
             <div className={s.row2}>
               <Button size="sm" onClick={() => answer(q.id, true, q.yes)}>
                 {q.yes}

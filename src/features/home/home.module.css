@@ -36,6 +36,8 @@
 .question { padding: 14px 16px; border-radius: 16px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
 .question p { color: var(--heading); }
 .question .row2 { margin-top: 10px; }
+.question .about { margin-top: 6px; font-size: 15px; }
+.about a { color: var(--brand-line); font-weight: 600; padding: 2px 0; }
 .suggest { padding: 14px 16px; border-radius: 18px; background: var(--fresh); }
 .suggestBy { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--brand-line); font-weight: 600; }
 .suggestTitle { font-family: var(--font-display); font-weight: 700; color: var(--heading); font-size: 18px; margin: 4px 0 2px; }
