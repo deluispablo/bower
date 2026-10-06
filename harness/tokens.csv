@@ -33,3 +33,4 @@ p3-1-console-allow,mechanical,claude,haiku,,1,68523,,,,,,29,4.8,delivered,2026-1
 shared-domain-package,implementer,claude,sonnet,medium,1,62730,,,,,,8,1.0,delivered,2026-10-06
 worker-skeleton,implementer,claude,sonnet,medium,1,81891,,,,,,17,2.2,delivered,2026-10-06
 worker-skeleton,reviewer,claude,opus,medium,1,83732,,,,,,18,2.2,clean (TL-P2-46 fallback),2026-10-06
+done-sh-api-paths,mechanical,claude,haiku,,1,72534,,,,,,46,4.2,rejected: wrote proof.log/progress.md; tautological tests; climb to Sonnet,2026-10-06

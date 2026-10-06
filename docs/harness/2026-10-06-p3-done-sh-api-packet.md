@@ -13,3 +13,11 @@ Starting model: `bower-mechanical` (Haiku), as the lead ruled. Reason: tooling w
   - Files in scope: `harness/done.sh`, `scripts/harness-rules.mjs`, `scripts/check-harness.mjs`, `src/harness-git.test.ts`, `src/harness.test.ts`.
 - **Gates:** the verify, `pnpm check`.
 - **Deliver, under 10 lines:** commit SHA, files, red→green, gates.
+
+## Round 2 (climb to `bower-implementer`, Sonnet, fresh session)
+
+**Summary of the failed attempt (Haiku, branch `claude/p3-donesh`, rejected).** Commit `898dac6` added `api` to `paths` in `done.sh`, made `api/vitest.config.ts` write a JSON report to `api/test-results/unit.json`, and made `scripts/check-harness.mjs` read that report alongside the app's. That direction is right and may be reused. Rejected because: (1) commit `4e1ac49` wrote `harness/proof.log` and `harness/progress.md` (workers never touch them); (2) the `harness-git` test re-implements the exclusion regex instead of exercising `done.sh`'s real selection, and the `harness` test feeds `problems()` a hand-made api test list, so neither can fail on the old code.
+
+- **New checkout:** `/private/tmp/bower-p3-donesh2`, branch `claude/p3-donesh2`, from the integration head (not from the rejected branch). You may port the three code changes of `898dac6` (`git -C /private/tmp/bower-p3-donesh show 898dac6 -- harness/done.sh scripts/check-harness.mjs api/vitest.config.ts`).
+- **Make it testable for real:** move the code-file selection `done.sh` uses (paths + exclusions) into a function in `scripts/harness-git.mjs` that `done.sh` calls, and the api report collection into a function in `scripts/harness-rules.mjs` (or a small module) that `check-harness.mjs` calls. The two named tests call those functions. Each must fail on an assertion with today's behaviour (`paths` without `api`; no api report collected), then pass.
+- After the change, root `pnpm check` is green on your branch: it must run the api tests before the harness check so `api/test-results/unit.json` exists.
