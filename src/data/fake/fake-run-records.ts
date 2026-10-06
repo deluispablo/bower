@@ -353,6 +353,13 @@ function noteGrounded(manifest: RunManifest, c: ReportContribution, moveOp: Oper
     // A merge (I4): the applied Timeline line on that very note, the thing moved after it into the note's folder.
     if (line.effect.path !== note || !line.effect.changes.some((ch) => ch.kind === 'timeline-append')) return false;
     if (!moveOp.dependsOn.includes(line.op.operationId) || parentOf(note) !== placePath(manifest, move.parent)) return false;
+    // It names the captured answer that asked for it, whose archive waits on this very move (R3-4).
+    const archived = (recordId: string): boolean => {
+      const files = manifest.capture.journal.find((j) => j.recordId === recordId)?.fileIds ?? [];
+      return files.length > 0 && manifest.operations.some((o) => o.effect.kind === 'move' && files.includes(o.effect.before.fileId) && o.dependsOn.includes(moveOp.operationId));
+    };
+    const named = line.effect.changes.some((ch) => ch.kind === 'timeline-append' && ch.recordIds.some(archived));
+    if (!named) return false;
   } else if (create) {
     const same = JSON.stringify(create.effect.parent) === JSON.stringify(move.parent);
     if (!same || create.effect.purpose !== 'generated' || !moveOp.dependsOn.includes(create.op.operationId)) return false;
