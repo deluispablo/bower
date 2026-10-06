@@ -1,12 +1,30 @@
-# Current handoff: Claude coordinator, P2 222/234
+# Current handoff: Claude coordinator, P2 fast close (TL-P2-38/39), 255/269
 
-Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`, integration `/Users/deluisp/Projects/bower-app`, branch `codex/close-phase-2`. Technical lead and planner of the whole project: the Claude Planificador session (owner-appointed 2026-10-06; direct lead–coordinator messaging authorized, GOVERNANCE on main). Codex is out of usage until 2026-10-12; workers and reviewers are Claude meanwhile, with independent sessions for review. Adopted main `b95c4bb` (contracts-2), backed up privately and verified local=remote.
+Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`, integration `/Users/deluisp/Projects/bower-app`, branch `codex/close-phase-2`. Technical lead and planner: the Claude Planificador session (owner-appointed; direct lead–coordinator messaging authorized). Codex is out of usage until 2026-10-12; workers and reviewers are Claude.
 
-Closed today with independent review and `done.sh --fixed-in`: pile-declaration-authority, protected-current-prose, pile-disposition-authority, run-checkpoint-authority, run-manifest-authority. Live assignments and evidence: `ACTIVE.md`. Decisions: TL-P2-06 (O4 option A; service-owned recovery; derived public done; recordId bound ratified; monotonic chains; readiness amendments) and the owner's rulings on main (R1-OBS01 accepted limitation, no in-app offline reading, uploads kept across reload so D02 is required, reuse before building).
+Owner rules in force: TL-P2-38 (fast P2 close: at most two workers at a time, one review plus at most one changed-lines delta, only Critical/Important block, minors go to the polish list below, nothing heavy while the display sleeps) and TL-P2-39 (each green batch goes to `main` and the private repo; the lead redeploys the staging preview, `docs/harness/STAGING.md`). Live assignments and evidence: `ACTIVE.md`.
 
-Open: partial-pile-readiness (in implementation), run-report-save-barrier (next, after readiness), run-manifest-content-consistency and run-checkpoint-monotonic (in implementation), loose-pile-declaration, declared-pile-folder-lost, pile-member-reselection (D02), four O5 non-B effect entries and o5-no-legacy-run-path. O5 semantic capabilities, O6, O7 and O8 remain. No P2 acceptance, no P3/P4 work.
+On `main`: batch 1 `457b7d3` and batch 2 `2d92e96` (green: check, e2e, e2e:fake on the integrated SHA).
 
-P3 step recorded for the coordinator (owner request via the lead, 2026-10-06): when the P3 staging deployment (Worker + app) is up and working, send the staging URL and the deployed SHA to the technical lead, who tells the owner. The owner has run `wrangler login` on this machine; staging gets its own allowlist, filled by the lead with both test accounts when it exists. Not before P2 closes.
+Queue to the freeze: runner-files (3 entries, CLEAN, integrated, gates running) → loose-pile (3 entries, last delta) → `b-path-asked-question` and `legacy-runner-write-removal` (TL-P2-38: a plan B can't take holds that pile with "Bower couldn't tidy this up yet. Try again.") → `o5-no-legacy-run-path` (the five other TL-P2-37 entries close as superseded, pinned inside the removal) → capability matrix audit and the missing C04–C11 scripted journeys → freeze one SHA → review → phone/desktop evaluation → one C/I fix round → dossier → close.
+
+P3 step recorded (owner request via the lead): when the P3 staging deployment (Worker + app) works, send its URL and deployed SHA to the lead. P3 contract notes: a session `leave` after `DELETE /me` must be answered harmlessly; the real runner should drop the last edit without re-reading when the manifest guard refuses for size; native Workspace members (no sha256) need their own capture rule (P3_DRAFT).
+
+## P2 polish list (TL-P2-38: never new entries)
+
+- Runner: `planRun`'s own `parseNote` can still refuse the whole plan if a pile note changes between capture and that read (narrow race).
+- Runner: a rule removal relinked by a same-run rename also removes another rule whose text becomes identical (consistent with "remove every rule with that text").
+- Runner: a made `Rules.md` holding zero rules would pass grounding (unreachable today).
+- Runner: the merge authoring refusal has no test (needs fault injection); every link rewrite names all rename records of the run (delays archiving by a run at most).
+- Runner: a note that only gets a link fix keeps last run's "new" mark one more run; an in-place mark move setting `bowerNew` is also accepted by grounding (harmless).
+- Runner: other `planRun` sorts still use `localeCompare` (captured places, missing folders, hashes.json paths, journal tie-breaks).
+- Runner: a declared pile whose context note was binned on purpose is checked on its first other note (held more than needed, reason shown).
+- Vault: `removePile`'s memory of copies already binned is in memory only; after a reload between a failed Remove and its retry, Undo misses the first try's copies (pile comes back as ordinary, nothing lost).
+- Vault: the loose declaration scan skips an unreadable copy, so a never-arrived loose file can drop out of the Inbox for one listing.
+- Vault: a declaration naming another pile logs a plain string on every listing; the runner logs an unreadable declaration once per plan.
+- UI: `Home.tsx` and `TidySheet.tsx` compute pile emptiness inline instead of `isEmptyPile` (the tidy sheet shows a note icon for an empty pile).
+- Session: the bfcache e2e does not itself show "no stale-epoch write" (the unit test does); the reload drops page-memory-only items (TL-P2-28 covers the notice).
+- Tests: `src/ui/focus.ts` `focusMain` timer can fire after jsdom teardown (seen once in `runner-errors.test.tsx` under load; two reruns clean).
 
 # Historical handoffs (provenance only)
 
