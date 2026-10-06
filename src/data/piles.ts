@@ -15,6 +15,11 @@ export function thingsIn(p: Pile): number {
   return p.items.length || (p.text.trim() ? 1 : 0);
 }
 
+/** A pile with no things and no words: nothing to file and no note to keep (TL-P2-22). */
+export function isEmptyPile(p: Pick<Pile, 'items' | 'text'>): boolean {
+  return !p.items.length && !p.text.trim();
+}
+
 export function waitingIn(piles: readonly Pile[] | undefined): number {
   return (piles ?? []).reduce((n, p) => n + thingsIn(p), 0);
 }

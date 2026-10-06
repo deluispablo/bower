@@ -85,6 +85,27 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(screen.queryByText(/A note, added/)).toBeNull();
   });
 
+  it("an empty pile's removal never mentions a note", async () => {
+    // Undeclared (no reason on it) and declared empty alike: no things and no words means no note.
+    const asked = async (pile: Pile): Promise<void> => {
+      cleanup();
+      screenFor(pile);
+      await screen.findByRole('heading', { level: 1 });
+      fireEvent.click(screen.getByRole('button', { name: 'Remove this pile' }));
+    };
+    const bare = { path: 'Inbox/2026-10-06 Old', text: '  ', createdAt: Date.now(), items: [] };
+    await asked({ id: 'p-bare', ...bare });
+    expect(screen.queryByText(/Bin of your Drive/)).toBeNull();
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(expect.arrayContaining(['Remove the pile', 'Keep it']));
+    await asked({ id: 'p-empty-declared', ...bare, setAside: 'empty' });
+    expect(screen.queryByText(/Bin of your Drive/)).toBeNull();
+    // A pile that is a note, or has files, keeps its sentence.
+    await asked({ id: 'p-note', ...bare, text: 'Call Alex back' });
+    expect(screen.getByText('The note goes to the Bin of your Drive.')).toBeVisible();
+    await asked({ id: 'p-files', ...bare, items: [{ id: 'a', name: 'a.pdf', kind: 'pdf', origin: 'From this computer' }] });
+    expect(screen.getByText('Its files go to the Bin of your Drive, where you can get them back.')).toBeVisible();
+  });
+
   it('a thing that has not arrived: the reason and Try again, said once', async () => {
     const retry = screenFor(notArrived);
     expect(await screen.findByText('Some of its things have not arrived yet.')).toBeVisible();

@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
 import type { Pile, SetAside } from '@/data/types';
 import { SET_ASIDE_TEXT } from '@/data/pile-readiness';
-import { thingsIn } from '@/data/piles';
+import { isEmptyPile, thingsIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
 import { Button, IconButton } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
@@ -36,7 +36,7 @@ export function PileScreen() {
   if (!pile) return <div className={s.page} aria-busy="true" />;
   const running = isRunning(run);
   // A pile with no things is a note only when it has words; with none it is an empty pile (TL-P2-22).
-  const empty = !pile.items.length && !pile.text.trim();
+  const empty = isEmptyPile(pile);
   const onlyNote = !pile.items.length && !empty;
   return (
     <div className={s.page}>
@@ -321,7 +321,8 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
     } else if (asked.current) box.current?.querySelector('button')?.focus();
     // Only after the question was open does the focus go back to Remove this pile.
   }, [confirm]);
-  const onlyNote = !pile.items.length;
+  const empty = isEmptyPile(pile);
+  const onlyNote = !pile.items.length && !empty;
   const size = block ? 'md' : 'sm';
   return (
     <div ref={box} className={confirm ? s.confirm : undefined} role={confirm ? 'alert' : undefined}>
@@ -331,8 +332,8 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
         </Button>
       ) : (
         <>
-          {/* A pile with nothing left has no files nor words to keep: the reason above says enough. */}
-          {pile.setAside !== 'empty' && <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>}
+          {/* A pile with no things and no words has nothing to go to the Bin: only the buttons. */}
+          {!empty && <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Button
               variant="danger"
