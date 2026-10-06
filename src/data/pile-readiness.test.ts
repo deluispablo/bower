@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { DriveFile } from './drive/drive-api';
+import type { Declaration } from './contracts/pile-declaration';
 import { SET_ASIDE } from './fake/fake-runner';
-import { SET_ASIDE_TEXT, setAsideOf } from './pile-readiness';
+import { SET_ASIDE_TEXT, declarationRecord, findLooseDeclarations, setAsideOf } from './pile-readiness';
+import { BowerError } from './types';
 
 describe('a set-aside pile shows its reason in the inbox', () => {
   it('in the same words as the tidy-up report', () => {
@@ -30,5 +33,58 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(setAsideOf('found', null, { ...none, text: 'Receipts' })).toBeNull();
     expect(setAsideOf('found', null, { ...none, restore: true })).toBeNull();
     expect(setAsideOf('found', null, some)).toBeNull();
+  });
+});
+
+describe('loose declarations are found in .bower/piles by real parents', () => {
+  const at = '2026-10-06T10:00:00.000Z';
+  const file = (id: string, name: string, parent: string, folder = false): DriveFile => ({ id, name, folder, parents: [parent], modifiedTime: at, createdTime: at });
+  const loose = (declarationId: string, inboxId = 'INBOX_ID', size = 8): Declaration => ({
+    v: 1, kind: 'pile-declaration', scope: { rootId: 'ROOT_ID' }, declarationId, pileId: `pile-${declarationId}`, createdAt: 1,
+    anchor: { kind: 'loose', inboxId },
+    members: [{ memberKey: `member-${declarationId}`, name: 'receipt.txt', kind: 'other', origin: null, content: { encoding: 'blob', size, sha256: '0'.repeat(64) } }],
+    context: { kind: 'absent' },
+  });
+
+  it('keeps identical copies as one, and leaves out folder piles, other inboxes, differing copies and copies gone since', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const bytes = new Map<string, string>();
+    const files: DriveFile[] = [file('BOWER', '.bower', 'ROOT_ID', true), file('PILES', 'piles', 'BOWER', true)];
+    const put = async (id: string, value: Declaration, parent = 'PILES'): Promise<void> => {
+      const record = await declarationRecord(value, 'ROOT_ID');
+      if (!record) throw new Error('refused');
+      bytes.set(id, record.text);
+      files.push(file(id, record.name, parent));
+    };
+    await put('one-a', loose('one'));
+    await put('one-b', loose('one'));
+    await put('other-inbox', loose('elsewhere', 'OTHER_INBOX'));
+    await put('two-a', loose('two'));
+    await put('two-b', loose('two', 'INBOX_ID', 9));
+    await put('outside', loose('outside'), 'ROOT_ID');
+    await put('gone', loose('gone'));
+    const folder: Declaration = { ...loose('folder'), anchor: { kind: 'folder', inboxId: 'INBOX_ID', name: 'Papers', createKey: 'anchor-folder' } };
+    await put('folder', folder);
+    const read = async (id: string): Promise<Uint8Array> => {
+      if (id === 'gone') throw new BowerError('not-found', 'That is no longer there.');
+      return new TextEncoder().encode(bytes.get(id) ?? '');
+    };
+    const found = await findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', read);
+    expect(found.map((d) => [d.declaration.declarationId, d.copies.map((c) => c.id)])).toEqual([['one', ['one-a', 'one-b']]]);
+    expect(errors).toHaveBeenCalled();
+  });
+
+  it('skips a copy it cannot read, and stops only when signed out', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const files: DriveFile[] = [file('BOWER', '.bower', 'ROOT_ID', true), file('PILES', 'piles', 'BOWER', true), file('copy', `declaration-one-${'0'.repeat(64)}.json`, 'PILES')];
+    await expect(findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', async () => { throw new BowerError('offline', 'You are offline.'); })).resolves.toEqual([]);
+    await expect(findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', async () => { throw new BowerError('auth', 'Sign in again.'); })).rejects.toMatchObject({ code: 'auth' });
+  });
+
+  it('never reads a declaration it is told to skip', async () => {
+    const files: DriveFile[] = [file('BOWER', '.bower', 'ROOT_ID', true), file('PILES', 'piles', 'BOWER', true), file('copy', `declaration-decl-a-b-${'0'.repeat(64)}.json`, 'PILES')];
+    const read = vi.fn(async (): Promise<Uint8Array> => new Uint8Array());
+    await expect(findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', read, undefined, new Set(['decl-a-b']))).resolves.toEqual([]);
+    expect(read).not.toHaveBeenCalled();
   });
 });

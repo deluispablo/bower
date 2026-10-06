@@ -488,6 +488,23 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
   });
 
+  it('a declared loose file removed before it arrives is gone from every device, its declaration in the Bin', async () => {
+    const uploader = declaring();
+    drive.upload = async () => {
+      throw driveError('offline');
+    };
+    const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+    await uploader.settled();
+    const [declaration] = await declarations();
+    expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(true);
+    await fresh().removePile(pile.id);
+    expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+    expect((await uploader.piles()).some((p) => p.id === pile.id && p.items.some((i) => i.upload === -1 && i.chooseAgain))).toBe(false);
+    // In the Bin, never deleted: it is no longer listed, and it can come back.
+    expect(await declarations()).toEqual([]);
+    await expect(drive.untrash(declaration?.id ?? '')).resolves.toMatchObject({ id: declaration?.id });
+  });
+
   /** A declared pile whose things all arrived. */
   async function readyPile(text = 'Papers from Alex', items = [pdf('arrived.pdf'), pdf('missing.pdf')]) {
     const uploader = declaring();

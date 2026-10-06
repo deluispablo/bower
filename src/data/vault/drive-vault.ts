@@ -28,7 +28,7 @@ import {
 } from '../types';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { SET_ASIDE_TEXT, accountPile, contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, recordedNote, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountPile, contextRemoved, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, hasStoredDigests, journalValues, recordedNote, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -583,7 +583,50 @@ export class DriveVault implements VaultSource {
         if (!pile.path && !pile.items.some((i) => i.id === item.memberKey)) pile.items.push(queuedRow(item));
       } else out.push({ id: item.pileId, text: '', createdAt: Date.parse(item.addedAt), items: [queuedRow(item)] });
     }
+    for (const pile of await this.looseMissing(new Set(out.map((p) => p.id)))) out.push(pile);
     return out.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /** The files holding a loose pile's declaration, found by its pile id; none for any other pile. */
+  private async looseDeclarationOf(pileId: string): Promise<DriveFile[]> {
+    const ix = await this.index();
+    const inbox = ix.file('Inbox');
+    if (!inbox?.folder) return [];
+    const found = await findLooseDeclarations(this.known(ix), await this.rootId(), inbox.id, (id) => this.drive.readBytes(id), this.declarationCache);
+    this.checkCurrent();
+    return found.filter((d) => d.declaration.pileId === pileId).flatMap((d) => d.copies);
+  }
+
+  /**
+   * Declared loose things that have not arrived, from any device (fixture 07): the folder-pile accounting
+   * with the inbox as the pile's place. One in the inbox is listed as itself, one filed has left it, and
+   * one you put in the Bin from the inbox was removed; only one with no file anywhere waits, to be sent
+   * from the device that has it. `listed` are the piles already shown, this device's own sends included.
+   */
+  private async looseMissing(listed: ReadonlySet<string>): Promise<Pile[]> {
+    const ix = await this.index();
+    const inbox = ix.file('Inbox');
+    if (!inbox?.folder) return [];
+    const files = this.known(ix);
+    const drive = this.drive;
+    const root = await this.rootId();
+    // A declaration a live folder or file carries is that pile's: the loose scan never reads it.
+    const marked = new Set(files.flatMap((f) => f.appProperties?.[PROP.declaration] ?? []));
+    const found = await findLooseDeclarations(files, root, inbox.id, (id) => drive.readBytes(id), this.declarationCache, marked);
+    this.checkCurrent();
+    const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
+    const out: Pile[] = [];
+    for (const { declaration, sha256: hash } of found) {
+      const [member] = declaration.members;
+      if (!member || listed.has(declaration.pileId)) continue;
+      const readiness = await accountPile(declaration, hash, inbox, files, (id) => drive.readBytes(id), (f) => this.digestOf(f), binned, this.dispositionCache);
+      this.checkCurrent();
+      if (readiness.members[0]?.state !== 'missing') continue;
+      // Binned from the inbox is you removing it, as a pile folder in the Bin is.
+      if (binned && (await binned([member.memberKey])).length) continue;
+      out.push({ id: declaration.pileId, text: '', createdAt: declaration.createdAt, items: [{ id: member.memberKey, name: shownName(member), kind: member.kind, origin: member.origin ?? 'Added in Drive', upload: -1, chooseAgain: true }] });
+    }
+    return out;
   }
 
   /**
@@ -719,15 +762,18 @@ export class DriveVault implements VaultSource {
     this.emit();
   }
 
-  /** Writes a pile's declaration in `.bower/piles`, before anything of the pile exists. */
-  private async declare(input: NewPile, text: string, inbox: string, name: string, createdAt: number): Promise<Declared> {
+  /**
+   * Writes a pile's declaration in `.bower/piles`, before anything of the pile exists. With no folder
+   * name it declares a loose single thing (fixture 07): its anchor is the inbox it is sent into.
+   */
+  private async declare(input: NewPile, text: string, inbox: string, name: string | null, createdAt: number): Promise<Declared> {
     const root = await this.rootId();
     const mint = (kind: string): string => `${kind}-${createdAt.toString(36)}${Math.random().toString(36).slice(2, 10)}`;
     const contextKey = mint('context');
     const members = await Promise.all(input.items.map(async (it) => ({ memberKey: mint('member'), name: declaredName(it), kind: it.kind, origin: it.origin, content: await contentOf(it) })));
     const declaration: Declaration = {
       v: 1, kind: 'pile-declaration', scope: { rootId: root }, declarationId: mint('decl'), pileId: mint('pile'), createdAt,
-      anchor: { kind: 'folder', inboxId: inbox, name, createKey: mint('anchor') }, members,
+      anchor: name === null ? { kind: 'loose', inboxId: inbox } : { kind: 'folder', inboxId: inbox, name, createKey: mint('anchor') }, members,
       context: text ? { kind: 'text', memberKey: contextKey, originalText: text, content: await utf8(text) } : { kind: 'absent' },
     };
     const record = await declarationRecord(declaration, root);
@@ -775,6 +821,10 @@ export class DriveVault implements VaultSource {
           throw e;
         }
       }
+    } else if (this.declarePiles && input.items.length === 1) {
+      // A loose single thing is declared too, before it is sent, so any device sees it until it arrives.
+      declared = await this.declare(input, '', inbox, null, createdAt);
+      id = declared.pileId;
     }
     const entries: Sending[] = input.items.map((it, i) => ({
       key: declared?.keys[i] ?? `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
@@ -797,6 +847,9 @@ export class DriveVault implements VaultSource {
     const pile = await this.pile(id);
     const ix = await this.index();
     const f = pile.path ? ix.file(pile.path) : undefined;
+    // A declared loose thing that has not arrived has only its declaration in Drive: it goes to the Bin,
+    // as a pile's folder does, so no device lists it any more.
+    const declaration = f ? [] : await this.looseDeclarationOf(id);
     const u = this.uploads.get(id);
     this.uploads.delete(id);
     const held = await this.haltQueued(id);
@@ -804,6 +857,10 @@ export class DriveVault implements VaultSource {
       if (f) {
         await this.drive.trash(f.id);
         ix.drop(f.id);
+      }
+      for (const copy of declaration) {
+        await this.drive.trash(copy.id);
+        ix.drop(copy.id);
       }
       // A thing whose answer was lost may be in Drive already, where it was sent: it goes to the Bin too.
       for (const made of held.made) {

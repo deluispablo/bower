@@ -341,6 +341,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string; merge: Merge | null }> = [];
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
+    // A declared loose thing that has not arrived is only a row to choose again: nothing to capture (TL-P2-21).
+    if (!pile.path && pile.items.every((i) => i.chooseAgain)) continue;
     const marks = { members: members.length, things: things.length };
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!folder?.folder) return legacy('loose pile');

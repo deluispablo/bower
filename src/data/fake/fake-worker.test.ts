@@ -2537,6 +2537,22 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const leaseTo = (m: Pick<Manifest | ManifestV2, 'reportPlan'> | undefined): string[] => (m?.reportPlan ?? []).flatMap((c) => c.value.filed).filter((f) => f.name === 'lease.pdf' || f.name === 'inventory.pdf').map((f) => f.to);
     const runPlan = (w: Where) => planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
 
+    it('keeps the B path while a declared loose file has not arrived, and captures nothing for it', async () => {
+      const w = await bWorld({ declared: true });
+      const real = w.drive.upload.bind(w.drive);
+      w.drive.upload = async (parent, name, body, onProgress, props) => {
+        if (name === 'loose.pdf') throw driveError('offline');
+        return real(parent, name, body, onProgress, props);
+      };
+      const loose = await w.uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+      await w.uploader.settled();
+      const planned = await runPlan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      expect(planned.manifest.capture.piles.map((p) => p.pileId)).not.toContain(loose.id);
+      expect(planned.manifest.capture.members.map((m) => m.pileId)).not.toContain(loose.id);
+    });
+
     it('leaves a file that is not a member of a declared pile in its folder as an uncaptured child', async () => {
       const w = await bWorld({ declared: true });
       const { folder } = await leasePile(w);

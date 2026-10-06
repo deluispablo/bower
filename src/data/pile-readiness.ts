@@ -152,6 +152,57 @@ export async function findDeclaration(files: readonly DriveFile[], rootId: strin
   return { state: 'found', declaration, sha256: hash };
 }
 
+/** A loose single thing's declaration, with the files that hold it (identical copies). */
+export type LooseDeclaration = { declaration: Declaration; sha256: string; copies: DriveFile[] };
+
+/**
+ * The declarations of loose single things in this inbox (fixture 07): no folder carries their mark, so
+ * they are found by reading `.bower/piles` by real parents, as `findDeclaration` does. Identical copies
+ * are one; copies that differ, or a copy that breaks its name or the contract, are logged and left out.
+ * Folder declarations are skipped, and `skip` names declarations not to read at all (those a live folder or
+ * file carries, read through their own pile). Parsed copies are kept in `cache`, since a declaration never changes.
+ */
+export async function findLooseDeclarations(files: readonly DriveFile[], rootId: string, inboxId: string, read: ReadBytes, cache?: Map<string, DeclarationResult>, skip: ReadonlySet<string> = new Set()): Promise<LooseDeclaration[]> {
+  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
+  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
+  const byId = new Map<string, LooseDeclaration | 'conflict'>();
+  for (const copy of files) {
+    if (copy.folder || !copy.name.startsWith('declaration-') || !copy.name.endsWith('.json') || !copy.parents.some((p) => piles.has(p))) continue;
+    // A declaration a live folder or file carries is read through that pile, never here.
+    if (skip.has(copy.name.slice('declaration-'.length, -'-.json'.length - 64))) continue;
+    const key = `${copy.id}@${copy.modifiedTime}`;
+    let parsed = cache?.get(key);
+    if (!parsed) {
+      let bytes: Uint8Array;
+      try {
+        bytes = await read(copy.id);
+      } catch (e) {
+        // One copy that cannot be read affects only its own pile (TL-P2-08 a): it is skipped this time and read
+        // again next listing. Signed out stops the listing.
+        if (e instanceof BowerError && e.code === 'auth') throw e;
+        console.error(e);
+        continue;
+      }
+      parsed = await parsePileDeclaration(bytes, rootId);
+      cache?.set(key, parsed);
+    }
+    if (!parsed.ok || copy.name !== declarationName(parsed.value.declarationId, parsed.sha256)) {
+      console.error(`A pile declaration copy was refused (${parsed.ok ? 'name' : parsed.reason}).`);
+      continue;
+    }
+    const { declarationId, anchor } = parsed.value;
+    if (anchor.kind !== 'loose' || anchor.inboxId !== inboxId) continue;
+    const had = byId.get(declarationId);
+    if (had === undefined) byId.set(declarationId, { declaration: parsed.value, sha256: parsed.sha256, copies: [copy] });
+    else if (had !== 'conflict' && had.sha256 === parsed.sha256) had.copies.push(copy);
+    else if (had !== 'conflict') {
+      console.error('Two different copies of a loose pile declaration were found; neither is used.');
+      byId.set(declarationId, 'conflict');
+    }
+  }
+  return [...byId.values()].filter((d): d is LooseDeclaration => d !== 'conflict');
+}
+
 const keyed = (files: readonly DriveFile[], key: string): DriveFile[] => files.filter((f) => !f.folder && f.appProperties?.[PROP.item] === key);
 
 async function check(file: DriveFile, member: Member, digest: DigestOf): Promise<'match' | 'differs' | 'unchecked'> {
