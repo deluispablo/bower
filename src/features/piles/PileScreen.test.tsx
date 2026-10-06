@@ -166,6 +166,68 @@ it.each([
   fresh.dispose();
 });
 
+// Final delta review (Important): a kept draft is never saved over words this page never showed (RFC 9110 §13.1.1).
+it.each(['reads it again', 'cannot read it again, then Try again reads it'] as const)('a draft whose note changed elsewhere is refused and kept when a listing %s', async (how) => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const drive = new FakeDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  await drive.createFolder(root.id, 'Inbox');
+  vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const pile = await vault.addPile({ text: 'Papers about the lease', items: [{ name: 'lease.pdf', kind: 'pdf', origin: 'This device', body: new Blob(['lease']) }] });
+  await vault.settled();
+  const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+  if (!note) throw new Error('no pile note');
+  const real = drive.readText.bind(drive);
+  let failing = false;
+  vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+    if (failing && id === note.id) throw new BowerError('offline', 'You are offline.');
+    return real(id);
+  });
+  const base = loadingSources();
+  render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+  const field = (): HTMLElement => screen.getByRole('textbox', { name: 'What is this?' });
+  await waitFor(() => expect(field()).toHaveValue('Papers about the lease'));
+  fireEvent.change(field(), { target: { value: 'My unsaved draft' } });
+  await drive.writeText(note.id, 'Changed elsewhere', note.modifiedTime);
+  if (how === 'reads it again') await vault.refresh();
+  else {
+    failing = true;
+    await vault.refresh();
+    await waitFor(() => expect(field()).toBeDisabled());
+    failing = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  }
+  await waitFor(() => expect(field()).toBeEnabled());
+  expect(field()).toHaveValue('My unsaved draft');
+  fireEvent.click(screen.getByRole('button', { name: 'Save the note' }));
+  await waitFor(() => expect(useToasts.getState().list.map((t) => t.text)).toContain('This changed somewhere else. Look again and try once more.'));
+  expect(field()).toHaveValue('My unsaved draft');
+  expect(await real(note.id)).toBe('Changed elsewhere');
+});
+
+it('a draft whose note did not change saves after a listing reads it again', async () => {
+  const drive = new FakeDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  await drive.createFolder(root.id, 'Inbox');
+  vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const pile = await vault.addPile({ text: 'Papers about the lease', items: [{ name: 'lease.pdf', kind: 'pdf', origin: 'This device', body: new Blob(['lease']) }] });
+  await vault.settled();
+  const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+  const base = loadingSources();
+  render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+  const field = (): HTMLElement => screen.getByRole('textbox', { name: 'What is this?' });
+  await waitFor(() => expect(field()).toHaveValue('Papers about the lease'));
+  fireEvent.change(field(), { target: { value: 'My draft' } });
+  await vault.refresh();
+  fireEvent.click(screen.getByRole('button', { name: 'Save the note' }));
+  await waitFor(async () => expect(await drive.readText(note?.id ?? '')).toBe('My draft'));
+  // And a second edit after it saves too: the saved words are its new base.
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Save the note' })).toBeNull());
+  fireEvent.change(field(), { target: { value: 'My second draft' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save the note' }));
+  await waitFor(async () => expect(await drive.readText(note?.id ?? '')).toBe('My second draft'));
+});
+
 describe('a set-aside pile shows its reason in the inbox', () => {
   const changed: Pile = {
     id: 'p-changed', path: 'Inbox/2026-10-06 Papers from Alex', text: 'Papers from Alex', createdAt: Date.now(), setAside: 'changed',

@@ -2089,6 +2089,21 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(out.report.setAside.find((r) => r.name === name)?.why).toBe("Bower can't read this pile's note.");
   });
 
+  // Final delta review (Important): a draft is saved only over the words it started from (RFC 9110 §13.1.1).
+  it('a note saved from a draft whose words changed elsewhere is refused, and the note kept', async () => {
+    const pile = await vault.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf')] });
+    await vault.settled();
+    const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+    if (!note) throw new Error('no pile note');
+    await drive.writeText(note.id, 'Changed elsewhere', note.modifiedTime);
+    await vault.refresh();
+    expect((await vault.piles()).find((p) => p.id === pile.id)?.text).toBe('Changed elsewhere');
+    await expect(vault.updatePile(pile.id, 'My unsaved draft', 'Papers about the lease')).rejects.toMatchObject({ code: 'conflict', message: 'This changed somewhere else. Look again and try once more.' });
+    expect(await drive.readText(note.id)).toBe('Changed elsewhere');
+    await vault.updatePile(pile.id, 'My draft', 'Changed elsewhere');
+    expect(await drive.readText(note.id)).toBe('My draft');
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();

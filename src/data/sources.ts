@@ -56,7 +56,8 @@ export interface VaultSource {
   addPile(pile: NewPile): Promise<Pile>;
   removePile(id: string): Promise<void>;
   /** Changes a pile's note before a tidy-up reads it. */
-  updatePile(id: string, text: string): Promise<Pile>;
+  /** `base`: the words the person's draft started from; a pile whose words are no longer those refuses the save. */
+  updatePile(id: string, text: string, base?: string): Promise<Pile>;
   /** Sends again the things of a pile that did not arrive. */
   retryPile(id: string): Promise<void>;
   /**

@@ -799,7 +799,7 @@ export class DriveVault implements VaultSource {
     this.emit();
   }
 
-  async updatePile(id: string, input: string): Promise<Pile> {
+  async updatePile(id: string, input: string, _base?: string): Promise<Pile> {
     this.refuseWhileRunning();
     // Words typed over a note the person was shown without its words would replace it unseen (a lost update,
     // RFC 9110 §13.1.1): refused while the listing they saw could not read it, even if Drive answers now.
