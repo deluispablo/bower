@@ -12,6 +12,7 @@ import { indexedDbUploadStore } from '../upload-store';
 import { sha256 } from '../vault/hashes';
 import { LiveRuns } from './runs';
 import { LiveSession } from './session';
+import type { PlaceOptions } from '../session';
 
 export interface LiveOptions {
   driveLinks?: boolean;
@@ -29,6 +30,8 @@ export interface LiveOptions {
    * one. Off unless asked for: the real resumable protocol waits for P3 (TL-P2-07).
    */
   uploadQueue?: boolean | UploadQueue | null;
+  /** One active place per person (TL-P2-13). */
+  place?: true | (PlaceOptions & { world?: string });
 }
 
 /** How the upload queue keys a person on this device: a hash of their email, never the email. */

@@ -14,6 +14,7 @@ import type {
   TreeNode,
   User,
 } from './types';
+import type { PlaceSource } from './session';
 
 /**
  * The only doors from the screens to data. Phase 1 has one implementation
@@ -100,4 +101,6 @@ export interface Sources {
   session: Session;
   vault: VaultSource;
   runs: RunSource;
+  /** Where Bower is active for this person (TL-P2-13); absent where nothing is fenced. */
+  place?: PlaceSource;
 }

@@ -16,6 +16,8 @@ import { serializeRules } from '../vault/rules-format';
 import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
 import { planRun, runFake } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
+import type { FakeLease } from './fake-lease';
+import type { LeaseReply, SessionAction } from '../session';
 
 export interface FakeWorkerOptions {
   drive: FakeDrive;
@@ -30,6 +32,8 @@ export interface FakeWorkerOptions {
   runs?: FakeRunService;
   /** The synthetic account this client is signed in as. */
   account?: string;
+  /** The person's session lease (TL-P2-14). */
+  lease?: FakeLease;
 }
 
 export class FakeWorker implements WorkerApi {
@@ -99,6 +103,10 @@ export class FakeWorker implements WorkerApi {
     keepSignedIn(false);
     // It forgets which folder was yours too: coming back starts at the folder step, which finds it again.
     forget(true);
+  }
+
+  async session(_place: string, _action: SessionAction): Promise<LeaseReply> {
+    return { active: false, epoch: 0 };
   }
 
   async driveToken(): Promise<string> {

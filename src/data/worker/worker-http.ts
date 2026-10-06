@@ -5,6 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { isRunWire, type Me, type RunWire, type WorkerApi } from './worker-api';
+import type { LeaseReply, SessionAction } from '../session';
 
 const SENTENCE: Record<ErrorCode, string> = {
   auth: 'Sign in again to keep going.',
@@ -79,6 +80,10 @@ export class WorkerHttp implements WorkerApi {
 
   async status(): Promise<RunWire | null> {
     return (await this.call<{ run: RunWire | null }>('GET', '/status', undefined, isStatus)).run;
+  }
+
+  async session(_place: string, _action: SessionAction): Promise<LeaseReply> {
+    return { active: false, epoch: 0 };
   }
 
   private async call<T>(method: string, path: string, body?: unknown, valid?: (v: unknown) => v is T): Promise<T> {

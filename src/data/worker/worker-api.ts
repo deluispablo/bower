@@ -5,6 +5,7 @@
  * in for it, with a scripted runner, in tests and behind `?source=fake`.
  */
 import type { RunPhase, User } from '../types';
+import type { LeaseReply, SessionAction } from '../session';
 
 export interface RunWire {
   id: string;
@@ -53,4 +54,6 @@ export interface WorkerApi {
   process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunWire>;
   /** The run going now, or the last one. */
   status(): Promise<RunWire | null>;
+  /** The person's one active place (TL-P2-14): `check`, `take` or `leave` this place's lease. */
+  session(place: string, action: SessionAction): Promise<LeaseReply>;
 }
