@@ -14,7 +14,7 @@ export function withSource(url: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}source=${source}`;
 }
 
-export const test = base.extend<{ allowConsole: AllowConsole; consoleGuard: void }>({
+export const test = base.extend<{ allowConsole: AllowConsole; consoleGuard: undefined }>({
   page: async ({ page }, provide) => {
     const goto = page.goto.bind(page);
     page.goto = (url, opts) => goto(withSource(url), opts);
@@ -27,7 +27,7 @@ export const test = base.extend<{ allowConsole: AllowConsole; consoleGuard: void
     const bad = guard.unexpected();
     if (bad.length) throw new Error(`Unexpected console errors:\n${bad.join('\n')}`);
   },
-  consoleGuard: [async ({ allowConsole }, provide) => { void allowConsole; await provide(); }, { auto: true }],
+  consoleGuard: [async ({ allowConsole }, provide) => { void allowConsole; await provide(undefined); }, { auto: true }],
 });
 
 export { expect };
