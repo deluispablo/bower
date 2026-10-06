@@ -1,5 +1,7 @@
 # Technical-lead decision TL-P2-2026-10-06-42: token measurement and the model ladder
 
+> Amended by [TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md): the ledger gains billed-token columns, budgets come from the measured median, models are pinned by project agents, and every climb is a fresh session.
+
 **Owner request, 2026-10-06:** measure what each task costs in tokens. Start each task on a low model when planning allows, and raise the model only when the task gets stuck, gets complicated or fails review. Always pre-analyse which starting model is optimal. This extends [TL-P2-41](2026-10-06-tl-p2-41-token-budget.md).
 
 The approach is a standard **model cascade**: cheap models first, with escalation to stronger ones only when needed. This literature reports large cost savings at small quality loss ([FrugalGPT techniques](https://portkey.ai/docs/guides/whitepapers/optimizing-llm-costs/frugalgpt-techniques), [routing and cascading survey](https://arxiv.org/pdf/2603.04445)).

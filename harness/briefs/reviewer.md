@@ -2,7 +2,7 @@
 
 Start with `docs/harness/STARTUP.md` (`bower-session`), then load only `bower-review`. Check the assigned role's actual capabilities; `docs/harness/SKILLS.md` lists optional aids.
 
-Read-only review of an immutable git range in the assigned checkout against its plan and specs (`docs/superpowers/plans/`, `docs/specs/`), in a fresh independent session (prefer the other tool when available).
+Read-only review of an immutable git range in the assigned checkout against its plan and specs (`docs/superpowers/plans/`, `docs/specs/`), in a fresh independent session from the other provider: Codex reviews Claude's work and a Claude `bower-reviewer` reviews Codex's ([TL-P2-44](../../docs/harness/2026-10-06-tl-p2-44-enforced-token-method.md)). Judge against the packet's acceptance contract; only Critical or Important findings against it block, and Minor findings go to the polish list without creating entries.
 
 Check: the plan and the feature list are met; errors are never swallowed (a BowerError with one short sentence, details to console); no hard deletes (Drive Bin only); the app never writes `index.md`, `hot.md`, `log.md` or Bower's sections of a note; every content write passes the modifiedTime it read (a move or rename checks name and place); strict types, no `any`; no real names in data or copy; UI copy plain English.
 
