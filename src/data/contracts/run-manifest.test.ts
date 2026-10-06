@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { parseRunManifest, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
+import { parseRunManifest, type Content, type Manifest, type ManifestRefusal, type Operation, type ReportContribution, type SeenFile, type VerifiedContent } from './run-manifest';
 
 const dir = 'docs/harness/evidence/2026-10-05-local-prerequisites/run-recovery-contract/';
 const fixture = (file: string): Record<string, unknown> => JSON.parse(readFileSync(dir + file, 'utf8')) as Record<string, unknown>;
@@ -18,6 +18,11 @@ const C = (value: unknown): string => {
   return `{${Object.keys(node).sort().map((key) => `${JSON.stringify(key)}:${C(node[key])}`).join(',')}}`;
 };
 const H = (value: unknown): string => createHash('sha256').update(C(value), 'utf8').digest('hex');
+/** Raw text content per the contract: SHA-256 and size of the exact UTF-8 bytes, never C(string). */
+const raw = (text: string): Content => {
+  const encoded = Buffer.from(text, 'utf8');
+  return { encoding: 'utf8', size: encoded.byteLength, sha256: createHash('sha256').update(encoded).digest('hex') };
+};
 
 // Literal digests copied from the ratified fixtures; never computed by the code under test.
 const manifest01Hash = '9badff317145d753071b77cb70bd17c13ac745047180d0e0b6e341c1a1eef088';
@@ -35,6 +40,10 @@ const time = '2026-10-05T10:00:00.000Z';
 const seen = (fileId: string, name: string, parent: string, folder = false): SeenFile => ({ fileId, name, parents: [parent], folder, modifiedTime: time });
 const verified = (size: number, sha256: string, encoding: 'utf8' | 'blob' = 'utf8'): VerifiedContent => ({ encoding, size, sha256, provenance: 'fake-stored', observedModifiedTime: time });
 const digest = (char: string): string => char.repeat(64);
+const verifiedText = (text: string): VerifiedContent => ({ ...raw(text), provenance: 'fake-stored', observedModifiedTime: time });
+const contextText = ' Edited\r\n é😀  ';
+const noteText = 'Receipts\r\n é ';
+const runnerText = '[]\n';
 
 /** Recompute captureId and operation IDs with the oracle, carrying references to renamed operations. */
 function seal(value: Manifest): Manifest {
@@ -60,7 +69,7 @@ function rich(): Manifest {
       anchor: seen('pile-folder-id', 'Receipts', 'inbox-folder', true), memberKeys: ['member-a', null],
       childFileIds: ['child-a', 'context-file'],
       context: { kind: 'text', memberKey: 'member-context', file: seen('context-file', 'context.md', 'pile-folder-id'),
-        text: ' Edited\r\n é😀  ', content: verified(17, digest('c')) } },
+        text: contextText, content: verifiedText(contextText) } },
     { pileId: 'legacy-pile', source: { kind: 'observed' }, anchor: null, memberKeys: [null, null], childFileIds: [], context: { kind: 'absent' } },
   );
   value.capture.members.push({ pileId: 'pile-folder', memberKey: 'member-a', file: seen('child-a', 'a.txt', 'pile-folder-id'), content: verified(3, digest('d'), 'blob') });
@@ -79,9 +88,9 @@ function rich(): Manifest {
   add(first.effect, []);
   add({ kind: 'create-folder', parent: { fileId: 'areas-home' }, name: 'Receipts', createKey: 'folder-new' }, []);
   add({ kind: 'create-text', parent: { createdBy: ids[1] ?? '' }, name: 'Receipts note.md', createKey: 'note-new',
-    text: 'Receipts\r\n é ', content: { encoding: 'utf8', size: 14, sha256: digest('f') }, purpose: 'generated' }, [1]);
+    text: noteText, content: raw(noteText), purpose: 'generated' }, [1]);
   add({ kind: 'write-runner-json', before: seen('questions-file', 'questions.json', 'bower-system'),
-    beforeContent: verified(3, digest('1')), path: '.bower/questions.json', text: '[]\n', content: { encoding: 'utf8', size: 3, sha256: digest('2') } }, []);
+    beforeContent: verified(3, digest('1')), path: '.bower/questions.json', text: runnerText, content: raw(runnerText) }, []);
   add({ kind: 'move', before: seen('child-a', 'a.txt', 'pile-folder-id'), parent: { createdBy: ids[1] ?? '' }, name: 'a.txt',
     properties: { by: 'bower', bowerNew: null, asAdded: 'a.txt', origin: null, kind: 'other', pile: 'pile-folder', bowerItem: 'member-a', bowerDeclaration: 'decl-folder' } }, [1]);
   add({ kind: 'bin', before: seen('pile-folder-id', 'Receipts', 'inbox-folder', true), capturedChildIds: ['child-a', 'context-file'] }, [4]);
@@ -283,7 +292,8 @@ describe('run manifests fix capture and operation identity', () => {
     ['instructions scope', (value: Manifest): void => { value.runScope = 'instructions'; }],
     ['web allowed', (value: Manifest): void => { value.allowWeb = true; }],
     ['adapter-read provenance', (value: Manifest): void => { set(value, ['capture', 'members', 0, 'content', 'provenance'], 'adapter-read'); }],
-    ['blob create content', (value: Manifest): void => { set(value, ['operations', 2, 'effect', 'content', 'encoding'], 'blob'); }],
+    // Was 'blob create content'; create-text content is now utf8 only (Unit G), refused in the consistency suite.
+    ['blob member content', (value: Manifest): void => { set(value, ['capture', 'members', 0, 'content', 'encoding'], 'blob'); }],
     ['runner-json purpose', (value: Manifest): void => { set(value, ['operations', 2, 'effect', 'purpose'], 'runner-json'); }],
     ['requests.json write', (value: Manifest): void => { set(value, ['operations', 3, 'effect', 'path'], '.bower/requests.json'); }],
     ['hashes.json write', (value: Manifest): void => { set(value, ['operations', 3, 'effect', 'path'], '.bower/hashes.json'); }],
@@ -300,12 +310,17 @@ describe('run manifests fix capture and operation identity', () => {
     ['capture', 'members', 1, 'memberKey'], ['operations', 1, 'effect', 'createKey'], ['operations', 2, 'effect', 'createKey'],
     ['operations', 4, 'effect', 'properties', 'pile'], ['operations', 4, 'effect', 'properties', 'bowerItem'],
     ['operations', 4, 'effect', 'properties', 'bowerDeclaration']];
+  // Both ends of one capture identity; a boundary rename keeps the other end equal (Unit G member keys).
+  const linked: Record<string, Path[]> = {
+    'capture.piles.1.pileId': [['capture', 'members', 1, 'pileId']], 'capture.members.1.pileId': [['capture', 'piles', 1, 'pileId']],
+    'capture.piles.1.memberKeys.0': [['capture', 'members', 1, 'memberKey']], 'capture.members.1.memberKey': [['capture', 'piles', 1, 'memberKeys', 0]],
+  };
   for (const path of idPaths) {
     it.each(['', 'x'.repeat(129), 'a b', 'a/b', 'é', 'a.', 'a\n', '\u0000'])('refuses invalid logical ID %j at ' + path.join('.'), async (id) => {
       const value = rich(); set(value, path, id); await refuse(bytes(value), 'shape');
     });
     it.each(['Z', 'A_0-z'.repeat(25) + 'xyz'])('accepts logical ID boundary %s at ' + path.join('.'), async (id) => {
-      await accept(variant((value) => { set(value, path, id); }));
+      await accept(variant((value) => { for (const end of [path, ...linked[path.join('.')] ?? []]) set(value, end, id); }));
     });
   }
 
@@ -556,5 +571,177 @@ describe('run manifests fix capture and operation identity', () => {
     try { await expect(parseRunManifest(source, 'fake-root')).rejects.toBe(failure); }
     finally { spy.mockRestore(); }
     expect(source).toEqual(before);
+  });
+});
+
+// Unit G (guard 6 and the effect shapes): text against its content, observed piles, member keys, createdBy targets.
+const textSites: { label: string; text: Path; content: Path }[] = [
+  { label: 'captured context', text: ['capture', 'piles', 1, 'context', 'text'], content: ['capture', 'piles', 1, 'context', 'content'] },
+  { label: 'create-text', text: ['operations', 2, 'effect', 'text'], content: ['operations', 2, 'effect', 'content'] },
+  { label: 'write-runner-json', text: ['operations', 3, 'effect', 'text'], content: ['operations', 3, 'effect', 'content'] },
+];
+/**
+ * Replace a site's text and give its content the exact raw description of that text, then apply only the
+ * given overrides, so a size override keeps the right digest and a digest override keeps the right size.
+ * Verified provenance fields stay.
+ */
+function write(value: Manifest, site: (typeof textSites)[number], text: string, content: Partial<Content> = {}): void {
+  set(value, site.text, text);
+  Object.assign(at(value, site.content) as Content, raw(text), content);
+}
+/** Append an operation with a distinct placeholder identity; seal() gives it its real one and renames references. */
+function append(value: Manifest, effect: Operation['effect']): void {
+  const ordinal = value.operations.length;
+  value.operations.push({ operationId: H({ placeholder: ordinal }), ordinal, dependsOn: [], effect });
+}
+
+describe('run manifests keep captured and written text consistent', () => {
+  it('checks the independent raw-content oracle against literal SHA-256 vectors first', () => {
+    expect(raw('')).toEqual({ encoding: 'utf8', size: 0, sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' });
+    expect(raw('abc')).toEqual({ encoding: 'utf8', size: 3, sha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' });
+    expect(raw('é😀').size).toBe(6);
+    expect(raw('x').sha256).not.toBe(H('x'));
+  });
+
+  for (const site of textSites) {
+    const other = 'é😀\r\n';
+    it.each([
+      ['text edited after its content was taken', (value: Manifest): void => { set(value, site.text, `${String(at(value, site.text))}x`); }],
+      ['size one byte larger', (value: Manifest): void => { write(value, site, other, { size: raw(other).size + 1 }); }],
+      ['size one byte smaller', (value: Manifest): void => { write(value, site, other, { size: raw(other).size - 1 }); }],
+      ['size counted in UTF-16 code units', (value: Manifest): void => { write(value, site, other, { size: other.length }); }],
+      ['digest of other text', (value: Manifest): void => { write(value, site, other, { sha256: raw(`${other}x`).sha256 }); }],
+      ['digest of the canonical JSON string', (value: Manifest): void => { write(value, site, other, { sha256: H(other) }); }],
+      ['content of the trimmed text', (value: Manifest): void => { write(value, site, ' a\r\n', raw('a')); }],
+      ['content of the NFD-normalized text', (value: Manifest): void => { write(value, site, 'é', raw('é'.normalize('NFD'))); }],
+      ['content of CRLF turned into LF', (value: Manifest): void => { write(value, site, 'a\r\nb', raw('a\nb')); }],
+      ['empty text with nonempty content', (value: Manifest): void => { write(value, site, '', raw(' ')); }],
+      ['text with the content of empty text', (value: Manifest): void => { write(value, site, ' ', raw('')); }],
+      ['blob encoding over the exact bytes', (value: Manifest): void => { write(value, site, other, { encoding: 'blob' }); }],
+      ['same-size digest of other bytes (Receiptz for Receipts)', (value: Manifest): void => { write(value, site, 'Receipts', { sha256: raw('Receiptz').sha256 }); }],
+      ['same-size digest of other bytes ({} for [])', (value: Manifest): void => { write(value, site, '{}\n', { sha256: raw('[]\n').sha256 }); }],
+      ['text edited in place keeping its size', (value: Manifest): void => {
+        const before = String(at(value, site.text)); set(value, site.text, `${before.slice(0, -1)}x`);
+      }],
+    ] as const)(`refuses ${site.label} whose content does not describe its text, with resealed identities: %s`, async (_label, change) => {
+      const value = variant(change);
+      expect(value.captureId).toBe(H({ scope: value.scope, runScope: value.runScope, capture: value.capture }));
+      expect(value.operations.map((item) => item.operationId)).toEqual(value.operations.map((item) =>
+        H({ runId: value.runId, captureId: value.captureId, ordinal: item.ordinal, effect: item.effect })));
+      await refuse(bytes(value), 'content');
+    });
+    it.each(['', ' ', 'a\r\nb\r', ' é😀\t\u0085  ', 'é'.normalize('NFD'), '{"a":[1,2]}\n', 'x'.repeat(4096)])(
+      `accepts ${site.label} text %j with the exact UTF-8 size and raw digest, preserving its bytes`, async (text) => {
+        const value = variant((change) => { write(change, site, text); });
+        await accept(value);
+        const result = await parseRunManifest(bytes(value), 'fake-root');
+        expect(result.ok && at(result.value, site.text)).toBe(text);
+      });
+  }
+  it('refuses inconsistent content even when the identities were not resealed', async () => {
+    const value = rich(); set(value, ['operations', 2, 'effect', 'content', 'size'], raw(noteText).size + 1);
+    await refuse(bytes(value), 'content');
+  });
+
+  it.each([
+    ['observed pile with a member key', (value: Manifest): void => { set(value, ['capture', 'piles', 2, 'memberKeys'], ['legacy-key']); }],
+    ['observed pile with one key among nulls', (value: Manifest): void => { set(value, ['capture', 'piles', 2, 'memberKeys'], [null, 'legacy-key', null]); }],
+    ['declared pile turned observed keeping its keys', (value: Manifest): void => { set(value, ['capture', 'piles', 1, 'source'], { kind: 'observed' }); }],
+    ['observed pile whose member keeps a key', (value: Manifest): void => {
+      set(value, ['capture', 'piles', 1, 'source'], { kind: 'observed' }); set(value, ['capture', 'piles', 1, 'memberKeys'], [null, null]);
+      set(value, ['capture', 'piles', 1, 'context', 'memberKey'], null);
+    }],
+    ['observed pile whose context keeps a key', (value: Manifest): void => {
+      set(value, ['capture', 'piles', 1, 'source'], { kind: 'observed' }); set(value, ['capture', 'piles', 1, 'memberKeys'], [null, null]);
+      set(value, ['capture', 'members', 1, 'memberKey'], null);
+    }],
+    ['keyed member added to an observed pile', (value: Manifest): void => {
+      value.capture.members.push({ pileId: 'legacy-pile', memberKey: 'legacy-key', file: seen('legacy-file', 'old.txt', 'inbox-folder'), content: verified(1, digest('7'), 'blob') });
+    }],
+    ['observed pile with a keyed text context', (value: Manifest): void => {
+      set(value, ['capture', 'piles', 2, 'context'], { kind: 'text', memberKey: 'legacy-key', file: seen('legacy-context', 'context.md', 'inbox-folder'), text: 'Old', content: verifiedText('Old') });
+    }],
+    ['two files under one member key of a pile', (value: Manifest): void => {
+      value.capture.members.push({ pileId: 'pile-folder', memberKey: 'member-a', file: seen('child-b', 'b.txt', 'pile-folder-id'), content: verified(3, digest('d'), 'blob') });
+    }],
+    ['member key missing from its pile', (value: Manifest): void => { set(value, ['capture', 'members', 1, 'memberKey'], 'member-b'); }],
+    ['member key of another pile', (value: Manifest): void => { set(value, ['capture', 'members', 1, 'memberKey'], 'member-receipt'); }],
+    ['context key used as a member key', (value: Manifest): void => { set(value, ['capture', 'members', 1, 'memberKey'], 'member-context'); }],
+    ['keyed member of a pile that was not captured', (value: Manifest): void => { set(value, ['capture', 'members', 1, 'pileId'], 'pile-missing'); }],
+    ['pile key dropped while its member keeps it', (value: Manifest): void => { set(value, ['capture', 'piles', 1, 'memberKeys'], [null]); }],
+  ] as const)('refuses inconsistent pile membership with resealed identities: %s', async (_label, change) => {
+    const value = variant(change);
+    expect(value.captureId).toBe(H({ scope: value.scope, runScope: value.runScope, capture: value.capture }));
+    await refuse(bytes(value), 'shape');
+  });
+  it.each([
+    ['observed pile with null keys, null-keyed members and an unkeyed text context', (value: Manifest): void => {
+      set(value, ['capture', 'piles', 1, 'source'], { kind: 'observed' }); set(value, ['capture', 'piles', 1, 'memberKeys'], [null, null]);
+      set(value, ['capture', 'piles', 1, 'context', 'memberKey'], null); set(value, ['capture', 'members', 1, 'memberKey'], null);
+    }],
+    ['several null-keyed members of one observed pile', (value: Manifest): void => {
+      value.capture.members.push(
+        { pileId: 'legacy-pile', memberKey: null, file: seen('legacy-1', 'old.txt', 'inbox-folder'), content: verified(1, digest('7'), 'blob') },
+        { pileId: 'legacy-pile', memberKey: null, file: seen('legacy-2', 'old.txt', 'inbox-folder'), content: verified(1, digest('7'), 'blob') });
+    }],
+    ['null-keyed members beside a keyed member of a declared pile', (value: Manifest): void => {
+      value.capture.members.push(
+        { pileId: 'pile-folder', memberKey: null, file: seen('child-c', 'c.txt', 'pile-folder-id'), content: verified(1, digest('7'), 'blob') },
+        { pileId: 'pile-folder', memberKey: null, file: seen('child-d', 'd.txt', 'pile-folder-id'), content: verified(1, digest('7'), 'blob') });
+    }],
+  ] as const)('accepts consistent pile membership: %s', async (_label, change) => { await accept(variant(change)); });
+  // Not decided by Unit G or the contract: these pin only that this unit adds no rule for them.
+  it.each([
+    ['one member key in two piles', (value: Manifest): void => {
+      set(value, ['capture', 'piles', 0, 'memberKeys'], ['member-receipt', 'member-a']);
+      value.capture.members.push({ pileId: 'pile-receipt', memberKey: 'member-a', file: seen('receipt-2', 'receipt.txt', 'inbox-folder'), content: verified(3, digest('d'), 'blob') });
+    }],
+    ['declared key whose member was not captured', (value: Manifest): void => { set(value, ['capture', 'piles', 1, 'memberKeys'], ['member-a', 'member-b', null]); }],
+    ['declared context keyed apart from its pile keys', (value: Manifest): void => { set(value, ['capture', 'piles', 1, 'context', 'memberKey'], 'member-other'); }],
+  ] as const)('accepts membership not decided by Unit G: %s', async (_label, change) => { await accept(variant(change)); });
+
+  // Logical ID guards the membership check cannot decide first: no member names these piles or keys.
+  const badIds: unknown[] = ['', 'x'.repeat(129), 'a b', 'a/b', 'é', 'a.', 'a\n', '\u0000', 7];
+  it.each([...badIds, null])('refuses invalid pileId %j on a pile no member references', async (id) => {
+    const value = rich(); set(value, ['capture', 'piles', 2, 'pileId'], id); await refuse(bytes(value), 'shape');
+  });
+  it.each([...badIds, null])('refuses invalid pileId %j on a null-keyed member', async (id) => {
+    const value = rich(); set(value, ['capture', 'members', 1, 'memberKey'], null); set(value, ['capture', 'members', 1, 'pileId'], id);
+    await refuse(bytes(value), 'shape');
+  });
+  it.each(badIds)('refuses invalid unreferenced pile member key %j', async (id) => {
+    const value = rich(); set(value, ['capture', 'piles', 1, 'memberKeys', 1], id); await refuse(bytes(value), 'shape');
+  });
+  it('accepts the controls behind those ID refusals with valid IDs', async () => {
+    await accept(variant((value) => { set(value, ['capture', 'piles', 2, 'pileId'], 'Z'); }));
+    await accept(variant((value) => { set(value, ['capture', 'members', 1, 'memberKey'], null); set(value, ['capture', 'members', 1, 'pileId'], 'legacy-pile'); }));
+    await accept(variant((value) => { set(value, ['capture', 'piles', 1, 'memberKeys', 1], 'Z'); }));
+  });
+
+  it.each([
+    ['create-text into a moved file', (value: Manifest): void => { op(value, 2).effect = { ...op(value, 2).effect, parent: { createdBy: op(value, 0).operationId } } as Operation['effect']; }],
+    ['move into a created text', (value: Manifest): void => { op(value, 4).effect = { ...op(value, 4).effect, parent: { createdBy: op(value, 2).operationId } } as Operation['effect']; }],
+    ['create-folder under a runner JSON write', (value: Manifest): void => {
+      append(value, { kind: 'create-folder', parent: { createdBy: op(value, 3).operationId }, name: 'Inside', createKey: 'folder-inside' });
+    }],
+    ['create-text under a binned folder', (value: Manifest): void => {
+      append(value, { kind: 'create-text', parent: { createdBy: op(value, 5).operationId }, name: 'x.md', createKey: 'note-inside', text: 'x', content: raw('x'), purpose: 'generated' });
+    }],
+  ] as const)('refuses createdBy naming an earlier operation that creates no folder, with resealed identities: %s', async (_label, change) => {
+    const value = variant(change);
+    expect(value.operations.map((item) => item.ordinal)).toEqual(value.operations.map((_item, index) => index));
+    await refuse(bytes(value), 'shape');
+  });
+  it('accepts createdBy chains through earlier create-folder operations', async () => {
+    await accept(variant((value) => {
+      append(value, { kind: 'create-folder', parent: { createdBy: op(value, 1).operationId }, name: 'Inside', createKey: 'folder-inside' });
+      append(value, { kind: 'create-text', parent: { createdBy: op(value, 6).operationId }, name: 'x.md', createKey: 'note-inside', text: 'x', content: raw('x'), purpose: 'generated' });
+      append(value, { kind: 'move', before: seen('loose-file', 'loose.txt', 'inbox-folder'), parent: { createdBy: op(value, 6).operationId }, name: 'loose.txt', properties: {} });
+    }));
+  });
+  it('still refuses createdBy naming a later create-folder as order', async () => {
+    const value = rich();
+    op(value, 0).effect = { ...op(value, 0).effect, parent: { createdBy: op(value, 1).operationId } } as Operation['effect'];
+    await refuse(bytes(seal(value)), 'order');
   });
 });

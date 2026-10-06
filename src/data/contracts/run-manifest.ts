@@ -1,4 +1,5 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
+import { sha256 } from '../vault/hashes';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -48,7 +49,11 @@ export type Manifest = {
   runScope: 'all' | 'instructions'; allowWeb: boolean; requestedAt: number;
   captureId: string; capture: Capture; operations: Operation[]; reportPlan: ReportContribution[];
 };
-export type ManifestRefusal = RecordJsonFailure['reason'] | 'shape' | 'scope' | 'capture-id' | 'order' | 'operation-id' | 'report';
+/**
+ * `content`: a captured context, create-text or write-runner-json text whose content is not utf8 with the exact
+ * UTF-8 size and raw SHA-256 of that text. Observed-pile keys, member keys and createdBy targets refuse as `shape`.
+ */
+export type ManifestRefusal = RecordJsonFailure['reason'] | 'shape' | 'scope' | 'content' | 'capture-id' | 'order' | 'operation-id' | 'report';
 export type ManifestResult = { ok: true; value: Manifest; sha256: string } | { ok: false; reason: ManifestRefusal };
 
 type Fields = Record<string, unknown>;
@@ -166,6 +171,19 @@ function capturedJournal(value: unknown): value is CapturedJournal {
   return closed(value, ['recordId', 'sha256', 'fileIds']) && recordId(value.recordId) && hash(value.sha256)
     && list(value.fileIds, driveId) && value.fileIds.length > 0 && unique(value.fileIds);
 }
+/**
+ * Guard 6 membership: an observed pile invents no keys, so it and its members and context carry null keys;
+ * a non-null member key is listed by its own captured pile and is carried by at most one captured member of that pile.
+ */
+function membership(piles: CapturedPile[], members: CapturedMember[]): boolean {
+  const byId = new Map(piles.map((pile) => [pile.pileId, pile]));
+  const observed = (pile: CapturedPile): boolean => pile.source.kind === 'observed';
+  if (piles.some((pile) => observed(pile)
+    && (pile.memberKeys.some((key) => key !== null) || (pile.context.kind === 'text' && pile.context.memberKey !== null)))) return false;
+  const keyed = members.filter((member) => member.memberKey !== null);
+  return uniqueBy(keyed, (member) => JSON.stringify([member.pileId, member.memberKey]))
+    && keyed.every((member) => byId.get(member.pileId)?.memberKeys.includes(member.memberKey) === true);
+}
 function capture(value: unknown): value is Capture {
   return closed(value, ['piles', 'members', 'journal', 'places'])
     && list(value.piles, capturedPile) && list(value.members, capturedMember) && list(value.journal, capturedJournal)
@@ -173,7 +191,8 @@ function capture(value: unknown): value is Capture {
     && uniqueBy(value.piles as CapturedPile[], (pile) => pile.pileId)
     && uniqueBy(value.members as CapturedMember[], (member) => member.file.fileId)
     && uniqueBy(value.places as Capture['places'], (place) => place.file.fileId)
-    && uniqueBy(value.journal as CapturedJournal[], (entry) => entry.recordId);
+    && uniqueBy(value.journal as CapturedJournal[], (entry) => entry.recordId)
+    && membership(value.piles as CapturedPile[], value.members as CapturedMember[]);
 }
 
 function target(value: unknown): value is Target {
@@ -237,6 +256,19 @@ function manifest(value: unknown): value is Manifest {
     && capture(value.capture) && list(value.operations, operation) && list(value.reportPlan, contribution);
 }
 
+/** Raw text content: utf8 with the size and SHA-256 of the exact UTF-8 bytes, not of C(text). */
+async function describes(content: Content, text: string): Promise<boolean> {
+  const raw = new TextEncoder().encode(text);
+  return content.encoding === 'utf8' && content.size === raw.byteLength && content.sha256 === await sha256(new Blob([raw.buffer]));
+}
+function texts(value: Manifest): { text: string; content: Content }[] {
+  const found: { text: string; content: Content }[] = value.capture.piles.flatMap((pile) => pile.context.kind === 'text' ? [pile.context] : []);
+  for (const { effect } of value.operations) {
+    if (effect.kind === 'create-text' || effect.kind === 'write-runner-json') found.push(effect);
+  }
+  return found;
+}
+
 async function digest(value: unknown): Promise<string> {
   const result = await hashRecordJson(value);
   // Every string and number was validated above, so canonical encoding cannot refuse here.
@@ -251,6 +283,9 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
   if (!manifest(parsed.value)) return { ok: false, reason: 'shape' };
   const value = parsed.value;
   if (!driveId(expectedRootId) || expectedRootId !== value.scope.rootId) return { ok: false, reason: 'scope' };
+  for (const item of texts(value)) {
+    if (!await describes(item.content, item.text)) return { ok: false, reason: 'content' };
+  }
   if (await digest({ scope: value.scope, runScope: value.runScope, capture: value.capture }) !== value.captureId) {
     return { ok: false, reason: 'capture-id' };
   }
@@ -259,12 +294,15 @@ export async function parseRunManifest(bytes: Uint8Array, expectedRootId: string
     const expected = await digest({ runId: value.runId, captureId: value.captureId, ordinal: item.ordinal, effect: item.effect });
     if (expected !== item.operationId) return { ok: false, reason: 'operation-id' };
   }
-  const earlier = new Set<string>();
+  // Earlier operation ID -> its effect kind; a createdBy parent must be an earlier create-folder.
+  const earlier = new Map<string, Effect['kind']>();
   for (const item of value.operations) {
     const parent = 'parent' in item.effect ? item.effect.parent : null;
+    const createdBy = parent && 'createdBy' in parent ? parent.createdBy : null;
     if (!item.dependsOn.every((dependency) => earlier.has(dependency))
-      || (parent && 'createdBy' in parent && !earlier.has(parent.createdBy))) return { ok: false, reason: 'order' };
-    earlier.add(item.operationId);
+      || (createdBy !== null && !earlier.has(createdBy))) return { ok: false, reason: 'order' };
+    if (createdBy !== null && earlier.get(createdBy) !== 'create-folder') return { ok: false, reason: 'shape' };
+    earlier.set(item.operationId, item.effect.kind);
   }
   const questions = new Set<string>();
   for (const item of value.reportPlan) {
