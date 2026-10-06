@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { seedFakeDrive } from '../fake/seed';
 import { findNode } from '../tree';
+import { BowerError } from '../types';
 import { DriveVault } from './drive-vault';
 import { runFake } from '../fake/fake-runner';
 
@@ -734,4 +735,78 @@ it('plain action names preserve dots in folder names', async () => {
 it('search finds a full file name while showing its plain name', async () => {
   const hits = await vault.search('Lease draft.pdf');
   expect(hits.find((h) => h.path === 'Projects/Flat hunt/Lease draft.pdf')?.title).toBe('Lease draft');
+});
+
+
+describe('unreadable ownership notes do not block other notes', () => {
+  const target = 'Resources/Target.md';
+  const healthy = 'Resources/Healthy.md';
+  const odd = 'Resources/Odd.md';
+  const body = 'ownershipneedle [[Target]]';
+  const formats = [
+    { name: 'unsupported format', text: `---\nbower_format: obsidian-thing\n---\n${body}`, message: 'This note uses an unsupported format.' },
+    { name: 'damaged ownership/2', text: `---\nbower_format: ownership/2\n---\n${body}`, message: 'This note cannot be read safely.' },
+  ];
+
+  beforeEach(() => { vi.spyOn(console, 'error').mockImplementation(() => undefined); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  async function addNotes(text: string) {
+    const resources = await idOf('Resources');
+    await drive.createText(resources, 'Target.md', '# Target');
+    await drive.createText(resources, 'Healthy.md', body);
+    const bad = await drive.createText(resources, 'Odd.md', text);
+    const inbox = await idOf('Inbox');
+    const folder = await drive.createFolder(inbox, 'Unreadable pile');
+    const context = await drive.createText(folder.id, 'Pile note.md', text);
+    await drive.createText(folder.id, 'Input.md', 'Alex added a synthetic input.');
+    const good = await drive.createFolder(inbox, 'Readable pile');
+    await drive.createText(good.id, 'Pile note.md', 'Alex added readable context.');
+    return { bad, folder, context, good };
+  }
+
+  it.each(formats)('search skips and logs $name while returning readable matches', async ({ text }) => {
+    await addNotes(text);
+    const before = await drive.snapshot();
+    await expect(vault.search('ownershipneedle').then((hits) => hits.map((hit) => hit.path))).resolves.toEqual([healthy]);
+    expect(console.error).toHaveBeenCalledWith(expect.any(BowerError));
+    expect(await drive.snapshot()).toBe(before);
+  });
+
+  it.each(formats)('backlinks skip and log $name while the target still opens', async ({ text }) => {
+    await addNotes(text);
+    const before = await drive.snapshot();
+    await expect(vault.note(target)).resolves.toMatchObject({ path: target, body: '# Target', backlinks: [healthy] });
+    expect(console.error).toHaveBeenCalledWith(expect.any(BowerError));
+    expect(await drive.snapshot()).toBe(before);
+  });
+
+  it.each(formats)('Inbox skips and logs a pile with $name without hiding readable piles', async ({ text }) => {
+    const { folder, good } = await addNotes(text);
+    const before = await drive.snapshot();
+    await expect(vault.piles().then((piles) => piles.find((pile) => pile.id === good.id)?.text)).resolves.toBe('Alex added readable context.');
+    expect((await vault.piles()).some((pile) => pile.id === folder.id)).toBe(false);
+    expect(console.error).toHaveBeenCalledWith(expect.any(BowerError));
+    expect(await drive.snapshot()).toBe(before);
+  });
+
+  it.each(formats)('opening $name directly retains the short readable refusal', async ({ text, message }) => {
+    await addNotes(text);
+    const before = await drive.snapshot();
+    await expect(vault.note(odd)).rejects.toMatchObject({ name: 'BowerError', code: 'unknown', message });
+    await expect(vault.toggleTask(odd, 0)).rejects.toMatchObject({ name: 'BowerError', message });
+    expect(await drive.snapshot()).toBe(before);
+  });
+
+  it.each(['search', 'backlinks', 'Inbox'] as const)('still propagates Drive read failures in %s', async (operation) => {
+    const { bad, context } = await addNotes(body);
+    const read = drive.readText.bind(drive);
+    const error = new BowerError('offline', 'You appear to be offline.');
+    vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+      if (id === bad.id || id === context.id) throw error;
+      return read(id);
+    });
+    const result = operation === 'search' ? vault.search('ownershipneedle') : operation === 'backlinks' ? vault.note(target) : vault.piles();
+    await expect(result).rejects.toBe(error);
+  });
 });

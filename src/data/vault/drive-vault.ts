@@ -177,7 +177,8 @@ export class DriveVault implements VaultSource {
     const candidates = [...new Set(hits.map((h) => ix.pathOf(h.id)).filter((p): p is string => !!p && p !== path && p.endsWith('.md')))].slice(0, MAX_READS);
     const linking = await inBatches(candidates, async (p) => {
       const f = ix.file(p);
-      return f && (await this.parsed(f, p)).links.some((l) => wanted.has(linkTarget(l))) ? p : null;
+      const note = f ? await this.parsed(f, p, true) : null;
+      return note?.links.some((l) => wanted.has(linkTarget(l))) ? p : null;
     });
     const backlinks = linking.filter((p): p is string => !!p);
     return { ...parsed, path, links: [...new Set(links)], backlinks };
@@ -373,7 +374,8 @@ export class DriveVault implements VaultSource {
         const address = savedLinkAddress(await this.drive.readText(h.id));
         return address && words.every((w) => address.toLowerCase().includes(w)) ? { path, title: thingName(nameOf(path)), snippet: address, score: 1 } : null;
       }
-      const n = await this.parsed(h, path);
+      const n = await this.parsed(h, path, true);
+      if (!n) return null;
       const line = searchLines(n).map(plainText).find((l) => words.every((w) => l.toLowerCase().includes(w)));
       return line ? { path, title: n.title, snippet: plainSnippet(line), score: 1 } : null;
     });
@@ -404,7 +406,10 @@ export class DriveVault implements VaultSource {
       }
       const kids = ix.filesIn(path).filter((k) => !k.folder);
       const note = kids.find((k) => k.name === PILE_NOTE);
-      const text = note ? (await this.parsed(note, `${path}/${PILE_NOTE}`)).body.trim() : '';
+      const parsed = note ? await this.parsed(note, `${path}/${PILE_NOTE}`, true) : null;
+      // Pile.text is editable context, so a refusal must not masquerade as saved text.
+      if (note && !parsed) continue;
+      const text = parsed?.body.trim() ?? '';
       out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items: [...kids.filter((k) => k !== note).map(itemOf), ...sending] });
     }
     // A lone thing still on its way has no file yet: show it from here.
@@ -790,10 +795,21 @@ export class DriveVault implements VaultSource {
     return f;
   }
 
-  protected async parsed(f: DriveFile, path: string): Promise<ParsedNote> {
+  protected parsed(f: DriveFile, path: string): Promise<ParsedNote>;
+  protected parsed(f: DriveFile, path: string, skipUnreadable: true): Promise<ParsedNote | null>;
+  protected async parsed(f: DriveFile, path: string, skipUnreadable = false): Promise<ParsedNote | null> {
     const cached = this.notes.get(f.id);
     if (cached && cached.modified === f.modifiedTime) return { ...cached.note, path, title: displayName(nameOf(path)) };
-    const note = parseNote(path, await this.text(f));
+    // Read/session failures still reject the operation; only a note's parse refusal is isolated.
+    const text = await this.text(f);
+    let note: ParsedNote;
+    try {
+      note = parseNote(path, text);
+    } catch (e) {
+      if (!skipUnreadable || !(e instanceof BowerError)) throw e;
+      console.error(e);
+      return null;
+    }
     this.checkCurrent();
     this.notes.set(f.id, { modified: f.modifiedTime, note });
     return note;

@@ -21,6 +21,7 @@
  */
 import { BowerError, type Note, type Property, type SourceKind, type TimelineEntry } from '../types';
 import { TASK_LINE } from '../tasks';
+import { parseOwnership, togglePersonalTask, type ByteSpan } from './ownership-format';
 
 /** Frontmatter keys that are not properties. */
 export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source'] as const;
@@ -40,6 +41,32 @@ const labelOf = (key: string): string => {
 const oneLine = (s: string): string => s.replace(/\s*\n\s*/g, ' ').trim();
 const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '');
 const trimLines = (s: string): string => s.replace(/^\n+|\n+$/g, '');
+const encoder = new TextEncoder();
+const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
+function ownershipError(reason: string): BowerError {
+  console.error('Cannot read note ownership:', reason);
+  return new BowerError('unknown', reason === 'unsupported-version'
+    ? 'This note uses an unsupported format.'
+    : 'This note cannot be read safely.');
+}
+
+function ownershipOf(raw: string) {
+  // This validates the available string, not the original fetched byte encoding.
+  const bytes = encoder.encode(raw);
+  const ownership = parseOwnership(bytes);
+  if (ownership.status === 'invalid') throw ownershipError(ownership.reason);
+  // Do not silently replace unpaired surrogates when editing a declared v2 note.
+  if (ownership.status === 'v2' && decoder.decode(bytes) !== raw) throw ownershipError('text-cannot-round-trip');
+  return { bytes, ownership };
+}
+
+/** Display only; these normalized strings never supply mutation offsets. */
+function payloadDisplay(bytes: Uint8Array, span: ByteSpan, heading?: string): string {
+  const text = trimLines(decoder.decode(bytes.subarray(span.start, span.end)).replace(/\r\n/g, '\n'));
+  if (heading && text === heading) return '';
+  return heading && text.startsWith(`${heading}\n`) ? trimLines(text.slice(heading.length + 1)) : text;
+}
 
 interface Parts {
   front: Map<string, string> | null;
@@ -126,10 +153,19 @@ function linksIn(text: string): string[] {
 }
 
 export function parseNote(path: string, raw: string): ParsedNote {
+  const { bytes, ownership } = ownershipOf(raw);
   const text = raw.replace(/\r\n/g, '\n');
-  const p = split(text);
+  const p = split(ownership.status === 'v2' ? text.replace(/^\ufeff/, '') : text);
   const title = nameOf(path);
-  const body = trimLines(text.slice(p.bodyStart, p.bodyEnd));
+  let body = trimLines(text.slice(p.bodyStart, p.bodyEnd));
+  if (ownership.status === 'v2') {
+    body = payloadDisplay(bytes, ownership.personal);
+    p.current = payloadDisplay(bytes, ownership.payloads.current, CURRENT)
+      .split('\n').filter(Boolean).map((line) => line.startsWith('- ') ? line.slice(2) : line);
+    p.timeline = payloadDisplay(bytes, ownership.payloads.timeline, TIMELINE);
+    p.bowerNote = payloadDisplay(bytes, ownership.payloads['bower-note'], BOWER_NOTE) || null;
+    p.front?.delete('bower_format');
+  }
   if (!p.front) return { path, title, summary: '', properties: [], tags: [], currentState: [], body, timeline: [], links: linksIn(text), byBower: false };
   const f = p.front;
   const properties: Property[] = [];
@@ -183,6 +219,14 @@ export function serializeNote(n: NoteFile): string {
 
 /** Ticks or unticks the n-th task of the body; Bower's sections are never touched. */
 export function toggleTaskInText(raw: string, index: number): { text: string; label: string; done: boolean } {
+  const { bytes, ownership } = ownershipOf(raw);
+  if (ownership.status === 'v2') {
+    const task = ownership.tasks.find((candidate) => candidate.index === index);
+    if (!task) throw new BowerError('not-found', 'That line is no longer in the note.');
+    const result = togglePersonalTask(bytes, { index, label: task.label, previousDone: task.done, done: !task.done });
+    if (result.kind === 'refused') throw ownershipError(result.reason);
+    return { text: decoder.decode(result.bytes), label: result.label, done: result.done };
+  }
   const text = raw.replace(/\r\n/g, '\n');
   const p = split(text);
   let i = -1;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NOTES } from '../demo/notes';
+import { BowerError } from '../types';
 import { parseNote, serializeNote, toggleTaskInText } from './note-format';
 
 describe('the note file format', () => {
@@ -137,5 +138,114 @@ describe('notes written elsewhere (Obsidian)', () => {
 describe('more YAML from elsewhere', () => {
   it('reads a list that is not indented', () => {
     expect(parseNote('x.md', '---\ntags:\n- flat\n- shortlist\n---\nbody').tags).toEqual(['flat', 'shortlist']);
+  });
+});
+
+
+describe('protected sections retain prose and tasks outside the personal body', () => {
+  const paragraph = 'Alex keeps café 🪶 notes here.  ';
+  const personal = '## My notes\n- [ ] Personal task 🪶  ';
+  const raw = [
+    '---', 'bower_format: ownership/2', 'summary: Synthetic note', 'by: bower', 'contact: you@example.com', '---', '',
+    '<!-- bower:ownership/2 begin current -->', '## Current state', paragraph, '', '- [ ] Protected task',
+    '<!-- bower:ownership/2 end current -->', '<!-- bower:ownership/2 begin personal -->', personal,
+    '<!-- bower:ownership/2 end personal -->', '<!-- bower:ownership/2 begin timeline -->', '## Timeline',
+    '- 5 Oct · Protected history · [[Another note]]', '<!-- bower:ownership/2 end timeline -->',
+    '<!-- bower:ownership/2 begin bower-note -->', "## Bower's note", 'Protected explanation.',
+    '<!-- bower:ownership/2 end bower-note -->', '',
+  ].join('\n');
+  const fixtures = [
+    { name: 'LF', source: raw },
+    { name: 'CRLF', source: raw.replace(/\n/g, '\r\n') },
+    { name: 'mixed endings', source: raw.split('\n').map((line, i, lines) => line + (i === lines.length - 1 ? '' : i % 2 ? '\r\n' : '\n')).join('') },
+    { name: 'BOM', source: `\ufeff${raw}` },
+  ];
+
+  it.each(fixtures)('reads only the personal payload and derives protected display ($name)', ({ source }) => {
+    const note = parseNote('Synthetic.md', source);
+    expect(note.body).toBe(personal);
+    expect(note.currentState).toEqual([paragraph, '[ ] Protected task']);
+    expect(note.timeline).toEqual([{ date: '5 Oct', text: 'Protected history', source: 'Another note' }]);
+    expect(note.bowerNote).toEqual({ text: 'Protected explanation.', source: 'notes' });
+    expect(note.properties).toEqual([{ key: 'contact', label: 'Contact', value: 'you@example.com' }]);
+    expect(note.summary).toBe('Synthetic note');
+    expect(note.byBower).toBe(true);
+    expect(note.links).toEqual(['Another note']);
+  });
+
+  it.each(fixtures)('changes only the personal checkbox byte ($name)', ({ source }) => {
+    const expected = source.replace('- [ ] Personal task', '- [x] Personal task');
+    const changed = toggleTaskInText(source, 0);
+    expect(changed).toEqual({ text: expected, label: 'Personal task 🪶  ', done: true });
+    const before = new TextEncoder().encode(source);
+    const after = new TextEncoder().encode(changed.text);
+    expect(after).toHaveLength(before.length);
+    expect([...after].filter((byte, i) => byte !== before[i])).toEqual([120]);
+    expect(toggleTaskInText(changed.text, 0).text).toBe(source);
+    for (const index of [-1, 1, 2, 0.5, NaN]) {
+      expect(() => toggleTaskInText(source, index)).toThrow(BowerError);
+    }
+  });
+
+  it('does not infer ownership from headings inside payloads', () => {
+    const body = '## Current state\n- [ ] Personal task 🪶  \n## Timeline\nPersonal prose.';
+    const source = raw.replace(personal, body).replace('## Current state\n' + paragraph, paragraph);
+    const note = parseNote('Synthetic.md', source);
+    expect(note.body).toBe(body);
+    expect(note.currentState).toEqual([paragraph, '[ ] Protected task']);
+    expect(toggleTaskInText(source, 0).text).toBe(source.replace('- [ ] Personal task', '- [x] Personal task'));
+  });
+
+  it('uses parser task indices across fenced examples and empty labels', () => {
+    const body = [
+      '## My notes', '```markdown', '<!-- bower:ownership/2 end personal -->', '- [ ] Example only', '```',
+      '\\<!-- bower:ownership/2 begin personal -->', '- [ ]   ', '- [ ] Personal task 🪶  ',
+    ].join('\n');
+    const source = raw.replace(personal, body);
+    expect(parseNote('Synthetic.md', source).body).toBe(body);
+    expect(toggleTaskInText(source, 0).text).toBe(source.replace('- [ ] Personal task', '- [x] Personal task'));
+    expect(() => toggleTaskInText(source, 1)).toThrow(BowerError);
+  });
+
+  it('has no personal task when its payload is empty', () => {
+    const source = raw.replace(personal + '\n', '');
+    expect(parseNote('Synthetic.md', source).body).toBe('');
+    expect(() => toggleTaskInText(source, 0)).toThrow(BowerError);
+  });
+
+  const invalid = [
+    { name: 'missing end marker', source: raw.replace('<!-- bower:ownership/2 end current -->\n', '') },
+    { name: 'unsupported version', source: raw.replace('bower_format: ownership/2', 'bower_format: ownership/3') },
+    { name: 'duplicate declaration', source: raw.replace('summary:', 'bower_format: ownership/2\nsummary:') },
+    { name: 'unclaimed content', source: raw + 'Outside text\n- [ ] Unclaimed task' },
+    { name: 'unclosed fence', source: raw.replace(personal, '```\n' + personal) },
+    { name: 'lone CR', source: raw.replace(paragraph, paragraph + '\rX') },
+  ];
+  it.each(invalid)('refuses reading and task edits for $name', ({ source }) => {
+    const before = new TextEncoder().encode(source);
+    expect(() => parseNote('Synthetic.md', source)).toThrow(BowerError);
+    expect(() => toggleTaskInText(source, 0)).toThrow(BowerError);
+    expect(new TextEncoder().encode(source)).toEqual(before);
+  });
+
+  it('preserves the legacy ambiguity and ordinary My notes heading', () => {
+    const body = 'Protected-looking prose.\n- [ ] Disputed task\n## My notes\n- [ ] Personal task';
+    const source = '---\nsummary: Legacy\n---\n## Current state\n- Protected bullet\n' + body + '\n## Timeline\n- 5 Oct · History';
+    expect(parseNote('Synthetic.md', source).body).toBe(body);
+    expect(parseNote('Synthetic.md', source).currentState).toEqual(['Protected bullet']);
+    expect(toggleTaskInText(source, 0).text).toBe(source.replace('[ ] Disputed', '[x] Disputed'));
+    expect(toggleTaskInText(source, 1).text).toBe(source.replace('[ ] Personal', '[x] Personal'));
+  });
+
+  it('keeps marker-looking text without frontmatter wholly personal', () => {
+    const source = raw.slice(raw.indexOf('<!--'));
+    expect(parseNote('Synthetic.md', source).body).toBe(source.replace(/\n+$/, ''));
+    expect(toggleTaskInText(source, 0).text).toBe(source.replace('[ ] Protected', '[x] Protected'));
+  });
+
+  it('does not activate ownership/2 serialization', () => {
+    const serialized = serializeNote(parseNote('Synthetic.md', raw));
+    expect(serialized).not.toContain('bower_format:');
+    expect(serialized).not.toContain('<!-- bower:ownership');
   });
 });
