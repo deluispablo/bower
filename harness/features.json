@@ -3542,7 +3542,7 @@
       "Answer it; the next tidy-up drops the question."
     ],
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C07: a contradiction asks a question linking both sources\"",
-    "passes": false,
+    "passes": true,
     "note": "After b-path-asked-question. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {
