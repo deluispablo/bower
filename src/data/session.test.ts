@@ -25,6 +25,7 @@ import {
   type PlaceClock,
   type PlaceGuard,
   type PlaceLocks,
+  type PlaceSource,
   type SessionBus,
   type SessionMessage,
 } from './session';
@@ -62,6 +63,18 @@ class TestClock implements PlaceClock {
     this.t = end;
     await drain();
   }
+}
+
+/** Settles once the place has decided (it told its listeners it is no longer starting). */
+function settled(place: PlaceSource): Promise<void> {
+  if (place.state() !== 'starting') return Promise.resolve();
+  return new Promise((resolve) => {
+    const off = place.subscribe(() => {
+      if (place.state() === 'starting') return;
+      off();
+      resolve();
+    });
+  });
 }
 
 async function drain(): Promise<void> {
@@ -775,8 +788,16 @@ describe('review findings and TL-P2-25: blocked is not closed, nothing stale lan
     await drain();
     expect(a.place.state()).toBe('starting');
     expect(leaseOn(w.storage, w.clock).read().holder).toBeNull();
+    // Rejoining hashes who is signed in (real async work): a busy machine makes it slow.
+    // The browser's own digest (not a spy someone else may have set), slowed down.
+    const digest = (Object.getPrototypeOf(crypto.subtle) as SubtleCrypto).digest;
+    vi.spyOn(crypto.subtle, 'digest').mockImplementation(async (...args: Parameters<SubtleCrypto['digest']>) => {
+      await new Promise((r) => setTimeout(r, 20));
+      return digest.apply(crypto.subtle, args);
+    });
     a.target.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
-    await drain();
+    // The rejoin runs on its own (no caller awaits it): wait for the place to say how it stands.
+    await settled(a.place);
     expect(a.place.state()).toBe('active');
     expect(refresh).toHaveBeenCalled();
   });
