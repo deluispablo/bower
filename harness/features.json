@@ -3457,7 +3457,7 @@
       "Follow the result link to the new note and see its words and the timeline line.",
       "Open the saved link's note and follow its Source link."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04: a note added to the inbox becomes a note reached by a link\"",
     "passes": false,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3471,7 +3471,7 @@
       "Follow the 'brought up to date' link to the project note.",
       "See the new timeline line marked New and the earlier text unchanged."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05\"",
+    "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05: a tidy-up brings a project note up to date\"",
     "passes": false,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3485,7 +3485,7 @@
       "Run a tidy-up.",
       "See the rule with 'You wrote: …', the question gone, and the merge line in the note opened from the question's link."
     ],
-    "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C11\"",
+    "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C11: a kept rule and a merge answer are applied\"",
     "passes": false,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3513,7 +3513,7 @@
       "The request's answer shows links to the notes it used; each opens.",
       "The inbox count is unchanged."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C09\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C09: a question about your notes is answered with links\"",
     "passes": false,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3527,7 +3527,7 @@
       "Turn web on in Settings and ask again.",
       "The note's timeline shows an external link to the source."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C10\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C10: web lookups say what they did, off and on\"",
     "passes": false,
     "note": "Web off says \"Bower did not look anything up\"; web on gives a scripted result with URL and provenance; failed and stale evidence are P4 depth (TL-P2-40 (2)). Fake only; the demo must never contradict the fake. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3541,7 +3541,7 @@
       "Home shows a question whose two links open both sources.",
       "Answer it; the next tidy-up drops the question."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C07\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C07: a contradiction asks a question linking both sources\"",
     "passes": false,
     "note": "After b-path-asked-question. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3555,7 +3555,7 @@
       "The request's done line links the new note.",
       "The note shows a table and links to its sources."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C08\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C08: a comparison request makes a note with a table and its sources\"",
     "passes": false,
     "note": "Revision is P4 depth (TL-P2-40 (1)); in P2 only the comparison note with table, sources and links. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
@@ -3569,7 +3569,7 @@
       "Run the C05 journey: a project note brought up to date, its earlier text unchanged, reached by a link.",
       "Run the C11 journey: a kept rule worded with your words kept and a 'Yes, merge' answer merged into the note opened from the question's link."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04|C05|C11\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04: a note added to the inbox|C05: a tidy-up brings a project note|C11: a kept rule and a merge answer\"",
     "passes": false,
     "note": "Merges c04-journey-new-note, c05-journey-hub-updated, c11-journey-rule-and-answer (closed as superseded, pinned by these tests). TL-P2-40 (main cfd63e6). Planned, not implemented."
   },
@@ -3583,7 +3583,7 @@
       "Ask Bower a question about your notes; its answer names what was done with links that open; the inbox count is unchanged.",
       "A request answer names what was done; the generic 'Done…' line only when nothing specific can be named."
     ],
-    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C06|C09\"",
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C06: a project note cites what it is about|C09: a question about your notes is answered\"",
     "passes": false,
     "note": "Merges c06-hub-cites-filed, c09-request-answer-links (closed as superseded, pinned by these tests). TL-P2-40 (main cfd63e6). Planned, not implemented."
   }
