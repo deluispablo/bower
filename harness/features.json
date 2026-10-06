@@ -2597,8 +2597,8 @@
       "Keep an honest recoverable result; after saving is restored recover the existing effects and report without repeating them; another client can retrieve it."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"report save failure cannot publish done or repeat effects\"",
-    "passes": false,
-    "note": "Historical 143ae2b fault corroborated on current source1dc7f64 with a BowerError terminal-write refusal after actual filing: status done, durable saving/no report. See docs/harness/2026-10-05-report-barrier-current-reproduction.md. Named regression/same-run recovery are planned, not passed; O3/O4 compatible effect/report authority remains pending."
+    "passes": true,
+    "note": "Closed with U1 (run-report-save-barrier-legacy) and U2 (B path). U2: Claude candidate claude/p2-report-barrier-b, rebased final 1d14531 with final-API stub bda9de5; review u2-review-1 BLOCKED (C1 key-order view, I1 persistence window) then CLEAN after three deltas (docs/harness/2026-10-06-u2-review.md). Proves: no false done or failed on either path; B-path recovery from another client and after reload without repeating effects; honest legacy failure. Does NOT prove: legacy recovery; any seeded or demo run on the B path (o5-* and b-path-* entries; P2 cannot close while any plan reaches the legacy path); real Drive CAS or exactly-once (fence pass-list is a fake-only no-effect proof); closed-browser scheduling. Accepted limits: hashes.json stale after a rejected move until the next run recomputes it (TL-P2-18); after 5 failed recovery attempts the run stays saving with no message until reload; a double storage failure resets the pretend world. Gates check 3121, e2e 198, e2e:fake 198."
   },
   {
     "id": "pile-context-version",
