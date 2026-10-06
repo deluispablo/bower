@@ -20,7 +20,8 @@ import { canonical, grounded, groundedKeys } from './fake-run-records';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
-import { ALEX } from '../demo/fixture';
+import { ALEX, wordRule } from '../demo/fixture';
+import { parseRules } from '../vault/rules-format';
 import { pretendDrive, pretendRuns } from './pretend';
 
 afterEach(() => vi.useRealTimers());
@@ -2074,6 +2075,141 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.requests).toEqual([LEASE]);
       // One file each, made once.
       for (const name of ['requests.json', 'hashes.json']) expect(w.calls.filter((c) => c.op === 'create-text' && c.name === name)).toHaveLength(1);
+      await expectFiledOnce(w);
+    });
+  });
+
+  // o5-rules-wording: wording a rule in Rules.md is a fixed B operation (TL-P2-20 rules-wording, R3-4, TL-P2-26).
+  describe('rules are worded on the recoverable path', () => {
+    const RULES = 'Rules.md';
+    const LEASE_RULE = 'Keep lease papers together';
+    const RECEIPTS_RULE = 'Never file receipts under Projects';
+    const plan = async (w: { drive: FakeDrive; rootId: string }, scope: 'all' | 'instructions' = 'all') =>
+      planRun(w.drive, w.rootId, { scope, allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    const fileAt = async (w: { drive: FakeDrive; rootId: string }, path: string): Promise<DriveFile> => {
+      const f = (await w.drive.listAll(w.rootId)).find((x) => w.drive.pathOf(x.id, w.rootId) === path);
+      if (!f) throw new Error(`${path} is missing`);
+      return f;
+    };
+    const vaultOf = (w: { drive: FakeDrive; rootId: string }): DriveVault => new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    /** The journal lines not archived yet, oldest first. */
+    async function linesOf(w: { drive: FakeDrive; rootId: string }): Promise<Array<{ file: DriveFile; rec: JournalRecord }>> {
+      const files = (await w.drive.listAll(w.rootId)).filter((f) => {
+        const path = w.drive.pathOf(f.id, w.rootId);
+        return !f.folder && path.startsWith(`${SYSTEM.changes}/`) && !path.startsWith(`${SYSTEM.archive}/`);
+      });
+      const out = await Promise.all(files.map(async (file) => ({ file, rec: JSON.parse(await w.drive.readText(file.id)) as JournalRecord })));
+      return out.sort((a, b) => a.rec.at - b.rec.at || a.file.id.localeCompare(b.file.id));
+    }
+    const operationsOf = (m: Manifest | undefined): OperationV2[] => (m?.operations ?? []) as OperationV2[];
+    const archivesOf = (m: Manifest | undefined, fileId: string): OperationV2[] => operationsOf(m).filter((o) => o.effect.kind === 'move' && o.effect.before.fileId === fileId);
+    const isRulesWrite = (w: { drive: FakeDrive; rootId: string }) => (c: FencedCall): boolean => c.op === 'write-text' && w.drive.pathOf(c.id, w.rootId) === RULES;
+    const isRulesMade = (w: { rootId: string }) => (c: FencedCall): boolean => c.op === 'create-text' && c.parentId === w.rootId && c.name === RULES;
+    /** Runs until the run is over, letting a lost reply be reconciled by a later attempt. */
+    async function settle(w: World): Promise<RunWire | null> {
+      await w.runs.settled();
+      for (let i = 0; i < 5 && !['done', 'failed'].includes((await w.worker.status())?.phase ?? ''); i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      return w.worker.status();
+    }
+
+    it('a rule is worded once through a recoverable operation', async () => {
+      const w = await bWorld();
+      await w.uploader.addRule(LEASE_RULE);
+      const [line, ...more] = await linesOf(w);
+      expect(more).toEqual([]);
+      if (!line) return;
+      const rules = await fileAt(w, RULES);
+      const digest = await w.drive.storedDigest(rules.id);
+      expect(await plan(w)).toMatchObject({ path: 'b', manifest: { v: 2 } });
+
+      // The Rules.md write's answer is lost: the run reconciles it from what is stored and never words it twice.
+      w.rules.push(once(isRulesWrite(w), 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const edit = operationsOf(manifest).find((o) => o.effect.kind === 'edit-text');
+      // One fixed operation, planned on the bytes it read: their hash and the modified time it read them at.
+      expect(edit?.effect).toMatchObject({
+        path: RULES,
+        before: { fileId: rules.id, modifiedTime: rules.modifiedTime },
+        beforeContent: { size: digest?.size, sha256: digest?.sha256 },
+        changes: [{ kind: 'rules-wording', add: [{ recordId: line.rec.id, text: wordRule(LEASE_RULE), yourWords: LEASE_RULE, since: line.rec.at }], remove: [] }],
+      });
+      expect(manifest?.capture.places.map((p) => p.path)).toContain(RULES);
+      for (const archive of archivesOf(manifest, line.file.id)) expect(archive.dependsOn).toContain(edit?.operationId);
+      expect(w.calls.filter(isRulesWrite(w))).toHaveLength(1);
+      const worded = (): Array<[string, string | undefined]> => parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => [r.text, r.yourWords]);
+      expect(worded()).toEqual([[wordRule(LEASE_RULE), LEASE_RULE]]);
+      expect(viewOf(w)?.run.report).toMatchObject({ rulesWorded: 1 });
+      expect(viewOf(w)?.run.report?.yourChanges).toBeUndefined();
+      expect(await linesOf(w)).toEqual([]);
+
+      // A later run never words it again.
+      const wordedText = w.drive.dump(w.rootId).get(RULES);
+      await vaultOf(w).addRequest('Put the lease papers together');
+      const later = await w.worker.process('instructions');
+      expect(await settle(w)).toMatchObject({ id: later.id, phase: 'done' });
+      expect(w.drive.dump(w.rootId).get(RULES)).toBe(wordedText);
+      expect(w.calls.filter(isRulesWrite(w))).toHaveLength(1);
+
+      // Taking it out is a recoverable edit too: the rule goes with its "You wrote" line, and no rule is counted.
+      const [rule] = (await vaultOf(w).rules()).filter((r) => !r.pending);
+      if (!rule) throw new Error('the worded rule is missing');
+      await vaultOf(w).removeRule(rule.id);
+      const removal = await w.worker.process('instructions');
+      expect(await settle(w)).toMatchObject({ id: removal.id, phase: 'done' });
+      expect(worded()).toEqual([]);
+      expect(w.drive.dump(w.rootId).get(RULES)).not.toContain('You wrote');
+      expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
+      expect(await linesOf(w)).toEqual([]);
+
+      // A missing Rules.md is made with create-text, marked as Bower's; each rule's archive is held by it.
+      const m = await bWorld();
+      await m.drive.trash((await fileAt(m, RULES)).id);
+      await vaultOf(m).addRule(LEASE_RULE);
+      // Typed a moment later, so it is the newer rule.
+      await new Promise((r) => setTimeout(r, 2));
+      await vaultOf(m).addRule(RECEIPTS_RULE);
+      const lines = await linesOf(m);
+      expect(lines).toHaveLength(2);
+      m.rules.push(once(isRulesMade(m), 'lose-reply'));
+      const made = await m.worker.process('all');
+      expect(await settle(m)).toMatchObject({ id: made.id, phase: 'done' });
+      const [created] = await manifestsOf(m);
+      const create = operationsOf(created).find((o) => o.effect.kind === 'create-text' && o.effect.name === RULES);
+      expect(create?.effect).toMatchObject({ parent: { fileId: m.rootId }, purpose: 'generated' });
+      for (const l of lines) for (const archive of archivesOf(created, l.file.id)) expect(archive.dependsOn).toContain(create?.operationId);
+      expect(m.calls.filter(isRulesMade(m))).toHaveLength(1);
+      const files = (await m.drive.listAll(m.rootId)).filter((f) => m.drive.pathOf(f.id, m.rootId) === RULES);
+      expect(files).toHaveLength(1);
+      const createKey = create?.effect.kind === 'create-text' ? create.effect.createKey : '';
+      expect(files[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: createKey });
+      const text = m.drive.dump(m.rootId).get(RULES) ?? '';
+      expect(text).toContain('by: bower');
+      // Newest first, and the count is what the made file holds.
+      expect(parseRules(text).map((r) => r.yourWords)).toEqual([RECEIPTS_RULE, LEASE_RULE]);
+      expect(viewOf(m)?.run.report?.rulesWorded).toBe(parseRules(text).length);
+      expect(await linesOf(m)).toEqual([]);
+    });
+
+    it("leaves rules pending when Rules.md is not Bower's, and files the rest on the recoverable path", async () => {
+      const w = await bWorld();
+      const rules = await fileAt(w, RULES);
+      await w.drive.writeText(rules.id, '# My rules\n\n## Rules\n\n- Mine.\n', rules.modifiedTime);
+      await w.uploader.addRule(LEASE_RULE);
+      const [line] = await linesOf(w);
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      expect(out.manifest.capture.journal).toEqual([]);
+      const admitted = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.drive.dump(w.rootId).get(RULES)).toBe('# My rules\n\n## Rules\n\n- Mine.\n');
+      expect((await linesOf(w)).map((l) => l.rec.id)).toEqual([line?.rec.id]);
+      expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
       await expectFiledOnce(w);
     });
   });
