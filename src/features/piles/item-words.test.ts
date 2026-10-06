@@ -19,5 +19,6 @@ describe('a pile page', () => {
     expect(pileLine({ things: 9, onlyNote: false, createdAt: Date.parse('2026-10-03T09:00:00') }, now)).toBe('9 things, added 3 Oct');
     expect(pileLine({ things: 0, onlyNote: true, createdAt: now - 5 * 60_000 }, now)).toBe('A note, added 5 min ago. Bower files it as a note where it belongs.');
     expect(pileLine({ things: 1, onlyNote: false, createdAt: Date.parse('2026-10-05T09:30:00') }, now)).toBe('1 thing, added today, 09:30');
+    expect(pileLine({ things: 0, onlyNote: false, createdAt: now - 5 * 60_000 }, now)).toBe('Nothing in it, added 5 min ago');
   });
 });

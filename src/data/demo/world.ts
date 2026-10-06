@@ -63,7 +63,8 @@ import { forgetThisPerson, sayGoodbye } from '../device';
 import { ruleLike } from '../rules';
 import { formerNames, rewriteLinks } from '../links';
 import { shortDay } from '../dates';
-import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName, thingsIn } from '../piles';
+import { PILE_NOTE, pileFolderName, pileHasFolder, pileName, safeInboxName, thingsIn } from '../piles';
+import { SET_ASIDE_TEXT } from '../pile-readiness';
 
 type Listener = () => void;
 
@@ -321,10 +322,10 @@ export class DemoWorld {
     const items = sample.items.map((it, i) => {
       const itemId = `${id}-${i}`;
       this.plans.set(itemId, { title: it.title, to: it.to });
-      return { id: itemId, name: it.name, kind: it.kind, origin: it.origin };
+      return { id: itemId, name: it.name, kind: it.kind, origin: it.origin, ...(it.changed ? { changed: it.changed } : {}) };
     });
     if (sample.note) this.plans.set(`${id}-note`, sample.note);
-    this.piles = [{ id, text: sample.text, createdAt: at, items }, ...this.piles];
+    this.piles = [{ id, text: sample.text, createdAt: at, items, ...(sample.setAside ? { setAside: sample.setAside } : {}) }, ...this.piles];
     this.syncInbox();
     this.emitVault();
   }
@@ -439,7 +440,9 @@ export class DemoWorld {
   /** Files every inbox thing as the run would, and returns the report. */
   private fileInbox(at: number): RunReport {
     const filed: FiledItem[] = [];
-    const taken = this.piles.filter((p) => !this.runPiles.size || this.runPiles.has(p.id));
+    // A pile set aside stays in the inbox, with its reason, as a tidy-up over Drive leaves it.
+    const aside = this.piles.filter((p) => p.setAside);
+    const taken = this.piles.filter((p) => !p.setAside && (!this.runPiles.size || this.runPiles.has(p.id)));
     for (const pile of taken) {
       if (!pile.items.length && pile.text.trim()) {
         const plan = this.plans.get(`${pile.id}-note`) ?? { title: `${pile.text.trim().slice(0, 48).replace(/[/\\:*?"<>|]+/g, ' ')}.md`, to: this.guess(pile.text, 'note') };
@@ -516,7 +519,7 @@ export class DemoWorld {
       filed,
       created: filed.filter((f) => f.note).map((f) => ({ path: f.note ?? '', what: `A note for ${f.title}.` })),
       updated,
-      setAside: [],
+      setAside: aside.flatMap((p) => (p.setAside ? [{ name: pileName(p), why: SET_ASIDE_TEXT[p.setAside] }] : [])),
       questions: asked,
     };
   }
@@ -884,7 +887,7 @@ export class DemoWorld {
           if (scope === 'all' && !this.inboxCount()) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
           if (scope === 'instructions' && !this.journal.length) throw new BowerError('conflict', 'There is nothing new for Bower to read.');
           this.run = this.newRun(scope, Date.now());
-          this.runPiles = new Set(this.piles.map((p) => p.id));
+          this.runPiles = new Set(this.piles.filter((p) => !p.setAside).map((p) => p.id));
           this.advance('queued', PHASE_MS[this.scale].queued);
           this.emitRun();
           return this.run;

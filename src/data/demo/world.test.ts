@@ -173,6 +173,25 @@ describe('piles and failures', () => {
     expect(r?.report?.filed[0]?.to).toBe('Areas/Home');
     expect(findNode(await vault.tree(), 'Areas/Home/Bins and recycling.md')).not.toBeNull();
   });
+
+  it('a set-aside sample pile keeps its reason after a tidy-up, as Drive would', async () => {
+    vi.useFakeTimers();
+    const w = new DemoWorld({ scenario: 'empty', scale: 'demo', latency: 0 });
+    const { vault, runs } = w.sources();
+    const aside = SAMPLE_PILES.find((x) => x.setAside);
+    const note = SAMPLE_PILES.find((x) => !x.items.length);
+    if (!aside || !note) throw new Error('no samples');
+    w.addSample(aside);
+    w.addSample(note);
+    await runs.start('all');
+    await vi.runAllTimersAsync();
+    const r = await runs.current();
+    expect(r?.report?.filed.map((f) => f.name)).toEqual(['Your note']);
+    expect(r?.report?.setAside).toEqual([{ name: aside.text, why: 'Some of its things changed after they were added. Remove it and add them again.' }]);
+    const left = await vault.piles();
+    expect(left.map((p) => [p.text, p.setAside])).toEqual([[aside.text, 'changed']]);
+    expect(left[0]?.items.map((i) => i.changed)).toEqual([true, undefined]);
+  });
 });
 
 describe('what the testers found', () => {

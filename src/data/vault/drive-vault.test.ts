@@ -1244,13 +1244,19 @@ describe('uploads survive a reload, through the vault', () => {
     expect(tab.queue.items()[0]).toMatchObject({ pileId: pile.id, declarationId: parsed.value.declarationId, memberKey: member?.memberKey, sha256: member?.content.sha256 });
   });
 
-  it('a browser that will not keep storage is told in plain words', async () => {
+  it('a browser that will not keep storage is told in plain words, only while something waits to be sent', async () => {
     const { d, idb } = await fresh();
+    const hold = holdAt(d, 4);
     const tab = page(d, idb, ACCOUNT_A, { persist: async () => false });
     expect(tab.vault.uploadNotice()).toBeNull();
     await tab.vault.addPile({ text: 'Receipts', items: [scan()] });
-    await tab.vault.settled();
     await vi.waitFor(() => expect(tab.vault.uploadNotice()).toBe('This browser may clear what Bower keeps here. Keep Bower open until everything is sent.'));
+    // TL-P2-19 (4): once nothing is left to send, the notice goes, without a reload.
+    hold.open();
+    await tab.vault.settled();
+    await tab.queue.idle();
+    expect(tab.queue.persistence()).toBe('refused');
+    await vi.waitFor(() => expect(tab.vault.uploadNotice()).toBeNull());
   });
 
   it('kept uploads this device cannot read are told once, and the things they held show as missing', async () => {
@@ -1427,5 +1433,292 @@ describe('uploads survive a reload, through the vault', () => {
     expect(d.resumableCalls.filter((c) => c.op === 'open')).toHaveLength(opens);
     expect(await scans(d)).toEqual([fileId]);
     expect((await d.get(fileId)).parents).toEqual([projects]);
+  });
+});
+
+describe('a set-aside pile shows its reason in the inbox', () => {
+  /** The approved sentences (TL-P2-11 (1)), as the tidy-up's report says them. */
+  const SAID = {
+    'not-arrived': 'Some of its things have not arrived yet.',
+    'not-checked': 'Bower could not check some of its things. Try again.',
+    changed: 'Some of its things changed after they were added. Remove it and add them again.',
+    declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
+    empty: 'Nothing is left in it. Remove it from your inbox.',
+  } as const;
+  const declaring = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const pdf = (name: string): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name, kind: 'pdf', origin: 'From this computer', body: new Blob([`%PDF ${name}`]) });
+  const pileOn = async (v: DriveVault, id: string) => (await v.piles()).find((p) => p.id === id);
+  const rows = async (v: DriveVault, id: string): Promise<Array<[string, number | undefined, boolean | undefined]>> =>
+    ((await pileOn(v, id))?.items ?? []).map((i) => [i.name, i.upload, i.changed]);
+
+  async function folderOf(pileId: string) {
+    const folder = (await drive.listAll(root)).find((f) => f.folder && f.appProperties?.pile === pileId);
+    if (!folder) throw new Error('no pile folder');
+    return folder;
+  }
+  async function fileIn(pileId: string, name: string) {
+    const folder = await folderOf(pileId);
+    const f = (await drive.listAll(folder.id)).find((x) => x.name === name && x.parents[0] === folder.id);
+    if (!f) throw new Error(`no ${name}`);
+    return f;
+  }
+  /** What a tidy-up says about the pile now: the reason it sets it aside for, or undefined when it takes it. */
+  async function runnerSays(pileId: string): Promise<string | undefined> {
+    const name = (await folderOf(pileId)).name;
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    if (out.phase !== 'done') throw new Error('the tidy-up failed');
+    return out.report.setAside.find((s) => s.name === name)?.why;
+  }
+  /** `name` does not get through until `heal` is called. */
+  function failing(name: string): () => void {
+    const real = drive.upload.bind(drive);
+    let fail = true;
+    drive.upload = async (parent, n, body, onProgress, props) => {
+      if (n === name && fail) throw driveError('offline');
+      return real(parent, n, body, onProgress, props);
+    };
+    return () => { fail = false; };
+  }
+
+  it('a thing that has not arrived: the reason on any device, after a run, until it arrives', async () => {
+    const heal = failing('b.pdf');
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    expect((await pileOn(uploader, pile.id))?.setAside).toBe('not-arrived');
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-arrived');
+    expect(await rows(declaring(), pile.id)).toEqual([['a.pdf', undefined, undefined], ['b.pdf', -1, undefined]]);
+    expect(await runnerSays(pile.id)).toBe(SAID['not-arrived']);
+    // The reason stays after the run: it comes from Drive, not from the last report.
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-arrived');
+    heal();
+    await uploader.retryPile(pile.id);
+    await uploader.settled();
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBeUndefined();
+  });
+
+  it('things still on their way from this device give no reason yet', async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((r) => { open = r; });
+    const real = drive.upload.bind(drive);
+    drive.upload = async (parent, n, body, onProgress, props) => {
+      await gate;
+      return real(parent, n, body, onProgress, props);
+    };
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    const sending = await pileOn(uploader, pile.id);
+    expect(sending?.items.map((i) => i.upload)).toEqual([0]);
+    expect(sending?.setAside).toBeUndefined();
+    open();
+    await uploader.settled();
+    expect((await pileOn(uploader, pile.id))?.setAside).toBeUndefined();
+  });
+
+  it("a changed thing shows as changed, not as Didn't arrive, and the reason stays until the pile is removed", async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const b = await fileIn(pile.id, 'b.pdf');
+    await drive.writeText(b.id, 'Edited somewhere else', b.modifiedTime);
+    const other = declaring();
+    expect((await pileOn(other, pile.id))?.setAside).toBe('changed');
+    expect(await rows(other, pile.id)).toEqual([['a.pdf', undefined, undefined], ['b.pdf', undefined, true]]);
+    expect(await runnerSays(pile.id)).toBe(SAID.changed);
+    const after = declaring();
+    expect((await pileOn(after, pile.id))?.setAside).toBe('changed');
+    await after.removePile(pile.id);
+    expect(await pileOn(declaring(), pile.id)).toBeUndefined();
+  });
+
+  it('a changed thing that left the pile is not listed again, and the pile still says why', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const b = await fileIn(pile.id, 'b.pdf');
+    const areas = await idOf('Areas');
+    const moved = await drive.update(b.id, { addParent: areas, removeParent: b.parents[0] ?? '' });
+    await drive.writeText(b.id, 'Edited somewhere else', moved.modifiedTime);
+    const other = declaring();
+    expect((await pileOn(other, pile.id))?.setAside).toBe('changed');
+    // As the readiness entry pins it (fake-runner.test.ts): a changed thing that left is never asked for again.
+    expect(await rows(other, pile.id)).toEqual([['a.pdf', undefined, undefined]]);
+    expect(await runnerSays(pile.id)).toBe(SAID.changed);
+  });
+
+  it('two different lists of the pile: Remove it and add it again', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
+    const [declared] = (await drive.listAll(root)).filter((f) => !f.folder && drive.pathOf(f.id, root).startsWith('.bower/piles/'));
+    const parsed = await parsePileDeclaration(await drive.readBytes(declared?.id ?? ''), root);
+    if (!parsed.ok) throw new Error('declaration refused');
+    const other = { ...parsed.value, createdAt: parsed.value.createdAt + 1 };
+    const bytes = canonicalRecordJson(other);
+    const hash = await hashRecordJson(other);
+    if (!bytes.ok || !hash.ok) throw new Error('no canonical copy');
+    await drive.createText(declared?.parents[0] ?? '', `declaration-${other.declarationId}-${hash.value}.json`, new TextDecoder().decode(bytes.value));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBe('declaration');
+    expect(await runnerSays(pile.id)).toBe(SAID.declaration);
+  });
+
+  it('a list Bower cannot find, or bytes it cannot check: Try again later', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const digest = vi.spyOn(drive, 'storedDigest').mockRejectedValue(driveError('offline'));
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-checked');
+    expect(await runnerSays(pile.id)).toBe(SAID['not-checked']);
+    digest.mockRestore();
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBeUndefined();
+    const [declared] = (await drive.listAll(root)).filter((f) => !f.folder && drive.pathOf(f.id, root).startsWith('.bower/piles/'));
+    await drive.trash(declared?.id ?? '');
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-checked');
+    expect(await runnerSays(pile.id)).toBe(SAID['not-checked']);
+  });
+
+  it('Try again checks a pile Bower could not check again, now', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const digest = vi.spyOn(drive, 'storedDigest').mockRejectedValue(driveError('offline'));
+    const other = declaring();
+    expect((await pileOn(other, pile.id))?.setAside).toBe('not-checked');
+    digest.mockRestore();
+    const heard = vi.fn();
+    other.subscribe(heard);
+    await other.retryPile(pile.id);
+    // The screen hears of it at once, and the next listing has checked again.
+    expect(heard).toHaveBeenCalled();
+    expect((await pileOn(other, pile.id))?.setAside).toBeUndefined();
+  });
+
+  /** A declared pile with words, whose things all left it and whose note went to the Bin in Drive, never through Bower. */
+  async function noteToWriteAgain(text: string) {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text, items: [pdf(`${text}.pdf`)] });
+    await uploader.settled();
+    const thing = await fileIn(pile.id, `${text}.pdf`);
+    await drive.update(thing.id, { addParent: await idOf('Areas'), removeParent: thing.parents[0] ?? '' });
+    await drive.trash((await fileIn(pile.id, 'Pile note.md')).id);
+    return pile;
+  }
+
+  it('a note to write again is not an empty pile, for the inbox and the tidy-up alike', async () => {
+    const pile = await noteToWriteAgain('Papers from Alex');
+    const seen = await pileOn(declaring(), pile.id);
+    expect(seen?.items).toEqual([]);
+    expect(seen?.setAside).toBeUndefined();
+    expect(await runnerSays(pile.id)).toBeUndefined();
+  });
+
+  it('your changes are read once per listing, and one that cannot be read affects only its pile', async () => {
+    const first = await noteToWriteAgain('Papers from Alex');
+    const second = await noteToWriteAgain('Letters from Alex');
+    await declaring().create('Areas', 'note', 'Shopping');
+    const changes = new Set((await drive.listAll(root)).filter((f) => !f.folder && drive.pathOf(f.id, root).startsWith('.bower/changes/')).map((f) => f.id));
+    expect(changes.size).toBeGreaterThan(0);
+    const real = drive.readText.bind(drive);
+    const readText = vi.spyOn(drive, 'readText');
+    const reads = (): number => readText.mock.calls.filter(([id]) => changes.has(id)).length;
+    const listed = await declaring().piles();
+    expect([first.id, second.id].map((id) => listed.find((p) => p.id === id)?.setAside)).toEqual([undefined, undefined]);
+    expect(reads()).toBe(changes.size);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    readText.mockImplementation(async (id) => {
+      if (changes.has(id)) throw driveError('offline');
+      return real(id);
+    });
+    const broken = await declaring().piles();
+    expect(broken.find((p) => p.id === first.id)?.setAside).toBe('not-checked');
+    expect(broken.find((p) => p.id === second.id)?.setAside).toBe('not-checked');
+    expect(broken.length).toBe(listed.length);
+  });
+
+  it('nothing left in it: Remove it from your inbox', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
+    await uploader.updatePile(pile.id, '');
+    const a = await fileIn(pile.id, 'a.pdf');
+    await drive.update(a.id, { addParent: await idOf('Areas'), removeParent: a.parents[0] ?? '' });
+    const other = declaring();
+    const seen = await pileOn(other, pile.id);
+    expect(seen?.setAside).toBe('empty');
+    expect(seen?.items).toEqual([]);
+    expect(await runnerSays(pile.id)).toBe(SAID.empty);
+  });
+
+  it('a pile with no declaration, and a ready one, have no reason', async () => {
+    expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await uploader.settled();
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBeUndefined();
+    expect(await rows(declaring(), pile.id)).toEqual([['a.pdf', undefined, undefined]]);
+  });
+
+  it.each([
+    ['storage refused', { persist: async (): Promise<boolean> => false }, 'This browser may clear what Bower keeps here. Keep Bower open until everything is sent.'],
+    ['no copy kept', { persist: async (): Promise<boolean> => true, estimate: async (): Promise<{ quota: number; usage: number }> => ({ quota: 0, usage: 0 }) }, "This device couldn't keep a copy. Keep Bower open until everything is sent."],
+  ] as const)('a storage notice shows only while this device has something to send (%s)', async (_label, storage, said) => {
+    const d = new FakeDrive({ chunkMultiple: 4 });
+    root = (await seedFakeDrive(d, 'default', Date.now())) ?? '';
+    let open!: () => void;
+    const gate = new Promise<void>((r) => { open = r; });
+    d.beforeChunk = async (call) => { if (call.start >= 4) await gate; };
+    const queue = createUploadQueue({ drive: d, store: indexedDbUploadStore(new IDBFactory()), chunkSize: 4, storage });
+    const v = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => 'ACCOUNT_A' } });
+    await v.addPile({ text: 'Receipts', items: [{ name: 'scan.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])]) }] });
+    await vi.waitFor(() => expect(v.uploadNotice()).toBe(said));
+    const heard = vi.fn();
+    v.subscribe(heard);
+    open();
+    await v.settled();
+    await queue.idle();
+    await vi.waitFor(() => expect(v.uploadNotice()).toBeNull());
+    expect(heard).toHaveBeenCalled();
+    v.dispose();
+  });
+
+  it.each([
+    ['storage refused', { persist: async (): Promise<boolean> => false }, 'This browser may clear what Bower keeps here. Keep Bower open until everything is sent.'],
+    ['no copy kept', { persist: async (): Promise<boolean> => true, estimate: async (): Promise<{ quota: number; usage: number }> => ({ quota: 0, usage: 0 }) }, "This device couldn't keep a copy. Keep Bower open until everything is sent."],
+  ] as const)('a storage notice stays while a failed upload waits for Try again, and goes when it is discarded (%s)', async (_label, storage, said) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = new FakeDrive({ chunkMultiple: 4 });
+    root = (await seedFakeDrive(d, 'default', Date.now())) ?? '';
+    d.beforeChunk = (call) => {
+      if (call.start >= 4) throw new BowerError('unknown', 'Drive said no.');
+    };
+    const queue = createUploadQueue({ drive: d, store: indexedDbUploadStore(new IDBFactory()), chunkSize: 4, storage });
+    const v = new DriveVault({ drive: d, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => 'ACCOUNT_A' } });
+    const pile = await v.addPile({ text: 'Receipts', items: [{ name: 'scan.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])]) }] });
+    await vi.waitFor(() => expect(queue.items().map((i) => i.state)).toEqual(['failed']));
+    // TL-P2-22 (2): the only copy is still on this device, so the warning stays.
+    await vi.waitFor(() => expect(v.uploadNotice()).toBe(said));
+    await v.removePile(pile.id);
+    await vi.waitFor(() => expect(v.uploadNotice()).toBeNull());
+    v.dispose();
+  });
+
+  it('a notice the upload queue tells with nothing held reaches the inbox', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const store = { ...indexedDbUploadStore(new IDBFactory()), list: () => Promise.reject(new Error('IndexedDB list failed')) };
+    const queue = createUploadQueue({ drive, store, chunkSize: 4 });
+    let account!: () => void;
+    const signedIn = new Promise<void>((r) => { account = r; });
+    const v = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true, uploads: { queue, account: async () => { await signedIn; return 'ACCOUNT_A'; } } });
+    await v.piles();
+    const heard = vi.fn();
+    v.subscribe(heard);
+    // The queue starts only now, after the inbox was listed: only a change can bring the notice to the screen.
+    account();
+    await vi.waitFor(() => expect(v.uploadNotice()).toBe("Bower couldn't read what it kept on this device. Choose those files again to send them."));
+    await vi.waitFor(() => expect(heard).toHaveBeenCalled());
+    v.dispose();
   });
 });

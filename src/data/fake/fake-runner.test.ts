@@ -628,7 +628,7 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     drive = FakeDrive.restore(JSON.stringify(old));
     const out = await runFake(drive, root, opts());
     if (out.phase !== 'done') throw new Error('failed');
-    expect(out.report.setAside).toContainEqual({ name: folder.name, why: 'Bower could not check some of its things. Try again later.' });
+    expect(out.report.setAside).toContainEqual({ name: folder.name, why: 'Bower could not check some of its things. Try again.' });
     expect(out.report.filed.map((f) => f.name)).not.toContain('arrived.pdf');
     expect((await drive.listAll(folder.id)).map((f) => f.name).sort()).toEqual(['Pile note.md', 'arrived.pdf', 'big scan.pdf']);
   });

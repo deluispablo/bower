@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { report } from '@/ui/report';
 import { Link, useNavigate, useParams } from 'react-router';
 import { usePiles, useRun, useSources } from '@/data/provider';
-import type { Pile } from '@/data/types';
+import type { Pile, SetAside } from '@/data/types';
+import { SET_ASIDE_TEXT } from '@/data/pile-readiness';
 import { thingsIn } from '@/data/piles';
 import { useUi } from '@/app/ui-store';
 import { Button, IconButton } from '@/ui/Button';
@@ -20,7 +21,6 @@ export function PileScreen() {
   const { data: run } = useRun();
   const { vault } = useSources();
   const nav = useNavigate();
-  const [confirm, setConfirm] = useState(false);
   const pile = piles?.find((p) => p.id === id);
   if (piles && !pile)
     return (
@@ -34,7 +34,9 @@ export function PileScreen() {
     );
   if (!pile) return <div className={s.page} aria-busy="true" />;
   const running = isRunning(run);
-  const onlyNote = !pile.items.length;
+  // A pile with no things is a note only when it has words; with none it is an empty pile (TL-P2-22).
+  const empty = !pile.items.length && !pile.text.trim();
+  const onlyNote = !pile.items.length && !empty;
   return (
     <div className={s.page}>
       <div className={s.bar}>
@@ -46,7 +48,7 @@ export function PileScreen() {
       <div className={s.pileHead}>
         <PileStack items={pile.items} />
         <div>
-          <h1 className={s.title}>{onlyNote ? 'Your note' : pile.text || pile.items[0]?.name}</h1>
+          <h1 className={s.title}>{empty ? 'An empty pile' : onlyNote ? 'Your note' : pile.text || pile.items[0]?.name}</h1>
           <p className="muted">
             {pileLine({ things: thingsIn(pile), onlyNote, createdAt: pile.createdAt })}
           </p>
@@ -55,7 +57,7 @@ export function PileScreen() {
 
       <PileNote key={`${pile.id}:${pile.text}`} pile={pile} locked={running} />
 
-      {!onlyNote && (
+      {pile.items.length > 0 && (
         <ul className={s.items} aria-label="In this pile">
           {pile.items.map((it) => (
             <li key={it.id}>
@@ -70,47 +72,116 @@ export function PileScreen() {
           ))}
         </ul>
       )}
-      {pile.items.some((it) => it.upload === -1) && (
-        <p className={s.retry} role="alert">
-          Some things did not reach your Bower folder.{' '}
-          <Button size="sm" variant="ghost" onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => report(e, 'That did not work. Try again.'))}>
-            Try again
-          </Button>
-        </p>
+      {pile.setAside ? (
+        <SetAsideNote pile={pile} />
+      ) : (
+        pile.items.some((it) => it.upload === -1) && (
+          <p className={s.retry} role="alert">
+            Some things did not reach your Bower folder.{' '}
+            <Button size="sm" variant="ghost" onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => report(e, 'That did not work. Try again.'))}>
+              Try again
+            </Button>
+          </p>
+        )
       )}
       <div className={s.footer}>
         <Button block disabled={running} onClick={() => useUi.getState().setTidy(true)}>
           {running ? 'A tidy-up is running' : 'Tidy up the inbox'}
         </Button>
-        {!confirm ? (
-          <Button variant="ghost" block disabled={running} onClick={() => setConfirm(true)}>
-            Remove this pile
-          </Button>
-        ) : (
-          <div className={s.confirm} role="alert">
-            <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button
-                variant="danger"
-                onClick={() =>
-                  void vault.removePile(pile.id).then(
-                    () => {
-                      toast('Pile removed');
-                      nav('/');
-                    },
-                    (e: unknown) => report(e, 'That did not work. Try again.'),
-                  )
-                }
-              >
-                Remove the pile
-              </Button>
-              <Button variant="ghost" onClick={() => setConfirm(false)}>
-                Keep it
-              </Button>
-            </div>
-          </div>
-        )}
+        <RemovePile pile={pile} disabled={running} block onRemoved={() => nav('/')} />
       </div>
+    </div>
+  );
+}
+
+/** Reasons whose action is the pile's own Remove. */
+const REMOVE_IT: ReadonlySet<SetAside> = new Set(['changed', 'declaration', 'empty']);
+/** Reasons whose action is Try again: send it again, or check again now. */
+const TRY_AGAIN: ReadonlySet<SetAside> = new Set(['not-arrived', 'not-checked']);
+
+/**
+ * Why a tidy-up leaves this pile in the inbox, and what to do: Try again for
+ * a thing that has not arrived or could not be checked, Remove this pile
+ * when the sentence says Remove. On the pile's screen its own Remove button
+ * is below, so `remove` is only for the Inbox, where `nameId` names the pile
+ * each action is for.
+ */
+export function SetAsideNote({ pile, remove, disabled, nameId, onRemoved }: { pile: Pile; remove?: boolean; disabled?: boolean; nameId?: string; onRemoved?: () => void }) {
+  const { vault } = useSources();
+  const sentenceId = useId();
+  const why = pile.setAside;
+  if (!why) return null;
+  const describedBy = nameId ? `${nameId} ${sentenceId}` : undefined;
+  return (
+    <div className={s.setAside}>
+      <p className={s.retry}>
+        <span id={sentenceId}>{SET_ASIDE_TEXT[why]}</span>
+        {TRY_AGAIN.has(why) && (
+          <>
+            {' '}
+            <Button size="sm" variant="ghost" aria-describedby={describedBy} onClick={() => void vault.retryPile(pile.id).catch((e: unknown) => report(e, 'That did not work. Try again.'))}>
+              Try again
+            </Button>
+          </>
+        )}
+      </p>
+      {remove && REMOVE_IT.has(why) && <RemovePile pile={pile} disabled={disabled} describedBy={describedBy} onRemoved={onRemoved} />}
+    </div>
+  );
+}
+
+/**
+ * Remove this pile, asked first: its files go to the Bin of your Drive. The
+ * question opens with the focus on Keep it, which gives it back to Remove this pile.
+ */
+export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { pile: Pile; disabled?: boolean; block?: boolean; describedBy?: string | undefined; onRemoved?: (() => void) | undefined }) {
+  const { vault } = useSources();
+  const [confirm, setConfirm] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const asked = useRef(false);
+  useEffect(() => {
+    // The question opens on Keep it, its least destructive answer, so a repeated key cannot remove the pile.
+    if (confirm) {
+      asked.current = true;
+      [...(box.current?.querySelectorAll('button') ?? [])].at(-1)?.focus();
+    } else if (asked.current) box.current?.querySelector('button')?.focus();
+    // Only after the question was open does the focus go back to Remove this pile.
+  }, [confirm]);
+  const onlyNote = !pile.items.length;
+  const size = block ? 'md' : 'sm';
+  return (
+    <div ref={box} className={confirm ? s.confirm : undefined} role={confirm ? 'alert' : undefined}>
+      {!confirm ? (
+        <Button variant="ghost" size={size} block={block} disabled={disabled} aria-describedby={describedBy} onClick={() => setConfirm(true)}>
+          Remove this pile
+        </Button>
+      ) : (
+        <>
+          {/* A pile with nothing left has no files nor words to keep: the reason above says enough. */}
+          {pile.setAside !== 'empty' && <p>{onlyNote ? 'The note goes to the Bin of your Drive.' : 'Its files go to the Bin of your Drive, where you can get them back.'}</p>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Button
+              variant="danger"
+              size={size}
+              aria-describedby={describedBy}
+              onClick={() =>
+                void vault.removePile(pile.id).then(
+                  () => {
+                    toast('Pile removed');
+                    onRemoved?.();
+                  },
+                  (e: unknown) => report(e, 'That did not work. Try again.'),
+                )
+              }
+            >
+              Remove the pile
+            </Button>
+            <Button variant="ghost" size={size} onClick={() => setConfirm(false)}>
+              Keep it
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

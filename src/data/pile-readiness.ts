@@ -11,6 +11,7 @@ import { canonicalRecordJson, hashRecordJson } from './contracts/record-json';
 import { PILE_NOTE, safeInboxName } from './piles';
 import { isJournalRecord } from './vault/journal';
 import { PROP, SYSTEM } from './vault/layout';
+import type { SetAside } from './types';
 
 export type ReadBytes = (id: string) => Promise<Uint8Array>;
 
@@ -184,14 +185,6 @@ async function observeAll(declaration: Declaration, folder: DriveFile, files: re
   return resolveBinned(declaration, folder, states, binned);
 }
 
-/** The declared members to show as not arrived: no file with their key anywhere, live or in the Bin. */
-export async function missingMembers(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<Member[]> {
-  const states = await observeAll(declaration, folder, files, digest, binned);
-  // Only a member with no file anywhere has not arrived; a changed or unchecked one is not sent again.
-  const missing = new Set(states.filter((s) => s.state === 'missing').map((s) => s.memberKey));
-  return declaration.members.filter((m) => missing.has(m.memberKey));
-}
-
 /** Each member's state; the pile waits while any member is missing, changed or unchecked. The context only has to be there. */
 export async function observePile(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<Readiness> {
   const members = await observeAll(declaration, folder, files, digest, binned);
@@ -200,6 +193,33 @@ export async function observePile(declaration: Declaration, folder: DriveFile, f
   const has = (state: MemberState['state']): boolean => members.some((m) => m.state === state);
   const blocked: Blocked = has('changed') ? 'changed' : has('missing') ? 'not-arrived' : has('unchecked') ? 'not-checked' : null;
   return { blocked, members, context };
+}
+
+/**
+ * The approved sentence for each reason (TL-P2-11 (1), TL-P2-19); the same
+ * words the tidy-up's report gives. "Remove" names the pile's own Remove button.
+ */
+export const SET_ASIDE_TEXT: Readonly<Record<SetAside, string>> = {
+  'not-arrived': 'Some of its things have not arrived yet.',
+  'not-checked': 'Bower could not check some of its things. Try again.',
+  changed: 'Some of its things changed after they were added. Remove it and add them again.',
+  declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
+  empty: 'Nothing is left in it. Remove it from your inbox.',
+};
+
+/**
+ * Why a tidy-up leaves a pile in the inbox, from the facts the runner reads:
+ * its declaration, its members' states, and whether anything is left in it
+ * (things in its folder, its words, or a note to write again). null when a
+ * tidy-up takes it.
+ */
+export function setAsideOf(lookup: DeclarationLookup['state'], blocked: Blocked, left: { things: number; text: string; restore: boolean }): SetAside | null {
+  if (lookup === 'unmarked') return null;
+  if (lookup === 'conflict') return 'declaration';
+  // Marked, but no list of it is there to check against.
+  if (lookup === 'missing') return 'not-checked';
+  if (blocked) return blocked;
+  return !left.things && !left.text.trim() && !left.restore ? 'empty' : null;
 }
 
 /** Whether the person put the pile's note in the Bin through Bower: a `trash` change for it in your changes. */

@@ -74,7 +74,17 @@ export interface PileItem {
   origin: string;
   /** 0 to 1 while uploading; absent when in Drive. */
   upload?: number;
+  /** Declared with other bytes than Drive has now: a tidy-up will not take it. */
+  changed?: true;
 }
+
+/**
+ * Why a tidy-up leaves a declared pile in the inbox for now, worked out from
+ * Drive with the same facts the runner reads: a thing that has not arrived,
+ * bytes Bower could not check, a thing that changed, two different lists of
+ * the pile, or nothing left in it.
+ */
+export type SetAside = 'not-arrived' | 'not-checked' | 'changed' | 'declaration' | 'empty';
 
 export interface Pile {
   id: string;
@@ -84,6 +94,8 @@ export interface Pile {
   text: string;
   createdAt: number;
   items: PileItem[];
+  /** Set while a tidy-up would leave it in the inbox; cleared once it is ready or removed. */
+  setAside?: SetAside;
 }
 
 export interface NewPile {

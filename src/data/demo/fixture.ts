@@ -6,7 +6,7 @@
  * from being later than that.
  */
 import { RULE_EXAMPLES } from '../examples';
-import type { FileKind, Pile, PileItem, Question, Rule, Suggestion } from '../types';
+import type { FileKind, Pile, PileItem, Question, Rule, SetAside, Suggestion } from '../types';
 
 export const ALEX = { name: 'Alex', email: 'you@example.com' };
 
@@ -255,6 +255,8 @@ export interface SamplePile {
   items: Array<Omit<PileItem, 'id'> & { title: string; to: string }>;
   /** For a pile that is only a note: the note Bower writes and where. */
   note?: { title: string; to: string };
+  /** A pile a tidy-up leaves in the inbox, and why (the demo sends nothing, so it is told). */
+  setAside?: SetAside;
 }
 
 export const SAMPLE_PILES: SamplePile[] = [
@@ -295,6 +297,15 @@ export const SAMPLE_PILES: SamplePile[] = [
     items: [
       { name: 'listing-99102.example', kind: 'link', origin: 'From the browser', title: 'Flat 4, 9 Osier Close.md', to: 'Projects/Flat hunt' },
       { name: 'listing-99377.example', kind: 'link', origin: 'From the browser', title: 'Flat 1, 22 Pellow Street.md', to: 'Projects/Flat hunt' },
+    ],
+  },
+  {
+    label: 'A pile set aside',
+    text: 'Bank letters for the mortgage',
+    setAside: 'changed',
+    items: [
+      { name: 'Statement_March.pdf', kind: 'pdf', origin: 'From Mail', title: 'Bank statement, March.pdf', to: 'Areas/Money', changed: true },
+      { name: 'Statement_April.pdf', kind: 'pdf', origin: 'From Mail', title: 'Bank statement, April.pdf', to: 'Areas/Money' },
     ],
   },
   {

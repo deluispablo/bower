@@ -6,7 +6,7 @@ import { answered } from './answer-words';
 import { startRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
-import { useChanges, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
+import { useChanges, useLoad, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
 import { parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
@@ -18,7 +18,13 @@ import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import { hasReplay, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
 import { PileStack } from '@/features/piles/PileStack';
+import { SetAsideNote } from '@/features/piles/PileScreen';
 import s from './home.module.css';
+
+/** One sentence about keeping uploads on this device, or null: said once, for the whole inbox. */
+function useUploadNotice(): string | null | undefined {
+  return useLoad(async (from) => (await from.vault.uploadNotice?.()) ?? null, (from, cb) => from.vault.subscribe(cb)).data;
+}
 
 export function Home() {
   const { data: user } = useUser();
@@ -131,6 +137,7 @@ function RunningCard({ run }: { run: RunState }) {
 function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; waiting: number; bird: boolean; running: boolean }) {
   const { setTidy } = useUi();
   const nav = useNavigate();
+  const notice = useUploadNotice();
   return (
     <section className={`${s.card} ${s.inbox}`} aria-labelledby="inbox">
       <div className={s.inboxHead}>
@@ -144,6 +151,8 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
           </p>
         </div>
       </div>
+      {/* Always there, so a notice that comes later is heard. */}
+      <div role="status">{notice && <p className={s.notice}>{notice}</p>}</div>
       {piles === undefined ? (
         <div className={s.skel} aria-hidden="true">
           <span />
@@ -156,15 +165,18 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
               <Link to={`/pile/${p.id}`} className={s.pile}>
                 <PileStack items={p.items} />
                 <span className={s.pileMain}>
-                  <span className={p.text ? s.pileText : `${s.pileText} mono`}>{pileName(p)}</span>
+                  <span id={`pile-name-${p.id}`} className={p.text ? s.pileText : `${s.pileText} mono`}>
+                    {pileName(p)}
+                  </span>
                   <span className={s.pileSub}>
-                    {!p.items.length ? 'A note' : p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
+                    {!p.items.length ? (p.text.trim() ? 'A note' : 'Nothing in it') : p.text ? plural(p.items.length, 'thing') : p.items[0]?.origin}
                     <span aria-hidden="true" className={s.sep} />
                     {ago(p.createdAt)}
                   </span>
                 </span>
                 <Icon name="chev" size={16} />
               </Link>
+              <SetAsideNote pile={p} remove disabled={running} nameId={`pile-name-${p.id}`} onRemoved={focusMain} />
             </li>
           ))}
         </ul>

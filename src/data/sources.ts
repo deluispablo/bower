@@ -57,6 +57,11 @@ export interface VaultSource {
   updatePile(id: string, text: string): Promise<Pile>;
   /** Sends again the things of a pile that did not arrive. */
   retryPile(id: string): Promise<void>;
+  /**
+   * One plain sentence about keeping uploads on this device, or null. Only a
+   * source with an upload queue has it; behind the live door it answers as a promise.
+   */
+  uploadNotice?(): string | null | Promise<string | null>;
   /** For each file, where you already have it (its path), or null. */
   duplicates(files: Array<{ name: string; body?: Blob }>): Promise<Array<string | null>>;
   questions(): Promise<Question[]>;
