@@ -2587,6 +2587,21 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await reader().piles()).some((p) => p.id === declaredPile.id)).toBe(false);
     });
 
+    it('a retired loose declaration costs the inbox no digest and no lookup of its member', async () => {
+      const w = await bWorld({ declared: true });
+      await w.uploader.addPile({ text: '', items: [pdf('declared loose.pdf')] });
+      await w.uploader.settled();
+      const file = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'declared loose.pdf');
+      await w.worker.process('all');
+      await w.runs.settled();
+      expect(w.drive.pathOf(file?.id ?? '', w.rootId).startsWith('Inbox/')).toBe(false);
+      const digests = vi.spyOn(w.drive, 'storedDigest');
+      const bin = vi.spyOn(w.drive, 'binnedByItem');
+      await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set() }).piles();
+      expect(digests.mock.calls.filter(([id]) => id === file?.id)).toEqual([]);
+      expect(bin).not.toHaveBeenCalled();
+    });
+
     it('keeps the B path while a declared loose file has not arrived, and captures nothing for it', async () => {
       const w = await bWorld({ declared: true });
       const real = w.drive.upload.bind(w.drive);

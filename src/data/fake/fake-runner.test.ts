@@ -488,6 +488,28 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
   });
 
+  it('a declared loose file that has not arrived is looked up in the Bin once per listing', async () => {
+    const uploader = declaring();
+    drive.upload = async () => {
+      throw driveError('offline');
+    };
+    const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+    await uploader.settled();
+    const bin = vi.spyOn(drive, 'binnedByItem');
+    const seen = (await fresh().piles()).find((p) => p.id === pile.id);
+    expect(seen?.items.map((i) => [i.name, i.upload])).toEqual([['loose.pdf', -1]]);
+    expect(bin).toHaveBeenCalledTimes(1);
+  });
+
+  it('a declared loose file put in the Bin outside Bower is not offered to choose again', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+    await uploader.settled();
+    const file = (await drive.listAll(root)).find((f) => f.name === 'loose.pdf');
+    await drive.trash(file?.id ?? '');
+    expect((await fresh().piles()).some((p) => p.id === pile.id)).toBe(false);
+  });
+
   it('a declared loose file removed before it arrives is gone from every device, its declaration in the Bin', async () => {
     const uploader = declaring();
     drive.upload = async () => {
