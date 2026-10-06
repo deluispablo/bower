@@ -2876,6 +2876,39 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       filed.to = '';
       expect(grounded(m)).toBe(false);
     });
+
+    it('grounds a generated note only under a main folder', async () => {
+      const w = await bWorld();
+      await w.uploader.addPile({ text: 'Bins go out on Tuesday nights', items: [] });
+      await w.uploader.settled();
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      expect(grounded(out.manifest)).toBe(true);
+      const listing = await w.drive.listAll(w.rootId);
+      const at = (path: string): DriveFile | undefined => listing.find((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === path);
+      /** The same plan with the words' note made straight in `path` ('' is the root), its rows saying so. */
+      const placed = (path: string): boolean => {
+        const m = structuredClone(out.manifest);
+        const op = m.operations.find((o) => o.effect.kind === 'create-text');
+        if (!op || op.effect.kind !== 'create-text') throw new Error('no generated note');
+        const folder = path ? at(path) : undefined;
+        if (path && !folder) throw new Error(`no ${path}`);
+        op.effect.parent = { fileId: folder?.id ?? w.rootId };
+        if (folder) m.capture.places.push({ file: { fileId: folder.id, name: folder.name, parents: [...folder.parents], folder: true, modifiedTime: folder.modifiedTime }, path });
+        const note = path ? `${path}/${op.effect.name}` : op.effect.name;
+        for (const c of m.reportPlan.filter((x) => x.requires[0] === op.operationId && x.when === 'applied')) {
+          c.requires = [op.operationId];
+          c.value.created = [{ path: note, what: c.value.created[0]?.what ?? '' }];
+          c.value.filed = c.value.filed.map((f) => ({ ...f, to: path, note }));
+        }
+        return grounded(m);
+      };
+      expect(placed('Resources'), 'a main folder').toBe(true);
+      expect(placed(''), 'the root').toBe(false);
+      expect(placed('Inbox'), 'the Inbox').toBe(false);
+      expect(placed('.bower'), '.bower').toBe(false);
+    });
   });
 
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
