@@ -234,3 +234,4 @@ pile-set-aside-reason-visible	7ac0e1ee3f3e9042	2026-10-06	red (fixed in a06bb16b
 b-path-journal	e2b8b250400a47f8	2026-10-06	red (fixed in b2e6cda3365e17ea9b0d9cd8f5cf4e7eaf0270ce)
 b-path-held-piles	f3cecfc28fa21cf3	2026-10-06	red (fixed in 5ede6e6b99ac0d9cd7c6f5a56065845a5e9e0e8b)
 single-active-session	976ee4169f966b6a	2026-10-06	red (fixed in 051d3ae21cdc5e3920482354aa3750bdbf4e0d97)
+note-edit-contract	aafffa972f3ddbb5	2026-10-06	red (fixed in dfc55d60e59c148f8bc33d6b3059c9838011a06f)

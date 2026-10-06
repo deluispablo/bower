@@ -3150,8 +3150,8 @@
       "Every refusal case of the ratified fixture list refuses; nothing is wired to a runner yet (fake-only until the raw-byte adapter)."
     ],
     "verify": "pnpm vitest run src/data/contracts/note-edit.test.ts -t \"note edits change only what the contract allows\"",
-    "passes": false,
-    "note": "B.2 ratified by the technical lead (TL-P2-20 rev 1-4 + Ratification, main d40e5b9); independent document review b2-contract-review-1 READY after three deltas (docs/harness/2026-10-06-b2-contract-review.md). Assignment I-ne-1: Claude note-edit-impl-1, checkout /private/tmp/bower-p2-note-edit. Planned, in implementation."
+    "passes": true,
+    "note": "B.2 ratified (TL-P2-20 rev 1-4 + Ratification, TL-P2-26). Claude candidate claude/p2-note-edit-contract (final 7ab559b on stub 62bb31c); reviewed by the B.2 contract reviewer: BLOCKED only procedurally (uncommitted ordering fix), then CLEAN after deltas. Root gate check 3270. Consumer obligations assigned to o5-rules-wording, b-path-merges, o5-saved-link-note, o5-timeline-append, o5-rename-link-rewrite. Documented limit: the re-parse check cannot see a misplaced pure insertion (TL-P2-26 D). Fake-only until the raw-byte adapter."
   },
   {
     "id": "single-active-session-screen",
