@@ -35,4 +35,5 @@ The map for any agent working on the Bower app rebuild. Short on purpose; the de
 - Brand tokens: `src/styles/tokens.json`, then `pnpm tokens`. Teal and amber are fills; text uses `--brand-line` / `--accent-line`.
 - `public/landing/` is exported from the design canvas: do not edit it by hand; mechanical fixes go in `scripts/fix-landing.mjs`, run after each export.
 - Reuse before building (owner, 2026-10-06): reuse features that already worked in the original Bower app and existing libraries or samples; record the source and reason in the entry. They still pass tests, review and the no-personal-data rule.
+- Simplest proven approach (owner, 2026-10-06): for complex or rare cases, copy how successful apps or repositories solve it; limit or reload rather than perfect, if honest and lossless.
 - Gates before a commit: `pnpm check`; screens also `pnpm e2e` and `pnpm e2e:fake`.
