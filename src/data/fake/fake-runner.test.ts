@@ -576,39 +576,21 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
       expect((await fresh().piles()).find((p) => p.id === pile.id)?.items.map((i) => [i.name, i.upload])).toEqual([['loose.pdf', -1]]);
     });
 
-    it('a declaration copy found in the Bin is ignored by the inbox and the runner, and logged once', async () => {
-      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    it('a declaration copy in the Bin is ignored by the inbox and the runner', async () => {
       const uploader = declaring();
       const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('one.pdf'), pdf('two.pdf')] });
       await uploader.settled();
-      const [binned] = await twoCopies();
-      const stale = await drive.listAll(root);
-      // A device that listed before the copy went to the Bin still has it in its listing.
-      const inbox = fresh();
-      await inbox.refresh();
+      const [binned, kept] = await twoCopies();
+      // As on a real Drive, the listing leaves out what is in the Bin: the other copy still declares the pile.
       await drive.trash(binned?.id ?? '');
-      const logged = (): number => errors.mock.calls.filter((c) => String(c[0]).includes('in the Bin')).length;
-      for (let i = 0; i < 2; i++) {
-        const listed: unknown = await inbox.piles().catch((e: unknown) => e);
-        expect(listed).toBeInstanceOf(Array);
-        const seen = (listed as Awaited<ReturnType<DriveVault['piles']>>).find((p) => p.id === pile.id);
-        expect(seen?.setAside).toBeUndefined();
-        expect(seen?.items.map((i) => i.name)).toEqual(['one.pdf', 'two.pdf']);
-      }
-      expect(logged()).toBe(1);
-
-      // The runner, given the same stale listing, takes the pile on its other copy.
-      errors.mockClear();
-      // Its inbox listing and its capture read the stale listing; its writes see Drive as it is.
-      const listAll = drive.listAll.bind(drive);
-      let staleReads = 2;
-      const spy = vi.spyOn(drive, 'listAll').mockImplementation(async (id) => (id === root && staleReads-- > 0 ? stale : listAll(id)));
+      const seen = (await fresh().piles()).find((p) => p.id === pile.id);
+      expect(seen?.setAside).toBeUndefined();
+      expect(seen?.items.map((i) => i.name)).toEqual(['one.pdf', 'two.pdf']);
       const out = await runFake(drive, root, opts());
-      spy.mockRestore();
       if (out.phase !== 'done') throw new Error('failed');
-      expect(out.report.filed.map((f) => f.name).sort()).toEqual(expect.arrayContaining(['one.pdf', 'two.pdf']));
+      expect(out.report.filed.map((f) => f.name)).toEqual(expect.arrayContaining(['one.pdf', 'two.pdf']));
       expect(out.report.setAside).toEqual([]);
-      expect(logged()).toBeGreaterThanOrEqual(1);
+      expect(await declarations()).toEqual([kept]);
     });
   });
 

@@ -101,6 +101,14 @@ export function shownName(member: Pick<Member, 'name' | 'kind'>): string {
   return member.kind === 'link' ? member.name.replace(/%(2F|5C|25)/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))) : member.name;
 }
 
+/** Every copy of one declaration in `.bower/piles`, by real parents and its name; none is read. */
+export function declarationCopies(files: readonly DriveFile[], rootId: string, declarationId: string): DriveFile[] {
+  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
+  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
+  const prefix = `declaration-${declarationId}-`;
+  return files.filter((f) => !f.folder && f.parents.some((p) => piles.has(p)) && f.name.startsWith(prefix) && f.name.endsWith('.json'));
+}
+
 /**
  * The declaration a pile folder names, found by real parents (`.bower` →
  * `piles`, duplicates included), never by a disambiguated path. Identical
@@ -114,10 +122,8 @@ export function shownName(member: Pick<Member, 'name' | 'kind'>): string {
 export async function findDeclaration(files: readonly DriveFile[], rootId: string, folder: DriveFile, read: ReadBytes, cache?: Map<string, DeclarationResult>): Promise<DeclarationLookup> {
   const declarationId = folder.appProperties?.[PROP.declaration];
   if (!declarationId) return { state: 'unmarked' };
-  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
-  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
   const prefix = `declaration-${declarationId}-`;
-  const copies = files.filter((f) => !f.folder && f.parents.some((p) => piles.has(p)) && f.name.startsWith(prefix) && f.name.endsWith('.json'));
+  const copies = declarationCopies(files, rootId, declarationId);
   if (!copies.length) return { state: 'missing' };
   const found = new Map<string, Declaration>();
   for (const copy of copies) {
