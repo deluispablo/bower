@@ -18,6 +18,8 @@ export interface LiveOptions {
   runningPiles?: () => ReadonlySet<string>;
   /** How often to ask the Worker while a run is going (ms); 4 s by default. */
   pollMs?: number;
+  /** Declares each new pile before sending it (the pretend Drive only, until the real runner reads declarations). */
+  declarePiles?: boolean;
 }
 
 export interface LiveSources extends Sources {
@@ -172,6 +174,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     }
     v = new DriveVault({
       driveLinks: opts.driveLinks ?? false,
+      declarePiles: opts.declarePiles ?? false,
       drive: bound(drive, ['createFolder', 'createText', 'upload', 'update', 'writeText', 'trash', 'untrash']),
       rootId: boundRoot,
       runningPiles: () => {

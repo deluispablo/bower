@@ -25,6 +25,27 @@ export interface DrivePatch {
   appProperties?: Record<string, string | null>;
 }
 
+/** A file in the Bin that carries a `bowerItem` key, with its stored size and SHA-256 when known. */
+export interface BinnedItem {
+  file: DriveFile;
+  size: number | null;
+  sha256: string | null;
+}
+
+/**
+ * Optional, feature-detected: Bin entries under `rootId` whose `bowerItem` is
+ * one of `keys`, in one call. The pretend Drive has it; P3 equivalent: one
+ * Drive query `trashed = true` with an appProperties OR over the keys,
+ * bounded and paginated.
+ */
+export interface BinLookup {
+  binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
+}
+
+export function hasBinLookup(drive: object): drive is BinLookup {
+  return typeof (drive as { binnedByItem?: unknown }).binnedByItem === 'function';
+}
+
 export interface DriveApi {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
   listAll(rootId: string): Promise<DriveFile[]>;

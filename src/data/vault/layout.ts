@@ -10,7 +10,8 @@
  * - `last-run.json`    { v, run: RunState without `seen` }
  * - `hashes.json`      { v, hashes: { [sha-256 hex]: path } }
  * Owned by the app: `changes/`, one JSON file per change (the journal);
- * the runner moves them to `changes/archive/` after reading them.
+ * the runner moves them to `changes/archive/` after reading them; `piles/`,
+ * one immutable declaration per pile, written before any of its things.
  */
 import { isRunWire } from '../worker/worker-api';
 import type { Question, Request, RunState, Suggestion } from '../types';
@@ -26,6 +27,8 @@ export const SYSTEM = {
   suggestions: '.bower/suggestions.json',
   requests: '.bower/requests.json',
   hashes: '.bower/hashes.json',
+  /** Immutable pile declarations: `declaration-<declarationId>-<sha256>.json`. */
+  piles: '.bower/piles',
 } as const;
 
 export const HIDDEN_AT_ROOT = ['index.md', 'hot.md', 'log.md'] as const;
@@ -71,6 +74,8 @@ export const PROP = {
   pile: 'pile',
   /** On a thing sent to the inbox: a key made before sending, so a retry never sends it twice. */
   item: 'bowerItem',
+  /** On a declared pile's folder and its things: the declaration id in `.bower/piles`. */
+  declaration: 'bowerDeclaration',
 } as const;
 
 /** Runtime checks for the runner's data: a version alone does not prove its shape. */

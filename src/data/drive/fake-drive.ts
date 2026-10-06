@@ -4,7 +4,8 @@
  * (`?source=fake`), where it holds Alex's folder in the browser.
  */
 import { BowerError, type ErrorCode } from '../types';
-import { driveError, type DriveApi, type DriveFile, type DrivePatch } from './drive-api';
+import { sha256 } from '../vault/hashes';
+import { driveError, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch } from './drive-api';
 
 interface Stored {
   meta: DriveFile;
@@ -12,6 +13,8 @@ interface Stored {
   content: string | Blob | null;
   /** A restored big-file placeholder has no original bytes; never certify it as content. */
   bytesUnavailable?: true;
+  /** Its original bytes' SHA-256, kept when they were not (fake-stored evidence). */
+  sha256?: string;
 }
 
 export interface FakeDriveOptions {
@@ -22,7 +25,7 @@ export interface FakeDriveOptions {
   offline?: boolean;
 }
 
-export class FakeDrive implements DriveApi {
+export class FakeDrive implements DriveApi, BinLookup {
   private files = new Map<string, Stored>();
   private seq = 0;
   private last = 0;
@@ -49,8 +52,11 @@ export class FakeDrive implements DriveApi {
     for (const f of this.files.values()) {
       const c = f.content;
       // A tab keeps a few MB: a big file keeps its place and size, not its bytes.
-      const content = c === null ? null : typeof c === 'string' ? { text: c } : f.bytesUnavailable || c.size > KEEP_BYTES ? { big: true, type: c.type } : { b64: toBase64(new Uint8Array(await c.arrayBuffer())), type: c.type };
-      files.push({ meta: f.meta, trashed: f.trashed, content });
+      const big = c instanceof Blob && (f.bytesUnavailable || c.size > KEEP_BYTES);
+      const content = c === null ? null : typeof c === 'string' ? { text: c } : big ? { big: true, type: c.type } : { b64: toBase64(new Uint8Array(await c.arrayBuffer())), type: c.type };
+      // A big file keeps the hash of its bytes beside its name and size, so it can still be checked after a reload.
+      const hash = big ? (f.bytesUnavailable ? f.sha256 : await sha256(c)) : undefined;
+      files.push({ meta: f.meta, trashed: f.trashed, content, ...(hash ? { sha256: hash } : {}) });
     }
     return JSON.stringify({ v: 1, seq: this.seq, last: this.last, files });
   }
@@ -58,14 +64,15 @@ export class FakeDrive implements DriveApi {
   /** A FakeDrive back from `snapshot()`. */
   static restore(json: string, opts: FakeDriveOptions = {}): FakeDrive {
     const d = new FakeDrive(opts);
-    const data = JSON.parse(json) as { seq: number; last: number; files: Array<{ meta: DriveFile; trashed: boolean; content: { text: string } | { b64: string; type: string } | { big: true; type: string } | null }> };
+    const data = JSON.parse(json) as { seq: number; last: number; files: Array<{ meta: DriveFile; trashed: boolean; content: { text: string } | { b64: string; type: string } | { big: true; type: string } | null; sha256?: unknown }> };
     d.files.clear();
     for (const f of data.files) {
       const c = f.content;
       const content = c === null ? null : 'text' in c ? c.text : 'big' in c ? new Blob([`A big file, kept by name only on the pretend Drive.`], { type: c.type }) : new Blob([fromBase64(c.b64)], { type: c.type });
       // Old restore→snapshot could lose `big` and base64-encode the small placeholder.
       const unavailable = c && ('big' in c || ('b64' in c && (f.meta.size ?? 0) > KEEP_BYTES && content instanceof Blob && content.size <= KEEP_BYTES));
-      d.files.set(f.meta.id, { meta: f.meta, trashed: f.trashed, content, ...(unavailable ? { bytesUnavailable: true as const } : {}) });
+      const kept = typeof f.sha256 === 'string' && /^[0-9a-f]{64}$/.test(f.sha256) ? { sha256: f.sha256 } : {};
+      d.files.set(f.meta.id, { meta: f.meta, trashed: f.trashed, content, ...(unavailable ? { bytesUnavailable: true as const, ...kept } : {}) });
     }
     d.seq = data.seq;
     d.last = data.last;
@@ -139,6 +146,49 @@ export class FakeDrive implements DriveApi {
     }
   }
 
+  /**
+   * A file's size and SHA-256 as stored here (fake-stored evidence): from its
+   * bytes, or, for a big file after a reload, from what the snapshot kept.
+   * Null when they could not be checked.
+   */
+  async storedDigest(id: string): Promise<{ size: number; sha256: string } | null> {
+    await this.gate();
+    const f = this.find(id);
+    if (f.bytesUnavailable) return f.sha256 !== undefined && f.meta.size !== undefined ? { size: f.meta.size, sha256: f.sha256 } : null;
+    const bytes = f.content === null ? new Uint8Array() : typeof f.content === 'string' ? new TextEncoder().encode(f.content) : new Uint8Array(await f.content.arrayBuffer());
+    return { size: bytes.byteLength, sha256: await sha256(new Blob([bytes])) };
+  }
+
+  /** Bin entries below `rootId` (through any parent, in the Bin or not) whose `bowerItem` is one of `keys`. */
+  async binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]> {
+    await this.gate();
+    const wanted = new Set(keys);
+    const below = (f: Stored): boolean => {
+      const seen = new Set<string>();
+      let cur: Stored | undefined = f;
+      while (cur && !seen.has(cur.meta.id)) {
+        seen.add(cur.meta.id);
+        const parent: string | undefined = cur.meta.parents[0];
+        if (parent === rootId) return true;
+        cur = parent ? this.files.get(parent) : undefined;
+      }
+      return false;
+    };
+    const out: BinnedItem[] = [];
+    for (const f of this.files.values()) {
+      const key = f.meta.appProperties?.bowerItem;
+      if (!f.trashed || f.meta.folder || !key || !wanted.has(key) || !below(f)) continue;
+      const digest = f.bytesUnavailable ? null : await this.digestOfStored(f);
+      out.push({ file: this.copy(f.meta), size: digest?.size ?? (f.sha256 ? (f.meta.size ?? null) : null), sha256: digest?.sha256 ?? f.sha256 ?? null });
+    }
+    return out;
+  }
+
+  private async digestOfStored(f: Stored): Promise<{ size: number; sha256: string }> {
+    const bytes = f.content === null ? new Uint8Array() : typeof f.content === 'string' ? new TextEncoder().encode(f.content) : new Uint8Array(await f.content.arrayBuffer());
+    return { size: bytes.byteLength, sha256: await sha256(new Blob([bytes])) };
+  }
+
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
     return this.changed(this.add(parentId, name, true, null, appProperties));
@@ -162,6 +212,7 @@ export class FakeDrive implements DriveApi {
     if (f.meta.modifiedTime !== ifModified) throw driveError('conflict');
     f.content = text;
     delete f.bytesUnavailable;
+    delete f.sha256;
     f.meta = { ...f.meta, modifiedTime: this.stamp(), size: text.length };
     return this.changed(this.copy(f.meta));
   }

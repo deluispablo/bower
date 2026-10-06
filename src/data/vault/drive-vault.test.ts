@@ -5,6 +5,9 @@ import { findNode } from '../tree';
 import { BowerError } from '../types';
 import { DriveVault } from './drive-vault';
 import { runFake } from '../fake/fake-runner';
+import { parsePileDeclaration } from '../contracts/pile-declaration';
+import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
+import { driveError } from '../drive/drive-api';
 
 const PASSPORT = 'Areas/Documents/Passport renewal.md';
 let drive: FakeDrive;
@@ -808,5 +811,245 @@ describe('unreadable ownership notes do not block other notes', () => {
     });
     const result = operation === 'search' ? vault.search('ownershipneedle') : operation === 'backlinks' ? vault.note(target) : vault.piles();
     await expect(result).rejects.toBe(error);
+  });
+});
+
+describe('pile declarations', () => {
+  const declaring = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const pdf = (name: string): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name, kind: 'pdf', origin: 'From this computer', body: new Blob([`%PDF ${name}`]) });
+  const DECLARATION = /^declaration-[A-Za-z0-9_-]+-[0-9a-f]{64}\.json$/;
+
+  async function declarations() {
+    const files = (await drive.listAll(root)).filter((f) => !f.folder && drive.pathOf(f.id, root).startsWith('.bower/piles/'));
+    return Promise.all(files.map(async (f) => ({ id: f.id, name: f.name, bytes: await drive.readBytes(f.id) })));
+  }
+
+  /** b.pdf does not get through until `heal` is called. */
+  function failing(name: string): () => void {
+    const real = drive.upload.bind(drive);
+    let fail = true;
+    drive.upload = async (parent, n, body, onProgress, props) => {
+      if (n === name && fail) throw driveError('offline');
+      return real(parent, n, body, onProgress, props);
+    };
+    return () => { fail = false; };
+  }
+
+  it('a declaration is written before any member and never rewritten', async () => {
+    const order: string[] = [];
+    const createText = drive.createText.bind(drive);
+    const createFolder = drive.createFolder.bind(drive);
+    drive.createText = async (parent, name, text, props) => { order.push(`text:${name}`); return createText(parent, name, text, props); };
+    drive.createFolder = async (parent, name, props) => { order.push(`folder:${name}`); return createFolder(parent, name, props); };
+    const heal = failing('b.pdf');
+    const upload = drive.upload.bind(drive);
+    drive.upload = async (parent, name, body, onProgress, props) => { order.push(`upload:${name}`); return upload(parent, name, body, onProgress, props); };
+    const writeText = vi.spyOn(drive, 'writeText');
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const declared = await declarations();
+    expect(declared.map((d) => d.name)).toEqual([expect.stringMatching(DECLARATION)]);
+    const at = order.findIndex((x) => DECLARATION.test(x.replace(/^text:/, '')));
+    expect(at).toBeGreaterThanOrEqual(0);
+    const pileFolder = order.findIndex((x) => x.startsWith('folder:') && x.endsWith('Papers from Alex'));
+    expect(pileFolder).toBeGreaterThan(at);
+    expect(order.slice(0, at).some((x) => x.startsWith('upload:') || x === 'text:Pile note.md')).toBe(false);
+    const parsed = await parsePileDeclaration(declared[0]?.bytes ?? new Uint8Array(), root);
+    if (!parsed.ok) throw new Error(`declaration refused: ${parsed.reason}`);
+    expect(parsed.value.pileId).toBe(pile.id);
+    expect(parsed.value.members.map((m) => m.name)).toEqual(['a.pdf', 'b.pdf']);
+    expect(declared[0]?.name).toBe(`declaration-${parsed.value.declarationId}-${parsed.sha256}.json`);
+    heal();
+    await uploader.retryPile(pile.id);
+    await uploader.settled();
+    expect(order.filter((x) => x.startsWith('upload:'))).toEqual(['upload:a.pdf', 'upload:b.pdf', 'upload:b.pdf']);
+    expect(await declarations()).toEqual(declared);
+    expect(writeText.mock.calls.filter(([id]) => id === declared[0]?.id)).toEqual([]);
+  });
+
+  it('a failed declaration write uploads nothing', async () => {
+    const inboxBefore = (await drive.listAll(root)).filter((f) => drive.pathOf(f.id, root).startsWith('Inbox/')).map((f) => f.id).sort();
+    const createText = drive.createText.bind(drive);
+    drive.createText = async (parent, name, text, props) => {
+      if (name.startsWith('declaration-')) throw driveError('offline');
+      return createText(parent, name, text, props);
+    };
+    const upload = vi.spyOn(drive, 'upload');
+    const uploader = declaring();
+    await expect(uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] })).rejects.toMatchObject({ name: 'BowerError', code: 'offline' });
+    await uploader.settled();
+    expect(upload).not.toHaveBeenCalled();
+    expect((await drive.listAll(root)).filter((f) => drive.pathOf(f.id, root).startsWith('Inbox/')).map((f) => f.id).sort()).toEqual(inboxBefore);
+  });
+
+  it('the uploader shows each missing member once', async () => {
+    failing('b.pdf');
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const rows = async (): Promise<Array<[string, number | undefined]>> => ((await uploader.piles()).find((p) => p.id === pile.id)?.items ?? []).map((i) => [i.name, i.upload]);
+    expect(await rows()).toEqual([['a.pdf', undefined], ['b.pdf', -1]]);
+    await uploader.refresh();
+    expect(await rows()).toEqual([['a.pdf', undefined], ['b.pdf', -1]]);
+  });
+
+  it('a conflicting declaration copy blocks the pile', async () => {
+    failing('b.pdf');
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const declared = await declarations();
+    expect(declared).toHaveLength(1);
+    const parsed = await parsePileDeclaration(declared[0]?.bytes ?? new Uint8Array(), root);
+    if (!parsed.ok) throw new Error(`declaration refused: ${parsed.reason}`);
+    // Another client wrote a different body under the same declaration id.
+    const other = { ...parsed.value, createdAt: parsed.value.createdAt + 1 };
+    const bytes = canonicalRecordJson(other);
+    const hash = await hashRecordJson(other);
+    if (!bytes.ok || !hash.ok) throw new Error('no canonical copy');
+    const parent = (await drive.get(declared[0]?.id ?? '')).parents[0] ?? '';
+    await drive.createText(parent, `declaration-${other.declarationId}-${hash.value}.json`, new TextDecoder().decode(bytes.value));
+    const second = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    const seen = (await second.piles()).find((p) => p.id === pile.id);
+    expect(seen?.items.map((i) => [i.name, i.upload])).toEqual([['a.pdf', undefined]]);
+    const folder = (await drive.listAll(root)).find((f) => f.folder && f.appProperties?.pile === pile.id);
+    if (!folder) throw new Error('no pile folder');
+    const mine = new Set((await drive.listAll(folder.id)).map((f) => f.id).concat(folder.id));
+    const before = await drive.snapshot();
+    const out = await runFake(drive, root, { scope: 'all', scale: 'instant', failOnce: false, onPhase: () => undefined });
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.report.setAside).toContainEqual({ name: folder.name, why: 'Bower found two different lists of what is in this pile. Remove it and add it again.' });
+    expect(out.report.filed.map((f) => f.name)).not.toContain('a.pdf');
+    const after = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: { id: string }; trashed: boolean }> };
+    const was = JSON.parse(before) as { files: Array<{ meta: { id: string }; trashed: boolean }> };
+    expect(after.files.filter((f) => mine.has(f.meta.id))).toEqual(was.files.filter((f) => mine.has(f.meta.id)));
+  });
+
+  /** The pile's folder, its note and its parsed declaration. */
+  async function declaredParts(pileId: string) {
+    const folder = (await drive.listAll(root)).find((f) => f.folder && f.appProperties?.pile === pileId);
+    if (!folder) throw new Error('no pile folder');
+    const note = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
+    const [declared] = await declarations();
+    const parsed = await parsePileDeclaration(declared?.bytes ?? new Uint8Array(), root);
+    if (!parsed.ok) throw new Error('declaration refused');
+    return { folder, note, declaration: parsed.value };
+  }
+
+  it('a new note for a declared pile carries its declared context key', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const { note, declaration } = await declaredParts(pile.id);
+    if (!note || declaration.context.kind !== 'text') throw new Error('no context');
+    await drive.trash(note.id);
+    await declaring().updatePile(pile.id, 'New words');
+    const again = (await declaredParts(pile.id)).note;
+    expect(again?.id).not.toBe(note.id);
+    expect(again?.appProperties?.bowerItem).toBe(declaration.context.memberKey);
+    expect(await drive.readText(again?.id ?? '')).toBe('New words');
+  });
+
+  it("clearing a declared pile's line keeps its note, empty", async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const { note } = await declaredParts(pile.id);
+    const trash = vi.spyOn(drive, 'trash');
+    const cleared = await declaring().updatePile(pile.id, '');
+    expect(cleared.text).toBe('');
+    expect(trash).not.toHaveBeenCalled();
+    expect((await declaredParts(pile.id)).note?.id).toBe(note?.id);
+    expect(await drive.readText(note?.id ?? '')).toBe('');
+  });
+
+  it('Try again on another client writes a missing note again, then asks for the file', async () => {
+    failing('b.pdf');
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const { folder, note, declaration } = await declaredParts(pile.id);
+    if (!note || declaration.context.kind !== 'text') throw new Error('no context');
+    await drive.trash(note.id);
+    const upload = vi.spyOn(drive, 'upload');
+    await expect(declaring().retryPile(pile.id)).rejects.toMatchObject({ code: 'conflict', message: 'Choose b.pdf again on this device to send it.' });
+    const again = (await drive.listAll(folder.id)).filter((f) => f.name === 'Pile note.md');
+    expect(again.map((f) => f.appProperties?.bowerItem)).toEqual([declaration.context.memberKey]);
+    expect(await drive.readText(again[0]?.id ?? '')).toBe('Papers from Alex');
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('a missing link shows as you added it, and asks to paste it again', async () => {
+    const createText = drive.createText.bind(drive);
+    drive.createText = async (parent, name, text, props) => {
+      if (name.endsWith('.url')) throw driveError('offline');
+      return createText(parent, name, text, props);
+    };
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Reading from Alex', items: [pdf('a.pdf'), { name: 'source.example/path', kind: 'link', origin: 'A link you pasted', url: 'https://source.example/path' }] });
+    await uploader.settled();
+    const second = declaring();
+    const seen = (await second.piles()).find((p) => p.id === pile.id);
+    expect(seen?.items.map((i) => [i.name, i.kind, i.upload])).toEqual([['a.pdf', 'pdf', undefined], ['source.example/path', 'link', -1]]);
+    await expect(second.retryPile(pile.id)).rejects.toMatchObject({ code: 'conflict', message: 'Paste the link again on this device to send it.' });
+  });
+
+  it('listing the inbox again reads no declaration twice and lists nothing again', async () => {
+    failing('b.pdf');
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const second = declaring();
+    expect((await second.piles()).find((p) => p.id === pile.id)?.items).toHaveLength(2);
+    const listAll = vi.spyOn(drive, 'listAll');
+    const readBytes = vi.spyOn(drive, 'readBytes');
+    expect((await second.piles()).find((p) => p.id === pile.id)?.items).toHaveLength(2);
+    expect(listAll).not.toHaveBeenCalled();
+    expect(readBytes).not.toHaveBeenCalled();
+  });
+
+  it('a missing link keeps its slashes on another client', async () => {
+    const createText = drive.createText.bind(drive);
+    drive.createText = async (parent, name, text, props) => {
+      if (name.endsWith('.url')) throw driveError('offline');
+      return createText(parent, name, text, props);
+    };
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Reading from Alex', items: [pdf('a.pdf'), { name: 'https://example.com/page%2F1', kind: 'link', origin: 'A link you pasted', url: 'https://example.com/page%2F1' }] });
+    await uploader.settled();
+    const seen = (await declaring().piles()).find((p) => p.id === pile.id);
+    expect(seen?.items.map((i) => i.name)).toEqual(['a.pdf', 'https://example.com/page%2F1']);
+  });
+
+  it('Try again writes no note while a tidy-up holds the pile, nor one already written again elsewhere', async () => {
+    failing('b.pdf');
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const { folder, note, declaration } = await declaredParts(pile.id);
+    if (!note || declaration.context.kind !== 'text') throw new Error('no context');
+    await drive.trash(note.id);
+    const createText = vi.spyOn(drive, 'createText');
+    const busy = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set([pile.id]), declarePiles: true });
+    await expect(busy.retryPile(pile.id)).rejects.toMatchObject({ code: 'conflict', message: 'Wait for the tidy-up to end.' });
+    expect(createText).not.toHaveBeenCalled();
+    const second = declaring();
+    expect((await second.piles()).find((p) => p.id === pile.id)?.text).toBe('');
+    // Someone else writes the note again after this client listed the pile.
+    await drive.createText(folder.id, 'Pile note.md', 'Papers from Alex', { bowerItem: declaration.context.memberKey });
+    await expect(second.retryPile(pile.id)).rejects.toMatchObject({ message: 'Choose b.pdf again on this device to send it.' });
+    expect((await drive.listAll(folder.id)).filter((f) => f.name === 'Pile note.md')).toHaveLength(1);
+  });
+
+  it('a second note with the context key is never shown as a thing', async () => {
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await uploader.settled();
+    const { folder, declaration } = await declaredParts(pile.id);
+    if (declaration.context.kind !== 'text') throw new Error('no context');
+    await drive.createText(folder.id, 'Pile note.md', 'Papers from Alex', { bowerItem: declaration.context.memberKey });
+    const seen = (await declaring().piles()).find((p) => p.id === pile.id);
+    expect(seen?.items.map((i) => i.name)).toEqual(['a.pdf', 'b.pdf']);
   });
 });

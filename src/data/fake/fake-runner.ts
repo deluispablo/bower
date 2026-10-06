@@ -12,7 +12,8 @@ import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
-import { thingsIn } from '../piles';
+import { PILE_NOTE, thingsIn } from '../piles';
+import { contextRemoved, findDeclaration, journalValues, observePile, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, type FiledItem, type Pile, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -56,12 +57,87 @@ const UPDATES = [
   { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.' },
 ];
 
+/** Why a declared pile waits for a later tidy-up, and what you can do about it. */
+export const SET_ASIDE = {
+  notArrived: 'Some of its things have not arrived yet.',
+  notChecked: 'Bower could not check some of its things. Try again later.',
+  changed: 'Some of its things changed after they were added. Remove it and add them again.',
+  declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
+  empty: 'Nothing is left in it. Remove it from your inbox.',
+} as const;
+
+/**
+ * What a run takes of a pile folder, fixed when it starts: every child it
+ * accounts for, and a declared note to write again first. The folder goes to
+ * the Bin only when nothing else is left in it.
+ */
+type Capture = { blocked: string } | { blocked: null; captured: Set<string>; restore?: { key: string; text: string } };
+
+/** A file's size and hash from the pretend Drive's stored bytes (`fake-stored`); null when they cannot be read. */
+async function storedDigest(drive: FakeDrive, f: DriveFile): Promise<Digest | null> {
+  try {
+    return await drive.storedDigest(f.id);
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+/** Declared piles are taken only when every member arrived with the bytes declared for it, or was filed with them. */
+async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[]): Promise<Map<string, Capture>> {
+  const listing = await drive.listAll(rootId);
+  const ix = VaultIndex.build(rootId, listing);
+  let records: Promise<unknown[]> | null = null;
+  const journal = (): Promise<unknown[]> => (records ??= journalValues(ix.journalFiles(true), (id) => drive.readText(id)));
+  const out = new Map<string, Capture>();
+  for (const pile of piles) {
+    const folder = pile.path ? ix.file(pile.path) : undefined;
+    if (!pile.path || !folder?.folder) continue;
+    const children = listing.filter((f) => f.parents[0] === folder.id);
+    const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
+    const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
+    const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id));
+    if (found.state === 'unmarked') {
+      out.set(pile.id, { blocked: null, captured: new Set([...pile.items.map((i) => i.id), ...notes]) });
+      continue;
+    }
+    if (found.state !== 'found') {
+      out.set(pile.id, { blocked: found.state === 'conflict' ? SET_ASIDE.declaration : SET_ASIDE.notChecked });
+      continue;
+    }
+    const readiness = await observePile(found.declaration, folder, listing, (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
+    if (readiness.blocked) {
+      out.set(pile.id, { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked });
+      continue;
+    }
+    // The context only has to have arrived: any note is the person's words. Missing though never
+    // removed through Bower, it is written again from its first words.
+    const context = found.declaration.context;
+    const restore = context.kind === 'text' && !children.some((f) => f.appProperties?.[PROP.item] === context.memberKey) && !contextRemoved(await journal(), pile.path)
+      ? { key: context.memberKey, text: context.originalText }
+      : undefined;
+    // A blank note is context removed: with no member left, the pile is empty.
+    if (!present.length && !pile.text.trim() && !restore) {
+      out.set(pile.id, { blocked: SET_ASIDE.empty });
+      continue;
+    }
+    out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}) });
+  }
+  return out;
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 
 export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOptions): Promise<FakeRunResult> {
   const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });
   const piles = opts.scope === 'all' ? await reader.piles() : [];
-  const taken = new Set(piles.filter((p) => p.path).map((p) => p.id));
+  const capture = await captureOf(drive, rootId, piles);
+  // A pile that has not fully arrived is not taken: nothing of it moves, nothing goes to the Bin.
+  const blocked = piles.flatMap((p) => {
+    const why = capture.get(p.id)?.blocked;
+    return why ? [{ name: nameOf(p.path ?? ''), why }] : [];
+  });
+  const taken = new Set(piles.filter((p) => p.path && !capture.get(p.id)?.blocked).map((p) => p.id));
   opts.took?.(taken);
   const ms = PHASE_MS[opts.scale];
   if (opts.readingFor === undefined) {
@@ -80,10 +156,10 @@ export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOpt
   const journal = await w.journal();
   await w.requests();
   await w.clearNew();
-  const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [], yourChanges: journal.length };
+  const report: RunReport = { filed: [], created: [], updated: [], setAside: blocked, questions: [], yourChanges: journal.length };
   const saidYes = new Set(journal.filter((r) => r.kind === 'answer' && r.text === 'yes').map((r) => r.questionId ?? ''));
   if (opts.scope === 'all') {
-    for (const pile of piles.filter((p) => taken.has(p.id))) await w.filePile(pile, report, saidYes);
+    for (const pile of piles.filter((p) => taken.has(p.id))) await w.filePile(pile, report, saidYes, capture.get(pile.id));
     for (const u of UPDATES) if (await w.addTimeline(u.path, u.what)) report.updated.push(u);
   }
   await w.followRenames(journal);
@@ -137,7 +213,18 @@ class Writer {
     for (const f of await this.drive.listAll(this.rootId)) if (f.appProperties?.[PROP.isNew]) this.ix.put(await this.drive.update(f.id, { appProperties: { [PROP.isNew]: null } }));
   }
 
-  async filePile(pile: Pile, report: RunReport, saidYes: ReadonlySet<string>): Promise<void> {
+  async filePile(taken: Pile, report: RunReport, saidYes: ReadonlySet<string>, capture?: Capture): Promise<void> {
+    let pile = taken;
+    const restore = capture?.blocked === null ? capture.restore : undefined;
+    const at = pile.path ? this.ix.file(pile.path) : undefined;
+    if (restore && at && capture?.blocked === null) {
+      // Look again right before writing: Try again elsewhere may have written it already.
+      const there = (await this.drive.listAll(at.id)).find((f) => f.parents[0] === at.id && f.appProperties?.[PROP.item] === restore.key);
+      const note = there ?? (await this.drive.createText(at.id, PILE_NOTE, restore.text, { [PROP.item]: restore.key }));
+      this.ix.put(note);
+      capture.captured.add(note.id);
+      pile = { ...pile, text: there ? (await this.drive.readText(there.id)).trim() : restore.text.trim() };
+    }
     if (!pile.items.length) {
       const to = guessFolder(pile.text, 'note');
       const folder = await this.folder(to);
@@ -191,9 +278,12 @@ class Writer {
         report.filed.push(filed);
       }
     }
-    // What is left of the pile (its folder and note) goes to the Bin, where it can be found.
+    // What is left of the pile (its folder and note) goes to the Bin, where it can be found,
+    // unless something the run did not take arrived in it since: then the folder stays.
     const top = pile.path ? this.ix.file(pile.path) : undefined;
     if (top?.folder) {
+      const left = (await this.drive.listAll(top.id)).filter((f) => f.parents[0] === top.id);
+      if (capture?.blocked === null && left.some((f) => !capture.captured.has(f.id))) return;
       await this.drive.trash(top.id);
       this.ix.drop(top.id);
     }

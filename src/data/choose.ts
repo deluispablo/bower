@@ -63,5 +63,5 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   drive.latency = scenario === 'slow' ? 1500 : scale === 'instant' ? 0 : 40;
   drive.offline = scenario === 'offline';
   const worker = new FakeWorker({ drive, scenario, scale, rootId, fresh, offline: scenario === 'offline' });
-  return { sources: makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300 }) };
+  return { sources: makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true }) };
 }

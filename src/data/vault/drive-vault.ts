@@ -5,7 +5,7 @@
  * writes one journal line for each change you make, so the next tidy-up
  * knows what happened. It never writes Bower's own sections of a note.
  */
-import type { DriveApi, DriveFile } from '../drive/drive-api';
+import { hasBinLookup, type DriveApi, type DriveFile } from '../drive/drive-api';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -24,6 +24,8 @@ import {
   type Suggestion,
   type TreeNode,
 } from '../types';
+import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
+import { contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, missingMembers, shownName, type DeclarationLookup, type Digest } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -43,6 +45,8 @@ export interface DriveVaultOptions {
   runningPiles: () => ReadonlySet<string>;
   /** Names this device in the journal. */
   device?: string;
+  /** Writes an immutable declaration before a pile folder and its things (off until every reader understands it). */
+  declarePiles?: boolean;
 }
 
 const where = (folder: string): string => folder.replaceAll('/', ' / ') || 'your Bower folder';
@@ -67,6 +71,11 @@ export class DriveVault implements VaultSource {
   protected readonly rootId: () => Promise<string>;
   protected readonly runningPiles: () => ReadonlySet<string>;
   protected readonly journal: Journal;
+  private readonly declarePiles: boolean;
+  /** Declarations never change: each copy is read once, by file id and modified time. */
+  private declarationCache = new Map<string, DeclarationResult>();
+  /** Sizes and hashes of files already checked, by file id and modified time. */
+  private digests = new Map<string, Digest>();
   private ix: Promise<VaultIndex> | null = null;
   private listeners = new Set<() => void>();
   private notes = new Map<string, { modified: string; note: ParsedNote }>();
@@ -85,6 +94,7 @@ export class DriveVault implements VaultSource {
     this.drive = opts.drive;
     this.rootId = opts.rootId;
     this.runningPiles = opts.runningPiles;
+    this.declarePiles = opts.declarePiles ?? false;
     this.journal = new Journal(
       this.drive,
       {
@@ -410,11 +420,137 @@ export class DriveVault implements VaultSource {
       // Pile.text is editable context, so a refusal must not masquerade as saved text.
       if (note && !parsed) continue;
       const text = parsed?.body.trim() ?? '';
-      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items: [...kids.filter((k) => k !== note).map(itemOf), ...sending] });
+      const declared = f.appProperties?.[PROP.declaration] ? await this.declaredMissing(f, this.uploads.get(id)) : { rows: [], contextKey: null };
+      // Every note with the pile's context key is its context, never a thing to file.
+      const things = kids.filter((k) => k !== note && !(declared.contextKey && k.appProperties?.[PROP.item] === declared.contextKey));
+      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items: [...things.map(itemOf), ...sending, ...declared.rows] });
     }
     // A lone thing still on its way has no file yet: show it from here.
     for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
     return out.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /**
+   * A declared pile's things that have not arrived and are not on their way
+   * from here: shown while its folder is there, so any device can see them.
+   */
+  private async declaredMissing(folder: DriveFile, u: Upload | undefined): Promise<{ rows: PileItem[]; contextKey: string | null }> {
+    const ix = await this.index();
+    const files = this.known(ix);
+    const found = await this.declarationOf(folder, files);
+    if (found.state !== 'found') return { rows: [], contextKey: null };
+    const contextKey = found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
+    const local = new Set(u?.entries.map((e) => e.key));
+    const drive = this.drive;
+    const root = await this.rootId();
+    // Only when a member is missing everywhere live: one Bin lookup for all of them.
+    const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
+    const missing = await missingMembers(found.declaration, folder, files, (f) => this.digestOf(f), binned);
+    this.checkCurrent();
+    const rows = missing
+      .filter((m) => !local.has(m.memberKey))
+      .map((m) => ({ id: m.memberKey, name: shownName(m), kind: m.kind, origin: m.origin ?? 'Added in Drive', upload: -1 }));
+    return { rows, contextKey };
+  }
+
+  private async declarationOf(folder: DriveFile, files: readonly DriveFile[]): Promise<DeclarationLookup> {
+    const found = await findDeclaration(files, await this.rootId(), folder, (id) => this.drive.readBytes(id), this.declarationCache);
+    this.checkCurrent();
+    return found;
+  }
+
+  /** Everything already listed, Bower's own pile declarations included, by real parents: no new listing. */
+  private known(ix: VaultIndex): DriveFile[] {
+    const out = new Map<string, DriveFile>();
+    for (const path of ix.entries().keys()) {
+      const f = ix.file(path);
+      if (f) out.set(f.id, f);
+    }
+    const under = (parent: DriveFile, name?: string): DriveFile[] => {
+      const path = ix.pathOf(parent.id);
+      return path === undefined ? [] : ix.filesIn(path).filter((f) => name === undefined || (f.folder && f.name === name));
+    };
+    const root = ix.filesIn('').filter((f) => f.folder && f.name === SYSTEM.dir);
+    for (const bower of root) {
+      out.set(bower.id, bower);
+      for (const piles of under(bower, nameOf(SYSTEM.piles))) {
+        out.set(piles.id, piles);
+        for (const f of under(piles)) out.set(f.id, f);
+      }
+    }
+    return [...out.values()];
+  }
+
+  /** A file's size and hash from its bytes, kept while it is unchanged; null when they cannot be read. */
+  private async digestOf(f: DriveFile): Promise<Digest | null> {
+    const key = `${f.id}@${f.modifiedTime}`;
+    const known = this.digests.get(key);
+    if (known) return known;
+    let d: Digest | null;
+    try {
+      // The pretend Drive says what it stored (fake-stored); any other Drive is read.
+      const drive = this.drive;
+      if (hasStoredDigests(drive)) d = await drive.storedDigest(f.id);
+      else {
+        const bytes = await drive.readBytes(f.id);
+        d = { size: bytes.byteLength, sha256: await sha256(new Blob([new Uint8Array(bytes).buffer])) };
+      }
+    } catch (e) {
+      // A file that cannot be read now is not counted as arrived; the next listing asks again.
+      console.error(e);
+      return null;
+    }
+    if (d) this.digests.set(key, d);
+    return d;
+  }
+
+  /** A declared pile's note, missing though you never removed it, written again from its first words. */
+  private async restoreContext(pile: Pile): Promise<void> {
+    const ix = await this.index();
+    const folder = pile.path ? ix.file(pile.path) : undefined;
+    if (!pile.path || !folder?.folder || !folder.appProperties?.[PROP.declaration]) return;
+    const found = await this.declarationOf(folder, this.known(ix));
+    if (found.state !== 'found' || found.declaration.context.kind !== 'text') return;
+    const context = found.declaration.context;
+    if (ix.filesIn(pile.path).some((f) => f.appProperties?.[PROP.item] === context.memberKey)) return;
+    if (contextRemoved(await journalValues(ix.journalFiles(true), (id) => this.drive.readText(id)), pile.path)) return;
+    // A tidy-up may be writing it too: wait for it; and look again right before writing, so it is written once.
+    if (this.runningPiles().has(pile.id)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
+    const now = (await this.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id);
+    this.checkCurrent();
+    const there = now.find((f) => f.appProperties?.[PROP.item] === context.memberKey);
+    if (there) {
+      ix.put(there);
+      this.emit();
+      return;
+    }
+    const made = await this.drive.createText(folder.id, PILE_NOTE, context.originalText, { [PROP.item]: context.memberKey });
+    this.checkCurrent();
+    ix.put(made);
+    this.emit();
+  }
+
+  /** Writes a pile's declaration in `.bower/piles`, before anything of the pile exists. */
+  private async declare(input: NewPile, text: string, inbox: string, name: string, createdAt: number): Promise<Declared> {
+    const root = await this.rootId();
+    const mint = (kind: string): string => `${kind}-${createdAt.toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    const contextKey = mint('context');
+    const members = await Promise.all(input.items.map(async (it) => ({ memberKey: mint('member'), name: declaredName(it), kind: it.kind, origin: it.origin, content: await contentOf(it) })));
+    const declaration: Declaration = {
+      v: 1, kind: 'pile-declaration', scope: { rootId: root }, declarationId: mint('decl'), pileId: mint('pile'), createdAt,
+      anchor: { kind: 'folder', inboxId: inbox, name, createKey: mint('anchor') }, members,
+      context: text ? { kind: 'text', memberKey: contextKey, originalText: text, content: await utf8(text) } : { kind: 'absent' },
+    };
+    const record = await declarationRecord(declaration, root);
+    if (!record) {
+      console.error('A pile declaration was refused by its own contract check.');
+      throw new BowerError('unknown', 'Bower could not save this pile. Try again.');
+    }
+    const at = await this.systemFolder(SYSTEM.piles);
+    const written = await this.drive.createText(at, record.name, record.text);
+    this.checkCurrent();
+    (await this.index()).put(written);
+    return { pileId: declaration.pileId, declarationId: declaration.declarationId, contextKey, keys: members.map((m) => m.memberKey) };
   }
 
   async addPile(input: NewPile): Promise<Pile> {
@@ -427,16 +563,21 @@ export class DriveVault implements VaultSource {
     let parent = inbox;
     let path: string | undefined;
     const lone = !pileHasFolder({ id, text, createdAt, items: input.items.map((it, i) => ({ ...it, id: String(i) })) });
+    let declared: Declared | null = null;
     if (!lone) {
       path = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ id, text, createdAt, items: [] })));
-      const folder = await this.drive.createFolder(inbox, nameOf(path));
+      // A declared pile's declaration comes first: a failed write leaves nothing to send.
+      if (this.declarePiles) declared = await this.declare(input, text, inbox, nameOf(path), createdAt);
+      const folder = declared
+        ? await this.drive.createFolder(inbox, nameOf(path), { [PROP.pile]: declared.pileId, [PROP.declaration]: declared.declarationId })
+        : await this.drive.createFolder(inbox, nameOf(path));
       this.checkCurrent();
       ix.put(folder);
-      id = folder.id;
+      id = declared?.pileId ?? folder.id;
       parent = folder.id;
       if (text) {
         try {
-          ix.put(await this.drive.createText(folder.id, PILE_NOTE, text));
+          ix.put(declared ? await this.drive.createText(folder.id, PILE_NOTE, text, { [PROP.item]: declared.contextKey }) : await this.drive.createText(folder.id, PILE_NOTE, text));
         } catch (e) {
           if (!this.current()) throw e;
           // Half a pile helps nobody: its empty folder goes to the Bin, and you can save again.
@@ -447,14 +588,14 @@ export class DriveVault implements VaultSource {
       }
     }
     const entries: Sending[] = input.items.map((it, i) => ({
-      key: `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
+      key: declared?.keys[i] ?? `${id}-${i}-${Math.random().toString(36).slice(2, 10)}`,
       tried: false,
-      item: { id: `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
+      item: { id: declared?.keys[i] ?? `${id}-${i}`, name: it.name, kind: it.kind, origin: it.origin, upload: 0 },
       ...(it.body ? { body: it.body } : {}),
       ...(it.url ? { url: it.url } : {}),
     }));
     if (entries.length) {
-      this.uploads.set(id, { lone, createdAt, parent, entries });
+      this.uploads.set(id, { lone, createdAt, parent, entries, ...(declared ? { declaration: declared.declarationId } : {}) });
       this.track(this.send(id));
     }
     this.emit();
@@ -505,18 +646,32 @@ export class DriveVault implements VaultSource {
       }
     }
     const folderId = ix.idOf(folderPath);
+    const declared = f.folder && f.appProperties?.[PROP.declaration] ? await this.declarationOf(f, this.known(ix)) : null;
+    const contextKey = declared?.state === 'found' && declared.declaration.context.kind === 'text' ? declared.declaration.context.memberKey : null;
     if (note && text) ix.put(await this.drive.writeText(note.id, text, note.modifiedTime));
+    // A declared pile's note stays, empty: its context arrived, and only your words changed.
+    else if (note && declared) ix.put(await this.drive.writeText(note.id, '', note.modifiedTime));
     else if (note) {
       await this.drive.trash(note.id);
       ix.drop(note.id);
-    } else if (text && folderId) ix.put(await this.drive.createText(folderId, PILE_NOTE, text));
+    } else if (text && folderId) ix.put(contextKey ? await this.drive.createText(folderId, PILE_NOTE, text, { [PROP.item]: contextKey }) : await this.drive.createText(folderId, PILE_NOTE, text));
     this.emit();
     return this.pile(id);
   }
 
   async retryPile(id: string): Promise<void> {
     const u = this.uploads.get(id);
-    if (!u || this.sendingPiles.has(id)) return;
+    if (!u) {
+      const pile = (await this.piles()).find((p) => p.id === id);
+      if (!pile) return;
+      // A declared pile's note needs no bytes from you: it is written again from its first words.
+      await this.restoreContext(pile);
+      // Another device's declared thing that never arrived: only its file can send it.
+      const missing = pile.items.find((i) => i.upload === -1);
+      if (missing) throw new BowerError('conflict', missing.kind === 'link' ? 'Paste the link again on this device to send it.' : `Choose ${missing.name} again on this device to send it.`);
+      return;
+    }
+    if (this.sendingPiles.has(id)) return;
     for (const e of u.entries) e.item.upload = 0;
     this.emit();
     this.track(this.send(id));
@@ -739,10 +894,10 @@ export class DriveVault implements VaultSource {
         e.tried = true;
         const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
         const name = freeName(ix.entries(), parentPath, safeInboxName(e.item));
-        const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}) };
+        const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
         e.item.upload = 0;
         const made = e.url
-          ? await this.drive.createText(u.parent, name, `[InternetShortcut]\nURL=${e.url}\n`, props)
+          ? await this.drive.createText(u.parent, name, shortcut(e.url), props)
           : e.body
               ? await this.drive.upload(u.parent, name, e.body, (p) => {
                 if (!this.current()) return;
@@ -850,6 +1005,30 @@ interface Upload {
   createdAt: number;
   parent: string;
   entries: Sending[];
+  /** A declared pile's declaration id, set on each thing it sends. */
+  declaration?: string;
+}
+
+/** What `declare` minted: the pile's ids and one key per thing, in order. */
+interface Declared {
+  pileId: string;
+  declarationId: string;
+  contextKey: string;
+  keys: string[];
+}
+
+/** A pasted link, as the `.url` file it becomes. */
+const shortcut = (url: string): string => `[InternetShortcut]\nURL=${url}\n`;
+
+async function utf8(text: string): Promise<Content> {
+  return { encoding: 'utf8', size: new TextEncoder().encode(text).byteLength, sha256: await sha256(new Blob([text])) };
+}
+
+/** The bytes a thing will have in Drive, as sendAll writes them. */
+async function contentOf(it: NewPile['items'][number]): Promise<Content> {
+  if (it.url) return utf8(shortcut(it.url));
+  if (it.body) return { encoding: 'blob', size: it.body.size, sha256: await sha256(it.body) };
+  return utf8('');
 }
 
 /** Notes read for one search or one backlink list, at most. */
