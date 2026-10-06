@@ -22,12 +22,13 @@
 import type { FakeDrive, FencedDrive, Peek } from '../drive/fake-drive';
 import { canonicalRecordJson } from '../contracts/record-json';
 import type { Checkpoint, EffectEvidence, Outcome } from '../contracts/run-checkpoint';
-import type { Manifest, Operation } from '../contracts/run-manifest';
+import { readBackEdit, recheckEdit } from '../contracts/note-edit';
+import type { EditText, OperationV2 } from '../contracts/run-manifest';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { BowerError, type RunReport } from '../types';
 import { SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { RunWire } from '../worker/worker-api';
-import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, shows, textHash, toEvidence } from './fake-run-records';
+import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, shows, textHash, toEvidence, type RunManifest } from './fake-run-records';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
 export interface Binding {
@@ -48,7 +49,7 @@ export interface DispatchAt {
   attemptId: string;
   epoch: number;
   ordinal: number;
-  effect: Operation['effect'];
+  effect: OperationV2['effect'];
 }
 
 export interface FakeRunServiceOptions {
@@ -92,7 +93,7 @@ interface Row {
 
 /** What this instance knows besides the row; never authority. */
 interface Cache {
-  manifest: Manifest;
+  manifest: RunManifest;
   chain: Checkpoint[];
   /** The view was read back with this run's exact terminal body. */
   confirmed: boolean;
@@ -116,6 +117,7 @@ const NOT_YOURS = 'This tidy-up belongs to another account or folder.';
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
 const NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
+const NOTE_CHANGED = 'The note changed before Bower could add to it.';
 /** Attempts in a row before this instance stops retrying a run that keeps failing; it stays saving. */
 const MAX_TRIES = 5;
 
@@ -184,7 +186,7 @@ export class FakeRunService {
    * the folder before the row exists and before anything is acknowledged.
    * The run then goes on here, whatever the client does.
    */
-  async admit(binding: Binding, manifest: Manifest, opts: { failAt?: 'writing' } = {}): Promise<RunWire> {
+  async admit(binding: Binding, manifest: RunManifest, opts: { failAt?: 'writing' } = {}): Promise<RunWire> {
     this.authorize(binding);
     const key = keyOf(binding);
     if (manifest.scope.rootId !== binding.rootId) throw new BowerError('auth', NOT_YOURS);
@@ -200,7 +202,7 @@ export class FakeRunService {
     }
   }
 
-  private async admitNow(binding: Binding, key: string, manifest: Manifest, opts: { failAt?: 'writing' }): Promise<RunWire> {
+  private async admitNow(binding: Binding, key: string, manifest: RunManifest, opts: { failAt?: 'writing' }): Promise<RunWire> {
     const before = this.rows.get(key);
     if (before) {
       const now = await this.publicPhase(key);
@@ -452,7 +454,7 @@ export class FakeRunService {
    * never passed the boundary is sent again under the same dispatch id; one
    * that passed and shows no effect stays unresolved.
    */
-  private async settle(attempt: Attempt, manifest: Manifest, head: Checkpoint, op: Operation): Promise<Checkpoint> {
+  private async settle(attempt: Attempt, manifest: RunManifest, head: Checkpoint, op: OperationV2): Promise<Checkpoint> {
     const outcome = head.outcomes[op.ordinal];
     if (!outcome || outcome.state === 'applied' || outcome.state === 'rejected') return head;
     const row = this.row(attempt.key);
@@ -496,14 +498,14 @@ export class FakeRunService {
     return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'applied', evidence: seen });
   }
 
-  private resolve(attempt: Attempt, head: Checkpoint, op: Operation, outcome: Outcome): Promise<Checkpoint> {
+  private resolve(attempt: Attempt, head: Checkpoint, op: OperationV2, outcome: Outcome): Promise<Checkpoint> {
     return this.commit(attempt, head, { outcomes: head.outcomes.map((o, i) => (i === op.ordinal ? outcome : o)) });
   }
 
   /** The id of an operation's parent: a captured folder, or the folder an applied earlier operation made. */
-  private parentOf(head: Checkpoint, op: Operation): string | null {
+  private parentOf(head: Checkpoint, op: OperationV2): string | null {
     const e = op.effect;
-    if (e.kind === 'bin' || e.kind === 'write-runner-json') return null;
+    if (e.kind === 'bin' || e.kind === 'write-runner-json' || e.kind === 'edit-text') return null;
     if ('fileId' in e.parent) return e.parent.fileId;
     const by = e.parent.createdBy;
     const made = head.outcomes.find((o) => o.operationId === by);
@@ -511,7 +513,7 @@ export class FakeRunService {
   }
 
   /** Stored evidence that this very effect applied, or null. A lookalike without the create key never counts. */
-  private async observe(head: Checkpoint, op: Operation): Promise<EffectEvidence | null> {
+  private async observe(head: Checkpoint, op: OperationV2): Promise<EffectEvidence | null> {
     const e = op.effect;
     const parentId = this.parentOf(head, op);
     if (e.kind === 'create-folder') {
@@ -523,9 +525,25 @@ export class FakeRunService {
       return ev && shows(e, ev, parentId) ? toEvidence(ev) : null;
     }
     if (e.kind === 'create-text') return null;
+    if (e.kind === 'edit-text') return this.readBack(e);
     const ev = await this.drive.evidence(e.before.fileId);
     if (!ev || !shows(e, ev, parentId)) return null;
     return toEvidence(ev, e.kind === 'write-runner-json' ? 'utf8' : 'blob');
+  }
+
+  /**
+   * An edit read back (TL-P2-20 rule 5): the same file, out of the Bin, with
+   * exactly the edit's text is applied. The bytes it was planned on stay a
+   * possible effect, and anything else stays unresolved: neither is evidence.
+   */
+  private async readBack(e: EditText): Promise<EffectEvidence | null> {
+    const ev = await this.drive.evidence(e.before.fileId);
+    if (!ev) return null;
+    const bytes = ev.trashed ? new Uint8Array() : await this.drive.readBytes(e.before.fileId);
+    const read = await readBackEdit(e, { fileId: ev.file.id, name: ev.file.name, parents: ev.file.parents, trashed: ev.trashed, bytes });
+    if (read === 'applied' && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256) return toEvidence(ev, 'utf8');
+    console.error(`The edit of ${e.path} reads back as ${read === 'applied' ? 'unresolved' : read}`);
+    return null;
   }
 
   /**
@@ -534,20 +552,39 @@ export class FakeRunService {
    * the modified time that content was read at, checked again inside the
    * boundary). Whether the source is still as seen is checked inside.
    */
-  private async precheck(head: Checkpoint, op: Operation): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string | null }> {
+  private async precheck(head: Checkpoint, op: OperationV2): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string | null }> {
     const e = op.effect;
     if (e.kind === 'create-text') return { failure: { code: 'conflict', message: 'Bower does not write new notes on this path.' } };
     // What it depends on must have happened: a pile folder whose things did not all go stays, and so do the hashes.
     if (op.dependsOn.some((id) => head.outcomes.find((o) => o.operationId === id)?.state !== 'applied')) return { failure: { code: 'conflict', message: 'Some of its things stayed where they were, so it stays too.' } };
-    if (e.kind !== 'bin' && e.kind !== 'write-runner-json' && !this.parentOf(head, op)) return { failure: { code: 'not-found', message: 'The folder for it could not be made.' } };
+    if (e.kind !== 'bin' && e.kind !== 'write-runner-json' && e.kind !== 'edit-text' && !this.parentOf(head, op)) return { failure: { code: 'not-found', message: 'The folder for it could not be made.' } };
+    if (e.kind === 'edit-text') return this.precheckEdit(e);
     if (e.kind !== 'write-runner-json') return { modifiedTime: null };
     const ev = await this.drive.evidence(e.before.fileId);
     if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { failure: { code: 'conflict', message: 'Bower\'s list of your files changed meanwhile.' } };
     return { modifiedTime: ev.file.modifiedTime };
   }
 
+  /**
+   * An edit's precondition (TL-P2-20 rules 1 and 4): one read gives the
+   * stored bytes' hash with their modifiedTime; the bytes must be the ones
+   * planned on, by the same name in the same place and out of the Bin, and
+   * `applyChanges` on them must give the edit's text again. The write then
+   * carries that read's modifiedTime, so a newer time with the same bytes
+   * before the read is no clash, and any change after it is refused inside
+   * the boundary.
+   */
+  private async precheckEdit(e: EditText): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string }> {
+    const ev = await this.drive.evidence(e.before.fileId);
+    const same = !!ev && !ev.trashed && ev.file.name === e.before.name && ev.file.parents.length === e.before.parents.length && ev.file.parents.every((p, i) => p === e.before.parents[i]);
+    if (!ev || !same) return { failure: { code: 'conflict', message: NOT_AS_SEEN } };
+    if (ev.content?.size !== e.beforeContent.size || ev.content.sha256 !== e.beforeContent.sha256) return { failure: { code: 'conflict', message: NOTE_CHANGED } };
+    if ((await recheckEdit(e, await this.drive.readBytes(e.before.fileId))) !== 'ok') return { failure: { code: 'conflict', message: NOTE_CHANGED } };
+    return { modifiedTime: ev.file.modifiedTime };
+  }
+
   /** Whether the stored source is still as the plan saw it, at the instant of the change; null when it is. */
-  private stillAsSeen(op: Operation, parentId: string, modifiedTime: string | null, peek: Peek): { code: 'conflict' | 'not-found'; message: string } | null {
+  private stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek): { code: 'conflict' | 'not-found'; message: string } | null {
     const e = op.effect;
     if (e.kind === 'create-text') return { code: 'conflict', message: 'Bower does not write new notes on this path.' };
     if (e.kind === 'create-folder' || e.kind === 'move') {
@@ -560,6 +597,7 @@ export class FakeRunService {
     if (!now || !same) return { code: 'conflict', message: NOT_AS_SEEN };
     if (e.kind === 'bin' && now.children.some((id) => !e.capturedChildIds.includes(id))) return { code: 'conflict', message: 'Something new arrived in it, so it stays in your inbox.' };
     if (e.kind === 'write-runner-json' && now.file.modifiedTime !== modifiedTime) return { code: 'conflict', message: 'Bower\'s list of your files changed meanwhile.' };
+    if (e.kind === 'edit-text' && now.file.modifiedTime !== modifiedTime) return { code: 'conflict', message: NOTE_CHANGED };
     return null;
   }
 
@@ -568,7 +606,7 @@ export class FakeRunService {
    * change: the claim, the source still as seen, then the dispatch is marked
    * as passed (kept with the rows) and only then applied.
    */
-  private async dispatch(attempt: Attempt, head: Checkpoint, op: Operation, dispatchId: string, modifiedTime: string | null): Promise<void> {
+  private async dispatch(attempt: Attempt, head: Checkpoint, op: OperationV2, dispatchId: string, modifiedTime: string | null): Promise<void> {
     const row = this.row(attempt.key);
     const e = op.effect;
     const parentId = this.parentOf(head, op) ?? '';
@@ -597,6 +635,11 @@ export class FakeRunService {
         return;
       case 'write-runner-json':
         await w.writeText(e.before.fileId, e.text, modifiedTime ?? e.before.modifiedTime);
+        return;
+      case 'edit-text':
+        // Only after precheckEdit, with the modifiedTime of the read it checked.
+        if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
+        await w.writeText(e.before.fileId, e.text, modifiedTime);
         return;
       case 'create-text':
         throw new BowerError('conflict', 'Bower does not write new notes on this path.');
@@ -717,7 +760,7 @@ export class FakeRunService {
    * byte-identical, whether the report came from memory or from a record
    * parsed back. `finishedAt` is the terminal checkpoint's `phaseAt`.
    */
-  private viewRun(manifest: Manifest, head: Checkpoint, report: RunReport | null): RunWire & { report?: RunReport } {
+  private viewRun(manifest: RunManifest, head: Checkpoint, report: RunReport | null): RunWire & { report?: RunReport } {
     const run = { id: manifest.runId, scope: manifest.runScope, phase: head.phase, requestedAt: manifest.requestedAt, phaseAt: head.phaseAt, total: manifest.capture.members.length, finishedAt: head.phaseAt };
     if (head.phase === 'failed') return { ...run, failure: B_FAILURE };
     return report ? { ...run, report } : run;
@@ -739,7 +782,7 @@ export class FakeRunService {
   }
 
   /** The manifest and committed chain: cached, or read and verified from the folder (always, for a recovery). */
-  private async loaded(key: string, fresh: boolean): Promise<{ manifest: Manifest; chain: Checkpoint[] }> {
+  private async loaded(key: string, fresh: boolean): Promise<{ manifest: RunManifest; chain: Checkpoint[] }> {
     const row = this.row(key);
     const cache = this.cache.get(key);
     if (cache && !fresh && cache.manifest.runId === row.control.runId) return cache;

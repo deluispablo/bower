@@ -8,7 +8,8 @@
  * writes (docs/specs/2026-10-04-worker-contract.md).
  */
 import type { DriveFile } from '../drive/drive-api';
-import { parseRunManifest, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Effect, type Manifest, type ManifestRunReport, type Operation, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
+import { applyChanges, timelineDate } from '../contracts/note-edit';
+import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
@@ -53,7 +54,7 @@ const PLAN_BY_NAME = new Map(
     }),
 );
 
-/** Hub notes a full tidy-up brings up to date, as the demo does. */
+/** Hub notes a full tidy-up brings up to date, as the demo does: on the B path, a Timeline line on Bower's notes only. */
 const UPDATES = [
   { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },
   { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.' },
@@ -138,7 +139,7 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 
 /** A run's classification, fixed before any effect: the B path with its manifest, or the legacy path and why. */
-export type RunPlan = { path: 'b'; manifest: Manifest } | { path: 'legacy'; why: string };
+export type RunPlan = { path: 'b'; manifest: Manifest | ManifestV2 } | { path: 'legacy'; why: string };
 
 export interface PlanOptions {
   scope: 'all' | 'instructions';
@@ -150,7 +151,7 @@ export interface PlanOptions {
 
 /**
  * Plans a run on the B path when every effect it needs is a B effect (move,
- * create-folder, Bin, write-runner-json); otherwise the whole run is legacy,
+ * create-folder, Bin, write-runner-json, and B.2's edit-text); otherwise the whole run is legacy,
  * with the reason. Decided from one capture before any effect, and never
  * changed during the run. The B plan fixes every operation and every report
  * row (TL-P2-06 §1, contract B guards 7 and 9) and reuses the readiness
@@ -164,6 +165,11 @@ export interface PlanOptions {
  * rejected at the boundary and the pile retained (guard 7). Your changes from the journal
  * are captured too (record id, digest, files) and archived by B moves into
  * `.bower/changes/archive`, after the runner-JSON writes derived from them.
+ * A hub note a full run brings up to date gets its Timeline line as one
+ * `edit-text` (TL-P2-20), authored only by `applyChanges` and dated from
+ * `requestedAt`: only on Bower's notes (ownership/2, or `by: bower`), never
+ * when the line is already there, and with the in-place "new" move after it.
+ * The manifest is v2 only when it holds an edit; otherwise it stays v1.
  */
 export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions): Promise<RunPlan> {
   const legacy = (why: string): RunPlan => ({ path: 'legacy', why });
@@ -174,7 +180,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   if (!Array.isArray(journal)) return legacy(journal.why);
   // An instructions run with no line it can take has nothing to read: the existing refusal, before admission.
   if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
-  if (all && UPDATES.some((u) => ix.file(u.path))) return legacy('timeline');
   const requests = ix.file(SYSTEM.requests);
   const hashesFile = ix.file(SYSTEM.hashes);
   if (!requests || !hashesFile) return legacy('runner files');
@@ -300,6 +305,32 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     planned.set(join(to, name), { path: join(to, name), type: 'file', kind: kindOf(name), modified: 0, created: 0 });
     filing.push({ thing, to, name });
   }
+  // Hub notes brought up to date: a Timeline line each, planned on the bytes read now (TL-P2-20). applyChanges is
+  // the only author: it refuses a note that is not Bower's, a damaged or too big one, and returns `unchanged` when
+  // the line is already there (from any day), so nothing is planned for that note and the run goes on without it.
+  const edits: Array<{ file: DriveFile; path: string; what: string; before: VerifiedContent; changes: Change[]; text: string }> = [];
+  const date = timelineDate(opts.requestedAt);
+  for (const u of all && date ? [...UPDATES].sort((a, b) => a.path.localeCompare(b.path)) : []) {
+    const f = ix.file(u.path);
+    if (!f || f.folder) continue;
+    const before = await verified(f, 'utf8');
+    if (!before) continue;
+    const bytes = await drive.readBytes(f.id);
+    if (before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
+      console.error('A hub note changed while it was read; no Timeline line is planned for it this time');
+      continue;
+    }
+    const changes: Change[] = [{ kind: 'timeline-append', recordIds: [], entries: [{ date: date ?? '', text: u.what, source: null }] }];
+    const result = applyChanges(bytes, changes);
+    if (!result.ok) {
+      // A person's note and a line already there are expected; anything else is logged with its reason.
+      if (result.reason !== 'not-bower' && result.reason !== 'unchanged') console.error(`A hub note's Timeline line was refused (${result.reason}); none is planned for it`);
+      continue;
+    }
+    edits.push({ file: f, path: ix.pathOf(f.id) ?? u.path, what: u.what, before, changes, text: result.text });
+    places.set(f.id, f);
+  }
+  const edited = new Set(edits.map((e) => e.file.id));
   // Your changes go to the archive the legacy runner uses, made in `.bower/changes` when missing.
   const changesFolder = ix.file(SYSTEM.changes);
   const archiveFolder = ix.file(SYSTEM.archive);
@@ -314,15 +345,16 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const scope = { rootId };
   const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
 
-  // The fixed operations, in order: clear last run's marks, make folders, file, Bin the piles, the hashes.
-  const operations: Operation[] = [];
-  const add = async (effect: Effect, dependsOn: string[] = []): Promise<string> => {
+  // The fixed operations, in order: clear last run's marks, make folders, file, Bin the piles, the Timeline lines, the hashes.
+  const operations: OperationV2[] = [];
+  const add = async (effect: EffectV2, dependsOn: string[] = []): Promise<string> => {
     const ordinal = operations.length;
     const operationId = (await canonical({ runId: opts.runId, captureId, ordinal, effect })).hash;
     operations.push({ operationId, ordinal, dependsOn, effect });
     return operationId;
   };
-  for (const f of listing.filter((x) => !x.folder && x.appProperties?.[PROP.isNew] === '1' && x.parents.length === 1).sort((a, b) => a.id.localeCompare(b.id))) {
+  // An edited note keeps its mark: it is marked new again after its edit (rule 3), never cleared in the same run.
+  for (const f of listing.filter((x) => !x.folder && x.appProperties?.[PROP.isNew] === '1' && x.parents.length === 1 && !edited.has(x.id)).sort((a, b) => a.id.localeCompare(b.id))) {
     await add({ kind: 'move', before: seen(f), parent: { fileId: f.parents[0] ?? '' }, name: f.name, properties: { bowerNew: null } });
   }
   const made = new Map<string, string>();
@@ -353,6 +385,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   }
   for (const pile of capturedPiles) {
     if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, movesOf.get(pile.pileId) ?? []);
+  }
+  // Each Timeline line: the edit, then the note marked new in place after it, and its updated row once it applied.
+  for (const edit of edits) {
+    const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text) });
+    await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
+    reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: edit.what }] } });
   }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
@@ -413,13 +451,16 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }
   }
 
-  const manifest: Manifest = {
-    v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
-    allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture: captureValue, operations, reportPlan,
+  const head = {
+    kind: 'run-manifest' as const, scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
+    allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture: captureValue, reportPlan,
   };
-  const checked = await parseRunManifest((await canonical(manifest)).bytes, rootId);
+  // v1 whenever the plan has no edit (TL-P2-20 Format): its identities and bytes are exactly as before.
+  const v1: Operation[] = operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [] : [{ ...o, effect: o.effect }]));
+  const manifest: Manifest | ManifestV2 = v1.length === operations.length ? { v: 1, ...head, operations: v1 } : { v: 2, ...head, operations };
+  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId);
   if (!checked.ok) {
-    console.error(`A B plan was refused by the manifest guard (${checked.reason}); the run takes the legacy path`);
+    console.error(`A B plan was refused by the manifest guard (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''}); the run takes the legacy path`);
     return legacy('manifest');
   }
   if (!grounded(manifest)) {

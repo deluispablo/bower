@@ -7,6 +7,7 @@ import type { Note, TreeNode } from '@/data/types';
 import { crumbs, decodeSplat, folderRoute, noteRoute, paraColor } from '@/app/paths';
 import { NodeMenuButton } from '@/features/files/Explorer';
 import { ago } from '@/app/words';
+import { timelineDay } from '@/data/dates';
 import { useIsDesktop } from '@/ui/media';
 import { useUi } from '@/app/ui-store';
 import { Icon, BowerHead } from '@/ui/Icon';
@@ -170,7 +171,7 @@ function NoteView({ path }: { path: string }) {
           <ol>
             {note.timeline.map((t, i) => (
               <li key={i}>
-                <span className={s.when}>{t.date}</span>
+                <span className={s.when}>{timelineDay(t.date)}</span>
                 <span>
                   <Inline text={t.text} link={link} />
                   {t.source && (

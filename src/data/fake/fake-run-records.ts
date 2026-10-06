@@ -13,7 +13,7 @@ import type { FakeDrive, FencedDrive, StoredEvidence } from '../drive/fake-drive
 import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
-import { parseRunManifest, type Effect, type Manifest, type Operation, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
+import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
 import { join } from '../tree';
 import { BowerError, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
@@ -27,6 +27,12 @@ export const manifestName = (hash: string): string => `manifest-${hash}.json`;
 export const checkpointName = (revision: number, hash: string): string => `checkpoint-${revision}-${hash}.json`;
 export const reportName = (hash: string): string => `report-${hash}.json`;
 export const dispositionName = (hash: string): string => `disposition-${hash}.json`;
+
+/**
+ * A B run's manifest, v1 or v2 (v1 plus `edit-text`, TL-P2-20): both are read by `parseRunManifestV2`, and a v1
+ * manifest is one of these as it is.
+ */
+export type RunManifest = Omit<Manifest, 'v' | 'operations'> & { v: 1 | 2; operations: OperationV2[] };
 
 /** Where a record lives: one run's folder, or the pile records. */
 export type Where = { runId: string } | 'piles';
@@ -89,7 +95,7 @@ export function shows(effect: Effect, ev: StoredEvidence, parentId: string | nul
  * exactly when all it requires reached its state. Null while any required
  * operation is unresolved: no row is invented for it.
  */
-export function materialize(manifest: Manifest, manifestHash: string, outcomes: readonly Outcome[]): ReportRecord | null {
+export function materialize(manifest: RunManifest, manifestHash: string, outcomes: readonly Outcome[]): ReportRecord | null {
   const state = new Map(outcomes.map((o) => [o.operationId, o.state]));
   const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [] };
   for (const c of manifest.reportPlan) {
@@ -118,10 +124,13 @@ export function materialize(manifest: Manifest, manifestHash: string, outcomes: 
  * same wording, and the archive moves of every file of that line, each
  * depending on the write; a `yourChanges` row counts one captured line that is
  * not a completed request, archived by all its moves. Every captured line is
- * archived once and claimed by exactly one row. Nothing else (created,
- * updated, questions, rules worded) is claimed.
+ * archived once and claimed by exactly one row. A hub note brought up to date
+ * (TL-P2-20 I10): an applied `updated` row requires exactly one `edit-text`
+ * with a Timeline line, names that edit's path and says what one of its lines
+ * says; each edit is claimed once. Nothing else (created, questions, rules
+ * worded) is claimed.
  */
-export function grounded(manifest: Manifest): boolean {
+export function grounded(manifest: RunManifest): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const members = new Map(manifest.capture.members.map((m) => [m.file.fileId, m]));
   const places = new Map(manifest.capture.places.map((p) => [p.file.fileId, p.path]));
@@ -138,7 +147,7 @@ export function grounded(manifest: Manifest): boolean {
     return op?.effect.kind === 'create-folder' ? [t.createdBy, ...chainOf(op.effect.parent)] : [];
   };
   const lineOf = new Map(manifest.capture.journal.flatMap((j) => j.fileIds.map((id) => [id, j] as const)));
-  const isArchive = (o: Operation): o is Operation & { effect: MoveEffect } => o.effect.kind === 'move' && lineOf.has(o.effect.before.fileId)
+  const isArchive = (o: OperationV2): o is OperationV2 & { effect: MoveEffect } => o.effect.kind === 'move' && lineOf.has(o.effect.before.fileId)
     && pathOf(o.effect.parent) === SYSTEM.archive && o.effect.name === o.effect.before.name && Object.keys(o.effect.properties).length === 0;
   const completed = new Map<string, string>();
   for (const o of manifest.operations) {
@@ -152,14 +161,14 @@ export function grounded(manifest: Manifest): boolean {
     const v = c.value;
     if (c.when !== 'applied' || v.filed.length || v.created.length || v.updated.length || v.setAside.length || v.questions.length || v.rulesWorded !== undefined) return false;
     const required = c.requires.map((id) => ops.get(id));
-    const moves = required.filter((o): o is Operation & { effect: MoveEffect } => !!o && isArchive(o));
+    const moves = required.filter((o): o is OperationV2 & { effect: MoveEffect } => !!o && isArchive(o));
     const line = moves[0] ? lineOf.get(moves[0].effect.before.fileId) : undefined;
     if (!line || claimed.has(line.recordId)) return false;
     const files = moves.map((o) => o.effect.before.fileId);
     if (files.length !== line.fileIds.length || !line.fileIds.every((id) => files.includes(id))) return false;
     const chain = new Set(moves.flatMap((o) => chainOf(o.effect.parent)));
     if (![...chain].every((id) => c.requires.includes(id))) return false;
-    const writes = required.filter((o): o is Operation => o?.effect.kind === 'write-runner-json');
+    const writes = required.filter((o): o is OperationV2 => o?.effect.kind === 'write-runner-json');
     const allowed = new Set([...moves, ...writes].map((o) => o.operationId));
     if (required.some((o) => !o || (!allowed.has(o.operationId) && !chain.has(o.operationId)))) return false;
     if (v.requests !== undefined) {
@@ -172,12 +181,28 @@ export function grounded(manifest: Manifest): boolean {
     claimed.add(line.recordId);
     return true;
   };
+  const updated = new Set<string>();
+  const updatedRow = (c: ReportContribution): boolean => {
+    const v = c.value;
+    if (c.when !== 'applied' || v.filed.length || v.created.length || v.setAside.length || v.questions.length || v.rulesWorded !== undefined) return false;
+    const [row, ...rest] = v.updated;
+    const [id, ...more] = c.requires;
+    const edit = id === undefined ? undefined : ops.get(id)?.effect;
+    if (!row || rest.length || more.length || id === undefined || edit?.kind !== 'edit-text' || edit.path !== row.path || updated.has(id)) return false;
+    if (!edit.changes.some((change) => change.kind === 'timeline-append' && change.entries.some((entry) => entry.text === row.what))) return false;
+    updated.add(id);
+    return true;
+  };
   const filed = new Set<string>();
   const setAside = new Set<string>();
   for (const c of manifest.reportPlan) {
     const v = c.value;
     if (v.requests !== undefined || v.yourChanges !== undefined) {
       if (!journalRow(c)) return false;
+      continue;
+    }
+    if (v.updated.length) {
+      if (!updatedRow(c)) return false;
       continue;
     }
     if (v.created.length || v.updated.length || v.questions.length || v.rulesWorded !== undefined) return false;
@@ -226,7 +251,7 @@ function requestsDone(text: string): Map<string, string> | null {
 }
 
 /** A filing move: a captured member going to another place (a cleared "new" mark stays where it is). */
-export function filingMove(manifest: Manifest, op: Operation): boolean {
+export function filingMove(manifest: RunManifest, op: OperationV2): boolean {
   const e = op.effect;
   return e.kind === 'move' && manifest.capture.members.some((m) => m.file.fileId === e.before.fileId);
 }
@@ -237,7 +262,7 @@ export function filingMove(manifest: Manifest, op: Operation): boolean {
  * moves (and the folder's Bin, when it went). A pile with a member not filed
  * keeps its declaration and gets none.
  */
-export function dispositionsFor(manifest: Manifest, outcomes: readonly Outcome[], reportHash: string): Disposition[] {
+export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcome[], reportHash: string): Disposition[] {
   const byOp = new Map(outcomes.map((o) => [o.operationId, o]));
   const out: Disposition[] = [];
   for (const pile of manifest.capture.piles) {
@@ -245,7 +270,7 @@ export function dispositionsFor(manifest: Manifest, outcomes: readonly Outcome[]
     const files = new Set(manifest.capture.members.filter((m) => m.pileId === pile.pileId).map((m) => m.file.fileId));
     const moves = manifest.operations.filter((o) => filingMove(manifest, o) && o.effect.kind === 'move' && files.has(o.effect.before.fileId));
     const bin = manifest.operations.find((o) => o.effect.kind === 'bin' && o.effect.before.fileId === pile.anchor?.fileId);
-    const applied = (o: Operation): EffectEvidence | null => {
+    const applied = (o: OperationV2): EffectEvidence | null => {
       const outcome = byOp.get(o.operationId);
       return outcome?.state === 'applied' ? outcome.evidence : null;
     };
@@ -330,10 +355,10 @@ export class RunRecords {
     }
   }
 
-  /** The verified manifest the control row names; anything else refuses. */
-  async manifest(runId: string, hash: string): Promise<Manifest> {
+  /** The verified manifest the control row names, v1 or v2; anything else refuses. */
+  async manifest(runId: string, hash: string): Promise<RunManifest> {
     const bytes = await this.read({ runId }, manifestName(hash));
-    const parsed = bytes ? await parseRunManifest(bytes, this.rootId) : null;
+    const parsed = bytes ? await parseRunManifestV2(bytes, this.rootId) : null;
     if (!parsed?.ok || parsed.sha256 !== hash || parsed.value.runId !== runId) {
       console.error(`The manifest of run ${runId} is ${parsed ? (parsed.ok ? 'another run' : parsed.reason) : 'missing'}`);
       throw new BowerError('unknown', READ_FAILED);
@@ -346,7 +371,7 @@ export class RunRecords {
    * record's own digest; orphan records are never taken as head. Verified as a
    * monotonic chain (contracts/run-checkpoint).
    */
-  async chain(manifest: Manifest, manifestHash: string, head: string): Promise<Checkpoint[]> {
+  async chain(manifest: RunManifest, manifestHash: string, head: string): Promise<Checkpoint[]> {
     const runId = manifest.runId;
     const files = (await this.list({ runId })).filter((f) => f.name.startsWith('checkpoint-'));
     const expected = { rootId: this.rootId, runId, captureId: manifest.captureId, manifestHash, operationIds: manifest.operations.map((o) => o.operationId) };
@@ -376,7 +401,7 @@ export class RunRecords {
   }
 
   /** The published report record, read back and bound to this run. */
-  async report(manifest: Manifest, manifestHash: string, hash: string): Promise<ReportRecord> {
+  async report(manifest: RunManifest, manifestHash: string, hash: string): Promise<ReportRecord> {
     const bytes = await this.read({ runId: manifest.runId }, reportName(hash));
     const parsed = bytes ? await parseRunReport(bytes, { rootId: this.rootId, runId: manifest.runId, captureId: manifest.captureId, manifestHash }) : null;
     if (!parsed?.ok || parsed.sha256 !== hash) {

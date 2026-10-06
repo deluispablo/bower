@@ -152,7 +152,13 @@ test('fake: a thing changed in Drive says why on the Inbox and its screen, stays
   await expect(rowOf(page, /Papers from Alex/).getByText(CHANGED, { exact: true })).toHaveCount(0);
   await elsewhere(page, 'a.pdf', 'edit');
   await changedPileSaysWhy(page, /Papers from Alex/, 'a.pdf');
+  // One ready pile beside it, sent before the tidy-up, so the run has something to take (TL-P2-21: a run with only
+  // held piles admits nothing); the changed pile stays held.
+  await addPile(page, 'Receipts for the boiler', 'boiler.pdf');
+  await expect.poll(() => queueEmpty(page)).toBe(0);
+  await expect(rowOf(page, /Papers from Alex/).getByText(CHANGED, { exact: true })).toBeVisible();
   await tidyUp(page);
+  await expect(inbox(page).getByRole('link', { name: /Receipts for the boiler/ })).toHaveCount(0);
   await expect(rowOf(page, /Papers from Alex/).getByText(CHANGED, { exact: true })).toBeVisible();
   await removeFromInbox(page, /Papers from Alex/);
 });
