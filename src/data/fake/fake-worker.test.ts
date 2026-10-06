@@ -2287,6 +2287,33 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await expect(runPlan(w)).rejects.toBe(signedOut);
     });
 
+    // Final delta review (Important, pile-note-format-visible): the refusal is checked on the note a run records.
+    it.each([
+      ['---\nbower_format: ownership/9\n---\nPapers about the lease\n', 'note-format'],
+      ['---\nbower_format: ownership/2\n---\nPapers about the lease\n', 'note-damaged'],
+    ] as const)('holds a declared pile whose context note, not listed first, Bower refuses (%#), and files the others', async (body, reason) => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      await w.drive.createText(folder, 'Pile note.md', 'Soup recipes to try');
+      const context = await w.drive.createText(folder, 'Pile note.md', body, { ...keyed.appProperties });
+      await w.drive.trash(keyed.id);
+      const ids = new Set([folder, ...(await w.drive.listAll(w.rootId)).filter((f) => f.parents[0] === folder).map((f) => f.id)]);
+      const before = await stateOf(w, ids);
+      const inbox = await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_B' }).piles();
+      expect(inbox.find((p) => p.items.some((i) => i.name === 'lease.pdf'))).toMatchObject({ setAside: reason, noteLocked: true });
+      const planning = runPlan(w);
+      await expect(planning).resolves.toMatchObject({ path: 'b' });
+      const planned = await planning;
+      if (planned.path !== 'b') return;
+      expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(folder);
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
+      expect(await stateOf(w, ids)).toBe(before);
+      expect(await w.drive.readText(context.id)).toBe(body);
+    });
+
     it('holds a declared pile whose bound note, not listed first, cannot be read, and plans the others', async () => {
       const w = await bWorld({ declared: true });
       const { folder, keyed } = await leasePile(w);
