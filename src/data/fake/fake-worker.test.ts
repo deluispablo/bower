@@ -680,6 +680,17 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     }
   }
 
+  /**
+   * A saved link whose file has the name it was added under (no `asAdded`): report rows use the file name
+   * (TL-P2-32 (2)), so these tests name the link by the name they added.
+   */
+  async function plainName(w: { drive: FakeDrive }, f: DriveFile | undefined): Promise<DriveFile> {
+    if (!f) throw new Error('the saved link did not arrive');
+    const name = f.appProperties?.asAdded;
+    if (!name) throw new Error('the saved link has no added name');
+    return w.drive.update(f.id, { name, appProperties: { asAdded: null } });
+  }
+
   type Rec = { name: string; path: string; text: string };
   async function recordsOf(w: { drive: FakeDrive; rootId: string }): Promise<Rec[]> {
     const files = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith('.bower/runs/'));
@@ -776,7 +787,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect((await checkpointsOf(w, admitted.id)).map((c) => [c.revision, c.phase])).toContainEqual([0, 'queued']);
     expect(w.applied.filter((c) => c.op === 'update' || c.op === 'trash' || c.op === 'write-text')).toEqual([]);
 
-    // Input only the legacy path could take arrives while the run goes: a typed rule and a saved link.
+    // Input arrives while the run goes: a typed rule and a saved link.
     await w.uploader.addRule('Keep lease papers together');
     await w.uploader.addPile({ text: '', items: [link] });
     const lines = async (): Promise<string[]> => (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.changes}/`) && !w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.archive}/`)).map((f) => f.id);
@@ -3516,8 +3527,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld({ ...o, hooks: { beforeDispatch: async (at) => { await act.at?.(at); } } });
       await w.uploader.addPile({ text: 'A recipe to keep', items: [CURRY, pdf('shopping list.pdf')] });
       await w.uploader.settled();
-      const link = (await w.drive.listAll(w.rootId)).find((f) => !f.folder && f.name.endsWith('.url'));
-      if (!link) throw new Error('the saved link did not arrive');
+      const link = await plainName(w, (await w.drive.listAll(w.rootId)).find((f) => !f.folder && f.name.endsWith('.url')));
       return { w, act, link, bytes: await w.drive.readText(link.id) };
     }
     const isLinkMove = (id: string) => (at: DispatchAt): boolean => at.effect.kind === 'move' && at.effect.before.fileId === id;

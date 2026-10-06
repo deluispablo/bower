@@ -14,7 +14,9 @@ import { parsePileDisposition, type Disposition } from '../contracts/pile-dispos
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
-import { join, thingName } from '../tree';
+import { savedLinkKey } from '../contracts/note-edit';
+import { safeInboxName } from '../piles';
+import { join, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
@@ -204,7 +206,12 @@ export function grounded(manifest: RunManifest): boolean {
   };
   // Generated notes (TL-P2-17): what each is for, from the fixed plan: a filed thing's own note follows that thing's
   // move; a pile's words are written before that pile's folder goes to the Bin.
-  const notes = manifest.operations.filter((o): o is OperationV2 & { effect: CreateText } => o.effect.kind === 'create-text' && o.effect.purpose === 'generated');
+  // A saved link's note (TL-P2-20 M5, R3-6) comes before the link's move, which depends on it: it is claimed by that
+  // link's filed row (`noteGrounded`), not by rows of its own.
+  const linkNote = (o: OperationV2): boolean => manifest.operations.some((m) => m.effect.kind === 'move' && members.has(m.effect.before.fileId) && m.dependsOn.includes(o.operationId));
+  const generatedOps = manifest.operations.filter((o): o is OperationV2 & { effect: CreateText } => o.effect.kind === 'create-text' && o.effect.purpose === 'generated');
+  const notes = generatedOps.filter((o) => !linkNote(o));
+  const linkNotes = generatedOps.filter(linkNote);
   const forOf = (o: OperationV2): string | null => {
     const [after, ...others] = o.dependsOn;
     if (after !== undefined && !others.length) {
@@ -255,13 +262,14 @@ export function grounded(manifest: RunManifest): boolean {
   };
   const filed = new Set<string>();
   const setAside = new Set<string>();
+  const claimedNotes = new Set<string>();
   for (const c of manifest.reportPlan) {
     const v = c.value;
     if (v.requests !== undefined || v.yourChanges !== undefined) {
       if (!journalRow(c)) return false;
       continue;
     }
-    if (c.requires.some((id) => ops.get(id)?.effect.kind === 'create-text')) {
+    if (c.requires.some((id) => { const o = ops.get(id); return o?.effect.kind === 'create-text' && !linkNote(o); })) {
       if (!noteRow(c)) return false;
       continue;
     }
@@ -272,22 +280,24 @@ export function grounded(manifest: RunManifest): boolean {
     if (v.created.length || v.updated.length || v.questions.length || v.rulesWorded !== undefined) return false;
     const moves = c.requires.flatMap((id) => {
       const op = ops.get(id);
-      return op?.effect.kind === 'move' && members.has(op.effect.before.fileId) ? [op.effect] : [];
+      return op?.effect.kind === 'move' && members.has(op.effect.before.fileId) ? [{ ...op, effect: op.effect }] : [];
     });
-    const [move, ...more] = moves;
-    if (!move || more.length) return false;
+    const [moveOp, ...more] = moves;
+    const move = moveOp?.effect;
+    if (!moveOp || !move || more.length) return false;
     const member = members.get(move.before.fileId);
     if (!member) return false;
     if (c.when === 'rejected') {
       const [row, ...rest] = v.setAside;
-      if (v.filed.length || !row || rest.length || row.name !== member.file.name || setAside.has(member.file.fileId)) return false;
+      if (v.filed.length || !row || rest.length || !shownAs(row.name, member.file.name) || setAside.has(member.file.fileId)) return false;
       setAside.add(member.file.fileId);
       continue;
     }
     const [row, ...rest] = v.filed;
-    if (v.setAside.length || !row || rest.length || row.note !== undefined) return false;
-    if (row.name !== member.file.name || row.to !== pathOf(move.parent) || filed.has(member.file.fileId)) return false;
+    if (v.setAside.length || !row || rest.length) return false;
+    if (!shownAs(row.name, member.file.name) || row.to !== pathOf(move.parent) || filed.has(member.file.fileId)) return false;
     if (!chainOf(move.parent).every((id) => c.requires.includes(id))) return false;
+    if (row.note !== undefined && !noteGrounded(manifest, c, moveOp, row.note, claimedNotes)) return false;
     filed.add(member.file.fileId);
   }
   // Every captured line's every file is moved once, into the archive, and the line is claimed by one row.
@@ -297,15 +307,90 @@ export function grounded(manifest: RunManifest): boolean {
   }
   return [...members.keys()].every((id) => filed.has(id) && setAside.has(id))
     && manifest.capture.journal.every((j) => claimed.has(j.recordId))
-    && notes.every((o) => written.has(o.operationId) && unwritten.has(o.operationId));
+    && notes.every((o) => written.has(o.operationId) && unwritten.has(o.operationId))
+    && linkNotes.every((o) => manifest.reportPlan.some((c) => c.when === 'applied' && c.requires.includes(o.operationId) && c.value.filed.some((r) => r.note !== undefined)));
 }
 
 /**
- * The keys grounding cannot check without hashing (TL-P2-20 Ratification 6): every saved-link note is keyed by
- * the link file it is for. Not implemented yet.
+ * A filed row's name as the person added the thing: the captured file name, or for a saved link the name it was
+ * added under, from which the inbox made that `.url` file (`safeInboxName`, plus any ` (n)` a clash added).
  */
-export async function groundedKeys(_manifest: RunManifest): Promise<boolean> {
-  return false;
+export function shownAs(name: string, fileName: string): boolean {
+  if (name === fileName) return true;
+  const inbox = fileName.replace(/ \(\d+\)(\.url)$/i, '$1');
+  return /\.url$/i.test(fileName) && [fileName, inbox].includes(safeInboxName({ name, kind: 'link' }));
+}
+
+/**
+ * A filed row's `note` (TL-P2-20 M5, R4-2): the path of the generated note an applied create-text in the same
+ * `requires` writes next to the move's destination, the move depending on it; or a note already there, recorded
+ * in `capture.places` in the move's destination folder and checked again in the step of the move
+ * (`reusedNoteOf`). Each note is claimed once.
+ */
+function noteGrounded(manifest: RunManifest, c: ReportContribution, moveOp: OperationV2 & { effect: MoveEffect }, note: string, claimed: Set<string>): boolean {
+  if (claimed.has(note)) return false;
+  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
+  const move = moveOp.effect;
+  const creates = c.requires.flatMap((id) => {
+    const op = ops.get(id);
+    return op?.effect.kind === 'create-text' ? [{ op, effect: op.effect }] : [];
+  });
+  const [create, ...more] = creates;
+  if (more.length) return false;
+  if (create) {
+    const same = JSON.stringify(create.effect.parent) === JSON.stringify(move.parent);
+    if (!same || create.effect.purpose !== 'generated' || !moveOp.dependsOn.includes(create.op.operationId)) return false;
+    if (join(placePath(manifest, move.parent) ?? '\u0000', create.effect.name) !== note) return false;
+  } else {
+    const place = manifest.capture.places.find((p) => p.path === note);
+    if (!place || place.file.folder || !note.endsWith('.md') || parentOf(note) !== placePath(manifest, move.parent)) return false;
+    if (manifest.capture.members.some((m) => m.file.fileId === place.file.fileId)) return false;
+  }
+  claimed.add(note);
+  return true;
+}
+
+/** The path a target resolves to: a captured place, or a folder a create-folder in the plan makes. */
+function placePath(manifest: RunManifest, t: Target): string | null {
+  if ('fileId' in t) return manifest.capture.places.find((p) => p.file.fileId === t.fileId)?.path ?? null;
+  const op = manifest.operations.find((o) => o.operationId === t.createdBy);
+  if (op?.effect.kind !== 'create-folder') return null;
+  const parent = placePath(manifest, op.effect.parent);
+  return parent === null ? null : join(parent, op.effect.name);
+}
+
+/**
+ * The note a filing move files beside without creating it (TL-P2-20 R4-2): the captured place its applied row
+ * names when no create-text in that row writes it. The move's dispatch checks it again, in the same step.
+ */
+export function reusedNoteOf(manifest: RunManifest, op: OperationV2): { file: SeenFile; path: string } | null {
+  if (op.effect.kind !== 'move') return null;
+  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
+  for (const c of manifest.reportPlan) {
+    if (c.when !== 'applied' || !c.requires.includes(op.operationId)) continue;
+    const note = c.value.filed[0]?.note;
+    if (note === undefined || c.requires.some((id) => ops.get(id)?.effect.kind === 'create-text')) continue;
+    if (c.requires.some((id) => ops.get(id)?.effect.kind === 'edit-text')) continue;
+    return manifest.capture.places.find((p) => p.path === note) ?? null;
+  }
+  return null;
+}
+
+/**
+ * The keys grounding cannot check without hashing (TL-P2-20 Ratification 6): the create key of every saved-link
+ * note is recomputed from the file id of the link its row files (`savedLinkKey`, R4-3 m-f).
+ */
+export async function groundedKeys(manifest: RunManifest): Promise<boolean> {
+  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
+  for (const c of manifest.reportPlan) {
+    if (c.when !== 'applied' || c.value.filed[0]?.note === undefined) continue;
+    const required = c.requires.map((id) => ops.get(id)?.effect);
+    const create = required.find((e) => e?.kind === 'create-text');
+    const move = required.find((e) => e?.kind === 'move' && manifest.capture.members.some((m) => m.file.fileId === e.before.fileId));
+    if (create?.kind !== 'create-text' || move?.kind !== 'move') continue;
+    if (create.createKey !== await savedLinkKey(move.before.fileId)) return false;
+  }
+  return true;
 }
 
 type MoveEffect = Extract<Effect, { kind: 'move' }>;

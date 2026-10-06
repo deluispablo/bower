@@ -22,13 +22,13 @@
 import type { FakeDrive, FencedDrive, Peek } from '../drive/fake-drive';
 import { canonicalRecordJson } from '../contracts/record-json';
 import type { Checkpoint, EffectEvidence, Outcome } from '../contracts/run-checkpoint';
-import { readBackEdit, recheckEdit } from '../contracts/note-edit';
-import type { EditText, OperationV2 } from '../contracts/run-manifest';
+import { readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit';
+import type { EditText, OperationV2, SeenFile } from '../contracts/run-manifest';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { BowerError, type RunReport } from '../types';
 import { SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { RunWire } from '../worker/worker-api';
-import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, shows, textHash, toEvidence, type RunManifest } from './fake-run-records';
+import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, textHash, toEvidence, type RunManifest } from './fake-run-records';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
 export interface Binding {
@@ -100,6 +100,12 @@ interface Cache {
   notBefore: number;
   /** Attempts in a row that ended without finishing; after MAX_TRIES this instance stops trying. */
   failures: number;
+}
+
+/** A note a filing move goes beside, as captured, and the key it must still carry for that move's file. */
+interface Reused {
+  file: SeenFile;
+  key: string;
 }
 
 interface Attempt {
@@ -483,9 +489,10 @@ export class FakeRunService {
     }
     const pre = await this.precheck(head, op);
     if ('failure' in pre) return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'rejected', failure: pre.failure });
+    const reused = await this.reused(manifest, op);
     await this.hooks?.beforeDispatch?.({ runId: manifest.runId, attemptId: attempt.attemptId, epoch: attempt.epoch, ordinal: op.ordinal, effect: op.effect });
     try {
-      await this.dispatch(attempt, head, op, dispatchId, pre.modifiedTime);
+      await this.dispatch(attempt, head, op, dispatchId, pre.modifiedTime, reused);
     } catch (e) {
       // Refused inside the boundary before it passed: nothing was sent, so the outcome is an honest rejection.
       if (e instanceof NotAsSeen) return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'rejected', failure: e.failure });
@@ -497,6 +504,16 @@ export class FakeRunService {
       throw new BowerError('unknown', UNRESOLVED);
     }
     return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'applied', evidence: seen });
+  }
+
+  /**
+   * A note a filing move goes beside without creating it (TL-P2-20 R4-2, Ratification 6): the place as captured
+   * and the key recomputed from the move's own file, checked again inside the boundary in the move's step.
+   */
+  private async reused(manifest: RunManifest, op: OperationV2): Promise<Reused | null> {
+    const place = reusedNoteOf(manifest, op);
+    if (!place || op.effect.kind !== 'move') return null;
+    return { file: place.file, key: await savedLinkKey(op.effect.before.fileId) };
   }
 
   private resolve(attempt: Attempt, head: Checkpoint, op: OperationV2, outcome: Outcome): Promise<Checkpoint> {
@@ -593,7 +610,7 @@ export class FakeRunService {
   }
 
   /** Whether the stored source is still as the plan saw it, at the instant of the change; null when it is. */
-  private stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek): { code: 'conflict' | 'not-found'; message: string } | null {
+  private stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek, reused: Reused | null): { code: 'conflict' | 'not-found'; message: string } | null {
     const e = op.effect;
     if (e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'create-text') {
       const parent = peek(parentId);
@@ -604,6 +621,13 @@ export class FakeRunService {
         const taken = parent.children.some((id) => peek(id)?.file.name.toLowerCase() === e.name.toLowerCase());
         return taken ? { code: 'conflict', message: NOTE_THERE } : null;
       }
+    }
+    if (reused) {
+      // The note it is filed beside: still where and as it was captured, and still the note for this very link.
+      const note = peek(reused.file.fileId);
+      const there = !!note && !note.trashed && note.file.name === reused.file.name && note.file.parents.length === reused.file.parents.length
+        && note.file.parents.every((p, i) => p === reused.file.parents[i]) && note.file.appProperties?.bowerItem === reused.key;
+      if (!there) return { code: 'conflict', message: NOT_AS_SEEN };
     }
     const now = peek(e.before.fileId);
     const same = !!now && !now.trashed && now.file.name === e.before.name && now.file.parents.length === e.before.parents.length && now.file.parents.every((p, i) => p === e.before.parents[i]);
@@ -619,13 +643,13 @@ export class FakeRunService {
    * change: the claim, the source still as seen, then the dispatch is marked
    * as passed (kept with the rows) and only then applied.
    */
-  private async dispatch(attempt: Attempt, head: Checkpoint, op: OperationV2, dispatchId: string, modifiedTime: string | null): Promise<void> {
+  private async dispatch(attempt: Attempt, head: Checkpoint, op: OperationV2, dispatchId: string, modifiedTime: string | null, reused: Reused | null): Promise<void> {
     const row = this.row(attempt.key);
     const e = op.effect;
     const parentId = this.parentOf(head, op) ?? '';
     const w = this.drive.fenced((peek) => {
       this.check(attempt);
-      const failure = this.stillAsSeen(op, parentId, modifiedTime, peek);
+      const failure = this.stillAsSeen(op, parentId, modifiedTime, peek, reused);
       if (failure) throw new NotAsSeen(failure);
       if (!row.crossed.includes(dispatchId)) row.crossed.push(dispatchId);
       this.changed();

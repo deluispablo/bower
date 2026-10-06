@@ -8,7 +8,7 @@
  * writes (docs/specs/2026-10-04-worker-contract.md).
  */
 import type { DriveFile } from '../drive/drive-api';
-import { applyChanges, timelineDate } from '../contracts/note-edit';
+import { applyChanges, savedLinkKey, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
@@ -27,7 +27,7 @@ import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
-import { canonical, grounded, seen } from './fake-run-records';
+import { canonical, grounded, groundedKeys, seen } from './fake-run-records';
 
 export interface FakeRunOptions {
   scope: 'all' | 'instructions';
@@ -209,6 +209,8 @@ export type HubUpdate = { path: string; what: string };
  * `edit-text` (TL-P2-20), authored only by `applyChanges` and dated from
  * `requestedAt`: only on Bower's notes (ownership/2, or `by: bower`), never
  * when the line is already there, and with the in-place "new" move after it.
+ * A saved link filed as a note gets a generated note (create-text, keyed by the link file's id) before the
+ * link file moves beside it; a note with that key already there is reused and checked again at the move.
  * The manifest is v2 only when it holds an edit; otherwise it stays v1.
  * At most `editCap` edits are planned, in code-point path order (TL-P2-29 (1)); when the manifest guard
  * refuses the plan as too big, it is planned again with one edit fewer. The rest wait for the next run.
@@ -297,7 +299,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       const key = declared ? (file.appProperties?.[PROP.item] ?? null) : null;
       // A file in a declared pile that is not one of its members stays there for the next run.
       if (declared && (key === null || !declared.memberKeys.has(key))) continue;
-      if (item.kind === 'link') return legacy('link');
       if (MERGES.some((m) => m.item === item.name)) return legacy('merge');
       const content = await verified(file, 'blob');
       if (!content) return legacy('not checked');
@@ -350,7 +351,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const planned = new Map(ix.entries());
   const places = new Map<string, DriveFile>();
   const missing: string[] = [];
-  const filing: Array<{ thing: (typeof things)[number]; to: string; name: string }> = [];
+  const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote }> = [];
   // A destination's nearest existing folder is a captured place; every folder missing below it is made by the run.
   const destination = (to: string): void => {
     let at = to;
@@ -365,10 +366,42 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const plannedFile = (path: string): void => {
     planned.set(path, { path, type: 'file', kind: kindOf(path), modified: 0, created: 0 });
   };
+  const date = timelineDate(opts.requestedAt);
   for (const thing of things) {
+    // A saved link is named from its address unless the plan names it (as the legacy runner does).
+    const linkText = thing.item.kind === 'link' ? await drive.readText(thing.file.id) : null;
+    const url = linkText === null || PLAN_BY_NAME.has(thing.item.name) ? null : savedLinkUrl(linkText);
+    const title = PLAN_BY_NAME.get(thing.item.name)?.title ?? (url ? `${linkTitle(url)}.url` : thing.file.name);
+    if (linkText !== null && kindOf(title) === 'note') {
+      // A saved link filed as a note (TL-P2-20 M5, R3-6): a generated note keyed by the link file's id, and the
+      // link file itself moved beside it, never rewritten. A note with that key already there is reused (R4-2).
+      const key = await savedLinkKey(thing.file.id);
+      const kept = listing.find((f) => !f.folder && f.appProperties?.[PROP.item] === key);
+      const keptPath = kept ? ix.pathOf(kept.id) : undefined;
+      const keptIn = keptPath === undefined ? undefined : ix.file(parentOf(keptPath));
+      if (kept && keptPath !== undefined && keptIn?.folder && !keptPath.startsWith('Inbox/') && !keptPath.startsWith(`${SYSTEM.dir}/`)) {
+        const to = parentOf(keptPath);
+        places.set(kept.id, kept);
+        places.set(keptIn.id, keptIn);
+        const name = freeName(planned, to, thing.file.name);
+        plannedFile(join(to, name));
+        filing.push({ thing, to, name, note: { name: kept.name, key, text: null } });
+        continue;
+      }
+      const address = savedLinkAddress(linkText) ?? thing.item.name;
+      const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: address }], tags: [], currentState: [], body: `Saved from ${address}.`, timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
+      const to = guessOf(thing.words, thing.item);
+      destination(to);
+      const noteName = freeName(planned, to, title);
+      plannedFile(join(to, noteName));
+      const name = freeName(planned, to, thing.file.name);
+      plannedFile(join(to, name));
+      filing.push({ thing, to, name, note: { name: noteName, key, text } });
+      continue;
+    }
     const to = guessOf(thing.words, thing.item);
     destination(to);
-    const name = freeName(planned, to, PLAN_BY_NAME.get(thing.item.name)?.title ?? thing.file.name);
+    const name = freeName(planned, to, title);
     plannedFile(join(to, name));
     filing.push({ thing, to, name });
   }
@@ -400,7 +433,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // the only author: it refuses a note that is not Bower's, a damaged or too big one, and returns `unchanged` when
   // the line is already there (from any day), so nothing is planned for that note and the run goes on without it.
   const edits: Array<{ file: DriveFile; path: string; what: string; before: VerifiedContent; changes: Change[]; text: string }> = [];
-  const date = timelineDate(opts.requestedAt);
   for (const u of all && date ? [...(opts.updates ?? UPDATES)].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) : []) {
     // At most editCap edits, in path order; the rest wait for the next run, which skips the lines already there.
     if (edits.length >= editCap) break;
@@ -464,17 +496,27 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const movesOf = new Map<string, string[]>();
   const moveOf = new Map<string, string>();
   const empty = (): ManifestRunReport => ({ filed: [], created: [], updated: [], setAside: [], questions: [] });
-  for (const { thing, to, name } of filing) {
+  for (const { thing, to, name, note } of filing) {
     const isNote = kindOf(name) === 'note';
+    // A saved link's note first (R3-6): written once by its key, then the link file moves beside it.
+    const created = note && note.text !== null
+      ? await add({ kind: 'create-text', parent: targetOf(to), name: note.name, createKey: note.key, text: note.text, content: await utf8(note.text), purpose: 'generated' })
+      : null;
     const move = await add({
       kind: 'move',
       before: seen(thing.file),
       parent: targetOf(to),
       name,
       properties: { bowerNew: '1', ...(isNote ? { by: 'bower' as const } : {}), asAdded: null, origin: null, kind: null, pile: null },
-    });
+    }, created ? [created] : []);
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
     moveOf.set(thing.file.id, move);
+    if (note) {
+      // R3-5: filed only with every operation for it; a rejected move (or its note's) leaves it to the next run.
+      reportPlan.push({ requires: [...(created ? [created] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(note.name), kind: thing.item.kind, to, note: join(to, note.name) }] } });
+      reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED_AGAIN }] } });
+      continue;
+    }
     // Rows name the thing as captured (its file name), which grounding checks; a name shown in the Inbox that a
     // file cannot carry (a slash, a clash) is not captured, so the report never claims it.
     reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(name), kind: thing.item.kind, to }] } });
@@ -577,7 +619,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     console.error(`A B plan was refused by the manifest guard (${checked.reason}${checked.reason === 'edit' ? `: ${checked.rule}` : ''}); the run takes the legacy path`);
     return legacy('manifest');
   }
-  if (!grounded(manifest)) {
+  if (!grounded(manifest) || !(await groundedKeys(manifest))) {
     console.error('A B plan has report rows its effects do not ground; the run takes the legacy path');
     return legacy('grounding');
   }
@@ -689,6 +731,11 @@ function generatedName(title: string): string {
 
 /** Why a thing the run captured was not filed (a rejected move). */
 export const NOT_FILED = 'It was moved, renamed or removed before Bower could file it.';
+/** Why a saved link filed with a note, or a merged thing, was not filed: it may have been moved already (R4-3 m-c). */
+export const NOT_FILED_AGAIN = "It couldn't be filed this time.";
+
+/** A saved link's note: its name, its stable key, and its text when the run writes it (null when one is reused). */
+type SavedNote = { name: string; key: string; text: string | null };
 
 const LOGICAL_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
