@@ -3570,7 +3570,7 @@
       "Run the C11 journey: a kept rule worded with your words kept and a 'Yes, merge' answer merged into the note opened from the question's link."
     ],
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04: a note added to the inbox|C05: a tidy-up brings a project note|C11: a kept rule and a merge answer\"",
-    "passes": false,
+    "passes": true,
     "note": "Merges c04-journey-new-note, c05-journey-hub-updated, c11-journey-rule-and-answer (closed as superseded, pinned by these tests). TL-P2-40 (main cfd63e6). Planned, not implemented."
   },
   {
