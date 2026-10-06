@@ -7,6 +7,7 @@
  */
 import type { DriveFile } from './drive/drive-api';
 import { parsePileDeclaration, type Declaration, type DeclarationResult, type Member } from './contracts/pile-declaration';
+import { parsePileDisposition, type DispositionResult } from './contracts/pile-disposition';
 import { canonicalRecordJson, hashRecordJson } from './contracts/record-json';
 import { PILE_NOTE, safeInboxName } from './piles';
 import { isJournalRecord } from './vault/journal';
@@ -193,6 +194,61 @@ export async function observePile(declaration: Declaration, folder: DriveFile, f
   const has = (state: MemberState['state']): boolean => members.some((m) => m.state === state);
   const blocked: Blocked = has('changed') ? 'changed' : has('missing') ? 'not-arrived' : has('unchecked') ? 'not-checked' : null;
   return { blocked, members, context };
+}
+
+/** What a declared pile's members come to, by the one accounting rule (`accountPile`). */
+export interface Accounting extends Readiness {
+  /** Members a consumed disposition records: filed, whatever their files are like now. Not in `members`. */
+  disposed: ReadonlySet<string>;
+  /** Members still in the pile's folder with their declared bytes: what a run takes of it now. */
+  remaining: string[];
+}
+
+/**
+ * Member keys the consumed dispositions in `.bower/piles` record for this pile and this declaration,
+ * found by real parents. A disposition that cannot be read records nothing and is logged. Parsed records
+ * are kept in `cache` by file id and modified time, since a disposition never changes.
+ *
+ * Accepted limit (review of b-path-leftover-piles, Minor 1): any well-formed consumed disposition with a
+ * matching scope, pile and declaration is trusted; its run's published report (`authority.reportHash`) is
+ * not read back. Only Bower's runner writes there, after it confirmed that report (guard 13).
+ */
+async function disposedKeys(declaration: Declaration, declarationSha256: string, files: readonly DriveFile[], read: ReadBytes, cache?: Map<string, DispositionResult>): Promise<Set<string>> {
+  const rootId = declaration.scope.rootId;
+  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
+  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
+  const out = new Set<string>();
+  for (const f of files) {
+    if (f.folder || !f.name.startsWith('disposition-') || !f.parents.some((p) => piles.has(p))) continue;
+    const key = `${f.id}@${f.modifiedTime}`;
+    let parsed = cache?.get(key);
+    if (!parsed) {
+      parsed = await parsePileDisposition(await read(f.id), rootId);
+      cache?.set(key, parsed);
+    }
+    if (!parsed.ok || f.name !== `disposition-${parsed.sha256}.json`) {
+      console.error(`A pile disposition was refused (${parsed.ok ? 'name' : parsed.reason}).`);
+      continue;
+    }
+    const d = parsed.value;
+    if (d.action !== 'consumed' || d.pileId !== declaration.pileId || d.declaration?.declarationId !== declaration.declarationId || d.declaration.sha256 !== declarationSha256) continue;
+    for (const k of d.memberKeys) out.add(k);
+  }
+  return out;
+}
+
+/**
+ * The one accounting rule the Inbox and the tidy-up share (TL-P2-09, TL-P2-12, TL-P2-29), so they never
+ * disagree: a member a consumed disposition records is filed, whatever its file is like now; any other
+ * member is looked up, and has arrived and left when it is outside the folder with its declared bytes.
+ * Readiness is judged only on the members not disposed of. A disposed member the person moves back into
+ * the folder is no longer a member: it is ordinary input in the pile.
+ */
+export async function accountPile(declaration: Declaration, declarationSha256: string, folder: DriveFile, files: readonly DriveFile[], read: ReadBytes, digest: DigestOf, binned?: BinnedOf, cache?: Map<string, DispositionResult>): Promise<Accounting> {
+  const disposed = await disposedKeys(declaration, declarationSha256, files, read, cache);
+  const open: Declaration = { ...declaration, members: declaration.members.filter((m) => !disposed.has(m.memberKey)) };
+  const readiness = await observePile(open, folder, files, digest, binned);
+  return { ...readiness, disposed, remaining: readiness.members.filter((m) => m.state === 'verified').map((m) => m.memberKey) };
 }
 
 /**

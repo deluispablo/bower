@@ -27,7 +27,8 @@ import {
   type TreeNode,
 } from '../types';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
-import { contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, observePile, setAsideOf, shownName, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import type { DispositionResult } from '../contracts/pile-disposition';
+import { accountPile, contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, setAsideOf, shownName, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -94,6 +95,7 @@ export class DriveVault implements VaultSource {
   private readonly declarePiles: boolean;
   /** Declarations never change: each copy is read once, by file id and modified time. */
   private declarationCache = new Map<string, DeclarationResult>();
+  private dispositionCache = new Map<string, DispositionResult>();
   /** Sizes and hashes of files already checked, by file id and modified time. */
   private digests = new Map<string, Digest>();
   private ix: Promise<VaultIndex> | null = null;
@@ -525,7 +527,8 @@ export class DriveVault implements VaultSource {
     const root = await this.rootId();
     // Only when a member is missing everywhere live: one Bin lookup for all of them.
     const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
-    const readiness = await observePile(found.declaration, folder, files, (f) => this.digestOf(f), binned);
+    // The tidy-up's own accounting: a member a consumed disposition records is filed, the rest looked up.
+    const readiness = await accountPile(found.declaration, found.sha256, folder, files, (id) => drive.readBytes(id), (f) => this.digestOf(f), binned, this.dispositionCache);
     this.checkCurrent();
     const state = new Map(readiness.members.map((m) => [m.memberKey, m]));
     // Only a member with no file anywhere has not arrived; a changed or unchecked one is not sent again.

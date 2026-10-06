@@ -15,7 +15,7 @@ import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } fr
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, thingsIn } from '../piles';
-import { contextRemoved, findDeclaration, journalValues, observePile, type Digest } from '../pile-readiness';
+import { accountPile, contextRemoved, findDeclaration, journalValues, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -26,8 +26,7 @@ import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
-import { parsePileDisposition } from '../contracts/pile-disposition';
-import { canonical, dispositionName, grounded, seen } from './fake-run-records';
+import { canonical, grounded, seen } from './fake-run-records';
 
 export interface FakeRunOptions {
   scope: 'all' | 'instructions';
@@ -87,30 +86,6 @@ type Declared = { ref: { declarationId: string; sha256: string }; contextKey: st
  */
 type Leftover = { contextKey: string | null };
 
-/**
- * Member keys that consumed dispositions (guard 13) already record, by pile and declaration: the earlier
- * B run filed them (TL-P2-09). A disposition that cannot be read records nothing and is logged.
- */
-async function consumedKeys(drive: FakeDrive, rootId: string, listing: readonly DriveFile[]): Promise<Map<string, Set<string>>> {
-  const bower = new Set(listing.filter((f) => f.folder && f.name === SYSTEM.dir && f.parents.includes(rootId)).map((f) => f.id));
-  const piles = new Set(listing.filter((f) => f.folder && f.name === SYSTEM.piles.slice(SYSTEM.dir.length + 1) && f.parents.some((p) => bower.has(p))).map((f) => f.id));
-  const out = new Map<string, Set<string>>();
-  for (const f of listing) {
-    if (f.folder || !f.name.startsWith('disposition-') || !f.parents.some((p) => piles.has(p))) continue;
-    const parsed = await parsePileDisposition(await drive.readBytes(f.id), rootId);
-    if (!parsed.ok || f.name !== dispositionName(parsed.sha256)) {
-      console.error(`A pile disposition was refused (${parsed.ok ? 'name' : parsed.reason}).`);
-      continue;
-    }
-    const d = parsed.value;
-    if (d.action !== 'consumed' || !d.declaration) continue;
-    const key = disposedOf(d.pileId, d.declaration);
-    out.set(key, new Set([...(out.get(key) ?? []), ...d.memberKeys]));
-  }
-  return out;
-}
-const disposedOf = (pileId: string, ref: { declarationId: string; sha256: string }): string => JSON.stringify([pileId, ref.declarationId, ref.sha256]);
-
 /** A file's size and hash from the pretend Drive's stored bytes (`fake-stored`); null when they cannot be read. */
 async function storedDigest(drive: FakeDrive, f: DriveFile): Promise<Digest | null> {
   try {
@@ -127,7 +102,6 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   const ix = VaultIndex.build(rootId, listing);
   let records: Promise<unknown[]> | null = null;
   const journal = (): Promise<unknown[]> => (records ??= journalValues(ix.journalFiles(true), (id) => drive.readText(id)));
-  let consumed: Promise<Map<string, Set<string>>> | null = null;
   const out = new Map<string, Capture>();
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
@@ -144,14 +118,10 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: found.state === 'conflict' ? SET_ASIDE.declaration : SET_ASIDE.notChecked });
       continue;
     }
-    const readiness = await observePile(found.declaration, folder, listing, (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
-    // A member a consumed disposition records is accounted for, whatever its file is like now (TL-P2-09, TL-P2-29).
-    const disposed = (await (consumed ??= consumedKeys(drive, rootId, listing))).get(disposedOf(pile.id, { declarationId: found.declaration.declarationId, sha256: found.sha256 }));
-    const open = readiness.members.filter((m) => !disposed?.has(m.memberKey));
-    const has = (state: (typeof open)[number]['state']): boolean => open.some((m) => m.state === state);
-    const blocked = has('changed') ? SET_ASIDE.changed : has('missing') ? SET_ASIDE.notArrived : has('unchecked') ? SET_ASIDE.notChecked : null;
-    if (blocked) {
-      out.set(pile.id, { blocked });
+    // The accounting the Inbox shares: disposed members are filed, the rest looked up (TL-P2-29 second amendment).
+    const readiness = await accountPile(found.declaration, found.sha256, folder, listing, (id) => drive.readBytes(id), (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
+    if (readiness.blocked) {
+      out.set(pile.id, { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked });
       continue;
     }
     // The context only has to have arrived: any note is the person's words. Missing though never
@@ -166,7 +136,7 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       continue;
     }
     // Ready, so every member not disposed of is either still in the folder or arrived and left (accounted for).
-    const remaining = open.filter((m) => m.state === 'verified').map((m) => m.memberKey);
+    const remaining = readiness.remaining;
     // Every declared member accounted for: what is left is an ordinary pile (TL-P2-29).
     if (found.declaration.members.length && !remaining.length) {
       out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}), leftover: { contextKey: context.kind === 'text' ? context.memberKey : null } });

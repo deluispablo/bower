@@ -2503,6 +2503,23 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await dispositions(w)).toHaveLength(1);
     });
 
+    it('files a disposed member the person moved back into the pile again, as ordinary input', async () => {
+      const w = await filedButKept();
+      // Alex puts the filed lease back into the pile: it is no longer a member, just something in the pile.
+      const lease = await w.drive.get(w.leaseId);
+      await w.drive.update(w.leaseId, { addParent: w.folder, removeParent: lease.parents[0] ?? '' });
+
+      await plannedLeftover(w, w.folder, [w.leaseId, w.stray].sort(), w.keyed.id);
+      const next = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['lease.pdf', 'stray.txt']);
+      expect(movesOf(w, w.leaseId)).toBe(2);
+      expect(inInbox(w, w.leaseId)).toBe(false);
+      expect((await w.drive.evidence(w.folder))?.trashed).toBe(true);
+      expect(await dispositions(w)).toEqual(w.disposed);
+    });
+
     it('recovers the run that files what is left without repeating any effect', async () => {
       let armed = false;
       let held = false;

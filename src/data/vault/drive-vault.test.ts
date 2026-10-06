@@ -4,7 +4,8 @@ import { seedFakeDrive } from '../fake/seed';
 import { findNode } from '../tree';
 import { BowerError } from '../types';
 import { DriveVault, NOT_THE_SAME_TEXT } from './drive-vault';
-import { runFake } from '../fake/fake-runner';
+import { planRun, runFake } from '../fake/fake-runner';
+import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { driveError } from '../drive/drive-api';
@@ -1976,5 +1977,44 @@ describe('a reselected file must match its declared member', () => {
     expect(queue.items().map((i) => i.state)).toEqual(['done']);
     expect((await vault.piles()).find((p) => p.id === pile.id)?.items.map((i) => [i.name, i.upload])).toEqual([['scan.pdf', undefined]]);
     vault.dispose();
+  });
+});
+
+// pile-accounting-shared (TL-P2-29 second amendment): the Inbox and the tidy-up account for filed members with
+// one rule, consumed dispositions first and then the lookup, so they can never disagree.
+describe('the inbox accounts for filed members like the tidy-up', () => {
+  const pdf = (name: string): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name, kind: 'pdf', origin: 'From this computer', body: new Blob([`%PDF ${name}`]) });
+
+  it('shows what is left of a pile whose filed member was edited afterwards as ready, as the run takes it', async () => {
+    localStorage.clear();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fake = new FakeDrive();
+    const runs = new FakeRunService({ drive: fake, clock: () => Date.now(), scale: 'instant' });
+    const worker = new FakeWorker({ drive: fake, scenario: 'first', scale: 'instant', rootId: null, runs });
+    const at = (await worker.createFolder()).id;
+    const reader = (): DriveVault => new DriveVault({ drive: fake, rootId: async () => at, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
+    const uploader = reader();
+    const pile = await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
+    await uploader.settled();
+    const folder = (await fake.listAll(at)).find((f) => f.folder && f.appProperties?.pile === pile.id);
+    if (!folder) throw new Error('no pile folder');
+    await fake.createText(folder.id, 'extra.txt', 'not one of its things');
+    const first = await worker.process('all');
+    await runs.settled();
+    expect(await worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    expect((await fake.listAll(at)).filter((f) => f.name.startsWith('disposition-'))).toHaveLength(1);
+
+    // Alex edits the filed lease: the lookup alone would call it changed, but the run's disposition records it as filed.
+    const lease = (await fake.listAll(at)).find((f) => f.name === 'lease.pdf');
+    await fake.writeText(lease?.id ?? '', '%PDF lease, signed', lease?.modifiedTime ?? '');
+
+    const shown = (await reader().piles()).find((p) => p.id === pile.id);
+    expect(shown?.setAside).toBeUndefined();
+    expect(shown?.items.map((i) => [i.name, i.changed, i.upload])).toEqual([['extra.txt', undefined, undefined]]);
+    const planned = await planRun(fake, at, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    expect(planned.path).toBe('b');
+    if (planned.path !== 'b') return;
+    expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).toEqual([folder.id]);
+    errors.mockRestore();
   });
 });
