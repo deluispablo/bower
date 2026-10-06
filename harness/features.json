@@ -3678,5 +3678,32 @@
     "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"done.sh sees a change under api/ as code and api tests as tests|the harness check finds a verify's titles among the api tests\"",
     "passes": true,
     "note": "TL-P3-03 (main c98b186). Today pnpm check is red: worker-skeleton's verify titles are looked up only among the app's unit tests."
+  },
+  {
+    "id": "worker-crypto-session",
+    "task": "p3-3",
+    "category": "feature",
+    "what": "P3-C: the Worker's AES-GCM envelope, constant-time compare and signed session cookie (generation counter, secret rotation), reused from the original; error codes kebab-case per the contract; CORS allows x-bower-place and x-bower-epoch.",
+    "steps": [
+      "The envelope round-trips and refuses a tampered byte; compare is constant-time.",
+      "A cookie signed with the old secret is accepted after rotation; a bumped generation retires older cookies.",
+      "Every error code the Worker emits is listed in the contract and is kebab-case; a preflight with x-bower-place and x-bower-epoch from the app origin is allowed."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the envelope round-trips and refuses a tampered byte|a session cookie signed with the old secret is accepted after rotation|every error code the Worker emits is in the contract and kebab-case\"",
+    "passes": false,
+    "note": "TL-P3-04 (main 8feb090) with TL-P3-03 folded in."
+  },
+  {
+    "id": "worker-person-object",
+    "task": "p3-3",
+    "category": "feature",
+    "what": "P3-C: one SQLite-backed Durable Object per person, keyed by OIDC sub, with its migration and a typed storage schema for lease, admission, quota, control row and tickets. No endpoints yet.",
+    "steps": [
+      "Two concurrent calls for one person run one at a time (input gate) and see each other's committed writes.",
+      "Two people's objects never see each other's rows."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"one person's calls run one at a time|two people never see each other's rows\"",
+    "passes": false,
+    "note": "TL-P3-04 (main 8feb090). TL-P2-05: people are keyed by sub."
   }
 ]
