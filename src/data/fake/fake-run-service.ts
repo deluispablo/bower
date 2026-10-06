@@ -58,6 +58,8 @@ export interface FakeRunServiceOptions {
   scale?: TimeScale;
   /** Test seam: awaited after an effect's intent is committed and before it is dispatched. */
   hooks?: { beforeDispatch?: (at: DispatchAt) => Promise<void> };
+  /** Test seam: how the admitting attempt waits out each phase's pace (a timer by default). */
+  sleep?: (ms: number) => Promise<void>;
   /** Makes the rows and the Drive durable together; an admission is acknowledged only after it. */
   persist?: () => Promise<void>;
 }

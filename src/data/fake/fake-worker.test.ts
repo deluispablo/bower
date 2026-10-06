@@ -7,7 +7,6 @@ import { PROP, SYSTEM } from '../vault/layout';
 import { FakeWorker } from './fake-worker';
 import { seedFakeDrive } from './seed';
 import { DriveVault } from '../vault/drive-vault';
-import type { Scenario } from '../demo/scenario';
 import { BowerError, type Pile } from '../types';
 import type { LastRunFile, QuestionsFile, RequestsFile } from '../vault/layout';
 import type { JournalRecord } from '../vault/journal';
@@ -24,6 +23,7 @@ import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
 import { ALEX, MERGES, saltmereQuestion, wordRule } from '../demo/fixture';
+import { PHASE_MS, type Scenario } from '../demo/scenario';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { nameOf } from '../tree';
 import { pretendDrive, pretendRuns } from './pretend';
@@ -499,6 +499,67 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
     return Promise.race([paused, none]);
   }
+
+  // Coordinator finding on 07a8bb4 (robustness and qa5 e2e on fake): once Alex's folder took the B path, a tidy-up on
+  // the demo pace took about 43 s and the slow situation's Inbox kept loading. The Inbox read every thing's bytes;
+  // the run listed its folder again for every record; its queue pace ignored the time planning took; and its things
+  // were put away only after the putting-away pace, not within it.
+  it('a tidy-up tried again after a failed run is done within the demo pace', async () => {
+    localStorage.clear();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const drive = new FakeDrive();
+    const rootId = (await seedFakeDrive(drive, 'fail-run', Date.now())) ?? '';
+    const listed = async (): Promise<Pile[]> => new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles();
+    // The Inbox lists without reading any thing's bytes: on a slow Drive each read is a wait a person sees.
+    const things = new Set((await listed()).flatMap((p) => p.items.map((i) => i.id)));
+    const read: string[] = [];
+    const digest = drive.storedDigest.bind(drive);
+    const bytes = drive.readBytes.bind(drive);
+    const digests = vi.spyOn(drive, 'storedDigest').mockImplementation(async (id) => (read.push(id), digest(id)));
+    const reads = vi.spyOn(drive, 'readBytes').mockImplementation(async (id) => (read.push(id), bytes(id)));
+    expect((await listed()).length).toBeGreaterThan(0);
+    digests.mockRestore();
+    reads.mockRestore();
+    expect(read.filter((id) => things.has(id))).toEqual([]);
+
+    // The first run fails before any effect, in the fail-run situation.
+    const runs = new FakeRunService({ drive, scale: 'instant' });
+    const worker = new FakeWorker({ drive, scenario: 'fail-run', rootId, runs });
+    const failed = await worker.process('all');
+    await runs.settled();
+    expect(await worker.status()).toMatchObject({ id: failed.id, phase: 'failed' });
+
+    // Trying again, on the demo pace, asked for 2 s ago (planning took that long).
+    let release = (): void => undefined;
+    const sleeps: number[] = [];
+    let dispatched = 0;
+    const paced = new FakeRunService({
+      drive, scale: 'demo',
+      sleep: (ms) => {
+        sleeps.push(ms);
+        // Queued, reading and writing go by at once; the putting-away pace (the fourth) lasts until released.
+        return sleeps.length === 4 ? new Promise((r) => { release = r; }) : Promise.resolve();
+      },
+      hooks: { beforeDispatch: async () => void dispatched++ },
+    });
+    const { runId, requestId } = paced.ids();
+    const plan = await planRun(drive, rootId, { scope: 'all', allowWeb: false, runId, requestId, requestedAt: Date.now() - 2000 });
+    const lists = vi.spyOn(drive, 'listAll');
+    await paced.admit({ account: ALEX.email, rootId }, plan.manifest);
+    const operations = plan.manifest.operations.length;
+    for (let i = 0; i < 150 && dispatched < operations; i++) await new Promise((r) => setTimeout(r, 10));
+    // It waited in the queue from when it was asked for: at most the second left of the queue's three.
+    expect(sleeps[0] ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(PHASE_MS.demo.queued - 2000);
+    expect(sleeps.slice(1)).toEqual([PHASE_MS.demo.reading, PHASE_MS.demo.writing, PHASE_MS.demo.saving]);
+    // Its things are put away within the putting-away pace, which is still going.
+    expect(dispatched).toBe(operations);
+    // Each record goes where the run's records already are: the folder is not listed again for every one.
+    expect(lists.mock.calls.length).toBeLessThan(operations);
+    release();
+    await paced.settled();
+    expect(await paced.status({ account: ALEX.email, rootId })).toMatchObject({ id: runId, phase: 'done' });
+    expect((await listed()).map((p) => p.id)).toEqual([]);
+  });
 
   it('fixes its classification before any effect', async () => {
     const w = await bWorld();
