@@ -413,12 +413,17 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       if (f && !f.folder) want(f, path).renames = renames;
     }
   }
-  /** Each Timeline line wanted: written by this run, there already, or not written (refused, deferred). */
-  const lineState = new Map<WantedLine, 'planned' | 'present' | 'not'>();
+  /**
+   * Each Timeline line wanted: written by this run, there already, refused as a person's note (I7), or held: refused
+   * for any other reason or deferred, so whatever derives from it waits (rule 7, R4-1).
+   */
+  const lineState = new Map<WantedLine, 'planned' | 'present' | 'person' | 'held'>();
+  /** A line wanted twice in one note (the same words): written once, and it goes as its twin goes. */
+  const twins = new Map<WantedLine, WantedLine>();
   const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[] }> = [];
   for (const w of [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path))) {
     const f = w.file;
-    for (const l of w.lines) lineState.set(l, 'not');
+    for (const l of w.lines) lineState.set(l, 'held');
     const before = await verified(f, 'utf8');
     const bytes = before ? await drive.readBytes(f.id) : null;
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
@@ -440,9 +445,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const lines: WantedLine[] = [];
     for (const l of w.lines) {
       const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [], entries: [l.entry] }]);
-      if (result.ok && !lines.some((x) => x.entry.text === l.entry.text)) lines.push(l);
+      const twin = lines.find((x) => x.entry.text === l.entry.text);
+      if (result.ok && twin) twins.set(l, twin);
+      else if (result.ok) lines.push(l);
       else if (!result.ok && result.reason === 'unchanged') lineState.set(l, 'present');
-      else if (!result.ok && result.reason !== 'not-bower') console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
+      else if (!result.ok && result.reason === 'not-bower') lineState.set(l, 'person');
+      else if (!result.ok) console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
     }
     if (rewrite || lines.length) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines });
   }
@@ -451,7 +459,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   if (candidates.slice(editCap).some((c) => c.rewrite)) holdRenames = true;
   // Each kept note's changes together, in the contract's order; the text never depends on the record ids.
   const appendOf = (lines: WantedLine[]): Change[] => (lines.length
-    ? [{ kind: 'timeline-append', recordIds: [...new Set(lines.flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
+    ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
     : []);
   const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
     [...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...appendOf(c.lines)];
@@ -470,17 +478,25 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, changes: changesOf(c, renameIds), text });
     places.set(c.file.id, c.file);
   }
-  // A merge whose line waits past the cap waits with its whole pile: planned again with that pile held.
-  const waiting = candidates.slice(editCap).flatMap((c) => c.lines).filter((l) => l.record !== null);
-  const waitingPiles = things.filter((t) => t.merge && waiting.some((l) => l.record === t.merge?.answer && l.entry.text === t.merge.line)).map((t) => t.pile.id);
+  for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'held');
+  /** A merge's line, when its note is one a line can go to at all. */
+  const lineOf = (m: Merge): WantedLine | undefined => wanted.get(ix.idOf(m.into) ?? '')?.lines.find((l) => l.record === m.answer && l.entry.text === m.line);
+  // A merge whose line is held (refused at plan time, changed while read, past the cap) waits with its whole pile
+  // and its answer: planned again with that pile held, so its question is never dropped (rule 7, R4-1).
+  const waitingPiles = things.filter((t) => {
+    const line = t.merge ? lineOf(t.merge) : undefined;
+    return line !== undefined && lineState.get(line) === 'held';
+  }).map((t) => t.pile.id);
   if (waitingPiles.length) return planRun(drive, rootId, opts, editCap, new Set([...held, ...waitingPiles]));
-  /** How each merge goes: after its line, beside a line already there, or not at all (filed as usual). */
+  /**
+   * How each merge goes: after its line, beside a line already there, or not at all when the note is a person's own
+   * (I7) or there is no note to merge into: then the thing is filed as usual.
+   */
   const mergeState = (thing: (typeof things)[number]): MergeState | null => {
     const m = thing.merge;
-    if (!m) return null;
-    const line = [...lineState.keys()].find((l) => l.record === m.answer && l.entry.text === m.line && wanted.get(ix.idOf(m.into) ?? '')?.lines.includes(l));
+    const line = m ? lineOf(m) : undefined;
     const state = line ? lineState.get(line) : undefined;
-    return state === 'planned' || state === 'present' ? { ...m, line: state } : null;
+    return m && (state === 'planned' || state === 'present') ? { ...m, line: state } : null;
   };
   // Lines held back stay where they are, uncaptured, for the next run (rule 7).
   if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
