@@ -14,7 +14,7 @@ import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import type { DeclarationResult } from '../contracts/pile-declaration';
-import { FILING, HUB_UPDATES, MERGES, citedName, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
+import { FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordablePile, recordedNote, sameText, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -541,6 +541,20 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (!m || !f || f.folder || !m.into.endsWith('.md') || m.into.startsWith('Inbox/') || m.into.startsWith(`${SYSTEM.dir}/`)) continue;
     want(f, m.into).lines.push({ entry: { date: date ?? '', text: m.line, source: null }, record: m.answer, what: m.line, after: null });
   }
+  // A lookup request (C10, TL-P2-40 (2)): with the web allowed, its scripted result is a Timeline line on its note,
+  // its address the line's source; the line names the request, so the request's archive waits for it (rule 7). With
+  // the web off nothing is looked up or written, and its answer says so.
+  const lookups = new Map<string, WantedLine>();
+  for (const l of opts.allowWeb && date ? journal.filter((x) => x.rec.kind === 'request') : []) {
+    const scripted = scriptedRequest(l.rec.text ?? l.rec.what);
+    if (scripted?.kind !== 'lookup') continue;
+    const [path] = scripted.uses;
+    const f = ix.file(path);
+    if (!f || f.folder) continue;
+    const line: WantedLine = { entry: { date: date ?? '', text: scripted.found.text, source: scripted.found.url }, record: l.rec.id, what: scripted.found.text, after: null };
+    want(f, path).lines.push(line);
+    lookups.set(l.rec.id, line);
+  }
   // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
   const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
   const taken = new Set([...ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
@@ -689,6 +703,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   };
   // Lines held back stay where they are, uncaptured, for the next run (rule 7).
   if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
+  // A lookup whose line is not written (past the cap, a note changed while read, refused) waits for the next run.
+  const heldLookups = new Set([...lookups].filter(([, line]) => !['planned', 'present'].includes(lineState.get(line) ?? '')).map(([id]) => id));
+  if (heldLookups.size) {
+    console.error(`${heldLookups.size} lookup requests wait for the next tidy-up: their result could not be written now`);
+    journal = journal.filter((l) => !heldLookups.has(l.rec.id));
+  }
   if (heldAnswers.size) journal = journal.filter((l) => !heldAnswers.has(l.rec.id));
   const rules = rulesPlanOf(ruleWords, rulesFile, rulesState, rulesWorded);
   if (rules.left.size) journal = journal.filter((l) => !rules.left.has(l.rec.id));
@@ -935,25 +955,29 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
    * What a request's done line says (C09, TL-P2-40): a scripted answer names what was found, with links to the notes
    * it used, when every one is there; the plain line only when nothing specific can be named.
    */
-  const answerOf = (text: string): string => {
-    const scripted = scriptedRequest(text);
+  const answerOf = (l: JournalLine): string => {
+    const scripted = scriptedRequest(l.rec.text ?? l.rec.what);
     const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
+    // A lookup with the web off looks nothing up, and says so (C10); with it on, it names the note its result went to.
+    if (scripted?.kind === 'lookup') return !opts.allowWeb ? NOT_LOOKED_UP : lookups.has(l.rec.id) ? scripted.answer : REQUEST_DONE;
     return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
   };
   let requestsOp: string | null = null;
   if (asked.length) {
-    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answerOf(l.rec.text ?? l.rec.what) }));
+    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answerOf(l) }));
+    // An answer that names what a request did is written once that is done (a lookup's Timeline line).
+    const answered = [...new Set(asked.flatMap((l) => editsFrom.get(l.rec.id) ?? []))];
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
     const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
     if (requests) {
       const before = await ownVerified(requests);
       if (requestsBroken) console.error(new BowerError('unknown', REQUESTS_REPLACED), `${SYSTEM.requests} is not a valid requests file`);
-      requestsOp = await add({ kind: 'write-runner-json', before: seen(requests), beforeContent: before, path: SYSTEM.requests, text, content: await utf8(text) });
+      requestsOp = await add({ kind: 'write-runner-json', before: seen(requests), beforeContent: before, path: SYSTEM.requests, text, content: await utf8(text) }, answered);
     } else {
       // Your changes live in `.bower`, so it is there; made again without it would leave the requests undone.
       if (!sys?.folder) throw new BowerError('unknown', OWN_FILES);
-      requestsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.requests), createKey: mintKey('runner'), text, content: await utf8(text), purpose: 'runner-json' });
+      requestsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.requests), createKey: mintKey('runner'), text, content: await utf8(text), purpose: 'runner-json' }, answered);
     }
   }
   let questionsOp: string | null = null;

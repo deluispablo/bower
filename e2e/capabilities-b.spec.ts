@@ -110,12 +110,15 @@ test('C09: a question about your notes is answered', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first()).toHaveText(waiting ?? '');
 });
 
-type Kept = { files: Array<{ meta: { name: string; parents: string[]; modifiedTime: string; folder?: boolean }; trashed: boolean }> };
-/** Every live file of the pretend Drive this tab keeps, but Bower's own records: its name, place and last change. */
-const notesAsKept = (page: Page, scenario = 'default'): Promise<string[]> =>
+type Kept = { files: Array<{ meta: { name: string; parents: string[]; folder?: boolean }; trashed: boolean; content: unknown }> };
+/**
+ * Every live file of the pretend Drive this tab keeps, but Bower's own records: its place, name and content. A
+ * tidy-up clearing last run's "new" marks changes no content, so it is not counted.
+ */
+const filesAsKept = (page: Page, scenario = 'default'): Promise<string[]> =>
   page.evaluate((key) => {
     const kept = JSON.parse(sessionStorage.getItem(key) ?? '{"files":[]}') as Kept;
-    return kept.files.filter((f) => !f.trashed && !f.meta.folder && !f.meta.name.endsWith('.json')).map((f) => `${f.meta.parents.join('/')}/${f.meta.name}@${f.meta.modifiedTime}`).sort();
+    return kept.files.filter((f) => !f.trashed && !f.meta.folder && !f.meta.name.endsWith('.json')).map((f) => `${f.meta.parents.join('/')}/${f.meta.name}: ${JSON.stringify(f.content)}`).sort();
   }, `bower:fake:${scenario}`);
 
 test('C10: web lookups say what they did, off and on', async ({ page }) => {
@@ -126,12 +129,12 @@ test('C10: web lookups say what they did, off and on', async ({ page }) => {
   await open(page, '/');
 
   // Web off (the default): the answer says honestly that nothing was looked up, and no note changes.
-  const before = await notesAsKept(page);
+  const before = await filesAsKept(page);
   expect(before.length).toBeGreaterThan(0);
   await ask(page, lookup);
   await expect(answerTo(page, lookup)).toContainText('Bower did not look anything up.');
   await expect(answerTo(page, lookup).getByRole('link')).toHaveCount(0);
-  expect(await notesAsKept(page)).toEqual(before);
+  expect(await filesAsKept(page)).toEqual(before);
   await goNote(page, flat3);
   await expect(timeline(page)).not.toContainText('Council tax band');
 

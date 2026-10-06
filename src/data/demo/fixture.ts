@@ -177,10 +177,19 @@ export function citedName(plan: { title: string; note?: string }): string {
 }
 
 /**
- * A request a tidy-up answers from your notes (the stand-in for Claude): matched on its words, and given only when
- * every note it `uses` is there; otherwise the plain done line stands. The answer names what was found, with links.
+ * A request a tidy-up answers (the stand-in for Claude): matched on its words, and given only when every note it
+ * `uses` is there; otherwise the plain done line stands. The answer names what was done, with links.
+ * - `answer`: answered from your notes alone.
+ * - `lookup` (C10): with the web allowed, a scripted web result goes into `uses[0]`'s Timeline, its address as the
+ *   line's source and its day as the line's date (the derivation, its source and when, after W3C PROV); with the
+ *   web off, the answer says honestly that nothing was looked up (`NOT_LOOKED_UP`).
  */
-export type ScriptedRequest = { kind: 'answer'; asks: RegExp; uses: readonly string[]; answer: string };
+export type ScriptedRequest =
+  | { kind: 'answer'; asks: RegExp; uses: readonly string[]; answer: string }
+  | { kind: 'lookup'; asks: RegExp; uses: readonly [string]; found: { text: string; url: string }; answer: string };
+
+/** What a lookup says when the web is off in Settings: nothing was looked up. */
+export const NOT_LOOKED_UP = 'Bower did not look anything up. Web lookups are off in Settings.';
 
 export const SCRIPTED_REQUESTS: readonly ScriptedRequest[] = [
   {
@@ -188,6 +197,14 @@ export const SCRIPTED_REQUESTS: readonly ScriptedRequest[] = [
     asks: /\bwhich flat\b.*\bclosest\b.*\bferrowick\b/i,
     uses: ['Projects/Flat hunt/Flat 7, Cobble Row.md', 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md'],
     answer: '[[Flat 7, Cobble Row]] has the shortest commute, 18 minutes. The [[Industrial Designer, Ferrowick]] job is fully remote, so no flat is closer to it.',
+  },
+  {
+    kind: 'lookup',
+    asks: /\bcouncil tax\b.*\b(flat 3|larkspur lane)\b/i,
+    uses: ['Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md'],
+    // A made-up address on a reserved name (RFC 2606): no real site.
+    found: { text: 'Council tax band C, looked up on the web.', url: 'https://council-tax.example/bands/12-larkspur-lane' },
+    answer: 'Council tax band C, found on the web. Added to [[Flat 3, 12 Larkspur Lane]] with its source.',
   },
 ];
 

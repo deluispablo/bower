@@ -45,6 +45,7 @@ import {
   FILING,
   HUB_UPDATES,
   MERGES,
+  NOT_LOOKED_UP,
   saltmereQuestion,
   scriptedRequest,
   guessFolder,
@@ -89,6 +90,8 @@ export class DemoWorld {
   private suggestions: Suggestion[] = [];
   private trash = new Map<string, { entries: Entry[]; pile: { pile: Pile; at: number } | null; change: string | null }>();
   private requests: Request[] = [];
+  /** Whether the running tidy-up may look things up on the web (Settings); the demo never does. */
+  private allowWeb = false;
   /** Where each pile sits in the inbox (folder or lone file), set by syncInbox. */
   private pilePath = new Map<string, string>();
   private journal: ChangeEntry[] = [];
@@ -439,10 +442,12 @@ export class DemoWorld {
     this.timers.push(t);
   }
 
-  /** A request's done line, as the pretend runner writes it: a scripted answer when its notes are there (C09). */
+  /** A request's done line, as the pretend runner writes it: a scripted answer when its notes are there (C09, C10). */
   private answerOf(text: string): string {
     const scripted = scriptedRequest(text);
     const there = (path: string): boolean => this.entries.get(path)?.type === 'file';
+    // The demo never looks anything up: with the web off it says so, as the pretend runner does (C10).
+    if (scripted?.kind === 'lookup') return this.allowWeb ? 'Done. See what changed in your folders.' : NOT_LOOKED_UP;
     return scripted && scripted.uses.every(there) ? scripted.answer : 'Done. See what changed in your folders.';
   }
 
@@ -905,12 +910,13 @@ export class DemoWorld {
 
   private runs(): RunSource {
     return {
-      start: (scope) =>
+      start: (scope, opts) =>
         this.wait(() => {
           if (this.run && !['done', 'failed'].includes(this.run.phase)) return this.run;
           if (scope === 'all' && !this.inboxCount()) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
           if (scope === 'instructions' && !this.journal.length) throw new BowerError('conflict', 'There is nothing new for Bower to read.');
           this.run = this.newRun(scope, Date.now());
+          this.allowWeb = !!opts?.allowWeb;
           this.runPiles = new Set(this.piles.filter((p) => !p.setAside).map((p) => p.id));
           this.advance('queued', PHASE_MS[this.scale].queued);
           this.emitRun();
