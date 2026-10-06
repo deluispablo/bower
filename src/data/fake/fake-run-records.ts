@@ -209,10 +209,11 @@ export function grounded(manifest: RunManifest): boolean {
       return move?.kind === 'move' && members.has(move.before.fileId) ? (members.get(move.before.fileId)?.file.name ?? null) : null;
     }
     if (o.dependsOn.length) return null;
-    const bins = manifest.operations.filter((b) => b.effect.kind === 'bin' && b.dependsOn.includes(o.operationId));
-    const [bin, ...more] = bins;
-    const anchor = bin?.effect.kind === 'bin' && !more.length ? bin.effect.before : null;
-    return anchor && manifest.capture.piles.some((p) => p.anchor?.fileId === anchor.fileId) ? anchor.name : null;
+    // The pile folder whose Bin waits for it (its context note may go to the Bin after it too).
+    const anchors = manifest.operations.flatMap((b) => (b.effect.kind === 'bin' && b.dependsOn.includes(o.operationId)
+      && manifest.capture.piles.some((p) => b.effect.kind === 'bin' && p.anchor?.fileId === b.effect.before.fileId) ? [b.effect.before] : []));
+    const [anchor, ...more] = anchors;
+    return anchor && !more.length ? anchor.name : null;
   };
   const written = new Set<string>();
   const unwritten = new Set<string>();

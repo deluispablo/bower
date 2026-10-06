@@ -255,7 +255,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const capturedPiles: CapturedPile[] = [];
   const members: CapturedMember[] = [];
   const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string }> = [];
-  const fromWords: Array<{ pileId: string; folder: DriveFile; words: string }> = [];
+  const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!folder?.folder) return legacy('loose pile');
@@ -276,10 +276,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const note = declared ? bound : (bound ?? notes[0]);
     // Where its things go is guessed from the bound note's words only, never from an unbound note listed first.
     const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), await drive.readText(note.id)).body.trim();
-    // A pile of words only becomes a generated note (TL-P2-17), under a main folder; a pile with no words either has
-    // nothing to write, so it is left as it is, untouched, like a held pile.
-    const wordsOnly = !pile.items.length;
-    if (wordsOnly && (!words.trim() || !generatedPlace(guessFolder(words, 'note')))) continue;
     const keys: Array<string | null> = [];
     const taken: string[] = [];
     for (const item of pile.items) {
@@ -298,7 +294,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
       things.push({ pile, folder, item, file, content, words });
     }
-    if (!taken.length && !wordsOnly) return legacy(declared ? 'member key' : 'pile notes only');
+    // A pile of words only, or of pile notes only (TL-P2-32), becomes a generated note from its context (TL-P2-17),
+    // under a main folder; its other pile notes stay as uncaptured children. A pile with no words either has nothing
+    // to write, so it is left as it is, untouched, like a held pile.
+    const wordsOnly = !pile.items.length || (!taken.length && !declared);
+    if (wordsOnly && (!words.trim() || !generatedPlace(guessFolder(words, 'note')))) continue;
+    if (!taken.length && !wordsOnly) return legacy('member key');
     // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
     if (declared && keys.length !== declared.memberKeys.size) return legacy('member key');
     let context: CapturedPile['context'] = { kind: 'absent' };
@@ -318,7 +319,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       childFileIds: [...taken, ...(note ? [note.id] : [])].sort(),
       context,
     });
-    if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words });
+    if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
   }
 
   // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal.
@@ -354,7 +355,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // Inbox, `.md`, unique against the folder as it will be. A filed thing's own note is written only where none is
   // yet, as the legacy runner does; it follows its thing's move. The words of a pile become its note.
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
-  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string }> = [];
+  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string; context: DriveFile | null }> = [];
   for (const { thing, name } of filing) {
     const own = PLAN_BY_NAME.get(thing.item.name)?.note;
     if (!own || !generatedPlace(parentOf(own))) continue;
@@ -363,16 +364,16 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     plannedFile(own);
     const what = `A note for ${displayName(name)}.`;
     const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
-    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name });
+    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
   }
-  for (const { pileId, folder, words } of fromWords) {
+  for (const { pileId, folder, words, context } of fromWords) {
     const to = guessFolder(words, 'note');
     destination(to);
     const name = freeName(planned, to, generatedName(words));
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
-    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name });
+    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
   }
   // Hub notes brought up to date: a Timeline line each, planned on the bytes read now (TL-P2-20). applyChanges is
   // the only author: it refuses a note that is not Bower's, a damaged or too big one, and returns `unchanged` when
@@ -466,6 +467,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const path = join(note.to, note.name);
     const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path }];
     if (note.pileId !== null) notesOf.set(note.pileId, op);
+    // An observed pile's context note goes to the Bin once its words are written, so a folder kept by another
+    // child (a second pile note, a late thing) never has the same words written again on the next run.
+    if (note.context) await add({ kind: 'bin', before: seen(note.context), capturedChildIds: [] }, [op]);
     reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed, created: [{ path, what: note.what }] } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: note.pileId === null ? NOTE_NOT_WRITTEN : WORDS_NOT_WRITTEN }] } });
   }
