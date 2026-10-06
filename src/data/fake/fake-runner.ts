@@ -16,7 +16,7 @@ import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } fr
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
-import { accountPile, contextRemoved, findDeclaration, journalValues, type Digest } from '../pile-readiness';
+import { accountPile, contextRemoved, findDeclaration, journalValues, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -109,6 +109,12 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!pile.path || !folder?.folder) continue;
     const children = listing.filter((f) => f.parents[0] === folder.id);
+    // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21).
+    if (!writable([folder.name, pile.text, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
+      console.error(new BowerError('unknown', SET_ASIDE.notChecked), 'A pile has text no run record can carry; it waits as not checked');
+      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
+      continue;
+    }
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
     const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
     const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id));
@@ -656,8 +662,8 @@ export const REQUEST_DONE = 'Done. See what changed in your folders.';
 /** Logged when a pile holds text no run record can carry: it waits in the inbox. */
 const NOT_WRITABLE = 'Bower could not write down one of your piles; it stays in your inbox.';
 
-/** Why a filed thing has no note of its own (TL-P2-34): its note was not written, and a later tidy-up can try again. */
-export const NOTE_NOT_WRITTEN = "Bower couldn't write its note this time.";
+/** Why a filed thing has no note of its own (TL-P2-34): its note was not written; nothing writes it later. */
+export const NOTE_NOT_WRITTEN = "Bower couldn't write its note.";
 /** Why a pile of words stays in the inbox (its generated note was not written). */
 export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';
 

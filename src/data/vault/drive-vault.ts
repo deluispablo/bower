@@ -28,7 +28,7 @@ import {
 } from '../types';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { accountPile, contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, setAsideOf, shownName, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import { accountPile, contextRemoved, declarationRecord, declaredName, findDeclaration, hasStoredDigests, journalValues, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -496,7 +496,8 @@ export class DriveVault implements VaultSource {
       const things = kids.filter((k) => k !== note && !(contextKey && k.appProperties?.[PROP.item] === contextKey));
       // A changed thing shows as changed; one that has left the pile is not listed again, and the reason says so.
       const items = [...things.map((k) => (declared?.changed.has(k.id) ? { ...itemOf(k), changed: true as const } : itemOf(k))), ...sending, ...(declared?.rows ?? [])];
-      const setAside = declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
+      // What the tidy-up cannot write down waits, as not checked, here and in the tidy-up (pile-readiness `writable`).
+      const setAside = !writable([f.name, text, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
       out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}) });
     }
     // A lone thing still on its way has no file yet: show it from here.

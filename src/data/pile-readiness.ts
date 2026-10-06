@@ -298,6 +298,15 @@ export function setAsideOf(lookup: DeclarationLookup['state'], blocked: Blocked,
   return !left.things && !left.text.trim() && !left.restore ? 'empty' : null;
 }
 
+/**
+ * Whether everything a tidy-up would write down about a pile (its folder's name, its words, its things' names) is
+ * text a run record can carry. One that holds half of a character is held as not checked, with Try again, by the
+ * Inbox and the tidy-up alike (TL-P2-21).
+ */
+export function writable(texts: readonly string[]): boolean {
+  return canonicalRecordJson(texts).ok;
+}
+
 /** Whether the person put the pile's note in the Bin through Bower: a `trash` change for it in your changes. */
 export function contextRemoved(records: readonly unknown[], folderPath: string): boolean {
   return records.some((r) => isJournalRecord(r) && r.kind === 'trash' && r.path === `${folderPath}/${PILE_NOTE}`);
