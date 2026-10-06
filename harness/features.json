@@ -2955,5 +2955,33 @@
     "verify": "pnpm vitest run src/data/upload-queue.test.ts -t \"uploads survive a reload without a second file\"",
     "passes": false,
     "note": "TL-P2-07 (Planificador, main 6527286), D02 part 1, journey 9. Reuse: original Bower app/src/upload-queue.ts and app/src/cache.ts:520-596 (FSL-1.1-MIT, owner's copyright), adapted. Planned, not implemented."
+  },
+  {
+    "id": "declaration-read-isolation",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "An unreadable or damaged pile declaration affects only its own pile, which stays visible with a reason and a retry.",
+    "steps": [
+      "Make one declared pile's declaration fail to read, another malformed, next to healthy piles.",
+      "The Inbox lists every other pile; the affected pile shows one plain sentence and Try again, and is never treated as undeclared.",
+      "A tidy-up captures neither that pile nor its members; the error is logged once."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"an unreadable declaration affects only its own pile\"",
+    "passes": false,
+    "note": "TL-P2-08 (a), main c759ce1. Planned, not implemented."
+  },
+  {
+    "id": "declared-pile-context-arrival",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "A declared pile's note only has to have arrived: edited, removed through Bower or lost, the pile never stays set aside for ever.",
+    "steps": [
+      "A declared pile whose note text was edited is ready once its members are; the run captures the current text.",
+      "A note the person removed through Bower makes the pile ready without context; with no members left it is empty, offered for removal and never counted as filed.",
+      "A note missing without the person removing it is written again from the declaration's original text; every set-aside pile shows its reason and an action."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"a declared pile note only has to have arrived\"",
+    "passes": false,
+    "note": "TL-P2-08 (b), main c759ce1. No declaration field changes. Planned, not implemented."
   }
 ]

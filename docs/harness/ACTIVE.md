@@ -31,6 +31,8 @@
 - Adopted main `b95c4bb` (docs only: Claude Planificador is technical lead and planner; TL-P2-06; owner rulings R1 accepted limitation, no in-app offline reading, uploads kept across reload so D02 is required, reuse-before-building). Backup pushed and verified private local=remote `b95c4bb`.
 - Old-app reuse map archived [2026-10-06-old-app-reuse-map.md](2026-10-06-old-app-reuse-map.md); summary sent to the lead. TL-P2-07 (main `6527286`): D02 split, `upload-queue-persistent` registered first, then `pile-member-reselection`. Main `6527286` backed up and verified private.
 - Monotonic candidate `c3f2b3e`/`e3a0dbc` under review `mono-review-1`; guard-6 candidate `9235536`/`e21a777` under review `g6-review-1`.
+- `run-checkpoint-monotonic` CLOSED (`26c8dc9`), review [mono-review-1](2026-10-06-checkpoint-monotonic-review.md) CLEAN. Readiness candidate `3e8f154`/`d3a4830`/`8fd40b9`/`7e74934` (producer on for `?source=fake`, off for real) under review `ready-review-1`. Upload queue phase 1 in implementation ([packet](2026-10-06-upload-queue-unit.md)).
+- TL-P2-08 (main `c759ce1`) registered as `declaration-read-isolation` and `declared-pile-context-arrival` (own entries; readiness candidate already under review). Main `c759ce1` backed up and verified private.
 
 # Previous coordinator: stopped and released
 
