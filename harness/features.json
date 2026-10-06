@@ -3718,5 +3718,20 @@
     "verify": "pnpm exec vitest run src/ui/focus.test.ts -t \"focus timers do nothing once the page is gone\"",
     "passes": true,
     "note": "Seen twice in pnpm check (P3-2 worker-skeleton, P3-3 person-object): src/data/runner-errors.test.tsx and others. Gate reliability."
+  },
+  {
+    "id": "worker-error-codes-contract",
+    "task": "p3-3",
+    "category": "fix",
+    "what": "TL-P3-05: every Worker error answers a code and message from the contract's general-codes table (no `config` code, a 500 never names its cause); the codes test reads the allowed list from the contract; plus the P3-3 review's data-safety minors.",
+    "steps": [
+      "Missing config or a missing secret answers 500 `internal` with the table's message; the cause goes to console.error only.",
+      "The error-code test parses the allowed codes from docs/specs/2026-10-04-worker-contract.md; PENDING_CONTRACT_CODES is gone.",
+      "A person object whose stored schema version is newer than the build refuses to start and downgrades nothing.",
+      "assertEnv checks the PERSON binding; a SESSION_SECRET shorter than 32 bytes is refused."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a missing secret answers internal and names no cause|every error code the Worker emits is in the contract and kebab-case|a person object refuses storage from a newer build\"",
+    "passes": false,
+    "note": "TL-P3-05 (main a8e5d66) and the P3-3 Opus review minors."
   }
 ]
