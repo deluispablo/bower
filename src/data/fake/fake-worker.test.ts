@@ -2217,6 +2217,50 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await linesOf(w)).toEqual([]);
     });
 
+    // TL-P2-33 §3: yourChanges on B counts archived records that are not requests or rules (TL-P2-23).
+    it('counts a rule taken out and a rule already there as none of your changes', async () => {
+      const w = await bWorld();
+      await w.uploader.addRule(LEASE_RULE);
+      const first = await w.worker.process('all');
+      expect(await settle(w)).toMatchObject({ id: first.id, phase: 'done' });
+      /** The report contribution that claims a captured line: the one requiring that line's archive move. */
+      const rowOf = async (runId: string, recordId: string): Promise<ReportContribution['value'] | undefined> => {
+        const manifest = (await manifestsOf(w)).find((m) => m.runId === runId);
+        const files = manifest?.capture.journal.find((j) => j.recordId === recordId)?.fileIds ?? [];
+        const archives = new Set(files.flatMap((id) => archivesOf(manifest, id).map((o) => o.operationId)));
+        return manifest?.reportPlan.find((c) => c.requires.some((id) => archives.has(id)))?.value;
+      };
+
+      // The same rule typed again on a device that had not seen it worded, beside a new one.
+      const changes = await fileAt(w, SYSTEM.changes);
+      const again: JournalRecord = { v: 1, id: 'LINE_AGAIN', at: Date.now(), kind: 'rule', what: `New rule: "${LEASE_RULE}"`, device: 'DEVICE_X', path: RULES, text: LEASE_RULE };
+      await w.drive.createText(changes.id, 'LINE_AGAIN.json', `${JSON.stringify(again)}\n`);
+      await new Promise((r) => setTimeout(r, 2));
+      await vaultOf(w).addRule(RECEIPTS_RULE);
+      const added = (await linesOf(w)).find((l) => l.rec.id !== again.id);
+      const second = await w.worker.process('instructions');
+      expect(await settle(w)).toMatchObject({ id: second.id, phase: 'done' });
+      expect(parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => r.yourWords)).toEqual([RECEIPTS_RULE, LEASE_RULE]);
+      expect(await rowOf(second.id, again.id)).toMatchObject({ yourChanges: 0 });
+      expect(await rowOf(second.id, added?.rec.id ?? '')).toMatchObject({ rulesWorded: 1 });
+      expect(viewOf(w)?.run.report?.rulesWorded).toBe(1);
+      expect(viewOf(w)?.run.report?.yourChanges ?? 0).toBe(0);
+      expect(await linesOf(w)).toEqual([]);
+
+      // A rule taken out shows in Rules.md itself, not as one of your changes.
+      const [rule] = (await vaultOf(w).rules()).filter((r) => !r.pending && r.yourWords === LEASE_RULE);
+      if (!rule) throw new Error('the worded rule is missing');
+      await vaultOf(w).removeRule(rule.id);
+      const [removal] = await linesOf(w);
+      const third = await w.worker.process('instructions');
+      expect(await settle(w)).toMatchObject({ id: third.id, phase: 'done' });
+      expect(parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => r.yourWords)).toEqual([RECEIPTS_RULE]);
+      expect(await rowOf(third.id, removal?.rec.id ?? '')).toMatchObject({ yourChanges: 0 });
+      expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
+      expect(viewOf(w)?.run.report?.yourChanges ?? 0).toBe(0);
+      expect(await linesOf(w)).toEqual([]);
+    });
+
     it("leaves rules pending when Rules.md is not Bower's, and files the rest on the recoverable path", async () => {
       const w = await bWorld();
       const rules = await fileAt(w, RULES);
