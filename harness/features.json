@@ -3248,7 +3248,7 @@
       "Both call one shared accounting function in pile-readiness (dispositions, then the lookup)."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"the inbox accounts for filed members like the tidy-up\"",
-    "passes": false,
-    "note": "Second amendment to TL-P2-29 (main 07ba2b6): one shared function in pile-readiness.ts used by the runner and DriveVault. Internal to contract B; no external standard. Planned, not implemented."
+    "passes": true,
+    "note": "Second amendment to TL-P2-29 (main 07ba2b6): one shared function in pile-readiness.ts used by the runner and DriveVault. Internal to contract B; no external standard. Integrated in 54e7212 from claude/p2-leftover 9857543; review CLEAN after delta. Gates on 49681df (combined with the other three): check 3347, e2e 208, e2e:fake 218."
   }
 ]
