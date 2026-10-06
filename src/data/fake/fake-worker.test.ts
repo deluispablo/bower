@@ -2824,6 +2824,40 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
   });
 
+  // Review b-dest-review-1: what a plan names and writes must always encode, and a pile that cannot be held alone.
+  describe('destinations and generated notes hold under review', () => {
+    const plan = (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+
+    it('a generated note never splits a character, and a pile Bower cannot write down is held alone', async () => {
+      const w = await bWorld();
+      const long = `${'a'.repeat(47)}😀 more`;
+      await w.uploader.addPile({ text: long, items: [] });
+      await w.uploader.settled();
+      // A pile note whose text no record can carry (half of a character): only that pile waits.
+      const inbox = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Inbox' && f.parents[0] === w.rootId);
+      const broken = await w.drive.createFolder(inbox?.id ?? '', 'Broken');
+      await w.drive.createText(broken.id, 'Pile note.md', 'Bins go out \ud800 on Tuesday nights');
+
+      // Planning never throws for the whole run.
+      const planned = await plan(w).then((value) => ({ value }), (e: unknown) => ({ thrown: e }));
+      expect(planned).toMatchObject({ value: { path: 'b' } });
+      if (!('value' in planned)) return;
+      const out = planned.value;
+      if (out.path !== 'b') return;
+      const names = out.manifest.operations.flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect.name] : []));
+      expect(names).toEqual([`${'a'.repeat(47)}😀.md`]);
+      expect(out.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(broken.id);
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['Your note', 'idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
+      expect((await w.drive.evidence(broken.id))?.trashed).toBe(false);
+      expect(bowerErrors(w).length).toBeGreaterThan(0);
+    });
+  });
+
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
   describe('a Timeline line is added once and keeps the rest of the note', () => {
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';
