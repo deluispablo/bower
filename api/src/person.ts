@@ -3,6 +3,20 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './env.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
 
+/** The person's account row, as `GET /me` and the session check read it. */
+export interface PersonAccount {
+  email: string;
+  name: string;
+  /** Bumped at sign-out: a session cookie carrying another value is retired. */
+  generation: number;
+}
+
+/** What a sign-in leaves: the generation to sign into the cookie, and whether a refresh token is kept. */
+export interface SignInResult {
+  generation: number;
+  hasRefreshToken: boolean;
+}
+
 /**
  * One person's Durable Object, addressed by `idFromName(sub)` (TL-P2-05:
  * people are keyed by their OIDC sub). It holds that person's session
@@ -45,5 +59,25 @@ export class Person extends DurableObject<Env> {
         window,
       )
       .one().counter;
+  }
+
+  /** Records a sign-in (stub). */
+  signIn(_input: { email: string; name: string; encRefreshToken: string | null }): SignInResult {
+    throw new Error('not implemented');
+  }
+
+  /** The account, or null before the first sign-in (stub). */
+  account(): PersonAccount | null {
+    throw new Error('not implemented');
+  }
+
+  /** The encrypted refresh token, or null (stub). */
+  encryptedRefreshToken(): string | null {
+    throw new Error('not implemented');
+  }
+
+  /** Retires every session signed so far; returns the new generation (stub). */
+  retireSessions(): number {
+    throw new Error('not implemented');
   }
 }

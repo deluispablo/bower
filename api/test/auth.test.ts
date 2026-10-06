@@ -1,0 +1,388 @@
+import { env as testEnv } from 'cloudflare:test';
+import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
+import type { JWK, JWTVerifyGetKey } from 'jose';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { OAUTH_COOKIE } from '../src/auth.js';
+import { decrypt, importEncryptionKey } from '../src/crypto.js';
+import type { Env } from '../src/env.js';
+import { GOOGLE_AUTH_URL, GOOGLE_TOKEN_URL, codeChallenge } from '../src/google.js';
+import type { FetchLike } from '../src/google.js';
+import { createApp } from '../src/index.js';
+import { SESSION_COOKIE, signSession } from '../src/session.js';
+import { allowKey } from '../src/store.js';
+
+/** `Cloudflare.Env` is empty here (no `wrangler types`), so the bindings are asserted once. */
+const env = testEnv as unknown as Env;
+const kv = env.BOWER_KV;
+const API = 'https://api.example.com';
+const EMAIL = 'you@example.com';
+const REFRESH_TOKEN = 'test-refresh-token';
+const ISSUER = 'https://accounts.google.com';
+
+let signingKey: CryptoKey;
+let keys: JWTVerifyGetKey;
+let subCounter = 0;
+
+beforeAll(async () => {
+  // A local key set standing in for Google's JWKS: nothing reaches a network.
+  const pair = await generateKeyPair('RS256', { extractable: true });
+  signingKey = pair.privateKey;
+  const jwk: JWK = { ...(await exportJWK(pair.publicKey)), kid: 'test-key', alg: 'RS256', use: 'sig' };
+  keys = createLocalJWKSet({ keys: [jwk] });
+});
+
+beforeEach(async () => {
+  for (const { name } of (await kv.list()).keys) await kv.delete(name);
+});
+
+/** A fresh `sub` per test: each person object lives for the whole file. */
+function newSub(): string {
+  subCounter += 1;
+  return `test-sub-${subCounter}-${crypto.randomUUID()}`;
+}
+
+interface IdClaims {
+  sub: string;
+  nonce: string;
+  aud?: string;
+  iss?: string;
+  email?: string;
+  email_verified?: boolean;
+  given_name?: string;
+}
+
+async function idToken(claims: IdClaims): Promise<string> {
+  const { aud, iss, ...rest } = claims;
+  return new SignJWT({ email: EMAIL, email_verified: true, given_name: 'Alex', ...rest })
+    .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+    .setIssuer(iss ?? ISSUER)
+    .setAudience(aud ?? env.GOOGLE_CLIENT_ID)
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(signingKey);
+}
+
+interface Stub {
+  fetchImpl: FetchLike;
+  sentVerifier: () => string | undefined;
+}
+
+/** Google's token endpoint: answers the ID token `token(nonce)` builds. */
+function googleStub(token: () => Promise<string>, refreshToken: string | null = REFRESH_TOKEN): Stub {
+  let verifier: string | undefined;
+  const fetchImpl: FetchLike = async (input, init) => {
+    if (input !== GOOGLE_TOKEN_URL) throw new Error(`unexpected fetch in test: ${input}`);
+    const form = new URLSearchParams(typeof init?.body === 'string' ? init.body : '');
+    verifier = form.get('code_verifier') ?? undefined;
+    return Response.json({
+      access_token: 'test-access-token',
+      expires_in: 3599,
+      token_type: 'Bearer',
+      id_token: await token(),
+      ...(refreshToken === null ? {} : { refresh_token: refreshToken }),
+    });
+  };
+  return { fetchImpl, sentVerifier: () => verifier };
+}
+
+function cookieValue(response: Response, name: string): string | undefined {
+  const line = response.headers.getSetCookie().find((c) => c.startsWith(`${name}=`));
+  if (line === undefined) return undefined;
+  const pair = line.split(';')[0] ?? '';
+  return pair.slice(pair.indexOf('=') + 1);
+}
+
+interface Login { cookie: string; state: string; nonce: string; location: URL }
+
+async function login(app: ReturnType<typeof createApp>, query = ''): Promise<Login> {
+  const response = await app.request(`${API}/auth/login${query}`, {}, env);
+  expect(response.status).toBe(302);
+  const location = new URL(response.headers.get('location') ?? '');
+  return {
+    cookie: `${OAUTH_COOKIE}=${cookieValue(response, OAUTH_COOKIE) ?? ''}`,
+    state: location.searchParams.get('state') ?? '',
+    nonce: location.searchParams.get('nonce') ?? '',
+    location,
+  };
+}
+
+/** One whole sign-in: login, then the callback with the ID token `claims(nonce)` gives. */
+async function signIn(
+  claims: (nonce: string) => IdClaims,
+  refreshToken: string | null = REFRESH_TOKEN,
+): Promise<{ response: Response; stub: Stub; started: Login }> {
+  let nonce = '';
+  const stub = googleStub(() => idToken(claims(nonce)), refreshToken);
+  const app = createApp({ fetchImpl: stub.fetchImpl, keys });
+  const started = await login(app);
+  nonce = started.nonce;
+  const response = await app.request(
+    `${API}/auth/callback?code=test-code&state=${started.state}`,
+    { headers: { cookie: started.cookie } },
+    env,
+  );
+  return { response, stub, started };
+}
+
+async function sessionOf(sub: string): Promise<string> {
+  await kv.put(allowKey(EMAIL), '1');
+  const { response } = await signIn((nonce) => ({ sub, nonce }));
+  expect(response.status).toBe(302);
+  const token = cookieValue(response, SESSION_COOKIE);
+  expect(token).toBeDefined();
+  return `${SESSION_COOKIE}=${token ?? ''}`;
+}
+
+async function me(cookie?: string, bindings: object = env): Promise<Response> {
+  return createApp({ keys }).request(`${API}/me`, { headers: cookie === undefined ? {} : { cookie } }, bindings);
+}
+
+async function errorCode(response: Response): Promise<string> {
+  return ((await response.json()) as { error: { code: string } }).error.code;
+}
+
+const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
+
+describe('GET /auth/login', () => {
+  it('redirects to Google with PKCE, state, nonce and the contract scopes', async () => {
+    const response = await createApp({ keys }).request(`${API}/auth/login`, {}, env);
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(`${location.origin}${location.pathname}`).toBe(GOOGLE_AUTH_URL);
+    const p = location.searchParams;
+    expect(p.get('client_id')).toBe(env.GOOGLE_CLIENT_ID);
+    expect(p.get('redirect_uri')).toBe(`${env.API_ORIGIN}/auth/callback`);
+    expect(p.get('response_type')).toBe('code');
+    expect(p.get('scope')).toBe('openid email profile https://www.googleapis.com/auth/drive');
+    expect(p.get('access_type')).toBe('offline');
+    expect(p.get('code_challenge_method')).toBe('S256');
+    expect(p.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(p.get('state')).toMatch(/^[A-Za-z0-9_-]{22,}$/);
+    expect(p.get('nonce')).toMatch(/^[A-Za-z0-9_-]{22,}$/);
+    // Consent only when needed: a returning person keeps their refresh token.
+    expect(p.get('prompt')).toBeNull();
+    const line = response.headers.getSetCookie().find((c) => c.startsWith(`${OAUTH_COOKIE}=`)) ?? '';
+    expect(line.split('; ').slice(1)).toEqual(
+      expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/auth', 'Max-Age=600']),
+    );
+  });
+
+  it('asks for consent only when the callback says it is needed', async () => {
+    const { location } = await login(createApp({ keys }), '?consent=1');
+    expect(location.searchParams.get('prompt')).toBe('consent');
+  });
+});
+
+describe('GET /auth/callback', () => {
+  it('signs in: the person keyed by sub, the refresh token encrypted, a fresh session', async () => {
+    const sub = newSub();
+    await kv.put(allowKey(EMAIL), '1');
+    const { response, stub, started } = await signIn((nonce) => ({ sub, nonce }));
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(env.APP_ORIGIN);
+    // The verifier sent to Google matches the challenge sent at login.
+    expect(await codeChallenge(stub.sentVerifier() ?? '')).toBe(started.location.searchParams.get('code_challenge'));
+    const cookies = response.headers.getSetCookie();
+    const session = cookies.find((c) => c.startsWith(`${SESSION_COOKIE}=`)) ?? '';
+    expect(session.split('; ').slice(1)).toEqual(expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/']));
+    expect(cookies.some((c) => c.startsWith(`${OAUTH_COOKIE}=;`) && c.includes('Max-Age=0'))).toBe(true);
+
+    const stored = await person(sub).encryptedRefreshToken();
+    expect(stored).not.toBeNull();
+    expect(stored).not.toContain(REFRESH_TOKEN);
+    expect(await decrypt(stored ?? '', await importEncryptionKey(env.TOKEN_ENC_KEY))).toBe(REFRESH_TOKEN);
+    expect(await person(sub).account()).toEqual({ email: EMAIL, name: 'Alex', generation: 0 });
+  });
+
+  it('the callback refuses an ID token with the wrong audience or nonce', async () => {
+    await kv.put(allowKey(EMAIL), '1');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const wrongAudience = newSub();
+      const a = await signIn((nonce) => ({ sub: wrongAudience, nonce, aud: 'another-client-id' }));
+      expect(a.response.status).toBe(401);
+      expect(await errorCode(a.response)).toBe('signed-out');
+      expect(cookieValue(a.response, SESSION_COOKIE)).toBeUndefined();
+      expect(await person(wrongAudience).account()).toBeNull();
+
+      const wrongNonce = newSub();
+      const n = await signIn(() => ({ sub: wrongNonce, nonce: 'another-nonce' }));
+      expect(n.response.status).toBe(401);
+      expect(await errorCode(n.response)).toBe('signed-out');
+      expect(cookieValue(n.response, SESSION_COOKIE)).toBeUndefined();
+      expect(await person(wrongNonce).account()).toBeNull();
+
+      const wrongIssuer = newSub();
+      const i = await signIn((nonce) => ({ sub: wrongIssuer, nonce, iss: 'https://issuer.example.com' }));
+      expect(i.response.status).toBe(401);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('refuses a state that does not match the sign-in it started', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const app = createApp({ fetchImpl: googleStub(() => idToken({ sub: newSub(), nonce: 'x' })).fetchImpl, keys });
+      const { cookie } = await login(app);
+      const response = await app.request(`${API}/auth/callback?code=test-code&state=another-state`, { headers: { cookie } }, env);
+      expect(response.status).toBe(401);
+      expect(await errorCode(response)).toBe('signed-out');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a person not on the allowlist is refused at the callback', async () => {
+    const sub = newSub();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const { response } = await signIn((nonce) => ({ sub, nonce }));
+      expect(response.status).toBe(403);
+      expect(await errorCode(response)).toBe('forbidden');
+      expect(cookieValue(response, SESSION_COOKIE)).toBeUndefined();
+      // Nothing is kept for someone who was not invited.
+      expect(await person(sub).account()).toBeNull();
+      expect(await person(sub).encryptedRefreshToken()).toBeNull();
+
+      // An unverified address is not trusted against the allowlist either.
+      await kv.put(allowKey(EMAIL), '1');
+      const unverified = await signIn((nonce) => ({ sub, nonce, email_verified: false }));
+      expect(unverified.response.status).toBe(403);
+      expect(await person(sub).account()).toBeNull();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a returning person without a stored refresh token is sent back for consent', async () => {
+    const sub = newSub();
+    await kv.put(allowKey(EMAIL), '1');
+    const { response } = await signIn((nonce) => ({ sub, nonce }), null);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(`${env.API_ORIGIN}/auth/login?consent=1`);
+    expect(cookieValue(response, SESSION_COOKIE)).toBeUndefined();
+
+    // With a token kept, a later sign-in without one keeps it.
+    await sessionOf(sub);
+    const again = await signIn((nonce) => ({ sub, nonce }), null);
+    expect(again.response.status).toBe(302);
+    expect(again.response.headers.get('location')).toBe(env.APP_ORIGIN);
+    expect(await person(sub).encryptedRefreshToken()).not.toBeNull();
+  });
+});
+
+describe('sessions', () => {
+  it('GET /me answers signed-out without a session', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const none = await me();
+      expect(none.status).toBe(401);
+      expect(await errorCode(none)).toBe('signed-out');
+
+      const forged = await me(`${SESSION_COOKIE}=not-a-session`);
+      expect(forged.status).toBe(401);
+      expect(await errorCode(forged)).toBe('signed-out');
+      // The rejected cookie is cleared.
+      expect(forged.headers.getSetCookie().some((c) => c.startsWith(`${SESSION_COOKIE}=;`))).toBe(true);
+
+      // A well-signed session for someone who never signed in is refused too.
+      const stranger = await signSession({ sub: newSub() }, env.SESSION_SECRET);
+      expect((await me(`${SESSION_COOKIE}=${stranger}`)).status).toBe(401);
+
+      const signedIn = await me(await sessionOf(newSub()));
+      expect(signedIn.status).toBe(200);
+      expect(await signedIn.json()).toEqual({ user: { name: 'Alex', email: EMAIL }, folderId: null });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('logout retires every other cookie for that person', async () => {
+    const sub = newSub();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const phone = await sessionOf(sub);
+      const laptop = await sessionOf(sub);
+      const other = await sessionOf(newSub());
+      expect((await me(phone)).status).toBe(200);
+      expect((await me(laptop)).status).toBe(200);
+
+      const out = await createApp({ keys }).request(
+        `${API}/auth/logout`,
+        { method: 'POST', headers: { cookie: laptop, origin: env.APP_ORIGIN } },
+        env,
+      );
+      expect(out.status).toBe(204);
+      expect(out.headers.getSetCookie().some((c) => c.startsWith(`${SESSION_COOKIE}=;`) && c.includes('Max-Age=0'))).toBe(true);
+
+      for (const cookie of [phone, laptop]) {
+        const after = await me(cookie);
+        expect(after.status).toBe(401);
+        expect(await errorCode(after)).toBe('signed-out');
+      }
+      // Someone else's session is untouched, and signing in again works.
+      expect((await me(other)).status).toBe(200);
+      expect((await me(await sessionOf(sub))).status).toBe(200);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('logout from another origin is refused', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const cookie = await sessionOf(newSub());
+      const out = await createApp({ keys }).request(
+        `${API}/auth/logout`,
+        { method: 'POST', headers: { cookie, origin: 'https://elsewhere.example.com' } },
+        env,
+      );
+      expect(out.status).toBe(403);
+      expect((await me(cookie)).status).toBe(200);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a session signed with the previous secret still works during a rotation', async () => {
+    const sub = newSub();
+    await sessionOf(sub);
+    const previous = 'test-previous-secret-at-least-32-bytes';
+    const old = await signSession({ sub }, previous);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect((await me(`${SESSION_COOKIE}=${old}`)).status).toBe(401);
+    } finally {
+      log.mockRestore();
+    }
+    const rotated = { ...env, SESSION_SECRET_PREVIOUS: previous };
+    expect((await me(`${SESSION_COOKIE}=${old}`, rotated)).status).toBe(200);
+  });
+
+  it('an error reaching the person object answers internal with no cause', async () => {
+    const cookie = await sessionOf(newSub());
+    const broken = {
+      ...env,
+      PERSON: {
+        idFromName: (name: string) => env.PERSON.idFromName(name),
+        get: () => ({ account: () => Promise.reject(new Error('person-object-detail')) }),
+      },
+    };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await me(cookie, broken);
+      expect(response.status).toBe(500);
+      const text = await response.text();
+      expect(JSON.parse(text)).toEqual({
+        error: { code: 'internal', message: "Something went wrong on Bower's side. Try again later." },
+      });
+      expect(text).not.toContain('person-object-detail');
+      expect(log.mock.calls.flat().map(String).join(' ')).toContain('person-object-detail');
+    } finally {
+      log.mockRestore();
+    }
+  });
+});

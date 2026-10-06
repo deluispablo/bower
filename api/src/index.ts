@@ -1,12 +1,18 @@
 import { Hono } from 'hono';
 
+import { createAuthRoutes } from './auth.js';
+import type { AuthDeps } from './auth.js';
 import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { HttpError, createErrorHandler } from './errors.js';
 import { appCors, requestId, securityHeaders } from './security.js';
 
-/** The Worker's Hono app: the shared middleware, `/health`, and the JSON 404. */
-export function createApp(): Hono<AppEnv> {
+/**
+ * The Worker's Hono app: the shared middleware, `/health`, sign-in and `/me`,
+ * and the JSON 404. Tests pass `deps` (Google's fetch and keys); the deployed
+ * Worker is `createApp()` with the defaults.
+ */
+export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   // Outermost, so every response (errors and preflights too) gets the headers.
@@ -23,6 +29,7 @@ export function createApp(): Hono<AppEnv> {
   app.use('*', appCors());
 
   app.get('/health', (c) => c.json({ ok: true, version: c.get('env').APP_VERSION }));
+  app.route('/', createAuthRoutes(deps));
 
   app.notFound(() => {
     throw new HttpError(404, 'not-found');
