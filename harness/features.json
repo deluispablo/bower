@@ -2967,8 +2967,8 @@
       "A tidy-up captures neither that pile nor its members; the error is logged once."
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"an unreadable declaration affects only its own pile\"",
-    "passes": false,
-    "note": "TL-P2-08 (a), main c759ce1. Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-08 (a), main c759ce1. TL-P2-30 (a)(b): own reason unreadable with 'Bower could not read the list of what is in this pile. Try again.' Integrated: stub 97a5efa, fix bacfc7a from claude/p2-decl-isolation 8ff9236; review CLEAN (4 Minors: SetAside doc comment; runner logs once per plan; a declarationId-mismatch string logs each listing (pre-existing); differing copies plus a damaged one show unreadable). Gates on 4a1e4f2: check 3353, e2e 208, e2e:fake 218."
   },
   {
     "id": "run-report-save-barrier-legacy",
