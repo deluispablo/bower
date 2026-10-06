@@ -4137,6 +4137,46 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       }
     });
 
+    // Review o5-consumers-review-1 minor (a): a merge row's note is backed only by a line that names the answer.
+    it("grounds a merged thing's note only on a line carrying the answer that asked for it", async () => {
+      const { w, answer } = await merging();
+      const { manifest } = await tidy(w);
+      if (!manifest) return;
+      expect(grounded(manifest)).toBe(true);
+      const unnamed = { ...manifest, operations: manifest.operations.map((o) => (o.effect.kind === 'edit-text'
+        ? { ...o, effect: { ...o.effect, changes: o.effect.changes.map((c) => (c.kind === 'timeline-append' ? { ...c, recordIds: c.recordIds.filter((id) => id !== answer.id) } : c)) } }
+        : o)) };
+      expect(grounded(unnamed)).toBe(false);
+    });
+
+    // Review o5-consumers-review-1 minor (b), Ratification 2: one write drops every answered question, so one
+    // answer's rejected work keeps every answer and every question, all hidden, and the next run settles them all.
+    it('keeps every answer and question when one answer\'s merge is rejected, and settles them all next run', async () => {
+      const { w, act, link } = await merging();
+      const questions = await at(w, SYSTEM.questions);
+      const value = JSON.parse(await w.drive.readText(questions?.id ?? '')) as QuestionsFile;
+      await w.drive.writeText(questions?.id ?? '', `${JSON.stringify({ v: 1, questions: [...value.questions, question('q2')] }, null, 2)}\n`, questions?.modifiedTime ?? '');
+      await vaultOf(w).answer('q2', false);
+      const answers = await pendingAnswers(w);
+      expect(answers).toHaveLength(2);
+      act.at = async (d) => {
+        if (d.effect.kind !== 'move' || d.effect.before.fileId !== link.id || act.at === null) return;
+        act.at = null;
+        await w.drive.update(link.id, { name: 'listing, mine.url' });
+      };
+      const first = await tidy(w);
+      const head = (await checkpointsOf(w, first.id)).at(-1);
+      for (const a of answers) for (const op of archivesOf(first.manifest, a)) expect(head?.outcomes[op.ordinal], a.questionId).toMatchObject({ state: 'rejected' });
+      expect(asked(w)).toEqual(['q-keep', 'q1', 'q2']);
+      expect((await pendingAnswers(w)).map((r) => r.id).sort()).toEqual(answers.map((r) => r.id).sort());
+      expect((await vaultOf(w).questions()).map((q) => q.id)).toEqual(['q-keep']);
+      await w.drive.update(link.id, { name: link.name });
+      await tidy(w, 1);
+      expect(asked(w)).toEqual(['q-keep']);
+      expect(await pendingAnswers(w)).toEqual([]);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(JOINED);
+    });
+
     it('holds the pile and its answer while the line waits past the edit cap, and merges on the next run', async () => {
       const updates = Array.from({ length: 8 }, (_, i) => ({ path: `Projects/A ${i}/A ${i}.md`, what: `A ${i} brought up to date.` }));
       const { w, into, answer, link } = await merging({ updates });
