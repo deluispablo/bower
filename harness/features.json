@@ -2856,7 +2856,7 @@
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a declared pile whose folder vanished is not silently retired\"",
     "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Before P2-H."
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Before P2-H. TL-P2-29 (2): no new mechanism — a declared pile whose folder vanished shows the existing reason \"Nothing is left in it. Remove it from your inbox.\" with Remove, which retires the declaration through the person's removal."
   },
   {
     "id": "pile-member-reselection",
@@ -3123,7 +3123,7 @@
     ],
     "verify": "pnpm vitest run src/data/upload-queue.test.ts -t \"a reservation survives an immediate reload\"",
     "passes": false,
-    "note": "Found by u2-review-1 during the U2 rebase review: generateIds and a partial putChunk do not notify the pretend Drive of a change, so they are saved only with the next real change (pre-existing at e20a05c). Planned, not implemented."
+    "note": "Found by u2-review-1 during the U2 rebase review: generateIds and a partial putChunk do not notify the pretend Drive of a change, so they are saved only with the next real change (pre-existing at e20a05c). Planned, not implemented. TL-P2-29 (3): save the pretend snapshot immediately on generateIds/putChunk."
   },
   {
     "id": "empty-pile-remove-copy",
@@ -3179,7 +3179,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"leftovers of a held pile take the recoverable path\"",
     "passes": false,
-    "note": "Remaining legacy route found by the b-path-held-piles review (declared pile with no members left → legacy('member key')). Before P2-H; part of o5-no-legacy-run-path's mapping. Planned, not implemented."
+    "note": "Remaining legacy route found by the b-path-held-piles review (declared pile with no members left → legacy('member key')). Before P2-H; part of o5-no-legacy-run-path's mapping. Planned, not implemented. TL-P2-29 (4): interim legacy only (o5-no-legacy-run-path must prove no plan reaches legacy); lead default: the leftover is an ordinary pile for the next run (TL-P2-21). CONFIRMED (TL-P2-29 amendment, main 5217fbd): a declared pile whose keys are all accounted for (consumed dispositions from the earlier B run, or arrived-and-left by lookup after legacy) is, for what is left in its folder, an ordinary observed pile: null memberKeys, context = bound note else first, filed on B; no new disposition for keys already disposed; declaration file stays as history. No legacy, no new mechanism."
   },
   {
     "id": "session-signout-state",
@@ -3207,7 +3207,7 @@
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"note edits past the size cap wait for the next run\"",
     "passes": false,
-    "note": "From the o5-timeline-append review (M3 m7 8 MiB deferral, M4 m9 newer-Bower message). Needed before consumers with unbounded edits (link rewrites, merges). Planned, not implemented."
+    "note": "From the o5-timeline-append review (M3 m7 8 MiB deferral, M4 m9 newer-Bower message). Needed before consumers with unbounded edits (link rewrites, merges). Planned, not implemented. TL-P2-29 (1) SIMPLIFIED: at most 8 edit-text per run in path order (bounds 8 MiB); the rest go to the next run (records stay unarchived, resolver follows old names, skip-if-present converges); replaces R3-7 m7; 'needs a newer Bower' unchanged, no new mechanism. Verify unchanged."
   },
   {
     "id": "session-signout-helper",
@@ -3222,5 +3222,19 @@
     "verify": "pnpm vitest run src/data/session.test.ts -t \"every source lets the lease go the same way\"",
     "passes": false,
     "note": "Minor M4 from screen-review-1: choose.ts leavingLetsGo duplicates live/index.ts sign-out lease logic. Planned, not implemented."
+  },
+  {
+    "id": "bfcache-reload",
+    "task": "qa-25",
+    "category": "bug",
+    "what": "A page restored from the back/forward cache reloads, so it never writes with a stale session.",
+    "steps": [
+      "Open Bower, navigate away and come back with Back so the page is restored from the back/forward cache.",
+      "The page reloads (pageshow with persisted) and starts normally: lease, fresh data, queue resumed from the device.",
+      "No write is made with a stale epoch; the outbox and durable uploads survive."
+    ],
+    "verify": "pnpm vitest run src/data/session.test.ts -t \"a page restored from the back/forward cache reloads\"",
+    "passes": false,
+    "note": "Owner rule (simplest proven approach) + TL-P2-28 (main 9a72c1f): pageshow persisted → location.reload() (web.dev pattern) replaces the custom rejoin; one e2e back → reload → no stale-epoch write. Planned, not implemented."
   }
 ]
