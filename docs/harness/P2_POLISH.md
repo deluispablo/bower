@@ -26,3 +26,7 @@ TL-P2-38: minors never become entries; they wait here for after the freeze. Link
 - Session: the bfcache e2e does not itself show "no stale-epoch write" (the unit test does); the reload drops page-memory-only items (TL-P2-28 covers the notice).
 - Tests: `src/ui/focus.ts` `focusMain` timer can fire after jsdom teardown (seen once in `runner-errors.test.tsx` under load; two reruns clean).
 
+- Grounding does not check Timeline sources or answer links (a web line without the web pref, a citation of something not filed, an answer naming a note never created); only the planner prevents them — P3/P4 contract.
+- Rare races: a rejected requests.json write after a comparison note leads to a "(2)" note next run; a rejected questions write after the C07 note leaves the question unasked.
+- `citedName` cites the plan's title, not the final name; the Job hunt line waits only for the offer's move, not its note; "A flat from the same pile…" is written even when the offer wasn't in that pile.
+- With web on but the Flat 3 note missing, the lookup answers with the generic line; two same-named notes in different folders resolve to the last found.
