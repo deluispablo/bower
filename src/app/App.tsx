@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { bootDone, bootFail } from './boot';
 import { applyTheme, usePrefs } from './prefs';
 import { Shell } from './Shell';
+import { focusRouteHeading } from '@/ui/focus';
 
 /** The demo panel loads only with the demo or the pretend Drive. */
 const DemoPanel = lazy(() => import('@/data/demo/DemoPanel').then((m) => ({ default: m.DemoPanel })));
@@ -46,6 +47,7 @@ export interface DemoInfo {
 export function App({ demo }: { demo?: DemoInfo }) {
   return (
     <BrowserRouter>
+      <RouteFocus />
       <Gatekeeper />
       {demo && (
         <Suspense fallback={null}>
@@ -147,6 +149,18 @@ function Gatekeeper() {
     );
   }
   return <Signed />;
+}
+
+/** One rule for every route change, including views outside Shell (sign-in, legal). */
+function RouteFocus() {
+  const { pathname } = useLocation();
+  const last = useRef(pathname);
+  useEffect(() => {
+    if (last.current === pathname) return;
+    last.current = pathname;
+    return focusRouteHeading();
+  }, [pathname]);
+  return null;
 }
 
 function Signed() {

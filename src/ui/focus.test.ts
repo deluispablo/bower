@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { focusHeading, returnFocusTo } from './focus';
+import { focusHeading, focusRouteHeading, returnFocusTo } from './focus';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -36,5 +36,22 @@ describe('returnFocusTo', () => {
     document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1></main>';
     returnFocusTo(null);
     expect(document.activeElement?.tagName).toBe('H1');
+  });
+});
+
+describe('focusRouteHeading', () => {
+  it('moves a held link to the new heading, but leaves the file tree alone', async () => {
+    document.body.innerHTML = '<main><a href="#x" id="a">x</a><h1>Note</h1></main>';
+    document.getElementById('a')?.focus();
+    const cancel = focusRouteHeading();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(document.activeElement?.tagName).toBe('H1');
+    cancel();
+    document.body.innerHTML = '<main><ul role="tree"><li><a href="#t" id="t">t</a></li></ul><h1>Files</h1></main>';
+    document.getElementById('t')?.focus();
+    const cancel2 = focusRouteHeading();
+    await new Promise((r) => setTimeout(r, 80));
+    expect(document.activeElement?.id).toBe('t');
+    cancel2();
   });
 });
