@@ -3276,8 +3276,8 @@
       "No plan takes the legacy path for it; recovery never creates the note twice."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile of notes only is filed through the recoverable path\"",
-    "passes": false,
-    "note": "TL-P2-32 (1) (main 936cbb0). Removes the legacy reason 'pile notes only' found by the b-path-generated-note lane. Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-32 (1) (main 936cbb0). Removes the legacy reason 'pile notes only' found by the b-path-generated-note lane. TL-P2-32 (1), TL-P2-34 (3). Integrated by cherry-pick of claude/p2-b-dest (e4e3463 → dea252e); review CLEAN. Gates on 38a3dbc: check 3393, e2e 208, e2e:fake 218 (run 15:23-15:33 with the display awake)."
   },
   {
     "id": "b-path-missing-journal",
