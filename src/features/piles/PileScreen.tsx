@@ -361,6 +361,15 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
   );
 }
 
+/** Words cut at a word boundary about `max` characters in, ending with "…" when cut (TL-P2-36). */
+function cutAtWord(words: string, max: number): string {
+  const flat = words.replace(/\s+/g, ' ').trim();
+  if (flat.length <= max) return flat;
+  const head = flat.slice(0, max + 1);
+  const at = head.lastIndexOf(' ');
+  return `${(at > 0 ? head.slice(0, at) : flat.slice(0, max)).replace(/[\s,;:.]+$/, '')}…`;
+}
+
 /**
  * The pile's note: what you wrote about it. Saved as `Pile note.md` in the
  * pile's folder; Bower reads it with every thing in the pile. Editable until
@@ -426,7 +435,7 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
       />
       {clash && changed && !off && pile.text && (
         <p className="muted" role="status">
-          It now says: “{pile.text}”. Save the note to replace it with yours.
+          This note changed elsewhere. It now says “{cutAtWord(pile.text, 80)}”. Save again to replace it with yours.
         </p>
       )}
       <div className={s.noteFoot}>
