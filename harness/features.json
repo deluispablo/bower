@@ -3080,8 +3080,8 @@
       "Recovery never merges twice."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a merge is applied once through the recoverable path\"",
-    "passes": false,
-    "note": "TL-P2-16 item 5: a reason the O4 U2 classifier sends a plan to the legacy path; o5-no-legacy-run-path proves the list empty. Planned, not implemented. B.2 consumer obligations: questions.json removal write dependsOn every operation derived from the answer and every answer's archive dependsOn that write (R4-1, Ratification 2); hidden-question test (Ratification 1); rejected-move fixture where the record stays (TL-P2-26 C); grounded() filed.note via an applied append."
+    "passes": true,
+    "note": "TL-P2-16 item 5: a reason the O4 U2 classifier sends a plan to the legacy path; o5-no-legacy-run-path proves the list empty. B.2 consumer obligations: questions.json removal write dependsOn every operation derived from the answer and every answer's archive dependsOn that write (R4-1, Ratification 2); hidden-question test (Ratification 1); rejected-move fixture where the record stays (TL-P2-26 C); grounded() filed.note via an applied append. TL-P2-35. Integrated by cherry-pick of claude/p2-o5-consumers-r1 (fix df4dea0, then 976a37d, f08e613, f6d09ca, d0080da, 38a3dbc); review CLEAN after deltas. Gates on 38a3dbc: check 3393, e2e 208, e2e:fake 218 (run 15:23-15:33 with the display awake)."
   },
   {
     "id": "b-path-held-piles",

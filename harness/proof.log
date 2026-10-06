@@ -254,3 +254,4 @@ b-path-context-restore	9c2820a9eb10f747	2026-10-06	known-green: red shown by b-d
 b-path-pile-notes-only	383be3b1e832d6f2	2026-10-06	known-green: red shown by b-dest-review-1 at test 0eec7db (assertion: 'pile notes only' instead of 'b')
 o5-saved-link-note	ffa8c6e435827ab3	2026-10-06	known-green: red shown by o5-consumers-review-1 at test 99ef045 (assertion: the run took the B path)
 o5-rename-link-rewrite	09ccd2ed8335162a	2026-10-06	known-green: red shown by o5-consumers-review-1 at test 8aff170 (assertion: the run took the B path)
+b-path-merges	18023b0187cd2dea	2026-10-06	known-green: red shown by o5-consumers-review-1 at test 26dd825 (assertion: legacy instead of b)

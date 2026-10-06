@@ -400,3 +400,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: b-path-pile-notes-only passes — fix: proof-close a pile of notes only on the recoverable path
 - 2026-10-06: o5-saved-link-note passes — fix: proof-close saved link notes on the recoverable path
 - 2026-10-06: o5-rename-link-rewrite passes — fix: proof-close link rewrites after a rename on the recoverable path
+- 2026-10-06: b-path-merges passes — fix: proof-close merges on the recoverable path
