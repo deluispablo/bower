@@ -23,6 +23,8 @@ import { parseRules } from '../vault/rules-format';
 
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
+/** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
+const RUNNER_MADE: readonly string[] = [SYSTEM.requests, SYSTEM.hashes];
 /** The one note rules are worded in, at the root of the Bower folder. */
 const RULES = 'Rules.md';
 const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
@@ -368,6 +370,12 @@ export function grounded(manifest: RunManifest): boolean {
   for (const id of lineOf.keys()) {
     const touching = manifest.operations.filter((o) => 'before' in o.effect && o.effect.before.fileId === id);
     if (touching.length !== 1 || !touching[0] || !isArchive(touching[0])) return false;
+  }
+  // A runner file is made again only at its own path under `.bower/` (TL-P2-33 §2a).
+  for (const o of manifest.operations) {
+    if (o.effect.kind !== 'create-text' || o.effect.purpose !== 'runner-json') continue;
+    const parent = pathOf(o.effect.parent);
+    if (parent !== SYSTEM.dir || !RUNNER_MADE.includes(join(parent, o.effect.name))) return false;
   }
   // A made Rules.md is counted as what parseRules reads from it (R3-4).
   for (const o of manifest.operations) {
