@@ -18,13 +18,15 @@ export interface TidyUpOptions {
   /** Fails the run in its writing phase, before any effect (the fail-run situation). */
   failAt?: 'writing';
   hooks?: FakeRunServiceOptions['hooks'];
+  /** The person lets Bower look things up on the web in this tidy-up (Settings); off by default. */
+  allowWeb?: boolean;
 }
 
 export async function tidyUp(drive: FakeDrive, rootId: string, scope: 'all' | 'instructions' = 'all', opts: TidyUpOptions = {}): Promise<TidyUpResult> {
   const runs = new FakeRunService({ drive, scale: 'instant', ...(opts.hooks ? { hooks: opts.hooks } : {}) });
   const binding = { account: 'you@example.com', rootId };
   const { runId, requestId } = runs.ids();
-  const plan = await planRun(drive, rootId, { scope, allowWeb: false, runId, requestId, requestedAt: Date.now() });
+  const plan = await planRun(drive, rootId, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now() });
   await runs.admit(binding, plan.manifest, opts.failAt ? { failAt: opts.failAt } : {});
   for (let i = 0; i < 20; i++) {
     await runs.settled();

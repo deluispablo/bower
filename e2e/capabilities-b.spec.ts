@@ -109,3 +109,43 @@ test('C09: a question about your notes is answered', async ({ page }) => {
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
   await expect(page.getByRole('button', { name: /^Tidy up \d+ things?$/ }).first()).toHaveText(waiting ?? '');
 });
+
+type Kept = { files: Array<{ meta: { name: string; parents: string[]; modifiedTime: string; folder?: boolean }; trashed: boolean }> };
+/** Every live file of the pretend Drive this tab keeps, but Bower's own records: its name, place and last change. */
+const notesAsKept = (page: Page, scenario = 'default'): Promise<string[]> =>
+  page.evaluate((key) => {
+    const kept = JSON.parse(sessionStorage.getItem(key) ?? '{"files":[]}') as Kept;
+    return kept.files.filter((f) => !f.trashed && !f.meta.folder && !f.meta.name.endsWith('.json')).map((f) => `${f.meta.parents.join('/')}/${f.meta.name}@${f.meta.modifiedTime}`).sort();
+  }, `bower:fake:${scenario}`);
+
+test('C10: web lookups say what they did, off and on', async ({ page }) => {
+  test.skip(!isFake, 'the scripted journeys run on the pretend Drive and Worker');
+  test.setTimeout(60_000);
+  const lookup = 'Look up the council tax band for Flat 3';
+  const flat3 = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
+  await open(page, '/');
+
+  // Web off (the default): the answer says honestly that nothing was looked up, and no note changes.
+  const before = await notesAsKept(page);
+  expect(before.length).toBeGreaterThan(0);
+  await ask(page, lookup);
+  await expect(answerTo(page, lookup)).toContainText('Bower did not look anything up.');
+  await expect(answerTo(page, lookup).getByRole('link')).toHaveCount(0);
+  expect(await notesAsKept(page)).toEqual(before);
+  await goNote(page, flat3);
+  await expect(timeline(page)).not.toContainText('Council tax band');
+
+  // Web on, in Settings: a scripted result goes into the note's Timeline with its web address.
+  await page.goto('/settings');
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  const web = page.getByRole('switch', { name: 'Look things up on the web' });
+  await web.click();
+  await expect(web).toBeChecked();
+  await ask(page, lookup);
+  const answer = answerTo(page, lookup);
+  await expect(answer).toContainText('Council tax band C, found on the web.');
+  await answer.getByRole('link', { name: 'Flat 3, 12 Larkspur Lane' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat 3, 12 Larkspur Lane' })).toBeVisible();
+  const found = lineOf(page, 'Council tax band C, looked up on the web.');
+  await expect(found.getByRole('link', { name: 'council-tax.example/bands/12-larkspur-lane' })).toHaveAttribute('href', 'https://council-tax.example/bands/12-larkspur-lane');
+});

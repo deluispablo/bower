@@ -233,6 +233,31 @@ describe('the fake runner', () => {
     expect((await fresh().requests())[0]?.done).toBe('Done. See what changed in your folders.');
   });
 
+  // c10-web-on-off (TL-P2-40 (2)): a lookup says what it did, with the web off and on.
+  const FLAT_3 = 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md';
+  const LOOKUP = 'Look up the council tax band for Flat 3';
+
+  it('a lookup with the web off says nothing was looked up and changes no note', async () => {
+    const before = drive.dump(root).get(FLAT_3);
+    await vault.addRequest(LOOKUP);
+    const out = await tidyUp(drive, root, 'instructions');
+    if (out.phase !== 'done') throw new Error('failed');
+    expect((await fresh().requests())[0]?.done).toBe('Bower did not look anything up. Web lookups are off in Settings.');
+    expect(out.manifest.operations.some((o) => o.effect.kind === 'edit-text')).toBe(false);
+    expect(out.report.updated).toEqual([]);
+    expect(drive.dump(root).get(FLAT_3)).toBe(before);
+  });
+
+  it('a lookup with the web on adds its result to the note with its web address, and the answer links the note', async () => {
+    await vault.addRequest(LOOKUP);
+    const out = await tidyUp(drive, root, 'instructions', { allowWeb: true });
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(drive.dump(root).get(FLAT_3)).toMatch(/\n- \d{4}-\d{2}-\d{2} · Council tax band C, looked up on the web\. · \[\[https:\/\/council-tax\.example\/bands\/12-larkspur-lane\]\]\n/);
+    expect((await fresh().requests())[0]?.done).toBe('Council tax band C, found on the web. Added to [[Flat 3, 12 Larkspur Lane]] with its source.');
+    expect(out.report.updated).toEqual([{ path: FLAT_3, what: 'Council tax band C, looked up on the web.' }]);
+    expect(out.report.requests).toEqual([LOOKUP]);
+  });
+
   it('answered questions leave the list for good', async () => {
     const q = (await vault.questions())[0];
     if (!q) throw new Error('no question');
