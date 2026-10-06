@@ -1334,6 +1334,34 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     await expectFiledOnce(w);
   });
 
+  // TL-P2-34: a rejected move's sentence by its cause, decided once where the report is materialized.
+  it('an ordinary item is set aside by its cause: moved away, or not filed this time', async () => {
+    const MOVED = 'It was moved, renamed or removed before Bower could file it.';
+    const AGAIN = "It couldn't be filed this time.";
+    const act: { at: ((at: DispatchAt) => Promise<void>) | null } = { at: null };
+    const w = await bWorld({ hooks: { beforeDispatch: async (at) => { await act.at?.(at); } } });
+    await w.uploader.addPile({ text: 'A recipe to keep', items: [pdf('soup.pdf'), pdf('cake.pdf')] });
+    await w.uploader.settled();
+    const lease = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'lease.pdf');
+    let renamed = false;
+    act.at = async (at) => {
+      // A conflict: Alex renames lease.pdf after Bower checked it and before it moves.
+      if (lease && at.effect.kind === 'move' && at.effect.before.fileId === lease.id && !renamed) {
+        renamed = true;
+        await w.drive.update(lease.id, { name: 'lease, mine.pdf' });
+      }
+      // Any other cause: the folder the recipes go to cannot be made, as its parent went to the Bin meanwhile.
+      if (at.effect.kind === 'create-folder' && at.effect.name === 'Cooking' && 'fileId' in at.effect.parent) await w.drive.trash(at.effect.parent.fileId);
+    };
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    const setAside = viewOf(w)?.run.report?.setAside ?? [];
+    expect(setAside).toContainEqual({ name: 'lease.pdf', why: MOVED });
+    expect(setAside).toContainEqual({ name: 'soup.pdf', why: AGAIN });
+    expect(setAside).toContainEqual({ name: 'cake.pdf', why: AGAIN });
+  });
+
   it('checks a source is still as seen inside the boundary, so a rename just before the move is set aside, not undone', async () => {
     let renamed: string | null = null;
     let drive: FakeDrive | null = null;
@@ -3521,6 +3549,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const NOTE_NAME = 'Weeknight curry, clipping.md';
     const NOTE = `Resources/Cooking/${NOTE_NAME}`;
     const AGAIN = "It couldn't be filed this time.";
+    const MOVED = 'It was moved, renamed or removed before Bower could file it.';
     type Where = { drive: FakeDrive; rootId: string };
     type AnyManifest = Manifest | ManifestV2;
     const manifestsAll = async (w: Where): Promise<AnyManifest[]> =>
@@ -3623,7 +3652,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // The note was written, the link stays in the inbox, its pile and declaration stay: no consumed disposition.
       expect(await notesOf(w)).toHaveLength(1);
       expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
-      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: AGAIN }]);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: MOVED }]);
       expect(viewOf(w)?.run.report?.filed.map((r) => r.name)).not.toContain(CURRY.name);
       const dispositions = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name.startsWith('disposition-'));
       const piles = await Promise.all(dispositions.map(async (f) => (JSON.parse(await w.drive.readText(f.id)) as { pileId: string }).pileId));
@@ -3666,7 +3695,30 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(createsOf(w)).toHaveLength(1);
       expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: AGAIN }]);
     });
+
+    it('a saved link is set aside by its cause: moved away, or not filed this time', async () => {
+      // A conflict: the link file is renamed right before its move.
+      const moved = await linkWorld();
+      moved.act.at = async (at) => {
+        if (!isLinkMove(moved.link.id)(at) || moved.act.at === null) return;
+        moved.act.at = null;
+        await moved.w.drive.update(moved.link.id, { name: 'curry, mine.url' });
+      };
+      await tidy(moved.w);
+      expect(viewOf(moved.w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: MOVED }]);
+      // A failed dependency: its note cannot be written, as the folder for it cannot be made; the move waits on it.
+      const other = await linkWorld();
+      other.act.at = async (at) => {
+        if (at.effect.kind === 'create-folder' && at.effect.name === 'Cooking' && 'fileId' in at.effect.parent) await other.w.drive.trash(at.effect.parent.fileId);
+      };
+      const run = await tidy(other.w);
+      const move = opOf(run.manifest, (o) => o.effect.kind === 'move' && o.effect.before.fileId === other.link.id);
+      expect((await checkpointsOf(other.w, run.id)).at(-1)?.outcomes[move?.ordinal ?? -1]).toMatchObject({ state: 'rejected' });
+      expect(await notesOf(other.w)).toEqual([]);
+      expect(viewOf(other.w)?.run.report?.setAside.filter((r) => r.name === CURRY.name)).toEqual([{ name: CURRY.name, why: AGAIN }]);
+    });
   });
+
   // o5-rename-link-rewrite (TL-P2-20 link-rewrite, rule 7, C2/R3-4; TL-P2-29 (1)): after a rename every [[link]] to the
   // old name is one edit-text per note, fixed with its precondition; the rename's line is archived only after every
   // rewrite it needs applied, and stays when one is refused at plan time, rejected, or waits for a later run.
@@ -3849,6 +3901,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const LINE = 'The Wrenfield Road listing is the same building; kept here, as you asked.';
     const JOINED = 'Projects/Flat hunt/Wrenfield Road listing.url';
     const AGAIN = "It couldn't be filed this time.";
+    const MOVED = 'It was moved, renamed or removed before Bower could file it.';
     const larkspur = (timeline: string[]): string => ['---', 'summary: A flat we liked.', 'by: bower', '---', '', 'Close to the station.', '', '## Timeline', '- 2026-09-20 · Viewed it.', ...timeline, ''].join('\n');
     const question = (id: string) => ({ id, text: `Question ${id}?`, yes: 'Yes', no: 'No', askedAt: 1 });
     const manifestsAll = async (w: Where): Promise<ManifestV2[]> =>
@@ -3980,7 +4033,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(asked(w)).toEqual(['q-keep', 'q1']);
       expect((await pendingAnswers(w)).map((r) => r.id)).toEqual([answer.id]);
       expect((await vaultOf(w).questions()).map((q) => q.id)).toEqual(['q-keep']);
-      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: LISTING.name, why: AGAIN }]);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: LISTING.name, why: MOVED }]);
       expect(viewOf(w)?.run.report?.filed.map((r) => r.name)).not.toContain(LISTING.name);
       expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
 
@@ -4005,6 +4058,31 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(false);
       expect(asked(w)).toEqual(['q-keep']);
       expect((await pendingAnswers(w)).map((r) => r.id)).not.toContain(answer.id);
+    });
+
+    it('a merged thing is set aside by its cause: moved away, or not filed this time', async () => {
+      // A conflict: the listing is renamed right before its move.
+      const moved = await merging();
+      moved.act.at = async (d) => {
+        if (d.effect.kind !== 'move' || d.effect.before.fileId !== moved.link.id || moved.act.at === null) return;
+        moved.act.at = null;
+        await moved.w.drive.update(moved.link.id, { name: 'listing, mine.url' });
+      };
+      await tidy(moved.w);
+      expect(viewOf(moved.w)?.run.report?.setAside).toEqual([{ name: LISTING.name, why: MOVED }]);
+      // A failed dependency: the note changed before its line was added, so the line and then the move are rejected.
+      const other = await merging();
+      other.act.at = async (d) => {
+        if (d.effect.kind !== 'edit-text' || other.act.at === null) return;
+        other.act.at = null;
+        await other.w.drive.writeText(other.into.id, larkspur(['- 2026-09-21 · Called the agent.']), (await other.w.drive.get(other.into.id)).modifiedTime);
+      };
+      const run = await tidy(other.w);
+      const head = (await checkpointsOf(other.w, run.id)).at(-1);
+      expect(head?.outcomes[editsOf(run.manifest)[0]?.ordinal ?? -1]).toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
+      expect(head?.outcomes[moveOf(run.manifest, other.link.id)?.ordinal ?? -1]).toMatchObject({ state: 'rejected' });
+      expect(viewOf(other.w)?.run.report?.setAside).toEqual([{ name: LISTING.name, why: AGAIN }]);
+      expect(other.w.drive.pathOf(other.link.id, other.w.rootId).startsWith('Inbox/')).toBe(true);
     });
 
     it('holds the pile and its answer while the line waits past the edit cap, and merges on the next run', async () => {
