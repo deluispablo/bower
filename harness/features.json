@@ -2911,8 +2911,8 @@
       "Recovery never appends twice."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a Timeline line is added once and keeps the rest of the note\"",
-    "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; also resolves the fake runner v2 downgrade. B.2 consumer obligations: grounded() updated.path for an applied append; adapter precondition when the hash is the same but modifiedTime changed (rule 4); YYYY-MM-DD shown as \"6 Oct\" (m8)."
+    "passes": true,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; also resolves the fake runner v2 downgrade. B.2 consumer obligations: grounded() updated.path for an applied append; adapter precondition when the hash is the same but modifiedTime changed (rule 4); YYYY-MM-DD shown as \"6 Oct\" (m8). CLOSED via Claude candidate claude/p2-o5-timeline (62b428b); review CLEAN 0C/0I/5M (M3/M4 → note-edit-consumer-limits). qa26 fake test adjusted (only-held inbox now refused, TL-P2-21). Root gates check 3285, e2e 200, e2e:fake 202. Merges remain legacy (b-path-merges)."
   },
   {
     "id": "o5-rules-wording",

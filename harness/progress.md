@@ -382,3 +382,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: single-active-session passes — feat: proof-close single active session data layer
 - 2026-10-06: note-edit-contract passes — feat: proof-close note-edit contract
 - 2026-10-06: session-signout-state passes — fix: proof-close session sign-out state
+- 2026-10-06: o5-timeline-append passes — feat: proof-close Timeline lines on the recoverable path
