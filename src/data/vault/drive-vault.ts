@@ -965,6 +965,12 @@ export class DriveVault implements VaultSource {
     if (!f.folder) {
       // A lone thing that gets a note becomes a pile folder; the pile keeps its id.
       if (!text) return pile;
+      // A declared loose thing becomes an ordinary pile (TL-P2-31 amendment): its declaration copies go to the Bin
+      // first, so no device ever looks for it as a loose thing again.
+      for (const copy of await this.declarationCopiesOf(id, f)) {
+        await this.drive.trash(copy.id);
+        ix.drop(copy.id);
+      }
       folderPath = join('Inbox', freeName(ix.entries(), 'Inbox', pileFolderName({ ...pile, text })));
       const folder = await this.drive.createFolder(f.parents[0] ?? (await this.rootId()), nameOf(folderPath), { [PROP.pile]: id });
       ix.put(folder);
