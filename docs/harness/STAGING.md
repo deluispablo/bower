@@ -35,3 +35,4 @@ P3 replaces this preview with the real staging environment: Worker plus real ser
 - 2026-10-06, `main` `a1b9ec0` (P2 batch 3), version `b3e83d1b`.
 - 2026-10-06, `main` `3939760` (P2 batch 4), version `0bea1818`.
 - 2026-10-06, `main` `4d7ab08` (P2 batch 5), version `826a00ad`.
+- 2026-10-06, `main` `cc54d83` (P2 closed, dossier `3e6e7da`), version `0996fb05`.
