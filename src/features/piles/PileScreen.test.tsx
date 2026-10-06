@@ -81,6 +81,67 @@ it('a pile note Bower could not read cannot be edited until Try again reads it',
   fresh.dispose();
 });
 
+// note-read-review-1, Minor 1: a listing that reads the note again never drops what the person is typing.
+it.each(['reads it again', 'cannot read it again'] as const)('a draft of the note survives a listing that %s', async (how) => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const drive = new FakeDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  await drive.createFolder(root.id, 'Inbox');
+  vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const pile = await vault.addPile({ text: 'Papers about the lease', items: [{ name: 'lease.pdf', kind: 'pdf', origin: 'This device', body: new Blob(['lease']) }] });
+  await vault.settled();
+  const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+  if (!note) throw new Error('no pile note');
+  const real = drive.readText.bind(drive);
+  let failing = false;
+  vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+    if (failing && id === note.id) throw new BowerError('offline', 'You are offline.');
+    return real(id);
+  });
+  const listings = vi.spyOn(vault, 'piles');
+  const base = loadingSources();
+  render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+  const field = (): HTMLElement => screen.getByRole('textbox', { name: 'What is this?' });
+  await waitFor(() => expect(field()).toHaveValue('Papers about the lease'));
+  fireEvent.change(field(), { target: { value: 'Papers about the new lease' } });
+  // The note changes elsewhere, so the next listing reads it again.
+  await drive.writeText(note.id, 'Papers about the lease, signed', note.modifiedTime);
+  failing = how === 'cannot read it again';
+  const before = listings.mock.calls.length;
+  await vault.refresh();
+  await waitFor(() => expect(listings.mock.calls.length).toBeGreaterThan(before));
+  await new Promise((r) => setTimeout(r, 50));
+  expect(field()).toHaveValue('Papers about the new lease');
+  if (how === 'cannot read it again') {
+    expect(field()).toBeDisabled();
+    failing = false;
+    const again = listings.mock.calls.length;
+    await vault.refresh();
+    await waitFor(() => expect(listings.mock.calls.length).toBeGreaterThan(again));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(field()).toHaveValue('Papers about the new lease');
+  }
+  await waitFor(() => expect(field()).toBeEnabled());
+  expect(screen.getByRole('button', { name: 'Save the note' })).toBeVisible();
+});
+
+it('with nothing typed, the note shows what a listing read again', async () => {
+  const drive = new FakeDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  await drive.createFolder(root.id, 'Inbox');
+  vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const pile = await vault.addPile({ text: 'Papers about the lease', items: [{ name: 'lease.pdf', kind: 'pdf', origin: 'This device', body: new Blob(['lease']) }] });
+  await vault.settled();
+  const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+  const base = loadingSources();
+  render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+  const field = (): HTMLElement => screen.getByRole('textbox', { name: 'What is this?' });
+  await waitFor(() => expect(field()).toHaveValue('Papers about the lease'));
+  await drive.writeText(note?.id ?? '', 'Papers about the lease, signed', note?.modifiedTime ?? '');
+  await vault.refresh();
+  await waitFor(() => expect(field()).toHaveValue('Papers about the lease, signed'));
+});
+
 describe('a set-aside pile shows its reason in the inbox', () => {
   const changed: Pile = {
     id: 'p-changed', path: 'Inbox/2026-10-06 Papers from Alex', text: 'Papers from Alex', createdAt: Date.now(), setAside: 'changed',
