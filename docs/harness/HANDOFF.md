@@ -28,6 +28,10 @@ P3 step recorded (owner request via the lead): when the P3 staging deployment (W
 - Runner: a request or rule line holding a lone surrogate makes a full tidy-up fail "Bower could not save what it did" (pre-existing; the app's own fields cannot produce it).
 - Runner: when `.bower` is missing, the Saltmere-style question is not asked and its pile is filed, so the question is never asked.
 - Harness: `runner-request-preflight` note still describes the pre-TL-P2-17 refusal of malformed history; the two e2e failure regexes still accept "Nothing was moved".
+- Fake: the pretend Drive saves to the tab's storage on a 250 ms delay, so a reload within that window after adding a note-only pile loses it (fix: await persist before replying to every reported write, as for reservations).
+- Demo vs fake: a merge does not mark the target note New in the demo's Just filed list; the fake seed writes "Today" while runs write the date, so one day shows twice in a Timeline.
+- UI: links to a note later moved, renamed or binned (result card rows, a question's note) open a missing-note screen; result and question links have small tap targets; "New notes"/"Brought up to date" labels are paragraphs, not headings; the side panel's questions have no note link.
+- Tests: no unit tests for the Timeline New marks or the question link (e2e only); the C11 journey reopens the merged note by address instead of a link.
 - UI: `Home.tsx` and `TidySheet.tsx` compute pile emptiness inline instead of `isEmptyPile` (the tidy sheet shows a note icon for an empty pile).
 - Session: the bfcache e2e does not itself show "no stale-epoch write" (the unit test does); the reload drops page-memory-only items (TL-P2-28 covers the notice).
 - Tests: `src/ui/focus.ts` `focusMain` timer can fire after jsdom teardown (seen once in `runner-errors.test.tsx` under load; two reruns clean).
