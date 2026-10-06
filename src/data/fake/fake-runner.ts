@@ -227,8 +227,11 @@ async function looseCapture(drive: FakeDrive, rootId: string, listing: readonly 
   return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId: declaration.declarationId, sha256: hash }, contextKey: null, memberKeys: new Set(accounting.remaining) } };
 }
 
-/** A run's classification, fixed before any effect: the B path with its manifest, or the legacy path and why. */
-export type RunPlan = { path: 'b'; manifest: Manifest | ManifestV2 } | { path: 'legacy'; why: string };
+/**
+ * A run's plan, fixed before any effect: always the B path with its manifest (TL-P2-38). What it cannot take it holds,
+ * and what Bower's own checks refuse is refused before admission; there is no other path.
+ */
+export type RunPlan = { path: 'b'; manifest: Manifest | ManifestV2 };
 
 export interface PlanOptions {
   scope: 'all' | 'instructions';
@@ -286,7 +289,6 @@ export type HubUpdate = { path: string; what: string };
  * a pile whose merge line waits is planned again as `held`, left whole for the next run with its answer.
  */
 export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions, editCap = EDITS_PER_RUN, held: ReadonlySet<string> = new Set()): Promise<RunPlan> {
-  const legacy = (why: string): RunPlan => ({ path: 'legacy', why });
   const all = opts.scope === 'all';
   const listing = await drive.listAll(rootId);
   const ix = VaultIndex.build(rootId, listing);
@@ -336,7 +338,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });
   // An instructions run takes no pile: it reads only your changes.
   const piles = all ? await reader.piles() : [];
-  if (all && !piles.length) return legacy('empty');
+  // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect.
+  if (all && !piles.length) throw new BowerError('conflict', NOTHING_WAITING);
   const capture = await captureOf(drive, rootId, piles);
   const verified = async (f: DriveFile, encoding: 'utf8' | 'blob'): Promise<VerifiedContent | null> => {
     const d = await storedDigest(drive, f);
@@ -703,7 +706,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       filing.push({ thing, to, name, merge });
       continue;
     }
-    // A saved link is named from its address unless the plan names it (as the legacy runner does).
+    // A saved link is named from its address unless the plan names it (as the legacy runner did).
     const linkText = thing.item.kind === 'link' ? await drive.readText(thing.file.id) : null;
     const url = linkText === null || PLAN_BY_NAME.has(thing.item.name) ? null : savedLinkUrl(linkText);
     const title = PLAN_BY_NAME.get(thing.item.name)?.title ?? (url ? `${linkTitle(url)}.url` : thing.file.name);
@@ -742,7 +745,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   }
   // Generated notes (TL-P2-17): under a main folder, named from the authored title with the naming rules of the
   // Inbox, `.md`, unique against the folder as it will be. A filed thing's own note is written only where none is
-  // yet, as the legacy runner does; it follows its thing's move. The words of a pile become its note.
+  // yet, as the legacy runner did; it follows its thing's move. The words of a pile become its note.
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
   const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string; context: DriveFile | null }> = [];
   for (const { thing, name } of filing) {
@@ -788,7 +791,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     // No `.bower` yet: the run's own records make it; there is no list to ask in, so the question is not asked.
     console.error(new BowerError('unknown', NOT_ASKED), `${SYSTEM.dir} is missing; the question is not asked`);
   }
-  // Your changes go to the archive the legacy runner uses, made in `.bower/changes` only when a line needs it
+  // Your changes go to the archive the legacy runner used, made in `.bower/changes` only when a line needs it
   // (TL-P2-33 §1). With no `.bower/changes` there is no line: the journal is empty and no folder is made. A line
   // is always in a changes folder (`journalFiles`), so its own folder is the place when the path names another.
   const named = ix.file(SYSTEM.changes);
@@ -981,7 +984,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }
   }
 
-  // `.bower/hashes.json` only on a full run, as the legacy runner writes it.
+  // `.bower/hashes.json` only on a full run, as the legacy runner wrote it.
   if (all) {
     const hashes: Record<string, string> = {};
     const digests = new Map(things.map(({ file, content }) => [file.id, content.sha256]));
@@ -1215,6 +1218,8 @@ const REQUESTS_PER_RUN = 20;
  * 8 MiB. Nothing is written for the rest; they stay as they are and the next run plans them.
  */
 const EDITS_PER_RUN = 8;
+/** The fake Worker's refusal of a full run with nothing in the inbox (409). */
+const NOTHING_WAITING = 'Nothing is waiting in the inbox.';
 /** The fake Worker's refusal of an instructions run with nothing new (409). */
 const NOTHING_TO_READ = 'There is nothing new for Bower to read.';
 /** The same refusal of a full run when every waiting pile is held for readiness (409 `nothing`, TL-P2-21). */

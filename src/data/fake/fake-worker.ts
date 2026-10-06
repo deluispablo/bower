@@ -17,7 +17,7 @@ import { serializeNote } from '../vault/note-format';
 import { serializeRules } from '../vault/rules-format';
 import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
 import { planRun, type HubUpdate } from './fake-runner';
-import { B_FAILURE, type Binding, type FakeRunService } from './fake-run-service';
+import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
 import { openElsewhere, type LeaseReply, type SessionAction } from '../session';
 
@@ -187,15 +187,10 @@ export class FakeWorker implements WorkerApi {
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
     const vault = new DriveVault({ drive: this.drive, rootId: async () => root, runningPiles: () => new Set(), device: 'worker' });
     if (scope === 'all' && !(await vault.piles()).reduce((n, p) => n + thingsIn(p), 0)) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
-    // Planned once, before any effect, and admitted whole on the B path; planning refuses what it cannot take.
+    // Planned once, before any effect, and admitted whole on the B path, the only one (TL-P2-38): planning holds the
+    // piles it cannot take and refuses, before admission, what Bower's own checks refuse.
     const { runId, requestId } = this.runs.ids();
     const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(this.updates ? { updates: this.updates } : {}) });
-    if (plan.path !== 'b') {
-      // No other path to run on: refused before any effect (TL-P2-38).
-      const e = new BowerError('unknown', B_FAILURE);
-      console.error(e, `A tidy-up was refused before admission (${plan.why})`);
-      throw e;
-    }
     const failAt = this.failOnce;
     this.failOnce = false;
     const wire = await this.runs.admit(this.binding(root), plan.manifest, failAt ? { failAt: 'writing' } : {});
@@ -279,10 +274,6 @@ export class FakeWorker implements WorkerApi {
     try {
       const { runId, requestId } = this.runs.ids();
       const plan = await planRun(this.drive, root, { scope: 'all', allowWeb: false, runId, requestId, requestedAt: Date.now() - 70_000, ...(this.updates ? { updates: this.updates } : {}) });
-      if (plan.path !== 'b') {
-        console.error(new BowerError('unknown', B_FAILURE), `The running situation's tidy-up was refused before admission (${plan.why})`);
-        return;
-      }
       await this.runs.admit(this.binding(root), plan.manifest);
       this.onB = true;
     } catch (e) {

@@ -79,7 +79,7 @@ function tasks(bytes: Uint8Array, personal: ByteSpan, v2: boolean): PersonalTask
   return out;
 }
 
-function legacy(bytes: Uint8Array, raw: string): OwnershipResult {
+function legacyNote(bytes: Uint8Array, raw: string): OwnershipResult {
   const text = raw.replace(/\r\n/g, '\n');
   const close = text.startsWith('---\n') ? text.indexOf('\n---', 3) : -1;
   if (close < 0) {
@@ -123,13 +123,13 @@ export function parseOwnership(bytes: Uint8Array): OwnershipResult {
   const prefix = raw.startsWith('\ufeff') ? 3 : 0;
   const sourceLines = lines(bytes, { start: prefix, end: bytes.length });
   const first = sourceLines[0];
-  if (first?.text !== '---' || first.after === bytes.length) return legacy(bytes, raw);
+  if (first?.text !== '---' || first.after === bytes.length) return legacyNote(bytes, raw);
   // Preserve the old unterminated-frontmatter interpretation. An explicit closed
   // declaration never falls back to legacy merely because its v2 framing is bad.
   const close = sourceLines.findIndex((line, i) => i > 0 && line.text.startsWith('---'));
-  if (close < 0) return legacy(bytes, raw);
+  if (close < 0) return legacyNote(bytes, raw);
   const declarations = sourceLines.slice(1, close).filter((line) => /^\s*bower_format\s*:/.test(line.text));
-  if (!declarations.length) return legacy(bytes, raw);
+  if (!declarations.length) return legacyNote(bytes, raw);
   if (declarations.length !== 1) return damaged();
   const declaration = declarations[0]?.text ?? '';
   if (declaration !== 'bower_format: ownership/2') {

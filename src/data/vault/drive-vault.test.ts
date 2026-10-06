@@ -1807,7 +1807,6 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(listed.find((p) => p.id === pile.id)).toBeUndefined();
     // A tidy-up's plan does not capture it, nor any of its things; it takes the other pile as usual.
     const planned = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
-    if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
     expect(planned.manifest.capture.piles.map((p) => p.pileId)).toEqual([ready.id]);
     expect(planned.manifest.capture.piles.flatMap((p) => p.memberKeys).filter((k) => k !== null && memberKeys.includes(k))).toEqual([]);
     expect(planned.manifest.capture.members.map((m) => m.file.fileId).filter((id) => id === folder.id || inside.includes(id))).toEqual([]);
@@ -2030,7 +2029,6 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     await expect(reader.updatePile(damaged.id, 'Fresh words')).rejects.toMatchObject({ message: "Bower can't read this pile's note." });
     // The tidy-up plans the rest and holds both.
     const planned = await planRun(drive, root, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
-    if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
     expect(planned.manifest.capture.piles.map((p) => p.pileId)).toEqual([healthy.id]);
     const out = await tidyUp(drive, root, 'all');
     if (out.phase !== 'done') throw new Error('the tidy-up failed');

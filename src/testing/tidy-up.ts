@@ -25,7 +25,6 @@ export async function tidyUp(drive: FakeDrive, rootId: string, scope: 'all' | 'i
   const binding = { account: 'you@example.com', rootId };
   const { runId, requestId } = runs.ids();
   const plan = await planRun(drive, rootId, { scope, allowWeb: false, runId, requestId, requestedAt: Date.now() });
-  if (plan.path !== 'b') throw new Error(`The plan did not take the B path (${plan.why}).`);
   await runs.admit(binding, plan.manifest, opts.failAt ? { failAt: opts.failAt } : {});
   for (let i = 0; i < 20; i++) {
     await runs.settled();

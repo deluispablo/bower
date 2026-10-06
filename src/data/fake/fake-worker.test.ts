@@ -2439,7 +2439,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(seen?.setAside).toBe(why);
         expect(seen?.items.map((i) => [i.name, i.changed])).toEqual([['loose.pdf', why === 'changed' ? true : undefined]]);
         const planned = await runPlan(w);
-        if (planned.path !== 'b') throw new Error(`legacy: ${planned.why}`);
         expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(file.id);
       });
     }
@@ -2731,7 +2730,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld();
       const { lease, reads } = await failingRead(w, 1, driveError('offline'));
       const planned = await runPlan(w);
-      if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
       expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(lease);
       expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
       expect(reads()).toBe(2);
@@ -2741,7 +2739,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld();
       const { lease, reads } = await failingRead(w, 3, driveError('offline'));
       const planned = await runPlan(w);
-      if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
       expect(reads()).toBe(3);
       expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(lease);
       expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
@@ -2793,7 +2790,6 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         return real(id);
       });
       const planned = await runPlan(w);
-      if (planned.path !== 'b') throw new Error(`the plan went legacy: ${planned.why}`);
       expect(reads).toBe(2);
       expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(folder);
       expect(planned.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
@@ -3488,7 +3484,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const second = await w.drive.createText(folder.id, 'Pile note.md', 'Recycling on Fridays');
 
       const out = await plan(w);
-      expect(out.path === 'legacy' ? out.why : out.path).toBe('b');
+      expect(out.path).toBe('b');
       if (out.path !== 'b') return;
       // The first note is the context, written as one generated note; the other is an uncaptured child.
       const pile = out.manifest.capture.piles.find((p) => p.anchor?.fileId === folder.id);
@@ -5287,7 +5283,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await runs.settled();
       expect(await worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
       expect([...drive.dump(rootId).keys()].some((path) => path.startsWith(`.bower/runs/${admitted.id}/manifest-`))).toBe(true);
-      expect((await vault.piles()).map((p) => p.id)).toEqual([odd.id]);
+      expect((await new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_C' }).piles()).map((p) => p.id)).toEqual([odd.id]);
 
       // An inbox emptied while a run plans is the Worker's own refusal, before any effect.
       for (const f of (await drive.listAll(rootId)).filter((x) => x.parents[0] === inbox.id)) await drive.trash(f.id);
