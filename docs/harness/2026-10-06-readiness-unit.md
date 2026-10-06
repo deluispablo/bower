@@ -22,3 +22,13 @@ Prepared by the integration coordinator (Claude, `claude-orchestrator-2026-10-06
 Test-first through public APIs only (no missing-import reds): scenarios under `describe('an incomplete pile retains every member across tidy-up and retry')` — second client lists the declared missing member; tidy-up keeps an unready pile and names it set aside (no move/Bin, bytes unchanged); a client without bytes is asked to choose the file again; retry then tidy-up files each member once and Bins once, declaration unchanged; a child added to a ready pile keeps its folder; an unmarked pile is filed as before. In `drive-vault.test.ts` `describe('pile declarations')`: declaration written before any member and never rewritten; failed declaration write uploads nothing; uploader shows each missing member once; conflicting declaration copy blocks the pile. Existing tests stay green unchanged.
 
 Commit tests first, capture genuine red, ONE fix commit, verify + full `pnpm check` (+ `pnpm e2e` and `pnpm e2e:fake` are NOT run by the worker: browser gates are serialized by the coordinator). Do not claim real upload retention/D02 reselection, R4 create uniqueness, disposition retirement, browser/real-runner admission, fixtures 07/09 in full, or exactly-once beyond counted fake effects.
+
+## TL-P2-06 amendments (Planificador, 2026-10-06)
+
+- (1) Rows show only while the folder is live; hiding does not retire. Follow-up entry registered for a declared pile whose folder disappeared other than through the person's Bin.
+- (2) Loose layout (fixture 07) deferred as its own registered P2 entry, not a P2 limit.
+- (3) Done with setAside on the legacy path; blocked piles untouched: no move, Bin, disposition or Timeline, never counted consumed.
+- (4) Uncaptured-child Bin guard applies to EVERY pile folder, declared or not: Bin only if current children ⊆ captured children.
+- (5) Producer on in tests, `?source=fake` (pretend) and demo if it uses DriveVault; off for the real source until the P3 runner consumes declarations (P3 obligation). Scope widened to the fake/demo factory wiring (`pretend.ts`/`choose.ts`) for that option only.
+- (6) Blocked piles: assert every byte, name and place of members, folder and context unchanged.
+- Copy approved; D02 reselection registered as its own entry.

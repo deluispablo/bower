@@ -25,6 +25,10 @@
 - Technical lead: a Claude Planificador session (owner-appointed 2026-10-06 while Codex is out of usage) contacted the coordinator. Pending TL-P2-06: O4 non-B effects (A/B/C), recovery mechanism, journal bound ratification, checkpoint monotonicity, readiness provisional rulings 1–6.
 - Assignment I-ready-1: Claude `readiness-impl-1` for `partial-pile-readiness`, packet [readiness unit](2026-10-06-readiness-unit.md), checkout `/private/tmp/bower-p2-readiness` (`claude/p2-readiness`) base `8dcf8de`. Owns `fake-runner.ts`; `run-report-save-barrier` waits for it. Browser gates at closure run by the coordinator (5190–5192 reserved then).
 - Assignment I-g6-1: Claude `manifest-g6-impl-1`, new entry `run-manifest-content-consistency` (qa-22, unit G), checkout `/private/tmp/bower-p2-manifest-g6` (`claude/p2-manifest-g6`). Owns `run-manifest.ts` and its test only; disjoint from readiness.
+- TL-P2-06 received from Planificador (O4 option A with conditions; service-owned recovery; derived public done; recordId bound RATIFIED; monotonic chains; readiness amendments). Main SHA pending from the lead; coordinator adopts at a clean checkpoint. Readiness implementer notified of amendments (4)(5)(6); scope widened to fake/demo factory wiring.
+- Registered from TL-P2-06: `run-checkpoint-monotonic`, `loose-pile-declaration`, `declared-pile-folder-lost`, `pile-member-reselection` (D02), `o5-saved-link-note`, `o5-rename-link-rewrite`, `o5-timeline-append`, `o5-rules-wording`, `o5-no-legacy-run-path`. 222/234.
+- Assignment I-mono-1: Claude `checkpoint-mono-impl-1`, entry `run-checkpoint-monotonic`, checkout `/private/tmp/bower-p2-checkpoint-monotonic` (`claude/p2-checkpoint-monotonic`) base `9dd70a0`; owns only `run-checkpoint.ts` and its test.
+- Adopted main `b95c4bb` (docs only: Claude Planificador is technical lead and planner; TL-P2-06; owner rulings R1 accepted limitation, no in-app offline reading, uploads kept across reload so D02 is required, reuse-before-building). Backup pushed and verified private local=remote `b95c4bb`.
 
 # Previous coordinator: stopped and released
 

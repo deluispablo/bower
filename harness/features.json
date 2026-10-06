@@ -2815,5 +2815,131 @@
     "verify": "pnpm vitest run src/data/contracts/run-manifest.test.ts -t \"run manifests keep captured and written text consistent\"",
     "passes": false,
     "note": "Guard 6 and effect-consistency follow-ups from reviews R-man-1/R-man-2, packet docs/harness/2026-10-06-run-record-units.md unit G. Planned, not implemented."
+  },
+  {
+    "id": "run-checkpoint-monotonic",
+    "task": "qa-22",
+    "category": "data",
+    "what": "Run checkpoint chains only move forward: phases never go back, report state only advances and recovery continues from the head.",
+    "steps": [
+      "Chain independent checkpoints whose phase goes back, or leaves done or failed.",
+      "Chain report states that skip or reverse not-ready, pending, published, or change a pending hash or body.",
+      "Accept repeated phases, failed after any non-terminal phase and the integrated fixtures unchanged."
+    ],
+    "verify": "pnpm vitest run src/data/contracts/run-checkpoint.test.ts -t \"run checkpoint chains only move forward\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Lands before O4 recovery reads a chain it did not write."
+  },
+  {
+    "id": "loose-pile-declaration",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "A single loose file added with a declaration stays visible and retryable from another client until it arrives.",
+    "steps": [
+      "Add one loose file whose upload fails, with declarations on.",
+      "A second client sees it as missing and a tidy-up does not consume anything for it.",
+      "Retry from the uploader; the next tidy-up files it once."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"a declared loose file stays pending until it arrives\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Fixture 07 layout; C02."
+  },
+  {
+    "id": "declared-pile-folder-lost",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "A declared pile whose folder disappeared without the person's Bin is shown honestly instead of silently vanishing.",
+    "steps": [
+      "Declare a folder pile, then remove its folder outside the person's Bin.",
+      "Every client shows the pile as needing attention; nothing is filed or retired from it.",
+      "A person-bin disposition retires it explicitly."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a declared pile whose folder vanished is not silently retired\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Before P2-H."
+  },
+  {
+    "id": "pile-member-reselection",
+    "task": "qa-23",
+    "category": "feature",
+    "what": "Choosing a missing file again on another device sends it under the same declared member, only when it matches.",
+    "steps": [
+      "From a client without the bytes, choose a file for a declared missing member.",
+      "A matching size and hash uploads it once under the same member key; a different file is refused with a short sentence and nothing is sent.",
+      "Completed siblings are never resent."
+    ],
+    "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"a reselected file must match its declared member\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. D02."
+  },
+  {
+    "id": "o5-saved-link-note",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Writing the note for a saved link is a recoverable B operation, not a legacy effect.",
+    "steps": [
+      "Plan a run that writes a saved link's note.",
+      "Its operation is fixed in the manifest with intent before effect.",
+      "Lost replies reconcile without a second note."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a saved link note is written once through a recoverable operation\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; one entry per non-B effect."
+  },
+  {
+    "id": "o5-rename-link-rewrite",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Rewriting links after a rename is a recoverable B operation, not a legacy effect.",
+    "steps": [
+      "Plan a run that renames a note with backlinks.",
+      "Each link rewrite is a fixed operation with its precondition and evidence.",
+      "A lost reply reconciles without rewriting twice or touching personal text."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"link rewrites after a rename recover without repeating\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5."
+  },
+  {
+    "id": "o5-timeline-append",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Adding a Timeline line is a recoverable B operation that preserves every other byte of the note.",
+    "steps": [
+      "Plan a run that appends to a note's Timeline, including an ownership/2 note.",
+      "The operation splices only the Timeline payload and records evidence.",
+      "Recovery never appends twice."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a Timeline line is added once and keeps the rest of the note\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5; also resolves the fake runner v2 downgrade."
+  },
+  {
+    "id": "o5-rules-wording",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Wording a rule in Rules.md is a recoverable B operation, not a legacy effect.",
+    "steps": [
+      "Plan a run that words a rule.",
+      "The write is a fixed operation with its read precondition and evidence.",
+      "Recovery never words it twice."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a rule is worded once through a recoverable operation\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5."
+  },
+  {
+    "id": "o5-no-legacy-run-path",
+    "task": "qa-24",
+    "category": "data",
+    "what": "No tidy-up plan can take the legacy run path any more.",
+    "steps": [
+      "Plan runs covering every supported capability.",
+      "Every plan's operations are B effects and admission takes the B path.",
+      "A plan needing a non-B effect is refused before any effect."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"every tidy-up plan takes the recoverable path\"",
+    "passes": false,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Closes O5; P2 cannot close while any plan reaches the legacy path."
   }
 ]
