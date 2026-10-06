@@ -510,7 +510,8 @@ export class DriveVault implements VaultSource {
       // What the tidy-up cannot write down waits, as not checked, here and in the tidy-up (pile-readiness `writable`):
       // the names, and the raw text (front matter included) of the one note it records (`recordedNote`).
       const recorded = recordedNote(kids, contextKey);
-      const raw = recorded ? await this.rawText(recorded) : '';
+      // A note already found unreadable in this listing is not read (nor logged) again.
+      const raw = unread && recorded === note ? null : recorded ? await this.rawText(recorded) : '';
       const setAside = unread || raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
       out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}) });
     }
@@ -1374,7 +1375,9 @@ export class DriveVault implements VaultSource {
     try {
       text = await this.drive.readText(f.id);
     } catch (e) {
-      // expected: a note that cannot be read now holds only its pile, as not checked; the next listing asks again.
+      // A note that cannot be read now holds only its pile, as not checked; the next listing asks again.
+      // Signed out, or a session that changed, stops the whole listing.
+      if (!(e instanceof BowerError) || e.code === 'auth' || !this.current()) throw e;
       console.error(e);
       return null;
     }

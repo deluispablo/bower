@@ -108,11 +108,6 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!pile.path || !folder?.folder) continue;
-    // A pile the Inbox could not check (its note could not be read) is held, and only it (TL-P2-08 (a)).
-    if (pile.setAside === 'not-checked') {
-      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
-      continue;
-    }
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
     const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
@@ -121,9 +116,23 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
     // text (front matter included) of the one note the run records. Another pile note is never read here.
     const contextKey = found.state === 'found' && found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
     const recorded = recordedNote(children, contextKey);
-    const raw = recorded ? await drive.readText(recorded.id) : '';
+    let raw: string;
+    try {
+      raw = recorded ? await drive.readText(recorded.id) : '';
+    } catch (e) {
+      // A note Drive cannot give back now holds only this pile, as in the Inbox (TL-P2-08 (a)); a sign-out stops all.
+      if (!(e instanceof BowerError) || e.code === 'auth') throw e;
+      console.error(e);
+      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
+      continue;
+    }
     if (!writable([folder.name, raw, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
       console.error(new BowerError('unknown', SET_ASIDE.notChecked), 'A pile has text no run record can carry; it waits as not checked');
+      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
+      continue;
+    }
+    // A pile the Inbox could not check (its note could not be read there) is held too, and only it (TL-P2-08 (a)).
+    if (pile.setAside === 'not-checked') {
       out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;
     }
