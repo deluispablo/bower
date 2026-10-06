@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { focusHeading, focusRouteHeading, returnFocusTo } from './focus';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { focusHeading, focusRouteHeading, returnFocusTo, focusMain } from './focus';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -93,5 +93,49 @@ describe('focusRouteHeading', () => {
     await wait(300);
     expect(document.activeElement?.tagName).not.toBe('H1');
     cancel();
+  });
+});
+
+describe('focus timers do nothing once the page is gone', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    if (typeof document !== 'undefined') {
+      document.body.innerHTML = '';
+    }
+  });
+
+  it('handles document being undefined in focusMain callback', () => {
+    document.body.innerHTML = '<main id="main"></main>';
+    focusMain();
+    vi.stubGlobal('document', undefined);
+    expect(() => {
+      vi.runAllTimers();
+    }).not.toThrow();
+  });
+
+  it('handles document being undefined in returnFocusTo callback', () => {
+    document.body.innerHTML = '<main id="main" tabindex="-1"><h1>Home</h1><button id="o">Watch</button></main>';
+    const opener = document.getElementById('o');
+    returnFocusTo(opener);
+    vi.stubGlobal('document', undefined);
+    expect(() => {
+      vi.runAllTimers();
+    }).not.toThrow();
+  });
+
+  it('handles document being undefined in focusRouteHeading callback', () => {
+    document.body.innerHTML = '<main><button id="b">Go</button></main>';
+    document.getElementById('b')?.focus();
+    focusRouteHeading();
+    vi.stubGlobal('document', undefined);
+    expect(() => {
+      vi.runAllTimers();
+    }).not.toThrow();
   });
 });
