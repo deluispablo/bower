@@ -7,7 +7,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Staging preview.** Redeploy after each main batch, following [STAGING.md](STAGING.md). Last deployed: `main` `4d7ab08`, batch 5, version `826a00ad`.
 - **Open with the owner:** start the coordinator from the bower-app folder at the next batch boundary, so the project agents and the hook load (TL-P2-44 adoption).
 - **Waiting on the coordinator:**
-  - the Codex batch review of frozen `4d7ab08` against the P2 exit contract;
+  - the batch review of `4d7ab08` came back clean on Opus (TL-P2-46): 0 Critical/Important, 9 Minor findings in P2_POLISH. Then the evaluation, then `e2e:pwa` on `4d7ab08` (all four gates on one SHA);
   - the phone/desktop evaluation, one Critical/Important round, and the P2 dossier.
 - **Session rule:** never clear this session; the owner compacts by hand ([TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md)). After a compaction, re-read this file.
 - **Recurring duties:**
