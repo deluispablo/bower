@@ -1998,6 +1998,41 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(await kept()).toEqual(before);
   });
 
+  // note-read-review-1, Minor 2: a vault that never listed still refuses to write over a note it cannot read.
+  it('a vault that never listed refuses to write over a pile note Bower cannot parse', async () => {
+    const pile = await vault.addPile({ text: 'Receipts from Alex', items: [pdf('receipt.pdf')] });
+    await vault.settled();
+    const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+    if (!note) throw new Error('no pile note');
+    const text = '---\nbower_format: ownership/9\n---\nReceipts from Alex\n';
+    await drive.writeText(note.id, text, note.modifiedTime);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const never = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set() });
+    await expect(never.updatePile(pile.id, 'Fresh words')).rejects.toMatchObject({ message: "This pile's note needs a newer Bower." });
+    expect(await drive.readText(note.id)).toBe(text);
+  });
+
+  // note-read-review-1, Minor 3: a declared pile whose note cannot be read never shows its keyed pile note as a thing.
+  it('a declared pile whose first note cannot be read does not list its keyed pile note as a thing', async () => {
+    const pile = await declaring().addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await declaring().settled();
+    const folder = await folderOf(pile.id);
+    const keyed = (await drive.listAll(folder.id)).find((f) => f.name === 'Pile note.md');
+    if (!keyed) throw new Error('no pile note');
+    const first = await drive.createText(folder.id, 'Pile note.md', 'Soup recipes to try');
+    await drive.createText(folder.id, 'Pile note.md', 'Papers from Alex', { ...keyed.appProperties });
+    await drive.trash(keyed.id);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const real = drive.readText.bind(drive);
+    vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+      if (id === first.id) throw driveError('offline');
+      return real(id);
+    });
+    const seen = (await declaring().piles()).find((p) => p.id === pile.id);
+    expect(seen).toMatchObject({ setAside: 'not-checked', noteLocked: true });
+    expect(seen?.items.map((i) => i.name)).toEqual(['a.pdf']);
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();

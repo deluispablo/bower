@@ -142,6 +142,30 @@ it('with nothing typed, the note shows what a listing read again', async () => {
   await waitFor(() => expect(field()).toHaveValue('Papers about the lease, signed'));
 });
 
+// note-read-review-1, Minor 8: through the vault, a note Bower cannot parse gives its reason, a read-only note, Remove, no Try again.
+it.each([
+  ['---\nbower_format: ownership/9\n---\nReceipts from Alex\n', "This pile's note needs a newer Bower."],
+  ['---\nbower_format: ownership/2\n---\nReceipts from Alex\n', "Bower can't read this pile's note."],
+] as const)('a pile note Bower cannot parse, listed by the vault, says why with Remove and no Try again (%#)', async (text, said) => {
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const drive = new FakeDrive();
+  const root = await drive.createFolder('root', 'Bower');
+  await drive.createFolder(root.id, 'Inbox');
+  vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const pile = await vault.addPile({ text: 'Receipts from Alex', items: [{ name: 'receipt.pdf', kind: 'pdf', origin: 'This device', body: new Blob(['receipt']) }] });
+  await vault.settled();
+  const note = (await drive.listAll(pile.id)).find((f) => f.name === 'Pile note.md');
+  await drive.writeText(note?.id ?? '', text, note?.modifiedTime ?? '');
+  const fresh = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
+  const base = loadingSources();
+  render(<MemoryRouter initialEntries={[`/pile/${pile.id}`]}><DataProvider sources={{ ...base, vault: fresh, runs: { ...base.runs, current: async () => null } }}><Routes><Route path="/pile/:id" element={<PileScreen />} /></Routes></DataProvider></MemoryRouter>);
+  expect(await screen.findByText(said)).toBeVisible();
+  expect(screen.getByRole('textbox', { name: 'What is this?' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Remove this pile' })).toBeVisible();
+  fresh.dispose();
+});
+
 describe('a set-aside pile shows its reason in the inbox', () => {
   const changed: Pile = {
     id: 'p-changed', path: 'Inbox/2026-10-06 Papers from Alex', text: 'Papers from Alex', createdAt: Date.now(), setAside: 'changed',
