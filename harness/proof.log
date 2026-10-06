@@ -257,3 +257,4 @@ o5-rename-link-rewrite	09ccd2ed8335162a	2026-10-06	known-green: red shown by o5-
 b-path-merges	18023b0187cd2dea	2026-10-06	known-green: red shown by o5-consumers-review-1 at test 26dd825 (assertion: legacy instead of b)
 pile-note-read-isolation	21aa455bea212cc7	2026-10-06	known-green: red shown by note-read-review-1 at test 42920b9 (assertion: promise rejected instead of resolving)
 pile-note-format-visible	46a6ccae1aea834b	2026-10-06	known-green: red shown by note-read-review-1 at test 942c760 (assertion: pile missing from the listing)
+b-path-unreadable-runner-files	f9f8a664d1140149	2026-10-06	known-green: red shown by b-runner-files-review-1 at test 5b24aea (assertion: offline error instead of the refusal)
