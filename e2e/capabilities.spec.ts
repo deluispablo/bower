@@ -5,7 +5,7 @@
  * journeys run on the pretend Drive, where the effects are files.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, isFake, test } from './fixtures';
 
 const NOTE_WORDS = 'Ask the landlord about the heating';
 
@@ -14,6 +14,9 @@ const open = async (page: Page, path: string, scenario = 'empty', time = 'instan
   await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
 };
 const inbox = (page: Page) => page.getByRole('region', { name: 'Inbox' });
+const home = (page: Page) => page.getByRole('link', { name: /^Home/ }).first().click();
+const timeline = (page: Page) => page.getByRole('region', { name: 'Timeline' }).getByRole('listitem');
+const FAKE_ONLY = 'the journey checks what the tidy-up wrote into the pretend Drive (TL-P2-40)';
 
 /** Puts a note with no things in the inbox, from Add. */
 async function addNote(page: Page, words: string): Promise<void> {
@@ -51,4 +54,107 @@ test('the result links what it made', async ({ page }) => {
   await card.getByRole('link', { name: NOTE_WORDS, exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: NOTE_WORDS })).toBeVisible();
   await expect(page.getByRole('main')).toContainText('Written from a note you added.');
+});
+
+/** Puts a pasted link in the inbox, from Add, reached inside the app so nothing waiting is cut short by a reload. */
+async function addLink(page: Page, address: string): Promise<void> {
+  await home(page);
+  await inbox(page).getByRole('button', { name: 'Add a pile' }).click();
+  await page.getByRole('textbox', { name: 'Paste a link' }).fill(address);
+  await page.getByRole('button', { name: 'Add link' }).click();
+  await page.getByRole('button', { name: 'Put 1 thing in the inbox' }).click();
+  await expect(inbox(page).getByRole('link', { name: new RegExp(address.replace(/\./g, '\\.')) })).toBeVisible();
+}
+
+test('C04: a note added to the inbox becomes a note reached by a link', async ({ page, context }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(60_000);
+  // The saved page is never fetched: the web is answered here, so following the link stays offline.
+  await context.route('https://curry-clipping.example/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<title>A saved page</title>' }));
+  await addNote(page, NOTE_WORDS);
+  await addLink(page, 'curry-clipping.example');
+  await tidyUp(page);
+  // The result links the note written from your words; it holds them, and says where they came from.
+  await page.getByRole('dialog').getByRole('list', { name: 'New notes' }).getByRole('link', { name: NOTE_WORDS, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: NOTE_WORDS })).toBeVisible();
+  await expect(page.getByRole('main').getByText(NOTE_WORDS, { exact: true }).first()).toBeVisible();
+  await expect(timeline(page)).toHaveCount(1);
+  await expect(timeline(page).first()).toContainText('Written from a note you added.');
+  // The saved link got its own note, filed where it belongs; its Source opens the saved page.
+  await home(page);
+  await page.getByRole('region', { name: 'Just filed' }).getByRole('link', { name: /^Weeknight curry, clipping/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Weeknight curry, clipping' })).toBeVisible();
+  const saved = timeline(page).filter({ hasText: 'Saved by you, filed by Bower.' });
+  const source = saved.getByRole('link', { name: 'curry-clipping.example', exact: true });
+  await expect(source).toHaveAttribute('href', 'https://curry-clipping.example');
+  const [opened] = await Promise.all([page.waitForEvent('popup'), source.click()]);
+  await expect(opened).toHaveURL('https://curry-clipping.example/');
+});
+
+test('C05: a tidy-up brings a project note up to date', async ({ page }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(60_000);
+  const LINE = 'A fourth flat added; the shortlist compared by commute.';
+  // The project note as it is before the tidy-up: its words and its timeline.
+  await open(page, '/note/Projects/Flat%20hunt/Flat%20hunt.md');
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat hunt' })).toBeVisible();
+  const before = { words: await page.locator('article [class*="_body_"]').innerText(), lines: await timeline(page).allInnerTexts() };
+  expect(before.lines.length).toBeGreaterThan(0);
+  expect(before.lines.join('\n')).not.toContain(LINE);
+  await home(page);
+  await addNote(page, NOTE_WORDS);
+  await tidyUp(page);
+  await page.getByRole('dialog').getByRole('list', { name: 'Brought up to date' }).getByRole('link', { name: 'Flat hunt', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat hunt' })).toBeVisible();
+  // One new line, marked New, after the earlier ones, which are as they were; so are the note's own words.
+  await expect(timeline(page)).toHaveCount(before.lines.length + 1);
+  const added = timeline(page).last();
+  await expect(added).toContainText(LINE);
+  await expect(added.getByText('New', { exact: true })).toBeVisible();
+  expect((await timeline(page).allInnerTexts()).slice(0, before.lines.length)).toEqual(before.lines);
+  await expect(page.getByRole('region', { name: 'Timeline' }).getByText('New', { exact: true })).toHaveCount(1);
+  expect(await page.locator('article [class*="_body_"]').innerText()).toBe(before.words);
+});
+
+test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(90_000);
+  const RULE = 'anything from the dentist goes in health';
+  const WORDED = 'Letters, reminders and invoices from the dentist go to Areas / Health; add the appointment date to Health.';
+  const MERGE_LINE = 'The Wrenfield Road listing is the same building; kept here, as you asked.';
+  const NOTE = 'Flat 3, 12 Larkspur Lane';
+  await open(page, '/');
+  // The question links the note it is about.
+  const question = page.getByRole('region', { name: /questions? for you/ }).getByRole('listitem').filter({ hasText: 'Keep one note for both?' });
+  const about = question.getByRole('link', { name: NOTE, exact: true });
+  await expect(about).toBeVisible();
+  await about.click();
+  await expect(page.getByRole('heading', { level: 1, name: NOTE })).toBeVisible();
+  const noteAddress = page.url();
+  await expect(timeline(page).filter({ hasText: MERGE_LINE })).toHaveCount(0);
+  // A rule, kept: it waits for the next tidy-up at once, in your words.
+  await page.getByRole('link', { name: /^(Bower|Talk to Bower)$/ }).first().click();
+  await page.getByRole('radio', { name: 'A rule' }).click();
+  await page.getByRole('button', { name: RULE }).click();
+  await page.getByRole('button', { name: 'Keep this rule' }).click();
+  const rules = page.getByRole('main').getByRole('listitem').filter({ hasText: RULE });
+  await expect(rules.getByText('Waiting for the next tidy-up, where Bower words it clearly.')).toBeVisible();
+  // The thing the question is about arrives, and the answer is Yes: it waits for the next tidy-up at once.
+  await addLink(page, 'listing-88213.example');
+  await question.getByRole('button', { name: 'Yes, merge' }).click();
+  await expect(page.getByRole('status').getByText('You chose "Yes, merge". Bower does it in the next tidy-up.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Since the last tidy-up' })).toContainText('Answered "Yes, merge" to a question');
+  await expect(question).toHaveCount(0);
+  await tidyUp(page);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // The question stays gone; the rule is in Bower's words with yours kept; the note holds the merge line.
+  await expect(page.getByText('Keep one note for both?')).toHaveCount(0);
+  await page.getByRole('link', { name: /^(Bower|Talk to Bower)$/ }).first().click();
+  const worded = page.getByRole('main').getByRole('listitem').filter({ hasText: WORDED });
+  await expect(worded).toContainText(`You wrote: "${RULE}"`);
+  await expect(page.getByText('Waiting for the next tidy-up, where Bower words it clearly.')).toHaveCount(0);
+  await page.goto(noteAddress);
+  await expect(page.getByRole('heading', { level: 1, name: NOTE })).toBeVisible();
+  await expect(timeline(page).filter({ hasText: MERGE_LINE })).toHaveCount(1);
 });
