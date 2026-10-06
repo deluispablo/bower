@@ -8,7 +8,7 @@ On `main`: batch 1 `457b7d3` and batch 2 `2d92e96` (green: check, e2e, e2e:fake 
 
 Queue to the freeze: runner-files (3 entries, CLEAN, integrated, gates running) → loose-pile (3 entries, last delta) → `b-path-asked-question` and `legacy-runner-write-removal` (TL-P2-38: a plan B can't take holds that pile with "Bower couldn't tidy this up yet. Try again.") → `o5-no-legacy-run-path` (the five other TL-P2-37 entries close as superseded, pinned inside the removal) → capability matrix audit and the missing C04–C11 scripted journeys → freeze one SHA → review → phone/desktop evaluation → one C/I fix round → dossier → close.
 
-P3 step recorded (owner request via the lead): when the P3 staging deployment (Worker + app) works, send its URL and deployed SHA to the lead. P3 contract notes: a session `leave` after `DELETE /me` must be answered harmlessly; the real runner should drop the last edit without re-reading when the manifest guard refuses for size; native Workspace members (no sha256) need their own capture rule (P3_DRAFT).
+P3 step recorded (owner request via the lead): when the P3 staging deployment (Worker + app) works, send its URL and deployed SHA to the lead. P3 contract notes: a session `leave` after `DELETE /me` must be answered harmlessly; the real runner should drop the last edit without re-reading when the manifest guard refuses for size; native Workspace members (no sha256) need their own capture rule (P3_DRAFT); the Inbox now checks the bytes of every inbox thing once per version to agree with the run, so on real Drive it must use Drive checksums instead of downloading.
 
 ## P2 polish list (TL-P2-38: never new entries)
 
@@ -23,6 +23,11 @@ P3 step recorded (owner request via the lead): when the P3 staging deployment (W
 - Vault: the loose declaration scan skips an unreadable copy, so a never-arrived loose file can drop out of the Inbox for one listing.
 - Vault: a declaration naming another pile logs a plain string on every listing; the runner logs an unreadable declaration once per plan.
 - Vault: `updatePile` turning a single file into a folder: if moving the file into the new folder fails, an empty folder pile and the loose file both show under the same pile id, and a retry saves the note into the folder without moving the file (nothing lost).
+- Copy: holds that Try again cannot fix (a name with a backslash or control character, a declared member named "Pile note.md", a note starting with a byte order mark) show "Bower couldn't tidy this up yet. Try again." (TL-P2-38 one sentence); Remove on the pile screen is the way out.
+- Runner: "a line added to a declared pile is its context" takes two runs on the B path (members first, then the note); converges.
+- Runner: a request or rule line holding a lone surrogate makes a full tidy-up fail "Bower could not save what it did" (pre-existing; the app's own fields cannot produce it).
+- Runner: when `.bower` is missing, the Saltmere-style question is not asked and its pile is filed, so the question is never asked.
+- Harness: `runner-request-preflight` note still describes the pre-TL-P2-17 refusal of malformed history; the two e2e failure regexes still accept "Nothing was moved".
 - UI: `Home.tsx` and `TidySheet.tsx` compute pile emptiness inline instead of `isEmptyPile` (the tidy sheet shows a note icon for an empty pile).
 - Session: the bfcache e2e does not itself show "no stale-epoch write" (the unit test does); the reload drops page-memory-only items (TL-P2-28 covers the notice).
 - Tests: `src/ui/focus.ts` `focusMain` timer can fire after jsdom teardown (seen once in `runner-errors.test.tsx` under load; two reruns clean).
