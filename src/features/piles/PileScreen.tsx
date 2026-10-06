@@ -56,7 +56,7 @@ export function PileScreen() {
         </div>
       </div>
 
-      <PileNote key={`${pile.id}:${pile.text}`} pile={pile} locked={running} />
+      <PileNote key={pile.id} pile={pile} locked={running} />
 
       {pile.items.length > 0 && (
         <ul className={s.items} aria-label="In this pile">
@@ -369,6 +369,13 @@ export function RemovePile({ pile, disabled, block, describedBy, onRemoved }: { 
 function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const { vault } = useSources();
   const [text, setText] = useState(pile.text);
+  // The words the draft started from. When a listing reads the note again, the editor shows the new words
+  // only while nothing is typed; a draft is kept, and saving it meets the vault's own conflict check.
+  const [from, setFrom] = useState(pile.text);
+  if (pile.text !== from) {
+    setFrom(pile.text);
+    if (text.trim() === from) setText(pile.text);
+  }
   const [busy, setBusy] = useState(false);
   // A note Bower could not read is shown, never typed over: Try again reads it (the reason above says so).
   const held = !!pile.noteLocked;
@@ -396,7 +403,9 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         value={text}
         disabled={off}
         placeholder={held ? undefined : 'One line about these things helps Bower most'}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          if (!off) setText(e.target.value);
+        }}
         onBlur={() => {
           if (changed && !off && (text.trim() || pile.items.length)) void save();
         }}
