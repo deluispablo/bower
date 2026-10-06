@@ -2567,6 +2567,77 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     });
   });
 
+  // b-path-destinations (TL-P2-17): a name the move must carry and a chain of new folders are planned on the B path.
+  describe('destinations take the recoverable path', () => {
+    const plan = (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    const isFolderCall = (name: string) => (call: FencedCall): boolean => call.op === 'create-folder' && call.name === name;
+    /** Live folders named `name` whose first parent is `parentId`. */
+    const foldersIn = async (w: { drive: FakeDrive; rootId: string }, parentId: string, name: string): Promise<DriveFile[]> =>
+      (await w.drive.listAll(w.rootId)).filter((f) => f.folder && f.name === name && f.parents[0] === parentId);
+
+    /** The template with Projects in the Bin, and a pile whose things were added under names a file cannot carry. */
+    async function destinations(o: { hooks?: Hooks } = {}) {
+      const w = await bWorld(o);
+      const projects = (await foldersIn(w, w.rootId, 'Projects'))[0];
+      if (!projects) throw new Error('no Projects folder');
+      await w.drive.trash(projects.id);
+      await w.uploader.addPile({ text: 'Deposit for the lease', items: [pdf('Deposit 1/2.pdf'), pdf('Deposit 2/2.pdf')] });
+      await w.uploader.settled();
+      const files = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name.startsWith('Deposit'));
+      return { ...w, deposits: files.map((f) => f.id).sort() };
+    }
+
+    it('destinations are planned once on the recoverable path', async () => {
+      const w = await destinations();
+      const out = await plan(w);
+      expect(out).toMatchObject({ path: 'b' });
+      if (out.path !== 'b') return;
+      const ops = out.manifest.operations;
+      // Each folder of the chain is one create-folder, keyed once, made inside the one before it.
+      const made = ops.filter((o) => o.effect.kind === 'create-folder');
+      const projectsOp = made.find((o) => o.effect.kind === 'create-folder' && o.effect.name === 'Projects');
+      const flatOp = made.find((o) => o.effect.kind === 'create-folder' && o.effect.name === 'Flat hunt');
+      expect(projectsOp?.effect).toMatchObject({ parent: { fileId: w.rootId } });
+      expect(flatOp?.effect).toMatchObject({ parent: { createdBy: projectsOp?.operationId } });
+      const keys = made.map((o) => (o.effect.kind === 'create-folder' ? o.effect.createKey : ''));
+      expect(new Set(keys).size).toBe(keys.length);
+      // The move carries the name the file can have there, not the name shown in the Inbox.
+      for (const id of w.deposits) {
+        const move = ops.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === id);
+        expect(move?.effect).toMatchObject({ parent: { createdBy: flatOp?.operationId } });
+        const name = move?.effect.kind === 'move' ? move.effect.name : '';
+        expect(name === 'Deposit 1 - 2.pdf' || name === 'Deposit 2 - 2.pdf', name).toBe(true);
+      }
+
+      // A lost reply on each folder and on one move: recovery reconciles them by evidence, sending none again.
+      const [first] = w.deposits;
+      w.rules.push(once(isFolderCall('Projects'), 'lose-reply'), once(isFolderCall('Flat hunt'), 'lose-reply'), once(isMoveOf(first ?? ''), 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      for (let i = 0; i < 8 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.calls.filter(isFolderCall('Projects'))).toHaveLength(1);
+      expect(w.calls.filter(isFolderCall('Flat hunt'))).toHaveLength(1);
+      const [projects, ...moreProjects] = await foldersIn(w, w.rootId, 'Projects');
+      expect(moreProjects).toEqual([]);
+      const [flat, ...moreFlats] = await foldersIn(w, projects?.id ?? '', 'Flat hunt');
+      expect(moreFlats).toEqual([]);
+      for (const id of w.deposits) {
+        expect(movesOf(w, id), `moves of ${id}`).toBe(1);
+        const ev = await w.drive.evidence(id);
+        expect(ev?.file.parents).toEqual([flat?.id]);
+      }
+      const names = (await Promise.all(w.deposits.map((id) => w.drive.evidence(id)))).map((ev) => ev?.file.name).sort();
+      expect(names).toEqual(['Deposit 1 - 2.pdf', 'Deposit 2 - 2.pdf']);
+      const filed = viewOf(w)?.run.report?.filed.filter((f) => f.to === 'Projects/Flat hunt').map((f) => f.title).sort();
+      expect(filed).toEqual(['Deposit 1 - 2', 'Deposit 2 - 2', 'inventory', 'lease']);
+    });
+  });
+
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
   describe('a Timeline line is added once and keeps the rest of the note', () => {
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';
