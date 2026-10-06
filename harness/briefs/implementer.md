@@ -22,3 +22,5 @@ Report: what changed (files), the test, the command output that proves it, anyth
 Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase acceptance before acting. Record plan revision and capability IDs with the code SHA. Implement only the assigned phase/entry; missing contract or capability scope returns to the coordinator/technical lead, not an improvised backend expansion.
 
 Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.
+
+Research first, always (owner rule, 2026-10-06): before designing a fix, look up the standard solution, recommended practice and relevant specifications on the web, follow them, and cite them in your delivery; a mechanism of your own needs a stated reason why no standard approach fits.

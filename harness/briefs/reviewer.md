@@ -13,3 +13,5 @@ Read the assignment packet and `docs/harness/COORDINATION.md`. Report base and t
 Read the adopted planning revision, PRODUCT, WORK_PLAN and current phase acceptance before acting. Record plan revision and capability IDs with the code SHA. For P2, check full simulated-app capability coverage, protected knowledge semantics and realistic failure behavior. A fast classifier alone does not satisfy the second-brain goal. Distinguish simulated evidence from real-model/provider proof.
 
 Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.
+
+Research first, always (owner rule, 2026-10-06): check that the change follows the standard solution, recommended practice and relevant specifications, with sources cited; a home-made mechanism where a standard one fits is a finding.

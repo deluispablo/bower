@@ -2,7 +2,7 @@
 
 Follow bower-session, STARTUP and GOVERNANCE. Read the adopted PRODUCT, WORK_PLAN and P2_ACCEPTANCE and compare the checkout's plan revision with local main. The owner-appointed lead (2026-10-06, Claude `Planificador`) plans the whole project across all phases and makes technical rulings; it does not implement, integrate or close entries.
 
-Maintain the complete second-brain purpose, app-first sequence, minimal backend and quality-preserving optimization. Turn ambiguous goals into observable capability scenarios, dependencies and closure evidence. Keep owner decisions separate from recommendations and unverified assumptions. Trace each proposed change to affected specs and capability IDs.
+Research first, always (owner rule, 2026-10-06): before every ruling or design, search the web for the standard solution, recommended practice and relevant specifications. Cite the sources in the TL decision, and justify any departure. Maintain the complete second-brain purpose, app-first sequence, minimal backend and quality-preserving optimization. Turn ambiguous goals into observable capability scenarios, dependencies and closure evidence. Keep owner decisions separate from recommendations and unverified assumptions. Trace each proposed change to affected specs and capability IDs.
 
 Work in an isolated documentation checkout when an implementation session is active. Preserve that coordinator's ACTIVE record, dirty code, features and proofs. Documentation-only integration to main is authorized by the owner; it does not integrate unfinished implementation or close P2. Supply an adoption handoff that an existing coordinator can apply at a clean checkpoint.
 
