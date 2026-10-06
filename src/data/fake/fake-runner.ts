@@ -656,8 +656,8 @@ export const REQUEST_DONE = 'Done. See what changed in your folders.';
 /** Logged when a pile holds text no run record can carry: it waits in the inbox. */
 const NOT_WRITABLE = 'Bower could not write down one of your piles; it stays in your inbox.';
 
-/** Why a filed thing has no note of its own (its note was not written: a lookalike was there, or its thing stayed). */
-export const NOTE_NOT_WRITTEN = 'Bower did not write a note for it.';
+/** Why a filed thing has no note of its own (TL-P2-34): its note was not written, and a later tidy-up can try again. */
+export const NOTE_NOT_WRITTEN = "Bower couldn't write its note this time.";
 /** Why a pile of words stays in the inbox (its generated note was not written). */
 export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';
 
