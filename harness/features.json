@@ -3584,7 +3584,7 @@
       "A request answer names what was done; the generic 'Done…' line only when nothing specific can be named."
     ],
     "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities-b.spec.ts -g \"C06: a project note cites what it is about|C09: a question about your notes is answered\"",
-    "passes": false,
+    "passes": true,
     "note": "Merges c06-hub-cites-filed, c09-request-answer-links (closed as superseded, pinned by these tests). TL-P2-40 (main cfd63e6). Planned, not implemented."
   }
 ]
