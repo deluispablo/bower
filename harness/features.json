@@ -2841,8 +2841,8 @@
       "Retry from the uploader; the next tidy-up files it once."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"a declared loose file stays pending until it arrives\"",
-    "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Fixture 07 layout; C02."
+    "passes": true,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). Fixture 07 layout; C02. Integrated by cherry-pick of claude/p2-loose-pile-r2 (fix 9bcef0e, then 8cad209, e753e73, a496b38); review CLEAN after one delta. Gates on c30267d: check 3469, e2e 208, e2e:fake 218."
   },
   {
     "id": "declared-pile-folder-lost",

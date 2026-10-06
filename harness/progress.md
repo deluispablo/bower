@@ -406,3 +406,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: b-path-unreadable-runner-files passes — fix: proof-close unreadable runner files on the recoverable path
 - 2026-10-06: o5-rules-wording passes — fix: proof-close rule wording on the recoverable path
 - 2026-10-06: b-path-missing-journal passes — fix: proof-close a missing journal on the recoverable path
+- 2026-10-06: loose-pile-declaration passes — fix: proof-close a declared loose file staying pending until it arrives
