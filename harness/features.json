@@ -2827,8 +2827,8 @@
       "Accept repeated phases, failed after any non-terminal phase and the integrated fixtures unchanged."
     ],
     "verify": "pnpm vitest run src/data/contracts/run-checkpoint.test.ts -t \"run checkpoint chains only move forward\"",
-    "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Lands before O4 recovery reads a chain it did not write."
+    "passes": true,
+    "note": "TL-P2-06 item 5. Claude candidate c3f2b3e/e3a0dbc, review mono-review-1 CLEAN 0/0/0 (docs/harness/2026-10-06-checkpoint-monotonic-review.md). Nothing follows done or failed; report hash fixed from pending to published. Epoch/attempt order along the chain is left to the O4 service control row."
   },
   {
     "id": "loose-pile-declaration",

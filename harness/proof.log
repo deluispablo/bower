@@ -224,3 +224,4 @@ protected-current-prose	0bf01dc829b63b07	2026-10-06	red (fixed in 03cc5b1f3a60cf
 pile-disposition-authority	f0b42b5c66e12aa9	2026-10-06	red (fixed in 7f5252a1785831b7937b438aea601de2a3ae381b)
 run-checkpoint-authority	e6b30162e4765a9c	2026-10-06	red (fixed in b4724fed0a2a81c780f37e5039024e7448fc2bc3)
 run-manifest-authority	235fbf246e54c076	2026-10-06	red (fixed in 7abc8c9ffe95ca75f48e87d99602383df57b0ee2)
+run-checkpoint-monotonic	8de31da3ad8180fd	2026-10-06	red (fixed in b83db6d795f507d6c37ce14f33cb5b1b80fb6940)

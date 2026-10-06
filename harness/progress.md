@@ -370,3 +370,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: pile-disposition-authority passes — fix: proof-close pile disposition authority
 - 2026-10-06: run-checkpoint-authority passes — fix: proof-close run checkpoint authority
 - 2026-10-06: run-manifest-authority passes — fix: proof-close run manifest authority
+- 2026-10-06: run-checkpoint-monotonic passes — fix: proof-close monotonic run checkpoint chains
