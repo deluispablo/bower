@@ -300,6 +300,14 @@ export function grounded(manifest: RunManifest): boolean {
     && notes.every((o) => written.has(o.operationId) && unwritten.has(o.operationId));
 }
 
+/**
+ * The keys grounding cannot check without hashing (TL-P2-20 Ratification 6): every saved-link note is keyed by
+ * the link file it is for. Not implemented yet.
+ */
+export async function groundedKeys(_manifest: RunManifest): Promise<boolean> {
+  return false;
+}
+
 type MoveEffect = Extract<Effect, { kind: 'move' }>;
 type CreateText = Extract<Effect, { kind: 'create-text' }>;
 /** Where a generated note may be (TL-P2-17): the main folders, never Inbox. */

@@ -15,8 +15,8 @@ import type { RunWire } from '../worker/worker-api';
 import { CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type FakeRunServiceOptions } from './fake-run-service';
 import type { FaultAction, FencedCall } from '../drive/fake-drive';
 import { MANIFEST_V2_LIMIT, type EditText, type Manifest, type ManifestV2, type OperationV2, type ReportContribution } from '../contracts/run-manifest';
-import { EDIT_FILE_LIMIT } from '../contracts/note-edit';
-import { canonical, grounded } from './fake-run-records';
+import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
+import { canonical, grounded, groundedKeys } from './fake-run-records';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
@@ -757,14 +757,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
   it('sends a plan with an effect outside B down the legacy path, whole', async () => {
     const w = await bWorld();
-    await w.uploader.addPile({ text: '', items: [link] });
-    await w.uploader.settled();
+    await w.uploader.addRule('Keep lease papers together');
     const admitted = await w.worker.process('all');
     await until(w.worker, 'done');
     expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
     expect(await recordsOf(w)).toEqual([]);
     expect(w.calls).toEqual([]);
-    expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).toContain(link.name);
+    expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
   });
 
   it('fixes its classification before any effect', async () => {
@@ -3495,6 +3494,161 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await expect(asked).rejects.toBeInstanceOf(BowerError);
       await expect(asked).rejects.toThrow('Bower could not read what it did. Try again later.');
       await runs.settled();
+    });
+  });
+
+  // o5-saved-link-note (TL-P2-20 M5, R3-5, R3-6, R4-2, Ratification 6; TL-P2-26 C): the note is a create-text keyed
+  // by the link file's id, written before the original link file moves beside it; the link file is never rewritten.
+  describe('a saved link note is written once through a recoverable operation', () => {
+    const CURRY = { name: 'curry-clipping.example', kind: 'link' as const, origin: 'Pasted', url: 'https://curry.example/weeknight' };
+    const NOTE_NAME = 'Weeknight curry, clipping.md';
+    const NOTE = `Resources/Cooking/${NOTE_NAME}`;
+    const AGAIN = "It couldn't be filed this time.";
+    type Where = { drive: FakeDrive; rootId: string };
+    type AnyManifest = Manifest | ManifestV2;
+    const manifestsAll = async (w: Where): Promise<AnyManifest[]> =>
+      (await recordsOf(w)).filter((r) => r.name.startsWith('manifest-')).map((r) => JSON.parse(r.text) as AnyManifest);
+    const notesOf = async (w: Where): Promise<DriveFile[]> => (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === NOTE_NAME);
+    const createsOf = (w: Pick<World, 'applied'>): FencedCall[] => w.applied.filter((c) => c.op === 'create-text' && c.name === NOTE_NAME);
+    /** A world with a pile holding the saved link and a pdf, every dispatch open to `act`. */
+    async function linkWorld(o: { declared?: boolean } = {}) {
+      const act: { at: ((at: DispatchAt) => Promise<void>) | null } = { at: null };
+      const w = await bWorld({ ...o, hooks: { beforeDispatch: async (at) => { await act.at?.(at); } } });
+      await w.uploader.addPile({ text: 'A recipe to keep', items: [CURRY, pdf('shopping list.pdf')] });
+      await w.uploader.settled();
+      const link = (await w.drive.listAll(w.rootId)).find((f) => !f.folder && f.name.endsWith('.url'));
+      if (!link) throw new Error('the saved link did not arrive');
+      return { w, act, link, bytes: await w.drive.readText(link.id) };
+    }
+    const isLinkMove = (id: string) => (at: DispatchAt): boolean => at.effect.kind === 'move' && at.effect.before.fileId === id;
+    async function tidy(w: World): Promise<{ id: string; manifest: AnyManifest | undefined }> {
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      const manifest = (await manifestsAll(w)).find((m) => m.runId === admitted.id);
+      expect(manifest, 'the run took the B path').toBeDefined();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      return { id: admitted.id, manifest };
+    }
+    const opOf = (m: AnyManifest | undefined, match: (o: OperationV2) => boolean): OperationV2 | undefined => (m?.operations as OperationV2[] | undefined)?.find(match);
+
+    it('writes the note first, then files the link file beside it, each once, and reports one filed row', async () => {
+      const { w, link, bytes } = await linkWorld();
+      const { id, manifest } = await tidy(w);
+      if (!manifest) return;
+      // Fixed in the manifest before any effect: the create-text keyed by the link file's id, then the move after it.
+      const create = opOf(manifest, (o) => o.effect.kind === 'create-text');
+      const move = opOf(manifest, (o) => o.effect.kind === 'move' && o.effect.before.fileId === link.id);
+      expect(create?.effect).toMatchObject({ kind: 'create-text', name: NOTE_NAME, purpose: 'generated', createKey: await savedLinkKey(link.id) });
+      expect(move?.effect).toMatchObject({ kind: 'move', name: link.name });
+      if (create?.effect.kind !== 'create-text' || move?.effect.kind !== 'move') return;
+      expect(move.effect.parent).toEqual(create.effect.parent);
+      expect(move.dependsOn).toContain(create.operationId);
+      expect(create.ordinal).toBeLessThan(move.ordinal);
+      const filed = manifest.reportPlan.filter((c) => c.value.filed.some((r) => r.name === CURRY.name));
+      expect(filed).toHaveLength(1);
+      expect(filed[0]?.value.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE }]);
+      expect(filed[0]?.requires).toEqual(expect.arrayContaining([create.operationId, move.operationId]));
+      expect(manifest.reportPlan).toContainEqual({ requires: [move.operationId], when: 'rejected', value: { filed: [], created: [], updated: [], setAside: [{ name: CURRY.name, why: AGAIN }], questions: [] } });
+      expect(grounded(manifest)).toBe(true);
+      expect(await groundedKeys(manifest)).toBe(true);
+      // A filed note that no applied create (or reused note) backs is never grounded, nor a create with another key.
+      const at = manifest.reportPlan.indexOf(filed[0] as ReportContribution);
+      const plan = (patch: (c: ReportContribution) => ReportContribution): AnyManifest => ({ ...manifest, reportPlan: manifest.reportPlan.map((c, i) => (i === at ? patch(c) : c)) }) as AnyManifest;
+      expect(grounded(plan((c) => ({ ...c, requires: c.requires.filter((r) => r !== create.operationId) })))).toBe(false);
+      expect(grounded(plan((c) => ({ ...c, value: { ...c.value, filed: c.value.filed.map((r) => ({ ...r, note: 'Resources/Cooking/Elsewhere.md' })) } })))).toBe(false);
+      const rekeyed = { ...manifest, operations: (manifest.operations as OperationV2[]).map((o) => (o === create && o.effect.kind === 'create-text' ? { ...o, effect: { ...o.effect, createKey: 'another-key' } } : o)) } as AnyManifest;
+      expect(await groundedKeys(rekeyed)).toBe(false);
+
+      // Applied once each: one note with Bower's marks, the link file beside it with its bytes as they were.
+      const [note, ...more] = await notesOf(w);
+      expect(more).toEqual([]);
+      expect(w.drive.pathOf(note?.id ?? '', w.rootId)).toBe(NOTE);
+      expect(note?.appProperties).toMatchObject({ by: 'bower', bowerNew: '1', bowerItem: await savedLinkKey(link.id) });
+      expect(await w.drive.readText(note?.id ?? '')).toBe(create.effect.text);
+      expect(create.effect.text).toContain('curry.example/weeknight');
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(`Resources/Cooking/${link.name}`);
+      expect(await w.drive.readText(link.id)).toBe(bytes);
+      expect(w.calls.filter((c) => c.op === 'write-text' && c.id === link.id)).toEqual([]);
+      expect(createsOf(w)).toHaveLength(1);
+      expect(movesOf(w, link.id)).toBe(1);
+      expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE });
+      expect((await checkpointsOf(w, id)).at(-1)?.outcomes.every((o) => o.state === 'applied')).toBe(true);
+      await expectFiledOnce(w);
+    });
+
+    it('reconciles a lost create reply by its key, ending with one note', async () => {
+      const { w, link } = await linkWorld();
+      w.rules.push(once((c) => c.op === 'create-text' && c.name === NOTE_NAME, 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+      for (let i = 0; i < 4 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.calls.filter((c) => c.op === 'create-text' && c.name === NOTE_NAME)).toHaveLength(1);
+      expect(await notesOf(w)).toHaveLength(1);
+      expect(movesOf(w, link.id)).toBe(1);
+      expect(viewOf(w)?.run.report?.filed.map((r) => r.note)).toContain(NOTE);
+    });
+
+    it('keeps a declared pile and its record when the link move is rejected, and the next run reuses the note', async () => {
+      const { w, act, link } = await linkWorld({ declared: true });
+      act.at = async (at) => {
+        if (!isLinkMove(link.id)(at) || act.at === null) return;
+        act.at = null;
+        // Alex renames the link file after Bower checked it and before the move is sent.
+        await w.drive.update(link.id, { name: 'curry, mine.url' });
+      };
+      const first = await tidy(w);
+      const pileId = first.manifest?.capture.members.find((m) => m.file.fileId === link.id)?.pileId;
+      expect(pileId).toBeDefined();
+      // The note was written, the link stays in the inbox, its pile and declaration stay: no consumed disposition.
+      expect(await notesOf(w)).toHaveLength(1);
+      expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: AGAIN }]);
+      expect(viewOf(w)?.run.report?.filed.map((r) => r.name)).not.toContain(CURRY.name);
+      const dispositions = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name.startsWith('disposition-'));
+      const piles = await Promise.all(dispositions.map(async (f) => (JSON.parse(await w.drive.readText(f.id)) as { pileId: string }).pileId));
+      expect(piles).not.toContain(pileId);
+      expect(piles).toHaveLength(2);
+
+      // Alex names it back; the next run reuses the note: no second create, the link files beside it.
+      await w.drive.update(link.id, { name: link.name });
+      const [note] = await notesOf(w);
+      const second = await tidy(w);
+      expect(opOf(second.manifest, (o) => o.effect.kind === 'create-text')).toBeUndefined();
+      expect(second.manifest?.capture.places).toContainEqual({ file: expect.objectContaining({ fileId: note?.id }), path: NOTE });
+      expect(createsOf(w)).toHaveLength(1);
+      expect(await notesOf(w)).toHaveLength(1);
+      expect(w.drive.pathOf(link.id, w.rootId)).toBe(`Resources/Cooking/${link.name}`);
+      expect(viewOf(w)?.run.report?.filed).toEqual([{ name: CURRY.name, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE }]);
+    });
+
+    it('checks a reused note again in the same step as the move, and sets the link aside when it is no longer the one', async () => {
+      const { w, act, link } = await linkWorld();
+      act.at = async (at) => {
+        if (!isLinkMove(link.id)(at) || act.at === null) return;
+        act.at = null;
+        await w.drive.update(link.id, { name: 'curry, mine.url' });
+      };
+      await tidy(w);
+      await w.drive.update(link.id, { name: link.name });
+      const [note] = await notesOf(w);
+      // Right before the move is sent, the note loses Bower's key for this link: the move is refused, nothing else.
+      act.at = async (at) => {
+        if (!isLinkMove(link.id)(at) || act.at === null) return;
+        act.at = null;
+        await w.drive.update(note?.id ?? '', { appProperties: { bowerItem: null } });
+      };
+      const second = await tidy(w);
+      const move = opOf(second.manifest, (o) => o.effect.kind === 'move' && o.effect.before.fileId === link.id);
+      expect((await checkpointsOf(w, second.id)).at(-1)?.outcomes[move?.ordinal ?? -1]).toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
+      expect(w.drive.pathOf(link.id, w.rootId).startsWith('Inbox/')).toBe(true);
+      expect(movesOf(w, link.id)).toBe(0);
+      expect(createsOf(w)).toHaveLength(1);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: AGAIN }]);
     });
   });
 });
