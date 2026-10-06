@@ -639,7 +639,16 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }
     // Each line on its own: one already there (from any day) is dropped; a person's note takes none.
     const lines: WantedLine[] = [];
+    // A hub line with nothing to cite is there already when its words are, with or without a source (C06).
+    const said = new Set(new TextDecoder().decode(bytes).split(/\r?\n/).flatMap((x) => {
+      const m = /^- .*? · (.*?)(?: · \[\[[^\]]+\]\])?$/.exec(x);
+      return m?.[1] === undefined ? [] : [m[1]];
+    }));
     for (const l of w.lines) {
+      if (l.record === null && l.entry.source === null && said.has(l.entry.text)) {
+        lineState.set(l, 'present');
+        continue;
+      }
       const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [], entries: [l.entry] }]);
       const twin = lines.find((x) => x.entry.text === l.entry.text);
       if (result.ok && twin) twins.set(l, twin);

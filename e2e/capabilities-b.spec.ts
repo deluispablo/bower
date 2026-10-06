@@ -195,7 +195,9 @@ test('C07: a contradiction asks a question linking both sources', async ({ page 
   await question.getByRole('link', { name: words }).click();
   await expect(page.getByRole('heading', { level: 1, name: words })).toBeVisible();
   await page.goBack();
-  await question.getByRole('link', { name: 'Flat 3, 12 Larkspur Lane' }).click();
+  // The question's own words link the stored note; Home also names the note it is about (TL-P2-40), the same note.
+  await expect(question.getByRole('link', { name: 'Flat 3, 12 Larkspur Lane' })).toHaveCount(2);
+  await question.getByRole('link', { name: 'Flat 3, 12 Larkspur Lane' }).first().click();
   await expect(page.getByRole('heading', { level: 1, name: 'Flat 3, 12 Larkspur Lane' })).toBeVisible();
   await page.goBack();
 

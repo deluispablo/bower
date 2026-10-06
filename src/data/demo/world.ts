@@ -460,14 +460,15 @@ export class DemoWorld {
     // The notes this run wrote, worded as the run over Drive words them; a note a thing joined is not one of them.
     const created: RunReport['created'] = [];
     // The notes this run brought up to date: a Timeline line added once, the note marked new, one row for each note.
-    // A line already there (the same words and source, from any run) is not added, marked or reported again, as the
-    // run over Drive does. A line citing a note links to it (C06).
+    // A line already there (the same words, and the same source when it cites one, from any run) is not added, marked
+    // or reported again, as the run over Drive does. A line citing a note links to it (C06).
     const updated: RunReport['updated'] = [];
     const addLine = (path: string, what: string, cite?: { source: string; path: string }): void => {
       const e = this.entries.get(path);
       if (!e) return;
       const n = this.noteFor(path);
-      if (n.timeline.some((t) => t.text === what && t.source === cite?.source)) return;
+      // A line with nothing to cite is there already when its words are, with or without a source (C06).
+      if (n.timeline.some((t) => t.text === what && (cite === undefined || t.source === cite.source))) return;
       const links = cite && cite.path.endsWith('.md') && !n.links.includes(cite.path) ? [...n.links, cite.path] : n.links;
       this.notes.set(path, { ...n, links, timeline: [...n.timeline, { date: 'Today', text: what, ...(cite ? { source: cite.source } : {}) }] });
       this.entries.set(path, { ...e, modified: at, isNew: true });
