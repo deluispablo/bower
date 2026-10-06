@@ -3206,8 +3206,8 @@
       "Nothing is written for deferred edits; they appear in a later run."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"note edits past the size cap wait for the next run\"",
-    "passes": false,
-    "note": "From the o5-timeline-append review (M3 m7 8 MiB deferral, M4 m9 newer-Bower message). Needed before consumers with unbounded edits (link rewrites, merges). Planned, not implemented. TL-P2-29 (1) SIMPLIFIED: at most 8 edit-text per run in path order (bounds 8 MiB); the rest go to the next run (records stay unarchived, resolver follows old names, skip-if-present converges); replaces R3-7 m7; 'needs a newer Bower' unchanged, no new mechanism. Verify unchanged."
+    "passes": true,
+    "note": "From the o5-timeline-append review (M3 m7 8 MiB deferral, M4 m9 newer-Bower message). Needed before consumers with unbounded edits (link rewrites, merges). TL-P2-29 (1) SIMPLIFIED: at most 8 edit-text per run in path order (bounds 8 MiB); the rest go to the next run (records stay unarchived, resolver follows old names, skip-if-present converges); replaces R3-7 m7; 'needs a newer Bower' unchanged, no new mechanism. Verify unchanged. Corrected TL-P2-29 (1) (main 84e857b): count cap 8 in code-point path order, then defer from the end until the manifest fits. Integrated: stub 5c18671, fix 8e63d4d from claude/p2-note-edit-limits a8c497c; review CLEAN after delta (3 Minors: the real Worker should drop the last edit without re-reading; other planRun sorts still use localeCompare; the test measures JSON.stringify, the admitted run proves the guard). Gates on 4a1e4f2: check 3353, e2e 208, e2e:fake 218."
   },
   {
     "id": "session-signout-helper",

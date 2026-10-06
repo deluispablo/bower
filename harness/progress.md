@@ -390,3 +390,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: empty-pile-remove-copy passes — fix: proof-close an empty pile's removal copy
 - 2026-10-06: bfcache-reload passes — fix: proof-close reload after a back/forward cache restore
 - 2026-10-06: session-signout-helper passes — fix: proof-close one lease helper for every source
+- 2026-10-06: note-edit-consumer-limits passes — fix: proof-close the note edit cap
