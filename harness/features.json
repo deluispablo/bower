@@ -3432,5 +3432,159 @@
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"removing a declared pile bins its declaration copies too\"",
     "passes": false,
     "note": "TL-P2-31 (main 2a85144) and its amendment (main 11bdfc9, option b: all copies gone → ordinary observed pile, shared accounting). Implemented in the loose-pile lane (claude/p2-loose-pile). Planned, not implemented."
+  },
+  {
+    "id": "run-result-links",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "The finished tidy-up links to every note it made or brought up to date.",
+    "steps": [
+      "Run a tidy-up that creates and updates notes.",
+      "The finished sheet and Home's result card list a link for each created and updated note.",
+      "Each link opens its note."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"the result links what it made\"",
+    "passes": false,
+    "note": "Shared 'show with links' step for C04, C05, C06, C08. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c04-journey-new-note",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C04: a note added to the inbox becomes a note in your folders after a tidy-up, reached by a link.",
+    "steps": [
+      "Add a note-only pile and a saved link, then tidy up.",
+      "Follow the result link to the new note and see its words and the timeline line.",
+      "Open the saved link's note and follow its Source link."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04\"",
+    "passes": false,
+    "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c05-journey-hub-updated",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C05: a tidy-up brings a project note up to date without touching the rest of it.",
+    "steps": [
+      "Run a full tidy-up.",
+      "Follow the 'brought up to date' link to the project note.",
+      "See the new timeline line marked New and the earlier text unchanged."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05\"",
+    "passes": false,
+    "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c11-journey-rule-and-answer",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C11: a kept rule is worded in Bower's words with yours kept, and a 'Yes, merge' answer merges the thing into the note.",
+    "steps": [
+      "Keep a rule and answer a merge question Yes; the waiting mark shows at once.",
+      "Run a tidy-up.",
+      "See the rule with 'You wrote: …', the question gone, and the merge line in the note opened from the question's link."
+    ],
+    "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C11\"",
+    "passes": false,
+    "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c06-hub-cites-filed",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C06: a project note's new timeline line cites the thing it is about, across projects too, and the citation is navigable.",
+    "steps": [
+      "Run a tidy-up that files things related to project notes.",
+      "Open the project note and follow the cited link.",
+      "See the backlink in the cited note's Linked notes."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a hub line cites\"",
+    "passes": false,
+    "note": "Plus e2e -g C06. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c09-request-answer-links",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C09: a question about stored material is answered in its request with links to the notes it used, and adds nothing to the inbox.",
+    "steps": [
+      "Ask Bower a question about your notes and let it do it now.",
+      "The request's answer shows links to the notes it used; each opens.",
+      "The inbox count is unchanged."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C09\"",
+    "passes": false,
+    "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c10-web-on-off",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C10: with web lookups off a lookup request says honestly nothing was looked up; with them on a scripted result adds a timeline line with its web address.",
+    "steps": [
+      "With web off, ask for a lookup: an honest done line, no file change.",
+      "Turn web on in Settings and ask again.",
+      "The note's timeline shows an external link to the source."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C10\"",
+    "passes": false,
+    "note": "Web off says \"Bower did not look anything up\"; web on gives a scripted result with URL and provenance; failed and stale evidence are P4 depth (TL-P2-40 (2)). Fake only; the demo must never contradict the fake. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c07-contradiction-question",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C07: new evidence that disagrees with a note produces a question linking both sources, with a follow-up.",
+    "steps": [
+      "Add a note that contradicts a stored note, then tidy up.",
+      "Home shows a question whose two links open both sources.",
+      "Answer it; the next tidy-up drops the question."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C07\"",
+    "passes": false,
+    "note": "After b-path-asked-question. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "c08-generated-comparison",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C08: a comparison request produces a new note with a table and source links, linked from the request.",
+    "steps": [
+      "Ask Bower to compare the flats on the shortlist and let it do it now.",
+      "The request's done line links the new note.",
+      "The note shows a table and links to its sources."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C08\"",
+    "passes": false,
+    "note": "Revision is P4 depth (TL-P2-40 (1)); in P2 only the comparison note with table, sources and links. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
+  },
+  {
+    "id": "journeys-existing-effects",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C04, C05 and C11 scripted journeys over effects the pretend Drive already makes, each shown with links.",
+    "steps": [
+      "Run the C04 journey: a note added to the inbox becomes a note reached by a link; a saved link's note opens its Source.",
+      "Run the C05 journey: a project note brought up to date, its earlier text unchanged, reached by a link.",
+      "Run the C11 journey: a kept rule worded with your words kept and a 'Yes, merge' answer merged into the note opened from the question's link."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C04|C05|C11\"",
+    "passes": false,
+    "note": "Merges c04-journey-new-note, c05-journey-hub-updated, c11-journey-rule-and-answer (closed as superseded, pinned by these tests). TL-P2-40 (main cfd63e6). Planned, not implemented."
+  },
+  {
+    "id": "journeys-cites-and-answers",
+    "task": "qa-26",
+    "category": "feature",
+    "what": "C06 and C09: a project note's timeline cites what it is about (across projects too), and a question about stored material is answered with links to the notes it used.",
+    "steps": [
+      "Run a tidy-up; open the project note and follow its cited link; see the backlink.",
+      "Ask Bower a question about your notes; its answer names what was done with links that open; the inbox count is unchanged.",
+      "A request answer names what was done; the generic 'Done…' line only when nothing specific can be named."
+    ],
+    "verify": "E2E_SOURCE=fake pnpm exec playwright test e2e/capabilities.spec.ts -g \"C06|C09\"",
+    "passes": false,
+    "note": "Merges c06-hub-cites-filed, c09-request-answer-links (closed as superseded, pinned by these tests). TL-P2-40 (main cfd63e6). Planned, not implemented."
   }
 ]
