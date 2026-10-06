@@ -14,7 +14,7 @@ import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import type { DeclarationResult } from '../contracts/pile-declaration';
-import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
+import { FILING, HUB_UPDATES, MERGES, citedName, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordablePile, recordedNote, sameText, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -42,10 +42,7 @@ const PLAN_BY_NAME = new Map(
 );
 
 /** Hub notes a full tidy-up brings up to date, as the demo does: on the B path, a Timeline line on Bower's notes only. */
-const UPDATES = [
-  { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },
-  { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.' },
-];
+const UPDATES = HUB_UPDATES;
 
 /** Why a declared pile waits for a later tidy-up, and what you can do about it. */
 export const SET_ASIDE = {
@@ -243,8 +240,7 @@ export interface PlanOptions {
   updates?: readonly HubUpdate[];
 }
 
-/** A hub note a full run brings up to date, and the Timeline line it gets. */
-export type HubUpdate = { path: string; what: string };
+export type { HubUpdate };
 
 /**
  * Plans a run on the B path: every effect it needs is a B effect (move, create-folder, a generated note's create-text
@@ -523,17 +519,27 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     wanted.set(f.id, made);
     return made;
   };
+  // A hub line cites the thing this run files for it (C06): the note or file its plan makes of it, never a merge's.
+  // The line waits for that thing's move, so it never cites what is not there.
+  const citeOf = (name: string | undefined): { source: string; fileId: string } | null => {
+    const thing = name === undefined ? undefined : things.find((t) => t.item.name === name && !t.merge);
+    const plan = thing ? PLAN_BY_NAME.get(thing.item.name) : undefined;
+    return thing && plan ? { source: citedName(plan), fileId: thing.file.id } : null;
+  };
   for (const u of all && date ? (opts.updates ?? UPDATES) : []) {
     const f = ix.file(u.path);
     if (!f || f.folder) continue;
-    want(f, u.path).lines.push({ entry: { date: date ?? '', text: u.what, source: null }, record: null, what: u.what });
+    const cite = citeOf(u.cites);
+    if (u.onlyCited && !cite) continue;
+    const made = want(f, u.path);
+    made.lines.push({ entry: { date: date ?? '', text: u.what, source: cite?.source ?? null }, record: null, what: u.what, after: cite?.fileId ?? null });
   }
   // A merge's line, by its answer (R3-4): only into a note in a main folder, never the inbox or Bower's own files.
   for (const thing of things) {
     const m = thing.merge;
     const f = m && date ? ix.file(m.into) : undefined;
     if (!m || !f || f.folder || !m.into.endsWith('.md') || m.into.startsWith('Inbox/') || m.into.startsWith(`${SYSTEM.dir}/`)) continue;
-    want(f, m.into).lines.push({ entry: { date: date ?? '', text: m.line, source: null }, record: m.answer, what: m.line });
+    want(f, m.into).lines.push({ entry: { date: date ?? '', text: m.line, source: null }, record: m.answer, what: m.line, after: null });
   }
   // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
   const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
@@ -645,12 +651,13 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     return [];
   });
   const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; changes: Change[]; text: string }> = [];
+  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; changes: Change[]; text: string; after: string[] }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
     const what = c.lines.find((l) => l.what !== null)?.what ?? null;
-    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, changes: changesOf(c, renameIds), text });
+    const after = [...new Set(c.lines.flatMap((l) => (l.after === null ? [] : [l.after])))];
+    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, changes: changesOf(c, renameIds), text, after });
     places.set(c.file.id, c.file);
   }
   for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'refused');
@@ -905,7 +912,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // After the filing moves, each note edit (TL-P2-20), then the merges whose moves depend on their line. A Timeline
   // line's note is marked new in place after its edit, and gets its updated row once it applied.
   for (const edit of edits) {
-    const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text) });
+    // A line citing a thing filed by this run waits for that thing's move (C06).
+    const cited = edit.after.flatMap((id) => moveOf.get(id) ?? []);
+    const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text) }, cited);
     editOf.set(edit.file.id, op);
     for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [...c.add, ...c.remove].map((r) => r.recordId) : c.recordIds))) editsFrom.set(id, [...(editsFrom.get(id) ?? []), op]);
     // Only a Timeline line marks a note new (m3); a link fix never does.
@@ -922,9 +931,18 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
   const asked = journal.filter((l) => l.rec.kind === 'request');
+  /**
+   * What a request's done line says (C09, TL-P2-40): a scripted answer names what was found, with links to the notes
+   * it used, when every one is there; the plain line only when nothing specific can be named.
+   */
+  const answerOf = (text: string): string => {
+    const scripted = scriptedRequest(text);
+    const there = (path: string): boolean => !!ix.file(path) && !ix.file(path)?.folder;
+    return scripted && scripted.uses.every(there) ? scripted.answer : REQUEST_DONE;
+  };
   let requestsOp: string | null = null;
   if (asked.length) {
-    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: REQUEST_DONE }));
+    const done: Request[] = [...asked].reverse().map((l) => ({ id: l.rec.id, text: l.rec.text ?? l.rec.what, at: l.rec.at, done: answerOf(l.rec.text ?? l.rec.what) }));
     // A request done before (its line not archived then) keeps one row: the new one.
     const again = new Set(done.map((r) => r.id));
     const text = `${JSON.stringify({ v: 1, done: [...done, ...requestsDone.filter((r) => !again.has(r.id))].slice(0, 20) } satisfies RequestsFile, null, 2)}\n`;
@@ -1283,8 +1301,11 @@ function generatedName(title: string): string {
 }
 
 
-/** A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), its note's updated row wording. */
-type WantedLine = { entry: EditEntry; record: string | null; what: string | null };
+/**
+ * A Timeline line a run wants: its entry, the journal record it comes from (a merge's answer), its note's updated row
+ * wording, and the captured file whose move it waits for (the thing it cites).
+ */
+type WantedLine = { entry: EditEntry; record: string | null; what: string | null; after: string | null };
 /** What a run wants to change in one note, before applyChanges decides what it may. */
 type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null; rules: RulesWording | null };
 /** A thing joining a note you said yes to keeping (MERGES), with the answer that says so. */

@@ -19,7 +19,7 @@ const goNote = async (page: Page, path: string): Promise<void> => {
 const timeline = (page: Page) => page.getByRole('region', { name: 'Timeline' });
 const lineOf = (page: Page, text: string) => timeline(page).getByRole('listitem').filter({ hasText: text });
 
-/** What links to the open note: the Linked notes section on a phone, the right panel's tab on a desktop. */
+/** The open note's links, both ways: the Linked notes section on a phone, the right panel's tab on a desktop. */
 async function linkedFrom(page: Page, isMobile: boolean) {
   if (isMobile) return page.getByRole('main').locator('section', { has: page.getByRole('heading', { name: 'Linked notes' }) });
   await page.getByRole('tab', { name: 'Linked notes' }).click();
@@ -71,7 +71,7 @@ test('C06: a project note cites what it is about', async ({ page, isMobile }) =>
   await flatLine.getByRole('link', { name: 'Flat 9, Wrenfield Road' }).click();
   await expect(page).toHaveURL(new RegExp(`${noteUrl('Projects/Flat hunt/Flat 9, Wrenfield Road.md').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   await expect(page.getByRole('heading', { level: 1, name: 'Flat 9, Wrenfield Road' })).toBeVisible();
-  await expect((await linkedFrom(page, isMobile)).getByRole('link', { name: /^Flat hunt/ })).toBeVisible();
+  await expect((await linkedFrom(page, isMobile)).getByRole('link', { name: 'Flat hunt Projects / Flat hunt' })).toBeVisible();
 
   // Across projects: the job hunt's note cites the offer, and the flat that came in the same pile.
   await goNote(page, 'Projects/Job hunt/Job hunt.md');
@@ -79,7 +79,7 @@ test('C06: a project note cites what it is about', async ({ page, isMobile }) =>
   const crossLine = lineOf(page, 'A flat from the same pile went to the flat hunt.');
   await crossLine.getByRole('link', { name: 'Flat 9, Wrenfield Road' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Flat 9, Wrenfield Road' })).toBeVisible();
-  await expect((await linkedFrom(page, isMobile)).getByRole('link', { name: /^Job hunt/ })).toBeVisible();
+  await expect((await linkedFrom(page, isMobile)).getByRole('link', { name: 'Job hunt Projects / Job hunt' })).toBeVisible();
 });
 
 test('C09: a question about your notes is answered', async ({ page }) => {

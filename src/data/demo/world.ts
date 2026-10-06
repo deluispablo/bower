@@ -43,8 +43,10 @@ import {
 import {
   ALEX,
   FILING,
+  HUB_UPDATES,
   MERGES,
   saltmereQuestion,
+  scriptedRequest,
   guessFolder,
   wordRule,
   type SamplePile,
@@ -427,7 +429,7 @@ export class DemoWorld {
         // Each change counts once: the requests and rules the report names are not among the rest.
         r.report.yourChanges = yourChanges - asked.length - worded;
         this.rules = this.rules.map((x) => (x.pending ? { ...x, text: wordRule(x.yourWords ?? x.text), pending: false } : x));
-        this.requests = this.requests.map((q) => (q.done ? q : { ...q, done: 'Done. See what changed in your folders.' }));
+        this.requests = this.requests.map((q) => (q.done ? q : { ...q, done: this.answerOf(q.text) }));
         this.journal = [];
         r.finishedAt = now;
         this.emitVault();
@@ -437,23 +439,34 @@ export class DemoWorld {
     this.timers.push(t);
   }
 
+  /** A request's done line, as the pretend runner writes it: a scripted answer when its notes are there (C09). */
+  private answerOf(text: string): string {
+    const scripted = scriptedRequest(text);
+    const there = (path: string): boolean => this.entries.get(path)?.type === 'file';
+    return scripted && scripted.uses.every(there) ? scripted.answer : 'Done. See what changed in your folders.';
+  }
+
   /** Files every inbox thing as the run would, and returns the report. */
   private fileInbox(at: number): RunReport {
     const filed: FiledItem[] = [];
     // The notes this run wrote, worded as the run over Drive words them; a note a thing joined is not one of them.
     const created: RunReport['created'] = [];
-    // The notes this run brought up to date: a Timeline line added once, the note marked new, a row for it.
-    // A line already there (from any run) is not added, marked or reported again, as the run over Drive does.
+    // The notes this run brought up to date: a Timeline line added once, the note marked new, one row for each note.
+    // A line already there (the same words and source, from any run) is not added, marked or reported again, as the
+    // run over Drive does. A line citing a note links to it (C06).
     const updated: RunReport['updated'] = [];
-    const addLine = (path: string, what: string): void => {
+    const addLine = (path: string, what: string, cite?: { source: string; path: string }): void => {
       const e = this.entries.get(path);
       if (!e) return;
       const n = this.noteFor(path);
-      if (n.timeline.some((t) => t.text === what)) return;
-      this.notes.set(path, { ...n, timeline: [...n.timeline, { date: 'Today', text: what }] });
+      if (n.timeline.some((t) => t.text === what && t.source === cite?.source)) return;
+      const links = cite && cite.path.endsWith('.md') && !n.links.includes(cite.path) ? [...n.links, cite.path] : n.links;
+      this.notes.set(path, { ...n, links, timeline: [...n.timeline, { date: 'Today', text: what, ...(cite ? { source: cite.source } : {}) }] });
       this.entries.set(path, { ...e, modified: at, isNew: true });
-      updated.push({ path, what });
+      if (!updated.some((u) => u.path === path)) updated.push({ path, what });
     };
+    /** What a hub's Timeline line cites for each thing filed now, by the name it was added under (C06). */
+    const cited = new Map<string, { source: string; path: string }>();
     // A pile set aside stays in the inbox, with its reason, as a tidy-up over Drive leaves it.
     const aside = this.piles.filter((p) => p.setAside);
     const taken = this.piles.filter((p) => !p.setAside && (!this.runPiles.size || this.runPiles.has(p.id)));
@@ -504,6 +517,7 @@ export class DemoWorld {
         // A saved link filed as a note is a note this run wrote, as over Drive.
         if (item.kind === 'link' && kindOf(name) === 'note') created.push({ path, what: `Saved from ${item.name}.` });
         const f: FiledItem = { name: item.name, title: thingName(name), kind: item.kind, to: folder };
+        cited.set(item.name, plan.note ? { source: displayName(nameOf(plan.note)), path: plan.note } : { source: kindOf(name) === 'note' ? displayName(name) : name, path });
         if (plan.note) {
           this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
           f.note = plan.note;
@@ -515,8 +529,11 @@ export class DemoWorld {
     this.piles = this.piles.filter((p) => !taken.includes(p));
     this.runPiles = new Set();
     this.syncInbox();
-    addLine('Projects/Flat hunt/Flat hunt.md', 'A fourth flat added; the shortlist compared by commute.');
-    addLine('Projects/Job hunt/Job hunt.md', 'New offer from Ferrowick, scored 7 out of 10 against your CV.');
+    // Each hub gets its lines, citing what this tidy-up filed for it, as the pretend runner writes them (C06).
+    for (const u of HUB_UPDATES) {
+      const cite = u.cites === undefined ? undefined : cited.get(u.cites);
+      if (!u.onlyCited || cite) addLine(u.path, u.what, cite);
+    }
     // In path order, as the run over Drive plans its note edits.
     updated.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     // Only the questions this tidy-up asked; the open ones stay on Home.

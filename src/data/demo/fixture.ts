@@ -154,6 +154,48 @@ export const MERGES: Array<{ question: string; item: string; into: string; title
   },
 ];
 
+/**
+ * A project note a full tidy-up brings up to date, and the Timeline line it gets. `cites` is the inbox thing (by
+ * the name it was added under) the line is about: when this tidy-up files it, the line cites the note or file it
+ * became (C06, TL-P2-40), the provenance W3C PROV calls "derived from" (https://www.w3.org/TR/prov-overview/).
+ * A line `onlyCited` is written only then.
+ */
+export type HubUpdate = { path: string; what: string; cites?: string; onlyCited?: true };
+
+/** The hub notes a full tidy-up brings up to date, as both the demo and the pretend runner do. */
+export const HUB_UPDATES: readonly HubUpdate[] = [
+  { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example' },
+  { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.', cites: 'Offer_letter_final(2).pdf' },
+  // Across projects: the flat came in the same pile as the offer.
+  { path: 'Projects/Job hunt/Job hunt.md', what: 'A flat from the same pile went to the flat hunt.', cites: 'listing-88213.example', onlyCited: true },
+];
+
+/** What a Timeline line cites for a thing filed by its plan: the note it became or got, otherwise the file itself. */
+export function citedName(plan: { title: string; note?: string }): string {
+  if (plan.title.endsWith('.md')) return plan.title.slice(0, -3);
+  return plan.note ? (plan.note.split('/').pop() ?? plan.note).replace(/\.md$/, '') : plan.title;
+}
+
+/**
+ * A request a tidy-up answers from your notes (the stand-in for Claude): matched on its words, and given only when
+ * every note it `uses` is there; otherwise the plain done line stands. The answer names what was found, with links.
+ */
+export type ScriptedRequest = { kind: 'answer'; asks: RegExp; uses: readonly string[]; answer: string };
+
+export const SCRIPTED_REQUESTS: readonly ScriptedRequest[] = [
+  {
+    kind: 'answer',
+    asks: /\bwhich flat\b.*\bclosest\b.*\bferrowick\b/i,
+    uses: ['Projects/Flat hunt/Flat 7, Cobble Row.md', 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md'],
+    answer: '[[Flat 7, Cobble Row]] has the shortest commute, 18 minutes. The [[Industrial Designer, Ferrowick]] job is fully remote, so no flat is closer to it.',
+  },
+];
+
+/** The scripted request these words ask for, if any. */
+export function scriptedRequest(text: string): ScriptedRequest | null {
+  return SCRIPTED_REQUESTS.find((r) => r.asks.test(text)) ?? null;
+}
+
 /** The question a tidy-up asks when it files the Saltmere receipts (the stand-in for Claude asking). */
 export function saltmereQuestion(now: number): Question {
   return {

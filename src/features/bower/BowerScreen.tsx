@@ -13,6 +13,8 @@ import { useUi } from '@/app/ui-store';
 import { RULE_EXAMPLES } from '@/data/examples';
 import { canDictate, dictate } from './dictation';
 import { isRunning } from '@/features/tidy/run-words';
+import { Inline } from '@/features/note/markdown';
+import { useNoteLink } from '@/features/note/note-link';
 import s from './bower.module.css';
 
 
@@ -30,6 +32,7 @@ export function BowerScreen() {
   const [text, setText] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<'request' | 'rule'>('request');
+  const link = useNoteLink();
   const requestsState = useRequests();
   const { data: requests } = requestsState;
   const [typing, setTyping] = useState(false);
@@ -153,7 +156,8 @@ export function BowerScreen() {
           {(requests ?? []).map((m, i) => (
             <div key={m.id} className={s.bubble}>
               <p>{m.text}</p>
-              <p className={s.bubbleSub}>{m.done ?? 'Waiting for the next tidy-up.'}</p>
+              {/* What Bower did, with links to what it names (C09). */}
+              <p className={s.bubbleSub}>{m.done ? <Inline text={m.done} link={link} /> : 'Waiting for the next tidy-up.'}</p>
               {i === 0 && !m.done && !isRunning(run) && (
                 <Button
                   size="sm"
