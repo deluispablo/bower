@@ -2925,8 +2925,8 @@
       "Recovery never words it twice."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a rule is worded once through a recoverable operation\"",
-    "passes": false,
-    "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. O5. B.2 consumer obligations (note-edit-contract review M1): missing Rules.md create-text — rule archives dependsOn it and rulesWorded = parseRules of the created text; grounded() rulesWorded row."
+    "passes": true,
+    "note": "TL-P2-06 (Planificador, 2026-10-06). O5. B.2 consumer obligations (note-edit-contract review M1): missing Rules.md create-text — rule archives dependsOn it and rulesWorded = parseRules of the created text; grounded() rulesWorded row. TL-P2-33 (2b, 2c, 3: count 0). Integrated by cherry-pick of claude/p2-b-runner-files-r2 (fix 992ff23, then dab5624, 4317715, 23d6f16, 6dd18c6, 111ad94); review CLEAN after one delta. Gates on 111ad94: check 3447 (one jsdom teardown race in runner-errors.test, two clean reruns; polish list), e2e 208, e2e:fake 218."
   },
   {
     "id": "o5-no-legacy-run-path",
