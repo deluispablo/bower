@@ -1,7 +1,9 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import s from './ui.module.css';
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** The button element itself (React 19 passes `ref` as a prop), e.g. to move focus to it. */
+  ref?: Ref<HTMLButtonElement>;
   variant?: 'primary' | 'ghost' | 'danger';
   size?: 'md' | 'sm';
   block?: boolean;

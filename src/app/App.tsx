@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { bootDone, bootFail } from './boot';
 import { applyTheme, usePrefs } from './prefs';
@@ -22,12 +22,16 @@ import { BowerScreen } from '@/features/bower/BowerScreen';
 import { Settings } from '@/features/settings/Settings';
 import { BirdLab } from '@/bird/BirdLab';
 import { NotFound } from './NotFound';
+import { OpenElsewhere } from './OpenElsewhere';
 
 import { Privacy, Terms } from '@/features/legal/Legal';
 
 interface Gate {
   user: User | null;
-  folder: FolderState;
+  /** Unknown while the page was blocked from the start (the folder step waits for Use here). */
+  folder: FolderState | null;
+  /** Bower is active in another tab, window or device: only the block screen shows (TL-P2-13). */
+  elsewhere: boolean;
 }
 
 /** The demo and fake sources come with their panel (⌘⇧D); the real app has none. */
@@ -54,21 +58,34 @@ export function App({ demo }: { demo?: DemoInfo }) {
 
 /** Who is here and whether their folder exists decide which screens exist. */
 function Gatekeeper() {
-  const { session } = useSources();
+  const { session, place } = useSources();
   const [gate, setGate] = useState<Gate | null>(null);
   const [attempt, setAttempt] = useState(0);
+  /** Use here is under way: only its end shows the app again, once the data was read again. */
+  const taking = useRef(false);
   const theme = usePrefs((p) => p.theme);
   useEffect(() => applyTheme(theme), [theme]);
 
   useEffect(() => {
     let live = true;
+    let seq = 0;
     const check = async (): Promise<void> => {
+      // Only the latest check decides: a slower earlier one never overwrites it.
+      const n = ++seq;
+      const current = (): boolean => live && n === seq;
       try {
         const user = await session.current();
+        // The place starts once someone is signed in, before the folder step; a blocked page reads nothing more.
+        if (user && place && (await place.start()) === 'elsewhere') {
+          if (current()) setGate((g) => ({ user, folder: g?.user ? g.folder : null, elsewhere: true }));
+          return;
+        }
+        // Use here shows the app itself once it finished; a person signed out meanwhile always reaches sign-in.
+        if (user && taking.current) return;
         const folder = user ? await session.folderState() : 'ready';
-        if (live) setGate({ user, folder });
+        if (current()) setGate({ user, folder, elsewhere: false });
       } catch (e) {
-        if (!live) return;
+        if (!current()) return;
         console.error(e);
         bootFail(e instanceof BowerError && e.code === 'offline' ? 'offline' : 'error', () =>
           setAttempt((a) => a + 1),
@@ -77,17 +94,49 @@ function Gatekeeper() {
     };
     void check();
     const off = session.subscribe(() => void check());
+    // Another place took over: the screen shows at once, whatever asking again would answer. A place that
+    // starts again (signing out lets it go) waits for the next sign-in, which the session tells.
+    const offPlace =
+      place?.subscribe(() => {
+        if (place.state() === 'elsewhere') setGate((g) => (g?.user && !g.elsewhere ? { ...g, elsewhere: true } : g));
+      }) ?? ((): void => undefined);
+    // Back from the back/forward cache, the place joins again by itself; if that failed, it sits in
+    // 'starting' while someone is signed in, so it is started again here.
+    const onShow = (e: PageTransitionEvent): void => {
+      if (!e.persisted || !place) return;
+      const joined = place.state() === 'starting' ? place.start().then(() => undefined, (err: unknown) => console.error(err)) : Promise.resolve();
+      void joined.then(() => check());
+    };
+    window.addEventListener('pageshow', onShow);
     return () => {
       live = false;
       off();
+      offPlace();
+      window.removeEventListener('pageshow', onShow);
     };
-  }, [session, attempt]);
+  }, [session, place, attempt]);
 
   useEffect(() => {
     if (gate) bootDone();
   }, [gate]);
 
+  /** Use here: the app shows once the place is active and its data was read again; the folder is read only if unknown. */
+  const useHere = async (): Promise<void> => {
+    if (!place) return;
+    taking.current = true;
+    try {
+      await place.useHere();
+      if (place.state() !== 'active') return;
+      const folder = gate?.folder ?? (await session.folderState());
+      setGate((g) => (g?.user ? { ...g, folder: g.folder ?? folder, elsewhere: place.state() === 'elsewhere' } : g));
+    } finally {
+      taking.current = false;
+    }
+  };
+
   if (!gate) return null;
+  if (gate.user && gate.elsewhere && place) return <OpenElsewhere place={place} onUse={useHere} />;
+  if (gate.user && gate.folder === null) return null;
   if (!gate.user) {
     return (
       <Routes>
