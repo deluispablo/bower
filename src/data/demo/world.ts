@@ -440,6 +440,8 @@ export class DemoWorld {
   /** Files every inbox thing as the run would, and returns the report. */
   private fileInbox(at: number): RunReport {
     const filed: FiledItem[] = [];
+    // The notes this run wrote, worded as the run over Drive words them; a note a thing joined is not one of them.
+    const created: RunReport['created'] = [];
     // A pile set aside stays in the inbox, with its reason, as a tidy-up over Drive leaves it.
     const aside = this.piles.filter((p) => p.setAside);
     const taken = this.piles.filter((p) => !p.setAside && (!this.runPiles.size || this.runPiles.has(p.id)));
@@ -464,6 +466,7 @@ export class DemoWorld {
           byBower: true,
         });
         filed.push({ name: 'Your note', title: displayName(name), kind: 'note', to: plan.to, note: path });
+        created.push({ path, what: 'Written from a note you added.' });
         continue;
       }
       for (const item of pile.items) {
@@ -491,6 +494,7 @@ export class DemoWorld {
         if (plan.note) {
           this.entries.set(plan.note, { path: plan.note, type: 'file', kind: 'note', modified: at, created: at, isNew: true, byBower: true });
           f.note = plan.note;
+          created.push({ path: plan.note, what: `A note for ${displayName(name)}.` });
         }
         filed.push(f);
       }
@@ -517,7 +521,7 @@ export class DemoWorld {
     this.questions = [...this.questions, ...asked];
     return {
       filed,
-      created: filed.filter((f) => f.note).map((f) => ({ path: f.note ?? '', what: `A note for ${f.title}.` })),
+      created,
       updated,
       setAside: aside.flatMap((p) => (p.setAside ? [{ name: pileName(p), why: SET_ASIDE_TEXT[p.setAside] }] : [])),
       questions: asked,

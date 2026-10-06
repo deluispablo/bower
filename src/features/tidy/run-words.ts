@@ -1,6 +1,6 @@
 import { clock, elapsed, plural } from '@/app/words';
 import type { Pose } from '@/bird/Bower';
-import { RUN_STEPS, type RunPhase, type RunState } from '@/data/types';
+import { RUN_STEPS, type RunPhase, type RunReport, type RunState } from '@/data/types';
 
 /**
  * Every word a run shows comes from here, so the sheet, the chip, Home and
@@ -154,4 +154,19 @@ export function landedSummary(r: RunState): string {
 export function statusLine(run: RunState | null | undefined, waiting: number | undefined): string {
   const what = waiting === undefined ? 'Looking at the inbox…' : waiting ? `${plural(waiting, 'thing')} waiting` : 'Nothing waiting';
   return run?.phase === 'done' ? `Last tidy-up ${clock(run.finishedAt ?? run.phaseAt)}. ${what}` : what;
+}
+
+export type RunLinkRow = { path: string; what: string };
+
+/** The notes a run made and brought up to date, in report order; a note listed as new is not listed again. */
+export function runLinkRows(report: Pick<RunReport, 'created' | 'updated'>): { made: RunLinkRow[]; updated: RunLinkRow[] } {
+  const seen = new Set<string>();
+  const once = (rows: RunLinkRow[]): RunLinkRow[] =>
+    rows.filter((r) => {
+      if (!r.path || seen.has(r.path)) return false;
+      seen.add(r.path);
+      return true;
+    });
+  const made = once(report.created);
+  return { made, updated: once(report.updated) };
 }

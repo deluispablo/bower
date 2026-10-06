@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunState } from '@/data/types';
-import { landedSummary, runClock, runDetail, runTitle, stepState } from './run-words';
+import { landedSummary, runClock, runDetail, runLinkRows, runTitle, stepState } from './run-words';
 
 const base: RunState = { id: 'r', scope: 'all', phase: 'writing', requestedAt: Date.UTC(2026, 9, 4, 15, 0), phaseAt: 0, seen: false, total: 6 };
 
@@ -70,3 +70,17 @@ describe('how long a run takes', () => {
   });
 });
 
+
+describe('the notes a finished run links', () => {
+  it('lists each note once, a new one under new notes only, in report order', () => {
+    const rows = runLinkRows({
+      created: [{ path: 'Resources/Ideas/Heating.md', what: 'Written from a note you added.' }, { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A note.' }],
+      updated: [{ path: 'Projects/Flat hunt/Flat hunt.md', what: 'A line.' }, { path: 'Projects/Job hunt/Job hunt.md', what: 'Another line.' }, { path: 'Projects/Job hunt/Job hunt.md', what: 'Again.' }],
+    });
+    expect(rows.made.map((r) => r.path)).toEqual(['Resources/Ideas/Heating.md', 'Projects/Flat hunt/Flat hunt.md']);
+    expect(rows.updated).toEqual([{ path: 'Projects/Job hunt/Job hunt.md', what: 'Another line.' }]);
+  });
+  it('lists nothing for a run that made and updated nothing', () => {
+    expect(runLinkRows({ created: [], updated: [] })).toEqual({ made: [], updated: [] });
+  });
+});

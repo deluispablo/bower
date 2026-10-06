@@ -17,6 +17,7 @@ import { Button } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
 import { hasReplay, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
+import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
 import s from './home.module.css';
@@ -82,6 +83,7 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
         {plural(run.report?.filed.length ?? 0, 'thing')} filed{run.report?.updated.length ? `, ${plural(run.report.updated.length, 'note')} brought up to date` : ''}.
       </h2>
       <p className="muted">{landedSummary(run)}</p>
+      {run.report && <RunLinks report={run.report} />}
       <div className={s.row2}>
         <Button size="sm" onClick={() => startReplay(run.id)}>
           <Icon name="play" size={15} /> Watch what Bower did

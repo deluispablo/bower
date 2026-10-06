@@ -14,6 +14,7 @@ import { PoseBower } from '@/bird/Bower';
 import { hasReplay, isRunning, runClock, runDetail, runTitle, stepLabel, stepState } from './run-words';
 import { useNow } from './useNow';
 import { TidyScene } from './TidyScene';
+import { RunLinks } from './RunLinks';
 import s from './tidy.module.css';
 
 /** The tidy-up: confirm, then the real phases, then the result. One sheet. */
@@ -138,6 +139,7 @@ function RunView({ run }: { run: RunState }) {
           })}
         </ol>
       )}
+      {run.phase === 'done' && run.report && <RunLinks report={run.report} onOpen={() => setTidy(false)} />}
       <p className={s.clock}>{runClock(run, now)}</p>
       <div className={s.actions}>
         {run.phase === 'done' && !hasReplay(run) ? (
