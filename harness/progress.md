@@ -26,3 +26,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: b-plan-guard-refusal passes — chore(harness): b-plan-guard-refusal passes (batch 5)
 - 2026-10-06: running-scenario-on-b passes — chore(harness): running-scenario-on-b passes (batch 5)
 - 2026-10-06: legacy-runner-write-removal passes — chore(harness): legacy-runner-write-removal passes (batch 5)
+- 2026-10-06: run-result-links passes — chore(harness): run-result-links passes (batch 5)

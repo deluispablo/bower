@@ -3444,7 +3444,7 @@
       "Each link opens its note."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"the result links what it made\"",
-    "passes": false,
+    "passes": true,
     "note": "Shared 'show with links' step for C04, C05, C06, C08. TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {
