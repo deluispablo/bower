@@ -65,13 +65,14 @@ The order follows WORK_PLAN:
 
 Review findings will add entries, as in P2. The rulings already taken (reuse, single session, simplest answers for rare cases) should keep that count far below P2's.
 
-## Decisions the owner must take before or at P3 start
+## Owner decisions (2026-10-06)
 
-1. **Where tidy-ups run.**
-   - **GitHub Actions**, as in the original. It is known and reused, but it has minutes of startup, which is part of why the old tidy-ups were slow.
-   - **[Cloudflare Workflows](https://developers.cloudflare.com/workflows/) or Durable Object alarms** running the deterministic spine. This is fast, and Workflows has a free plan, but its per-invocation CPU limits must be measured.
-
-   R3 measures both on synthetic data. This choice also shapes how P4 calls Claude: from GitHub Actions or from the API, each with a different cost. That makes it the owner's decision, and the lead will recommend from R3's numbers.
-2. **Deployment.** A new, separate Cloudflare deployment on its own subdomain. The original app's production is never touched (GOVERNANCE), and moving people across is a later decision.
-3. **Test accounts.** One synthetic Google account for the real-service gates, and a second one for R2's isolation proof. Credentials stay outside the repository.
-4. **Cost.** Free tiers only. If measurements show a paid plan is needed (for example Workers Paid, $5 a month), the owner decides.
+1. **Tidy-ups run on GitHub Actions**, as in the original. Claude Code runs there with the owner's existing Claude subscription token, inside GitHub's free minutes, so there is no extra cost. Cloudflare Workflows is not adopted: Claude from there means paid API use. R3 still measures dispatch, startup, duplicates and lost callbacks on GitHub Actions. Speed comes from preparation, fewer reads and fewer model calls, not from changing the executor.
+2. **The new app replaces the original and reuses everything already set up**: Cloudflare account and domain, the Google OAuth client, the GitHub instance repository, and secrets.
+   - **During P3,** the new Worker and app are deployed as a separate staging environment in the same account. Production is untouched.
+   - **The original production is replaced at the end of P4,** once the new app tidies up with Claude. Before switching, a check confirms the new app reads the owner's existing Bower folder correctly. A rollback path is kept.
+3. **Test accounts.** Two owner-provided Google accounts. Their addresses stay out of the repository.
+   - **The second account** runs the real-service gates on synthetic data in its own Bower folder.
+   - **The owner's main account** is used only for R2's isolation checks. Those checks never open or write its Bower folder.
+   - **Allowlist.** Both go on the staging Worker's allowlist at P3 start. That needs the owner to run `wrangler login` once on this machine, because no session ever enters credentials.
+4. **Free tiers only.** Any paid plan goes back to the owner first.
