@@ -118,6 +118,7 @@ const UNRESOLVED = 'Bower could not check one of the things it moved. It will lo
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
 const NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
 const NOTE_CHANGED = 'The note changed before Bower could add to it.';
+const NOTE_THERE = 'A note with that name was already there, so Bower did not write it.';
 /** Attempts in a row before this instance stops retrying a run that keeps failing; it stays saving. */
 const MAX_TRIES = 5;
 
@@ -524,7 +525,15 @@ export class FakeRunService {
       const ev = await this.drive.evidence(only.id);
       return ev && shows(e, ev, parentId) ? toEvidence(ev) : null;
     }
-    if (e.kind === 'create-text') return null;
+    if (e.kind === 'create-text') {
+      // Ours only with its create key (TL-P2-17): a lookalike at that path never counts as this operation.
+      if (!parentId) return null;
+      const made = (await this.drive.listAll(parentId)).filter((f) => f.parents[0] === parentId && !f.folder && f.name === e.name && f.appProperties?.bowerItem === e.createKey);
+      const [only, ...more] = made;
+      if (!only || more.length) return null;
+      const ev = await this.drive.evidence(only.id);
+      return ev && shows(e, ev, parentId) ? toEvidence(ev, 'utf8') : null;
+    }
     if (e.kind === 'edit-text') return this.readBack(e);
     const ev = await this.drive.evidence(e.before.fileId);
     if (!ev || !shows(e, ev, parentId)) return null;
@@ -554,7 +563,7 @@ export class FakeRunService {
    */
   private async precheck(head: Checkpoint, op: OperationV2): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string | null }> {
     const e = op.effect;
-    if (e.kind === 'create-text') return { failure: { code: 'conflict', message: 'Bower does not write new notes on this path.' } };
+    if (e.kind === 'create-text' && e.purpose !== 'generated') return { failure: { code: 'conflict', message: 'Bower does not write new runner files on this path.' } };
     // What it depends on must have happened: a pile folder whose things did not all go stays, and so do the hashes.
     if (op.dependsOn.some((id) => head.outcomes.find((o) => o.operationId === id)?.state !== 'applied')) return { failure: { code: 'conflict', message: 'Some of its things stayed where they were, so it stays too.' } };
     if (e.kind !== 'bin' && e.kind !== 'write-runner-json' && e.kind !== 'edit-text' && !this.parentOf(head, op)) return { failure: { code: 'not-found', message: 'The folder for it could not be made.' } };
@@ -586,11 +595,15 @@ export class FakeRunService {
   /** Whether the stored source is still as the plan saw it, at the instant of the change; null when it is. */
   private stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek): { code: 'conflict' | 'not-found'; message: string } | null {
     const e = op.effect;
-    if (e.kind === 'create-text') return { code: 'conflict', message: 'Bower does not write new notes on this path.' };
-    if (e.kind === 'create-folder' || e.kind === 'move') {
+    if (e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'create-text') {
       const parent = peek(parentId);
       if (!parent || parent.trashed) return { code: 'not-found', message: 'The folder for it could not be made.' };
       if (e.kind === 'create-folder') return null;
+      // Any file or folder already at a generated note's path is a lookalike, never overwritten (TL-P2-17).
+      if (e.kind === 'create-text') {
+        const taken = parent.children.some((id) => peek(id)?.file.name.toLowerCase() === e.name.toLowerCase());
+        return taken ? { code: 'conflict', message: NOTE_THERE } : null;
+      }
     }
     const now = peek(e.before.fileId);
     const same = !!now && !now.trashed && now.file.name === e.before.name && now.file.parents.length === e.before.parents.length && now.file.parents.every((p, i) => p === e.before.parents[i]);
@@ -642,7 +655,9 @@ export class FakeRunService {
         await w.writeText(e.before.fileId, e.text, modifiedTime);
         return;
       case 'create-text':
-        throw new BowerError('conflict', 'Bower does not write new notes on this path.');
+        // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17).
+        await w.createText(parentId, e.name, e.text, { by: 'bower', bowerNew: '1', bowerItem: e.createKey });
+        return;
     }
   }
 

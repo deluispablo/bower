@@ -14,10 +14,10 @@ import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
-import { PILE_NOTE, thingsIn } from '../piles';
+import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
 import { accountPile, contextRemoved, findDeclaration, journalValues, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
+import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
@@ -174,7 +174,7 @@ export type HubUpdate = { path: string; what: string };
 
 /**
  * Plans a run on the B path when every effect it needs is a B effect (move,
- * create-folder, Bin, write-runner-json, and B.2's edit-text); otherwise the whole run is legacy,
+ * create-folder, a generated note's create-text (TL-P2-17), Bin, write-runner-json, and B.2's edit-text); otherwise the whole run is legacy,
  * with the reason. Decided from one capture before any effect, and never
  * changed during the run. The B plan fixes every operation and every report
  * row (TL-P2-06 §1, contract B guards 7 and 9) and reuses the readiness
@@ -253,6 +253,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const capturedPiles: CapturedPile[] = [];
   const members: CapturedMember[] = [];
   const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string }> = [];
+  const fromWords: Array<{ pileId: string; folder: DriveFile; words: string }> = [];
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!folder?.folder) return legacy('loose pile');
@@ -260,7 +261,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (!cap) return legacy('readiness');
     // A pile that is not ready is held (TL-P2-21): not captured, no effect, no report row; its reason shows in the Inbox.
     if (cap.blocked !== null) continue;
-    if (cap.restore || !pile.items.length) return legacy('generated note');
+    // A declared context written again before filing is a note in the Inbox, which no generated note may be (TL-P2-17).
+    if (cap.restore) return legacy('context restore');
     if (!LOGICAL_ID.test(pile.id) || /saltmere/i.test(pile.text)) return legacy('question');
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE);
@@ -274,6 +276,10 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const note = declared ? bound : (bound ?? notes[0]);
     // Where its things go is guessed from the bound note's words only, never from an unbound note listed first.
     const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), await drive.readText(note.id)).body.trim();
+    // A pile of words only becomes a generated note (TL-P2-17), under a main folder; a pile with no words either has
+    // nothing to write, so it is left as it is, untouched, like a held pile.
+    const wordsOnly = !pile.items.length;
+    if (wordsOnly && (!words.trim() || !generatedPlace(guessFolder(words, 'note')))) continue;
     const keys: Array<string | null> = [];
     const taken: string[] = [];
     for (const item of pile.items) {
@@ -284,7 +290,6 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       // A file in a declared pile that is not one of its members stays there for the next run.
       if (declared && (key === null || !declared.memberKeys.has(key))) continue;
       if (item.kind === 'link') return legacy('link');
-      if (PLAN_BY_NAME.get(item.name)?.note) return legacy('note');
       if (MERGES.some((m) => m.item === item.name)) return legacy('merge');
       const content = await verified(file, 'blob');
       if (!content) return legacy('not checked');
@@ -293,7 +298,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
       things.push({ pile, folder, item, file, content, words });
     }
-    if (!taken.length) return legacy(declared ? 'member key' : 'generated note');
+    if (!taken.length && !wordsOnly) return legacy(declared ? 'member key' : 'pile notes only');
     // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
     if (declared && keys.length !== declared.memberKeys.size) return legacy('member key');
     let context: CapturedPile['context'] = { kind: 'absent' };
@@ -313,6 +318,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       childFileIds: [...taken, ...(note ? [note.id] : [])].sort(),
       context,
     });
+    if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words });
   }
 
   // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal.
@@ -323,8 +329,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const places = new Map<string, DriveFile>();
   const missing: string[] = [];
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string }> = [];
-  for (const thing of things) {
-    const to = guessOf(thing.words, thing.item);
+  // A destination's nearest existing folder is a captured place; every folder missing below it is made by the run.
+  const destination = (to: string): void => {
     let at = to;
     while (at && !ix.file(at)?.folder) at = parentOf(at);
     if (at) {
@@ -333,9 +339,40 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     }
     for (let p = to; p !== at; p = parentOf(p)) if (!missing.includes(p)) missing.push(p);
     for (let p = to; p !== at; p = parentOf(p)) planned.set(p, { path: p, type: 'folder', modified: 0, created: 0 });
+  };
+  const plannedFile = (path: string): void => {
+    planned.set(path, { path, type: 'file', kind: kindOf(path), modified: 0, created: 0 });
+  };
+  for (const thing of things) {
+    const to = guessOf(thing.words, thing.item);
+    destination(to);
     const name = freeName(planned, to, PLAN_BY_NAME.get(thing.item.name)?.title ?? thing.file.name);
-    planned.set(join(to, name), { path: join(to, name), type: 'file', kind: kindOf(name), modified: 0, created: 0 });
+    plannedFile(join(to, name));
     filing.push({ thing, to, name });
+  }
+  // Generated notes (TL-P2-17): under a main folder, named from the authored title with the naming rules of the
+  // Inbox, `.md`, unique against the folder as it will be. A filed thing's own note is written only where none is
+  // yet, as the legacy runner does; it follows its thing's move. The words of a pile become its note.
+  const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
+  const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string }> = [];
+  for (const { thing, name } of filing) {
+    const own = PLAN_BY_NAME.get(thing.item.name)?.note;
+    if (!own || !generatedPlace(parentOf(own))) continue;
+    if (freeName(planned, parentOf(own), nameOf(own)) !== nameOf(own)) continue;
+    destination(parentOf(own));
+    plannedFile(own);
+    const what = `A note for ${displayName(name)}.`;
+    const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
+    generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name });
+  }
+  for (const { pileId, folder, words } of fromWords) {
+    const to = guessFolder(words, 'note');
+    destination(to);
+    const name = freeName(planned, to, generatedName(words));
+    plannedFile(join(to, name));
+    const what = 'Written from a note you added.';
+    const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
+    generated.push({ to, name, text, what, after: null, pileId, aside: folder.name });
   }
   // Hub notes brought up to date: a Timeline line each, planned on the bytes read now (TL-P2-20). applyChanges is
   // the only author: it refuses a note that is not Bower's, a damaged or too big one, and returns `unchanged` when
@@ -403,6 +440,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const chainOf = (path: string): string[] => (made.has(path) ? [made.get(path) ?? '', ...chainOf(parentOf(path))] : []);
   const reportPlan: ReportContribution[] = [];
   const movesOf = new Map<string, string[]>();
+  const moveOf = new Map<string, string>();
   const empty = (): ManifestRunReport => ({ filed: [], created: [], updated: [], setAside: [], questions: [] });
   for (const { thing, to, name } of filing) {
     const isNote = kindOf(name) === 'note';
@@ -414,13 +452,26 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       properties: { bowerNew: '1', ...(isNote ? { by: 'bower' as const } : {}), asAdded: null, origin: null, kind: null, pile: null },
     });
     movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
+    moveOf.set(thing.file.id, move);
     // Rows name the thing as captured (its file name), which grounding checks; a name shown in the Inbox that a
     // file cannot carry (a slash, a clash) is not captured, so the report never claims it.
     reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(name), kind: thing.item.kind, to }] } });
     reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
   }
+  // Each generated note, keyed by its own createKey; a pile of words goes to the Bin only after its note is written.
+  const notesOf = new Map<string, string>();
+  for (const note of generated) {
+    const after = note.after === null ? undefined : moveOf.get(note.after);
+    const op = await add({ kind: 'create-text', parent: targetOf(note.to), name: note.name, createKey: mintKey('note'), text: note.text, content: await utf8(note.text), purpose: 'generated' }, after ? [after] : []);
+    const path = join(note.to, note.name);
+    const filed = note.pileId === null ? [] : [{ name: 'Your note', title: thingName(note.name), kind: 'note' as const, to: note.to, note: path }];
+    if (note.pileId !== null) notesOf.set(note.pileId, op);
+    reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed, created: [{ path, what: note.what }] } });
+    reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: note.pileId === null ? NOTE_NOT_WRITTEN : WORDS_NOT_WRITTEN }] } });
+  }
   for (const pile of capturedPiles) {
-    if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, movesOf.get(pile.pileId) ?? []);
+    const note = notesOf.get(pile.pileId);
+    if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : [])]);
   }
   // Each Timeline line: the edit, then the note marked new in place after it, and its updated row once it applied.
   for (const edit of edits) {
@@ -586,6 +637,25 @@ async function utf8(text: string): Promise<{ encoding: 'utf8'; size: number; sha
 
 /** The line a request done by a tidy-up carries in requests.json. */
 export const REQUEST_DONE = 'Done. See what changed in your folders.';
+
+/** Why a filed thing has no note of its own (its note was not written: a lookalike was there, or its thing stayed). */
+export const NOTE_NOT_WRITTEN = 'Bower did not write a note for it.';
+/** Why a pile of words stays in the inbox (its generated note was not written). */
+export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';
+
+/** Where a generated note may go (TL-P2-17): under a main folder; never Inbox, `.bower/` or the root. */
+const MAIN_FOLDERS: readonly string[] = PARA_ROOTS.filter((root) => root !== 'Inbox');
+function generatedPlace(to: string): boolean {
+  return MAIN_FOLDERS.includes(to.split('/')[0] ?? '');
+}
+
+/** A generated note's name from its authored title, by the Inbox's naming rules, as `.md`. */
+function generatedName(title: string): string {
+  // Control characters (a line break in the words) never reach a name: the manifest refuses them (C0 and DEL).
+  const plain = [...title].map((char) => (char.charCodeAt(0) <= 0x1f || char.charCodeAt(0) === 0x7f ? ' ' : char)).join('');
+  const safe = plain.replace(/[:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').slice(0, 48).trim();
+  return `${safeInboxName({ name: safe, kind: 'note' })}.md`;
+}
 
 /** Why a thing the run captured was not filed (a rejected move). */
 export const NOT_FILED = 'It was moved, renamed or removed before Bower could file it.';

@@ -1482,10 +1482,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.drive.createText(hub.id, 'Flat hunt.md', '# Flat hunt\n');
       expect(await plan(w)).toMatchObject({ path: 'b', manifest: { v: 1 } });
     });
-    it('sends a run with a thing that gets its own note to the legacy path', async () => {
+    // b-path-generated-note (TL-P2-17): a filed thing's own note is a B create-text.
+    it('takes the B path for a thing that gets its own note', async () => {
       const w = await bWorld();
       await folderPile(w, 'Offer', [{ name: 'Offer_letter_final(2).pdf', text: '%PDF offer' }, { name: 'other.pdf', text: '%PDF other' }]);
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'note' });
+      expect(await plan(w)).toMatchObject({ path: 'b', manifest: { operations: expect.arrayContaining([expect.objectContaining({ effect: expect.objectContaining({ kind: 'create-text', purpose: 'generated' }) })]) } });
     });
     it('sends a run with a merge to the legacy path', async () => {
       const w = await bWorld();
@@ -1515,10 +1516,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.settled();
       expect(await plan(w)).toEqual({ path: 'legacy', why: 'loose pile' });
     });
-    it('sends a run with a note to write to the legacy path', async () => {
+    it('takes the B path for a note to write from a pile of words', async () => {
       const w = await bWorld();
       await w.uploader.addPile({ text: 'Bins go out on Tuesday nights', items: [] });
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'generated note' });
+      expect(await plan(w)).toMatchObject({ path: 'b', manifest: { operations: expect.arrayContaining([expect.objectContaining({ effect: expect.objectContaining({ kind: 'create-text', purpose: 'generated' }) })]) } });
     });
     it('sends a run that asks a question to the legacy path', async () => {
       const w = await bWorld();

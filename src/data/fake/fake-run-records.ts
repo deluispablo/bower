@@ -14,7 +14,7 @@ import { parsePileDisposition, type Disposition } from '../contracts/pile-dispos
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
-import { join } from '../tree';
+import { join, thingName } from '../tree';
 import { BowerError, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
@@ -87,8 +87,10 @@ export function shows(effect: Effect, ev: StoredEvidence, parentId: string | nul
     case 'write-runner-json':
       return !ev.trashed && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256;
     case 'create-text':
-      // Never planned on this path: generated notes and new runner files stay legacy.
-      return false;
+      // A generated note (TL-P2-17): its exact bytes, its create key and Bower's marks; new runner files stay legacy.
+      return effect.purpose === 'generated' && !ev.trashed && !f.folder && f.parents.length === 1 && f.parents[0] === parentId
+        && f.name === effect.name && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256
+        && f.appProperties?.bowerItem === effect.createKey && f.appProperties.by === 'bower' && f.appProperties.bowerNew === '1';
   }
 }
 
@@ -129,8 +131,9 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
  * archived once and claimed by exactly one row. A hub note brought up to date
  * (TL-P2-20 I10): an applied `updated` row requires exactly one `edit-text`
  * with a Timeline line, names that edit's path and says what one of its lines
- * says; each edit is claimed once. Nothing else (created, questions, rules
- * worded) is claimed.
+ * says; each edit is claimed once. A generated note (TL-P2-17) is claimed by
+ * one applied row naming its resolved path and one set-aside row for what it
+ * was for (see `noteRow`). Nothing else (questions, rules worded) is claimed.
  */
 export function grounded(manifest: RunManifest): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
@@ -196,12 +199,64 @@ export function grounded(manifest: RunManifest): boolean {
     updated.add(id);
     return true;
   };
+  // Generated notes (TL-P2-17): what each is for, from the fixed plan: a filed thing's own note follows that thing's
+  // move; a pile's words are written before that pile's folder goes to the Bin.
+  const notes = manifest.operations.filter((o): o is OperationV2 & { effect: CreateText } => o.effect.kind === 'create-text' && o.effect.purpose === 'generated');
+  const forOf = (o: OperationV2): string | null => {
+    const [after, ...others] = o.dependsOn;
+    if (after !== undefined && !others.length) {
+      const move = ops.get(after)?.effect;
+      return move?.kind === 'move' && members.has(move.before.fileId) ? (members.get(move.before.fileId)?.file.name ?? null) : null;
+    }
+    if (o.dependsOn.length) return null;
+    const bins = manifest.operations.filter((b) => b.effect.kind === 'bin' && b.dependsOn.includes(o.operationId));
+    const [bin, ...more] = bins;
+    const anchor = bin?.effect.kind === 'bin' && !more.length ? bin.effect.before : null;
+    return anchor && manifest.capture.piles.some((p) => p.anchor?.fileId === anchor.fileId) ? anchor.name : null;
+  };
+  const written = new Set<string>();
+  const unwritten = new Set<string>();
+  /**
+   * A generated note's rows: applied, one `created` row with its resolved path, plus a pile's `filed` row naming
+   * that note (`filed.note` only when its create is in the same requires set), requiring its create and every folder
+   * made for it; rejected, one `setAside` row for what it was for, requiring only its create. Each claimed once.
+   */
+  const noteRow = (c: ReportContribution): boolean => {
+    const v = c.value;
+    const [id, ...rest] = c.requires;
+    const op = id === undefined ? undefined : ops.get(id);
+    if (!op || op.effect.kind !== 'create-text' || op.effect.purpose !== 'generated') return false;
+    const e = op.effect;
+    const aside = forOf(op);
+    const parent = pathOf(e.parent);
+    if (aside === null || parent === null || v.updated.length || v.questions.length || v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) return false;
+    if (c.when === 'rejected') {
+      const [row, ...more] = v.setAside;
+      if (rest.length || v.filed.length || v.created.length || !row || more.length || row.name !== aside || unwritten.has(op.operationId)) return false;
+      unwritten.add(op.operationId);
+      return true;
+    }
+    const chain = chainOf(e.parent);
+    const path = join(parent, e.name);
+    const [made, ...others] = v.created;
+    if (v.setAside.length || !made || others.length || made.path !== path || !made.what || written.has(op.operationId)) return false;
+    if (rest.length !== chain.length || !chain.every((x) => rest.includes(x))) return false;
+    const fromWords = op.dependsOn.length === 0;
+    const [row, ...more] = v.filed;
+    if (more.length || (fromWords ? !row || row.kind !== 'note' || row.to !== parent || row.note !== path || row.title !== thingName(e.name) : row !== undefined)) return false;
+    written.add(op.operationId);
+    return true;
+  };
   const filed = new Set<string>();
   const setAside = new Set<string>();
   for (const c of manifest.reportPlan) {
     const v = c.value;
     if (v.requests !== undefined || v.yourChanges !== undefined) {
       if (!journalRow(c)) return false;
+      continue;
+    }
+    if (c.requires.some((id) => ops.get(id)?.effect.kind === 'create-text')) {
+      if (!noteRow(c)) return false;
       continue;
     }
     if (v.updated.length) {
@@ -235,10 +290,12 @@ export function grounded(manifest: RunManifest): boolean {
     if (touching.length !== 1 || !touching[0] || !isArchive(touching[0])) return false;
   }
   return [...members.keys()].every((id) => filed.has(id) && setAside.has(id))
-    && manifest.capture.journal.every((j) => claimed.has(j.recordId));
+    && manifest.capture.journal.every((j) => claimed.has(j.recordId))
+    && notes.every((o) => written.has(o.operationId) && unwritten.has(o.operationId));
 }
 
 type MoveEffect = Extract<Effect, { kind: 'move' }>;
+type CreateText = Extract<Effect, { kind: 'create-text' }>;
 
 /** The done requests a requests.json text holds, by id; null when it is not a valid requests file. */
 function requestsDone(text: string): Map<string, string> | null {
