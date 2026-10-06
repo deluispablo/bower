@@ -7,7 +7,7 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 - **P2 is closed** under the owner's conditional acceptance, now at `00ec9a5` after the TL-P2-47 walk and fix round (dossier addendum); first closure at `3e6e7da`: [2026-10-06-p2-dossier.md](2026-10-06-p2-dossier.md). Four full suites green there (check 3486, e2e 216, e2e:fake 240, e2e:pwa 4); review CLEAN (TL-P2-46 Opus fallback); evaluation's F1/F2 focus findings fixed in `focus-after-replay-and-route`; 281/281 entries pass. Minors in [P2_POLISH.md](P2_POLISH.md).
 - Coordinator runs from `/Users/deluisp/Projects/bower-app`: project agents load and the quiet-gates hook is active; dispatch only through `.claude/agents/`, never with `model`.
 
-- **Backup:** `backup/main` = `03054bd` (verified by the lead, fast-forward from `4d7ab08`, scan clean). The owner authorised `gh`, and git reaches it through the keychain; Bash may need to run outside the sandbox. The coordinator pushes after each green integration per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA.
+- **Backup:** `backup/main` = local `main` at the P2 closure records (pushed and verified 2026-10-06 after `00ec9a5`; range scan clean). Git reaches `gh` through the keychain; Bash needs to run outside the sandbox. The coordinator pushes after each green integration per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA.
 
 ## The plan, in order
 
