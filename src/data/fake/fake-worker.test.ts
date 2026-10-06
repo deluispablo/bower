@@ -2909,6 +2909,30 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(placed('Inbox'), 'the Inbox').toBe(false);
       expect(placed('.bower'), '.bower').toBe(false);
     });
+
+    it('recovers a generated note whose new mark was cleared after its reply was lost', async () => {
+      const w = await bWorld();
+      const words = 'Bins go out on Tuesday nights';
+      await w.uploader.addPile({ text: words, items: [] });
+      await w.uploader.settled();
+      const isWords = (call: FencedCall): boolean => call.op === 'create-text' && call.name === `${words}.md`;
+      w.rules.push(once(isWords, 'lose-reply'));
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+      const made = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === `${words}.md`);
+      expect(made).toHaveLength(1);
+      // The mark goes before recovery (opened elsewhere): the key, place and bytes still prove the note is this one.
+      await w.drive.update(made[0]?.id ?? '', { appProperties: { bowerNew: null } });
+      for (let i = 0; i < 5 && (await w.worker.status())?.phase !== 'done'; i++) {
+        w.clock.later();
+        await after(w.worker, w.runs);
+      }
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(w.calls.filter(isWords)).toHaveLength(1);
+      expect((await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === `${words}.md`)).toHaveLength(1);
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).toContain('Your note');
+    });
   });
 
   // o5-timeline-append (TL-P2-20 B.2, TL-P2-26): a hub note's Timeline line is a v2 `edit-text` authored by `applyChanges`.
