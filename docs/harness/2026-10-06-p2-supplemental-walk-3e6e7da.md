@@ -22,4 +22,4 @@ Answering a Home question leaves focus on the container, not the next question; 
 
 ## NOT RUN
 
-C07 on demo and the full C06 on demo (the demo situation has no rent contradiction; the scripted C06–C10 journeys are fake-only); C01 sign-in on demo (needs Google; sign-out walked); phone keyboard-only on DP (no scripted journeys on demo).
+Not applicable (lead, TL-P2-47 amendment): C07 and the full C06 on demo, since their journeys are fake-only. Not run: ; C01 sign-in on demo (needs Google; sign-out walked); phone keyboard-only on DP (no scripted journeys on demo).
