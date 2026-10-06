@@ -2813,7 +2813,7 @@
       "Valid fixtures still parse unchanged; this checks intent consistency only, not stored bytes or effects."
     ],
     "verify": "pnpm vitest run src/data/contracts/run-manifest.test.ts -t \"run manifests keep captured and written text consistent\"",
-    "passes": false,
+    "passes": true,
     "note": "Claude candidate 9235536/e21a777 + rework 71badc0/4b8259d; review g6-review-1 BLOCKED (test power) then delta CLEAN (docs/harness/2026-10-06-manifest-g6-review.md). Follow-ups: context version vs file, remaining membership references, blob beforeContent on write-runner-json."
   },
   {
