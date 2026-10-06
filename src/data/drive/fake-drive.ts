@@ -230,33 +230,12 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
 
   async writeText(id: string, text: string, ifModified: string): Promise<DriveFile> {
     await this.gate();
-    const f = this.find(id);
-    if (f.meta.modifiedTime !== ifModified) throw driveError('conflict');
-    f.content = text;
-    delete f.bytesUnavailable;
-    delete f.sha256;
-    f.meta = { ...f.meta, modifiedTime: this.stamp(), size: text.length };
-    return this.changed(this.copy(f.meta));
+    return this.applyWrite(id, text, ifModified);
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
     await this.gate();
-    const f = this.find(id);
-    let parents = f.meta.parents;
-    if (patch.removeParent) parents = parents.filter((p) => p !== patch.removeParent);
-    if (patch.addParent) {
-      this.find(patch.addParent);
-      parents = [...parents, patch.addParent];
-    }
-    let appProperties = f.meta.appProperties;
-    if (patch.appProperties) {
-      const merged: Record<string, string | null> = { ...appProperties, ...patch.appProperties };
-      const next = Object.fromEntries(Object.entries(merged).filter((e): e is [string, string] => e[1] !== null));
-      appProperties = Object.keys(next).length ? next : undefined;
-    }
-    const { appProperties: _old, ...rest } = f.meta;
-    f.meta = { ...rest, parents, ...(patch.name ? { name: patch.name } : {}), ...(appProperties ? { appProperties } : {}), modifiedTime: this.stamp() };
-    return this.changed(this.copy(f.meta));
+    return this.applyUpdate(id, patch);
   }
 
   async trash(id: string): Promise<void> {
@@ -461,32 +440,110 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     return { ...m, parents: [...m.parents], ...(m.appProperties ? { appProperties: { ...m.appProperties } } : {}) };
   }
 
-  // --- The run service's controlled boundary (fake only): inert stub until the B path lands. ---
+  // --- The run service's controlled boundary (fake only): fenced writes, a fault hook, stored evidence. ---
 
-  /** Sees, and may refuse or lose the reply of, every fenced write. Stub: never consulted. */
+  /** Sees, and may refuse or lose the reply of, every fenced write. */
   fault: FaultHook | null = null;
 
-  /** Writes whose `check` runs right before the change. Stub: plain writes, no check. */
+  /**
+   * Writes whose `check` runs right before the change, with nothing awaited in
+   * between, and refuses it by throwing: the service's authority and
+   * still-as-seen checks and the change they permit are one step. `check` may
+   * look at what is stored at that instant. The fault hook sees each call first.
+   */
   fenced(check: (peek: Peek) => void): FencedDrive {
-    void check;
+    const run = async <T>(call: FencedCall, apply: () => T): Promise<T> => {
+      await this.gate();
+      const action = this.fault?.before?.(call) ?? 'pass';
+      if (action === 'refuse') throw driveError('offline');
+      check((id) => this.peek(id));
+      const out = apply();
+      this.fault?.applied?.(call);
+      if (action === 'lose-reply') throw driveError('offline');
+      return out;
+    };
+    const props = (appProperties?: Record<string, string>): { appProperties?: Record<string, string> } => (appProperties ? { appProperties: { ...appProperties } } : {});
     return {
-      createFolder: (parentId, name, appProperties) => this.createFolder(parentId, name, appProperties),
-      createText: (parentId, name, text, appProperties) => this.createText(parentId, name, text, appProperties),
-      update: (id, patch) => this.update(id, patch),
-      trash: (id) => this.trash(id),
-      writeText: (id, text, ifModified) => this.writeText(id, text, ifModified),
+      createFolder: (parentId, name, appProperties) => run({ op: 'create-folder', parentId, name, ...props(appProperties) }, () => this.changed(this.add(parentId, name, true, null, appProperties))),
+      createText: (parentId, name, text, appProperties) => run({ op: 'create-text', parentId, name, text, ...props(appProperties) }, () => this.changed(this.add(parentId, name, false, text, appProperties))),
+      update: (id, patch) => run({ op: 'update', id, patch }, () => this.applyUpdate(id, patch)),
+      trash: (id) => run({ op: 'trash', id }, () => {
+        this.find(id).trashed = true;
+        this.changed(null);
+      }),
+      writeText: (id, text, ifModified) => run({ op: 'write-text', id, text, ifModified }, () => this.applyWrite(id, text, ifModified)),
     };
   }
 
-  /** `snapshot()` together with `alongside()`. Stub: not taken at one instant. */
-  async snapshotWith<T>(alongside: () => T): Promise<{ snapshot: string; alongside: T }> {
-    return { snapshot: await this.snapshot(), alongside: alongside() };
+  /**
+   * What is stored for an id right now, with its live children: for a fenced
+   * check. Children are counted by their first parent only, as everywhere in
+   * this fake (its files have one parent); a real multi-parent Drive file would
+   * need every parent checked.
+   */
+  private peek(id: string): PeekedFile | null {
+    const f = this.files.get(id);
+    if (!f) return null;
+    const children = [...this.files.values()].filter((c) => !c.trashed && c.meta.parents[0] === id).map((c) => c.meta.id);
+    return { file: this.copy(f.meta), trashed: f.trashed, children };
   }
 
-  /** What is stored for an id, in the Bin or not. Stub: nothing. */
+  /** `update` after its gate, with nothing awaited: shared by `update` and fenced writes. */
+  private applyUpdate(id: string, patch: DrivePatch): DriveFile {
+    const f = this.find(id);
+    let parents = f.meta.parents;
+    if (patch.removeParent) parents = parents.filter((p) => p !== patch.removeParent);
+    if (patch.addParent) {
+      this.find(patch.addParent);
+      parents = [...parents, patch.addParent];
+    }
+    let appProperties = f.meta.appProperties;
+    if (patch.appProperties) {
+      const merged: Record<string, string | null> = { ...appProperties, ...patch.appProperties };
+      const next = Object.fromEntries(Object.entries(merged).filter((e): e is [string, string] => e[1] !== null));
+      appProperties = Object.keys(next).length ? next : undefined;
+    }
+    const { appProperties: _old, ...rest } = f.meta;
+    f.meta = { ...rest, parents, ...(patch.name ? { name: patch.name } : {}), ...(appProperties ? { appProperties } : {}), modifiedTime: this.stamp() };
+    return this.changed(this.copy(f.meta));
+  }
+
+  /** `writeText` after its gate, with nothing awaited: shared by `writeText` and fenced writes. */
+  private applyWrite(id: string, text: string, ifModified: string): DriveFile {
+    const f = this.find(id);
+    if (f.meta.modifiedTime !== ifModified) throw driveError('conflict');
+    f.content = text;
+    delete f.bytesUnavailable;
+    delete f.sha256;
+    f.meta = { ...f.meta, modifiedTime: this.stamp(), size: text.length };
+    return this.changed(this.copy(f.meta));
+  }
+
+  /**
+   * `snapshot()` together with `alongside()`, both taken at the same instant:
+   * nothing can change between them, though the snapshot is encoded after.
+   */
+  async snapshotWith<T>(alongside: () => T): Promise<{ snapshot: string; alongside: T }> {
+    const twin = new FakeDrive();
+    twin.files = new Map([...this.files].map(([id, f]) => [id, { ...f, meta: this.copy(f.meta) }]));
+    twin.seq = this.seq;
+    twin.last = this.last;
+    // The resumable uploads too (reserved ids and open sessions), as `snapshot()` keeps them.
+    twin.reserved = new Set(this.reserved);
+    twin.reservedSeq = this.reservedSeq;
+    twin.sessionSeq = this.sessionSeq;
+    twin.sessions = new Map([...this.sessions].map(([url, x]) => [url, { ...x, target: { ...x.target }, parts: [...x.parts], file: x.file ? this.copy(x.file) : null }]));
+    const kept = alongside();
+    return { snapshot: await twin.snapshot(), alongside: kept };
+  }
+
+  /** What is stored for an id, in the Bin or not: its metadata, its own Bin flag and its bytes' size and SHA-256 (fake-stored). */
   async evidence(id: string): Promise<StoredEvidence | null> {
-    void id;
-    return null;
+    await this.gate();
+    const f = this.files.get(id);
+    if (!f) return null;
+    const content = f.meta.folder ? null : f.bytesUnavailable ? (f.sha256 !== undefined && f.meta.size !== undefined ? { size: f.meta.size, sha256: f.sha256 } : null) : await this.digestOfStored(f);
+    return { file: this.copy(f.meta), trashed: f.trashed, content };
   }
 }
 

@@ -58,10 +58,12 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
     const worker = new WorkerHttp(import.meta.env.VITE_API_URL as string);
     return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }) }) };
   }
-  const [{ pretendDrive }, { FakeWorker }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker')]);
+  const [{ pretendDrive, pretendRuns }, { FakeWorker }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker')]);
   const { drive, rootId, fresh } = await pretendDrive(scenario);
   drive.latency = scenario === 'slow' ? 1500 : scale === 'instant' ? 0 : 40;
   drive.offline = scenario === 'offline';
-  const worker = new FakeWorker({ drive, scenario, scale, rootId, fresh, offline: scenario === 'offline' });
+  // The pretend Worker's run service owns runs on the B path, across reloads, beside the pretend Drive.
+  const runs = pretendRuns(scenario, drive, fresh, scale);
+  const worker = new FakeWorker({ drive, scenario, scale, rootId, fresh, offline: scenario === 'offline', runs });
   return { sources: makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, uploadQueue: true }) };
 }

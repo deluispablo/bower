@@ -8,7 +8,7 @@
  * writes (docs/specs/2026-10-04-worker-contract.md).
  */
 import type { DriveFile } from '../drive/drive-api';
-import type { Manifest } from '../contracts/run-manifest';
+import { parseRunManifest, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Effect, type Manifest, type ManifestRunReport, type Operation, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
@@ -16,7 +16,7 @@ import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, thingsIn } from '../piles';
 import { contextRemoved, findDeclaration, journalValues, observePile, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, type FiledItem, type Pile, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
+import { BowerError, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
@@ -25,6 +25,7 @@ import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
+import { canonical, grounded, seen } from './fake-run-records';
 
 export interface FakeRunOptions {
   scope: 'all' | 'instructions';
@@ -72,7 +73,9 @@ export const SET_ASIDE = {
  * accounts for, and a declared note to write again first. The folder goes to
  * the Bin only when nothing else is left in it.
  */
-type Capture = { blocked: string } | { blocked: null; captured: Set<string>; restore?: { key: string; text: string } };
+type Capture = { blocked: string } | { blocked: null; captured: Set<string>; restore?: { key: string; text: string }; declared?: Declared };
+/** A ready declared pile's declaration, as the B path captures it. */
+type Declared = { ref: { declarationId: string; sha256: string }; contextKey: string | null; memberKeys: ReadonlySet<string> };
 
 /** A file's size and hash from the pretend Drive's stored bytes (`fake-stored`); null when they cannot be read. */
 async function storedDigest(drive: FakeDrive, f: DriveFile): Promise<Digest | null> {
@@ -122,7 +125,12 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: SET_ASIDE.empty });
       continue;
     }
-    out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}) });
+    const declared: Declared = {
+      ref: { declarationId: found.declaration.declarationId, sha256: found.sha256 },
+      contextKey: context.kind === 'text' ? context.memberKey : null,
+      memberKeys: new Set(found.declaration.members.map((m) => m.memberKey)),
+    };
+    out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), ...(restore ? { restore } : {}), declared });
   }
   return out;
 }
@@ -140,16 +148,214 @@ export interface PlanOptions {
   requestedAt: number;
 }
 
-/** Stub until the B path lands: every run is legacy. */
+/**
+ * Plans a run on the B path when every effect it needs is a B effect (move,
+ * create-folder, Bin, write-runner-json); otherwise the whole run is legacy,
+ * with the reason. Decided from one capture before any effect, and never
+ * changed during the run. The B plan fixes every operation and every report
+ * row (TL-P2-06 §1, contract B guards 7 and 9) and reuses the readiness
+ * capture: only ready piles are captured, and their folders go to the Bin
+ * only with no child the run did not capture.
+ */
 export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions): Promise<RunPlan> {
-  void drive;
-  void rootId;
-  void opts;
-  return { path: 'legacy', why: 'not planned yet' };
+  const legacy = (why: string): RunPlan => ({ path: 'legacy', why });
+  if (opts.scope !== 'all') return legacy('instructions');
+  const listing = await drive.listAll(rootId);
+  const ix = VaultIndex.build(rootId, listing);
+  if (ix.journalFiles().some((f) => !f.folder && f.name.endsWith('.json'))) return legacy('journal');
+  if (UPDATES.some((u) => ix.file(u.path))) return legacy('timeline');
+  const requests = ix.file(SYSTEM.requests);
+  const hashesFile = ix.file(SYSTEM.hashes);
+  if (!requests || !hashesFile) return legacy('runner files');
+  const parsed = (text: string): unknown => {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      console.error(e);
+      return null;
+    }
+  };
+  if (!isRunnerFile(SYSTEM.requests, parsed(await drive.readText(requests.id)))) return legacy('requests');
+  const hashesText = await drive.readText(hashesFile.id);
+  if (!isRunnerFile(SYSTEM.hashes, parsed(hashesText))) return legacy('hashes');
+
+  const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });
+  const piles = await reader.piles();
+  if (!piles.length) return legacy('empty');
+  const capture = await captureOf(drive, rootId, piles);
+  const verified = async (f: DriveFile, encoding: 'utf8' | 'blob'): Promise<VerifiedContent | null> => {
+    const d = await storedDigest(drive, f);
+    return d ? { encoding, size: d.size, sha256: d.sha256, provenance: 'fake-stored', observedModifiedTime: f.modifiedTime } : null;
+  };
+
+  // The ready piles and their things, exactly as captured.
+  const capturedPiles: CapturedPile[] = [];
+  const members: CapturedMember[] = [];
+  const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent }> = [];
+  for (const pile of piles) {
+    const folder = pile.path ? ix.file(pile.path) : undefined;
+    if (!folder?.folder) return legacy('loose pile');
+    const cap = capture.get(pile.id);
+    if (!cap || cap.blocked !== null) return legacy('readiness');
+    if (cap.restore || !pile.items.length) return legacy('generated note');
+    if (!LOGICAL_ID.test(pile.id) || /saltmere/i.test(pile.text)) return legacy('question');
+    const children = listing.filter((f) => f.parents[0] === folder.id);
+    const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE);
+    if (notes.length > 1 || children.some((f) => !cap.captured.has(f.id))) return legacy('uncaptured child');
+    const declared = cap.declared;
+    const keys: Array<string | null> = [];
+    for (const item of pile.items) {
+      const file = children.find((f) => f.id === item.id);
+      if (!file || file.folder) return legacy('sending');
+      if (item.kind === 'link') return legacy('link');
+      if (PLAN_BY_NAME.get(item.name)?.note) return legacy('note');
+      if (MERGES.some((m) => m.item === item.name)) return legacy('merge');
+      if (item.name !== file.name) return legacy('name');
+      const content = await verified(file, 'blob');
+      if (!content) return legacy('not checked');
+      const key = declared ? (file.appProperties?.[PROP.item] ?? null) : null;
+      if (declared && (key === null || !declared.memberKeys.has(key))) return legacy('member key');
+      keys.push(key);
+      members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
+      things.push({ pile, folder, item, file, content });
+    }
+    if (declared && keys.length !== declared.memberKeys.size) return legacy('member key');
+    const [note] = notes;
+    let context: CapturedPile['context'] = { kind: 'absent' };
+    if (note) {
+      const text = await drive.readText(note.id);
+      const stored = await verified(note, 'utf8');
+      const raw = new TextEncoder().encode(text);
+      if (!stored || stored.size !== raw.byteLength || stored.sha256 !== (await sha256(new Blob([raw])))) return legacy('context');
+      const key = declared?.contextKey ?? null;
+      if (declared && note.appProperties?.[PROP.item] !== key) return legacy('context');
+      context = { kind: 'text', memberKey: key, file: seen(note), text, content: stored };
+    }
+    capturedPiles.push({
+      pileId: pile.id,
+      source: declared ? { kind: 'declared', ref: declared.ref } : { kind: 'observed' },
+      anchor: seen(folder),
+      memberKeys: keys,
+      childFileIds: [...cap.captured].sort(),
+      context,
+    });
+  }
+
+  // Where each thing goes and under which name, against the folder as it will be.
+  const planned = new Map(ix.entries());
+  const places = new Map<string, DriveFile>();
+  const missing: string[] = [];
+  const filing: Array<{ thing: (typeof things)[number]; to: string; name: string }> = [];
+  for (const thing of things) {
+    const to = guessOf(thing.pile, thing.item);
+    let at = to;
+    while (at && !ix.file(at)?.folder) at = parentOf(at);
+    if (at) {
+      const place = ix.file(at);
+      if (place) places.set(place.id, place);
+    }
+    for (let p = to; p !== at; p = parentOf(p)) if (!missing.includes(p)) missing.push(p);
+    for (let p = to; p !== at; p = parentOf(p)) planned.set(p, { path: p, type: 'folder', modified: 0, created: 0 });
+    const name = freeName(planned, to, PLAN_BY_NAME.get(thing.item.name)?.title ?? thing.file.name);
+    planned.set(join(to, name), { path: join(to, name), type: 'file', kind: kindOf(name), modified: 0, created: 0 });
+    filing.push({ thing, to, name });
+  }
+  const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
+  const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: [], places: capturedPlaces };
+  const scope = { rootId };
+  const captureId = (await canonical({ scope, runScope: opts.scope, capture: captureValue })).hash;
+
+  // The fixed operations, in order: clear last run's marks, make folders, file, Bin the piles, the hashes.
+  const operations: Operation[] = [];
+  const add = async (effect: Effect, dependsOn: string[] = []): Promise<string> => {
+    const ordinal = operations.length;
+    const operationId = (await canonical({ runId: opts.runId, captureId, ordinal, effect })).hash;
+    operations.push({ operationId, ordinal, dependsOn, effect });
+    return operationId;
+  };
+  for (const f of listing.filter((x) => !x.folder && x.appProperties?.[PROP.isNew] === '1' && x.parents.length === 1).sort((a, b) => a.id.localeCompare(b.id))) {
+    await add({ kind: 'move', before: seen(f), parent: { fileId: f.parents[0] ?? '' }, name: f.name, properties: { bowerNew: null } });
+  }
+  const made = new Map<string, string>();
+  const targetOf = (path: string): Target => {
+    const op = made.get(path);
+    if (op) return { createdBy: op };
+    return { fileId: ix.idOf(path) ?? '' };
+  };
+  for (const path of [...missing].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
+    made.set(path, await add({ kind: 'create-folder', parent: targetOf(parentOf(path)), name: nameOf(path), createKey: mintKey('folder') }));
+  }
+  const chainOf = (path: string): string[] => (made.has(path) ? [made.get(path) ?? '', ...chainOf(parentOf(path))] : []);
+  const reportPlan: ReportContribution[] = [];
+  const movesOf = new Map<string, string[]>();
+  const empty = (): ManifestRunReport => ({ filed: [], created: [], updated: [], setAside: [], questions: [] });
+  for (const { thing, to, name } of filing) {
+    const isNote = kindOf(name) === 'note';
+    const move = await add({
+      kind: 'move',
+      before: seen(thing.file),
+      parent: targetOf(to),
+      name,
+      properties: { bowerNew: '1', ...(isNote ? { by: 'bower' as const } : {}), asAdded: null, origin: null, kind: null, pile: null },
+    });
+    movesOf.set(thing.pile.id, [...(movesOf.get(thing.pile.id) ?? []), move]);
+    reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.item.name, title: thingName(name), kind: thing.item.kind, to }] } });
+    reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.item.name, why: NOT_FILED }] } });
+  }
+  for (const pile of capturedPiles) {
+    if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, movesOf.get(pile.pileId) ?? []);
+  }
+  const hashes: Record<string, string> = {};
+  const digests = new Map(things.map(({ file, content }) => [file.id, content.sha256]));
+  const finalPaths = new Map(filing.map(({ thing, to, name }) => [join(to, name), thing.file.id]));
+  for (const [path, entry] of [...planned].sort(([a], [b]) => a.localeCompare(b))) {
+    if (entry.type !== 'file' || entry.kind === 'note' || path.startsWith('Inbox/')) continue;
+    const id = finalPaths.get(path) ?? ix.idOf(path);
+    const f = id ? listing.find((x) => x.id === id) : undefined;
+    const hash = (id && digests.get(id)) ?? (f ? (await storedDigest(drive, f))?.sha256 : undefined);
+    if (!hash) return legacy('hashes');
+    hashes[hash] = path;
+  }
+  const text = `${JSON.stringify({ v: 1, hashes } satisfies HashesFile, null, 2)}\n`;
+  if (text !== hashesText) {
+    const before = await verified(hashesFile, 'utf8');
+    if (!before) return legacy('hashes');
+    const raw = new TextEncoder().encode(text);
+    await add({ kind: 'write-runner-json', before: seen(hashesFile), beforeContent: before, path: SYSTEM.hashes, text, content: { encoding: 'utf8', size: raw.byteLength, sha256: await sha256(new Blob([raw])) } }, [...movesOf.values()].flat());
+  }
+
+  const manifest: Manifest = {
+    v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
+    allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture: captureValue, operations, reportPlan,
+  };
+  const checked = await parseRunManifest((await canonical(manifest)).bytes, rootId);
+  if (!checked.ok) {
+    console.error(`A B plan was refused by the manifest guard (${checked.reason}); the run takes the legacy path`);
+    return legacy('manifest');
+  }
+  if (!grounded(manifest)) {
+    console.error('A B plan has report rows its effects do not ground; the run takes the legacy path');
+    return legacy('grounding');
+  }
+  return { path: 'b', manifest };
 }
 
 /** Why a thing the run captured was not filed (a rejected move). */
 export const NOT_FILED = 'It was moved, renamed or removed before Bower could file it.';
+
+const LOGICAL_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+/** Where the fixture or the pile's words send a thing. */
+function guessOf(pile: Pile, item: PileItem): string {
+  return PLAN_BY_NAME.get(item.name)?.to ?? guessFolder(`${pile.text} ${item.name}`, item.kind);
+}
+
+/** A create key, minted once and kept in the manifest; never derived from a name or a time alone. */
+function mintKey(kind: string): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return `${kind}-${[...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
 
 export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOptions): Promise<FakeRunResult> {
   const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });

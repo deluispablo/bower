@@ -28,30 +28,106 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
     rootId = await seedFakeDrive(drive, scenario, Date.now());
   }
   const d = drive;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const save = (): void => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      void d.snapshot().then((json) => {
-        try {
-          sessionStorage.setItem(FAKE_KEY(scenario), json);
-        } catch (e) {
-          // Too big for this tab's storage: it starts again on the next reload.
-          console.error(e);
-        }
-      });
-    }, 250);
-  };
-  d.onChange = save;
-  save();
+  const saver = new Saver(scenario, d);
+  savers.set(d, saver);
+  d.onChange = () => saver.schedule();
+  saver.schedule();
   return { drive: d, rootId, fresh };
 }
 
-/** The pretend run service for this tab. Stub until the B path lands: kept nowhere, owns no run. */
+const RUNS_KEY = (scenario: Scenario): string => `bower:fake:${scenario}:runs`;
+
+/**
+ * Keeps one pretend Drive, and the run service over it, in this tab: both in
+ * one snapshot taken at one instant, so a reload never finds runs that point
+ * at records the kept Drive lacks, nor effects the kept runs do not know of.
+ * Saves follow each other in order; a later one never lands before an earlier one.
+ */
+class Saver {
+  runs: FakeRunService | null = null;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private chain: Promise<void> = Promise.resolve();
+
+  constructor(
+    private readonly scenario: Scenario,
+    private readonly drive: FakeDrive,
+  ) {}
+
+  /** Soon, once changes settle. */
+  schedule(): void {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => void this.write(), 250);
+  }
+
+  /** Now: resolves once the tab holds everything up to this instant. */
+  flush(): Promise<void> {
+    clearTimeout(this.timer);
+    return this.write();
+  }
+
+  private write(): Promise<void> {
+    this.chain = this.chain.then(async () => {
+      const { snapshot, alongside } = await this.drive.snapshotWith(() => this.runs?.toJSON() ?? null);
+      this.store(snapshot, alongside);
+    }).catch((e: unknown) => console.error(e));
+    return this.chain;
+  }
+
+  /**
+   * Stores the pair in one synchronous step, so a reload sees both from one
+   * instant. When either write fails (the tab's storage is full), the pair
+   * kept before goes back; if even that fails, both go, and the next reload
+   * starts again rather than pairing a Drive with runs of another instant.
+   */
+  private store(snapshot: string, runs: string | null): void {
+    const driveKey = FAKE_KEY(this.scenario);
+    const runsKey = RUNS_KEY(this.scenario);
+    const before = { drive: sessionStorage.getItem(driveKey), runs: sessionStorage.getItem(runsKey) };
+    const put = (key: string, value: string | null): void => {
+      if (value === null) sessionStorage.removeItem(key);
+      else sessionStorage.setItem(key, value);
+    };
+    try {
+      put(driveKey, snapshot);
+      put(runsKey, runs);
+    } catch (e) {
+      console.error(e);
+      try {
+        put(driveKey, before.drive);
+        put(runsKey, before.runs);
+      } catch (again) {
+        console.error(again);
+        sessionStorage.removeItem(driveKey);
+        sessionStorage.removeItem(runsKey);
+      }
+    }
+  }
+}
+const savers = new WeakMap<FakeDrive, Saver>();
+
+/**
+ * The pretend run service for this tab, over its pretend Drive, kept in the
+ * same snapshot as the Drive. An admission is acknowledged only once that
+ * snapshot holds it. A fresh pretend Drive starts with no runs.
+ */
 export function pretendRuns(scenario: Scenario, drive: FakeDrive, fresh: boolean, scale: TimeScale): FakeRunService {
-  void scenario;
-  void fresh;
-  return new FakeRunService({ drive, scale });
+  const saver = savers.get(drive) ?? new Saver(scenario, drive);
+  savers.set(drive, saver);
+  const opts = { drive, scale, persist: () => saver.flush() };
+  let runs: FakeRunService | null = null;
+  try {
+    const kept = fresh ? null : sessionStorage.getItem(RUNS_KEY(scenario));
+    if (kept) runs = FakeRunService.restore(kept, opts);
+  } catch (e) {
+    // Unreadable kept runs start again empty; the folder still has every record.
+    console.error(e);
+  }
+  const service = runs ?? new FakeRunService(opts);
+  saver.runs = service;
+  drive.onChange = () => saver.schedule();
+  service.onChange = () => saver.schedule();
+  saver.schedule();
+  return service;
 }
 
 /** Forgets every pretend Drive of this tab, so the next start is Alex's folder again. */

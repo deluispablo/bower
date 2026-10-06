@@ -14,8 +14,8 @@ import { BOWER_FOLDER, PROP, SYSTEM, isRunnerFile, type LastRunFile } from '../v
 import { serializeNote } from '../vault/note-format';
 import { serializeRules } from '../vault/rules-format';
 import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
-import { runFake } from './fake-runner';
-import type { FakeRunService } from './fake-run-service';
+import { planRun, runFake } from './fake-runner';
+import type { Binding, FakeRunService } from './fake-run-service';
 
 export interface FakeWorkerOptions {
   drive: FakeDrive;
@@ -26,9 +26,9 @@ export interface FakeWorkerOptions {
   offline?: boolean;
   /** False after a reload, when the pretend Drive was kept: the running situation does not start a new run. */
   fresh?: boolean;
-  /** The run service that owns runs on the B path. Stub: not used yet; every run is legacy. */
+  /** The run service that owns runs on the B path; without it every run is legacy. */
   runs?: FakeRunService;
-  /** The synthetic account this client is signed in as. Stub: not used yet. */
+  /** The synthetic account this client is signed in as. */
   account?: string;
 }
 
@@ -50,6 +50,10 @@ export class FakeWorker implements WorkerApi {
   private took = new Set<string>();
   private seq = 0;
   private readonly offline: boolean;
+  private readonly runs: FakeRunService | null;
+  private readonly account: string;
+  /** Which path the latest run here took: the service's B path, or the legacy runner in this page. */
+  private via: 'b' | 'legacy' | null = null;
 
   constructor(opts: FakeWorkerOptions) {
     this.drive = opts.drive;
@@ -58,6 +62,8 @@ export class FakeWorker implements WorkerApi {
     this.signedIn = keptSignedIn() ?? opts.scenario !== 'signed-out';
     this.failOnce = opts.scenario === 'fail-run';
     this.offline = !!opts.offline;
+    this.runs = opts.runs ?? null;
+    this.account = opts.account ?? ALEX.email;
     // Offline, the folder cannot be read now; every call says so on its own.
     this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario, opts.fresh ?? true).catch((e: unknown) => {
       console.error(e);
@@ -67,6 +73,7 @@ export class FakeWorker implements WorkerApi {
 
   /** The piles the tidy-up going now took; empty when none is going. */
   runningPiles(): ReadonlySet<string> {
+    if (this.via === 'b' && this.runs && this.rootId) return this.runs.runningPiles(this.binding(this.rootId));
     return this.run && !['done', 'failed'].includes(this.run.phase) ? this.took : new Set();
   }
 
@@ -130,12 +137,50 @@ export class FakeWorker implements WorkerApi {
     if (this.loadFailure) throw this.loadFailure.error;
     this.lastAllowWeb = !!opts.allowWeb;
     await this.saveUnsaved();
-    if (this.run && !['done', 'failed'].includes(this.run.phase)) return this.wire();
+    if (this.via !== 'b' && this.run && !['done', 'failed'].includes(this.run.phase)) return this.wire();
+    // A run on the B path that is not over is the run, whichever client asked for it: nothing new is admitted.
+    const going = await this.goingOnB();
+    if (going) return going;
+    // Quick repeated asks share one admission.
+    this.starting ??= this.begin(scope, opts).finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+
+  private starting: Promise<RunWire> | null = null;
+
+  /** The service's run for this folder while it is not over, or null. */
+  private async goingOnB(): Promise<RunWire | null> {
+    if (!this.runs || !this.rootId) return null;
+    const run = await this.runs.status(this.binding(this.rootId));
+    if (!run || ['done', 'failed'].includes(run.phase)) return null;
+    this.via = 'b';
+    return run;
+  }
+
+  private async begin(scope: 'all' | 'instructions', opts: { allowWeb?: boolean }): Promise<RunWire> {
     const root = this.rootId;
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
     const vault = new DriveVault({ drive: this.drive, rootId: async () => root, runningPiles: () => new Set(), device: 'worker' });
     if (scope === 'all' && !(await vault.piles()).reduce((n, p) => n + thingsIn(p), 0)) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
     if (scope === 'instructions' && !(await vault.changes()).length) throw new BowerError('conflict', 'There is nothing new for Bower to read.');
+    if (this.runs) {
+      // Classified once, before any effect: the whole run is B or the whole run is legacy.
+      const { runId, requestId } = this.runs.ids();
+      const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now() });
+      if (plan.path === 'b') {
+        const failAt = this.failOnce;
+        this.failOnce = false;
+        const wire = await this.runs.admit(this.binding(root), plan.manifest, failAt ? { failAt: 'writing' } : {});
+        this.via = 'b';
+        return wire;
+      }
+      // Another client's run may have been admitted while this one planned.
+      const going = await this.goingOnB();
+      if (going) return going;
+    }
+    this.via = 'legacy';
     return this.start(root, scope, Date.now());
   }
 
@@ -144,10 +189,16 @@ export class FakeWorker implements WorkerApi {
     await this.loaded;
     if (this.loadFailure) throw this.loadFailure.error;
     await this.saveUnsaved();
+    if (this.via === 'b' && this.runs && this.rootId) return this.runs.status(this.binding(this.rootId));
     return this.run ? this.wire() : null;
   }
 
+  private binding(rootId: string): Binding {
+    return { account: this.account, rootId };
+  }
+
   private start(root: string, scope: 'all' | 'instructions', at: number, readingFor?: number): RunWire {
+    this.via = 'legacy';
     const run: RunWire & { report?: RunReport } = { id: `run-${Date.now().toString(36)}-${++this.seq}`, scope, phase: 'queued', requestedAt: at, phaseAt: Date.now() };
     this.run = run;
     this.unsaved = null;
@@ -264,6 +315,11 @@ export class FakeWorker implements WorkerApi {
     const all = await this.drive.listAll(root);
     const sys = all.find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === root);
     const file = sys && all.find((f) => f.name === 'last-run.json' && f.parents[0] === sys.id);
+    // The service's run is the latest when the folder shows no view yet, its own, or the one it found at admission.
+    if (this.runs && (await this.runs.shows(this.binding(root), file ? await this.drive.readText(file.id) : null))) {
+      this.via = 'b';
+      return;
+    }
     if (file) {
       let value: unknown;
       try {
@@ -278,6 +334,7 @@ export class FakeWorker implements WorkerApi {
         throw new BowerError('unknown', 'Bower could not read its latest update. Try again.');
       }
       this.run = { ...value.run };
+      this.via = 'legacy';
       // A run still going in the folder was cut short by a reload: the runner (this page) is gone.
       if (!['done', 'failed'].includes(this.run.phase)) {
         const now = Date.now();

@@ -9,7 +9,16 @@ import { BowerError } from '../types';
 import type { LastRunFile } from '../vault/layout';
 import { driveError } from '../drive/drive-api';
 import { LiveRuns } from '../live/runs';
-import { FAILURE } from './fake-runner';
+import { FAILURE, planRun } from './fake-runner';
+import type { RunWire } from '../worker/worker-api';
+import { CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type FakeRunServiceOptions } from './fake-run-service';
+import type { FaultAction, FencedCall } from '../drive/fake-drive';
+import type { Manifest } from '../contracts/run-manifest';
+import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
+import { parsePileDisposition } from '../contracts/pile-disposition';
+import type { Declaration } from '../contracts/pile-declaration';
+import { ALEX } from '../demo/fixture';
+import { pretendDrive, pretendRuns } from './pretend';
 
 afterEach(() => vi.useRealTimers());
 
@@ -579,5 +588,934 @@ describe('report save failure cannot publish done or repeat effects on the legac
     expect(loggedBowerErrors(w.errors)).toContainEqual(expect.objectContaining({ code: 'unknown', message: readMessage }));
     expect(w.drive.dump(w.rootId).get(SYSTEM.lastRun)).toBe(malformed);
     expect(w.mutations() - before).toBe(0);
+  });
+});
+
+describe('report save failure cannot publish done or repeat effects on the B path', () => {
+  type Rule = (call: FencedCall) => FaultAction | undefined;
+  type Hooks = FakeRunServiceOptions['hooks'];
+  const pdf = (name: string): { name: string; kind: 'pdf'; origin: string; body: Blob } => ({ name, kind: 'pdf', origin: 'From this computer', body: new Blob([`%PDF ${name}`]) });
+  const link = { name: 'saved-page.example/a', kind: 'link' as const, origin: 'Pasted', url: 'https://saved-page.example/a' };
+  const me = (rootId: string): { account: string; rootId: string } => ({ account: ALEX.email, rootId });
+
+  /**
+   * The template folder with two ready piles of plain files (one with a line, one without): only B effects.
+   * Every fenced write is seen by `calls`; the ones that changed the Drive by `applied`.
+   */
+  async function bWorld(o: { declared?: boolean; scenario?: Scenario; hooks?: Hooks } = {}) {
+    localStorage.clear();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let now = Date.now();
+    const clock = { now: (): number => now, later: (ms = RETRY_MS + 1): void => { now += ms; } };
+    const drive = new FakeDrive();
+    const runs = new FakeRunService({ drive, clock: clock.now, scale: 'instant', ...(o.hooks ? { hooks: o.hooks } : {}) });
+    const worker = new FakeWorker({ drive, scenario: o.scenario ?? 'first', scale: 'instant', rootId: null, runs });
+    const rootId = (await worker.createFolder()).id;
+    const uploader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), declarePiles: !!o.declared, device: 'DEVICE_A' });
+    await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
+    await uploader.addPile({ text: '', items: [pdf('idea one.pdf'), pdf('idea two.pdf')] });
+    await uploader.settled();
+    const sources = await inboxPdfs(drive, rootId);
+    const rules: Rule[] = [];
+    const calls: FencedCall[] = [];
+    const applied: FencedCall[] = [];
+    drive.fault = {
+      before: (call) => {
+        calls.push(call);
+        for (const rule of rules) {
+          const action = rule(call);
+          if (action) return action;
+        }
+        return 'pass';
+      },
+      applied: (call) => { applied.push(call); },
+    };
+    let mutations = 0;
+    drive.onChange = () => { mutations++; };
+    return { drive, rootId, runs, worker, uploader, sources, rules, calls, applied, errors, clock, mutations: () => mutations };
+  }
+  type World = Awaited<ReturnType<typeof bWorld>>;
+
+  async function inboxPdfs(drive: FakeDrive, rootId: string): Promise<string[]> {
+    return (await drive.listAll(rootId)).filter((f) => !f.folder && f.name.endsWith('.pdf') && drive.pathOf(f.id, rootId).startsWith('Inbox/')).map((f) => f.id);
+  }
+
+  const once = (match: (call: FencedCall) => boolean, action: FaultAction, seen?: FencedCall[]): Rule => {
+    let used = false;
+    return (call) => {
+      if (used || !match(call)) return undefined;
+      used = true;
+      seen?.push(call);
+      return action;
+    };
+  };
+  const textOf = (call: FencedCall): string | null => (call.op === 'create-text' || call.op === 'write-text' ? call.text : null);
+  const isView = (w: { drive: FakeDrive; rootId: string }, call: FencedCall, phase?: 'done' | 'failed'): boolean => {
+    const text = call.op === 'create-text' && call.name === 'last-run.json' ? call.text : call.op === 'write-text' && w.drive.pathOf(call.id, w.rootId) === SYSTEM.lastRun ? call.text : null;
+    if (text === null) return false;
+    if (!phase) return true;
+    try {
+      return (JSON.parse(text) as LastRunFile).run.phase === phase;
+    } catch {
+      // expected: not JSON, so not a view of that phase.
+      return false;
+    }
+  };
+  const named = (prefix: string) => (call: FencedCall): boolean => call.op === 'create-text' && call.name.startsWith(prefix);
+  const isMoveOf = (id: string) => (call: FencedCall): boolean => call.op === 'update' && call.id === id && call.patch.addParent !== undefined;
+  const movesOf = (w: Pick<World, 'applied'>, id: string): number => w.applied.filter(isMoveOf(id)).length;
+  const bowerErrors = (w: Pick<World, 'errors'>): BowerError[] => w.errors.mock.calls.map((c) => c[0]).filter((e): e is BowerError => e instanceof BowerError);
+
+  /** Every source moved exactly once through the boundary, and the stored evidence shows it out of the Inbox, live. */
+  async function expectFiledOnce(w: Pick<World, 'applied' | 'drive' | 'rootId' | 'sources'>): Promise<void> {
+    expect(w.sources.length).toBe(4);
+    for (const id of w.sources) {
+      expect(movesOf(w, id), `moves of ${id}`).toBe(1);
+      const ev = await w.drive.evidence(id);
+      expect(ev?.trashed, `${id} in the Bin`).toBe(false);
+      expect(w.drive.pathOf(id, w.rootId).startsWith('Inbox/'), `${id} still in the Inbox`).toBe(false);
+    }
+  }
+
+  type Rec = { name: string; path: string; text: string };
+  async function recordsOf(w: { drive: FakeDrive; rootId: string }): Promise<Rec[]> {
+    const files = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith('.bower/runs/'));
+    const out = await Promise.all(files.map(async (f) => ({ name: f.name, path: w.drive.pathOf(f.id, w.rootId), text: await w.drive.readText(f.id) })));
+    return out.sort((a, b) => a.path.localeCompare(b.path));
+  }
+  const manifestsOf = async (w: { drive: FakeDrive; rootId: string }): Promise<Array<Manifest & { name: string }>> =>
+    (await recordsOf(w)).filter((r) => r.name.startsWith('manifest-')).map((r) => ({ ...(JSON.parse(r.text) as Manifest), name: r.name }));
+  const checkpointsOf = async (w: { drive: FakeDrive; rootId: string }, runId?: string): Promise<Checkpoint[]> =>
+    (await recordsOf(w)).filter((r) => r.name.startsWith('checkpoint-')).map((r) => JSON.parse(r.text) as Checkpoint)
+      .filter((c) => !runId || c.runId === runId).sort((a, b) => a.revision - b.revision);
+  const reportsOf = async (w: { drive: FakeDrive; rootId: string }): Promise<Array<{ hash: string; body: ReportRecord }>> =>
+    (await recordsOf(w)).filter((r) => r.name.startsWith('report-')).map((r) => ({ hash: r.name.slice('report-'.length, -'.json'.length), body: JSON.parse(r.text) as ReportRecord }));
+  const viewOf = (w: { drive: FakeDrive; rootId: string }): LastRunFile | null => {
+    const text = w.drive.dump(w.rootId).get(SYSTEM.lastRun);
+    return text === undefined ? null : (JSON.parse(text) as LastRunFile);
+  };
+
+  /** Everything in the folder but the run's own records and view: names, places, ids, marks and texts. */
+  async function domain(drive: FakeDrive, rootId: string): Promise<string> {
+    const own = (path: string): boolean => path === SYSTEM.lastRun || path.startsWith('.bower/runs') || /^\.bower\/piles\/disposition-/.test(path);
+    const files = (await drive.listAll(rootId))
+      .filter((f) => !own(drive.pathOf(f.id, rootId)))
+      .map((f) => ({ id: f.id, name: f.name, parents: f.parents, folder: f.folder, props: f.appProperties ?? null, path: drive.pathOf(f.id, rootId) }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const texts = [...drive.dump(rootId)].filter(([path]) => !own(path)).sort(([a], [b]) => a.localeCompare(b));
+    return JSON.stringify({ files, texts });
+  }
+
+  /** The run once the recovery that asking started has settled. */
+  async function after(worker: FakeWorker, runs: FakeRunService): Promise<RunWire | null> {
+    await worker.status();
+    await runs.settled();
+    return worker.status();
+  }
+
+  /** A run whose terminal view is refused: it filed everything and stays saving. */
+  async function refusedView(o: { declared?: boolean } = {}) {
+    const w = await bWorld(o);
+    w.rules.push((call) => (isView(w, call, 'done') ? 'refuse' : undefined));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    return { ...w, admitted };
+  }
+
+  /** Pauses the first attempt right before it dispatches its first filing move. */
+  function pauseFirstMove() {
+    let release = (): void => undefined;
+    let reached = (_at: DispatchAt): void => undefined;
+    const paused = new Promise<DispatchAt>((r) => { reached = r; });
+    const gate = new Promise<void>((r) => { release = r; });
+    let first: string | null = null;
+    let held = false;
+    const hooks: Hooks = {
+      beforeDispatch: async (at) => {
+        if (at.effect.kind !== 'move' || held) return;
+        first ??= at.attemptId;
+        if (at.attemptId !== first) return;
+        held = true;
+        reached(at);
+        await gate;
+      },
+    };
+    return { hooks, paused, release: () => release() };
+  }
+
+  /** The paused dispatch, or null when every attempt settled without reaching it. */
+  async function reached(paused: Promise<DispatchAt>, runs: FakeRunService): Promise<DispatchAt | null> {
+    const none = runs.settled().then(async () => {
+      for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 1));
+      return null;
+    });
+    return Promise.race([paused, none]);
+  }
+
+  it('sends a plan with an effect outside B down the legacy path, whole', async () => {
+    const w = await bWorld();
+    await w.uploader.addPile({ text: '', items: [link] });
+    await w.uploader.settled();
+    const admitted = await w.worker.process('all');
+    await until(w.worker, 'done');
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect(await recordsOf(w)).toEqual([]);
+    expect(w.calls).toEqual([]);
+    expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).toContain(link.name);
+  });
+
+  it('fixes its classification before any effect', async () => {
+    const w = await bWorld();
+    const admitted = await w.worker.process('all');
+    // Admission confirmed the manifest and the first checkpoint, and nothing in your folders changed yet.
+    const manifests = await manifestsOf(w);
+    expect(manifests).toHaveLength(1);
+    expect(manifests[0]).toMatchObject({ runId: admitted.id, runScope: 'all' });
+    expect((await checkpointsOf(w, admitted.id)).map((c) => [c.revision, c.phase])).toContainEqual([0, 'queued']);
+    expect(w.applied.filter((c) => c.op === 'update' || c.op === 'trash' || c.op === 'write-text')).toEqual([]);
+
+    // Input only the legacy path could take arrives while the run goes: a typed rule and a saved link.
+    await w.uploader.addRule('Keep lease papers together');
+    await w.uploader.addPile({ text: '', items: [link] });
+    const lines = async (): Promise<string[]> => (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.changes}/`) && !w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.archive}/`)).map((f) => f.id);
+    const typed = await lines();
+    expect(typed).toHaveLength(1);
+    await w.uploader.settled();
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+
+    // Same plan, same classification: the late input is untouched and the report names only the four files.
+    expect(await manifestsOf(w)).toEqual(manifests);
+    expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
+    const after = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    expect(await lines()).toEqual(typed);
+    expect((await after.piles()).flatMap((p) => p.items.map((i) => i.kind))).toEqual(['link']);
+    await expectFiledOnce(w);
+  });
+
+  it('keeps saving when its terminal view is refused', async () => {
+    const w = await refusedView();
+    const { admitted } = w;
+    for (let i = 0; i < 3; i++) {
+      const status = await w.worker.status();
+      expect(status).toMatchObject({ id: admitted.id, phase: 'saving' });
+      expect(status?.finishedAt).toBeUndefined();
+    }
+    const again = await w.worker.process('all');
+    expect(again).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect(again.finishedAt).toBeUndefined();
+    expect(viewOf(w)).toBeNull();
+
+    // Durably done: the head is the done checkpoint and its report record is saved.
+    const head = (await checkpointsOf(w, admitted.id)).at(-1);
+    expect(head).toMatchObject({ phase: 'done', report: { state: 'published' } });
+    const reports = await reportsOf(w);
+    expect(reports).toHaveLength(1);
+    expect(head?.report.state === 'published' ? head.report.reportHash : null).toBe(reports[0]?.hash);
+    expect(bowerErrors(w).length).toBeGreaterThan(0);
+    await expectFiledOnce(w);
+  });
+
+  it('lets a second client republish the same run without domain effects', async () => {
+    const w = await refusedView();
+    const { admitted } = w;
+    const rest = await domain(w.drive, w.rootId);
+    const records = await recordsOf(w);
+    const seen = w.applied.length;
+    w.rules.length = 0;
+    w.clock.later();
+
+    const second = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+    // Asking does not wait for the recovery: it starts it and answers with the run as it stands.
+    expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    await w.runs.settled();
+    const status = await second.status();
+    const done = (await checkpointsOf(w, admitted.id)).find((c) => c.phase === 'done');
+    expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
+
+    // Only the view was written; no record, place or byte of your folders changed.
+    const fresh = w.applied.slice(seen);
+    expect(fresh.map((c) => c.op)).toEqual(['create-text']);
+    expect(fresh.every((c) => isView(w, c, 'done'))).toBe(true);
+    expect(await domain(w.drive, w.rootId)).toBe(rest);
+    expect(await recordsOf(w)).toEqual(records);
+
+    // The screens read the very report that was saved, and the first client sees the same run.
+    const [report] = await reportsOf(w);
+    const runs = new LiveRuns(second, new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }));
+    try {
+      const current = await runs.current();
+      expect(current).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(current?.report).toEqual(report?.body.report);
+    } finally {
+      runs.dispose();
+    }
+    expect(await w.worker.status()).toEqual(status);
+    await expectFiledOnce(w);
+  });
+
+  it('reloads the service and the drive and publishes without the originating closures', async () => {
+    const w = await refusedView();
+    const { admitted } = w;
+    const rest = await domain(w.drive, w.rootId);
+    const records = await recordsOf(w);
+    const snapshot = await w.drive.snapshot();
+    const json = w.runs.toJSON();
+    // The page that ran it is gone: its Drive takes nothing more.
+    w.rules.length = 0;
+    w.rules.push(() => 'refuse');
+
+    const drive = FakeDrive.restore(snapshot);
+    const applied: FencedCall[] = [];
+    drive.fault = { applied: (call) => { applied.push(call); } };
+    const runs = FakeRunService.restore(json, { drive, clock: w.clock.now, scale: 'instant' });
+    const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+    const status = await after(worker, runs);
+    expect(status).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect(applied.map((c) => c.op)).toEqual(['create-text']);
+    const reloaded = { drive, rootId: w.rootId };
+    expect(await domain(drive, w.rootId)).toBe(rest);
+    expect(await recordsOf(reloaded)).toEqual(records);
+    expect(viewOf(reloaded)?.run).toMatchObject({ id: admitted.id, phase: 'done', report: (await reportsOf(reloaded))[0]?.body.report });
+    for (const id of w.sources) {
+      expect(movesOf(w, id)).toBe(1);
+      expect(applied.filter(isMoveOf(id))).toEqual([]);
+      expect(drive.pathOf(id, w.rootId).startsWith('Inbox/')).toBe(false);
+      expect((await drive.evidence(id))?.trashed).toBe(false);
+    }
+  });
+
+  it('rebuilds the identical report after its first pending checkpoint is refused', async () => {
+    const w = await bWorld();
+    const refused: FencedCall[] = [];
+    const pending = (call: FencedCall): boolean => {
+      const text = textOf(call);
+      return named('checkpoint-')(call) && text !== null && (JSON.parse(text) as Checkpoint).report.state === 'pending';
+    };
+    w.rules.push(once(pending, 'refuse', refused));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect(await reportsOf(w)).toEqual([]);
+    expect((await checkpointsOf(w, admitted.id)).every((c) => c.report.state === 'not-ready')).toBe(true);
+    expect(bowerErrors(w).length).toBeGreaterThan(0);
+
+    w.clock.later();
+    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done' });
+    const first = JSON.parse(textOf(refused[0] ?? { op: 'trash', id: '' }) ?? '{}') as Checkpoint;
+    expect(first.report.state).toBe('pending');
+    const [report, ...more] = await reportsOf(w);
+    expect(more).toEqual([]);
+    expect(first.report.state === 'pending' ? [first.report.reportHash, first.report.body] : null).toEqual([report?.hash, report?.body]);
+    const kept = (await checkpointsOf(w, admitted.id)).filter((c) => c.report.state === 'pending');
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.epoch).toBeGreaterThan(first.epoch);
+    expect(viewOf(w)?.run.report).toEqual(report?.body.report);
+    expect(await manifestsOf(w)).toHaveLength(1);
+    await expectFiledOnce(w);
+  });
+
+  it('reconciles a lost move reply without moving it again', async () => {
+    const w = await bWorld();
+    const lost = w.sources[0] ?? '';
+    w.rules.push(once(isMoveOf(lost), 'lose-reply'));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    const [manifest] = await manifestsOf(w);
+    const op = manifest?.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === lost && !('fileId' in o.effect.parent && o.effect.parent.fileId === o.effect.before.parents[0]));
+    const head = (await checkpointsOf(w, admitted.id)).at(-1);
+    const unresolved = head?.outcomes.find((o) => o.operationId === op?.operationId);
+    expect(unresolved?.state).toBe('possible-effect');
+
+    w.clock.later();
+    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done' });
+    const chain = await checkpointsOf(w, admitted.id);
+    const settled = chain.at(-1)?.outcomes.find((o) => o.operationId === op?.operationId);
+    expect(settled?.state).toBe('applied');
+    expect(chain.at(-1)?.epoch).toBeGreaterThan(1);
+    // The move reached the Drive once and was never sent again.
+    expect(w.calls.filter(isMoveOf(lost))).toHaveLength(1);
+    await expectFiledOnce(w);
+  });
+
+  it('reconciles lost report and view replies by their exact bodies', async () => {
+    const w = await bWorld();
+    w.rules.push(once(named('report-'), 'lose-reply'), once((call) => isView(w, call, 'done'), 'lose-reply'));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    const status = await w.worker.status();
+    const done = (await checkpointsOf(w, admitted.id)).find((c) => c.phase === 'done');
+    expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
+    const reports = await reportsOf(w);
+    expect(reports).toHaveLength(1);
+    expect(w.calls.filter(named('report-'))).toHaveLength(1);
+    expect(w.calls.filter((call) => isView(w, call))).toHaveLength(1);
+    expect(viewOf(w)?.run).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt, report: reports[0]?.body.report });
+    await expectFiledOnce(w);
+  });
+
+  it('refuses a stale attempt at the mutation boundary', async () => {
+    const pause = pauseFirstMove();
+    const w = await bWorld({ hooks: pause.hooks });
+    const admitted = await w.worker.process('all');
+    const at = await reached(pause.paused, w.runs);
+    expect(at, 'the first move was paused before its dispatch').not.toBeNull();
+    if (!at) return;
+    const held = at.effect.kind === 'move' ? at.effect.before.fileId : '';
+    expect(w.sources).toContain(held);
+
+    // The paused attempt's claim lapses; another client asks, and the service recovers under a newer epoch.
+    w.clock.later(CLAIM_MS + 1);
+    const second = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+    await until(second, 'done');
+    expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await checkpointsOf(w, admitted.id)).at(-1)?.epoch).toBeGreaterThan(at.epoch);
+    const records = await recordsOf(w);
+    const mutations = w.mutations();
+
+    // The stale attempt wakes and tries its move: the boundary refuses it, and nothing changes.
+    pause.release();
+    await w.runs.settled();
+    expect(w.calls.filter(isMoveOf(held))).toHaveLength(2);
+    expect(await recordsOf(w)).toEqual(records);
+    expect(w.mutations()).toBe(mutations);
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    await expectFiledOnce(w);
+  });
+
+  it('refuses other scopes and a revoked session at the mutation boundary', async () => {
+    const pause = pauseFirstMove();
+    const w = await bWorld({ hooks: pause.hooks });
+    const admitted = await w.worker.process('all');
+    expect(await reached(pause.paused, w.runs), 'the first move was paused before its dispatch').not.toBeNull();
+    const records = await recordsOf(w);
+    const mutations = w.mutations();
+
+    // Another account or another folder has no run here and cannot recover this one.
+    await expect(w.runs.recover({ account: 'someone@example.com', rootId: w.rootId }, admitted.id)).rejects.toMatchObject({ code: 'auth' });
+    await expect(w.runs.recover({ account: ALEX.email, rootId: 'FOLDER_ID' }, admitted.id)).rejects.toMatchObject({ code: 'auth' });
+    expect(await w.runs.status({ account: 'someone@example.com', rootId: w.rootId })).toBeNull();
+
+    // The session ends while the attempt waits to move a file: the boundary refuses the move.
+    w.runs.revoke(me(w.rootId));
+    pause.release();
+    await w.runs.settled();
+    expect(await recordsOf(w)).toEqual(records);
+    expect(w.mutations()).toBe(mutations);
+    expect(w.applied.filter((c) => c.op === 'update' || c.op === 'trash')).toEqual([]);
+    await expect(w.worker.status()).rejects.toMatchObject({ code: 'auth' });
+    expect(w.calls.filter((c) => c.op === 'update')).toHaveLength(1);
+    for (const id of w.sources) {
+      expect(movesOf(w, id)).toBe(0);
+      expect(w.drive.pathOf(id, w.rootId).startsWith('Inbox/')).toBe(true);
+    }
+  });
+
+  it("never overwrites a later run's view", async () => {
+    const w = await refusedView();
+    const { admitted } = w;
+    w.rules.length = 0;
+    const sys = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === w.rootId);
+    const at = admitted.requestedAt + 1;
+    const later: LastRunFile = { v: 1, run: { id: 'run-later', scope: 'all', phase: 'done', requestedAt: at, phaseAt: at, finishedAt: at, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } };
+    await w.drive.createText(sys?.id ?? '', 'last-run.json', `${JSON.stringify(later, null, 2)}\n`);
+    const text = w.drive.dump(w.rootId).get(SYSTEM.lastRun);
+    const before = w.mutations();
+    w.errors.mockClear();
+
+    w.clock.later();
+    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect(w.drive.dump(w.rootId).get(SYSTEM.lastRun)).toBe(text);
+    expect(w.mutations()).toBe(before);
+    expect(bowerErrors(w).some((e) => e.code === 'conflict')).toBe(true);
+
+    // It stays saving, but stops trying after a few attempts instead of retrying every five seconds.
+    for (let i = 0; i < 8; i++) {
+      w.clock.later();
+      expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'saving' });
+    }
+    w.errors.mockClear();
+    for (let i = 0; i < 4; i++) {
+      w.clock.later();
+      expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'saving' });
+    }
+    expect(w.errors.mock.calls).toEqual([]);
+    expect(w.drive.dump(w.rootId).get(SYSTEM.lastRun)).toBe(text);
+    await expectFiledOnce(w);
+  });
+
+  it("publishes a declared pile's consumed disposition before done", async () => {
+    const w = await bWorld({ declared: true });
+    w.rules.push(once(named('disposition-'), 'refuse'));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect((await checkpointsOf(w, admitted.id)).some((c) => c.phase === 'done')).toBe(false);
+
+    w.clock.later();
+    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done' });
+    const listing = await w.drive.listAll(w.rootId);
+    const inPiles = listing.filter((f) => !f.folder && w.drive.pathOf(f.id, w.rootId).startsWith(`${SYSTEM.piles}/`));
+    const declarations = await Promise.all(inPiles.filter((f) => f.name.startsWith('declaration-')).map(async (f) => JSON.parse(await w.drive.readText(f.id)) as Declaration));
+    const dispositions = inPiles.filter((f) => f.name.startsWith('disposition-'));
+    expect(declarations).toHaveLength(2);
+    expect(dispositions).toHaveLength(2);
+    const [report] = await reportsOf(w);
+    const piles = new Set<string>();
+    for (const f of dispositions) {
+      const bytes = await w.drive.readBytes(f.id);
+      const pileId = (JSON.parse(new TextDecoder().decode(bytes)) as { pileId: string }).pileId;
+      const declaration = declarations.find((d) => d.pileId === pileId);
+      const parsed = await parsePileDisposition(bytes, w.rootId, declaration?.members.map((m) => m.memberKey) ?? []);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) continue;
+      expect(f.name).toBe(`disposition-${parsed.sha256}.json`);
+      expect(parsed.value).toMatchObject({ action: 'consumed', authority: { kind: 'run', runId: admitted.id, reportHash: report?.hash } });
+      piles.add(pileId);
+    }
+    expect([...piles].sort()).toEqual(declarations.map((d) => d.pileId).sort());
+
+    // Every disposition landed before the done checkpoint, and the done checkpoint before the view.
+    const order = w.applied.map((c) => (c.op === 'create-text' ? c.name : c.op === 'write-text' && isView(w, c) ? 'last-run.json' : ''));
+    const done = order.findIndex((n) => n.startsWith('checkpoint-') && (JSON.parse(textOf(w.applied[order.indexOf(n)] ?? { op: 'trash', id: '' }) ?? '{}') as Checkpoint).phase === 'done');
+    const lastDisposition = order.reduce((at, n, i) => (n.startsWith('disposition-') ? i : at), -1);
+    expect(lastDisposition).toBeGreaterThan(-1);
+    expect(done).toBeGreaterThan(lastDisposition);
+    expect(order.indexOf('last-run.json')).toBeGreaterThan(done);
+    await expectFiledOnce(w);
+  });
+
+  it('clears the last run\'s new marks as B moves and leaves the report unchanged', async () => {
+    const w = await bWorld();
+    const first = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    const marked = (await w.drive.listAll(w.rootId)).filter((f) => f.appProperties?.bowerNew === '1');
+    expect(marked.map((f) => f.id).sort()).toEqual([...w.sources].sort());
+
+    await w.uploader.addPile({ text: '', items: [pdf('extra one.pdf'), pdf('extra two.pdf')] });
+    await w.uploader.settled();
+    const extra = await inboxPdfs(w.drive, w.rootId);
+    expect(extra).toHaveLength(2);
+    const second = await w.worker.process('all');
+    await w.runs.settled();
+    expect(second.id).not.toBe(first.id);
+    expect(await w.worker.status()).toMatchObject({ id: second.id, phase: 'done' });
+
+    const manifest = (await manifestsOf(w)).find((m) => m.runId === second.id);
+    const clears = manifest?.operations.flatMap((o) => (o.effect.kind === 'move' && JSON.stringify(o.effect.properties) === '{"bowerNew":null}' ? [o.effect] : [])) ?? [];
+    expect(clears.map((e) => e.before.fileId).sort()).toEqual(marked.map((f) => f.id).sort());
+    for (const effect of clears) expect({ parent: effect.parent, name: effect.name }).toEqual({ parent: { fileId: effect.before.parents[0] }, name: effect.before.name });
+    for (const f of marked) {
+      const ev = await w.drive.evidence(f.id);
+      expect(ev?.file).toMatchObject({ name: f.name, parents: f.parents });
+      expect(ev?.file.appProperties?.bowerNew).toBeUndefined();
+      expect(w.applied.filter((c) => c.op === 'update' && c.id === f.id && c.patch.addParent === undefined)).toHaveLength(1);
+    }
+    const report = viewOf(w)?.run.report;
+    expect(report?.filed.map((f) => f.name).sort()).toEqual(['extra one.pdf', 'extra two.pdf']);
+    expect(report).toMatchObject({ created: [], updated: [], setAside: [], questions: [] });
+    for (const id of extra) expect(movesOf(w, id)).toBe(1);
+    await expectFiledOnce(w);
+  });
+
+  it('holds back a failed ending until its view is saved', async () => {
+    const w = await bWorld({ scenario: 'fail-run' });
+    const rest = await domain(w.drive, w.rootId);
+    w.rules.push((call) => (isView(w, call, 'failed') ? 'refuse' : undefined));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    const held = await w.worker.status();
+    expect(held).toMatchObject({ id: admitted.id, phase: 'writing' });
+    expect(held?.failure).toBeUndefined();
+    expect(held?.finishedAt).toBeUndefined();
+    expect(await w.worker.process('all')).toMatchObject({ id: admitted.id, phase: 'writing' });
+    const head = (await checkpointsOf(w, admitted.id)).at(-1);
+    expect(head?.phase).toBe('failed');
+    expect(head?.outcomes.every((o) => o.state === 'not-dispatched')).toBe(true);
+    expect(viewOf(w)).toBeNull();
+
+    w.rules.length = 0;
+    w.clock.later();
+    const failed = await after(w.worker, w.runs);
+    expect(failed).toMatchObject({ id: admitted.id, phase: 'failed', failure: 'The tidy-up stopped before changing anything. Try again.', finishedAt: head?.phaseAt });
+    expect(viewOf(w)?.run).toEqual(failed);
+    expect(await domain(w.drive, w.rootId)).toBe(rest);
+    for (const id of w.sources) {
+      expect(movesOf(w, id)).toBe(0);
+      expect(w.drive.pathOf(id, w.rootId).startsWith('Inbox/')).toBe(true);
+    }
+  });
+
+  it("replaces a late view of a run admitted before it, such as a legacy retry", async () => {
+    const w = await refusedView();
+    const { admitted } = w;
+    w.rules.length = 0;
+    const sys = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === w.rootId);
+    const at = admitted.requestedAt - 60_000;
+    const earlier: LastRunFile = { v: 1, run: { id: 'run-earlier', scope: 'all', phase: 'done', requestedAt: at, phaseAt: at, finishedAt: at, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } };
+    await w.drive.createText(sys?.id ?? '', 'last-run.json', `${JSON.stringify(earlier, null, 2)}\n`);
+    const rest = await domain(w.drive, w.rootId);
+
+    w.clock.later();
+    const done = (await checkpointsOf(w, admitted.id)).find((c) => c.phase === 'done');
+    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
+    expect(viewOf(w)?.run).toMatchObject({ id: admitted.id, phase: 'done', report: (await reportsOf(w))[0]?.body.report });
+    expect(await domain(w.drive, w.rootId)).toBe(rest);
+    await expectFiledOnce(w);
+  });
+
+  it('keeps a dispatch that passed the boundary and shows no effect unresolved, never sending it again', async () => {
+    const w = await bWorld();
+    const lost = w.sources[0] ?? '';
+    w.rules.push(once(isMoveOf(lost), 'lose-reply'));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    // The move landed, then the file went back where it was: the effect no longer shows.
+    const inbox = (await w.drive.listAll(w.rootId)).filter((f) => f.folder && w.drive.pathOf(f.id, w.rootId).startsWith('Inbox/'));
+    const [manifest] = await manifestsOf(w);
+    const before = manifest?.capture.members.find((m) => m.file.fileId === lost)?.file;
+    const now = await w.drive.get(lost);
+    expect(inbox.some((f) => f.id === before?.parents[0])).toBe(true);
+    await w.drive.update(lost, { name: before?.name ?? '', addParent: before?.parents[0] ?? '', removeParent: now.parents[0] ?? '' });
+    w.errors.mockClear();
+    const records = await recordsOf(w);
+
+    for (let i = 0; i < 3; i++) {
+      w.clock.later();
+      expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'saving' });
+    }
+    expect(w.calls.filter(isMoveOf(lost))).toHaveLength(1);
+    expect(await recordsOf(w)).toEqual(records);
+    expect(bowerErrors(w).length).toBeGreaterThan(0);
+  });
+
+  it('never reuses an epoch after the service is restored', async () => {
+    const w = await bWorld();
+    const pending = (call: FencedCall): boolean => {
+      const text = textOf(call);
+      return named('checkpoint-')(call) && text !== null && (JSON.parse(text) as Checkpoint).report.state === 'pending';
+    };
+    let refusals = 2;
+    w.rules.push((call) => (refusals > 0 && pending(call) ? (refusals--, 'refuse') : undefined));
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    // A recovery under epoch 2 is refused too, and leaves no checkpoint behind.
+    w.clock.later();
+    expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect(refusals).toBe(0);
+    expect(Math.max(...(await checkpointsOf(w, admitted.id)).map((c) => c.epoch))).toBe(1);
+
+    const drive = FakeDrive.restore(await w.drive.snapshot());
+    const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
+    const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+    expect(await after(worker, runs)).toMatchObject({ id: admitted.id, phase: 'done' });
+    const kept = (await checkpointsOf({ drive, rootId: w.rootId }, admitted.id)).filter((c) => c.report.state === 'pending');
+    expect(kept.map((c) => c.epoch)).toEqual([3]);
+  });
+
+  it('recovers after a reload inside the pretend persistence window', async () => {
+    sessionStorage.clear();
+    localStorage.clear();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const first = await pretendDrive('first');
+    const runs = pretendRuns('first', first.drive, first.fresh, 'instant');
+    const worker = new FakeWorker({ drive: first.drive, scenario: 'first', scale: 'instant', rootId: null, runs });
+    const rootId = (await worker.createFolder()).id;
+    const uploader = new DriveVault({ drive: first.drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_A' });
+    await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
+    await uploader.addPile({ text: '', items: [pdf('idea one.pdf'), pdf('idea two.pdf')] });
+    await uploader.settled();
+    const sources = await inboxPdfs(first.drive, rootId);
+    const view = { drive: first.drive, rootId };
+    first.drive.fault = { before: (call) => (isView(view, call, 'done') ? 'refuse' : 'pass') };
+    const admitted = await worker.process('all');
+    await runs.settled();
+
+    // The page reloads right now, before any delayed save: what the tab kept is all there is.
+    const again = await pretendDrive('first');
+    expect(again.fresh).toBe(false);
+    expect(again.rootId).toBe(rootId);
+    const reloadedRuns = pretendRuns('first', again.drive, again.fresh, 'instant');
+    const reloaded = new FakeWorker({ drive: again.drive, scenario: 'first', scale: 'instant', rootId: again.rootId, runs: reloadedRuns, fresh: false });
+    expect(await after(reloaded, reloadedRuns)).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect(sources).toHaveLength(4);
+    for (const id of sources) {
+      expect(again.drive.pathOf(id, rootId).startsWith('Inbox/')).toBe(false);
+      expect((await again.drive.evidence(id))?.trashed).toBe(false);
+    }
+  });
+
+  it('stays done after a restore from a consistent snapshot, its view unchanged, and admits the next run', async () => {
+    const w = await bWorld();
+    const first = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    const text = w.drive.dump(w.rootId).get(SYSTEM.lastRun);
+
+    const { snapshot, alongside } = await w.drive.snapshotWith(() => w.runs.toJSON());
+    const drive = FakeDrive.restore(snapshot);
+    const runs = FakeRunService.restore(alongside, { drive, clock: w.clock.now, scale: 'instant' });
+    const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+    expect(await after(worker, runs)).toMatchObject({ id: first.id, phase: 'done' });
+    expect(drive.dump(w.rootId).get(SYSTEM.lastRun)).toBe(text);
+
+    const uploader = new DriveVault({ drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    await uploader.addPile({ text: '', items: [pdf('extra one.pdf'), pdf('extra two.pdf')] });
+    await uploader.settled();
+    const next = await worker.process('all');
+    expect(next.id).not.toBe(first.id);
+    await runs.settled();
+    expect(await worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+  });
+
+  it('recovers from a consistent snapshot taken at any moment of the run, each file filed once', async () => {
+    const w = await bWorld();
+    const moments: Array<Promise<{ snapshot: string; alongside: string }>> = [];
+    const appliedAt: number[] = [];
+    const before = w.drive.fault?.before;
+    w.drive.fault = { ...w.drive.fault, before: (call) => {
+      // A save at this instant, as the pretend source takes it: the Drive and the runs together.
+      moments.push(w.drive.snapshotWith(() => w.runs.toJSON()));
+      appliedAt.push(w.applied.length);
+      return before?.(call) ?? 'pass';
+    } };
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect(moments.length).toBeGreaterThan(20);
+    const taken = await Promise.all(moments);
+    for (let i = 0; i < taken.length; i++) {
+      const moment = taken[i];
+      if (!moment) continue;
+      const drive = FakeDrive.restore(moment.snapshot);
+      const applied: FencedCall[] = [];
+      drive.fault = { applied: (call) => { applied.push(call); } };
+      const runs = FakeRunService.restore(moment.alongside, { drive, clock: w.clock.now, scale: 'instant' });
+      const rootId = (await drive.listAll('root')).find((f) => f.folder && f.parents[0] === 'root')?.id ?? null;
+      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId, runs, fresh: false });
+      const status = await after(worker, runs);
+      const earlier = w.applied.slice(0, appliedAt[i]);
+      if (status === null) {
+        // Saved before the admission was acknowledged: no run, and nothing of it took effect.
+        expect(earlier.filter((c) => c.op === 'update' || c.op === 'trash'), `moment ${i}`).toEqual([]);
+        for (const id of w.sources) expect(drive.pathOf(id, w.rootId).startsWith('Inbox/'), `moment ${i}, ${id}`).toBe(true);
+        continue;
+      }
+      expect(status, `moment ${i}`).toMatchObject({ id: admitted.id, phase: 'done' });
+      for (const id of w.sources) {
+        expect(earlier.filter(isMoveOf(id)).length + applied.filter(isMoveOf(id)).length, `moment ${i}, ${id}`).toBe(1);
+        expect(drive.pathOf(id, w.rootId).startsWith('Inbox/'), `moment ${i}, ${id}`).toBe(false);
+      }
+    }
+  });
+
+  it('returns the same admitted run to quick repeated asks from one or two clients', async () => {
+    const w = await bWorld();
+    const other = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+    const asks = await Promise.all([w.worker.process('all'), w.worker.process('all'), other.process('all')]);
+    expect(new Set(asks.map((a) => a.id)).size).toBe(1);
+    await w.runs.settled();
+    expect(await manifestsOf(w)).toHaveLength(1);
+    await expectFiledOnce(w);
+  });
+
+  it('checks a source is still as seen inside the boundary, so a rename just before the move is set aside, not undone', async () => {
+    let renamed: string | null = null;
+    let drive: FakeDrive | null = null;
+    const hooks: Hooks = {
+      beforeDispatch: async (at) => {
+        if (renamed || at.effect.kind !== 'move' || !drive) return;
+        renamed = at.effect.before.fileId;
+        // Alex renames it in Drive after Bower checked it and before the move is sent.
+        await drive.update(renamed, { name: 'renamed by Alex.pdf' });
+      },
+    };
+    const w = await bWorld({ hooks });
+    drive = w.drive;
+    const admitted = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    const held = renamed ?? '';
+    const ev = await w.drive.evidence(held);
+    expect(ev?.file.name).toBe('renamed by Alex.pdf');
+    expect(w.drive.pathOf(held, w.rootId).startsWith('Inbox/')).toBe(true);
+    expect(movesOf(w, held)).toBe(0);
+    const [manifest] = await manifestsOf(w);
+    const name = manifest?.capture.members.find((m) => m.file.fileId === held)?.file.name;
+    expect(viewOf(w)?.run.report?.setAside).toEqual([{ name, why: 'It was moved, renamed or removed before Bower could file it.' }]);
+    for (const id of w.sources.filter((x) => x !== held)) expect(movesOf(w, id)).toBe(1);
+  });
+
+  it('recomputes hashes.json from the stored files on the next run after its write was rejected', async () => {
+    let moved: string | null = null;
+    let drive: FakeDrive | null = null;
+    let rootId = '';
+    const hooks: Hooks = {
+      beforeDispatch: async (at) => {
+        if (moved || at.effect.kind !== 'move' || !drive) return;
+        moved = at.effect.before.fileId;
+        // Alex moves it to Areas in Drive just before Bower's move: that move, the pile's Bin and the hashes are rejected.
+        const areas = (await drive.listAll(rootId)).find((f) => f.folder && f.name === 'Areas' && f.parents[0] === rootId);
+        await drive.update(moved, { addParent: areas?.id ?? '', removeParent: at.effect.before.parents[0] ?? '' });
+      },
+    };
+    const w = await bWorld({ hooks });
+    drive = w.drive;
+    rootId = w.rootId;
+    const hashesOf = (): Record<string, string> => (JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.hashes) ?? '{}') as { hashes: Record<string, string> }).hashes;
+    /** What hashes.json should say: every live file outside the Inbox and Bower's own folder, not a note, by its stored bytes. */
+    const stored = async (): Promise<Record<string, string>> => {
+      const out: Record<string, string> = {};
+      for (const f of await w.drive.listAll(w.rootId)) {
+        const path = w.drive.pathOf(f.id, w.rootId);
+        if (f.folder || f.name.endsWith('.md') || path.startsWith('Inbox/') || path.split('/').some((part) => part.startsWith('.'))) continue;
+        const ev = await w.drive.evidence(f.id);
+        if (ev?.content) out[ev.content.sha256] = path;
+      }
+      return out;
+    };
+    const first = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    const [manifest] = await manifestsOf(w);
+    const head = (await checkpointsOf(w, first.id)).at(-1);
+    const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json');
+    expect(head?.outcomes.find((o) => o.operationId === write?.operationId)?.state).toBe('rejected');
+    expect(hashesOf()).not.toEqual(await stored());
+
+    // Alex clears what is left of that pile and adds another; the next run is on the B path too.
+    const alex = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
+    const left = await alex.piles();
+    expect(left).toHaveLength(1);
+    for (const pile of left) await alex.removePile(pile.id);
+    await alex.addPile({ text: '', items: [pdf('extra one.pdf'), pdf('extra two.pdf')] });
+    await alex.settled();
+    const second = await w.worker.process('all');
+    await w.runs.settled();
+    expect(await w.worker.status()).toMatchObject({ id: second.id, phase: 'done' });
+    expect((await manifestsOf(w)).some((m) => m.runId === second.id)).toBe(true);
+    expect(hashesOf()).toEqual(await stored());
+    expect(Object.values(hashesOf())).toContain(w.drive.pathOf(moved ?? '', w.rootId));
+  });
+
+  it('never keeps a pretend Drive and run service from different instants when the second save fails', async () => {
+    sessionStorage.clear();
+    localStorage.clear();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const DRIVE_KEY = 'bower:fake:first';
+    const RUNS_KEY = 'bower:fake:first:runs';
+    const first = await pretendDrive('first');
+    const runs = pretendRuns('first', first.drive, first.fresh, 'instant');
+    const worker = new FakeWorker({ drive: first.drive, scenario: 'first', scale: 'instant', rootId: null, runs });
+    const rootId = (await worker.createFolder()).id;
+    const uploader = new DriveVault({ drive: first.drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_A' });
+    await uploader.addPile({ text: 'Papers about the lease', items: [pdf('lease.pdf'), pdf('inventory.pdf')] });
+    await uploader.addPile({ text: '', items: [pdf('idea one.pdf'), pdf('idea two.pdf')] });
+    await uploader.settled();
+    const sources = await inboxPdfs(first.drive, rootId);
+    // The admission is saved: the Drive and the runs of one instant.
+    const view = { drive: first.drive, rootId };
+    first.drive.fault = { before: (call) => (isView(view, call, 'done') ? 'refuse' : 'pass') };
+    const admitted = await worker.process('all');
+    const saved = { drive: sessionStorage.getItem(DRIVE_KEY), runs: sessionStorage.getItem(RUNS_KEY) };
+    expect(saved.drive).not.toBeNull();
+    expect(saved.runs).not.toBeNull();
+
+    // The tab's storage is full for the runs: the next save writes the Drive, then fails on the runs.
+    const setItem = Storage.prototype.setItem;
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === RUNS_KEY) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      setItem.call(this, key, value);
+    });
+    await runs.settled();
+    for (let i = 0; i < 60 && !full.mock.calls.some(([key]) => key === RUNS_KEY); i++) await new Promise((r) => setTimeout(r, 25));
+    for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(full.mock.calls.some(([key]) => key === RUNS_KEY)).toBe(true);
+    full.mockRestore();
+
+    // A reader sees both from the same instant, or neither.
+    const kept = { drive: sessionStorage.getItem(DRIVE_KEY), runs: sessionStorage.getItem(RUNS_KEY) };
+    const oneInstant = (kept.drive === saved.drive && kept.runs === saved.runs) || (kept.drive === null && kept.runs === null);
+    expect(oneInstant, 'the kept Drive and runs are from one instant').toBe(true);
+
+    // A reload from what is kept recovers the run, each file filed once.
+    if (kept.drive === null) return;
+    const again = await pretendDrive('first');
+    const reloadedRuns = pretendRuns('first', again.drive, again.fresh, 'instant');
+    const reloaded = new FakeWorker({ drive: again.drive, scenario: 'first', scale: 'instant', rootId: again.rootId, runs: reloadedRuns, fresh: false });
+    const applied: FencedCall[] = [];
+    again.drive.fault = { applied: (call) => { applied.push(call); } };
+    expect(await after(reloaded, reloadedRuns)).toMatchObject({ id: admitted.id, phase: 'done' });
+    for (const id of sources) {
+      expect(applied.filter(isMoveOf(id))).toHaveLength(1);
+      expect(again.drive.pathOf(id, rootId).startsWith('Inbox/')).toBe(false);
+    }
+  });
+
+  describe('classification routes', () => {
+    const plan = async (w: { drive: FakeDrive; rootId: string }) =>
+      planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+    async function folderPile(w: World, name: string, files: Array<{ name: string; text: string; props?: Record<string, string> }>) {
+      const inbox = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Inbox' && f.parents[0] === w.rootId);
+      const folder = await w.drive.createFolder(inbox?.id ?? '', name);
+      for (const f of files) await w.drive.createText(folder.id, f.name, f.text, f.props);
+    }
+
+    it('takes the B path for ready plain files', async () => {
+      expect((await plan(await bWorld())).path).toBe('b');
+    });
+    it('sends a run with your changes to the legacy path', async () => {
+      const w = await bWorld();
+      await w.uploader.addRule('Keep lease papers together');
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'journal' });
+    });
+    it('sends a run with a hub Timeline update to the legacy path', async () => {
+      const w = await bWorld();
+      const projects = (await w.drive.listAll(w.rootId)).find((f) => f.folder && f.name === 'Projects');
+      const hub = await w.drive.createFolder(projects?.id ?? '', 'Flat hunt');
+      await w.drive.createText(hub.id, 'Flat hunt.md', '# Flat hunt\n');
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'timeline' });
+    });
+    it('sends a run with a thing that gets its own note to the legacy path', async () => {
+      const w = await bWorld();
+      await folderPile(w, 'Offer', [{ name: 'Offer_letter_final(2).pdf', text: '%PDF offer' }, { name: 'other.pdf', text: '%PDF other' }]);
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'note' });
+    });
+    it('sends a run with a merge to the legacy path', async () => {
+      const w = await bWorld();
+      await folderPile(w, 'Listing', [{ name: 'listing-88213.example', text: 'a listing', props: { kind: 'other' } }, { name: 'other.pdf', text: '%PDF other' }]);
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'merge' });
+    });
+    it('sends a run with a pile that has not fully arrived to the legacy path', async () => {
+      const w = await bWorld();
+      const declaring = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
+      const upload = w.drive.upload.bind(w.drive);
+      w.drive.upload = async (parent, name, body, onProgress, props) => {
+        if (name === 'missing.pdf') throw driveError('offline');
+        return upload(parent, name, body, onProgress, props);
+      };
+      await declaring.addPile({ text: 'Papers', items: [pdf('arrived.pdf'), pdf('missing.pdf')] });
+      await declaring.settled();
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'readiness' });
+    });
+    it('sends a run with a loose thing to the legacy path', async () => {
+      const w = await bWorld();
+      await w.uploader.addPile({ text: '', items: [pdf('alone.pdf')] });
+      await w.uploader.settled();
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'loose pile' });
+    });
+    it('sends a run with a note to write to the legacy path', async () => {
+      const w = await bWorld();
+      await w.uploader.addPile({ text: 'Bins go out on Tuesday nights', items: [] });
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'generated note' });
+    });
+    it('sends a run that asks a question to the legacy path', async () => {
+      const w = await bWorld();
+      await w.uploader.addPile({ text: 'Saltmere weekend receipts', items: [pdf('taxi.pdf'), pdf('hotel.pdf')] });
+      await w.uploader.settled();
+      expect(await plan(w)).toEqual({ path: 'legacy', why: 'question' });
+    });
   });
 });
