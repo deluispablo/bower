@@ -228,3 +228,4 @@ run-checkpoint-monotonic	8de31da3ad8180fd	2026-10-06	red (fixed in b83db6d795f50
 run-manifest-content-consistency	47d2935572169c11	2026-10-06	red (fixed in 6f6681d1699313549ce10f9b7faf4d1ee24b8ef3)
 run-report-save-barrier-legacy	911a8ae39ca41164	2026-10-06	red (fixed in eb64ebd9a832e421f285254041dc111485c7f335)
 partial-pile-readiness	e2caf67631c309d2	2026-10-06	red (fixed in a8b31d7fffefec20501ba4400b3e251c90438675)
+upload-queue-persistent	42d6497250abd84e	2026-10-06	red (fixed in e6a097d52b7c754b5c7b6d772732b18a518e03b9)

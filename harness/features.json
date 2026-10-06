@@ -2953,8 +2953,8 @@
       "Bytes are deleted only after Drive confirms; only one tab uploads; a storage failure is told in one sentence; another account never sees them and deleting the account removes them."
     ],
     "verify": "pnpm vitest run src/data/upload-queue.test.ts -t \"uploads survive a reload without a second file\"",
-    "passes": false,
-    "note": "TL-P2-07 (Planificador, main 6527286), D02 part 1, journey 9. Reuse: original Bower app/src/upload-queue.ts and app/src/cache.ts:520-596 (FSL-1.1-MIT, owner's copyright), adapted. Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-07 D02 part 1 / journey 9, TL-P2-13 scope (two-active-tab work dropped), TL-P2-15 copy. Claude candidate claude/p2-upload-queue (head ef6786a) with final-API stub 0350642; review uq-review-1 BLOCKED twice (phase 1 I1-I3; phase 2 P2-I1) then CLEAN (docs/harness/2026-10-06-upload-queue-review.md, -review-p2.md). Reuse: original Bower app/src/upload-queue.ts + cache.ts:520-596 (FSL-1.1-MIT). Dev dependency fake-indexeddb (tests only; old app had no IndexedDB test setup). Root gates check 3088, e2e 198, e2e:fake 198. On for ?source=fake only; real source stays direct until P3 R4 evidence (P3 obligation). Notices are not on screen yet (pile-set-aside-reason-visible)."
   },
   {
     "id": "declaration-read-isolation",
