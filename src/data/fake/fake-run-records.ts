@@ -139,12 +139,14 @@ export function grounded(manifest: RunManifest): boolean {
   const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
   const members = new Map(manifest.capture.members.map((m) => [m.file.fileId, m]));
   const places = new Map(manifest.capture.places.map((p) => [p.file.fileId, p.path]));
-  // The root of the scope is the path '' (a folder made at the top of the Bower folder); it is never a captured place.
+  // A captured place's path, or the path of a folder the run makes. The scope root is never a captured place, and
+  // is the path '' only as the parent of a folder the run makes at the top: a move or a note never goes to ''.
   const pathOf = (t: Target): string | null => {
-    if ('fileId' in t) return t.fileId === manifest.scope.rootId ? '' : (places.get(t.fileId) ?? null);
+    if ('fileId' in t) return places.get(t.fileId) ?? null;
     const op = ops.get(t.createdBy);
     if (op?.effect.kind !== 'create-folder') return null;
-    const parent = pathOf(op.effect.parent);
+    const top = op.effect.parent;
+    const parent = 'fileId' in top && top.fileId === manifest.scope.rootId ? '' : pathOf(top);
     return parent === null ? null : join(parent, op.effect.name);
   };
   const chainOf = (t: Target): string[] => {
