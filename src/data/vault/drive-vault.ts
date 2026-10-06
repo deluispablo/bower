@@ -65,6 +65,9 @@ export interface DriveVaultUploads {
  * A file or link chosen again that is not the one the pile declared
  * (proposed copy, waiting for approval): what happened, then the action.
  */
+/** Why a pile's note cannot be changed while Bower could not read it (proposed copy, for lead approval). */
+export const NOTE_LOCKED = "Bower could not read this pile's note. Try again.";
+
 export const NOT_THE_SAME_TEXT = {
   file: "That isn't the same file. Choose the file you added before.",
   link: "That isn't the same link. Paste the link you added before.",
@@ -98,6 +101,8 @@ export class DriveVault implements VaultSource {
   private dispositionCache = new Map<string, DispositionResult>();
   /** Pile folders whose declaration could not be read, already logged: once per failure, not per listing. */
   private unreadableLogged = new Set<string>();
+  /** Piles whose note the latest listing could not read: the person saw no words, so none are written over them. */
+  private lockedNotes = new Set<string>();
   /** Sizes and hashes of files already checked, by file id and modified time. */
   private digests = new Map<string, Digest>();
   private ix: Promise<VaultIndex> | null = null;
@@ -513,7 +518,10 @@ export class DriveVault implements VaultSource {
       // A note already found unreadable in this listing is not read (nor logged) again.
       const raw = unread && recorded === note ? null : recorded ? await this.rawText(recorded) : '';
       const setAside = unread || raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
-      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}) });
+      // Its note is shown read-only until a listing reads it (RFC 9110 §13.1.1: no update over an unseen version).
+      if (unread) this.lockedNotes.add(id);
+      else this.lockedNotes.delete(id);
+      out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(unread ? { noteLocked: true as const } : {}) });
     }
     // A lone thing still on its way has no file yet: show it from here.
     for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
@@ -766,7 +774,11 @@ export class DriveVault implements VaultSource {
 
   async updatePile(id: string, input: string): Promise<Pile> {
     this.refuseWhileRunning();
+    // Words typed over a note the person was shown without its words would replace it unseen (a lost update,
+    // RFC 9110 §13.1.1): refused while the listing they saw could not read it, even if Drive answers now.
+    if (this.lockedNotes.has(id)) throw new BowerError('conflict', NOTE_LOCKED);
     const pile = await this.pile(id);
+    if (pile.noteLocked) throw new BowerError('conflict', NOTE_LOCKED);
     const text = input.trim();
     if (!pile.items.length && !text) throw new BowerError('conflict', 'A pile with no files needs its note.');
     const ix = await this.index();

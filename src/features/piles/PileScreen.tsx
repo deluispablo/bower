@@ -370,6 +370,9 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
   const { vault } = useSources();
   const [text, setText] = useState(pile.text);
   const [busy, setBusy] = useState(false);
+  // A note Bower could not read is shown, never typed over: Try again reads it (the reason above says so).
+  const held = !!pile.noteLocked;
+  const off = locked || held;
   const changed = text.trim() !== pile.text;
   const save = async (): Promise<void> => {
     setBusy(true);
@@ -391,16 +394,16 @@ function PileNote({ pile, locked }: { pile: Pile; locked: boolean }) {
         id="pile-note-text"
         rows={3}
         value={text}
-        disabled={locked}
-        placeholder="One line about these things helps Bower most"
+        disabled={off}
+        placeholder={held ? undefined : 'One line about these things helps Bower most'}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => {
-          if (changed && !locked && (text.trim() || pile.items.length)) void save();
+          if (changed && !off && (text.trim() || pile.items.length)) void save();
         }}
       />
       <div className={s.noteFoot}>
-        <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>
-        {changed && !locked && (
+        {!held && <span className="muted">{locked ? 'Locked while a tidy-up runs.' : pile.text ? 'Saved with the pile.' : 'No note yet.'}</span>}
+        {changed && !off && (
           <Button size="sm" disabled={busy} onClick={() => void save()}>
             {busy ? 'Saving…' : 'Save the note'}
           </Button>
