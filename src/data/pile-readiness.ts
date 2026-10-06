@@ -109,8 +109,11 @@ export function declarationCopies(files: readonly DriveFile[], rootId: string, d
   return files.filter((f) => !f.folder && f.parents.some((p) => piles.has(p)) && f.name.startsWith(prefix) && f.name.endsWith('.json'));
 }
 
+/** Declarations found gone and logged already, per reader (its cache): each is logged once. */
+const goneLogged = new WeakMap<Map<string, DeclarationResult>, Set<string>>();
+
 /**
- * The declaration a pile folder names, found by real parents (`.bower` →
+ * The declaration a pile folder or loose file names, found by real parents (`.bower` →
  * `piles`, duplicates included), never by a disambiguated path. Identical
  * copies are one; anything else refuses. Parsed copies are kept in `cache`
  * by file id and modified time, since a declaration never changes. A copy
@@ -124,7 +127,14 @@ export async function findDeclaration(files: readonly DriveFile[], rootId: strin
   if (!declarationId) return { state: 'unmarked' };
   const prefix = `declaration-${declarationId}-`;
   const copies = declarationCopies(files, rootId, declarationId);
-  if (!copies.length) return { state: 'missing' };
+  if (!copies.length) {
+    // Every copy missing or in the Bin (TL-P2-31 amendment): an ordinary observed pile, as Drive's restore leaves it.
+    const logged = cache ? (goneLogged.get(cache) ?? new Set<string>()) : new Set<string>();
+    if (cache) goneLogged.set(cache, logged);
+    if (!logged.has(declarationId)) console.error(`A pile's declaration is gone (${declarationId}); it is taken as an ordinary pile.`);
+    logged.add(declarationId);
+    return { state: 'unmarked' };
+  }
   const found = new Map<string, Declaration>();
   for (const copy of copies) {
     const hash = copy.name.slice(prefix.length, -'.json'.length);
@@ -153,8 +163,8 @@ export async function findDeclaration(files: readonly DriveFile[], rootId: strin
   if (!only || more.length) return { state: 'conflict' };
   const [hash, declaration] = only;
   const anchor = declaration.anchor;
-  // The declaration must be about this folder: same pile, same inbox.
-  if (anchor.kind !== 'folder' || declaration.pileId !== folder.appProperties?.[PROP.pile] || !folder.parents.includes(anchor.inboxId)) return { state: 'conflict' };
+  // The declaration must be about this folder or loose file: same layout, same pile, same inbox.
+  if (anchor.kind !== (folder.folder ? 'folder' : 'loose') || declaration.pileId !== folder.appProperties?.[PROP.pile] || !folder.parents.includes(anchor.inboxId)) return { state: 'conflict' };
   return { state: 'found', declaration, sha256: hash };
 }
 

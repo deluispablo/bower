@@ -1597,7 +1597,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(await runnerSays(pile.id)).toBe(SAID.declaration);
   });
 
-  it('a list Bower cannot find, or bytes it cannot check: Try again later', async () => {
+  it('bytes it cannot check: Try again later; a list gone to the Bin leaves an ordinary pile', async () => {
     const uploader = declaring();
     const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
     await uploader.settled();
@@ -1609,8 +1609,9 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect((await pileOn(declaring(), pile.id))?.setAside).toBeUndefined();
     const [declared] = (await drive.listAll(root)).filter((f) => !f.folder && drive.pathOf(f.id, root).startsWith('.bower/piles/'));
     await drive.trash(declared?.id ?? '');
-    expect((await pileOn(declaring(), pile.id))?.setAside).toBe('not-checked');
-    expect(await runnerSays(pile.id)).toBe(SAID['not-checked']);
+    // TL-P2-31 amendment: with every copy of its list gone, it is an ordinary pile in the inbox and the run alike.
+    expect((await pileOn(declaring(), pile.id))?.setAside).toBeUndefined();
+    expect(await runnerSays(pile.id)).toBeUndefined();
   });
 
   it('Try again checks a pile Bower could not check again, now', async () => {

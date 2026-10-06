@@ -116,6 +116,8 @@ export class DriveVault implements VaultSource {
   private notes = new Map<string, { modified: string; note: ParsedNote; text: string }>();
   /** What went to the Bin from here, by the path it had, so Undo can bring it back. */
   /** What went to the Bin here, by where it was; a pile also takes its declaration copies (TL-P2-31). A pile that had no place has no id. */
+  /** Declaration copies a Remove of this pile sent to the Bin before it stopped: Undo restores them with the rest. */
+  private removing = new Map<string, string[]>();
   private bin = new Map<string, { id: string | null; change: string | null; top?: string; late?: string[]; pending?: Upload; pileKey?: string; declarations?: string[] }>();
   private texts = new Map<string, { modified: string; text: string }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
@@ -170,6 +172,7 @@ export class DriveVault implements VaultSource {
     for (const u of this.uploads.values()) for (const e of u.entries) { delete e.body; delete e.url; }
     this.uploads.clear();
     this.bin.clear();
+    this.removing.clear();
     this.ix = null;
     this.notes.clear();
     this.texts.clear();
@@ -335,13 +338,11 @@ export class DriveVault implements VaultSource {
       const held = await this.haltQueued(pileKey);
       const binned: string[] = [];
       try {
+        // Its declaration goes with it, so no device lists it again; Undo brings both back. The copies go first:
+        // stopped halfway, the pile is still listed, and removing it again finishes the job.
+        await this.binDeclarations(pileKey, declarations);
         await this.drive.trash(f.id);
         ix.drop(f.id);
-        // Its declaration goes with it, so no device lists it again; Undo brings both back.
-        for (const copy of declarations) {
-          await this.drive.trash(copy.id);
-          ix.drop(copy.id);
-        }
         for (const made of held.made) {
           if (made.id === f.id || made.parents.includes(f.id)) continue;
           await this.drive.trash(made.id);
@@ -357,7 +358,8 @@ export class DriveVault implements VaultSource {
       // What arrived though its answer was lost, here or filed elsewhere, is not sent again on Undo.
       if (pending) pending.entries = pending.entries.filter((e) => !held.arrived.has(e.key));
       for (const e of pending?.entries ?? []) delete e.queued;
-      this.bin.set(path, { id: f.id, change: null, top, ...(pending ? { pending, pileKey } : {}), ...(binned.length ? { late: binned } : {}), ...(declarations.length ? { declarations: declarations.map((d) => d.id) } : {}) });
+      const copies = this.removedDeclarations(pileKey);
+      this.bin.set(path, { id: f.id, change: null, top, ...(pending ? { pending, pileKey } : {}), ...(binned.length ? { late: binned } : {}), ...(copies.length ? { declarations: copies } : {}) });
       this.emit();
       return;
     }
@@ -599,6 +601,25 @@ export class DriveVault implements VaultSource {
     }
     for (const pile of await this.looseMissing(new Set(out.map((p) => p.id)))) out.push(pile);
     return out.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /** Sends a removed pile's declaration copies to the Bin, remembering each one in case the Remove stops halfway. */
+  private async binDeclarations(pileKey: string, copies: readonly DriveFile[]): Promise<void> {
+    const ix = await this.index();
+    const done = this.removing.get(pileKey) ?? [];
+    this.removing.set(pileKey, done);
+    for (const copy of copies) {
+      await this.drive.trash(copy.id);
+      ix.drop(copy.id);
+      done.push(copy.id);
+    }
+  }
+
+  /** Every copy this pile's Remove sent to the Bin, across tries; forgotten once the Remove is done. */
+  private removedDeclarations(pileKey: string): string[] {
+    const done = this.removing.get(pileKey) ?? [];
+    this.removing.delete(pileKey);
+    return done;
   }
 
   /**
@@ -886,13 +907,11 @@ export class DriveVault implements VaultSource {
     this.uploads.delete(id);
     const held = await this.haltQueued(id);
     try {
+      // The copies first: stopped halfway, the pile is still listed, and Remove again finishes the job.
+      await this.binDeclarations(id, declarations);
       if (f) {
         await this.drive.trash(f.id);
         ix.drop(f.id);
-      }
-      for (const copy of declarations) {
-        await this.drive.trash(copy.id);
-        ix.drop(copy.id);
       }
       // A thing whose answer was lost may be in Drive already, where it was sent: it goes to the Bin too.
       for (const made of held.made) {
@@ -909,7 +928,8 @@ export class DriveVault implements VaultSource {
     // Only now are their bytes no longer needed.
     await this.endQueued(held.ids);
     // Undo, from where it was (or by its id when it had no place), brings back its folder and declaration.
-    if (f || declarations.length) this.bin.set(pile.path ?? id, { id: f?.id ?? null, change: null, ...(pile.path ? { top: pile.path } : {}), ...(declarations.length ? { declarations: declarations.map((d) => d.id) } : {}) });
+    const copies = this.removedDeclarations(id);
+    if (f || copies.length) this.bin.set(pile.path ?? id, { id: f?.id ?? null, change: null, ...(pile.path ? { top: pile.path } : {}), ...(copies.length ? { declarations: copies } : {}) });
     this.emit();
   }
 

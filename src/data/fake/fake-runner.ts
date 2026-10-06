@@ -12,11 +12,12 @@ import { applyChanges, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkK
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
+import type { DeclarationResult } from '../contracts/pile-declaration';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
-import { accountPile, contextRemoved, findDeclaration, findLooseDeclarations, journalValues, recordedNote, writable, type Digest } from '../pile-readiness';
+import { accountPile, contextRemoved, findDeclaration, journalValues, recordedNote, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport, type SetAside } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -111,10 +112,12 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   let records: Promise<unknown[]> | null = null;
   const journal = (): Promise<unknown[]> => (records ??= journalValues(ix.journalFiles(true), (id) => drive.readText(id)));
   const out = new Map<string, Capture>();
+  // Each declaration copy is read once per run, whichever pile names it.
+  const cache = new Map<string, DeclarationResult>();
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (folder && !folder.folder) {
-      out.set(pile.id, await looseCapture(drive, rootId, listing, ix.file('Inbox'), folder));
+      out.set(pile.id, await looseCapture(drive, rootId, listing, ix.file('Inbox'), folder, cache));
       continue;
     }
     if (!pile.path || !folder?.folder) continue;
@@ -127,7 +130,7 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: refused });
       continue;
     }
-    const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id));
+    const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id), cache);
     // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21): the names, and the raw
     // text (front matter included) of the one note the run records. Another pile note is never read here.
     const contextKey = found.state === 'found' && found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
@@ -219,19 +222,19 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
 }
 
 /**
- * A loose file (fixture 07): observed when it carries no declaration; declared, it is ready when the shared
- * accounting finds its one member in the inbox with the declared bytes, the inbox standing for its folder.
+ * A loose file (fixture 07), through the same lookup and accounting as a pile folder: observed when it carries no
+ * declaration or every copy is gone; declared, it is ready when its one member is in the inbox with the declared
+ * bytes, the inbox standing for its folder.
  */
-async function looseCapture(drive: FakeDrive, rootId: string, listing: readonly DriveFile[], inbox: DriveFile | undefined, file: DriveFile): Promise<Capture> {
-  const declarationId = file.appProperties?.[PROP.declaration];
-  if (!declarationId) return { blocked: null, captured: new Set([file.id]) };
-  const found = inbox ? (await findLooseDeclarations(listing, rootId, inbox.id, (id) => drive.readBytes(id))).find((d) => d.declaration.declarationId === declarationId && d.declaration.pileId === file.appProperties?.[PROP.pile]) : undefined;
-  if (!inbox || !found) return { blocked: SET_ASIDE.notChecked };
+async function looseCapture(drive: FakeDrive, rootId: string, listing: readonly DriveFile[], inbox: DriveFile | undefined, file: DriveFile, cache: Map<string, DeclarationResult>): Promise<Capture> {
+  const found = await findDeclaration(listing, rootId, file, (id) => drive.readBytes(id), cache);
+  if (found.state === 'unmarked') return { blocked: null, captured: new Set([file.id]) };
+  if (found.state !== 'found' || !inbox) return { blocked: found.state === 'conflict' ? SET_ASIDE.declaration : found.state === 'unreadable' ? SET_ASIDE.unreadable : SET_ASIDE.notChecked };
   const readiness = await accountPile(found.declaration, found.sha256, inbox, listing, (id) => drive.readBytes(id), (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
   if (readiness.blocked) return { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked };
   // Filed already (a consumed disposition) and put back in the inbox: an ordinary loose file now.
   if (!readiness.remaining.length) return { blocked: null, captured: new Set([file.id]), leftover: { contextKey: null } };
-  return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId, sha256: found.sha256 }, contextKey: null, memberKeys: new Set(readiness.remaining) } };
+  return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId: found.declaration.declarationId, sha256: found.sha256 }, contextKey: null, memberKeys: new Set(readiness.remaining) } };
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
