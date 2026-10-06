@@ -40,3 +40,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: focus-after-replay-and-route passes — chore(harness): focus-after-replay-and-route passes (P2 C/I round)
 - 2026-10-06: focus-note-link-and-sign-out passes — chore(harness): focus-note-link-and-sign-out passes (TL-P2-47 fix round)
 - 2026-10-06: c11-no-policy-from-documents passes — chore(harness): c11-no-policy-from-documents passes (P3-1)
+- 2026-10-06: no-console-errors-on-journeys passes — chore(harness): no-console-errors-on-journeys passes (P3-1)

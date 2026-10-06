@@ -3636,7 +3636,7 @@
       "An unexpected error fails the test with the message; allowlisted entries carry a reason; expected BowerError logs are allowed only inside their own failure-path tests."
     ],
     "verify": "pnpm exec playwright test e2e/console-guard.spec.ts -g \"console guard: an unexpected console error fails the test|console guard: an allowlisted error passes with its reason\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-01 batch P3-1. The C04–C11 journeys (e2e/capabilities*.spec.ts) and e2e/focus-after-close.spec.ts adopt the fixture."
   }
 ]
