@@ -3623,7 +3623,7 @@
       "Run the tidy-up: Rules.md and the preferences are byte-identical; the document is filed like any other source."
     ],
     "verify": "pnpm exec vitest run src/data/fake/fake-runner.test.ts -t \"a source document that tells Bower to change a rule is filed as content and changes nothing\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-01 batch P3-1. Red first on an assertion with the guard removed."
   },
   {
