@@ -1,5 +1,7 @@
 # Technical-lead decision TL-P2-2026-10-06-41: token budget
 
+> Amended by [TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md): models are pinned by project agents, review is one cross-provider pass against the packet's acceptance contract, and a hook filters gate output.
+
 **Owner ruling, 2026-10-06:** token use is too high, so the method must change to cut it as far as possible. The owner approved this proposal in full. It overrides METHOD, STARTUP, COORDINATION and TL-P2-38 wherever they differ.
 
 ## Where the tokens went (measured 2026-10-06)

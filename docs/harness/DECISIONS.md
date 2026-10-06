@@ -1,6 +1,6 @@
 # Technical-lead decisions (index)
 
-One line per ruling, newest last. Read only the decision a task needs. Later rulings and their amendments override earlier ones; [TL-P2-38](2026-10-06-tl-p2-38-fast-close.md) and [TL-P2-41](2026-10-06-tl-p2-41-token-budget.md) govern P2 scope and method.
+One line per ruling, newest last. Read only the decision a task needs. Later rulings and their amendments override earlier ones; [TL-P2-38](2026-10-06-tl-p2-38-fast-close.md) and [TL-P2-41](2026-10-06-tl-p2-41-token-budget.md) as amended by [TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md) govern P2 scope and method.
 
 - TL-P2-03: ownership/2 grammar, readiness direction, run-recovery invariants (Codex lead) — [2026-10-05-tl-p2-03-decision.md](2026-10-05-tl-p2-03-decision.md)
 - TL-P2-04: exact contract B (Codex lead) — [2026-10-05-tl-p2-04-decision.md](2026-10-05-tl-p2-04-decision.md)
@@ -43,3 +43,4 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
 - TL-P2-41: token budget: role-based reading, small records, Sonnet/Haiku workers, fewer reviews, short messages — [2026-10-06-tl-p2-41-token-budget.md](2026-10-06-tl-p2-41-token-budget.md)
 - TL-P2-42: token ledger per entry, pre-analysed starting model, Haiku→Sonnet→Opus ladder — [2026-10-06-tl-p2-42-model-ladder.md](2026-10-06-tl-p2-42-model-ladder.md)
 - TL-P2-43: every session writes its state (LEAD.md / HANDOFF+ACTIVE / deliveries) and clears itself at batch boundaries — [2026-10-06-tl-p2-43-session-state.md](2026-10-06-tl-p2-43-session-state.md)
+- TL-P2-44: the token method enforced by configuration: pinned-model project agents, fresh-session fix rounds and climbs, acceptance contract, one cross-provider review, quiet-gates hook, billed-token ledger and the baseline in token-baseline.md — [2026-10-06-tl-p2-44-enforced-token-method.md](2026-10-06-tl-p2-44-enforced-token-method.md)

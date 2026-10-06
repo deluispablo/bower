@@ -28,8 +28,10 @@ The owner authorizes the named coordinator to delegate independent entries concu
 | Progress log | `harness/progress.md` | One dated line per session or feature: what changed, what is next. |
 | Init | `harness/init.sh` | Installs, runs every gate, prints the next feature. |
 | Proofs | `harness/proof.log` | One line per closed entry, written by `harness/done.sh`: the hash of the `verify` that passed, and whether it was red first. `pnpm check` refuses an entry that passes without one. |
-| Sensors | `pnpm check`, `pnpm e2e`, `pnpm e2e:fake`, `pnpm e2e:pwa`, `src/architecture.test.ts` | Machines that say when something is wrong, and how to fix it. |
+| Sensors | `.claude/settings.json` hooks, `pnpm check`, `pnpm e2e`, `pnpm e2e:fake`, `pnpm e2e:pwa`, `src/architecture.test.ts` | Machines that say when something is wrong, and how to fix it. |
 | Briefs | `harness/briefs/` | What to hand a subagent: implementer, evaluator (tester), reviewer. |
+| Project agents | `.claude/agents/` | Claude workers with their model and effort pinned: implementer, reviewer, mechanical, escalated ([TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md)). |
+| Token ledger | `harness/tokens.csv`, [token-baseline.md](token-baseline.md) | Billed tokens per agent run, and the baseline and targets each method change is compared with. |
 
 ## Phase acceptance before feature counts
 
@@ -56,7 +58,7 @@ Steps 3–6 describe implementation. Reviewers/evaluators follow their assigned 
 1. Follow `STARTUP.md`: orient, establish assignment/ownership and check relevant capabilities; read the required startup docs once.
 2. Assigned writers run `bash harness/init.sh` only with exclusive checkout use. Reviewers/evaluators use a prepared immutable target and do not install or run mutating gates. A failed baseline becomes an explicitly assigned repair; never take over another session's dirty work.
 3. The coordinator assigns the first eligible entry with `"passes": false` (or the one the human named); workers take only their assigned entry. Check dependencies and file reservations first.
-4. Write the test that shows it (it fails), make it pass, run the whole of `pnpm check`. For anything a person sees, run its e2e on `demo` and on `fake`. Token budget ([TL-P2-41](2026-10-06-tl-p2-41-token-budget.md)): send output to a log file and read only failures; workers read `WORKER.md` and their packet only. In P2, under [TL-P2-38](2026-10-06-tl-p2-38-fast-close.md), run only the touched screens' e2e per entry; the full suites run once per integration batch and at the freeze.
+4. Write the test that shows it (it fails), make it pass, run the whole of `pnpm check`. For anything a person sees, run its e2e on `demo` and on `fake`. Token budget ([TL-P2-41](2026-10-06-tl-p2-41-token-budget.md), [TL-P2-44](2026-10-06-tl-p2-44-enforced-token-method.md)): send output to a log file and read only failures (in Claude the `quiet-gates` hook does it); workers read `WORKER.md` and their packet only. In P2, under [TL-P2-38](2026-10-06-tl-p2-38-fast-close.md), run only the touched screens' e2e per entry; the full suites run once per integration batch and at the freeze.
 5. Check it as a person would, in a browser, at phone and desktop size, when it touches a screen.
 6. In single-writer mode, stage the entry's change (`git add`), then `bash harness/done.sh <id> "<commit message>"`. Only staged changes and `harness/` are committed; anything unstaged is refused. With the uncommitted code set aside (tests kept) the `verify` must fail with a failed test; then it runs `pnpm check` and the `verify`, and only then flips `passes`, logs the proof and commits. One entry per commit.
    - The fix is committed already: `--fixed-in <sha>` puts that commit's code back as it was before it and expects the same red.
@@ -74,7 +76,7 @@ Either tool can hold any role. Prefer cross-tool review when available. Only one
 - **Technical lead / planner** (owner-appointed, currently planning/method only): maintains purpose, dependencies, contracts and acceptance with the human; implementation coordinator registers findings/gaps as entries. Brief: `harness/briefs/technical-lead.md`.
 - **Implementer**: one entry at a time, test first. Brief: `harness/briefs/implementer.md`.
 - **Evaluator**: a fresh agent that did not build it uses the app as a person would and tries to break it. Its findings go into the feature list. Brief: `harness/briefs/evaluator.md`.
-- **Reviewer**: a fresh independent session with sufficient review capability reads the whole diff against the plan. Brief: `harness/briefs/reviewer.md`.
+- **Reviewer**: a fresh independent session from the other provider reads the diff against the packet's acceptance contract and the plan. Brief: `harness/briefs/reviewer.md`.
 
 The builder never grades its own work: every phase ends with an evaluator round and a review, and the phase is not done while any entry is open (owner's rule: no next phase until this one is right).
 
