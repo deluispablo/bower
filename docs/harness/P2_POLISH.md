@@ -64,4 +64,3 @@ From the worker-skeleton review (CLEAN): Hono cors sends Allow-Credentials/Expos
 - Tooling: `harness/done.sh` code paths (`paths=` line 49) do not include `api/`, so `--fixed-in` and red mode cannot show a red for Worker entries.
 
 
-From the worker-google-oidc review (CLEAN): taking someone off the allowlist leaves their existing sessions working (the contract asks only for refusal at the callback); revisit with worker-me-and-delete or rate limits.
