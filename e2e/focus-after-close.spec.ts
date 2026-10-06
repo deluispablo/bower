@@ -77,7 +77,7 @@ test('G2: signing out moves the keyboard to the sign-in page', async ({ page }) 
   expect(await active(page)).not.toMatch(/^BODY/);
 });
 
-test('focus: every route lands the keyboard on its h1', async ({ page }) => {
+test('focus: every route lands the keyboard on its h1, or on the control that navigated while it stays on screen', async ({ page }) => {
   await open(page, '/');
   const h1Focused = async (label: string): Promise<void> => {
     await expect(page.locator('h1').first(), label).toBeFocused();
@@ -92,10 +92,15 @@ test('focus: every route lands the keyboard on its h1', async ({ page }) => {
     await page.keyboard.press('Enter');
     await page.waitForTimeout(150);
     if (new URL(page.url()).pathname === before) continue; // already there (the phone bar has fewer links)
-    await h1Focused(name);
+    // TL-P2-47: the h1, or the still-attached control that navigated (a top-bar link keeps focus); never the body.
+    const onLink = await link.evaluate((el) => el === document.activeElement && el.isConnected);
+    if (!onLink) await h1Focused(name);
+    expect(await active(page), name).not.toMatch(/^BODY/);
   }
   // Routes with no top-bar link: a client-side route change from the keyboard's position.
   for (const path of ['/files', '/note/Projects/Flat%20hunt/Flat%20hunt.md', '/privacy', '/terms', '/no-such-page']) {
+    // The keyboard on the old view's heading, which the change takes away.
+    await page.locator('h1').first().evaluate((h) => { h.setAttribute('tabindex', '-1'); h.focus(); });
     await page.evaluate((to) => {
       history.pushState({}, '', to);
       dispatchEvent(new PopStateEvent('popstate'));
