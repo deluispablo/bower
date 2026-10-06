@@ -3716,7 +3716,7 @@
       "A unit test schedules the route focus, removes document, runs the timers, and sees no throw."
     ],
     "verify": "pnpm exec vitest run src/ui/focus.test.ts -t \"focus timers do nothing once the page is gone\"",
-    "passes": false,
+    "passes": true,
     "note": "Seen twice in pnpm check (P3-2 worker-skeleton, P3-3 person-object): src/data/runner-errors.test.tsx and others. Gate reliability."
   }
 ]
