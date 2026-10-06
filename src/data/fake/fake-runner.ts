@@ -73,8 +73,8 @@ export const SET_ASIDE = {
   noteDamaged: "Bower can't read this pile's note.",
 } as const;
 
-/** The Inbox's reasons about a pile's note that hold it from a run, worded as the report says them. */
-const HELD_BY_INBOX: Partial<Record<SetAside, string>> = { 'not-checked': SET_ASIDE.notChecked, 'note-format': SET_ASIDE.noteFormat, 'note-damaged': SET_ASIDE.noteDamaged };
+/** The Inbox's refusals of a pile's note that hold it from a run, worded as the report says them. */
+const HELD_BY_INBOX: Partial<Record<SetAside, string>> = { 'note-format': SET_ASIDE.noteFormat, 'note-damaged': SET_ASIDE.noteDamaged };
 
 /**
  * What a run takes of a pile folder, fixed when it starts: every child it
@@ -116,6 +116,12 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
     const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
+    // A note Bower will not parse holds its pile with the Inbox's own reason, checked first as the Inbox does.
+    const refused = pile.setAside === 'note-format' || pile.setAside === 'note-damaged' ? HELD_BY_INBOX[pile.setAside] : undefined;
+    if (refused) {
+      out.set(pile.id, { blocked: refused });
+      continue;
+    }
     const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id));
     // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21): the names, and the raw
     // text (front matter included) of the one note the run records. Another pile note is never read here.
@@ -136,11 +142,9 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
       out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;
     }
-    // A pile the Inbox could not check (its note could not be read there), or whose note Bower will not parse, is
-    // held too, and only it (TL-P2-08 (a), pile-note-format-visible).
-    const heldBy = pile.setAside ? HELD_BY_INBOX[pile.setAside] : undefined;
-    if (heldBy) {
-      out.set(pile.id, { blocked: heldBy });
+    // A pile the Inbox could not check (its note could not be read there) is held too, and only it (TL-P2-08 (a)).
+    if (pile.setAside === 'not-checked') {
+      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
       continue;
     }
     if (found.state === 'unmarked') {
