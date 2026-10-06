@@ -8,9 +8,9 @@
  * writes (docs/specs/2026-10-04-worker-contract.md).
  */
 import type { DriveFile } from '../drive/drive-api';
-import { applyChanges, savedLinkKey, timelineDate } from '../contracts/note-edit';
+import { applyChanges, renameOk, renamesFor, savedLinkKey, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
-import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
+import { parseRunManifestV2, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
@@ -220,8 +220,9 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const all = opts.scope === 'all';
   const listing = await drive.listAll(rootId);
   const ix = VaultIndex.build(rootId, listing);
-  const journal = await journalOf(drive, ix);
-  if (!Array.isArray(journal)) return legacy(journal.why);
+  const lines = await journalOf(drive, ix);
+  if (!Array.isArray(lines)) return legacy(lines.why);
+  let journal = lines;
   // An instructions run with no line it can take has nothing to read: the existing refusal, before admission.
   if (!all && !journal.length) throw new BowerError('conflict', NOTHING_TO_READ);
   const requests = ix.file(SYSTEM.requests);
@@ -429,32 +430,91 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
     generated.push({ to, name, text, what, after: null, pileId, aside: folder.name, context });
   }
-  // Hub notes brought up to date: a Timeline line each, planned on the bytes read now (TL-P2-20). applyChanges is
-  // the only author: it refuses a note that is not Bower's, a damaged or too big one, and returns `unchanged` when
-  // the line is already there (from any day), so nothing is planned for that note and the run goes on without it.
-  const edits: Array<{ file: DriveFile; path: string; what: string; before: VerifiedContent; changes: Change[]; text: string }> = [];
-  for (const u of all && date ? [...(opts.updates ?? UPDATES)].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) : []) {
-    // At most editCap edits, in path order; the rest wait for the next run, which skips the lines already there.
-    if (edits.length >= editCap) break;
+  // Note edits (TL-P2-20), one edit-text per note at most, planned on the bytes read now; applyChanges is the only
+  // author. A hub note a full run brings up to date gets its Timeline line, only on Bower's notes and never twice
+  // (from any day). After a rename or a move, every note linking to a former name gets its links rewritten.
+  const wanted = new Map<string, Wanted>();
+  const want = (f: DriveFile, path: string): Wanted => {
+    const had = wanted.get(f.id);
+    if (had) return had;
+    const made: Wanted = { file: f, path, entries: [], appendRecords: [], what: null, renames: null };
+    wanted.set(f.id, made);
+    return made;
+  };
+  for (const u of all && date ? (opts.updates ?? UPDATES) : []) {
     const f = ix.file(u.path);
     if (!f || f.folder) continue;
-    const before = await verified(f, 'utf8');
-    if (!before) continue;
-    const bytes = await drive.readBytes(f.id);
-    if (before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
-      console.error('A hub note changed while it was read; no Timeline line is planned for it this time');
-      continue;
-    }
-    const changes: Change[] = [{ kind: 'timeline-append', recordIds: [], entries: [{ date: date ?? '', text: u.what, source: null }] }];
-    const result = applyChanges(bytes, changes);
-    if (!result.ok) {
-      // A person's note and a line already there are expected; anything else is logged with its reason.
-      if (result.reason !== 'not-bower' && result.reason !== 'unchanged') console.error(`A hub note's Timeline line was refused (${result.reason}); none is planned for it`);
-      continue;
-    }
-    edits.push({ file: f, path: ix.pathOf(f.id) ?? u.path, what: u.what, before, changes, text: result.text });
-    places.set(f.id, f);
+    const w = want(f, u.path);
+    w.entries.push({ date: date ?? '', text: u.what, source: null });
+    w.what ??= u.what;
   }
+  // The rename and move lines this run takes; their renames as the resolver follows them (chains, `taken`).
+  const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
+  const taken = new Set([...ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
+  const allRenames = renamesFor(moved.map((l) => ({ id: l.rec.id, at: l.rec.at, kind: l.rec.kind, what: l.rec.what, ...(l.rec.path ? { path: l.rec.path } : {}), ...(l.rec.from ? { from: l.rec.from } : {}) })), taken);
+  const renames = allRenames.filter(renameOk);
+  // A rename no link can be written with keeps its lines where they are, as the resolver still follows them (rule 7).
+  let holdRenames = renames.length !== allRenames.length;
+  if (holdRenames) console.error('A former name cannot be written into links; the rename lines stay for the next tidy-up');
+  if (renames.length) {
+    for (const [path, entry] of ix.entries()) {
+      if (entry.type !== 'file' || !path.endsWith('.md') || path.startsWith('Inbox/') || path.startsWith(`${SYSTEM.dir}/`)) continue;
+      const f = ix.file(path);
+      if (f && !f.folder) want(f, path).renames = renames;
+    }
+  }
+  const candidates: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; append: Change | null }> = [];
+  for (const w of [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path))) {
+    const f = w.file;
+    const before = await verified(f, 'utf8');
+    const bytes = before ? await drive.readBytes(f.id) : null;
+    if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
+      console.error('A note changed while it was read; no edit is planned for it this time');
+      if (w.renames) holdRenames = true;
+      continue;
+    }
+    let rewrite = false;
+    if (w.renames) {
+      const result = applyChanges(bytes, [{ kind: 'link-rewrite', recordIds: [], renames: w.renames }]);
+      rewrite = result.ok;
+      // A note that links to a former name but cannot be rewritten keeps the rename lines (rule 7).
+      if (!result.ok && result.reason !== 'unchanged' && mentions(bytes, w.renames)) {
+        console.error(`A note's links could not be rewritten (${result.reason}); the rename lines stay for the next tidy-up`);
+        holdRenames = true;
+      }
+    }
+    let append: Change | null = w.entries.length ? { kind: 'timeline-append', recordIds: w.appendRecords, entries: w.entries } : null;
+    if (append) {
+      const result = applyChanges(bytes, [append]);
+      if (!result.ok) {
+        // A person's note and a line already there are expected; anything else is logged with its reason.
+        if (result.reason !== 'not-bower' && result.reason !== 'unchanged') console.error(`A note's Timeline line was refused (${result.reason}); none is planned for it`);
+        append = null;
+      }
+    }
+    if (rewrite || append) candidates.push({ file: f, path: w.path, what: append ? w.what : null, before, bytes, rewrite, append });
+  }
+  // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
+  // stay unarchived meanwhile (TL-P2-29 (1)).
+  if (candidates.slice(editCap).some((c) => c.rewrite)) holdRenames = true;
+  // Each kept note's changes together, in the contract's order; the text never depends on the record ids.
+  const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
+    [...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...(c.append ? [c.append] : [])];
+  const authored = candidates.slice(0, editCap).flatMap((c) => {
+    const result = applyChanges(c.bytes, changesOf(c, []));
+    if (result.ok) return [{ c, text: result.text }];
+    console.error(`A note edit was refused (${result.reason}); none is planned for it`);
+    if (c.rewrite) holdRenames = true;
+    return [];
+  });
+  const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
+  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; changes: Change[]; text: string }> = [];
+  for (const { c, text } of authored) {
+    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what: c.what, before: c.before, changes: changesOf(c, renameIds), text });
+    places.set(c.file.id, c.file);
+  }
+  // Lines held back stay where they are, uncaptured, for the next run (rule 7).
+  if (holdRenames) journal = journal.filter((l) => !moved.includes(l));
   const edited = new Set(edits.map((e) => e.file.id));
   // Your changes go to the archive the legacy runner uses, made in `.bower/changes` when missing.
   const changesFolder = ix.file(SYSTEM.changes);
@@ -541,10 +601,16 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : [])]);
   }
   // Each Timeline line: the edit, then the note marked new in place after it, and its updated row once it applied.
+  // Each edit by the journal records it comes from: their archives wait for it (rule 7, R3-4).
+  const editsFrom = new Map<string, string[]>();
   for (const edit of edits) {
     const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text) });
-    await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
-    reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: edit.what }] } });
+    for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [] : c.recordIds))) editsFrom.set(id, [...(editsFrom.get(id) ?? []), op]);
+    // Only a Timeline line marks a note new (m3); a link fix never does.
+    if (edit.changes.some((c) => c.kind === 'timeline-append')) {
+      await add({ kind: 'move', before: seen(edit.file), parent: { fileId: edit.file.parents[0] ?? '' }, name: edit.file.name, properties: { bowerNew: '1' } }, [op]);
+    }
+    if (edit.what !== null) reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), updated: [{ path: edit.path, what: edit.what }] } });
   }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
@@ -574,9 +640,10 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   }
   for (const line of journal) {
     if (!archiveTo) return legacy('journal');
-    const derived = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
+    const write = line.rec.kind === 'request' ? requestsOp : line.rec.kind === 'answer' ? questionsOp : null;
+    const derived = [...(write ? [write] : []), ...(editsFrom.get(line.rec.id) ?? [])];
     const moves: string[] = [];
-    for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived ? [derived] : []));
+    for (const f of line.files) moves.push(await add({ kind: 'move', before: seen(f), parent: archiveTo, name: f.name, properties: {} }, derived));
     if (line.rec.kind === 'request' && requestsOp) {
       reportPlan.push({ requires: [requestsOp, ...moves, ...archiveChain], when: 'applied', value: { ...empty(), requests: [line.rec.text ?? line.rec.what] } });
     } else {
@@ -633,9 +700,9 @@ type JournalLine = { rec: JournalRecord; files: DriveFile[]; sha256: string };
  * Your changes since the last tidy-up, each once by its id with all its
  * files, when every one can take the B path: a request (completed in
  * requests.json), an answer (dropped from questions.json) or a change that
- * needs nothing but archiving. A rule, a rename or a move needs an edit B
- * does not have yet (rule wording, link rewrites), so its whole run stays
- * legacy. Your changes are never replaced or discarded (TL-P2-23): a line
+ * needs nothing but archiving, or a rename or a move (archived after the
+ * link rewrites it needs). A rule needs rule wording, which B does not do
+ * yet, so its whole run stays legacy. Your changes are never replaced or discarded (TL-P2-23): a line
  * that cannot be read, a line whose copies differ and a line in more than
  * one place stay where they are, uncaptured, with one BowerError for all of
  * them; the run goes on with the rest. At most the 20 oldest requests are
@@ -677,7 +744,6 @@ async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[
   // Every readable line decides the path, captured or not: a rule left behind must not let runs take B.
   const kinds = new Set([...copies.values()].flat().map((c) => c.rec.kind));
   if (kinds.has('rule')) return { why: 'rules' };
-  if (kinds.has('rename') || kinds.has('move')) return { why: 'renames' };
   const requests = lines.filter((l) => l.rec.kind === 'request').slice(0, REQUESTS_PER_RUN);
   return lines.filter((l) => l.rec.kind !== 'request' || requests.includes(l));
 }
@@ -733,6 +799,27 @@ function generatedName(title: string): string {
 export const NOT_FILED = 'It was moved, renamed or removed before Bower could file it.';
 /** Why a saved link filed with a note, or a merged thing, was not filed: it may have been moved already (R4-3 m-c). */
 export const NOT_FILED_AGAIN = "It couldn't be filed this time.";
+
+/** What a run wants to change in one note, before applyChanges decides what it may. */
+type Wanted = { file: DriveFile; path: string; entries: EditEntry[]; appendRecords: string[]; what: string | null; renames: Rename[] | null };
+
+/** Paths in code-point order, the same everywhere (TL-P2-29). */
+const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Whether a note may link to a former name, read leniently (any encoding, any format): a note that does but cannot
+ * be rewritten keeps the rename lines unarchived. It may say yes for a link the resolver would not follow; never no
+ * for one it would.
+ */
+function mentions(bytes: Uint8Array, renames: readonly Rename[]): boolean {
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes).toLowerCase();
+  return renames.some((r) => {
+    for (let at = text.indexOf('[['); at >= 0; at = text.indexOf('[[', at + 2)) {
+      if (text.slice(at + 2).trimStart().startsWith(r.from.toLowerCase())) return true;
+    }
+    return false;
+  });
+}
 
 /** A saved link's note: its name, its stable key, and its text when the run writes it (null when one is reused). */
 type SavedNote = { name: string; key: string; text: string | null };
