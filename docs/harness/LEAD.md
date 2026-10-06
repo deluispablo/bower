@@ -7,7 +7,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Staging preview.** Redeploy after each main batch, following [STAGING.md](STAGING.md). Last deployed: `main` `605bbaa` (P2 re-closed), version `ec070ce8`.
 - **Open with the owner:** two Google test accounts for P3-B (addresses stay out of the repo), added to the staging Worker's allowlist by the owner.
 - **Waiting on the coordinator:** batch P3-1 ([TL-P3-01](2026-10-06-tl-p3-01-p3-start.md)).
-- **Lead's own P3-1 work:** `p3-acceptance-checklist` (the P3 column of C01–C16) and `p3-accounts-and-secrets` (the owner's setup list).
+- **Lead's own P3-1 work:** done, in [P3_ACCEPTANCE](../P3_ACCEPTANCE.md) (the P3 column and the owner setup).
 - **Session rule:** never clear this session; the owner compacts by hand ([TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md)). After a compaction, re-read this file.
 - **Recurring duties:**
   - Measure tokens per batch with `npx ccusage session`, reporting cache reads and cost by session, and log the lead's own row in `harness/tokens.csv` through the coordinator.
