@@ -15,6 +15,7 @@ import { serializeNote } from '../vault/note-format';
 import { serializeRules } from '../vault/rules-format';
 import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
 import { runFake } from './fake-runner';
+import type { FakeRunService } from './fake-run-service';
 
 export interface FakeWorkerOptions {
   drive: FakeDrive;
@@ -25,6 +26,10 @@ export interface FakeWorkerOptions {
   offline?: boolean;
   /** False after a reload, when the pretend Drive was kept: the running situation does not start a new run. */
   fresh?: boolean;
+  /** The run service that owns runs on the B path. Stub: not used yet; every run is legacy. */
+  runs?: FakeRunService;
+  /** The synthetic account this client is signed in as. Stub: not used yet. */
+  account?: string;
 }
 
 export class FakeWorker implements WorkerApi {

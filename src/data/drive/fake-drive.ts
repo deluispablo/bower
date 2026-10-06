@@ -460,6 +460,69 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   private copy(m: DriveFile): DriveFile {
     return { ...m, parents: [...m.parents], ...(m.appProperties ? { appProperties: { ...m.appProperties } } : {}) };
   }
+
+  // --- The run service's controlled boundary (fake only): inert stub until the B path lands. ---
+
+  /** Sees, and may refuse or lose the reply of, every fenced write. Stub: never consulted. */
+  fault: FaultHook | null = null;
+
+  /** Writes whose `check` runs right before the change. Stub: plain writes, no check. */
+  fenced(check: (peek: Peek) => void): FencedDrive {
+    void check;
+    return {
+      createFolder: (parentId, name, appProperties) => this.createFolder(parentId, name, appProperties),
+      createText: (parentId, name, text, appProperties) => this.createText(parentId, name, text, appProperties),
+      update: (id, patch) => this.update(id, patch),
+      trash: (id) => this.trash(id),
+      writeText: (id, text, ifModified) => this.writeText(id, text, ifModified),
+    };
+  }
+
+  /** `snapshot()` together with `alongside()`. Stub: not taken at one instant. */
+  async snapshotWith<T>(alongside: () => T): Promise<{ snapshot: string; alongside: T }> {
+    return { snapshot: await this.snapshot(), alongside: alongside() };
+  }
+
+  /** What is stored for an id, in the Bin or not. Stub: nothing. */
+  async evidence(id: string): Promise<StoredEvidence | null> {
+    void id;
+    return null;
+  }
+}
+
+/** A write through `fenced`, as the fault hook sees it. */
+export type FencedCall =
+  | { op: 'create-folder'; parentId: string; name: string; appProperties?: Record<string, string> }
+  | { op: 'create-text'; parentId: string; name: string; text: string; appProperties?: Record<string, string> }
+  | { op: 'update'; id: string; patch: DrivePatch }
+  | { op: 'trash'; id: string }
+  | { op: 'write-text'; id: string; text: string; ifModified: string };
+/** `refuse`: no effect, as with no network; `lose-reply`: the change lands, then its answer is lost. */
+export type FaultAction = 'pass' | 'refuse' | 'lose-reply';
+export interface FaultHook {
+  before?: (call: FencedCall) => FaultAction;
+  /** Told after a fenced write changed the Drive. */
+  applied?: (call: FencedCall) => void;
+}
+export interface FencedDrive {
+  createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  update(id: string, patch: DrivePatch): Promise<DriveFile>;
+  trash(id: string): Promise<void>;
+  writeText(id: string, text: string, ifModified: string): Promise<DriveFile>;
+}
+/** What a fenced check sees of a stored file at the instant of the change. */
+export interface PeekedFile {
+  file: DriveFile;
+  trashed: boolean;
+  /** Its live children's ids. */
+  children: string[];
+}
+export type Peek = (id: string) => PeekedFile | null;
+export interface StoredEvidence {
+  file: DriveFile;
+  trashed: boolean;
+  content: { size: number; sha256: string } | null;
 }
 
 /** The resumable part of a snapshot. */

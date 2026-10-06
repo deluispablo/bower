@@ -8,6 +8,7 @@
  * writes (docs/specs/2026-10-04-worker-contract.md).
  */
 import type { DriveFile } from '../drive/drive-api';
+import type { Manifest } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
 import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } from '../demo/fixture';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
@@ -127,6 +128,28 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+
+/** A run's classification, fixed before any effect: the B path with its manifest, or the legacy path and why. */
+export type RunPlan = { path: 'b'; manifest: Manifest } | { path: 'legacy'; why: string };
+
+export interface PlanOptions {
+  scope: 'all' | 'instructions';
+  allowWeb: boolean;
+  runId: string;
+  requestId: string;
+  requestedAt: number;
+}
+
+/** Stub until the B path lands: every run is legacy. */
+export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOptions): Promise<RunPlan> {
+  void drive;
+  void rootId;
+  void opts;
+  return { path: 'legacy', why: 'not planned yet' };
+}
+
+/** Why a thing the run captured was not filed (a rejected move). */
+export const NOT_FILED = 'It was moved, renamed or removed before Bower could file it.';
 
 export async function runFake(drive: FakeDrive, rootId: string, opts: FakeRunOptions): Promise<FakeRunResult> {
   const reader = new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' });

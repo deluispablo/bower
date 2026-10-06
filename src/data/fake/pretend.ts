@@ -4,8 +4,9 @@
  * (or "Start again" in the demo panel) starts from Alex's folder.
  */
 import { FakeDrive } from '../drive/fake-drive';
-import type { Scenario } from '../demo/scenario';
+import type { Scenario, TimeScale } from '../demo/scenario';
 import { BOWER_FOLDER } from '../vault/layout';
+import { FakeRunService } from './fake-run-service';
 import { seedFakeDrive } from './seed';
 
 const FAKE_KEY = (scenario: Scenario): string => `bower:fake:${scenario}`;
@@ -44,6 +45,13 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
   d.onChange = save;
   save();
   return { drive: d, rootId, fresh };
+}
+
+/** The pretend run service for this tab. Stub until the B path lands: kept nowhere, owns no run. */
+export function pretendRuns(scenario: Scenario, drive: FakeDrive, fresh: boolean, scale: TimeScale): FakeRunService {
+  void scenario;
+  void fresh;
+  return new FakeRunService({ drive, scale });
 }
 
 /** Forgets every pretend Drive of this tab, so the next start is Alex's folder again. */
