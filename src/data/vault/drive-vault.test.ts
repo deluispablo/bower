@@ -4,6 +4,7 @@ import { seedFakeDrive } from '../fake/seed';
 import { findNode } from '../tree';
 import { BowerError } from '../types';
 import { DriveVault, NOT_THE_SAME_TEXT } from './drive-vault';
+import { noteRefusal } from './note-format';
 import { planRun, runFake } from '../fake/fake-runner';
 import { FakeRunService } from '../fake/fake-run-service';
 import { parsePileDeclaration } from '../contracts/pile-declaration';
@@ -798,6 +799,21 @@ describe('unreadable ownership notes do not block other notes', () => {
     expect((await vault.piles()).find((pile) => pile.id === folder.id)).toMatchObject({ setAside: reason, noteLocked: true });
     expect(console.error).toHaveBeenCalledWith(expect.any(BowerError));
     expect(await drive.snapshot()).toBe(before);
+  });
+
+  // Final delta review, Minor: a refused note opened on its screen reaches the console once until it changes.
+  it.each(formats)('opening $name logs its refusal once until the note changes', async ({ text }) => {
+    await addNotes(text);
+    const errors = vi.mocked(console.error);
+    errors.mockClear();
+    for (let i = 0; i < 3; i++) await expect(vault.note(odd)).rejects.toMatchObject({ name: 'BowerError' });
+    const refusals = (): unknown[] => errors.mock.calls.map(([e]) => e).filter((e) => e instanceof BowerError && noteRefusal(e) !== null);
+    expect(refusals()).toHaveLength(1);
+    const f = (await drive.listAll(root)).find((x) => drive.pathOf(x.id, root) === odd);
+    await drive.writeText(f?.id ?? '', `${text}\nMore words`, f?.modifiedTime ?? '');
+    await vault.refresh();
+    for (let i = 0; i < 2; i++) await expect(vault.note(odd)).rejects.toMatchObject({ name: 'BowerError' });
+    expect(refusals()).toHaveLength(2);
   });
 
   it.each(formats)('opening $name directly retains the short readable refusal', async ({ text, message }) => {
