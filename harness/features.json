@@ -3676,7 +3676,7 @@
       "An entry whose verify is `pnpm -C api exec vitest run -t \"<title>\"` passes the harness check when api/ has that test, and fails it when it does not."
     ],
     "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"done.sh sees a change under api/ as code and api tests as tests|the harness check finds a verify's titles among the api tests\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-03 (main c98b186). Today pnpm check is red: worker-skeleton's verify titles are looked up only among the app's unit tests."
   }
 ]
