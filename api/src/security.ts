@@ -26,7 +26,7 @@ export function appCors(): MiddlewareHandler<AppEnv> {
       origin === c.get('env').APP_ORIGIN ? origin : null,
     credentials: true,
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Bower-Place', 'X-Bower-Epoch'],
     exposeHeaders: ['X-Request-Id'],
   });
 }
@@ -91,7 +91,7 @@ export const MAX_BODY_BYTES = 64 * 1024;
 export const limitBody: MiddlewareHandler<AppEnv> = bodyLimit({
   maxSize: MAX_BODY_BYTES,
   onError: () => {
-    throw new HttpError(413, 'payload_too_large', 'Request body too large');
+    throw new HttpError(413, 'payload-too-large', 'Request body too large');
   },
 });
 
@@ -121,7 +121,7 @@ export const requireJsonBody: MiddlewareHandler<AppEnv> = async (c, next) => {
     if (type !== 'application/json') {
       throw new HttpError(
         415,
-        'unsupported_media_type',
+        'unsupported-media-type',
         'Send the request body as application/json',
       );
     }
@@ -287,7 +287,7 @@ export const genericRateLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
   const retryAfter = genericWindow.hit(clientIp(c), Date.now());
   if (retryAfter > 0) {
     c.header('Retry-After', String(retryAfter));
-    throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
+    throw new HttpError(429, 'rate-limited', 'Too many requests, slow down');
   }
   await next();
 };
@@ -322,7 +322,7 @@ export function rateLimit<E extends AppEnv = AppEnv>(
     const retryAfter = strictWindow.hit(`${route}:${keyOf(c)}`, Date.now());
     if (retryAfter > 0) {
       c.header('Retry-After', String(retryAfter));
-      throw new HttpError(429, 'rate_limited', 'Too many requests, slow down');
+      throw new HttpError(429, 'rate-limited', 'Too many requests, slow down');
     }
     await next();
   };

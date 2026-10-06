@@ -2,16 +2,36 @@ import type { ErrorHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 /**
+ * Every code the Worker sends in `error.code`: kebab-case, the vocabulary of
+ * docs/specs/2026-10-04-worker-contract.md. The app reads `code`, so a new
+ * one is added here and in the contract together.
+ */
+export const ERROR_CODES = [
+  'config',
+  'forbidden',
+  'internal',
+  'no-folder',
+  'not-found',
+  'nothing',
+  'payload-too-large',
+  'rate-limited',
+  'stale-session',
+  'unsupported-media-type',
+] as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[number];
+
+/**
  * An error meant to reach the client as-is: a stable `code` and a message
  * safe to show, mapped to `status` by the error middleware.
  */
 export class HttpError extends Error {
   readonly status: ContentfulStatusCode;
-  readonly code: string;
+  readonly code: ErrorCode;
 
   constructor(
     status: ContentfulStatusCode,
-    code: string,
+    code: ErrorCode,
     message: string,
     options?: ErrorOptions,
   ) {
