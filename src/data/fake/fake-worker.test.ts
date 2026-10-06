@@ -1489,7 +1489,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await folderPile(w, 'Listing', [{ name: 'listing-88213.example', text: 'a listing', props: { kind: 'other' } }, { name: 'other.pdf', text: '%PDF other' }]);
       expect(await plan(w)).toEqual({ path: 'legacy', why: 'merge' });
     });
-    it('sends a run with a pile that has not fully arrived to the legacy path', async () => {
+    // TL-P2-21: a pile that has not fully arrived is held out of the capture; the run beside it takes the B path.
+    it('takes the B path beside a pile that has not fully arrived, leaving that pile out of the capture', async () => {
       const w = await bWorld();
       const declaring = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
       const upload = w.drive.upload.bind(w.drive);
@@ -1499,7 +1500,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       };
       await declaring.addPile({ text: 'Papers', items: [pdf('arrived.pdf'), pdf('missing.pdf')] });
       await declaring.settled();
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'readiness' });
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      expect(out.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
+      expect(out.manifest.capture.piles).toHaveLength(2);
     });
     it('sends a run with a loose thing to the legacy path', async () => {
       const w = await bWorld();
@@ -1912,6 +1917,288 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await checkpointsOf(w, admitted.id)).at(-1)?.outcomes.find((o) => o.operationId === archive?.operationId)?.state).toBe('rejected');
       expect(viewOf(w)?.run.report?.yourChanges).toBeUndefined();
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+    });
+  });
+
+  describe('held piles stay untouched on the recoverable path', () => {
+    const FOUR = ['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf'];
+    const DIDNT = 'missing.pdf';
+    type Where = { drive: FakeDrive; rootId: string };
+
+    /** A declared pile whose second thing never arrives: readiness holds it. Returns its folder and every id in it. */
+    async function addHeld(w: World): Promise<{ folder: string; ids: Set<string> }> {
+      const declaring = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
+      const upload = w.drive.upload.bind(w.drive);
+      w.drive.upload = async (parent, name, body, onProgress, props) => {
+        if (name === DIDNT) throw driveError('offline');
+        return upload(parent, name, body, onProgress, props);
+      };
+      await declaring.addPile({ text: 'Papers still coming', items: [pdf('arrived.pdf'), pdf(DIDNT)] });
+      await declaring.settled();
+      const listing = await w.drive.listAll(w.rootId);
+      const folder = listing.find((f) => f.name === 'arrived.pdf')?.parents[0] ?? '';
+      expect(folder).not.toBe('');
+      return { folder, ids: new Set([folder, ...listing.filter((f) => f.parents.includes(folder)).map((f) => f.id)]) };
+    }
+
+    /** Every byte, name, place, mark and Bin state of these files, and what is in them. */
+    async function stateOf(w: Where, ids: ReadonlySet<string>): Promise<string> {
+      const files = await Promise.all([...ids].sort().map(async (id) => ({ id, ev: await w.drive.evidence(id) })));
+      const kids = (await w.drive.listAll(w.rootId)).filter((f) => f.parents.some((p) => ids.has(p))).map((f) => f.id).sort();
+      return JSON.stringify({ files, kids });
+    }
+    const touches = (ids: ReadonlySet<string>) => (call: FencedCall): boolean => ('id' in call && ids.has(call.id)) || ('parentId' in call && ids.has(call.parentId));
+    const parentOfFile = async (w: Where, name: string): Promise<string> => (await w.drive.listAll(w.rootId)).find((f) => f.name === name)?.parents[0] ?? '';
+    const dispositions = async (w: Where): Promise<DriveFile[]> => (await w.drive.listAll(w.rootId)).filter((f) => f.name.startsWith('disposition-'));
+    const childNames = async (w: Where, folder: string): Promise<string[]> => (await w.drive.listAll(w.rootId)).filter((f) => f.parents[0] === folder).map((f) => f.name).sort();
+
+    /** The lease pile's folder and its context note bound by member key (a declared world). */
+    async function leasePile(w: World): Promise<{ folder: string; keyed: DriveFile }> {
+      const folder = await parentOfFile(w, 'lease.pdf');
+      const keyed = (await w.drive.listAll(w.rootId)).find((f) => f.parents[0] === folder && f.name === 'Pile note.md' && f.appProperties?.bowerItem);
+      if (!keyed) throw new Error('missing keyed pile note');
+      return { folder, keyed };
+    }
+    /** Where the plan files the lease pile's two things. */
+    const leaseTo = (m: Manifest | undefined): string[] => (m?.reportPlan ?? []).flatMap((c) => c.value.filed).filter((f) => f.name === 'lease.pdf' || f.name === 'inventory.pdf').map((f) => f.to);
+    const runPlan = (w: Where) => planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+
+    it('leaves a file that is not a member of a declared pile in its folder as an uncaptured child', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder } = await leasePile(w);
+      const stray = await w.drive.createText(folder, 'stray.txt', 'not one of its things');
+      const kept = await w.drive.evidence(stray.id);
+      const planned = await runPlan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      const pile = planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder);
+      expect(pile?.childFileIds).not.toContain(stray.id);
+      expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(stray.id);
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const captured = manifest?.capture.piles.find((p) => p.anchor?.fileId === folder);
+      expect((await checkpointsOf(w, admitted.id)).at(-1)?.retainedPileIds).toEqual([captured?.pileId]);
+      expect((await w.drive.evidence(folder))?.trashed).toBe(false);
+      expect(await childNames(w, folder)).toEqual(['Pile note.md', 'stray.txt']);
+      expect(await w.drive.evidence(stray.id)).toEqual(kept);
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([]);
+      await expectFiledOnce(w);
+    });
+
+    it('files a declared pile whose context was removed without context, leaving a later pile note as an uncaptured child', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      const path = w.drive.pathOf(folder, w.rootId);
+      // Alex removed the pile's note through Bower (a journaled Bin, already archived), then wrote a new one in Drive.
+      const listing = await w.drive.listAll(w.rootId);
+      const changes = listing.find((f) => w.drive.pathOf(f.id, w.rootId) === SYSTEM.changes);
+      const archive = listing.find((f) => w.drive.pathOf(f.id, w.rootId) === SYSTEM.archive) ?? (await w.drive.createFolder(changes?.id ?? '', 'archive'));
+      const rec: JournalRecord = { v: 1, id: 'LINE_CONTEXT_GONE', at: 1, kind: 'trash', what: 'Removed the note of a pile', device: 'DEVICE_A', path: `${path}/Pile note.md` };
+      await w.drive.createText(archive.id, 'LINE_CONTEXT_GONE.json', `${JSON.stringify(rec)}\n`);
+      await w.drive.trash(keyed.id);
+      const later = await w.drive.createText(folder, 'Pile note.md', 'Soup recipes to try');
+      const kept = await w.drive.evidence(later.id);
+
+      const planned = await runPlan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      const pile = planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder);
+      expect(pile?.context).toEqual({ kind: 'absent' });
+      expect(pile?.childFileIds).not.toContain(later.id);
+      // Without its context the pile is filed by its things' names alone, never by the later note's words.
+      expect(leaseTo(planned.manifest)).toEqual(['Projects/Flat hunt', 'Resources/Ideas']);
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await checkpointsOf(w, admitted.id)).at(-1)?.retainedPileIds).toEqual([pile?.pileId]);
+      expect((await w.drive.evidence(folder))?.trashed).toBe(false);
+      expect(await childNames(w, folder)).toEqual(['Pile note.md']);
+      expect(await w.drive.evidence(later.id)).toEqual(kept);
+      expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+      await expectFiledOnce(w);
+    });
+
+    it('guesses where a declared pile goes from its bound note, not from another pile note listed first', async () => {
+      const w = await bWorld({ declared: true });
+      const { folder, keyed } = await leasePile(w);
+      const text = await w.drive.readText(keyed.id);
+      // An unbound note comes first in the folder; the bound note is the person's same words, written again.
+      const other = await w.drive.createText(folder, 'Pile note.md', 'Soup recipes to try');
+      const bound = await w.drive.createText(folder, 'Pile note.md', text, { ...keyed.appProperties });
+      await w.drive.trash(keyed.id);
+
+      const planned = await runPlan(w);
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      const pile = planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder);
+      expect(pile?.context).toMatchObject({ kind: 'text', file: { fileId: bound.id } });
+      expect(pile?.childFileIds).not.toContain(other.id);
+      expect(leaseTo(planned.manifest)).toEqual(['Projects/Flat hunt', 'Projects/Flat hunt']);
+    });
+
+    it('admits the run on the B path, files the ready things and leaves a held pile out of it, untouched', async () => {
+      const w = await bWorld();
+      const held = await addHeld(w);
+      const before = await stateOf(w, held.ids);
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+
+      const [manifest, ...more] = await manifestsOf(w);
+      expect(manifest).toBeDefined();
+      expect(more).toEqual([]);
+      const text = JSON.stringify(manifest);
+      for (const id of held.ids) expect(text, `the manifest names ${id}`).not.toContain(JSON.stringify(id));
+      expect(w.calls.filter(touches(held.ids))).toEqual([]);
+      expect(await stateOf(w, held.ids)).toBe(before);
+      expect(await dispositions(w)).toEqual([]);
+
+      // TL-P2-21: the B report covers only what the run captured; the held pile keeps its reason in the Inbox.
+      const report = viewOf(w)?.run.report;
+      expect(report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+      expect(report).toMatchObject({ created: [], updated: [], setAside: [], questions: [] });
+      const inbox = await new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' }).piles();
+      expect(inbox.map((p) => p.items.map((i) => i.name).sort())).toEqual([['arrived.pdf', DIDNT]]);
+      await expectFiledOnce(w);
+    });
+
+    it('keeps a pile that gained a child after capture in the Inbox with that child, its captured things filed', async () => {
+      let drive: FakeDrive | null = null;
+      let into = '';
+      let late: string | null = null;
+      const hooks: Hooks = {
+        beforeDispatch: async (at) => {
+          if (late || !drive || !into || at.effect.kind !== 'move') return;
+          // Alex adds a thing to the lease pile after the run captured it.
+          late = (await drive.createText(into, 'later.txt', 'arrived late')).id;
+        },
+      };
+      const w = await bWorld({ hooks });
+      drive = w.drive;
+      const held = await addHeld(w);
+      const before = await stateOf(w, held.ids);
+      const lease = await parentOfFile(w, 'lease.pdf');
+      into = lease;
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(late).not.toBeNull();
+
+      const [manifest] = await manifestsOf(w);
+      const pile = manifest?.capture.piles.find((p) => p.anchor?.fileId === lease);
+      expect(pile).toBeDefined();
+      expect(pile?.childFileIds).not.toContain(late);
+      const bin = manifest?.operations.find((o) => o.effect.kind === 'bin' && o.effect.before.fileId === lease);
+      const head = (await checkpointsOf(w, admitted.id)).at(-1);
+      expect(head?.outcomes.find((o) => o.operationId === bin?.operationId)?.state).toBe('rejected');
+      expect(head?.retainedPileIds).toEqual([pile?.pileId]);
+
+      // The folder, its note and the late child stay; nothing of them went to the Bin.
+      expect((await w.drive.evidence(lease))?.trashed).toBe(false);
+      expect(await childNames(w, lease)).toEqual(['Pile note.md', 'later.txt']);
+      expect(await w.drive.evidence(late ?? '')).toMatchObject({ trashed: false, file: { parents: [lease], name: 'later.txt' } });
+      expect(w.applied.filter((c) => c.op === 'trash' && c.id === lease)).toEqual([]);
+      expect(w.calls.filter((c) => 'id' in c && c.id === late)).toEqual([]);
+
+      expect(w.calls.filter(touches(held.ids))).toEqual([]);
+      expect(await stateOf(w, held.ids)).toBe(before);
+      const report = viewOf(w)?.run.report;
+      expect(report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+      expect(report?.setAside).toEqual([]);
+      await expectFiledOnce(w);
+    });
+
+    it('captures the pile note bound to a pile and leaves a second one in its folder as an uncaptured child', async () => {
+      const w = await bWorld();
+      const lease = await parentOfFile(w, 'lease.pdf');
+      const bound = (await w.drive.listAll(w.rootId)).find((f) => f.parents[0] === lease && f.name === 'Pile note.md');
+      expect(bound).toBeDefined();
+      const extra = await w.drive.createText(lease, 'Pile note.md', 'A second note about the lease');
+      const kept = { bound: await w.drive.evidence(bound?.id ?? ''), extra: await w.drive.evidence(extra.id) };
+
+      const planned = await planRun(w.drive, w.rootId, { scope: 'all', allowWeb: false, runId: 'run-plan', requestId: 'request-plan', requestedAt: Date.now() });
+      expect(planned.path).toBe('b');
+      if (planned.path !== 'b') return;
+      const captured = planned.manifest.capture.piles.find((p) => p.anchor?.fileId === lease);
+      expect(captured?.context).toMatchObject({ kind: 'text', file: { fileId: bound?.id } });
+      expect(captured?.childFileIds).toContain(bound?.id);
+      expect(captured?.childFileIds).not.toContain(extra.id);
+      expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(extra.id);
+
+      const admitted = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      const [manifest] = await manifestsOf(w);
+      const pile = manifest?.capture.piles.find((p) => p.anchor?.fileId === lease);
+      expect((await checkpointsOf(w, admitted.id)).at(-1)?.retainedPileIds).toEqual([pile?.pileId]);
+      expect((await w.drive.evidence(lease))?.trashed).toBe(false);
+      expect(await childNames(w, lease)).toEqual(['Pile note.md', 'Pile note.md']);
+      expect({ bound: await w.drive.evidence(bound?.id ?? ''), extra: await w.drive.evidence(extra.id) }).toEqual(kept);
+      const report = viewOf(w)?.run.report;
+      expect(report?.filed.map((f) => f.name).sort()).toEqual(FOUR);
+      expect(report?.setAside).toEqual([]);
+      await expectFiledOnce(w);
+    });
+
+    it('admits nothing when only held piles are waiting', async () => {
+      const w = await bWorld();
+      const first = await w.worker.process('all');
+      await w.runs.settled();
+      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      const held = await addHeld(w);
+      const before = await stateOf(w, held.ids);
+      const records = await recordsOf(w);
+      const view = viewOf(w);
+      const rest = await domain(w.drive, w.rootId);
+      const calls = w.calls.length;
+
+      await expect(w.worker.process('all')).rejects.toMatchObject({ code: 'conflict', message: 'Nothing in the inbox is ready yet.' });
+      await w.runs.settled();
+      expect(await recordsOf(w)).toEqual(records);
+      expect(w.calls.slice(calls)).toEqual([]);
+      expect(viewOf(w)).toEqual(view);
+      expect(await domain(w.drive, w.rootId)).toBe(rest);
+      expect(await stateOf(w, held.ids)).toBe(before);
+      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    });
+
+    it('recovers a run beside a held pile without ever touching it', async () => {
+      const pause = pauseFirstMove();
+      const w = await bWorld({ hooks: pause.hooks });
+      const held = await addHeld(w);
+      const before = await stateOf(w, held.ids);
+      const admitted = await w.worker.process('all');
+      const at = await reached(pause.paused, w.runs);
+      expect(at, 'the first move was paused before its dispatch').not.toBeNull();
+      if (!at) return;
+
+      // The paused attempt's claim lapses; another client asks, and the service recovers under a newer epoch.
+      w.clock.later(CLAIM_MS + 1);
+      const second = new FakeWorker({ drive: w.drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs: w.runs, fresh: false });
+      await until(second, 'done');
+      expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await checkpointsOf(w, admitted.id)).at(-1)?.epoch).toBeGreaterThan(at.epoch);
+      pause.release();
+      await w.runs.settled();
+      expect(w.calls.filter(touches(held.ids))).toEqual([]);
+      expect(await stateOf(w, held.ids)).toBe(before);
+
+      // After a reload of the service and the Drive, asking again leaves it as it was too.
+      const drive = FakeDrive.restore(await w.drive.snapshot());
+      const applied: FencedCall[] = [];
+      drive.fault = { applied: (call) => { applied.push(call); } };
+      const runs = FakeRunService.restore(w.runs.toJSON(), { drive, clock: w.clock.now, scale: 'instant' });
+      const worker = new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: w.rootId, runs, fresh: false });
+      expect(await after(worker, runs)).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect(applied.filter(touches(held.ids))).toEqual([]);
+      expect(await stateOf({ drive, rootId: w.rootId }, held.ids)).toBe(before);
+      expect(viewOf(w)?.run.report?.setAside).toEqual([]);
+      await expectFiledOnce(w);
     });
   });
 });

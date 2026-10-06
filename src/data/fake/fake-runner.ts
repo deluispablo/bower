@@ -155,7 +155,13 @@ export interface PlanOptions {
  * changed during the run. The B plan fixes every operation and every report
  * row (TL-P2-06 §1, contract B guards 7 and 9) and reuses the readiness
  * capture: only ready piles are captured, and their folders go to the Bin
- * only with no child the run did not capture. Your changes from the journal
+ * only with no child the run did not capture. A pile held for readiness is
+ * left out, untouched and unreported (TL-P2-21). A pile is captured with its
+ * members and its one bound context note (by member key when declared,
+ * otherwise the first pile note); any other child (a late thing, a pile
+ * note not bound to it, a file a declared pile does not list) is uncaptured,
+ * stays for the next run, and keeps the folder out of the Bin: the Bin is
+ * rejected at the boundary and the pile retained (guard 7). Your changes from the journal
  * are captured too (record id, digest, files) and archived by B moves into
  * `.bower/changes/archive`, after the runner-JSON writes derived from them.
  */
@@ -212,55 +218,68 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   // The ready piles and their things, exactly as captured.
   const capturedPiles: CapturedPile[] = [];
   const members: CapturedMember[] = [];
-  const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent }> = [];
+  const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string }> = [];
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!folder?.folder) return legacy('loose pile');
     const cap = capture.get(pile.id);
-    if (!cap || cap.blocked !== null) return legacy('readiness');
+    if (!cap) return legacy('readiness');
+    // A pile that is not ready is held (TL-P2-21): not captured, no effect, no report row; its reason shows in the Inbox.
+    if (cap.blocked !== null) continue;
     if (cap.restore || !pile.items.length) return legacy('generated note');
     if (!LOGICAL_ID.test(pile.id) || /saltmere/i.test(pile.text)) return legacy('question');
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE);
-    if (notes.length > 1 || children.some((f) => !cap.captured.has(f.id))) return legacy('uncaptured child');
     const declared = cap.declared;
+    // The one context note bound to the pile (TL-P2-21): by its member key when declared, otherwise the first.
+    // Any other child (a second pile note, a folder) is uncaptured: guard 7 then keeps the folder out of the Bin.
+    const contextKey = declared?.contextKey ?? null;
+    // A declared pile whose context was removed (TL-P2-08 b) has none: any pile note in it is unbound.
+    const note = declared ? children.find((f) => !f.folder && contextKey !== null && f.appProperties?.[PROP.item] === contextKey) : notes[0];
+    // Where its things go is guessed from the bound note's words only, never from an unbound note listed first.
+    const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), await drive.readText(note.id)).body.trim();
     const keys: Array<string | null> = [];
+    const taken: string[] = [];
     for (const item of pile.items) {
       const file = children.find((f) => f.id === item.id);
+      if (file && !file.folder && file.name === PILE_NOTE && file.id !== note?.id) continue;
       if (!file || file.folder) return legacy('sending');
+      const key = declared ? (file.appProperties?.[PROP.item] ?? null) : null;
+      // A file in a declared pile that is not one of its members stays there for the next run.
+      if (declared && (key === null || !declared.memberKeys.has(key))) continue;
       if (item.kind === 'link') return legacy('link');
       if (PLAN_BY_NAME.get(item.name)?.note) return legacy('note');
       if (MERGES.some((m) => m.item === item.name)) return legacy('merge');
       if (item.name !== file.name) return legacy('name');
       const content = await verified(file, 'blob');
       if (!content) return legacy('not checked');
-      const key = declared ? (file.appProperties?.[PROP.item] ?? null) : null;
-      if (declared && (key === null || !declared.memberKeys.has(key))) return legacy('member key');
       keys.push(key);
+      taken.push(file.id);
       members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
-      things.push({ pile, folder, item, file, content });
+      things.push({ pile, folder, item, file, content, words });
     }
+    if (!taken.length) return legacy(declared ? 'member key' : 'generated note');
     if (declared && keys.length !== declared.memberKeys.size) return legacy('member key');
-    const [note] = notes;
     let context: CapturedPile['context'] = { kind: 'absent' };
     if (note) {
       const text = await drive.readText(note.id);
       const stored = await verified(note, 'utf8');
       const raw = new TextEncoder().encode(text);
       if (!stored || stored.size !== raw.byteLength || stored.sha256 !== (await sha256(new Blob([raw])))) return legacy('context');
-      const key = declared?.contextKey ?? null;
-      if (declared && note.appProperties?.[PROP.item] !== key) return legacy('context');
-      context = { kind: 'text', memberKey: key, file: seen(note), text, content: stored };
+      context = { kind: 'text', memberKey: contextKey, file: seen(note), text, content: stored };
     }
     capturedPiles.push({
       pileId: pile.id,
       source: declared ? { kind: 'declared', ref: declared.ref } : { kind: 'observed' },
       anchor: seen(folder),
       memberKeys: keys,
-      childFileIds: [...cap.captured].sort(),
+      childFileIds: [...taken, ...(note ? [note.id] : [])].sort(),
       context,
     });
   }
+
+  // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal.
+  if (all && !capturedPiles.length && !journal.length) throw new BowerError('conflict', NOTHING_READY);
 
   // Where each thing goes and under which name, against the folder as it will be.
   const planned = new Map(ix.entries());
@@ -268,7 +287,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const missing: string[] = [];
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string }> = [];
   for (const thing of things) {
-    const to = guessOf(thing.pile, thing.item);
+    const to = guessOf(thing.words, thing.item);
     let at = to;
     while (at && !ix.file(at)?.folder) at = parentOf(at);
     if (at) {
@@ -470,6 +489,8 @@ async function journalOf(drive: FakeDrive, ix: VaultIndex): Promise<JournalLine[
 const REQUESTS_PER_RUN = 20;
 /** The fake Worker's refusal of an instructions run with nothing new (409). */
 const NOTHING_TO_READ = 'There is nothing new for Bower to read.';
+/** The same refusal of a full run when every waiting pile is held for readiness (409 `nothing`, TL-P2-21). */
+const NOTHING_READY = 'Nothing in the inbox is ready yet.';
 const JOURNAL_LEFT = 'Bower could not read some of your changes; they stay for the next tidy-up.';
 const QUESTIONS_REPLACED = 'Bower replaced its list of questions, which it could not read.';
 
@@ -488,8 +509,8 @@ export const NOT_FILED = 'It was moved, renamed or removed before Bower could fi
 const LOGICAL_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** Where the fixture or the pile's words send a thing. */
-function guessOf(pile: Pile, item: PileItem): string {
-  return PLAN_BY_NAME.get(item.name)?.to ?? guessFolder(`${pile.text} ${item.name}`, item.kind);
+function guessOf(words: string, item: PileItem): string {
+  return PLAN_BY_NAME.get(item.name)?.to ?? guessFolder(`${words} ${item.name}`, item.kind);
 }
 
 /** A create key, minted once and kept in the manifest; never derived from a name or a time alone. */
