@@ -3374,7 +3374,7 @@
       "The legacy reasons not checked and manifest (for these causes) are gone."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"a pile whose names no run record can carry is held, not sent down the legacy path\"",
-    "passes": false,
+    "passes": true,
     "note": "Merges the proposed b-path-unrecordable-names, b-path-unverifiable-member and journal-record-grammar; Q4 copy approved. Also covers a request with a lone surrogate (stays uncaptured, never throws at planning). TL-P2-37 (main d6dca4b). Planned, not implemented."
   },
   {
