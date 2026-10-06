@@ -32,3 +32,5 @@ export function createApp(): Hono<AppEnv> {
 }
 
 export default createApp();
+
+export { Person } from './person.js';
