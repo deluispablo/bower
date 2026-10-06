@@ -29,6 +29,8 @@
 - Registered from TL-P2-06: `run-checkpoint-monotonic`, `loose-pile-declaration`, `declared-pile-folder-lost`, `pile-member-reselection` (D02), `o5-saved-link-note`, `o5-rename-link-rewrite`, `o5-timeline-append`, `o5-rules-wording`, `o5-no-legacy-run-path`. 222/234.
 - Assignment I-mono-1: Claude `checkpoint-mono-impl-1`, entry `run-checkpoint-monotonic`, checkout `/private/tmp/bower-p2-checkpoint-monotonic` (`claude/p2-checkpoint-monotonic`) base `9dd70a0`; owns only `run-checkpoint.ts` and its test.
 - Adopted main `b95c4bb` (docs only: Claude Planificador is technical lead and planner; TL-P2-06; owner rulings R1 accepted limitation, no in-app offline reading, uploads kept across reload so D02 is required, reuse-before-building). Backup pushed and verified private local=remote `b95c4bb`.
+- Old-app reuse map archived [2026-10-06-old-app-reuse-map.md](2026-10-06-old-app-reuse-map.md); summary sent to the lead. TL-P2-07 (main `6527286`): D02 split, `upload-queue-persistent` registered first, then `pile-member-reselection`. Main `6527286` backed up and verified private.
+- Monotonic candidate `c3f2b3e`/`e3a0dbc` under review `mono-review-1`; guard-6 candidate `9235536`/`e21a777` under review `g6-review-1`.
 
 # Previous coordinator: stopped and released
 

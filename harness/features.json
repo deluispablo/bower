@@ -2941,5 +2941,19 @@
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"every tidy-up plan takes the recoverable path\"",
     "passes": false,
     "note": "TL-P2-06 (Planificador, 2026-10-06). Planned, not implemented. Closes O5; P2 cannot close while any plan reaches the legacy path."
+  },
+  {
+    "id": "upload-queue-persistent",
+    "task": "qa-23",
+    "category": "feature",
+    "what": "Things on their way to Drive survive a reload: their bytes stay on the device until Drive confirms, the upload resumes where it stopped and never makes two files.",
+    "steps": [
+      "Start a pile upload, reload mid-transfer with the bytes kept on the device for that account and folder.",
+      "After the reload the upload resumes from the stored offset (bounded restart if the session expired), reusing the reserved file identity; a reply lost after the effect is confirmed by reading back, never a second file.",
+      "Bytes are deleted only after Drive confirms; only one tab uploads; a storage failure is told in one sentence; another account never sees them and deleting the account removes them."
+    ],
+    "verify": "pnpm vitest run src/data/upload-queue.test.ts -t \"uploads survive a reload without a second file\"",
+    "passes": false,
+    "note": "TL-P2-07 (Planificador, main 6527286), D02 part 1, journey 9. Reuse: original Bower app/src/upload-queue.ts and app/src/cache.ts:520-596 (FSL-1.1-MIT, owner's copyright), adapted. Planned, not implemented."
   }
 ]
