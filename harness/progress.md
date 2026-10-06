@@ -395,3 +395,4 @@ Main10ca886626206e0d4d880d6679dd4f57adcafcee adopted at root clean6a630d2 checkp
 - 2026-10-06: declared-pile-folder-lost passes — test: close declared-pile-folder-lost as superseded by TL-P2-30
 - 2026-10-06: fake-drive-reservation-saved passes — fix: proof-close the pretend Drive saving a reservation before answering
 - 2026-10-06: b-path-destinations passes — fix: proof-close destinations on the recoverable path
+- 2026-10-06: b-path-generated-note passes — fix: proof-close generated notes on the recoverable path
