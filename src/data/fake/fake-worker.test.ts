@@ -2609,6 +2609,41 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await reader.piles()).some((p) => p.id === pile.id)).toBe(false);
     });
 
+    // Final review of b-path-loose-piles: a held loose file shows its reason in the Inbox, as the run holds it (TL-P2-21, TL-P2-29).
+    for (const why of ['changed', 'not-checked', 'unreadable'] as const) {
+      it(`an arrived declared loose file the run holds as ${why} shows that reason in the inbox`, async () => {
+        const w = await bWorld({ declared: true });
+        const pile = await w.uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
+        await w.uploader.settled();
+        const file = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'loose.pdf');
+        if (!file) throw new Error('no loose file');
+        if (why === 'changed') await w.drive.writeText(file.id, '%PDF edited', file.modifiedTime);
+        if (why === 'not-checked') {
+          const real = w.drive.storedDigest.bind(w.drive);
+          vi.spyOn(w.drive, 'storedDigest').mockImplementation(async (id) => {
+            if (id === file.id) throw driveError('offline');
+            return real(id);
+          });
+        }
+        if (why === 'unreadable') {
+          const declarationId = file.appProperties?.bowerDeclaration ?? '';
+          const copy = (await w.drive.listAll(w.rootId)).find((f) => f.name.startsWith(`declaration-${declarationId}-`));
+          const real = w.drive.readBytes.bind(w.drive);
+          vi.spyOn(w.drive, 'readBytes').mockImplementation(async (id) => {
+            if (id === copy?.id) throw driveError('offline');
+            return real(id);
+          });
+        }
+        const reader = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set() });
+        const seen = (await reader.piles()).find((p) => p.id === pile.id);
+        expect(seen?.setAside).toBe(why);
+        expect(seen?.items.map((i) => [i.name, i.changed])).toEqual([['loose.pdf', why === 'changed' ? true : undefined]]);
+        const planned = await runPlan(w);
+        if (planned.path !== 'b') throw new Error(`legacy: ${planned.why}`);
+        expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(file.id);
+      });
+    }
+
     it('a retired loose declaration costs the inbox no digest and no lookup of its member', async () => {
       const w = await bWorld({ declared: true });
       await w.uploader.addPile({ text: '', items: [pdf('declared loose.pdf')] });
