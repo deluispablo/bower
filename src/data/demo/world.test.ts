@@ -236,6 +236,24 @@ describe('what the testers found', () => {
     expect((await vault.requests())[0]?.done).toMatch(/^Done/);
   });
 
+  // The demo writes no comparison and looks nothing up, so it never claims to (TL-P2-40: never contradict the fake).
+  it.each([false, true])('names no note it did not write and no lookup it did not make (web %s)', async (allowWeb) => {
+    vi.useFakeTimers();
+    const w = new DemoWorld({ scenario: 'default', scale: 'demo', latency: 0 });
+    const { vault, runs } = w.sources();
+    await vault.addRequest('Compare the flats on the shortlist');
+    await vault.addRequest('Look up the council tax band for Flat 3');
+    await vault.addRequest('Which flat is closest to Ferrowick?');
+    await runs.start('instructions', { allowWeb });
+    await vi.runAllTimersAsync();
+    const done = new Map((await vault.requests()).map((r) => [r.text, r.done]));
+    expect(done.get('Compare the flats on the shortlist')).toBe('Done. See what changed in your folders.');
+    expect(done.get('Look up the council tax band for Flat 3')).toBe(allowWeb ? 'Bower did not look anything up.' : 'Bower did not look anything up. Web lookups are off in Settings.');
+    expect(done.get('Which flat is closest to Ferrowick?')).toContain('[[Flat 7, Cobble Row]] has the shortest commute');
+    expect(findNode(await vault.tree(), 'Projects/Flat hunt/Flats on the shortlist, compared.md')).toBeNull();
+    w.dispose();
+  });
+
   it('finds notes by what they say, names first', async () => {
     const w = new DemoWorld({ scenario: 'default', scale: 'instant' });
     const hits = await w.sources().vault.search('£1,450');
