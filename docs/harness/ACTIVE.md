@@ -6,9 +6,11 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 
 - **Batch P3-1 closed** at `be87050`: c11 + console guard (+ scoped `allowConsole` in six failure-path tests, qa26 stub fix). Suites: check 3492, e2e 226, e2e:fake 250, e2e:pwa 4. 284/284.
 - **Batch P3-2 closed** at `541c26c`: `shared-domain-package`, `worker-skeleton`, `done-sh-api-paths` (TL-P3-03; Haiku attempt rejected, Sonnet climb). Suites: check 3496 + api 4, e2e 226, e2e:fake 250, e2e:pwa 4; harness 287/287.
-- **Next:** register `worker-crypto-session` (and then the OIDC path to P3-B) on the lead's go.
-- **Carried into `worker-crypto-session` (TL-P3-03):** error codes kebab-case per the contract plus a test that every emitted code is in the contract; add `x-bower-place`/`x-bower-epoch` to CORS allowHeaders (there or in `worker-session-lease`). Worker entries close with a real red from now on.
-  - Then: P3-B (`r2-oidc-two-accounts`, `drive-real-behavior-suite`) once the Worker can do the OAuth sign-in. Test-account addresses never go in the repo or messages; a probe needing the owner's sign-in → message the lead.
+- **Batch P3-3, running ([TL-P3-04](2026-10-06-tl-p3-04-batch-p3-3.md)):**
+  - `worker-crypto-session`, `bower-implementer`, packet [2026-10-06-p3-3-crypto-session-packet.md](2026-10-06-p3-3-crypto-session-packet.md), `/private/tmp/bower-p3-crypto` branch `claude/p3-crypto` (TL-P3-03 folded in).
+  - `worker-person-object`, `bower-escalated`, packet [2026-10-06-p3-3-person-object-packet.md](2026-10-06-p3-3-person-object-packet.md), `/private/tmp/bower-p3-person` branch `claude/p3-person`.
+  - Then one Opus review over both diffs (TL-P2-46), integrate (both touch `api/src/index.ts`/`env.ts`: resolve by hand), `done.sh` with a real red, four suites, main, push. Next P3-4: `worker-google-oidc` and the first staging deploy; tell the lead when ready for the owner's sign-in.
+
 - Evaluations: fresh origin and bundle name checked (TL-P3-01).
 - P2 evidence checkouts (`/private/tmp/bower-p2-*`) can be removed.
 - Resume (TL-P2-45): never clear; after a compaction re-read HANDOFF and this file; a worker gone with no delivery is redispatched fresh from its packet.
