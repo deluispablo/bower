@@ -560,10 +560,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     // (not Bower's, damaged, too big) leaves them pending (rule 7).
     let rules: RulesWording | null = null;
     if (w.rules) {
-      const result = applyChanges(rewritten, [w.rules]);
-      const worded = result.ok ? wordedBy(new TextDecoder().decode(rewritten), w.rules, result.text) : null;
+      // A rule taken out is matched as it reads after this edit's link rewrite (TL-P2-38); still no match, it is gone.
+      const change = rewrite && w.renames ? relinkedRemovals(w.rules, w.renames) : w.rules;
+      const result = applyChanges(rewritten, [change]);
+      const worded = result.ok ? wordedBy(new TextDecoder().decode(rewritten), change, result.text) : null;
       if (worded) {
-        rules = w.rules;
+        rules = change;
         rulesWorded = worded;
       } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
       else console.error(`${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
@@ -1042,6 +1044,18 @@ function ruleChangesOf(lines: readonly JournalLine[]): { change: RulesWording | 
   }
   if (left.size) console.error(`${left.size} rule lines cannot be worded`);
   return { change: add.length || remove.length ? { kind: 'rules-wording', add, remove } : null, left };
+}
+
+/**
+ * A rules change whose removals read as the rules will after a link rewrite with these renames: each removal's text
+ * goes through that very rewrite (`applyChanges`, the one author), as the rule line it names in Rules.md does.
+ */
+function relinkedRemovals(change: RulesWording, renames: Rename[]): RulesWording {
+  const relinked = (text: string): string => {
+    const result = applyChanges(new TextEncoder().encode(`- ${text}`), [{ kind: 'link-rewrite', recordIds: [], renames }]);
+    return result.ok ? result.text.slice(2) : text;
+  };
+  return { ...change, remove: change.remove.map((r) => ({ ...r, text: relinked(r.text) })) };
 }
 
 /**
