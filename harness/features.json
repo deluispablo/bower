@@ -3161,7 +3161,7 @@
     "steps": [
       "Open Bower in two pages for the same person: the second shows \"Bower is open in another window.\" with \"Use here\", and, while it holds things only on that page, \"Some things you added here are only on this page. Use Bower here to send them.\"",
       "Use here moves the session without a reload; the first page shows the same screen and its Use here moves it back; a reload of the active page stays active; closing the active page lets the next open without asking.",
-      "The fake and demo sources wire the session for every factory; the real source wires it with its own world; phone and desktop, accessibility clean."
+      "The fake and demo sources wire the session for every factory; the real source stays unwired until the P3 Worker has POST /session (P3 obligation); phone and desktop, accessibility clean."
     ],
     "verify": "pnpm vitest run src/app/OpenElsewhere.test.tsx -t \"Bower is open in another window\"",
     "passes": false,
@@ -3180,5 +3180,33 @@
     "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"leftovers of a held pile take the recoverable path\"",
     "passes": false,
     "note": "Remaining legacy route found by the b-path-held-piles review (declared pile with no members left → legacy('member key')). Before P2-H; part of o5-no-legacy-run-path's mapping. Planned, not implemented."
+  },
+  {
+    "id": "session-signout-state",
+    "task": "qa-25",
+    "category": "bug",
+    "what": "Signing out never shows the wrong session state: a failed sign-out keeps an active place active and a blocked place blocked, at every moment.",
+    "steps": [
+      "Sign out from an active place and make the sign-out fail.",
+      "At no point does the place report starting; right after the failure it is still active and holds the lease, unless another place took it meanwhile.",
+      "A blocked place that fails to sign out stays blocked; writes during sign-out wait."
+    ],
+    "verify": "pnpm vitest run src/data/session.test.ts -t \"a failed sign-out never shows another state\"",
+    "passes": false,
+    "note": "Race found as a full-suite flake after single-active-session closed; root cause in the failed-sign-out path. Candidate claude/p2-session-flake 49edf2f (test 54fddd5)."
+  },
+  {
+    "id": "note-edit-consumer-limits",
+    "task": "qa-24",
+    "category": "data",
+    "what": "Runs with many note edits defer the extra edits deterministically instead of falling back to the legacy path, and an older Bower names a newer run plainly.",
+    "steps": [
+      "Plan a run whose edit-text total passes 8 MiB: the edits past the cap are deferred in path order to the next run, and the run stays on the B path.",
+      "A build that knows manifest versions but not this one shows \"This tidy-up needs a newer Bower.\"",
+      "Nothing is written for deferred edits; they appear in a later run."
+    ],
+    "verify": "pnpm vitest run src/data/fake/fake-worker.test.ts -t \"note edits past the size cap wait for the next run\"",
+    "passes": false,
+    "note": "From the o5-timeline-append review (M3 m7 8 MiB deferral, M4 m9 newer-Bower message). Needed before consumers with unbounded edits (link rewrites, merges). Planned, not implemented."
   }
 ]
