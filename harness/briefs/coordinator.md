@@ -17,6 +17,10 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - messages of 10 lines at most;
   - keep HANDOFF at 5 KB or less and ACTIVE at 3 KB or less, archiving the rest;
   - compact at batch boundaries.
+- The model ladder ([TL-P2-42](../../docs/harness/2026-10-06-tl-p2-42-model-ladder.md)):
+  - every packet states its starting model and a one-line reason;
+  - climb Haiku → Sonnet → Opus on the ladder's triggers;
+  - record each agent run in `harness/tokens.csv` and give the entry's total in its closure note.
 - Research first, always (owner rule, 2026-10-06). Every packet tells the worker to look up the standard solution, recommended practice and specifications before designing a fix. The worker cites them in its delivery. A worker's own mechanism needs a stated reason why no standard approach fits.
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
