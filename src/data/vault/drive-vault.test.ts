@@ -1891,6 +1891,27 @@ describe('a set-aside pile shows its reason in the inbox', () => {
     expect(await real(note.id)).toBe('Papers about the new lease');
   });
 
+  // note-read-review-1, Minor 3: the whole app offline logs one error per pile and listing, a declared pile too.
+  it('offline, a declared pile logs one error per listing', async () => {
+    localStorage.clear();
+    drive = new FakeDrive();
+    const runs = new FakeRunService({ drive, clock: () => Date.now(), scale: 'instant' });
+    root = (await new FakeWorker({ drive, scenario: 'first', scale: 'instant', rootId: null, runs }).createFolder()).id;
+    const pile = await declaring().addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await declaring().settled();
+    const offline = driveError('offline');
+    vi.spyOn(drive, 'readText').mockRejectedValue(offline);
+    vi.spyOn(drive, 'readBytes').mockRejectedValue(offline);
+    vi.spyOn(drive, 'storedDigest').mockRejectedValue(offline);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reader = declaring();
+    const listed = await reader.piles();
+    expect(listed.map((p) => [p.id, p.setAside, p.noteLocked])).toEqual([[pile.id, 'not-checked', true]]);
+    expect(errors.mock.calls).toHaveLength(1);
+    await reader.piles();
+    expect(errors.mock.calls).toHaveLength(2);
+  });
+
   it('a pile with no declaration, and a ready one, have no reason', async () => {
     expect((await vault.piles()).map((p) => p.setAside)).toEqual((await vault.piles()).map(() => undefined));
     const uploader = declaring();
