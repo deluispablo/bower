@@ -3696,6 +3696,30 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.setAside).toEqual([{ name: CURRY.name, why: AGAIN }]);
     });
 
+    // Review o5-consumers-review-1 I1: rows use the file name; a saved link added under another name is not planned here.
+    it('names a saved link by its file in every row, refusing any other name, also when the inbox renamed it', async () => {
+      const { w, link } = await linkWorld();
+      const { manifest } = await tidy(w);
+      if (!manifest) return;
+      expect(manifest.reportPlan.flatMap((c) => [...c.value.filed, ...c.value.setAside]).filter((r) => r.name.includes('curry')).map((r) => r.name)).toEqual([link.name, link.name]);
+      // The member as an inbox `.url` file: no row may claim the name it was added under, or one like it.
+      const asUrl = { ...manifest, capture: { ...manifest.capture, members: manifest.capture.members.map((m) => (m.file.fileId === link.id ? { ...m, file: { ...m.file, name: `${link.name}.url` } } : m)) } } as AnyManifest;
+      for (const name of [link.name, `../${link.name}`, ` .-${link.name}`]) {
+        const tampered = { ...asUrl, reportPlan: asUrl.reportPlan.map((c) => ({ ...c, value: { ...c.value, filed: c.value.filed.map((r) => (r.name === link.name ? { ...r, name } : r)), setAside: c.value.setAside.map((r) => (r.name === link.name ? { ...r, name } : r)) } })) } as AnyManifest;
+        expect(grounded(tampered), name).toBe(false);
+      }
+      // A link renamed when it was added (x.example became x.example.url) takes the B path too, named by its file.
+      const v = await bWorld();
+      await v.uploader.addPile({ text: 'A recipe to keep', items: [CURRY, pdf('shopping list.pdf')] });
+      await v.uploader.settled();
+      const added = (await v.drive.listAll(v.rootId)).find((f) => !f.folder && f.name.endsWith('.url'));
+      expect(added?.name).toBe(`${CURRY.name}.url`);
+      await tidy(v);
+      expect(v.drive.pathOf(added?.id ?? '', v.rootId)).toBe(`Resources/Cooking/${CURRY.name}.url`);
+      expect(viewOf(v)?.run.report?.filed).toContainEqual({ name: `${CURRY.name}.url`, title: 'Weeknight curry, clipping', kind: 'link', to: 'Resources/Cooking', note: NOTE });
+      expect(await notesOf(v)).toHaveLength(1);
+    });
+
     it('a saved link is set aside by its cause: moved away, or not filed this time', async () => {
       // A conflict: the link file is renamed right before its move.
       const moved = await linkWorld();
