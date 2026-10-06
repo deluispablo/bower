@@ -3124,5 +3124,19 @@
     "verify": "pnpm vitest run src/data/upload-queue.test.ts -t \"a reservation survives an immediate reload\"",
     "passes": false,
     "note": "Found by u2-review-1 during the U2 rebase review: generateIds and a partial putChunk do not notify the pretend Drive of a change, so they are saved only with the next real change (pre-existing at e20a05c). Planned, not implemented."
+  },
+  {
+    "id": "empty-pile-remove-copy",
+    "task": "qa-23",
+    "category": "bug",
+    "what": "Removing an empty pile never says that a note goes to the Bin when there is no note.",
+    "steps": [
+      "Open an undeclared pile with no things and no words.",
+      "Ask to remove it.",
+      "The confirmation shows only the buttons, with no note sentence; a pile that is a note still says the note goes to the Bin."
+    ],
+    "verify": "pnpm vitest run src/features/piles/PileScreen.test.tsx -t \"an empty pile's removal never mentions a note\"",
+    "passes": false,
+    "note": "Minor from inbox-review-1 final delta: RemovePile keeps its own onlyNote = !pile.items.length (PileScreen.tsx:150). Planned, not implemented."
   }
 ]
