@@ -28,4 +28,4 @@ The original review is retained in [the review archive](../reviews/2026-10-05-in
 
 ## Result packet
 
-Return planning revision adopted, integration SHA, affected capability IDs, mapped evidence, newly registered gaps, unresolved owner decisions and next assignment. The technical lead currently improves planning/method only; implementation stays with its assigned coordinator. Use an owner-authorized channel for inter-session messaging, or this repository packet; neither tool is assumed to see the other's private chat.
+Return planning revision adopted, integration SHA, affected capability IDs, mapped evidence, newly registered gaps, unresolved owner decisions and next assignment. The technical lead owns planning, method and technical rulings for the whole project; implementation stays with its assigned coordinator. Use an owner-authorized channel for inter-session messaging, or this repository packet; neither tool is assumed to see the other's private chat.

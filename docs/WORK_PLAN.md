@@ -38,7 +38,7 @@ These are explicit P2 architecture-risk work, not the beginning of P3. Coordinat
 
 | Risk | Small experiment | Required decision / stop condition |
 | --- | --- | --- |
-| R1: Drive write preconditions | Two synthetic clients interleave read/update, move/rename and a lost response; inspect supported conditional behavior | Choose a demonstrably safe conflict strategy; do not label read-before-write atomic. Unresolved data-loss race blocks dependent contracts. |
+| R1: Drive write preconditions | Two synthetic clients interleave read/update, move/rename and a lost response; inspect supported conditional behavior | Done: the residual race was observed (R1-OBS01). Owner ruling 2026-10-06 accepts it as a documented limitation with the existing modifiedTime check; do not label read-before-write atomic. |
 | R2: identity and external inputs | Synthetic OAuth/token/folder flow and appProperties visibility; externally added item discovery and permission revocation | Confirm identity/scopes and extraction fallback assumptions; record browser/session constraints. No new product OAuth backend. |
 | R3: admission and executor behavior | A disposable no-model executor probe, if access is authorized, measures dispatch/startup and observes duplicate/lost dispatch/callback behavior; otherwise record the missing evidence | Select durable dispatch/attempt/recovery design and limits. No success inferred from an accepted dispatch response; no executor migration without measured need. |
 | R4: upload/readiness and recovery | Synthetic partial/resumable upload, lost response and reopened client; contrast local retained-byte and reselect policies | Separate platform facts from the owner's reload policy; define ready-set capture and recovery without silently losing members. |
@@ -77,15 +77,17 @@ One/two calls can be a target for ordinary ingestion. Task budgets adapt to requ
 | App-first phases and a complete simulated P2 | Adopted by owner | This plan and capability matrix govern closure. |
 | Preserve full second-brain capabilities while reducing redundant model work | Adopted by owner | Quality parity precedes efficiency claims. |
 | Minimal Worker; app direct mechanics; deterministic runner | Adopted direction | Centralized all-write backend from v2 is superseded. |
-| Technical lead owns planning/method only for now | Adopted by owner | Do not implement product fixes or seize the active coordinator role. |
+| Technical lead (Claude `Planificador`, since 2026-10-06) owns planning, method and technical rulings for the whole project | Adopted by owner | Do not implement product fixes or seize the active coordinator role; rulings land on main as TL decisions. |
 | Local documentation integration into main | Authorized by owner | Merge only planning/method files; product-code closure remains separate. |
-| Offline reading | Pending specific product ruling | Scope must be explicit before P2 closure; shell caching is not note reading. |
-| Upload persistence across reload | Pending specific product ruling | Recommend recovery where feasible; same-session safety/retry is mandatory regardless. |
-| Real Drive atomic conflict behavior | Unverified contract-threatening premise | P2-R investigates before dependent contract acceptance; P3 validates the real implementation. Fake simulations cannot certify provider semantics. |
+| Offline reading | Ruled by owner 2026-10-06: simplest solution | No in-app offline note reading. Notes are plain Markdown in Drive, readable offline through the person's own local Drive sync. Offline, the app says so truthfully and keeps changes queued as today; shell caching is not note reading. |
+| Upload persistence across reload | Ruled by owner 2026-10-06: uploads in progress are kept | Selected bytes stay on the device until Drive confirms the upload, and continue after a reload; a storage failure is disclosed, never silent. Same-session retry stays mandatory. |
+| Real Drive atomic conflict behavior | Ruled by owner 2026-10-06: rare in normal use, simplest solution | Keep the existing check of the modifiedTime read before every content write; a detected conflict never overwrites and keeps the person's edit. The race with a non-cooperating external writer between check and write (R1-OBS01) is an accepted, documented limitation, not a P2/P3 blocker. Save a copy is not adopted. Never claim the write is atomic. |
 | Stable app/service and runner/semantic boundaries | Adopted in contracts-2 | Shared behavioral/compatibility suites; explicit migration for breaking changes. |
 | Durable execution independent of the browser | Adopted in contracts-2 | Simulate in P2, implement/prove deterministic spine in P3, reuse in P4. |
 | Specific model, latency/token budget, executor changes | Unmeasured | Decide using the shared quality/performance corpus; no arbitrary universal caps. |
 | Extra export formats, mail/connectors or scheduled processing | Not automatically in core scope | Separate requirements and owner scope decisions. |
+| Reuse the original Bower app | Adopted by owner 2026-10-06 | Features that already worked in the original repository are reused (code, tests, prompts) when they fit the new contracts, instead of being rewritten. Reused code passes the same tests, review and no-personal-data rule; old patches that conflict with contracts-2 are not carried over. |
+| Reuse before building | Adopted by owner 2026-10-06 | For a new feature or change, first look for a maintained library, official sample or other repository that already solves it, and use it when its license, cost (free tier) and size fit. Record the source and a one-line reason in the entry; new runtime dependencies still pass the bundle check. |
 
 The general approval of this plan does not stand in for the unresolved specific choices. The lead prepares a concrete recommendation; only the owner can remove a product requirement or accept a scope deferral.
 

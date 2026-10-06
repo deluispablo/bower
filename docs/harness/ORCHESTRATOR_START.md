@@ -40,7 +40,7 @@ Worker outputs: immutable candidate, changed paths, actual red/green/check evide
 
 ## Product decisions and stopping rules
 
-Offline note reading and reload-safe upload retention still require specific owner decisions. Recommended baseline for discussion: no implied offline editing; explicit truthful offline availability; retain selected upload bytes locally when supported, disclose storage failure and preserve same-session retry everywhere. These are recommendations, not adopted removals or guarantees. Ask for the concrete decision when assigning dependent work; continue independent contracts/audit meanwhile.
+Owner rulings of 2026-10-06 (WORK_PLAN decision register): no in-app offline note reading, a truthful offline state; uploads in progress kept across a reload, storage failure disclosed, same-session retry everywhere; R1's residual race accepted as a documented limitation with the existing modifiedTime check. Reuse the original app's working features and existing libraries before writing new code.
 
 A provider risk that could invalidate safety or the app contract blocks O3 acceptance and P2 closure until observed and resolved. No credentials means the relevant probe is blocked, not passed; obtain access through the normal owner-authorized setup. Minor implementation choices inside an accepted contract do not need repeated permission.
 

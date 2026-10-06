@@ -11,7 +11,7 @@ Every row is a P2 acceptance obligation unless the owner explicitly narrows it i
 | ID | User capability | What must work by P2 exit | Real-service proof later |
 | --- | --- | --- | --- |
 | C01 | Sign in, create/recover folder, sign out, leave | Fake lifecycle and account isolation, recoverable errors, local cleanup, truthful states | P3 Google/session/revocation and actual Drive folder lifecycle |
-| C02 | Add files, links and notes as piles | Bytes and context retained, readiness explicit, retries for missing items, no lost incomplete pile; reload behavior matches the adopted policy | P3 resumable protocol and real persistence |
+| C02 | Add files, links and notes as piles | Bytes and context retained, readiness explicit, retries for missing items, no lost incomplete pile; uploads in progress kept across a reload (owner ruling 2026-10-06) | P3 resumable protocol and real persistence |
 | C03 | Browse, search, move, rename, edit supported fields/tasks and Bin/restore | Same real app logic over fake Drive; protected sections preserved; errors/recovery; no extension/name inconsistencies | P3 permissions/version/concurrency behavior |
 | C04 | Incorporate new knowledge | Scripted backend creates source/compiled notes from a synthetic input; UI reads and links the actual resulting data | P4 comprehension and factual quality |
 | C05 | Update existing knowledge | Scripted updates preserve user text and history, mark what changed, reveal conflicts and remain idempotent | P4 semantic merging and conflict interpretation |
@@ -73,7 +73,7 @@ Observe contract-threatening real provider/executor assumptions through the boun
 - The four independent-review concerns are triaged on the current target: incomplete-pile loss, protected-section parsing, external-change refresh and stale run responses. Preserve their reproduction evidence.
 - `pnpm check`, full `pnpm e2e`, full `pnpm e2e:fake` and `pnpm e2e:pwa` pass on the same frozen implementation SHA. Explain each skip; no skipped required journey counts as coverage.
 - Independent reviewer and evaluator certify their stated scope on that SHA. Phone/desktop and console/error paths are covered; later relevant changes invalidate the affected evidence.
-- Offline reading, reload durability and other unresolved product policies have actual owner rulings and matching behavior. A PWA shell is not offline notes; fake data is not evidence of real-service behavior.
+- Behavior matches the owner's 2026-10-06 rulings: uploads in progress survive a reload; offline, the app is truthful and does not promise note reading; a detected write conflict never overwrites. A PWA shell is not offline notes; fake data is not evidence of real-service behavior.
 - Shared boundary/fault/compatibility suites pass for implemented P2 adapters; R1–R4 results resolve contract-threatening assumptions, with no unsupported data-safety guarantee. Admitted work survives the originating client in the simulation.
 - Specs, schemas, handoff and fixtures match the accepted app. The coordinator records the complete evidence summary and applies the owner’s conditional acceptance under GOVERNANCE; no additional owner reply is required.
 
