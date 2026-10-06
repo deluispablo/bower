@@ -2117,6 +2117,25 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       }
     });
 
+    // TL-P2-33 §2a: a runner file is made only at its supported path under the verified `.bower/`.
+    it('grounds a runner file made again only at its own path in .bower', async () => {
+      const w = await bWorld();
+      await w.drive.trash((await fileAt(w, SYSTEM.hashes)).id);
+      const out = await plan(w);
+      expect(out.path).toBe('b');
+      if (out.path !== 'b') return;
+      expect(grounded(out.manifest)).toBe(true);
+      const made = operationsOf(out.manifest).findIndex((o) => o.effect.kind === 'create-text' && o.effect.purpose === 'runner-json');
+      expect(made).toBeGreaterThanOrEqual(0);
+      const tampered = (patch: Record<string, unknown>): Manifest | ManifestV2 => ({
+        ...out.manifest,
+        operations: operationsOf(out.manifest).map((o, i) => (i === made ? { ...o, effect: { ...o.effect, ...patch } } : o)),
+      }) as Manifest | ManifestV2;
+      for (const patch of [{ name: 'questions.json' }, { name: 'last-run.json' }, { name: 'notes.json' }, { parent: { fileId: w.rootId } }]) {
+        expect(grounded(tampered(patch)), JSON.stringify(patch)).toBe(false);
+      }
+    });
+
     it('makes a missing runner file again on the recoverable path', async () => {
       const w = await bWorld();
       await w.uploader.addRequest(LEASE);
