@@ -12,6 +12,7 @@ import { BowerError } from './types';
 import { createUploadQueue, KEEP_OPEN_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, type AddUpload, type LocksLike, type StorageLike, type UploadQueue } from './upload-queue';
 import { indexedDbUploadStore, type UploadStore } from './upload-store';
 import { sha256 } from './vault/hashes';
+import { openElsewhere } from './session';
 
 const ACCOUNT = 'account-a';
 const OTHER_ACCOUNT = 'account-b';
@@ -305,6 +306,124 @@ describe('uploads survive a reload without a second file', () => {
     await vi.waitFor(() => expect(b.queue.items()[0]?.state).toBe('done'));
     expect(b.queue.role()).toBe('owner');
     expect(ops(env, before)).toEqual(['status', 'put@4', 'put@8']);
+    expect(await files(env)).toHaveLength(1);
+  });
+
+  it('a paused page keeps what is only in its memory and sends it once when it starts again', async () => {
+    const env = await setup();
+    const locks = fakeLocks();
+    const full = indexedDbUploadStore(env.idb);
+    full.add = () => Promise.reject(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
+    const hold = holdAt(env, 4);
+    const a = device(env, { locks, store: full });
+    expect(await a.queue.start(ACCOUNT, FOLDER)).toBe('owner');
+    await a.queue.add(await member(env));
+    await reachedChunk(env, 4);
+    a.queue.pause();
+    env.drive.beforeChunk = null;
+    hold.open();
+    await a.queue.idle();
+    expect(a.queue.items()).toEqual([expect.objectContaining({ state: 'waiting', durable: false, sent: 4 })]);
+    expect(a.queue.onlyHere()).toBe(1);
+    expect(a.queue.role()).toBe('idle');
+    // Another tab gets the lock: it has nothing of this page's to send.
+    const b = device(env, { locks });
+    expect(await b.queue.start(ACCOUNT, FOLDER)).toBe('owner');
+    await b.queue.idle();
+    expect(await files(env)).toHaveLength(0);
+    b.queue.stop();
+    expect(await a.queue.start(ACCOUNT, FOLDER)).toBe('owner');
+    await vi.waitFor(() => expect(a.queue.items()[0]?.state).toBe('done'));
+    expect(await files(env)).toHaveLength(1);
+    expect(a.queue.onlyHere()).toBe(0);
+  });
+
+  it('what a paused page kept only in memory is never sent for another account', async () => {
+    const env = await setup();
+    const full = indexedDbUploadStore(env.idb);
+    full.add = () => Promise.reject(new DOMException('The quota has been exceeded.', 'QuotaExceededError'));
+    const hold = holdAt(env, 0);
+    const a = device(env, { store: full });
+    await a.queue.start(ACCOUNT, FOLDER);
+    await a.queue.add(await member(env));
+    await reachedChunk(env, 0);
+    a.queue.pause();
+    env.drive.beforeChunk = null;
+    hold.open();
+    await a.queue.idle();
+    expect(a.queue.onlyHere()).toBe(1);
+    await a.queue.start(OTHER_ACCOUNT, FOLDER);
+    await a.queue.idle();
+    expect(a.queue.items()).toEqual([]);
+    expect(a.queue.onlyHere()).toBe(0);
+    expect(await files(env)).toHaveLength(0);
+  });
+
+  it('a refusal because Bower is open elsewhere leaves the upload waiting and pauses; the next start sends it once', async () => {
+    const env = await setup();
+    let refuse = true;
+    const drive = new Proxy(env.drive, {
+      get(target, key, receiver) {
+        const value: unknown = Reflect.get(target, key, receiver);
+        if (key === 'openResumable' && refuse)
+          return async () => {
+            refuse = false;
+            throw openElsewhere();
+          };
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const queue = createUploadQueue({ drive, store: indexedDbUploadStore(env.idb), chunkSize: CHUNK });
+    await queue.start(ACCOUNT, FOLDER);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await queue.add(await member(env));
+    await queue.idle();
+    expect(queue.items()).toEqual([expect.objectContaining({ state: 'waiting' })]);
+    expect(queue.items()[0]?.error).toBeUndefined();
+    expect(queue.role()).toBe('idle');
+    expect(await files(env)).toHaveLength(0);
+    await queue.start(ACCOUNT, FOLDER);
+    await vi.waitFor(() => expect(queue.items()[0]?.state).toBe('done'));
+    expect(await files(env)).toHaveLength(1);
+  });
+
+  it('a paused page keeps what the device keeps too, and sends it once when it starts again', async () => {
+    const env = await setup();
+    const hold = holdAt(env, 4);
+    const a = device(env);
+    await a.queue.start(ACCOUNT, FOLDER);
+    await a.queue.add(await member(env));
+    await reachedChunk(env, 4);
+    a.queue.pause();
+    env.drive.beforeChunk = null;
+    hold.open();
+    await a.queue.idle();
+    expect(a.queue.items()).toEqual([expect.objectContaining({ state: 'waiting', durable: true, sent: 4 })]);
+    expect(a.queue.onlyHere()).toBe(0);
+    await a.queue.start(ACCOUNT, FOLDER);
+    await vi.waitFor(() => expect(a.queue.items()[0]?.state).toBe('done'));
+    expect(a.queue.items()[0]?.file).toBeDefined();
+    expect(await files(env)).toHaveLength(1);
+  });
+
+  it('a paused page whose kept upload another tab finished sees it done, with its file', async () => {
+    const env = await setup();
+    const locks = fakeLocks();
+    const hold = holdAt(env, 4);
+    const a = device(env, { locks });
+    await a.queue.start(ACCOUNT, FOLDER);
+    await a.queue.add(await member(env));
+    await reachedChunk(env, 4);
+    a.queue.pause();
+    env.drive.beforeChunk = null;
+    hold.open();
+    await a.queue.idle();
+    const b = device(env, { locks });
+    expect(await b.queue.start(ACCOUNT, FOLDER)).toBe('owner');
+    await vi.waitFor(() => expect(b.queue.items()[0]?.state).toBe('done'));
+    b.queue.pause();
+    await a.queue.start(ACCOUNT, FOLDER);
+    await vi.waitFor(() => expect(a.queue.items()[0]).toMatchObject({ state: 'done', file: expect.objectContaining({ name: 'scan-1.pdf' }) }));
     expect(await files(env)).toHaveLength(1);
   });
 

@@ -20,6 +20,7 @@
  */
 import { driveError, type DriveFile } from './drive/drive-api';
 import { RESUMABLE_CHUNK_BYTES, sendResumable, type ResumableClient } from './drive/resumable-upload';
+import { isOpenElsewhere, OPEN_ELSEWHERE_TEXT } from './session';
 import { BowerError } from './types';
 import { uploadId, type PendingUpload, type UploadStore } from './upload-store';
 
@@ -170,6 +171,14 @@ export interface UploadQueue {
   forgetAccount: (account: string) => Promise<void>;
   /** Stops sending and gives the lock back; what is kept on the device stays (sign-out, page gone). */
   stop: () => void;
+  /**
+   * This place is blocked (another place is active): stops sending and gives the lock back, like `stop`,
+   * but what exists only in this page's memory stays here, paused, and goes when `start` is called again
+   * for the same account and folder. What the device keeps is picked up as after a stop.
+   */
+  pause: () => void;
+  /** How many things exist only in this page's memory and are not in Drive yet. */
+  onlyHere: () => number;
   /** One sentence for the person about this device's storage, once; `null` when all is well. */
   notice: () => string | null;
   /** Whether the browser agreed to keep this device's storage. */
@@ -241,6 +250,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   let told: string | null = null;
   /** Bumped by every `pump` call, so a run that is ending sees a call it would miss. */
   let wakes = 0;
+  /** Another place is active: nothing is sent, and what is only in this page's memory waits here. */
+  let paused = false;
 
   /** Tells the person once. */
   function tell(text: string): void {
@@ -271,12 +282,24 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         entry.item.reserved = record.fileId;
       }
     }
-    for (const { item, halted } of entries.values()) {
+    const finished: Entry[] = [];
+    for (const entry of entries.values()) {
+      const { item, halted } = entry;
       // Kept on the device, gone from it, not sent here: another tab finished it.
       // One held back is being removed here: it is not done.
       if (item.durable && item.state === 'waiting' && !halted && !ids.has(item.id)) {
         item.state = 'done';
         item.sent = item.size;
+        finished.push(entry);
+      }
+    }
+    // Its file, where this page knew the reserved id (one a block interrupted here and another tab finished).
+    for (const { item, record } of finished) {
+      if (record.fileId === null || item.file) continue;
+      try {
+        item.file = await drive.getUploaded(record.fileId);
+      } catch (error) {
+        console.error(error);
       }
     }
     notify();
@@ -314,6 +337,24 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     };
     /** Bytes to hold in memory after a failed try, because the device copy cannot be trusted. */
     let holdBytes = false;
+    /** Another place is active: the fence refused a Drive call of this send. */
+    let refused = false;
+    // The refusal goes back as an abort, so the protocol never mistakes it for Drive's 409 (which it reads back).
+    const fenced = new Proxy(drive, {
+      get(target, key, receiver) {
+        const value: unknown = Reflect.get(target, key, receiver);
+        if (typeof value !== 'function') return value;
+        return (...args: unknown[]): unknown => {
+          const out: unknown = Reflect.apply(value, target, args);
+          if (!(out instanceof Promise)) return out;
+          return out.catch((error: unknown) => {
+            if (!isOpenElsewhere(error)) throw error;
+            refused = true;
+            throw new DOMException(OPEN_ELSEWHERE_TEXT, 'AbortError');
+          });
+        };
+      },
+    });
     /**
      * Never send under a reserved id the device has not kept: a reload would
      * reserve another and make a second file. If it cannot be kept, the kept
@@ -366,14 +407,14 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       }
       if (record.fileId === null) {
         // The file's identity is reserved and kept before anything is created.
-        const [id] = await drive.generateIds(1);
+        const [id] = await fenced.generateIds(1);
         if (id === undefined) throw driveError('unknown');
         if (item.durable && gen === generation) await keepFileId(id);
         record.fileId = id;
         item.reserved = id;
       }
       const file = await sendResumable(
-        drive,
+        fenced,
         { id: record.fileId, parentId: record.parentId, name: record.name, type: record.type, size: record.size, sha256: record.sha256, appProperties: record.appProperties, body, session: record.session },
         {
           onSession: async (session) => {
@@ -403,7 +444,11 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       entry.body = null;
     } catch (error) {
       item.state = 'waiting';
-      if (isAbort(error) || controller.signal.aborted) {
+      if (refused || isOpenElsewhere(error)) {
+        // Another place is active: not a failure. It waits, paused, for Use here (TL-P2-24).
+        item.sent = record.confirmed;
+        if (gen === generation) pauseNow();
+      } else if (isAbort(error) || controller.signal.aborted) {
         // Stopped, discarded, or the lock went to another tab: it carries on there.
         item.sent = record.confirmed;
       } else if (error instanceof BowerError && error.code === 'offline') {
@@ -448,7 +493,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         const seen = wakes;
         const gen = generation;
         const s = scope;
-        if (s === null) return;
+        if (s === null || paused) return;
         if (role === 'owner') {
           try {
             await refresh(s, gen);
@@ -477,7 +522,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
 
   bus?.listen(() => {
     const s = scope;
-    if (s === null) return;
+    if (s === null || paused) return;
     if (role === 'owner') void pump();
     else refresh(s, generation).catch((error: unknown) => console.error(error));
   });
@@ -542,6 +587,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   }
 
   function stop(): void {
+    paused = false;
     generation += 1;
     sending?.controller.abort();
     sending = null;
@@ -551,6 +597,25 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     waiting = null;
     entries.clear();
     scope = null;
+    role = 'idle';
+    notify();
+  }
+
+  /**
+   * Blocked is not closed: stops sending and gives the lock back, but every upload not yet in Drive stays,
+   * waiting, so the screens never see it fail. The next start for the same account and folder sends them
+   * (what the device keeps is read again; one another tab finished meanwhile shows done).
+   */
+  function pauseNow(): void {
+    if (scope === null) return;
+    paused = true;
+    generation += 1;
+    sending?.controller.abort();
+    sending = null;
+    release?.();
+    release = null;
+    waiting?.abort();
+    waiting = null;
     role = 'idle';
     notify();
   }
@@ -571,7 +636,10 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   return {
     async start(account, folder) {
       if (scope?.account === account && scope.folder === folder && role !== 'idle') return role;
-      if (scope !== null) stop();
+      // Paused for this account and folder: what waited only in this page's memory goes now; any other start drops it.
+      const resuming = paused && scope?.account === account && scope.folder === folder;
+      if (scope !== null && !resuming) stop();
+      paused = false;
       const s: Scope = { account, folder };
       scope = s;
       const gen = generation;
@@ -583,7 +651,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         return [];
       });
       if (gen !== generation) return 'idle';
-      for (const record of records) if (!tombstones.has(uploadId(record))) entries.set(uploadId(record), { item: itemOf(record, true), record, body: null, kept: true });
+      for (const record of records) if (!tombstones.has(uploadId(record)) && !entries.has(uploadId(record))) entries.set(uploadId(record), { item: itemOf(record, true), record, body: null, kept: true });
       const got = await acquire(s, gen);
       if (gen !== generation) return 'idle';
       role = role === 'owner' ? role : got;
@@ -721,6 +789,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
 
     stop,
     notice: () => told,
+    pause: () => pauseNow(),
+    onlyHere: () => [...entries.values()].filter((e) => !e.item.durable && e.item.state !== 'done' && !e.item.gone).length,
     persistence: () => persisted,
   };
 }

@@ -54,6 +54,10 @@ export interface WorkerApi {
   process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunWire>;
   /** The run going now, or the last one. */
   status(): Promise<RunWire | null>;
-  /** The person's one active place (TL-P2-14): `check`, `take` or `leave` this place's lease. */
+  /**
+   * The person's one active place (TL-P2-14): `check` keeps this place's lease (or takes a free or expired
+   * one), `take` moves it here with a higher epoch, `leave` lets it go. Every client has it (TL-P2-24):
+   * the real Worker, and the fake (with a `FakeLease`; without one every place is active).
+   */
   session(place: string, action: SessionAction): Promise<LeaseReply>;
 }

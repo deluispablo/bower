@@ -1031,6 +1031,7 @@ export class DriveVault implements VaultSource {
         e.tried = true;
         const parentPath = ix.pathOf(u.parent) ?? 'Inbox';
         const name = freeName(ix.entries(), parentPath, safeInboxName(e.item));
+        // The session fence (live/index.ts) recognises a pile's thing by PROP.asAdded: it waits for Use here.
         const props: Record<string, string> = { [PROP.asAdded]: e.item.name, [PROP.origin]: e.item.origin, [PROP.kind]: e.item.kind, [PROP.item]: e.key, ...(u.lone ? { [PROP.pile]: pileId } : {}), ...(u.declaration ? { [PROP.declaration]: u.declaration } : {}) };
         e.item.upload = 0;
         const made = e.url

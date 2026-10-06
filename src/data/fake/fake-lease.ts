@@ -1,8 +1,16 @@
 /**
- * The pretend Worker's session lease (TL-P2-14, TL-P2-25): inert stubs of the
- * final API, so the tests load and fail on their assertions.
+ * The pretend Worker's session lease (TL-P2-14): one per person and world,
+ * `{holder, epoch, beatAt}`, kept in this browser's localStorage so every
+ * tab and window of the fake shares it as devices share the real Worker.
+ *
+ * - `check` by the holder renews its lease with the same epoch, even after
+ *   the TTL when nobody took it meanwhile (TL-P2-25); a free lease, or one
+ *   another place let expire, is granted to whoever checks, with a higher
+ *   epoch; a live lease held by another place answers `active: false`.
+ * - `take` always moves the lease to the place, with a higher epoch.
+ * - `leave` by the holder frees it at once (the epoch stays).
  */
-import { createPlaceGuard, type LeaseReply, type PlaceDeps, type PlaceGuard, type PlaceOptions, type SessionAction } from '../session';
+import { LEASE_TTL_MS, createPlaceGuard, sessionBus, type LeaseReply, type PlaceDeps, type PlaceGuard, type PlaceOptions, type SessionAction } from '../session';
 
 export interface LeaseRecord {
   holder: string | null;
@@ -11,39 +19,122 @@ export interface LeaseRecord {
 }
 
 export interface FakeLeaseOptions {
+  /** `leaseKey(world, person)`. */
   key: string;
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
   now?: () => number;
   ttlMs?: number;
 }
 
+/** Demo, each fake scenario and real are separate worlds; the person is never an email (a hash or an id). */
 export function leaseKey(world: string, person: string): string {
-  return `${world}:${person}`;
+  return `bower:lease:${world}:${person}`;
 }
 
-export class FakeLease {
-  constructor(readonly opts: FakeLeaseOptions) {}
+const FREE: LeaseRecord = { holder: null, epoch: 0, beatAt: 0 };
 
-  async session(_place: string, _action: SessionAction): Promise<LeaseReply> {
-    return { active: false, epoch: 0 };
+const isRecord = (v: unknown): v is LeaseRecord => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const r = v as Record<string, unknown>;
+  return (r.holder === null || typeof r.holder === 'string') && typeof r.epoch === 'number' && Number.isSafeInteger(r.epoch) && r.epoch >= 0 && typeof r.beatAt === 'number' && Number.isFinite(r.beatAt);
+};
+
+export class FakeLease {
+  private readonly storage: Pick<Storage, 'getItem' | 'setItem'>;
+  private readonly now: () => number;
+  private readonly ttl: number;
+
+  constructor(private readonly opts: FakeLeaseOptions) {
+    this.storage = opts.storage ?? localStorage;
+    this.now = opts.now ?? Date.now;
+    this.ttl = opts.ttlMs ?? LEASE_TTL_MS;
   }
 
-  holds(_place: string | null, _epoch: number | null): boolean {
-    return true;
+  async session(place: string, action: SessionAction): Promise<LeaseReply> {
+    const lease = this.read();
+    const live = this.live(lease);
+    if (action === 'leave') {
+      if (lease.holder === place) this.write({ ...lease, holder: null });
+      return { active: false, epoch: lease.epoch };
+    }
+    // Back after the TTL with nobody in between: the same epoch carries on (TL-P2-25).
+    if (action === 'check' && lease.holder === place) {
+      this.write({ ...lease, beatAt: this.now() });
+      return { active: true, epoch: lease.epoch };
+    }
+    if (action === 'take' || !live) {
+      const next = { holder: place, epoch: lease.epoch + 1, beatAt: this.now() };
+      this.write(next);
+      return { active: true, epoch: next.epoch };
+    }
+    return { active: false, epoch: lease.epoch };
+  }
+
+  /**
+   * Whether `place` holds the lease at `epoch`: the Worker's own check on its endpoints. An expired lease
+   * nobody took is still this place's (TL-P2-25); a stale or missing epoch is not.
+   */
+  holds(place: string | null, epoch: number | null): boolean {
+    const lease = this.read();
+    return place !== null && epoch !== null && lease.holder === place && lease.epoch === epoch;
   }
 
   read(): LeaseRecord {
-    return { holder: null, epoch: 0, beatAt: 0 };
+    const text = this.storage.getItem(this.opts.key);
+    if (text === null) return { ...FREE };
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      value = null;
+    }
+    if (isRecord(value)) return value;
+    // An unreadable lease is free, as an expired one: the next place takes it with a higher epoch than any it saw.
+    console.error('The pretend session lease is unreadable');
+    return { ...FREE };
+  }
+
+  private live(lease: LeaseRecord): boolean {
+    return lease.holder !== null && this.now() - lease.beatAt < this.ttl;
+  }
+
+  private write(lease: LeaseRecord): void {
+    this.storage.setItem(this.opts.key, JSON.stringify(lease));
   }
 }
 
 export interface LocalPlaceOptions extends PlaceOptions, Pick<PlaceDeps, 'onActive' | 'onBlocked' | 'pageOnly'> {
+  /** `demo`, or `fake:<scenario>`. */
   world: string;
+  /** The person as the lease keys them: an id or a hash, never an email. */
   person: string;
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
   now?: () => number;
 }
 
+/**
+ * A place for the demo (and any source without a Worker), on a `FakeLease` in this browser (TL-P2-24):
+ * the same session as the fake Worker gives, so every demo and fake factory has one. Wrap the demo's
+ * sources with `fenceDoors(sources, place)`. In a browser it uses this tab's place id, Web Locks,
+ * BroadcastChannel and `pagehide` unless the options replace them.
+ */
 export function localPlace(opts: LocalPlaceOptions): PlaceGuard {
-  return createPlaceGuard({ lease: async () => ({ active: false, epoch: 0 }), scope: async () => `${opts.world}:${opts.person}` });
+  const lease = new FakeLease({ key: leaseKey(opts.world, opts.person), ...(opts.storage ? { storage: opts.storage } : {}), ...(opts.now ? { now: opts.now } : {}) });
+  const nav = typeof navigator === 'undefined' ? undefined : navigator;
+  const locks = opts.locks ?? nav?.locks;
+  const bus = opts.bus ?? sessionBus();
+  const target = opts.target ?? (typeof window === 'undefined' ? undefined : window);
+  return createPlaceGuard({
+    ...(opts.place ? { place: opts.place } : {}),
+    ...(locks ? { locks } : {}),
+    ...(bus ? { bus } : {}),
+    ...(opts.clock ? { clock: opts.clock } : {}),
+    ...(target ? { target } : {}),
+    ...(opts.onActive ? { onActive: opts.onActive } : {}),
+    ...(opts.onBlocked ? { onBlocked: opts.onBlocked } : {}),
+    ...(opts.pageOnly ? { pageOnly: opts.pageOnly } : {}),
+    lease: (place, action) => lease.session(place, action),
+    scope: async () => `${opts.world}:${opts.person}`,
+  });
 }

@@ -17,7 +17,7 @@ import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
 import { planRun, runFake } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
-import type { LeaseReply, SessionAction } from '../session';
+import { openElsewhere, type LeaseReply, type SessionAction } from '../session';
 
 export interface FakeWorkerOptions {
   drive: FakeDrive;
@@ -32,7 +32,7 @@ export interface FakeWorkerOptions {
   runs?: FakeRunService;
   /** The synthetic account this client is signed in as. */
   account?: string;
-  /** The person's session lease (TL-P2-14). */
+  /** The person's session lease (TL-P2-14); without it this client is never fenced. */
   lease?: FakeLease;
 }
 
@@ -58,6 +58,9 @@ export class FakeWorker implements WorkerApi {
   private readonly account: string;
   /** Which path the latest run here took: the service's B path, or the legacy runner in this page. */
   private via: 'b' | 'legacy' | null = null;
+  private readonly lease: FakeLease | null;
+  /** The place this client last held the lease for, and its epoch: what the real Worker reads from the request. */
+  private holder: { place: string; epoch: number } | null = null;
 
   constructor(opts: FakeWorkerOptions) {
     this.drive = opts.drive;
@@ -68,6 +71,7 @@ export class FakeWorker implements WorkerApi {
     this.offline = !!opts.offline;
     this.runs = opts.runs ?? null;
     this.account = opts.account ?? ALEX.email;
+    this.lease = opts.lease ?? null;
     // Offline, the folder cannot be read now; every call says so on its own.
     this.loaded = this.offline ? Promise.resolve() : this.load(opts.scenario, opts.fresh ?? true).catch((e: unknown) => {
       console.error(e);
@@ -99,14 +103,30 @@ export class FakeWorker implements WorkerApi {
   /** The pretend Worker forgets the person; the pretend Drive keeps the folder, as Google would. */
   async deleteAccount(): Promise<void> {
     this.online();
+    this.fenced();
+    // The person is gone, and so is their lease (the real Worker's DELETE /me must do the same: P3).
+    const holder = this.holder;
+    if (this.lease && holder) await this.lease.session(holder.place, 'leave');
+    this.holder = null;
     this.signedIn = false;
     keepSignedIn(false);
     // It forgets which folder was yours too: coming back starts at the folder step, which finds it again.
     forget(true);
   }
 
-  async session(_place: string, _action: SessionAction): Promise<LeaseReply> {
-    return { active: false, epoch: 0 };
+  /** The person's one active place (TL-P2-14); without a lease every place is active. */
+  async session(place: string, action: SessionAction): Promise<LeaseReply> {
+    this.online();
+    if (!this.lease) return { active: action !== 'leave', epoch: 0 };
+    const reply = await this.lease.session(place, action);
+    if (reply.active) this.holder = { place, epoch: reply.epoch };
+    else if (this.holder?.place === place) this.holder = null;
+    return reply;
+  }
+
+  /** The Worker's own fence on its endpoints: a place that does not hold the live lease gets one plain error. */
+  private fenced(): void {
+    if (this.lease && !this.lease.holds(this.holder?.place ?? null, this.holder?.epoch ?? null)) throw openElsewhere();
   }
 
   async driveToken(): Promise<string> {
@@ -116,6 +136,7 @@ export class FakeWorker implements WorkerApi {
 
   /** The template: the five main folders, Rules.md, About me.md and Bower's own folder. */
   async createFolder(): Promise<{ id: string; found: boolean }> {
+    this.fenced();
     // After a deleted account, the folder it had is found again, as the Worker finds it in the Drive.
     const found = forgotten();
     forget(false);
@@ -141,6 +162,7 @@ export class FakeWorker implements WorkerApi {
 
   async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunWire> {
     this.online();
+    this.fenced();
     await this.loaded;
     if (this.loadFailure) throw this.loadFailure.error;
     this.lastAllowWeb = !!opts.allowWeb;

@@ -50,7 +50,8 @@ export function isJournalRecord(v: unknown): v is JournalRecord {
 }
 
 /** This device's unsent lines, per Bower folder, so one person's never reach another's. */
-const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
+/** Where this device keeps a folder's change outbox (live sources read it to know lines wait). */
+export const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
 
 function readOutbox(key: string): JournalRecord[] {
   try {

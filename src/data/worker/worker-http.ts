@@ -5,7 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { isRunWire, type Me, type RunWire, type WorkerApi } from './worker-api';
-import type { LeaseReply, SessionAction } from '../session';
+import { isLeaseReply, openElsewhere, type LeaseReply, type SessionAction } from '../session';
 
 const SENTENCE: Record<ErrorCode, string> = {
   auth: 'Sign in again to keep going.',
@@ -29,6 +29,8 @@ const isStatus = (v: unknown): v is { run: RunWire | null } => object(v) && (v.r
 
 export class WorkerHttp implements WorkerApi {
   private token: { value: string; until: number } | null = null;
+  /** The place this tab holds the lease for, sent with the calls the Worker fences (TL-P2-14, P3 contract). */
+  private place: { place: string; epoch: number } | null = null;
   private readonly fetchFn: typeof fetch;
 
   constructor(
@@ -59,7 +61,7 @@ export class WorkerHttp implements WorkerApi {
 
   async deleteAccount(): Promise<void> {
     this.token = null;
-    await this.call('DELETE', '/me');
+    await this.call('DELETE', '/me', undefined, undefined, this.fence());
   }
 
   async driveToken(fresh: boolean): Promise<string> {
@@ -70,29 +72,42 @@ export class WorkerHttp implements WorkerApi {
   }
 
   async createFolder(): Promise<{ id: string; found: boolean }> {
-    const r = await this.call<FolderReply>('POST', '/vault', {}, isFolder);
+    const r = await this.call<FolderReply>('POST', '/vault', {}, isFolder, this.fence());
     return { id: r.folderId, found: r.found };
   }
 
   async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunWire> {
-    return (await this.call<{ run: RunWire }>('POST', '/process', { scope, allowWeb: !!opts.allowWeb }, isRunReply)).run;
+    return (await this.call<{ run: RunWire }>('POST', '/process', { scope, allowWeb: !!opts.allowWeb }, isRunReply, this.fence())).run;
   }
 
   async status(): Promise<RunWire | null> {
     return (await this.call<{ run: RunWire | null }>('GET', '/status', undefined, isStatus)).run;
   }
 
-  async session(_place: string, _action: SessionAction): Promise<LeaseReply> {
-    return { active: false, epoch: 0 };
+  /** POST /session: the Worker binds the lease to the signed-in person; `place` is a random tab id, no secret. */
+  async session(place: string, action: SessionAction): Promise<LeaseReply> {
+    // Leaving is sent as the page closes: keepalive lets it outlive the page (sendBeacon cannot set headers).
+    const reply = await this.call<LeaseReply>('POST', '/session', { place, action }, isLeaseReply, {}, action === 'leave');
+    if (reply.active) this.place = { place, epoch: reply.epoch };
+    else if (this.place?.place === place) this.place = null;
+    return { active: reply.active, epoch: reply.epoch };
   }
 
-  private async call<T>(method: string, path: string, body?: unknown, valid?: (v: unknown) => v is T): Promise<T> {
+  /** The place and epoch the Worker checks on process, createFolder and deleteAccount; none before a session. */
+  private fence(): Record<string, string> {
+    return this.place ? { 'x-bower-place': this.place.place, 'x-bower-epoch': String(this.place.epoch) } : {};
+  }
+
+  private async call<T>(method: string, path: string, body?: unknown, valid?: (v: unknown) => v is T, extra: Record<string, string> = {}, keepalive = false): Promise<T> {
     let res: Response;
     try {
+      const headers = { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...extra };
       res = await this.fetchFn(`${this.base}${path}`, {
         method,
         credentials: 'include',
-        ...(body !== undefined ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+        ...(Object.keys(headers).length ? { headers } : {}),
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        ...(keepalive ? { keepalive: true } : {}),
       });
     } catch (e) {
       if (e instanceof TypeError) throw new BowerError('offline', SENTENCE.offline);
@@ -110,7 +125,10 @@ export class WorkerHttp implements WorkerApi {
     const parsed: unknown = await res.json().catch(() => null);
     if (!res.ok) {
       const code = codeFor(res.status);
-      const message = (parsed as { error?: { message?: unknown } } | null)?.error?.message;
+      const error = (parsed as { error?: { code?: unknown; message?: unknown } } | null)?.error;
+      // A stale or missing session epoch (TL-P2-14/24): another place is active, told apart from other conflicts.
+      if (res.status === 409 && error?.code === 'stale-session') throw openElsewhere();
+      const message = error?.message;
       if (code === 'unknown') console.error(`Worker answered ${res.status} for ${method} ${path}`);
       throw new BowerError(code, typeof message === 'string' && message ? message : SENTENCE[code]);
     }

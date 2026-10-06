@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WorkerHttp } from './worker-http';
+import { isOpenElsewhere } from '../session';
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
@@ -24,6 +25,40 @@ describe('WorkerHttp', () => {
     expect(s.calls[0]?.init.credentials).toBe('include');
     const bad = stub(() => json({ error: { code: 'server', message: 'Try again later.' } }, 500));
     await expect(new WorkerHttp(BASE, bad.fetch).deleteAccount()).rejects.toThrow('Try again later.');
+  });
+
+  it('session posts the place and action, and process, createFolder and deleteAccount carry the epoch', async () => {
+    const s = stub((url) => (url.pathname === '/session' ? json({ active: true, epoch: 7 }) : url.pathname === '/process' ? json({ run: { id: 'run-1', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 } }) : url.pathname === '/vault' ? json({ folderId: 'FOLDER_ID', found: false }) : new Response(null, { status: 204 })));
+    const w = new WorkerHttp(BASE, s.fetch);
+    expect(await w.session('place-1', 'check')).toEqual({ active: true, epoch: 7 });
+    expect(s.calls[0]?.init.method).toBe('POST');
+    expect(s.calls[0]?.init.credentials).toBe('include');
+    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ place: 'place-1', action: 'check' });
+    await w.process('all');
+    await w.createFolder();
+    await w.deleteAccount();
+    for (const call of s.calls.slice(1)) {
+      const headers = new Headers(call.init.headers);
+      expect(headers.get('x-bower-place')).toBe('place-1');
+      expect(headers.get('x-bower-epoch')).toBe('7');
+    }
+    const bad = stub(() => json({ active: 'yes' }));
+    await expect(new WorkerHttp(BASE, bad.fetch).session('place-1', 'take')).rejects.toMatchObject({ code: 'unknown' });
+    const stale = stub(() => json({ error: { code: 'session', message: 'Bower is open in another window.' } }, 409));
+    await expect(new WorkerHttp(BASE, stale.fetch).process('all')).rejects.toMatchObject({ code: 'conflict', message: 'Bower is open in another window.' });
+  });
+
+  it('a stale session refusal is told apart from other conflicts, and leaving survives the page closing', async () => {
+    const stale = stub(() => json({ error: { code: 'stale-session', message: 'Bower is open in another window.' } }, 409));
+    const refusal = await new WorkerHttp(BASE, stale.fetch).process('all').then(() => null, (e: unknown) => e);
+    expect(isOpenElsewhere(refusal)).toBe(true);
+    expect(refusal).toMatchObject({ code: 'conflict', message: 'Bower is open in another window.' });
+    const other = stub(() => json({ error: { code: 'nothing', message: 'Nothing is waiting in the inbox.' } }, 409));
+    expect(isOpenElsewhere(await new WorkerHttp(BASE, other.fetch).process('all').then(() => null, (e: unknown) => e))).toBe(false);
+    const s = stub(() => json({ active: false, epoch: 2 }));
+    await new WorkerHttp(BASE, s.fetch).session('place-1', 'leave');
+    expect(s.calls[0]?.init.keepalive).toBe(true);
+    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ place: 'place-1', action: 'leave' });
   });
 
   it('401 on /me gives null', async () => {
