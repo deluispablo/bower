@@ -190,8 +190,21 @@ export interface GoogleIdentity {
   name: string;
 }
 
-/** jose errors that mean the keys could not be read, not that the token is bad. */
-const KEY_SET_FAILURES = new Set(['ERR_JWKS_TIMEOUT', 'ERR_JWKS_INVALID']);
+/**
+ * jose errors that mean the token itself is bad. Anything else (a key
+ * endpoint that is down, slow, answers a non-200 or garbage) is Google's
+ * outage, not the person's mistake, and answers `internal`.
+ */
+function isTokenFault(err: unknown): boolean {
+  if (!(err instanceof errors.JOSEError)) return false;
+  return (
+    err.code.startsWith('ERR_JWT_') ||
+    err.code.startsWith('ERR_JWS_') ||
+    err.code === 'ERR_JOSE_ALG_NOT_ALLOWED' ||
+    err.code === 'ERR_JWKS_NO_MATCHING_KEY' ||
+    err.code === 'ERR_JWKS_MULTIPLE_MATCHING_KEYS'
+  );
+}
 
 /**
  * Validates an ID token as OIDC Core 3.1.3.7 asks: the signature against
@@ -216,10 +229,9 @@ export async function verifyIdToken(
       ...(params.now === undefined ? {} : { currentDate: new Date(params.now) }),
     }));
   } catch (err) {
-    if (err instanceof errors.JOSEError && !KEY_SET_FAILURES.has(err.code)) {
-      throw notProven(`ID token refused: ${err.code}`, err);
-    }
-    throw googleFailed('Google signing keys unavailable', err);
+    // A refused token's error carries its claims (address, sub): only its code is kept (OWASP logging).
+    if (isTokenFault(err)) throw notProven(`ID token refused: ${(err as errors.JOSEError).code}`);
+    throw googleFailed('Google sign-in outage: signing keys unavailable', err);
   }
   const { aud, azp, nonce, sub, email } = payload;
   if (Array.isArray(aud) && aud.length > 1 && azp !== params.clientId) {

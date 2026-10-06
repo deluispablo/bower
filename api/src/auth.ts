@@ -199,9 +199,26 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     );
   });
 
+  // The callback is a browser navigation: whatever goes wrong, the person lands on the app's
+  // sign-in with one word of why (TL-P3-07), never a JSON page. Details go to the log only.
   auth.get('/auth/callback', async (c) => {
     const env = c.get('env');
-    if (c.req.query('error') !== undefined) throw signedOut('Google returned an error');
+    const backToSignIn = (why: 'cancelled' | 'failed', detail: unknown) => {
+      console.error(`[${c.get('requestId')}] sign-in ${why}:`, detail);
+      c.header('Set-Cookie', oauthCookie('', 0));
+      return c.redirect(`${env.APP_ORIGIN}/sign-in?signin=${why}`, 302);
+    };
+    const reported = c.req.query('error');
+    if (reported !== undefined) return backToSignIn(reported === 'access_denied' ? 'cancelled' : 'failed', `Google returned ${reported}`);
+    try {
+      return await finishSignIn(c);
+    } catch (err) {
+      return backToSignIn('failed', err);
+    }
+  });
+
+  async function finishSignIn(c: Context<AppEnv>): Promise<Response> {
+    const env = c.get('env');
     const code = c.req.query('code');
     const state = c.req.query('state');
     if (code === undefined || code === '' || state === undefined) throw signedOut('callback without code or state');
@@ -221,7 +238,6 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     // An unproven address is never matched against the allowlist (Google: use email only when email_verified).
     if (!identity.emailVerified || !(await isAllowed(env.BOWER_KV, identity.email))) {
       // Nothing is kept for someone who was not invited.
-      c.header('Set-Cookie', oauthCookie('', 0));
       throw new HttpError(403, 'forbidden');
     }
 
@@ -244,7 +260,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const session = await signSession({ sub: identity.sub, gen: signedIn.generation }, env.SESSION_SECRET);
     c.header('Set-Cookie', sessionCookie(session, SESSION_TTL_SECONDS), { append: true });
     return c.redirect(env.APP_ORIGIN, 302);
-  });
+  }
 
   // Signing out retires every session of the person (the stored generation moves on),
   // so a copied or forgotten cookie on another device stops working too.

@@ -6,18 +6,17 @@
   // first only on its own paths, so the session cookie is first-party on Safari too.
   "assets": {
     "directory": "../dist",
-    "run_worker_first": ["/auth/*", "/me", "/drive/*", "/vault", "/process", "/status", "/session"]
+    "run_worker_first": ["/auth/*", "/me", "/drive/*", "/vault", "/process", "/status", "/session", "/health"]
   },
-  "kv_namespaces": [{ "binding": "BOWER_KV", "id": "KV_NAMESPACE_ID" }],
+  "kv_namespaces": [{ "binding": "BOWER_KV", "id": "6969d46bffdb4b1e90d068f84235fbec" }],
   // One SQLite-backed Durable Object per person, addressed by idFromName(sub).
   "durable_objects": { "bindings": [{ "name": "PERSON", "class_name": "Person" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Person"] }],
-  // Secrets (GOOGLE_CLIENT_SECRET, SESSION_SECRET, TOKEN_ENC_KEY) are never set here: `wrangler secret put` only.
+  // Secrets (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET, TOKEN_ENC_KEY) are never set here: `wrangler secret put` only.
   "vars": {
-    // The OAuth client id is public (it travels in every sign-in address); a placeholder until deploy.
-    "GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID",
+    // One origin (TL-P3-06): the same placeholder for both; the deploy passes the real one with --var.
     "APP_ORIGIN": "https://app.example.com",
-    "API_ORIGIN": "https://api.example.com",
+    "API_ORIGIN": "https://app.example.com",
     "APP_VERSION": "0.1.0",
     "GITHUB_REPO": "OWNER/REPO",
     "VAPID_SUBJECT": "mailto:you@example.com",

@@ -134,3 +134,28 @@ describe('person object', () => {
     }
   });
 });
+
+describe('person storage migration', () => {
+  it('a version 1 person migrates to version 2 on start, keeps its rows and gains the account table', async () => {
+    const alex = personFor('sub-alex-v1');
+    expect(await alex.countQuota('2026-10-06')).toBe(1);
+    // Put the database back as P3-3 shipped it: no account table, a version row of 1.
+    await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      sql.exec('DROP TABLE account');
+      sql.exec('UPDATE schema_version SET version = 1 WHERE id = 1');
+    });
+    await evictDurableObject(alex);
+
+    expect(await alex.schemaVersion()).toBe(2);
+    expect(await alex.countQuota('2026-10-06')).toBe(2);
+    const after = await runInDurableObject(alex, (_instance, state) => ({
+      counts: Object.fromEntries(PERSON_TABLES.map((t) => [t, rowCount(state.storage.sql, t)])),
+      version: state.storage.sql.exec<{ version: number }>('SELECT version FROM schema_version WHERE id = 1').one().version,
+    }));
+    expect(after.version).toBe(2);
+    expect(after.counts.account).toBe(0);
+    expect(after.counts.quota).toBe(1);
+    expect(await alex.account()).toBeNull();
+  });
+});

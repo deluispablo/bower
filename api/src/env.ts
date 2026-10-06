@@ -14,6 +14,8 @@ export interface Env {
   PERSON: DurableObjectNamespace<Person>;
 
   // Secrets (wrangler secret put / .dev.vars) — no defaults, ever.
+  /** A secret on the staging Worker (the lead's setup), though it travels in every sign-in address. */
+  GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
   TOKEN_ENC_KEY: string;
@@ -35,8 +37,6 @@ export interface Env {
   SESSION_SECRET_PREVIOUS?: string;
 
   // Vars without a default: required, but not secret.
-  /** Public: it travels in every sign-in address (TL-P3-06). */
-  GOOGLE_CLIENT_ID: string;
   APP_ORIGIN: string;
   API_ORIGIN: string;
   GITHUB_REPO: string;
@@ -72,6 +72,7 @@ export interface AppEnv {
 
 /** The secrets this stage requires (TL-P3-06); a test pins the list. */
 export const REQUIRED_SECRETS = [
+  'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
   'SESSION_SECRET',
   'TOKEN_ENC_KEY',
@@ -87,7 +88,6 @@ export const OPTIONAL_SECRETS = [
 ] as const satisfies readonly (keyof Env)[];
 
 const REQUIRED_VARS = [
-  'GOOGLE_CLIENT_ID',
   'APP_ORIGIN',
   'API_ORIGIN',
   'GITHUB_REPO',

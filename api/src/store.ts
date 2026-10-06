@@ -5,7 +5,8 @@
  */
 
 function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+  // ASCII letters only: Unicode case mapping would let a look-alike (the Kelvin sign) match.
+  return email.trim().replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 }
 
 /** The KV key for `email` on the allowlist. */

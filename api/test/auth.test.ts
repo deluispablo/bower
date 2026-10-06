@@ -1,12 +1,12 @@
 import { env as testEnv } from 'cloudflare:test';
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
+import { SignJWT, createLocalJWKSet, createRemoteJWKSet, customFetch, exportJWK, generateKeyPair } from 'jose';
 import type { JWK, JWTVerifyGetKey } from 'jose';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OAUTH_COOKIE } from '../src/auth.js';
 import { decrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
-import { GOOGLE_AUTH_URL, GOOGLE_TOKEN_URL, codeChallenge } from '../src/google.js';
+import { GOOGLE_AUTH_URL, GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL, codeChallenge } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
@@ -15,7 +15,7 @@ import { allowKey } from '../src/store.js';
 /** `Cloudflare.Env` is empty here (no `wrangler types`), so the bindings are asserted once. */
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
-const API = 'https://api.example.com';
+const API = 'https://app.example.com';
 const EMAIL = 'you@example.com';
 const REFRESH_TOKEN = 'test-refresh-token';
 const ISSUER = 'https://accounts.google.com';
@@ -142,6 +142,33 @@ async function errorCode(response: Response): Promise<string> {
   return ((await response.json()) as { error: { code: string } }).error.code;
 }
 
+const FAILED = `${env.APP_ORIGIN}/sign-in?signin=failed`;
+const CANCELLED = `${env.APP_ORIGIN}/sign-in?signin=cancelled`;
+
+/** A callback answer is a redirect to the app's sign-in: never JSON, the OAuth cookie cleared. */
+function expectSignInRedirect(response: Response, to: string): void {
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(to);
+  expect(response.headers.get('content-type') ?? '').not.toContain('json');
+  expect(response.headers.getSetCookie().some((c) => c.startsWith(`${OAUTH_COOKIE}=;`) && c.includes('Max-Age=0'))).toBe(true);
+  expect(cookieValue(response, SESSION_COOKIE)).toBeUndefined();
+}
+
+/** Everything `console.error` was given, walked through causes and own properties. */
+function logged(spy: { mock: { calls: unknown[][] } }): string {
+  const seen = new Set<unknown>();
+  const walk = (value: unknown): string => {
+    if (typeof value !== 'object' || value === null) return String(value);
+    if (seen.has(value)) return '';
+    seen.add(value);
+    const parts: string[] = [];
+    if (value instanceof Error) parts.push(value.name, value.message, value.stack ?? '');
+    for (const key of Object.getOwnPropertyNames(value)) parts.push(key, walk((value as Record<string, unknown>)[key]));
+    return parts.join(' ');
+  };
+  return spy.mock.calls.flat().map(walk).join(' ');
+}
+
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
 
 describe('GET /auth/login', () => {
@@ -202,21 +229,17 @@ describe('GET /auth/callback', () => {
     try {
       const wrongAudience = newSub();
       const a = await signIn((nonce) => ({ sub: wrongAudience, nonce, aud: 'another-client-id' }));
-      expect(a.response.status).toBe(401);
-      expect(await errorCode(a.response)).toBe('signed-out');
-      expect(cookieValue(a.response, SESSION_COOKIE)).toBeUndefined();
+      expectSignInRedirect(a.response, FAILED);
       expect(await person(wrongAudience).account()).toBeNull();
 
       const wrongNonce = newSub();
       const n = await signIn(() => ({ sub: wrongNonce, nonce: 'another-nonce' }));
-      expect(n.response.status).toBe(401);
-      expect(await errorCode(n.response)).toBe('signed-out');
-      expect(cookieValue(n.response, SESSION_COOKIE)).toBeUndefined();
+      expectSignInRedirect(n.response, FAILED);
       expect(await person(wrongNonce).account()).toBeNull();
 
       const wrongIssuer = newSub();
       const i = await signIn((nonce) => ({ sub: wrongIssuer, nonce, iss: 'https://issuer.example.com' }));
-      expect(i.response.status).toBe(401);
+      expectSignInRedirect(i.response, FAILED);
     } finally {
       log.mockRestore();
     }
@@ -228,8 +251,7 @@ describe('GET /auth/callback', () => {
       const app = createApp({ fetchImpl: googleStub(() => idToken({ sub: newSub(), nonce: 'x' })).fetchImpl, keys });
       const { cookie } = await login(app);
       const response = await app.request(`${API}/auth/callback?code=test-code&state=another-state`, { headers: { cookie } }, env);
-      expect(response.status).toBe(401);
-      expect(await errorCode(response)).toBe('signed-out');
+      expectSignInRedirect(response, FAILED);
     } finally {
       log.mockRestore();
     }
@@ -240,9 +262,7 @@ describe('GET /auth/callback', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const { response } = await signIn((nonce) => ({ sub, nonce }));
-      expect(response.status).toBe(403);
-      expect(await errorCode(response)).toBe('forbidden');
-      expect(cookieValue(response, SESSION_COOKIE)).toBeUndefined();
+      expectSignInRedirect(response, FAILED);
       // Nothing is kept for someone who was not invited.
       expect(await person(sub).account()).toBeNull();
       expect(await person(sub).encryptedRefreshToken()).toBeNull();
@@ -250,8 +270,92 @@ describe('GET /auth/callback', () => {
       // An unverified address is not trusted against the allowlist either.
       await kv.put(allowKey(EMAIL), '1');
       const unverified = await signIn((nonce) => ({ sub, nonce, email_verified: false }));
-      expect(unverified.response.status).toBe(403);
+      expectSignInRedirect(unverified.response, FAILED);
       expect(await person(sub).account()).toBeNull();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a cancelled sign-in returns to the app saying so', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const app = createApp({ keys });
+      const { cookie } = await login(app);
+      const response = await app.request(
+        `${API}/auth/callback?error=access_denied&state=anything`,
+        { headers: { cookie } },
+        env,
+      );
+      expectSignInRedirect(response, CANCELLED);
+      // Details go to the log only.
+      expect(logged(log)).toContain('access_denied');
+      // Any other error Google reports is a failure, not a cancellation.
+      const other = await app.request(`${API}/auth/callback?error=server_error`, { headers: { cookie } }, env);
+      expectSignInRedirect(other, FAILED);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a failed sign-in returns to the app saying so', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const app = createApp({ fetchImpl: googleStub(() => idToken({ sub: newSub(), nonce: 'x' })).fetchImpl, keys });
+      const { cookie, state } = await login(app);
+      // No code or state, no OAuth cookie, a state from another sign-in.
+      expectSignInRedirect(await app.request(`${API}/auth/callback`, { headers: { cookie } }, env), FAILED);
+      expectSignInRedirect(await app.request(`${API}/auth/callback?code=c&state=${state}`, {}, env), FAILED);
+      expectSignInRedirect(await app.request(`${API}/auth/callback?code=c&state=other`, { headers: { cookie } }, env), FAILED);
+      // Google's token endpoint refuses the code (PKCE or a used code).
+      const refused = createApp({
+        fetchImpl: async () => Response.json({ error: 'invalid_grant' }, { status: 400 }),
+        keys,
+      });
+      expectSignInRedirect(await refused.request(`${API}/auth/callback?code=c&state=${state}`, { headers: { cookie } }, env), FAILED);
+      // Google's token endpoint is down.
+      const down = createApp({ fetchImpl: async () => { throw new Error('offline-detail'); }, keys });
+      expectSignInRedirect(await down.request(`${API}/auth/callback?code=c&state=${state}`, { headers: { cookie } }, env), FAILED);
+      expect(logged(log)).toContain('offline-detail');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a failure reading Google signing keys sends the person back to sign in and logs an outage', async () => {
+    await kv.put(allowKey(EMAIL), '1');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      let nonce = '';
+      const stub = googleStub(() => idToken({ sub: newSub(), nonce }));
+      const unreachable = createRemoteJWKSet(new URL(GOOGLE_JWKS_URL), {
+        [customFetch]: async () => { throw new Error('keys-unreachable'); },
+      });
+      const app = createApp({ fetchImpl: stub.fetchImpl, keys: unreachable });
+      const started = await login(app);
+      nonce = started.nonce;
+      const response = await app.request(
+        `${API}/auth/callback?code=test-code&state=${started.state}`,
+        { headers: { cookie: started.cookie } },
+        env,
+      );
+      expectSignInRedirect(response, FAILED);
+      expect(logged(log)).toMatch(/outage/i);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('an address on the allowlist in another case signs in, and only ASCII letters fold', async () => {
+    await kv.put(allowKey('kim@example.com'), '1');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const upper = await signIn((nonce) => ({ sub: newSub(), nonce, email: 'KIM@Example.COM' }));
+      expect(upper.response.status).toBe(302);
+      expect(upper.response.headers.get('location')).toBe(env.APP_ORIGIN);
+      // The Kelvin sign (U+212A) lowercases to "k" under Unicode rules: it must not match.
+      const kelvin = await signIn((nonce) => ({ sub: newSub(), nonce, email: '\u212Aim@example.com' }));
+      expectSignInRedirect(kelvin.response, FAILED);
     } finally {
       log.mockRestore();
     }
