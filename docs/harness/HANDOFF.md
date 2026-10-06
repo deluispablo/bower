@@ -4,14 +4,14 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## Where things stand
 
-- **P2 is closed** under the owner's conditional acceptance at dossier SHA `3e6e7da`: [2026-10-06-p2-dossier.md](2026-10-06-p2-dossier.md). Four full suites green there (check 3486, e2e 216, e2e:fake 240, e2e:pwa 4); review CLEAN (TL-P2-46 Opus fallback); evaluation's F1/F2 focus findings fixed in `focus-after-replay-and-route`; 281/281 entries pass. Minors in [P2_POLISH.md](P2_POLISH.md).
+- **P2 is closed** under the owner's conditional acceptance, now at `00ec9a5` after the TL-P2-47 walk and fix round (dossier addendum); first closure at `3e6e7da`: [2026-10-06-p2-dossier.md](2026-10-06-p2-dossier.md). Four full suites green there (check 3486, e2e 216, e2e:fake 240, e2e:pwa 4); review CLEAN (TL-P2-46 Opus fallback); evaluation's F1/F2 focus findings fixed in `focus-after-replay-and-route`; 281/281 entries pass. Minors in [P2_POLISH.md](P2_POLISH.md).
 - Coordinator runs from `/Users/deluisp/Projects/bower-app`: project agents load and the quiet-gates hook is active; dispatch only through `.claude/agents/`, never with `model`.
 
 - **Backup:** `backup/main` = `03054bd` (verified by the lead, fast-forward from `4d7ab08`, scan clean). The owner authorised `gh`, and git reaches it through the keychain; Bash may need to run outside the sandbox. The coordinator pushes after each green integration per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA.
 
 ## The plan, in order
 
-1. [TL-P2-47](DECISIONS.md): one supplemental walk on 3e6e7da before P3 implementation (see ACTIVE); P3 planning runs in parallel. First P3 batch entries: C11 "no policy change from documents" and an app console-error e2e check.
+1. TL-P2-47 walk and fix round done; P3 implementation can start from the lead's adopted P3 plan. First P3 batch entries: C11 "no policy change from documents" and an app console-error e2e check.
 2. Coordinator resumes from HANDOFF/ACTIVE and runs P3 batches under the same method. Codex is back as reviewer from 2026-10-12 (no re-review of 4d7ab08, TL-P2-46).
 
 ## How to run a round
@@ -24,6 +24,7 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 
 ## Traps on this machine
 
+- A browser evaluation on a reused preview port can run an old build from the PWA service worker's cache: use a fresh port or clear service workers and caches, and check the loaded `index-*.js` against `dist/assets`.
 - Playwright stalls when the display sleeps (`system_profiler SPDisplaysDataType | grep Asleep`); never edit `src/` while e2e or `done.sh` runs.
 - macOS has no `timeout`; chain gates with `&&`, not `;`.
 - A jsdom teardown race can fail `pnpm check` once under load; rerun before blaming code.

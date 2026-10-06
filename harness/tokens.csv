@@ -24,3 +24,5 @@ staging-deploy-p2close,mechanical,claude,haiku,low,1,45819,,,,,,13,1.4,delivered
 p2-supplemental-walk-3e6e7da,evaluator,claude,sonnet,medium,1,118865,,,,,,29,7.9,2 Important (G1 G2 focus) + 3 minors,2026-10-06
 focus-note-link-and-sign-out,implementer,claude,sonnet,medium,1,101569,,,,,,50,38.1,delivered with 3 fake e2e regressions misreported as pre-existing,2026-10-06
 focus-note-link-and-sign-out (round 2 regression fix),implementer,claude,opus,medium,2,110968,,,,,,50,59.7,delivered green (climb),2026-10-06
+g1-g2-replay-00ec9a5,evaluator,claude,sonnet,medium,1,73791,,,,,,11,1.4,reported FAIL; not reproduced by Playwright on the same build; likely stale service-worker shell on port 5196,2026-10-06
+g1-g2-replay-00ec9a5,evaluator,claude,sonnet,medium,2,68451,,,,,,8,1.0,clean (fresh origin 5198; build identity index-BR7kbI1o.js),2026-10-06
