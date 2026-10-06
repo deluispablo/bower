@@ -3486,7 +3486,7 @@
       "See the rule with 'You wrote: …', the question gone, and the merge line in the note opened from the question's link."
     ],
     "verify": "bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C11: a kept rule and a merge answer are applied\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P2-38 scripted journey (capability audit 2026-10-06, docs/P2_ACCEPTANCE.md). Planned, not implemented."
   },
   {

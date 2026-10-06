@@ -29,3 +29,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-06: run-result-links passes — chore(harness): run-result-links passes (batch 5)
 - 2026-10-06: c04-journey-new-note passes — chore(harness): c04-journey-new-note passes (batch 5)
 - 2026-10-06: c05-journey-hub-updated passes — chore(harness): c05-journey-hub-updated passes (batch 5)
+- 2026-10-06: c11-journey-rule-and-answer passes — chore(harness): c11-journey-rule-and-answer passes (batch 5)
