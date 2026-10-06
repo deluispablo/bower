@@ -1554,11 +1554,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(out.manifest.capture.members.map((m) => m.file.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
       expect(out.manifest.capture.piles).toHaveLength(2);
     });
-    it('sends a run with a loose thing to the legacy path', async () => {
+    it('keeps a run with a loose thing on the B path (b-path-loose-piles)', async () => {
       const w = await bWorld();
       await w.uploader.addPile({ text: '', items: [pdf('alone.pdf')] });
       await w.uploader.settled();
-      expect(await plan(w)).toEqual({ path: 'legacy', why: 'loose pile' });
+      expect((await plan(w)).path).toBe('b');
     });
     it('takes the B path for a note to write from a pile of words', async () => {
       const w = await bWorld();

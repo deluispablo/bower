@@ -16,7 +16,7 @@ import { FILING, MERGES, guessFolder, saltmereQuestion, seedPiles, wordRule } fr
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { formerNames, rewriteLinks } from '../links';
 import { PILE_NOTE, safeInboxName, thingsIn } from '../piles';
-import { accountPile, contextRemoved, findDeclaration, journalValues, recordedNote, writable, type Digest } from '../pile-readiness';
+import { accountPile, contextRemoved, findDeclaration, findLooseDeclarations, journalValues, recordedNote, writable, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type FiledItem, type Pile, type PileItem, type Question, type Request, type Rule, type RunPhase, type RunReport, type SetAside } from '../types';
 import { DriveVault } from '../vault/drive-vault';
@@ -113,6 +113,10 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   const out = new Map<string, Capture>();
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
+    if (folder && !folder.folder) {
+      out.set(pile.id, await looseCapture(drive, rootId, listing, ix.file('Inbox'), folder));
+      continue;
+    }
     if (!pile.path || !folder?.folder) continue;
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
@@ -214,6 +218,22 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   return out;
 }
 
+/**
+ * A loose file (fixture 07): observed when it carries no declaration; declared, it is ready when the shared
+ * accounting finds its one member in the inbox with the declared bytes, the inbox standing for its folder.
+ */
+async function looseCapture(drive: FakeDrive, rootId: string, listing: readonly DriveFile[], inbox: DriveFile | undefined, file: DriveFile): Promise<Capture> {
+  const declarationId = file.appProperties?.[PROP.declaration];
+  if (!declarationId) return { blocked: null, captured: new Set([file.id]) };
+  const found = inbox ? (await findLooseDeclarations(listing, rootId, inbox.id, (id) => drive.readBytes(id))).find((d) => d.declaration.declarationId === declarationId && d.declaration.pileId === file.appProperties?.[PROP.pile]) : undefined;
+  if (!inbox || !found) return { blocked: SET_ASIDE.notChecked };
+  const readiness = await accountPile(found.declaration, found.sha256, inbox, listing, (id) => drive.readBytes(id), (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
+  if (readiness.blocked) return { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked };
+  // Filed already (a consumed disposition) and put back in the inbox: an ordinary loose file now.
+  if (!readiness.remaining.length) return { blocked: null, captured: new Set([file.id]), leftover: { contextKey: null } };
+  return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId, sha256: found.sha256 }, contextKey: null, memberKeys: new Set(readiness.remaining) } };
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 
 /** A run's classification, fixed before any effect: the B path with its manifest, or the legacy path and why. */
@@ -241,7 +261,8 @@ export type HubUpdate = { path: string; what: string };
  * changed during the run. The B plan fixes every operation and every report
  * row (TL-P2-06 §1, contract B guards 7 and 9) and reuses the readiness
  * capture: only ready piles are captured, and their folders go to the Bin
- * only with no child the run did not capture. A pile held for readiness is
+ * only with no child the run did not capture. A loose pile (one file in the
+ * inbox) is captured with no folder: its file is moved and nothing is Binned. A pile held for readiness is
  * left out, untouched and unreported (TL-P2-21). A pile is captured with its
  * members and its one bound context note (by member key when declared,
  * otherwise the first pile note); any other child (a late thing, a pile
@@ -341,11 +362,12 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string; merge: Merge | null }> = [];
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
-    // A declared loose thing that has not arrived is only a row to choose again: nothing to capture (TL-P2-21).
-    if (!pile.path && pile.items.every((i) => i.chooseAgain)) continue;
     const marks = { members: members.length, things: things.length };
     const folder = pile.path ? ix.file(pile.path) : undefined;
-    if (!folder?.folder) return legacy('loose pile');
+    // Not in this listing (a loose thing not arrived, or one still on its way): nothing to capture (TL-P2-21).
+    if (!folder) continue;
+    // A loose pile (TL-P2-16 item 5) has no folder: its one file is its only child, and nothing goes to the Bin.
+    const loose = !folder.folder;
     const cap = capture.get(pile.id);
     if (!cap) return legacy('readiness');
     // A pile that is not ready is held (TL-P2-21): not captured, no effect, no report row; its reason shows in the Inbox.
@@ -359,8 +381,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
       continue;
     }
     if (!LOGICAL_ID.test(pile.id) || /saltmere/i.test(pile.text)) return legacy('question');
-    const children = listing.filter((f) => f.parents[0] === folder.id);
-    const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE);
+    const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
+    const notes = loose ? [] : children.filter((f) => !f.folder && f.name === PILE_NOTE);
     const declared = cap.declared;
     // The one context note bound to the pile (TL-P2-21): by its member key when declared, otherwise the first.
     // What is left of a declared pile takes its bound note when it is there, otherwise the first (TL-P2-29).
@@ -428,7 +450,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     capturedPiles.push({
       pileId: pile.id,
       source: declared ? { kind: 'declared', ref: declared.ref } : { kind: 'observed' },
-      anchor: seen(folder),
+      anchor: loose ? null : seen(folder),
       memberKeys: keys,
       childFileIds: [...taken, ...(note ? [note.id] : [])].sort(),
       context,
