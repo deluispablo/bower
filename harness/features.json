@@ -3430,8 +3430,8 @@
       "Restore the folder from Drive's Bin: with all declaration copies missing or in the Bin the pile is an ordinary observed pile in the Inbox and the run alike; an unreadable or damaged declaration is still held (TL-P2-08 a)."
     ],
     "verify": "pnpm vitest run src/data/fake/fake-runner.test.ts -t \"removing a declared pile bins its declaration copies too\"",
-    "passes": false,
-    "note": "TL-P2-31 (main 2a85144) and its amendment (main 11bdfc9, option b: all copies gone → ordinary observed pile, shared accounting). Implemented in the loose-pile lane (claude/p2-loose-pile). Planned, not implemented."
+    "passes": true,
+    "note": "TL-P2-31 (main 2a85144) and its amendment (main 11bdfc9, option b: all copies gone → ordinary observed pile, shared accounting). Implemented in the loose-pile lane (claude/p2-loose-pile). Integrated by cherry-pick of claude/p2-loose-pile-r2 (fix 57aa1d1, then e753e73); review CLEAN. Gates on c30267d: check 3469, e2e 208, e2e:fake 218."
   },
   {
     "id": "run-result-links",
