@@ -16,6 +16,8 @@ export interface DriveFile {
   createdTime: string;
   size?: number;
   appProperties?: Record<string, string>;
+  /** SHA-256 of the content, hex; only from `ResumableDrive.getUploaded`. */
+  sha256?: string;
 }
 
 export interface DrivePatch {
@@ -66,6 +68,48 @@ export interface DriveApi {
   /** Files under `rootId` whose name or text contains `query`. */
   fullText(rootId: string, query: string): Promise<DriveFile[]>;
 }
+
+/** What a resumable upload creates: the reserved file id, where it goes and what it is. */
+export interface ResumableTarget {
+  /** Pre-generated with `generateIds`, kept before the first byte is sent. */
+  id: string;
+  parentId: string;
+  name: string;
+  /** The media type; empty sends `application/octet-stream`. */
+  type: string;
+  size: number;
+  /** SHA-256 of the bytes, hex: a file read back must have the same content. */
+  sha256?: string;
+  appProperties?: Record<string, string>;
+}
+
+/** Where a resumable session stands after a chunk or a status question. */
+export type SessionStatus =
+  | { kind: 'done'; file: DriveFile }
+  | { kind: 'partial'; confirmed: number }
+  | { kind: 'expired' };
+
+/**
+ * Drive's resumable upload with a pre-generated file id (TL-P2-05), so a file
+ * whose answer was lost is found again by its id and never created twice.
+ * Creating with an id that already exists rejects with `conflict`.
+ * Chunks other than the last are a multiple of `RESUMABLE_UNIT` bytes.
+ */
+export interface ResumableDrive {
+  /** Ids reserved for files not created yet (`files.generateIds`). */
+  generateIds(count: number): Promise<string[]>;
+  /** Opens a session that will create `target.id`; answers the session address. */
+  openResumable(target: ResumableTarget): Promise<string>;
+  /** Sends `chunk`, the bytes from `start` of a file of `size` bytes. */
+  putChunk(session: string, start: number, chunk: Blob, size: number, signal?: AbortSignal): Promise<SessionStatus>;
+  /** Asks how many bytes of a file of `size` bytes the session holds. */
+  sessionStatus(session: string, size: number): Promise<SessionStatus>;
+  /** A file with its content's SHA-256, to check one read back under a reserved id. */
+  getUploaded(id: string): Promise<DriveFile>;
+}
+
+/** Drive takes resumable chunks in multiples of 256 KiB, except the last. */
+export const RESUMABLE_UNIT = 256 * 1024;
 
 /** One short sentence per failure, the same for every Drive client. */
 export const DRIVE_MESSAGES: Record<ErrorCode, string> = {

@@ -5,7 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
-import { driveError, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch } from './drive-api';
+import { driveError, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
 interface Stored {
   meta: DriveFile;
@@ -23,9 +23,20 @@ export interface FakeDriveOptions {
   latency?: number;
   /** Every call fails as with no network. */
   offline?: boolean;
+  /** Resumable chunks other than the last must be a multiple of this (stub: unused). */
+  chunkMultiple?: number;
 }
 
-export class FakeDrive implements DriveApi, BinLookup {
+/** One resumable-upload call the pretend Drive answered, for tests. */
+export interface ResumableCall {
+  op: 'generateIds' | 'open' | 'put' | 'status';
+  id?: string;
+  session?: string;
+  start?: number;
+  bytes?: number;
+}
+
+export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   private files = new Map<string, Stored>();
   private seq = 0;
   private last = 0;
@@ -261,6 +272,39 @@ export class FakeDrive implements DriveApi, BinLookup {
       if (f.meta.name.toLowerCase().includes(q) || text.toLowerCase().includes(q)) out.push(this.copy(f.meta));
     }
     return out;
+  }
+
+  // ---------- resumable uploads: an inert stub until upload-queue-persistent lands
+
+  /** Every resumable call, in order (stub: none are answered). */
+  resumableCalls: ResumableCall[] = [];
+  /** Runs before a chunk is taken (stub: never). */
+  beforeChunk: ((call: { session: string; start: number; bytes: number }) => void | Promise<void>) | null = null;
+
+  /** Every open session answers as expired from now on (stub: there are none). */
+  expireSessions(): void {}
+
+  /** The next resumable call's answer is lost (stub: there are none). */
+  loseNextReply(): void {}
+
+  async generateIds(_count: number): Promise<string[]> {
+    throw driveError('unknown');
+  }
+
+  async openResumable(_target: ResumableTarget): Promise<string> {
+    throw driveError('unknown');
+  }
+
+  async putChunk(_session: string, _start: number, _chunk: Blob, _size: number, _signal?: AbortSignal): Promise<SessionStatus> {
+    throw driveError('unknown');
+  }
+
+  async sessionStatus(_session: string, _size: number): Promise<SessionStatus> {
+    throw driveError('unknown');
+  }
+
+  async getUploaded(_id: string): Promise<DriveFile> {
+    throw driveError('unknown');
   }
 
   private changed<T>(out: T): T {
