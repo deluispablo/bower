@@ -487,9 +487,19 @@ export class DriveVault implements VaultSource {
       }
       const kids = ix.filesIn(path).filter((k) => !k.folder);
       const note = kids.find((k) => k.name === PILE_NOTE);
-      const parsed = note ? await this.parsed(note, `${path}/${PILE_NOTE}`, true) : null;
+      let parsed: ParsedNote | null = null;
+      let unread = false;
+      try {
+        parsed = note ? await this.parsed(note, `${path}/${PILE_NOTE}`, true) : null;
+      } catch (e) {
+        // A note Drive cannot give back now holds only its own pile (TL-P2-08 (a)): logged once for this pile and
+        // listing, never kept, so the next listing reads it again. Signed out, or a session that changed, stops all.
+        if (!(e instanceof BowerError) || e.code === 'auth' || !this.current()) throw e;
+        console.error(e);
+        unread = true;
+      }
       // Pile.text is editable context, so a refusal must not masquerade as saved text.
-      if (note && !parsed) continue;
+      if (note && !parsed && !unread) continue;
       const text = parsed?.body.trim() ?? '';
       const declared = f.appProperties?.[PROP.declaration] ? await this.declaredState(f, this.uploads.get(id), queued.map((i) => i.memberKey)) : null;
       const contextKey = declared?.contextKey ?? null;
@@ -501,7 +511,7 @@ export class DriveVault implements VaultSource {
       // the names, and the raw text (front matter included) of the one note it records (`recordedNote`).
       const recorded = recordedNote(kids, contextKey);
       const raw = recorded ? await this.rawText(recorded) : '';
-      const setAside = raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
+      const setAside = unread || raw === null || !writable([f.name, raw, ...kids.map((k) => k.name)]) ? 'not-checked' : declared ? await this.setAsideFor(declared, path, kids, things.length, text, sending, changes) : null;
       out.push({ id, path, text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}) });
     }
     // A lone thing still on its way has no file yet: show it from here.
@@ -763,6 +773,8 @@ export class DriveVault implements VaultSource {
     if (!f || !pile.path) throw new BowerError('not-found', 'That pile is already filed.');
     await this.stillAsSeen(f);
     const note = ix.file(join(pile.path, PILE_NOTE));
+    // Words Bower could not read are never saved over: the note must read back first.
+    if (note) await this.text(note);
     // Check the context before a rename or removal can partially apply a stale edit.
     if (note && (await this.drive.get(note.id)).modifiedTime !== note.modifiedTime) {
       void this.refresh();

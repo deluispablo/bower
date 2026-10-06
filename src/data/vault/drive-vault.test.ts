@@ -807,7 +807,8 @@ describe('unreadable ownership notes do not block other notes', () => {
     expect(await drive.snapshot()).toBe(before);
   });
 
-  it.each(['search', 'backlinks', 'Inbox'] as const)('still propagates Drive read failures in %s', async (operation) => {
+  // The Inbox no longer does: a pile note Drive cannot give back holds only its pile (pile-note-read-isolation).
+  it.each(['search', 'backlinks'] as const)('still propagates Drive read failures in %s', async (operation) => {
     const { bad, context } = await addNotes(body);
     const read = drive.readText.bind(drive);
     const error = new BowerError('offline', 'You appear to be offline.');
@@ -815,8 +816,22 @@ describe('unreadable ownership notes do not block other notes', () => {
       if (id === bad.id || id === context.id) throw error;
       return read(id);
     });
-    const result = operation === 'search' ? vault.search('ownershipneedle') : operation === 'backlinks' ? vault.note(target) : vault.piles();
+    const result = operation === 'search' ? vault.search('ownershipneedle') : vault.note(target);
     await expect(result).rejects.toBe(error);
+  });
+
+  it('a Drive read failure in the Inbox holds only the pile whose note it is', async () => {
+    const { context, folder, good } = await addNotes(body);
+    const read = drive.readText.bind(drive);
+    const error = new BowerError('offline', 'You appear to be offline.');
+    vi.spyOn(drive, 'readText').mockImplementation(async (id) => {
+      if (id === context.id) throw error;
+      return read(id);
+    });
+    const piles = await vault.piles();
+    expect(piles.find((pile) => pile.id === folder.id)?.setAside).toBe('not-checked');
+    expect(piles.find((pile) => pile.id === good.id)?.text).toBe('Alex added readable context.');
+    expect(console.error).toHaveBeenCalledWith(error);
   });
 });
 

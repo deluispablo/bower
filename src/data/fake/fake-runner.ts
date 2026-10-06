@@ -108,6 +108,11 @@ async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[
   for (const pile of piles) {
     const folder = pile.path ? ix.file(pile.path) : undefined;
     if (!pile.path || !folder?.folder) continue;
+    // A pile the Inbox could not check (its note could not be read) is held, and only it (TL-P2-08 (a)).
+    if (pile.setAside === 'not-checked') {
+      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
+      continue;
+    }
     const children = listing.filter((f) => f.parents[0] === folder.id);
     const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
     const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
@@ -309,8 +314,20 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     const bound = contextKey === null ? undefined : children.find((f) => !f.folder && f.appProperties?.[PROP.item] === contextKey);
     // A declared pile whose context was removed (TL-P2-08 b) has none: any pile note in it is unbound.
     const note = declared ? bound : (bound ?? notes[0]);
+    // The bound note is read once, before anything of the pile is captured: one Drive cannot give back now holds
+    // only this pile (TL-P2-08 (a)), never the run; a sign-out still stops it.
+    let noteText = '';
+    if (note) {
+      try {
+        noteText = await drive.readText(note.id);
+      } catch (e) {
+        if (!(e instanceof BowerError) || e.code === 'auth') throw e;
+        console.error(e);
+        continue;
+      }
+    }
     // Where its things go is guessed from the bound note's words only, never from an unbound note listed first.
-    const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), await drive.readText(note.id)).body.trim();
+    const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), noteText).body.trim();
     const keys: Array<string | null> = [];
     const taken: string[] = [];
     for (const item of pile.items) {
@@ -337,7 +354,7 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
     if (declared && keys.length !== declared.memberKeys.size) return legacy('member key');
     let context: CapturedPile['context'] = { kind: 'absent' };
     if (note) {
-      const text = await drive.readText(note.id);
+      const text = noteText;
       const stored = await verified(note, 'utf8');
       const raw = new TextEncoder().encode(text);
       if (!stored || stored.size !== raw.byteLength || stored.sha256 !== (await sha256(new Blob([raw])))) return legacy('context');
