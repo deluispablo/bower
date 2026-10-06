@@ -5,7 +5,7 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 ## Where things stand
 
 - **P2 is closed** under the owner's conditional acceptance at dossier SHA `3e6e7da`: [2026-10-06-p2-dossier.md](2026-10-06-p2-dossier.md). Four full suites green there (check 3486, e2e 216, e2e:fake 240, e2e:pwa 4); review CLEAN (TL-P2-46 Opus fallback); evaluation's F1/F2 focus findings fixed in `focus-after-replay-and-route`; 281/281 entries pass. Minors in [P2_POLISH.md](P2_POLISH.md).
-- No workers running. This coordinator ran from `~/Projects/bower` (agents dispatched as general-purpose with the agent's model pinned, accepted by the lead); the owner restarts the coordinator from `/Users/deluisp/Projects/bower-app` at this boundary (TL-P2-45).
+- Coordinator runs from `/Users/deluisp/Projects/bower-app`: project agents load and the quiet-gates hook is active; dispatch only through `.claude/agents/`, never with `model`.
 
 - **Backup pending:** local `main` is at the P2 closure; remote `backup/main` is still `4d7ab08`. This session has no GitHub credentials (`could not read Username`), so the push waits for the restarted coordinator or the owner: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA (BACKUP.md). Personal-data and secret scan of the range was clean.
 
