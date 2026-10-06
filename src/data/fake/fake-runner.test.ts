@@ -294,6 +294,44 @@ describe('the fake runner', () => {
     expect((await fresh().requests())[0]?.done).toBe('Done. See what changed in your folders.');
   });
 
+  // c07-contradiction-question (TL-P2-40): new words that disagree with a stored note ask a question linking both.
+  const RENT_QUESTION = '[[Flat 3 rent is now £1,550]] says the rent is £1,550, but [[Flat 3, 12 Larkspur Lane]] says £1,450. Is £1,550 right?';
+
+  it('a note that disagrees with a stored one asks a question linking both, once its note is written', async () => {
+    await vault.addPile({ text: 'Flat 3 rent is now £1,550', items: [] });
+    const out = await tidyUp(drive, root);
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(drive.dump(root).has('Projects/Flat hunt/Flat 3 rent is now £1,550.md')).toBe(true);
+    const asked = out.report.questions.find((q) => q.text === RENT_QUESTION);
+    expect(asked).toMatchObject({ yes: 'Yes, £1,550', no: 'No, £1,450', about: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md' });
+    expect((await fresh().questions()).map((q) => q.text)).toContain(RENT_QUESTION);
+    // Asked through the one questions.json write, after the note it links is written.
+    const write = out.manifest.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
+    const note = out.manifest.operations.find((o) => o.effect.kind === 'create-text' && o.effect.name === 'Flat 3 rent is now £1,550.md');
+    expect(write?.dependsOn).toContain(note?.operationId);
+  });
+
+  it('a note that agrees with the stored one asks nothing', async () => {
+    await vault.addPile({ text: 'Flat 3 rent is now £1,450', items: [] });
+    const out = await tidyUp(drive, root);
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.report.questions.map((q) => q.id)).toEqual(['q-saltmere']);
+  });
+
+  it('answering the question and the next tidy-up drop it for good', async () => {
+    await vault.addPile({ text: 'Flat 3 rent is now £1,550', items: [] });
+    await tidyUp(drive, root);
+    const q = (await fresh().questions()).find((x) => x.text === RENT_QUESTION);
+    expect(q?.text).toBe(RENT_QUESTION);
+    if (!q) return;
+    await fresh().answer(q.id, true);
+    const out = await tidyUp(drive, root, 'instructions');
+    if (out.phase !== 'done') throw new Error('failed');
+    expect(out.report.questions).toEqual([]);
+    expect(drive.dump(root).get(SYSTEM.questions)).not.toContain(q.id);
+    expect((await fresh().questions()).some((x) => x.id === q.id)).toBe(false);
+  });
+
   it('answered questions leave the list for good', async () => {
     const q = (await vault.questions())[0];
     if (!q) throw new Error('no question');

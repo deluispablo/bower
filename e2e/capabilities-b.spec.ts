@@ -177,3 +177,40 @@ test('C08: a comparison request makes a note with a table and its sources', asyn
   await sources.getByRole('link', { name: 'Flat 2, 40 Tanners Walk' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Flat 2, 40 Tanners Walk' })).toBeVisible();
 });
+
+test('C07: a contradiction asks a question linking both sources', async ({ page }) => {
+  test.skip(!isFake, 'the scripted journeys run on the pretend Drive and Worker');
+  test.setTimeout(60_000);
+  const words = 'Flat 3 rent is now £1,550';
+  await open(page, '/add', 'empty');
+  await page.locator('textarea').first().fill(words);
+  await page.getByRole('button', { name: 'Put the note in the inbox' }).click();
+  await expect(page.getByRole('status').getByText(/in the inbox/)).toBeVisible();
+  await expect(page).toHaveURL(/\/(?:\?|$)/);
+  await tidyUpAll(page);
+
+  // Home asks about it, linking the note just written and the note it disagrees with.
+  const question = page.getByRole('region', { name: /questions? for you/ }).getByRole('listitem').filter({ hasText: 'says the rent is £1,550' });
+  await expect(question).toContainText('Flat 3 rent is now £1,550 says the rent is £1,550, but Flat 3, 12 Larkspur Lane says £1,450. Is £1,550 right?');
+  await question.getByRole('link', { name: words }).click();
+  await expect(page.getByRole('heading', { level: 1, name: words })).toBeVisible();
+  await page.goBack();
+  await question.getByRole('link', { name: 'Flat 3, 12 Larkspur Lane' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat 3, 12 Larkspur Lane' })).toBeVisible();
+  await page.goBack();
+
+  // Answering it takes it off Home; the next tidy-up drops it from Bower's list for good.
+  await question.getByRole('button', { name: 'Yes, £1,550' }).click();
+  await expect(question).toHaveCount(0);
+  await page.getByRole('button', { name: /Let Bower read (it|them) now/ }).click();
+  await closeWhenDone(page);
+  const asked = (): Promise<string> => page.evaluate(() => {
+    const kept = JSON.parse(sessionStorage.getItem('bower:fake:empty') ?? '{"files":[]}') as { files: Array<{ meta: { name: string }; trashed: boolean; content: unknown }> };
+    return kept.files.filter((f) => !f.trashed && f.meta.name === 'questions.json').map((f) => JSON.stringify(f.content)).join('');
+  });
+  await expect.poll(asked).not.toContain('says the rent is');
+  expect(await asked()).toContain('questions');
+  await page.reload();
+  await expect(page.locator('#boot')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.getByText('says the rent is £1,550')).toHaveCount(0);
+});
