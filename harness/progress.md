@@ -80,3 +80,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: runner-restart-truth-fix passes — chore(harness): runner-restart-truth-fix passes
 - 2026-10-07: spine-ordered-status passes — chore(harness): spine-ordered-status passes
 - 2026-10-07: spine-recovery-without-browser passes — chore(harness): spine-recovery-without-browser passes
+- 2026-10-07: staging-runner-routes passes — chore(harness): staging-runner-routes passes

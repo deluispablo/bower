@@ -4197,7 +4197,7 @@
       "An api test parses wrangler.jsonc and every path registered by the route modules, and fails for any path the patterns do not cover."
     ],
     "verify": "pnpm -C api exec vitest run -t \"every Worker route runs the Worker first\"",
-    "passes": false,
+    "passes": true,
     "note": "First real run on Actions (2026-10-07, run 37619425172): GET /runner/runs/:id/token answered the SPA page with 200, so the runner failed in 13s."
   }
 ]
