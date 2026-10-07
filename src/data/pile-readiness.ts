@@ -11,7 +11,7 @@ import { parsePileDisposition, type DispositionResult } from './contracts/pile-d
 import { canonicalRecordJson, hashRecordJson } from './contracts/record-json';
 import { recordableId, recordableName } from './contracts/run-manifest';
 import { PILE_NOTE, safeInboxName } from './piles';
-import { isJournalRecord } from './vault/journal';
+import { isJournalRecord } from './contracts/journal-record';
 import { PROP, SYSTEM } from './vault/layout';
 import { BowerError, type SetAside } from './types';
 import { sha256 } from './vault/hashes';

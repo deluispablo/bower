@@ -114,7 +114,7 @@ export async function parsePileDeclaration(bytes: Uint8Array, expectedRootId: st
   if (value.context.kind === 'text') {
     const raw = new TextEncoder().encode(value.context.originalText);
     if (value.context.content.encoding !== 'utf8' || value.context.content.size !== raw.byteLength
-      || value.context.content.sha256 !== await sha256(new Blob([raw.buffer]))) return { ok: false, reason: 'content' };
+      || value.context.content.sha256 !== await sha256(new Blob([raw]))) return { ok: false, reason: 'content' };
   }
   // Member digests describe intent only. No member bytes or I/O are available here.
   const identity = await hashRecordJson(value);
