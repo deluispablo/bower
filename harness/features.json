@@ -4383,7 +4383,7 @@
       "Tests: a wrangler output whose URL contains bower-api but uploads bower-staging passes; an upload of bower-api fails."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"deploy-staging passes when only the URL holds bower-api|deploy-staging fails when bower-api is uploaded\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-26; the lead's 5a4ab04 deploy stopped on a false production alarm (production untouched, last deployed 10-01)."
   },
   {
