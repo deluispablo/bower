@@ -187,3 +187,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - A new service worker waits until every tab closes (registerType autoUpdate with injectRegister script-defer, no skipWaiting):
     a reload keeps the old bundle.
 - (P3 pause) Local-only branch `archive/p2-o5-snapshot` (never pushed; base b3c2eb7): uncommitted P2 O5 work kept as a P4 candidate (fake-drive WTF-8 bytes, fake-runner, pile-readiness, drive-vault).
+- (P4-1 review, notes /private/tmp/p4-1-review-notes.md) Minors:
+  - tidy.yml passes the Claude secret even when the provider is scripted; npm is pinned by version only.
+  - claude.ts claudeArgs has no --setting-sources, so HOME ~/.claude settings or a CLAUDE.md could load.
+  - Important, rated for P4-2 provider-contract: claude.ts notAdmitted lets an in-contract reply bin Resources.
+    Keep claude off live until provider-contract.
+  - Model-supplied digests: a model with no tools cannot compute them, so every live reply is refused (provider-contract).
