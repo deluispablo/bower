@@ -64,8 +64,9 @@ export class RunnerToken {
     const body = (await res.json().catch((e: unknown) => {
       console.error(e);
       return null;
-    })) as { error?: unknown } | Partial<TokenGrant> | null;
-    if (res.status === 409 && body && 'error' in body && body.error === STALE_ATTEMPT) throw staleAttempt();
+    })) as { error?: { code?: unknown } } | Partial<TokenGrant> | null;
+    const code = body && 'error' in body && typeof body.error === 'object' && body.error !== null ? body.error.code : undefined;
+    if (res.status === 409 && code === STALE_ATTEMPT) throw staleAttempt();
     if (res.status === 401) {
       console.error('The token route refused the run ticket');
       throw new BowerError('auth', 'This tidy-up is no longer allowed to change your folder.');

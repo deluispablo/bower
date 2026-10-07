@@ -9,7 +9,7 @@
  *
  * `:id` is the run id, `<person object id hex>-<random>` (run-ticket.ts): the route reaches the person
  * object with `idFromString` and no lookup. The ticket in `Authorization: Bearer` (RFC 6750) is the only
- * credential: no cookie, no same-origin check. A missing, wrong or expired ticket, or a malformed run id,
+ * credential: no cookie, no same-origin check. A missing, wrong or expired ticket (a superseded one answers 409 `stale-attempt`), or a malformed run id,
  * answers 401 `signed-out`. The ticket is hashed here, and the person object decides in one synchronous
  * section (`Person.runnerAccess`, `Person.runnerReport`).
  *
@@ -110,8 +110,9 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const hash = await hashTicket(ticket);
     const access = await reach(
       'runner access',
-      async (): Promise<RunnerAccess | null> => await person.runnerAccess(runId, hash, Date.now()),
+      async (): Promise<RunnerAccess | 'stale-attempt' | null> => await person.runnerAccess(runId, hash, Date.now()),
     );
+    if (access === 'stale-attempt') throw refusal('stale-attempt');
     if (access?.folderId == null) throw signedOut();
     const options: DriveTokenOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;

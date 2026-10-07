@@ -174,8 +174,8 @@ describe('stale run recovery', () => {
     expect(await status(sub, now)).toEqual(before);
     expect(await alarmOf(sub)).toBe(now + QUEUED_STALE_MS);
     expect((await status(sub, now + QUEUED_STALE_MS - 1)).run?.phase).toBe('queued');
-    // Attempt 1 is fenced: its ticket is signed out, and its reports are a stale attempt.
-    expect(await tokenStatus(runId, ticket)).toBe(401);
+    // Attempt 1 is fenced: its ticket and its reports are a stale attempt.
+    expect(await tokenStatus(runId, ticket)).toBe(409);
     const stale = await report(runId, second, { attempt: 1, seq: 1, phase: 'reading' });
     expect(stale.status).toBe(409);
     expect(((await stale.json()) as { error: { code: string } }).error.code).toBe('stale-attempt');

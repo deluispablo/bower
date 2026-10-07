@@ -50,9 +50,9 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
       const auth = new Headers(init.headers).get('authorization') ?? '';
       if (url.origin === API) {
         wire.tokenCalls++;
-        if (url.pathname !== `/runner/runs/${RUN_ID}/token` || method !== 'GET') return json(404, { error: 'not-found' });
-        if (auth !== `Bearer ${TICKET}`) return json(401, { error: 'signed-out', message: 'Sign in again to keep going.' });
-        if (wire.tokenRefusal) return json(wire.tokenRefusal.status, { error: wire.tokenRefusal.error, message: 'This tidy-up was taken over.' });
+        if (url.pathname !== `/runner/runs/${RUN_ID}/token` || method !== 'GET') return json(404, { error: { code: 'not-found', message: 'Not found.' } });
+        if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
+        if (wire.tokenRefusal) return json(wire.tokenRefusal.status, { error: { code: wire.tokenRefusal.error, message: 'This tidy-up was taken over.' } });
         const accessToken = `drive-token-${++minted}`;
         live.add(accessToken);
         return json(200, { accessToken, expiresAt: wire.now + 3_600_000, folderId: 'FOLDER_ID', attempt: wire.attempt });

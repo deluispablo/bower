@@ -142,8 +142,8 @@ describe('runner wire', () => {
     if (second === null) throw new Error('no ticket');
     expect(second).not.toBe(first);
     // The older attempt's ticket stops working.
-    expect((await runner.token(first)).status).toBe(401);
-    expect((await runner.report({ attempt: 1, seq: 6, phase: 'writing' }, first)).status).toBe(401);
+    expect((await runner.token(first)).status).toBe(409);
+    expect((await runner.report({ attempt: 1, seq: 6, phase: 'writing' }, first)).status).toBe(409);
     // The new ticket names its attempt; a report for another attempt is refused.
     expect(((await (await runner.token(second)).json()) as { attempt: number }).attempt).toBe(2);
     const stale = await runner.report({ attempt: 1, seq: 6, phase: 'writing' }, second);
@@ -157,6 +157,49 @@ describe('runner wire', () => {
     expect(await person(sub).mintTicket(runner.runId, 2, Date.now())).toBeNull();
     expect(await person(sub).mintTicket(`${runner.runId}x`, 3, Date.now())).toBeNull();
     expect((await runner.token(second)).status).toBe(200);
+  });
+
+  it('a superseded attempt\'s ticket answers stale-attempt', async () => {
+    const { sub, runner } = await aRun();
+    const first = runner.ticket;
+    const second = await person(sub).mintTicket(runner.runId, 2, Date.now());
+    if (second === null) throw new Error('no ticket');
+    const token = await runner.token(first);
+    expect(token.status).toBe(409);
+    expect(await code(token)).toBe('stale-attempt');
+    const report = await runner.report({ attempt: 1, seq: 1, phase: 'reading' }, first);
+    expect(report.status).toBe(409);
+    expect(await code(report)).toBe('stale-attempt');
+    // The older ticket is retired, never deleted.
+    const rows = await runInDurableObject(person(sub), (_instance, state) =>
+      state.storage.sql.exec<{ epoch: number; retired: number }>('SELECT epoch, retired FROM run_ticket ORDER BY epoch').toArray(),
+    );
+    expect(rows).toEqual([
+      { epoch: 1, retired: 1 },
+      { epoch: 2, retired: 0 },
+    ]);
+    expect((await runner.token(second)).status).toBe(200);
+  });
+
+  it('an unknown ticket is signed out', async () => {
+    const { runner } = await aRun();
+    const res = await runner.token('A'.repeat(43));
+    expect(res.status).toBe(401);
+    expect(await code(res)).toBe('signed-out');
+    const report = await runner.report({ attempt: 1, seq: 1, phase: 'reading' }, 'A'.repeat(43));
+    expect(report.status).toBe(401);
+    expect(await code(report)).toBe('signed-out');
+  });
+
+  it('a resent final report answers the current state', async () => {
+    const { runner } = await aRun();
+    await reply(await runner.report({ attempt: 1, seq: 1, phase: 'reading', total: 1 }));
+    const done = await reply(await runner.report({ attempt: 1, seq: 2, phase: 'done' }));
+    const again = await reply(await runner.report({ attempt: 1, seq: 2, phase: 'done' }));
+    expect(again).toEqual(done);
+    // Anything else on the retired ticket is signed out.
+    expect((await runner.report({ attempt: 1, seq: 3, phase: 'done' })).status).toBe(401);
+    expect((await runner.report({ attempt: 2, seq: 2, phase: 'done' })).status).toBe(401);
   });
 
   it('reports move forward by seq and phase', async () => {
