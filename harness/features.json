@@ -3894,5 +3894,35 @@
     "verify": "pnpm -C api exec vitest run -t \"delete me forgets the person and clears the cookie|delete me needs the session epoch|delete me revokes the Google grant even if Google fails|signing in again after delete me starts at the folder step\"",
     "passes": true,
     "note": "Worker contract DELETE /me; TL-P2-14/25 (DELETE /me releases the lease, by forgetting it); TL-P3-14 (DELETE /me mounts requireLease in its own entry); C01 \"delete my account behaves truthfully\"."
+  },
+  {
+    "id": "worker-process-admission",
+    "task": "p3-c",
+    "category": "feature",
+    "what": "POST /process admits one run per person in the person object, idempotent by the app's requestId, with an atomic daily quota and stale-run expiry as a write; /process and /status answer { run, revision }, where revision rises on every runs write. No dispatch yet.",
+    "steps": [
+      "POST /process (same origin, session, lease) with { scope, allowWeb, requestId } admits a queued run, or returns the active one; a repeat requestId returns that request's run even after it ended, keeping the first scope and allowWeb.",
+      "The daily quota (DAILY_RUN_LIMIT per UTC day) is checked and counted in the same synchronous section as admission, only for a newly admitted run; past it, 429 rate-limited.",
+      "A queued run older than 17 minutes or a running one silent for 30 is marked failed (stale) once, by the first /process or /status that finds it, raising the revision.",
+      "GET /status and POST /process answer { run, revision }; status_revision rises on every runs write and never otherwise.",
+      "The app sends one requestId per tidy-up press, and the fake Worker honours it the same way."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"admission is idempotent by requestId|one active run per person|the daily quota refuses past the limit and counts only new runs|a stale run is marked failed once and raises the revision|process and status answer the revision|process needs the session epoch\" && pnpm exec vitest run src/data -t \"each tidy-up press sends one requestId\"",
+    "passes": false,
+    "note": "TL-P3-15 (drafts adopted with changes), TL-P3-14 (quota folded in, rate-limits retired), C12; the original app's api/src/process.ts runStaleness (17/30 min). 409 nothing waits for spine-admission-manifest."
+  },
+  {
+    "id": "worker-status-revision",
+    "task": "p3-c",
+    "category": "feature",
+    "what": "The app takes run status by revision: an answer whose revision is lower than the last one taken is dropped, in the real run source in place of the ticket order, and the fake Worker answers revisions the same way.",
+    "steps": [
+      "LiveRuns keeps the highest revision taken from /status and /process and drops any answer below it, whatever order the replies arrive in.",
+      "The fake Worker answers { run, revision } with the same rising rule.",
+      "Out-of-order contract tests, on the real source with a fake fetch and on the fake: an older reply arriving last never replaces a newer run state."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"an older status revision arriving last is dropped|the fake answers rising revisions\"",
+    "passes": false,
+    "note": "TL-P3-15 ruling 5: the server half folded into worker-process-admission; runner-report ordering belongs to worker-runner-tickets."
   }
 ]
