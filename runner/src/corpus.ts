@@ -103,6 +103,8 @@ export interface LoadedCase extends CorpusCase {
   dir: string;
   /** The starting folder, path to text. */
   folder: Record<string, string>;
+  /** Files of the starting folder that are not text (a PDF, a picture), path to bytes. */
+  folderBinary: Record<string, Uint8Array>;
   /** The files of the inbox, name to text. */
   inboxFiles: Record<string, string>;
   expected: Expected;
@@ -133,7 +135,7 @@ export async function loadCase(dir: string): Promise<LoadedCase> {
   const meta = JSON.parse(await readFile(join(dir, 'case.json'), 'utf8')) as CorpusCase;
   const expected = JSON.parse(await readFile(join(dir, 'expected.json'), 'utf8')) as Expected;
   const rubric = await readFile(join(dir, 'rubric.md'), 'utf8');
-  return { ...meta, dir, folder: await walk(join(dir, 'folder')), inboxFiles: await walk(join(dir, 'inbox')), expected, rubric };
+  return { ...meta, dir, folder: await walk(join(dir, 'folder')), folderBinary: {}, inboxFiles: await walk(join(dir, 'inbox')), expected, rubric };
 }
 
 /** Every case under the corpus root, in id order. */

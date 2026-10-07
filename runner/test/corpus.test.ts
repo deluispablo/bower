@@ -1,4 +1,6 @@
-import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
+import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CORPUS_CAPABILITIES, loadCorpus, score } from '../src/corpus';
 import { runScripted } from './corpus-run';
@@ -52,5 +54,33 @@ describe('the capability corpus', () => {
     const edited = score({ ...asRun, after: { ...run.after, 'Projects/Flat hunt/Flat hunt.md': '---\nby: bower\n---\n\n## Timeline\n' } });
     expect(edited.pass).toBe(false);
     expect(edited.unmet.some((l) => l.includes('Flat hunt.md'))).toBe(true);
+  });
+
+  it('the bench cases start from the original\'s bench folder', async () => {
+    const bench = (await loadCorpus(ROOT)).filter((c) => c.speedBaseline);
+    expect(bench.map((c) => c.id)).toHaveLength(5);
+    const original = '/Users/deluisp/Projects/bower/agent/bench/vault';
+    const walk = async (dir: string): Promise<string[]> => {
+      const out: string[] = [];
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        if (e.isDirectory()) out.push(...(await walk(join(dir, e.name))));
+        else if (e.name !== '.gitkeep') out.push(join(dir, e.name));
+      }
+      return out;
+    };
+    for (const c of bench) {
+      const have = [...Object.keys(c.folder), ...Object.keys(c.folderBinary)].sort();
+      expect({ id: c.id, many: have.length > 50 }).toEqual({ id: c.id, many: true });
+      if (!existsSync(original)) continue;
+      const want = (await walk(original)).map((f) => relative(original, f)).sort();
+      expect({ id: c.id, files: have }).toEqual({ id: c.id, files: want });
+      for (const f of want) {
+        const mine = f in c.folder ? Buffer.from(c.folder[f] ?? '') : Buffer.from(c.folderBinary[f] ?? []);
+        expect({ id: c.id, f, same: mine.equals(await readFile(join(original, f))) }).toEqual({ id: c.id, f, same: true });
+      }
+    }
+    // The question about a filed PDF starts with that PDF filed.
+    const five = bench.find((c) => c.id === 'bench-5-question-about-filed-pdf');
+    expect(Object.keys(five?.folderBinary ?? {})).toContain('2-Areas/Home/Home insurance policy 2026.pdf');
   });
 });
