@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -54,3 +54,30 @@ describe('the palette', () => {
   });
 });
 
+
+describe('the palette and focus', () => {
+  it('focus returns to the opener when the palette closes', async () => {
+    const base = loadingSources();
+    render(
+      <MemoryRouter>
+        <DataProvider sources={base}>
+          <button type="button" onClick={() => useUi.getState().setPalette(true)}>Open it</button>
+          <Palette />
+        </DataProvider>
+      </MemoryRouter>,
+    );
+    const opener = screen.getByRole('button', { name: 'Open it' });
+    opener.focus();
+    await userEvent.keyboard('{Enter}');
+    await screen.findByRole('combobox');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    // A choice that does not navigate (a theme) comes back to the opener too.
+    await userEvent.keyboard('{Enter}');
+    await userEvent.type(await screen.findByRole('combobox'), 'Keep Bower still');
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+});

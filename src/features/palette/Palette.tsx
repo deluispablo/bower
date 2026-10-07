@@ -1,7 +1,7 @@
 import { Command } from 'cmdk';
 import { waitingIn } from '@/data/piles';
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { usePiles, useRun, useSources, useTree } from '@/data/provider';
 import { isRunning } from '@/features/tidy/run-words';
@@ -14,6 +14,7 @@ import { plural } from '@/app/words';
 import { Icon, type IconName } from '@/ui/Icon';
 import s from './palette.module.css';
 import { useBackCloses } from '@/ui/back';
+import { focusMain, returnFocusTo } from '@/ui/focus';
 import { useIsDesktop } from '@/ui/media';
 
 /** ⌘K: every action and every note, by typing. */
@@ -62,25 +63,40 @@ export function Palette() {
   const named = new Set(files.map((f) => f.path));
   const textHits = inside.q === q.trim() ? inside.hits.filter((h) => !named.has(h.path) || !displayName(nameOf(h.path)).toLowerCase().includes(inside.q.toLowerCase())) : [];
 
-  const run = (fn: () => void) => () => {
+  // What had the keyboard when the palette opened (WAI-ARIA APG: on close, focus returns to the opener).
+  const opener = useRef<HTMLElement | null>(null);
+  // A choice that opens another page or sheet hands the keyboard to that; the others go back to the opener.
+  const moved = useRef(false);
+  // Read when the store says open: React has not rendered yet, so the field has not taken the keyboard.
+  useEffect(
+    () =>
+      useUi.subscribe((now, before) => {
+        if (!now.paletteOpen || before.paletteOpen) return;
+        const at = document.activeElement;
+        opener.current = at instanceof HTMLElement && at !== document.body ? at : null;
+      }),
+    [],
+  );
+  const run = (fn: () => void, goes = true) => () => {
+    moved.current = goes;
     setPalette(false);
     setQ('');
     fn();
     // The page that opened gets the focus, so Tab carries on from it.
-    setTimeout(() => document.getElementById('main')?.focus(), 60);
+    if (goes) setTimeout(() => document.getElementById('main')?.focus(), 60);
   };
-  const actions: Array<{ id: string; label: string; icon: IconName; hint?: string; fn: () => void }> = [
+  const actions: Array<{ id: string; label: string; icon: IconName; hint?: string; fn: () => void; stays?: true }> = [
     { id: 'tidy', label: running ? 'See the tidy-up that is running' : waiting ? `Tidy up ${plural(waiting, 'thing')}` : 'Tidy up', icon: 'sweep', fn: () => setTidy(true) },
     { id: 'add', label: 'Add a pile', icon: 'add', hint: '⌥⌘N', fn: () => nav('/add') },
     { id: 'bower', label: 'Tell Bower something', icon: 'send', fn: () => nav('/bower') },
     { id: 'home', label: 'Go to Home', icon: 'home', fn: () => nav('/') },
     { id: 'files', label: 'Open your folders', icon: 'folder', fn: () => nav('/files') },
-    ...(desktop ? [{ id: 'collapse', label: 'Collapse all folders', icon: 'collapse' as IconName, fn: () => collapseAll() }] : []),
-    ...(desktop ? [{ id: 'outline', label: 'Show the outline', icon: 'outline' as IconName, fn: () => (prefs.set({ rightOpen: true }), setRightTab('outline')) }] : []),
+    ...(desktop ? [{ id: 'collapse', label: 'Collapse all folders', icon: 'collapse' as IconName, fn: () => collapseAll(), stays: true as const }] : []),
+    ...(desktop ? [{ id: 'outline', label: 'Show the outline', icon: 'outline' as IconName, fn: () => (prefs.set({ rightOpen: true }), setRightTab('outline')), stays: true as const }] : []),
     ...(['dark', 'light', 'system'] as const)
       .filter((t) => t !== prefs.theme)
-      .map((t) => ({ id: `theme-${t}`, label: t === 'system' ? 'Follow the system theme' : `Use the ${t} theme`, icon: 'sun' as IconName, fn: () => prefs.set({ theme: t }) })),
-    { id: 'moves', label: prefs.birdMoves ? 'Keep Bower still' : 'Let Bower move', icon: 'sparkle', fn: () => prefs.set({ birdMoves: !prefs.birdMoves }) },
+      .map((t) => ({ id: `theme-${t}`, label: t === 'system' ? 'Follow the system theme' : `Use the ${t} theme`, icon: 'sun' as IconName, fn: () => prefs.set({ theme: t }), stays: true as const })),
+    { id: 'moves', label: prefs.birdMoves ? 'Keep Bower still' : 'Let Bower move', icon: 'sparkle', fn: () => prefs.set({ birdMoves: !prefs.birdMoves }), stays: true },
     { id: 'settings', label: 'Open settings', icon: 'gear', fn: () => nav('/settings') },
   ];
 
@@ -88,7 +104,14 @@ export function Palette() {
     <Dialog.Root open={paletteOpen} onOpenChange={(o) => (setPalette(o), o || setQ(''))}>
       <Dialog.Portal>
         <Dialog.Overlay className={s.scrim} />
-        <Dialog.Content className={s.box} aria-describedby={undefined} onCloseAutoFocus={(e) => e.preventDefault()}>
+        <Dialog.Content className={s.box} aria-describedby={undefined} onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            if (moved.current) {
+              moved.current = false;
+              focusMain();
+            } else returnFocusTo(opener.current);
+          }}
+        >
           <Dialog.Title className="sr-only">{desktop ? 'Command palette' : 'Search'}</Dialog.Title>
           <Command
             label={desktop ? 'Search your notes, or type a command' : 'Search your notes'}
@@ -119,7 +142,7 @@ export function Palette() {
               <Command.Empty className={s.empty}>{q.trim().length > 1 && inside.q !== q.trim() ? 'Looking in your notes…' : inside.failed ? 'Search did not answer. Names still work; try the words again in a moment.' : 'Nothing by that name or in your notes.'}</Command.Empty>
               <Command.Group heading="Actions" className={s.group}>
                 {actions.map((a) => (
-                  <Command.Item key={a.id} value={`action ${a.label}`} onSelect={run(a.fn)} className={s.item}>
+                  <Command.Item key={a.id} value={`action ${a.label}`} onSelect={run(a.fn, !a.stays)} className={s.item}>
                     <Icon name={a.icon} size={18} />
                     <span className={s.label}>{a.label}</span>
                     {a.hint && desktop && <kbd className={s.kbd}>{a.hint}</kbd>}
