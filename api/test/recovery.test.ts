@@ -213,26 +213,94 @@ describe('stale run recovery', () => {
     expect((await status(queued.sub, qNow + 1)).run?.phase).toBe('queued');
   });
 
-  it('a finished job with no report is marked failed stale', async () => {
+  it('the alarm redispatches a run whose first job finished without a report', async () => {
+    // Attempt 1 started writing, then its job was cancelled (`gh run cancel`): completed, with no further report.
     const { sub, runId, ticket, t0 } = await aRun();
-    const before = await status(sub, t0);
-    const now = t0 + QUEUED_STALE_MS + 1;
+    const p = person(sub);
+    const hash1 = await hashTicket(ticket);
+    const reading = await p.runnerReport(runId, hash1, { attempt: 1, seq: 1, phase: 'reading', total: 2 }, t0 + MINUTE);
+    const writing = await p.runnerReport(runId, hash1, { attempt: 1, seq: 2, phase: 'writing' }, t0 + 2 * MINUTE);
+    if (!reading.accepted || !writing.accepted) throw new Error('report refused');
+    const before = await status(sub, t0 + 2 * MINUTE);
+    const now = t0 + 2 * MINUTE + RUNNING_STALE_MS + 1;
     const gh = github({
       runs: [{ id: 51, display_title: `tidy ${runId} 1` }],
       jobs: { 51: [{ id: 3, status: 'completed', started_at: iso(t0 + MINUTE), completed_at: iso(t0 + 3 * MINUTE) }] },
     });
     await recover(sub, now, gh.access);
     expect(lookups(gh.sent)).toHaveLength(1);
-    expect(dispatches(gh.sent)).toEqual([]);
-    const after = await status(sub, now);
-    expect(after.run).toMatchObject({ id: runId, phase: 'failed', failure: STALE_FAILURE, finishedAt: now });
-    expect(after.revision).toBe(before.revision + 1);
-    expect(await tokenStatus(runId, ticket)).toBe(401);
+    // Redispatched once, as attempt 2 with a new ticket; the run a person sees is unchanged.
+    const sent = dispatches(gh.sent);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.payload).toMatchObject({ run_id: runId, attempt: 2, scope: 'instructions', allow_web: true });
+    const second = sent[0]?.payload?.ticket ?? '';
+    expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(second).not.toBe(ticket);
+    expect(await status(sub, now)).toEqual(before);
+    expect(await alarmOf(sub)).toBe(now + QUEUED_STALE_MS);
+    // The old ticket is retired: a late attempt-1 job is a stale attempt.
+    expect(await tokenStatus(runId, ticket)).toBe(409);
+    const late = await report(runId, ticket, { attempt: 1, seq: 3, phase: 'saving' });
+    expect(late.status).toBe(409);
+    expect(((await late.json()) as { error: { code: string } }).error.code).toBe('stale-attempt');
+    // The resumed runner (attempt 2) reports through the runner routes and the run ends done.
+    expect(await tokenStatus(runId, second)).toBe(200);
+    for (const [seq, phase] of [[1, 'reading'], [2, 'writing'], [3, 'saving'], [4, 'done']] as const) {
+      const sentReport = await report(runId, second, { attempt: 2, seq, phase, ...(phase === 'reading' ? { total: 2 } : {}) });
+      expect(sentReport.status).toBe(200);
+    }
+    const after = await status(sub, now + MINUTE);
+    expect(after.run).toMatchObject({ id: runId, phase: 'done' });
+    expect(after.run?.failure).toBeUndefined();
+    // The next alarm asks nobody, changes nothing and is not set again.
+    await recover(sub, now + 2 * QUEUED_STALE_MS, gh.access);
+    expect(lookups(gh.sent)).toHaveLength(1);
+    expect(await status(sub, now + 2 * QUEUED_STALE_MS)).toEqual(after);
     expect(await alarmOf(sub)).toBeNull();
-    // Once: a later alarm changes nothing and asks nobody.
-    await recover(sub, now + MINUTE, gh.access);
-    expect(gh.sent.filter((c) => c.url.includes('/actions/runs?'))).toHaveLength(1);
-    expect(await status(sub, now + MINUTE)).toEqual(after);
+    expectNoSecretLogged(ticket, second);
+  });
+
+  it('a second attempt with no live job ends stale', async () => {
+    for (const lastPhase of [null, 'saving'] as const) {
+      const { sub, runId, ticket, t0 } = await aRun();
+      const before = await status(sub, t0);
+      const first = t0 + QUEUED_STALE_MS + 1;
+      // Attempt 1's job finished with no report: redispatched as attempt 2.
+      const gh = github({
+        runs: [
+          { id: 81, display_title: `tidy ${runId} 1` },
+          { id: 82, display_title: `tidy ${runId} 2` },
+        ],
+        jobs: {
+          81: [{ id: 8, status: 'completed', started_at: iso(t0 + MINUTE), completed_at: iso(t0 + 2 * MINUTE) }],
+          82: [{ id: 9, status: 'completed', started_at: iso(first + MINUTE), completed_at: iso(first + 3 * MINUTE) }],
+        },
+      });
+      await recover(sub, first, gh.access);
+      expect(dispatches(gh.sent)).toHaveLength(1);
+      const second = dispatches(gh.sent)[0]?.payload?.ticket ?? '';
+      let deadline = first + QUEUED_STALE_MS;
+      if (lastPhase === 'saving') {
+        // Attempt 2 got as far as saving, then its job finished too.
+        const saving = await person(sub).runnerReport(runId, await hashTicket(second), { attempt: 2, seq: 1, phase: 'saving' }, first + 2 * MINUTE);
+        if (!saving.accepted) throw new Error('report refused');
+        deadline = first + 2 * MINUTE + RUNNING_STALE_MS;
+      }
+      // Attempt 2's job finished with no report: no third attempt, the run ends failed stale.
+      await recover(sub, deadline, gh.access);
+      expect(lookups(gh.sent)).toHaveLength(2);
+      expect(dispatches(gh.sent)).toHaveLength(1);
+      const after = await status(sub, deadline);
+      expect(after.run).toMatchObject({ id: runId, phase: 'failed', failure: lastPhase === 'saving' ? SAVING_FAILURE : STALE_FAILURE, finishedAt: deadline });
+      expect(after.revision).toBe(before.revision + (lastPhase === 'saving' ? 2 : 1));
+      expect(await tokenStatus(runId, second)).toBe(401);
+      expect(await alarmOf(sub)).toBeNull();
+      // Once: a later alarm changes nothing and asks nobody.
+      await recover(sub, deadline + MINUTE, gh.access);
+      expect(lookups(gh.sent)).toHaveLength(2);
+      expect(await status(sub, deadline + MINUTE)).toEqual(after);
+      expectNoSecretLogged(ticket, second);
+    }
   });
 
   it('a run stuck twice is marked failed stale', async () => {
