@@ -43,7 +43,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - The owner signs in on a fresh origin and does the revocation last.
 - Made-up inputs come with expected outcomes.
 - The subdomain isn't secret.
-Running: `deploy-staging-upload-line` (mechanical; the script took "Uploaded 6 of 10 assets" as the upload line) and the C04–C11 inputs prep (to /private/tmp/p3-c16/inputs.md, not committed). Then the C16 walk (packet `2026-10-07-p3-c16-walk-packet.md`), with one message to the lead/owner giving the exact pane steps; then the dossier. Order:
+`deploy-staging-upload-line` passes (1ec5b82; script only, the app code stays frozen at da34905); 345/345. Running: the C04–C11 inputs prep (to /private/tmp/p3-c16/inputs.md, not committed). Then the C16 walk (packet `2026-10-07-p3-c16-walk-packet.md`), with one message to the lead/owner giving the exact pane steps; then the dossier. Order:
     1. `token-key-rotation-reconsent` and `tidy-pin-actions`;
     2. `app-security-headers` and `log-no-folder-content`;
     3. `cookie-host-prefix` and `instance-private-check`;
