@@ -137,14 +137,16 @@ export class LiveRuns implements RunSource {
       wire = await this.worker.status();
     } catch (e) {
       // 401 is the session's to handle and 429 can pass; any other 4xx is a client error that asking again cannot fix.
-      if (clientError(e) && !this.disposed && generation === this.generation) this.refused = e;
+      if (clientError(e) && !this.disposed && generation === this.generation && ticket > this.accepted) this.refused = e;
       else if (opts.again) this.refused = null;
       throw e;
     }
+    const wasRefused = this.refused;
     this.refused = null;
     if (!this.disposed && generation === this.generation && ticket > this.accepted) {
       this.accepted = ticket;
       this.take(wire);
+      if (wasRefused) this.schedule();
     }
     await this.hydrate();
     return this.last ? this.state(this.last) : null;
