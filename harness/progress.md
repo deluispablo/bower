@@ -60,3 +60,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: worker-session-lease passes — chore(harness): worker-session-lease passes
 - 2026-10-07: worker-me-and-delete passes — chore(harness): worker-me-and-delete passes
 - 2026-10-07: delete-me-generation-floor passes — chore(harness): delete-me-generation-floor passes
+- 2026-10-07: worker-process-admission passes — chore(harness): worker-process-admission passes

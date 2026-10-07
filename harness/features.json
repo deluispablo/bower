@@ -3908,7 +3908,7 @@
       "The app sends one requestId per tidy-up press, and the fake Worker honours it the same way."
     ],
     "verify": "pnpm -C api exec vitest run -t \"admission is idempotent by requestId|one active run per person|the daily quota refuses past the limit and counts only new runs|a stale run is marked failed once and raises the revision|process and status answer the revision|process needs the session epoch\" && pnpm exec vitest run src/data -t \"each tidy-up press sends one requestId\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-15 (drafts adopted with changes), TL-P3-14 (quota folded in, rate-limits retired), C12; the original app's api/src/process.ts runStaleness (17/30 min). 409 nothing waits for spine-admission-manifest."
   },
   {
