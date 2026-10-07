@@ -69,3 +69,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: runner-drive-adapter passes — chore(harness): runner-drive-adapter passes
 - 2026-10-07: worker-dispatch passes — chore(harness): worker-dispatch passes
 - 2026-10-07: worker-stale-run-recovery passes — chore(harness): worker-stale-run-recovery passes
+- 2026-10-07: recovery-status-poll-race passes — chore(harness): recovery-status-poll-race passes

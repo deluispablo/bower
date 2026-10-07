@@ -4047,7 +4047,7 @@
       "With no GitHub token, /status still fails the run stale at the deadline."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a status poll during the lookup leaves a live job.s run alone|a status poll past the deadline waits for recovery when dispatch is configured|without a GitHub token a status poll still expires the run\"",
-    "passes": false,
+    "passes": true,
     "note": "P3-9 Opus delta review, BLOCK Important 1: expire() at person.ts:753, called from runStatus, admit and the runner routes, failed runs at the deadline before recover() looked them up."
   },
   {
