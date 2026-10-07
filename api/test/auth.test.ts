@@ -172,7 +172,7 @@ function logged(spy: { mock: { calls: unknown[][] } }): string {
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
 
 describe('GET /auth/login', () => {
-  it('sign-in always shows Google account chooser', async () => {
+  it("sign-in always shows Google's account chooser", async () => {
     const response = await createApp({ keys }).request(`${API}/auth/login`, {}, env);
     expect(response.status).toBe(302);
     const location = new URL(response.headers.get('location') ?? '');
@@ -195,7 +195,7 @@ describe('GET /auth/login', () => {
     );
   });
 
-  it('the consent re-prompt also shows account chooser', async () => {
+  it('the consent re-prompt also shows the account chooser', async () => {
     const { location } = await login(createApp({ keys }), '?consent=1');
     expect(location.searchParams.get('prompt')).toBe('select_account consent');
   });
