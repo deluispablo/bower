@@ -148,3 +148,4 @@ P3-9 is closed.
 - Running: `runner-overhead` (bower-p4-overhead, at c98c378); the P4-1 Opus delta (packet p4-1-review); check plus e2e:fake at 62a9a3e.
 - Live Claude smoke after the review: the lead deploys, sets BOWER_PROVIDER=claude in bower-home, and I press one C04 case.
 - provider-contract entry and packet ready (lead 1089bd1); dispatch when a slot frees. Live C04 smoke after it closes. 351/354.
+- P4-1 suites at 62a9a3e: check 3608/175/66, e2e:fake 250 (green).
