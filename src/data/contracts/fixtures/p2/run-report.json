@@ -1,0 +1,57 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/runs/run-muy8umtu-170acfb8abb95/report-5d9ff4d35f4ba86aad448b17e4183f35677bcd63e6373137c9f7703e6c5da8b8.json",
+      "content": {
+        "captureId": "80dff98fc870ae9e8401efab4ef9379a4ef24536db757bab3dfe012ce76e99bc",
+        "kind": "run-report",
+        "manifestHash": "5dc54a7458d73f4932a4ba46d1051d255edf9a939df3c47f68478e1bf39ec03a",
+        "report": {
+          "created": [],
+          "filed": [
+            {
+              "kind": "image",
+              "name": "a.jpg",
+              "title": "a",
+              "to": "Resources/Ideas"
+            },
+            {
+              "kind": "image",
+              "name": "b.jpg",
+              "title": "b",
+              "to": "Resources/Ideas"
+            },
+            {
+              "kind": "link",
+              "name": "insurer.example - renewal.url",
+              "title": "insurer.example, renewal",
+              "to": "Areas/Car"
+            }
+          ],
+          "questions": [],
+          "requests": [
+            "Tidy my cooking notes"
+          ],
+          "rulesWorded": 1,
+          "setAside": [],
+          "updated": [
+            {
+              "path": "Projects/Flat hunt/Flat hunt.md",
+              "what": "A fourth flat added; the shortlist compared by commute."
+            },
+            {
+              "path": "Projects/Job hunt/Job hunt.md",
+              "what": "New offer from Ferrowick, scored 7 out of 10 against your CV."
+            }
+          ]
+        },
+        "runId": "run-muy8umtu-170acfb8abb95",
+        "scope": {
+          "rootId": "f1"
+        },
+        "v": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/changes/2026-10-07T15-09-56.472Z-qnwfb8.json",
+      "content": {
+        "v": 1,
+        "id": "2026-10-07T15-09-56.472Z-qnwfb8",
+        "at": 1791385796472,
+        "kind": "rule",
+        "what": "Removed the rule \"Keep receipts by month.\"",
+        "device": "device-ivjoyog5",
+        "path": "Rules.md",
+        "removes": "Keep receipts by month."
+      }
+    }
+  ]
+}

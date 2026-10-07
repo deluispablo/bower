@@ -1,0 +1,58 @@
+import { it } from 'vitest';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { FakeDrive } from '@/data/drive/fake-drive';
+import { DriveVault } from '@/data/vault/drive-vault';
+import { seedFakeDrive } from '@/data/fake/seed';
+import { tidyUp } from '@/testing/tidy-up';
+
+it('generate', async () => {
+  localStorage.clear();
+  const d0 = new FakeDrive();
+  const r0 = (await seedFakeDrive(d0, 'default', Date.now())) ?? '';
+  for (const [p, t] of d0.dump(r0)) if (p === '.bower/questions.json' || p === '.bower/suggestions.json') { mkdirSync('/tmp/p2gen/seeded', { recursive: true }); writeFileSync(join('/tmp/p2gen/seeded', p.split('/').pop() as string), t); }
+  const drive = new FakeDrive();
+  const root = (await seedFakeDrive(drive, 'empty', Date.now())) ?? '';
+  const vault = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const all = d0.dump(r0);
+  const withTask = [...all.entries()].find(([p, t]) => p.endsWith('.md') && /- \[ \]/.test(t));
+  const note = [...all.keys()].find((p) => p.startsWith('Resources/') && p.endsWith('.md') && p !== withTask?.[0]) as string;
+  await vault.addRule('Keep receipts by month');
+  await vault.addRequest('Tidy my cooking notes');
+  await vault.addPile({ text: 'Car insurance', items: [{ name: 'insurer.example/renewal', kind: 'link', origin: 'A link you pasted', url: 'https://insurer.example/renewal' }] });
+  await vault.addPile({ text: 'Two photos', items: [{ name: 'a.jpg', kind: 'image', origin: 'From this computer', body: new Blob(['a']) }, { name: 'b.jpg', kind: 'image', origin: 'From this computer', body: new Blob(['b']) }] });
+  const gone = await vault.addPile({ text: 'Old receipts', items: [{ name: 'old.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob(['%PDF made up']) }] });
+  await vault.trash(gone.path as string);
+  const out = await tidyUp(drive, root);
+  const v2 = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const qs = await v2.questions();
+  if (qs[0]) await v2.answer(qs[0].id, true);
+  // second run so requests.json / hashes / checkpoints carry more
+  const dump = drive.dump(root);
+  const dir = '/tmp/p2gen/out';
+  for (const [p, t] of dump) if (p.startsWith('.bower/')) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, t); }
+  // journal lines, one per kind, snapshotted right after each action
+  const d2 = new FakeDrive();
+  const r2 = (await seedFakeDrive(d2, 'default', Date.now())) ?? '';
+  const j = new DriveVault({ drive: d2, rootId: async () => r2, runningPiles: () => new Set() });
+  const keep = new Map<string, string>();
+  const snap = (): void => { for (const [p, t] of d2.dump(r2)) if (p.startsWith('.bower/changes/') && !keep.has(p)) keep.set(p, t); };
+  await j.addRule('Keep receipts by month'); snap();
+  await j.addRequest('Tidy my cooking notes'); snap();
+  await j.move(note, 'Areas'); snap();
+  await j.rename('Areas/' + note.split('/').pop(), 'Renamed note.md'); snap();
+  await j.create('Areas', 'note', 'Fresh idea.md'); snap();
+  if (withTask) await j.toggleTask(withTask[0], 0); snap();
+  const note2 = [...d2.dump(r2).keys()].find((p) => p.startsWith('Resources/') && p.endsWith('.md')) as string;
+  await j.trash(note2); snap();
+  await tidyUp(d2, r2);
+  const j2 = new DriveVault({ drive: d2, rootId: async () => r2, runningPiles: () => new Set() });
+  const q2 = await j2.questions();
+  if (q2[0]) await j2.answer(q2[0].id, true);
+  snap();
+  const rr = await j2.rules();
+  if (rr[0]) await j2.removeRule(rr[0].id);
+  snap();
+  for (const [p, t] of keep) { const f = join('/tmp/p2gen/journal', p.split('/').pop() as string); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, t); }
+  writeFileSync('/tmp/p2gen/meta.json', JSON.stringify({ phase: out.phase, task: !!withTask, qs: qs.length }));
+});

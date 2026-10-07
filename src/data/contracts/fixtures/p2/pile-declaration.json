@@ -1,0 +1,100 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/piles/declaration-decl-muy8umtq7p0jqcgm-1add8719c27ab9ba4c217227ad88bd80d9f181734c397dd08241cfff8b82d6fe.json",
+      "content": {
+        "anchor": {
+          "createKey": "anchor-muy8umtq2au6xdft",
+          "inboxId": "f2",
+          "kind": "folder",
+          "name": "2026-10-07 Car insurance"
+        },
+        "context": {
+          "content": {
+            "encoding": "utf8",
+            "sha256": "c94378b397758d1f9e0b75df282b31d2f5da32e6a591c791ccae6117f2bc7807",
+            "size": 13
+          },
+          "kind": "text",
+          "memberKey": "context-muy8umtql3oyzo8a",
+          "originalText": "Car insurance"
+        },
+        "createdAt": 1791385796366,
+        "declarationId": "decl-muy8umtq7p0jqcgm",
+        "kind": "pile-declaration",
+        "members": [
+          {
+            "content": {
+              "encoding": "utf8",
+              "sha256": "382fce6e1b5aeb83db785d8971f83fa249dfddf7cfec88100190641e1c43a9b6",
+              "size": 55
+            },
+            "kind": "link",
+            "memberKey": "member-muy8umtquo8vqtaz",
+            "name": "insurer.example%2Frenewal",
+            "origin": "A link you pasted"
+          }
+        ],
+        "pileId": "pile-muy8umtqhhuxrazr",
+        "scope": {
+          "rootId": "f1"
+        },
+        "v": 1
+      }
+    },
+    {
+      "path": ".bower/piles/declaration-decl-muy8umtsc7wo509o-01827a0eaeaf5c42ab964675890abd7cb3a62c3ea09950bd8165c4a1b89d21f5.json",
+      "content": {
+        "anchor": {
+          "createKey": "anchor-muy8umtslfw5v2e4",
+          "inboxId": "f2",
+          "kind": "folder",
+          "name": "2026-10-07 Two photos"
+        },
+        "context": {
+          "content": {
+            "encoding": "utf8",
+            "sha256": "37f7fe307fba0eda042ee73e166bec8e1eda04259edb148fe644e4c7ebc7d703",
+            "size": 10
+          },
+          "kind": "text",
+          "memberKey": "context-muy8umtsk04vndtt",
+          "originalText": "Two photos"
+        },
+        "createdAt": 1791385796368,
+        "declarationId": "decl-muy8umtsc7wo509o",
+        "kind": "pile-declaration",
+        "members": [
+          {
+            "content": {
+              "encoding": "blob",
+              "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+              "size": 1
+            },
+            "kind": "image",
+            "memberKey": "member-muy8umts5ff6eyv2",
+            "name": "a.jpg",
+            "origin": "From this computer"
+          },
+          {
+            "content": {
+              "encoding": "blob",
+              "sha256": "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+              "size": 1
+            },
+            "kind": "image",
+            "memberKey": "member-muy8umtsx09n292y",
+            "name": "b.jpg",
+            "origin": "From this computer"
+          }
+        ],
+        "pileId": "pile-muy8umtsrei71lzc",
+        "scope": {
+          "rootId": "f1"
+        },
+        "v": 1
+      }
+    }
+  ]
+}

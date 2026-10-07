@@ -16,7 +16,8 @@ describe('the accepted app files, read by the runner', () => {
     const rootId = (manifestFile.content as { scope: { rootId: string } }).scope.rootId;
     const runId = (manifestFile.content as { runId: string }).runId;
     const tree = folderOf(rootId, ['run-manifest', 'run-checkpoint', 'run-report', 'pile-declaration', 'pile-disposition']);
-    const byId = new Map<string, DriveFile>(tree.files.map((f) => [f.id, f]));
+    const root: DriveFile = { id: rootId, name: 'Bower', folder: true, parents: [], modifiedTime: '2026-10-07T09:00:00.000Z', createdTime: '2026-10-07T09:00:00.000Z' };
+    const byId = new Map<string, DriveFile>([root, ...tree.files].map((f) => [f.id, f]));
     const drive: RunnerReads = {
       get: async (id) => {
         const f = byId.get(id);

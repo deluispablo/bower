@@ -1,0 +1,953 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/runs/run-muy8umtu-170acfb8abb95/manifest-5dc54a7458d73f4932a4ba46d1051d255edf9a939df3c47f68478e1bf39ec03a.json",
+      "content": {
+        "allowWeb": false,
+        "capture": {
+          "journal": [
+            {
+              "fileIds": [
+                "f84"
+              ],
+              "recordId": "2026-10-07T15-09-56.366Z-ntbntj",
+              "sha256": "041b683d88aa7836373ce26e21292365d05517e298d9fbe9990ee1741c8c8daa"
+            },
+            {
+              "fileIds": [
+                "f85"
+              ],
+              "recordId": "2026-10-07T15-09-56.367Z-gbwh0l",
+              "sha256": "48624b9b5bf636745a13e3d23c1652848620489ea8539dbf0e80729cda55a3b5"
+            }
+          ],
+          "members": [
+            {
+              "content": {
+                "encoding": "blob",
+                "observedModifiedTime": "2026-10-07T15:09:56.458Z",
+                "provenance": "fake-stored",
+                "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+                "size": 1
+              },
+              "file": {
+                "fileId": "f94",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.458Z",
+                "name": "a.jpg",
+                "parents": [
+                  "f92"
+                ]
+              },
+              "memberKey": "member-muy8umts5ff6eyv2",
+              "pileId": "pile-muy8umtsrei71lzc"
+            },
+            {
+              "content": {
+                "encoding": "blob",
+                "observedModifiedTime": "2026-10-07T15:09:56.459Z",
+                "provenance": "fake-stored",
+                "sha256": "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+                "size": 1
+              },
+              "file": {
+                "fileId": "f95",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.459Z",
+                "name": "b.jpg",
+                "parents": [
+                  "f92"
+                ]
+              },
+              "memberKey": "member-muy8umtsx09n292y",
+              "pileId": "pile-muy8umtsrei71lzc"
+            },
+            {
+              "content": {
+                "encoding": "blob",
+                "observedModifiedTime": "2026-10-07T15:09:56.454Z",
+                "provenance": "fake-stored",
+                "sha256": "382fce6e1b5aeb83db785d8971f83fa249dfddf7cfec88100190641e1c43a9b6",
+                "size": 55
+              },
+              "file": {
+                "fileId": "f90",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.454Z",
+                "name": "insurer.example - renewal.url",
+                "parents": [
+                  "f88"
+                ]
+              },
+              "memberKey": "member-muy8umtquo8vqtaz",
+              "pileId": "pile-muy8umtqhhuxrazr"
+            }
+          ],
+          "piles": [
+            {
+              "anchor": {
+                "fileId": "f92",
+                "folder": true,
+                "modifiedTime": "2026-10-07T15:09:56.456Z",
+                "name": "2026-10-07 Two photos",
+                "parents": [
+                  "f2"
+                ]
+              },
+              "childFileIds": [
+                "f93",
+                "f94",
+                "f95"
+              ],
+              "context": {
+                "content": {
+                  "encoding": "utf8",
+                  "observedModifiedTime": "2026-10-07T15:09:56.457Z",
+                  "provenance": "fake-stored",
+                  "sha256": "37f7fe307fba0eda042ee73e166bec8e1eda04259edb148fe644e4c7ebc7d703",
+                  "size": 10
+                },
+                "file": {
+                  "fileId": "f93",
+                  "folder": false,
+                  "modifiedTime": "2026-10-07T15:09:56.457Z",
+                  "name": "Pile note.md",
+                  "parents": [
+                    "f92"
+                  ]
+                },
+                "kind": "text",
+                "memberKey": "context-muy8umtsk04vndtt",
+                "text": "Two photos"
+              },
+              "memberKeys": [
+                "member-muy8umts5ff6eyv2",
+                "member-muy8umtsx09n292y"
+              ],
+              "pileId": "pile-muy8umtsrei71lzc",
+              "source": {
+                "kind": "declared",
+                "ref": {
+                  "declarationId": "decl-muy8umtsc7wo509o",
+                  "sha256": "01827a0eaeaf5c42ab964675890abd7cb3a62c3ea09950bd8165c4a1b89d21f5"
+                }
+              }
+            },
+            {
+              "anchor": {
+                "fileId": "f88",
+                "folder": true,
+                "modifiedTime": "2026-10-07T15:09:56.452Z",
+                "name": "2026-10-07 Car insurance",
+                "parents": [
+                  "f2"
+                ]
+              },
+              "childFileIds": [
+                "f89",
+                "f90"
+              ],
+              "context": {
+                "content": {
+                  "encoding": "utf8",
+                  "observedModifiedTime": "2026-10-07T15:09:56.453Z",
+                  "provenance": "fake-stored",
+                  "sha256": "c94378b397758d1f9e0b75df282b31d2f5da32e6a591c791ccae6117f2bc7807",
+                  "size": 13
+                },
+                "file": {
+                  "fileId": "f89",
+                  "folder": false,
+                  "modifiedTime": "2026-10-07T15:09:56.453Z",
+                  "name": "Pile note.md",
+                  "parents": [
+                    "f88"
+                  ]
+                },
+                "kind": "text",
+                "memberKey": "context-muy8umtql3oyzo8a",
+                "text": "Car insurance"
+              },
+              "memberKeys": [
+                "member-muy8umtquo8vqtaz"
+              ],
+              "pileId": "pile-muy8umtqhhuxrazr",
+              "source": {
+                "kind": "declared",
+                "ref": {
+                  "declarationId": "decl-muy8umtq7p0jqcgm",
+                  "sha256": "1add8719c27ab9ba4c217227ad88bd80d9f181734c397dd08241cfff8b82d6fe"
+                }
+              }
+            }
+          ],
+          "places": [
+            {
+              "file": {
+                "fileId": "f79",
+                "folder": true,
+                "modifiedTime": "2026-10-07T15:09:56.443Z",
+                "name": "changes",
+                "parents": [
+                  "f78"
+                ]
+              },
+              "path": ".bower/changes"
+            },
+            {
+              "file": {
+                "fileId": "f27",
+                "folder": true,
+                "modifiedTime": "2026-08-18T06:09:56.364Z",
+                "name": "Car",
+                "parents": [
+                  "f26"
+                ]
+              },
+              "path": "Areas/Car"
+            },
+            {
+              "file": {
+                "fileId": "f13",
+                "folder": false,
+                "modifiedTime": "2026-10-06T08:09:56.364Z",
+                "name": "Flat hunt.md",
+                "parents": [
+                  "f12"
+                ]
+              },
+              "path": "Projects/Flat hunt/Flat hunt.md"
+            },
+            {
+              "file": {
+                "fileId": "f5",
+                "folder": false,
+                "modifiedTime": "2026-10-04T05:09:56.364Z",
+                "name": "Job hunt.md",
+                "parents": [
+                  "f4"
+                ]
+              },
+              "path": "Projects/Job hunt/Job hunt.md"
+            },
+            {
+              "file": {
+                "fileId": "f57",
+                "folder": true,
+                "modifiedTime": "2026-09-27T11:09:56.364Z",
+                "name": "Ideas",
+                "parents": [
+                  "f56"
+                ]
+              },
+              "path": "Resources/Ideas"
+            },
+            {
+              "file": {
+                "fileId": "f77",
+                "folder": false,
+                "modifiedTime": "2026-10-05T12:09:56.364Z",
+                "name": "Rules.md",
+                "parents": [
+                  "f1"
+                ]
+              },
+              "path": "Rules.md"
+            }
+          ]
+        },
+        "captureId": "80dff98fc870ae9e8401efab4ef9379a4ef24536db757bab3dfe012ce76e99bc",
+        "kind": "run-manifest",
+        "operations": [
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f44",
+                "folder": false,
+                "modifiedTime": "2026-10-06T08:09:56.364Z",
+                "name": "IMG_3101.jpg",
+                "parents": [
+                  "f43"
+                ]
+              },
+              "kind": "move",
+              "name": "IMG_3101.jpg",
+              "parent": {
+                "fileId": "f43"
+              },
+              "properties": {
+                "bowerNew": null
+              }
+            },
+            "operationId": "b47e8b7ffced723ea43d8d20d5219102abc1bd351532914fba0e3bf7f31a0341",
+            "ordinal": 0
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f61",
+                "folder": false,
+                "modifiedTime": "2026-10-06T08:09:56.364Z",
+                "name": "Weeknight curry.md",
+                "parents": [
+                  "f59"
+                ]
+              },
+              "kind": "move",
+              "name": "Weeknight curry.md",
+              "parent": {
+                "fileId": "f59"
+              },
+              "properties": {
+                "bowerNew": null
+              }
+            },
+            "operationId": "9e323ef06d2a32b02e4081d1bace6689ae3e04bd65ca311f03289fb4cd18b456",
+            "ordinal": 1
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f94",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.458Z",
+                "name": "a.jpg",
+                "parents": [
+                  "f92"
+                ]
+              },
+              "kind": "move",
+              "name": "a.jpg",
+              "parent": {
+                "fileId": "f57"
+              },
+              "properties": {
+                "asAdded": null,
+                "bowerNew": "1",
+                "kind": null,
+                "origin": null,
+                "pile": null
+              }
+            },
+            "operationId": "3b7b5c1dbca595ab77c1f5b910990a9c000ff0673807ce5f74fc1f0f48413f76",
+            "ordinal": 2
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f95",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.459Z",
+                "name": "b.jpg",
+                "parents": [
+                  "f92"
+                ]
+              },
+              "kind": "move",
+              "name": "b.jpg",
+              "parent": {
+                "fileId": "f57"
+              },
+              "properties": {
+                "asAdded": null,
+                "bowerNew": "1",
+                "kind": null,
+                "origin": null,
+                "pile": null
+              }
+            },
+            "operationId": "1574aba5ef95b95f1bfa27f02871f6fb095d7edc795bea4d11895a69bcc29045",
+            "ordinal": 3
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f90",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.454Z",
+                "name": "insurer.example - renewal.url",
+                "parents": [
+                  "f88"
+                ]
+              },
+              "kind": "move",
+              "name": "insurer.example, renewal.url",
+              "parent": {
+                "fileId": "f27"
+              },
+              "properties": {
+                "asAdded": null,
+                "bowerNew": "1",
+                "kind": null,
+                "origin": null,
+                "pile": null
+              }
+            },
+            "operationId": "76d686e2af58f23518c4e07c55951d7aa8159f4a6ddaae17e84b48d1e6255660",
+            "ordinal": 4
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f13",
+                "folder": false,
+                "modifiedTime": "2026-10-06T08:09:56.364Z",
+                "name": "Flat hunt.md",
+                "parents": [
+                  "f12"
+                ]
+              },
+              "beforeContent": {
+                "encoding": "utf8",
+                "observedModifiedTime": "2026-10-06T08:09:56.364Z",
+                "provenance": "fake-stored",
+                "sha256": "c3413c69989ae34b2668b08dc21de1574b82003b0ba406eb8a3000cd5cceed58",
+                "size": 1218
+              },
+              "changes": [
+                {
+                  "entries": [
+                    {
+                      "date": "2026-10-07",
+                      "source": null,
+                      "text": "A fourth flat added; the shortlist compared by commute."
+                    }
+                  ],
+                  "kind": "timeline-append",
+                  "recordIds": []
+                }
+              ],
+              "content": {
+                "encoding": "utf8",
+                "sha256": "1e670d33f7b47e52b7db3e8459e3308185a46d225a65558fc0e85ea63282d219",
+                "size": 1290
+              },
+              "kind": "edit-text",
+              "path": "Projects/Flat hunt/Flat hunt.md",
+              "text": "---\nsummary: Looking for a two-bed under £1,600 within 30 minutes of the office, moving by 1 December.\nstatus: active\ntags: [project]\nby: bower\nkind: Project\ndue: 1 Dec\nbudget: Up to £1,600 a month\n---\n\n## Current state\n- Three flats on the shortlist; [[Flat 3, 12 Larkspur Lane]] is the favourite.\n- References are due on Friday.\n- Notice on the current flat must be given by 31 October.\n\n## What matters\n\n- Two bedrooms, one usable as an office\n- Under 30 minutes to work\n- A bike can go inside\n\n## Shortlist\n\n| Flat | Rent | Commute | Status |\n| --- | --- | --- | --- |\n| [[Flat 3, 12 Larkspur Lane]] | £1,450 | 24 min | viewing done |\n| [[Flat 7, Cobble Row]] | £1,580 | 18 min | viewing booked |\n| [[Flat 2, 40 Tanners Walk]] | £1,390 | 35 min | maybe |\n\n## Next steps\n\n- [x] Ask the bank for a reference letter\n- [ ] Send references to Kittiwake Lettings by Friday\n- [ ] Give notice on the current flat by 31 October\n- [ ] Book a van for the last weekend of November\n\n## Timeline\n- 28 Sep · Project started from a pile with three listings.\n- 2 Oct · Viewing photos of Larkspur Lane filed. · [[IMG_2290.jpg]]\n- Today · Larkspur Lane moved to \"viewing done\"; references due Friday. · [[Lease draft.pdf]]\n- 2026-10-07 · A fourth flat added; the shortlist compared by commute.\n"
+            },
+            "operationId": "4cfeea01c6c745add38a1691d53da5a09ae672c78d3b393dea66b35853fab6b3",
+            "ordinal": 5
+          },
+          {
+            "dependsOn": [
+              "4cfeea01c6c745add38a1691d53da5a09ae672c78d3b393dea66b35853fab6b3"
+            ],
+            "effect": {
+              "before": {
+                "fileId": "f13",
+                "folder": false,
+                "modifiedTime": "2026-10-06T08:09:56.364Z",
+                "name": "Flat hunt.md",
+                "parents": [
+                  "f12"
+                ]
+              },
+              "kind": "move",
+              "name": "Flat hunt.md",
+              "parent": {
+                "fileId": "f12"
+              },
+              "properties": {
+                "bowerNew": "1"
+              }
+            },
+            "operationId": "d840b0dec2a6abf30634b2eeceb60fffd2bcf7b3e2d8ee1f99c895cb100b1f7b",
+            "ordinal": 6
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f5",
+                "folder": false,
+                "modifiedTime": "2026-10-04T05:09:56.364Z",
+                "name": "Job hunt.md",
+                "parents": [
+                  "f4"
+                ]
+              },
+              "beforeContent": {
+                "encoding": "utf8",
+                "observedModifiedTime": "2026-10-04T05:09:56.364Z",
+                "provenance": "fake-stored",
+                "sha256": "50555e6472f6166aef4824a9e39bef692a983facb60b0fa2b59a8b757b7858a9",
+                "size": 929
+              },
+              "changes": [
+                {
+                  "entries": [
+                    {
+                      "date": "2026-10-07",
+                      "source": null,
+                      "text": "New offer from Ferrowick, scored 7 out of 10 against your CV."
+                    }
+                  ],
+                  "kind": "timeline-append",
+                  "recordIds": []
+                }
+              ],
+              "content": {
+                "encoding": "utf8",
+                "sha256": "6ae7152f49323852e6722fb4aa2ec44cdaed10e00874488c88a2b3c769422ee4",
+                "size": 1007
+              },
+              "kind": "edit-text",
+              "path": "Projects/Job hunt/Job hunt.md",
+              "text": "---\nsummary: Looking for a senior design role in Wrenmouth, hybrid, from £55,000; three applications open.\nstatus: active\ntags: [project, career]\nby: bower\nkind: Project\ndue: 31 Dec\n---\n\n## Current state\n- First interview with Lumenfold on Thursday.\n- Quillstone has not answered in 11 days.\n- Skills asked for most often: design for manufacture, sustainable materials, client presentations.\n\n## Applications\n\n| Role | Fit | Status |\n| --- | --- | --- |\n| [[Senior Product Designer, Lumenfold]] | 8 | interview |\n| [[Design Lead, Quillstone]] | 6 | applied |\n| [[Industrial Designer, Ferrowick]] | 7 | new |\n\n## This week\n\n- [x] Update the CV with the migration project\n- [ ] Prepare the Lumenfold interview story\n- [ ] Chase Quillstone\n\n## Timeline\n- 15 Sep · Project started.\n- 1 Oct · Applied to Lumenfold; fit scored against [[CV insights]].\n- 3 Oct · Interview invitation from Lumenfold. · [[Interview invitation.pdf]]\n- 2026-10-07 · New offer from Ferrowick, scored 7 out of 10 against your CV.\n"
+            },
+            "operationId": "cfbcea6d8ff63e6957081f453ab6adeccf00e208bea98dc88b55c61eb758f5a5",
+            "ordinal": 7
+          },
+          {
+            "dependsOn": [
+              "cfbcea6d8ff63e6957081f453ab6adeccf00e208bea98dc88b55c61eb758f5a5"
+            ],
+            "effect": {
+              "before": {
+                "fileId": "f5",
+                "folder": false,
+                "modifiedTime": "2026-10-04T05:09:56.364Z",
+                "name": "Job hunt.md",
+                "parents": [
+                  "f4"
+                ]
+              },
+              "kind": "move",
+              "name": "Job hunt.md",
+              "parent": {
+                "fileId": "f4"
+              },
+              "properties": {
+                "bowerNew": "1"
+              }
+            },
+            "operationId": "4c6a066d4e0246faa8869328b25ecee9abe74b6b08a1404d6f275e860fd51ee2",
+            "ordinal": 8
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f77",
+                "folder": false,
+                "modifiedTime": "2026-10-05T12:09:56.364Z",
+                "name": "Rules.md",
+                "parents": [
+                  "f1"
+                ]
+              },
+              "beforeContent": {
+                "encoding": "utf8",
+                "observedModifiedTime": "2026-10-05T12:09:56.364Z",
+                "provenance": "fake-stored",
+                "sha256": "6f3d1b8537a1f8809ca492eb32408c17a0819e82e301b7b4d2308b643b17191b",
+                "size": 722
+              },
+              "changes": [
+                {
+                  "add": [
+                    {
+                      "recordId": "2026-10-07T15-09-56.366Z-ntbntj",
+                      "since": 1791385796366,
+                      "text": "Keep receipts by month.",
+                      "yourWords": "Keep receipts by month"
+                    }
+                  ],
+                  "kind": "rules-wording",
+                  "remove": []
+                }
+              ],
+              "content": {
+                "encoding": "utf8",
+                "sha256": "8aeffe00b6824f45b5941a3b854415b4abd91b7b9fddf68fd37b0f274ce5edd5",
+                "size": 814
+              },
+              "kind": "edit-text",
+              "path": "Rules.md",
+              "text": "---\nsummary: 4 rules Bower follows in every tidy-up.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n- Keep receipts by month. <!-- since 2026-10-07 -->\n  *You wrote: \"Keep receipts by month\"*\n- Receipts and invoices for purchases go to Areas / Money / Receipts, in a folder per month of their date (YYYY-MM). <!-- since 2026-10-06 -->\n  *You wrote: \"receipts to money by month\"*\n- Score every job offer from 1 to 10 against CV insights, list the skills it asks for that the CV lacks, and add a row to the Job hunt table. <!-- since 2026-10-02 -->\n  *You wrote: \"score job offers against my cv and tell me what im missing\"*\n- Passports, ID cards and certificates go to Areas / Documents; tick their line in Passport renewal. Never write document numbers. <!-- since 2026-10-02 -->\n  *You wrote: \"keep my id papers together\"*\n"
+            },
+            "operationId": "0c56d08a7c2ca63b2c31e6aefc1f46eed32a56a0e7ed446af369ce838834179c",
+            "ordinal": 9
+          },
+          {
+            "dependsOn": [
+              "3b7b5c1dbca595ab77c1f5b910990a9c000ff0673807ce5f74fc1f0f48413f76",
+              "1574aba5ef95b95f1bfa27f02871f6fb095d7edc795bea4d11895a69bcc29045"
+            ],
+            "effect": {
+              "before": {
+                "fileId": "f92",
+                "folder": true,
+                "modifiedTime": "2026-10-07T15:09:56.456Z",
+                "name": "2026-10-07 Two photos",
+                "parents": [
+                  "f2"
+                ]
+              },
+              "capturedChildIds": [
+                "f93",
+                "f94",
+                "f95"
+              ],
+              "kind": "bin"
+            },
+            "operationId": "74a7e871301b653691f924521b0820648b9997f1c229490bd056786d4b45a785",
+            "ordinal": 10
+          },
+          {
+            "dependsOn": [
+              "76d686e2af58f23518c4e07c55951d7aa8159f4a6ddaae17e84b48d1e6255660"
+            ],
+            "effect": {
+              "before": {
+                "fileId": "f88",
+                "folder": true,
+                "modifiedTime": "2026-10-07T15:09:56.452Z",
+                "name": "2026-10-07 Car insurance",
+                "parents": [
+                  "f2"
+                ]
+              },
+              "capturedChildIds": [
+                "f89",
+                "f90"
+              ],
+              "kind": "bin"
+            },
+            "operationId": "a91b80e4285156cc207c481d715ccd25088aebc8892a67814e53c10888fd77b6",
+            "ordinal": 11
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "before": {
+                "fileId": "f82",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.446Z",
+                "name": "requests.json",
+                "parents": [
+                  "f78"
+                ]
+              },
+              "beforeContent": {
+                "encoding": "utf8",
+                "observedModifiedTime": "2026-10-07T15:09:56.446Z",
+                "provenance": "fake-stored",
+                "sha256": "94275d012a39c1dc4aea1078af0a0e0b8bbfaf9bdbfe2546a05ff17822efba53",
+                "size": 27
+              },
+              "content": {
+                "encoding": "utf8",
+                "sha256": "daa6180e7f825be7d99b899afac492e7332eb82ed681573347b1b3f9bd480e4a",
+                "size": 211
+              },
+              "kind": "write-runner-json",
+              "path": ".bower/requests.json",
+              "text": "{\n  \"v\": 1,\n  \"done\": [\n    {\n      \"id\": \"2026-10-07T15-09-56.367Z-gbwh0l\",\n      \"text\": \"Tidy my cooking notes\",\n      \"at\": 1791385796367,\n      \"done\": \"Done. See what changed in your folders.\"\n    }\n  ]\n}\n"
+            },
+            "operationId": "7aa5109ae00f112bdcf6e5160bde4bfe8bc32b84741abde1e8cb6f99f4f0c320",
+            "ordinal": 12
+          },
+          {
+            "dependsOn": [],
+            "effect": {
+              "createKey": "folder-e8050a0e06ee6b99367779fc",
+              "kind": "create-folder",
+              "name": "archive",
+              "parent": {
+                "fileId": "f79"
+              }
+            },
+            "operationId": "90a70a2f88b39989e32559063f363314b88ac757df3f48ddecba6c683a62e573",
+            "ordinal": 13
+          },
+          {
+            "dependsOn": [
+              "0c56d08a7c2ca63b2c31e6aefc1f46eed32a56a0e7ed446af369ce838834179c"
+            ],
+            "effect": {
+              "before": {
+                "fileId": "f84",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.448Z",
+                "name": "2026-10-07T15-09-56.366Z-ntbntj.json",
+                "parents": [
+                  "f79"
+                ]
+              },
+              "kind": "move",
+              "name": "2026-10-07T15-09-56.366Z-ntbntj.json",
+              "parent": {
+                "createdBy": "90a70a2f88b39989e32559063f363314b88ac757df3f48ddecba6c683a62e573"
+              },
+              "properties": {}
+            },
+            "operationId": "d71146b1b9b315e854a46ca45a7ab7e34a3e9e94586a77c32345bdaab1f7a280",
+            "ordinal": 14
+          },
+          {
+            "dependsOn": [
+              "7aa5109ae00f112bdcf6e5160bde4bfe8bc32b84741abde1e8cb6f99f4f0c320"
+            ],
+            "effect": {
+              "before": {
+                "fileId": "f85",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.449Z",
+                "name": "2026-10-07T15-09-56.367Z-gbwh0l.json",
+                "parents": [
+                  "f79"
+                ]
+              },
+              "kind": "move",
+              "name": "2026-10-07T15-09-56.367Z-gbwh0l.json",
+              "parent": {
+                "createdBy": "90a70a2f88b39989e32559063f363314b88ac757df3f48ddecba6c683a62e573"
+              },
+              "properties": {}
+            },
+            "operationId": "bdea444e146ef5cd73558d67ad4e57ae1e1dba761ade986786b121e1075ba9f9",
+            "ordinal": 15
+          },
+          {
+            "dependsOn": [
+              "3b7b5c1dbca595ab77c1f5b910990a9c000ff0673807ce5f74fc1f0f48413f76",
+              "1574aba5ef95b95f1bfa27f02871f6fb095d7edc795bea4d11895a69bcc29045",
+              "76d686e2af58f23518c4e07c55951d7aa8159f4a6ddaae17e84b48d1e6255660"
+            ],
+            "effect": {
+              "before": {
+                "fileId": "f83",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.447Z",
+                "name": "hashes.json",
+                "parents": [
+                  "f78"
+                ]
+              },
+              "beforeContent": {
+                "encoding": "utf8",
+                "observedModifiedTime": "2026-10-07T15:09:56.447Z",
+                "provenance": "fake-stored",
+                "sha256": "3d585832c931b1a34f9f55536e1f3e4e100cf30f1f8ca3a2d4bc885ce8b31b34",
+                "size": 2642
+              },
+              "content": {
+                "encoding": "utf8",
+                "sha256": "cd08ae3ee5a9d3a64d161f58e6d9b9b8c36888a7f90670a129487ea1b615dca0",
+                "size": 2950
+              },
+              "kind": "write-runner-json",
+              "path": ".bower/hashes.json",
+              "text": "{\n  \"v\": 1,\n  \"hashes\": {\n    \"5f7d5dc8ceb7338f76e2e15f6d1d04e40171ee8c2ee20d6623ced5e18029a8e1\": \"Archive/Old flat/Deposit return.pdf\",\n    \"056a2291244a30ebf69a2ab42789c8e92dbe92a9a88b74827f832967b8d169c7\": \"Archive/Trips/Brackwater 2025 receipts.pdf\",\n    \"36e0cba36c9807afaba4abfd87c68b80d8afa29fb44d33530c759192d67380fc\": \"Areas/Car/Insurance 2026.pdf\",\n    \"382fce6e1b5aeb83db785d8971f83fa249dfddf7cfec88100190641e1c43a9b6\": \"Areas/Car/insurer.example, renewal.url\",\n    \"a0c2c42106af59a2ae977848b59a7c53823edd457a0efed76d26de087cf6bf90\": \"Areas/Car/MOT certificate.pdf\",\n    \"9d99e248fa7844675f46f99a7c8209b20633cca4254db9a0d660a3a61f9d371c\": \"Areas/Documents/Passport copy.pdf\",\n    \"2d9cfd544e080367f6a1bf86b90b6ee1ba8b224df0dd01e6c23894d1babeca02\": \"Areas/Health/Blood test, May.pdf\",\n    \"72cf1716437d105b8d87989f62cbd56343a8ffe6029b7e0c08ea0ed5c7657948\": \"Areas/Home/Boiler invoice.pdf\",\n    \"3bbc08b36a0a9a4c441fe50fee140091a9c36eb6338194647ed503f36abec978\": \"Areas/Home/Dishwasher warranty.pdf\",\n    \"b797daf6c64387a25988cbd1cbbb67f97d311bf01c51416f79784526f4529413\": \"Areas/Money/Payslips/Payslip August.pdf\",\n    \"0d2ec89a21015da3e0f7962f47bf4692600f735ea0010644e25d58658acc84bd\": \"Areas/Money/Payslips/Payslip September.pdf\",\n    \"b62860fcdab8c1fbd0b22447ac3f0a49d3c88a2702861dc9c5f56cf6f209f425\": \"Areas/Money/Receipts/2026-09/Groceries.jpg\",\n    \"8b346dba8e82dcd61027100ca3e53c03c9c363d8dece85134096b84b6058fc90\": \"Areas/Money/Receipts/2026-09/Hotel invoice.pdf\",\n    \"c1f219b89be8fd050cb42b125fd311b138003de2a825daf8f9a330e1887c58aa\": \"Areas/Money/Receipts/2026-09/Taxi.pdf\",\n    \"d08091e197482da5b6687338336097be743b02541bf015db7f6053df29b5f241\": \"Areas/Money/Receipts/2026-10/IMG_3101.jpg\",\n    \"00c2f3da939ee6ba6ce31435556c6d00f572e48f42fe49d9ff1c6c990cda31d8\": \"Projects/Flat hunt/Lease draft.pdf\",\n    \"78fd4a894e87975f8d6739d62680025597d2c59f87032611dc2510f4e40fb096\": \"Projects/Flat hunt/Viewing photos/IMG_2290.jpg\",\n    \"000c3c77859b153c77d362184b811894ad1575fc3013b4db6ed10d3ae76d33d9\": \"Projects/Flat hunt/Viewing photos/IMG_2291.jpg\",\n    \"5acdd1288477fb19c48934e61d1fb95ddf6bfd5732708a471836d811d93491cb\": \"Projects/Flat hunt/Viewing photos/IMG_2292.jpg\",\n    \"16ee11a95e2d449d49417c069446a82649c345bcfb4827d2945afb1e5108dd79\": \"Projects/Job hunt/CV 2026.pdf\",\n    \"26da6f586ee51cbeb167bb161a62d6b2b54616f9a93653b0dd7c5b45b97fe99f\": \"Projects/Saltmere weekend/Flights.pdf\",\n    \"22c303b206e6a0563a683f2fa5a6f7535a3eaa7825f6f6cbb9f2895aff2bda40\": \"Projects/Saltmere weekend/Hotel booking.pdf\",\n    \"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb\": \"Resources/Ideas/a.jpg\",\n    \"3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d\": \"Resources/Ideas/b.jpg\",\n    \"686d71bbc836460ed2ae9c5458552fb9a6548d94418343540d8b65a1d101c0db\": \"Resources/Manuals/Dishwasher manual.pdf\",\n    \"893aa2221959790dbc5a3a06eaa3f91f6d48707b3db485316cb21ea9d6567482\": \"Resources/Manuals/Router setup.pdf\"\n  }\n}\n"
+            },
+            "operationId": "776f56e1ed9e8b595bba7129170b4433884d04518c277c7f052fa0e4cb68102a",
+            "ordinal": 16
+          }
+        ],
+        "reportPlan": [
+          {
+            "requires": [
+              "3b7b5c1dbca595ab77c1f5b910990a9c000ff0673807ce5f74fc1f0f48413f76"
+            ],
+            "value": {
+              "created": [],
+              "filed": [
+                {
+                  "kind": "image",
+                  "name": "a.jpg",
+                  "title": "a",
+                  "to": "Resources/Ideas"
+                }
+              ],
+              "questions": [],
+              "setAside": [],
+              "updated": []
+            },
+            "when": "applied"
+          },
+          {
+            "requires": [
+              "3b7b5c1dbca595ab77c1f5b910990a9c000ff0673807ce5f74fc1f0f48413f76"
+            ],
+            "value": {
+              "created": [],
+              "filed": [],
+              "questions": [],
+              "setAside": [
+                {
+                  "name": "a.jpg",
+                  "why": "It couldn't be filed this time."
+                }
+              ],
+              "updated": []
+            },
+            "when": "rejected"
+          },
+          {
+            "requires": [
+              "1574aba5ef95b95f1bfa27f02871f6fb095d7edc795bea4d11895a69bcc29045"
+            ],
+            "value": {
+              "created": [],
+              "filed": [
+                {
+                  "kind": "image",
+                  "name": "b.jpg",
+                  "title": "b",
+                  "to": "Resources/Ideas"
+                }
+              ],
+              "questions": [],
+              "setAside": [],
+              "updated": []
+            },
+            "when": "applied"
+          },
+          {
+            "requires": [
+              "1574aba5ef95b95f1bfa27f02871f6fb095d7edc795bea4d11895a69bcc29045"
+            ],
+            "value": {
+              "created": [],
+              "filed": [],
+              "questions": [],
+              "setAside": [
+                {
+                  "name": "b.jpg",
+                  "why": "It couldn't be filed this time."
+                }
+              ],
+              "updated": []
+            },
+            "when": "rejected"
+          },
+          {
+            "requires": [
+              "76d686e2af58f23518c4e07c55951d7aa8159f4a6ddaae17e84b48d1e6255660"
+            ],
+            "value": {
+              "created": [],
+              "filed": [
+                {
+                  "kind": "link",
+                  "name": "insurer.example - renewal.url",
+                  "title": "insurer.example, renewal",
+                  "to": "Areas/Car"
+                }
+              ],
+              "questions": [],
+              "setAside": [],
+              "updated": []
+            },
+            "when": "applied"
+          },
+          {
+            "requires": [
+              "76d686e2af58f23518c4e07c55951d7aa8159f4a6ddaae17e84b48d1e6255660"
+            ],
+            "value": {
+              "created": [],
+              "filed": [],
+              "questions": [],
+              "setAside": [
+                {
+                  "name": "insurer.example - renewal.url",
+                  "why": "It couldn't be filed this time."
+                }
+              ],
+              "updated": []
+            },
+            "when": "rejected"
+          },
+          {
+            "requires": [
+              "4cfeea01c6c745add38a1691d53da5a09ae672c78d3b393dea66b35853fab6b3"
+            ],
+            "value": {
+              "created": [],
+              "filed": [],
+              "questions": [],
+              "setAside": [],
+              "updated": [
+                {
+                  "path": "Projects/Flat hunt/Flat hunt.md",
+                  "what": "A fourth flat added; the shortlist compared by commute."
+                }
+              ]
+            },
+            "when": "applied"
+          },
+          {
+            "requires": [
+              "cfbcea6d8ff63e6957081f453ab6adeccf00e208bea98dc88b55c61eb758f5a5"
+            ],
+            "value": {
+              "created": [],
+              "filed": [],
+              "questions": [],
+              "setAside": [],
+              "updated": [
+                {
+                  "path": "Projects/Job hunt/Job hunt.md",
+                  "what": "New offer from Ferrowick, scored 7 out of 10 against your CV."
+                }
+              ]
+            },
+            "when": "applied"
+          },
+          {
+            "requires": [
+              "0c56d08a7c2ca63b2c31e6aefc1f46eed32a56a0e7ed446af369ce838834179c",
+              "d71146b1b9b315e854a46ca45a7ab7e34a3e9e94586a77c32345bdaab1f7a280",
+              "90a70a2f88b39989e32559063f363314b88ac757df3f48ddecba6c683a62e573"
+            ],
+            "value": {
+              "created": [],
+              "filed": [],
+              "questions": [],
+              "rulesWorded": 1,
+              "setAside": [],
+              "updated": []
+            },
+            "when": "applied"
+          },
+          {
+            "requires": [
+              "7aa5109ae00f112bdcf6e5160bde4bfe8bc32b84741abde1e8cb6f99f4f0c320",
+              "bdea444e146ef5cd73558d67ad4e57ae1e1dba761ade986786b121e1075ba9f9",
+              "90a70a2f88b39989e32559063f363314b88ac757df3f48ddecba6c683a62e573"
+            ],
+            "value": {
+              "created": [],
+              "filed": [],
+              "questions": [],
+              "requests": [
+                "Tidy my cooking notes"
+              ],
+              "setAside": [],
+              "updated": []
+            },
+            "when": "applied"
+          }
+        ],
+        "requestId": "request-muy8umtu-2406e4e44f762",
+        "requestedAt": 1791385796370,
+        "runId": "run-muy8umtu-170acfb8abb95",
+        "runScope": "all",
+        "scope": {
+          "rootId": "f1"
+        },
+        "v": 2
+      }
+    }
+  ]
+}

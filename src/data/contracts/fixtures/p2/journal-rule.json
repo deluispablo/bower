@@ -1,0 +1,18 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/changes/2026-10-07T15-09-56.413Z-fvl201.json",
+      "content": {
+        "v": 1,
+        "id": "2026-10-07T15-09-56.413Z-fvl201",
+        "at": 1791385796413,
+        "kind": "rule",
+        "what": "New rule: \"Keep receipts by month\"",
+        "device": "device-ivjoyog5",
+        "path": "Rules.md",
+        "text": "Keep receipts by month"
+      }
+    }
+  ]
+}

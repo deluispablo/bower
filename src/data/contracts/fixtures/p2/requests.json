@@ -1,0 +1,19 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/requests.json",
+      "content": {
+        "v": 1,
+        "done": [
+          {
+            "id": "2026-10-07T15-09-56.367Z-gbwh0l",
+            "text": "Tidy my cooking notes",
+            "at": 1791385796367,
+            "done": "Done. See what changed in your folders."
+          }
+        ]
+      }
+    }
+  ]
+}

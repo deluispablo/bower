@@ -1,0 +1,161 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/piles/disposition-05ab9616b3e4bbb4c40272c220bd39cb071ae2f86e507d4007a45f6c6d7388b1.json",
+      "content": {
+        "action": "consumed",
+        "authority": {
+          "kind": "run",
+          "reportHash": "5d9ff4d35f4ba86aad448b17e4183f35677bcd63e6373137c9f7703e6c5da8b8",
+          "runId": "run-muy8umtu-170acfb8abb95"
+        },
+        "declaration": {
+          "declarationId": "decl-muy8umtsc7wo509o",
+          "sha256": "01827a0eaeaf5c42ab964675890abd7cb3a62c3ea09950bd8165c4a1b89d21f5"
+        },
+        "kind": "pile-disposition",
+        "memberKeys": [
+          "member-muy8umts5ff6eyv2",
+          "member-muy8umtsx09n292y"
+        ],
+        "operations": [
+          {
+            "evidence": {
+              "content": {
+                "encoding": "blob",
+                "observedModifiedTime": "2026-10-07T15:09:56.478Z",
+                "provenance": "fake-stored",
+                "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+                "size": 1
+              },
+              "file": {
+                "fileId": "f94",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.478Z",
+                "name": "a.jpg",
+                "parents": [
+                  "f57"
+                ]
+              },
+              "provenance": "fake-stored",
+              "trashed": false
+            },
+            "operationId": "3b7b5c1dbca595ab77c1f5b910990a9c000ff0673807ce5f74fc1f0f48413f76"
+          },
+          {
+            "evidence": {
+              "content": {
+                "encoding": "blob",
+                "observedModifiedTime": "2026-10-07T15:09:56.481Z",
+                "provenance": "fake-stored",
+                "sha256": "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+                "size": 1
+              },
+              "file": {
+                "fileId": "f95",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.481Z",
+                "name": "b.jpg",
+                "parents": [
+                  "f57"
+                ]
+              },
+              "provenance": "fake-stored",
+              "trashed": false
+            },
+            "operationId": "1574aba5ef95b95f1bfa27f02871f6fb095d7edc795bea4d11895a69bcc29045"
+          },
+          {
+            "evidence": {
+              "content": null,
+              "file": {
+                "fileId": "f92",
+                "folder": true,
+                "modifiedTime": "2026-10-07T15:09:56.456Z",
+                "name": "2026-10-07 Two photos",
+                "parents": [
+                  "f2"
+                ]
+              },
+              "provenance": "fake-stored",
+              "trashed": true
+            },
+            "operationId": "74a7e871301b653691f924521b0820648b9997f1c229490bd056786d4b45a785"
+          }
+        ],
+        "pileId": "pile-muy8umtsrei71lzc",
+        "scope": {
+          "rootId": "f1"
+        },
+        "v": 1
+      }
+    },
+    {
+      "path": ".bower/piles/disposition-bf266f9e8b17aff4957208ea0ad1c2059162bd0e5c235805fcf10f7f47f0b293.json",
+      "content": {
+        "action": "consumed",
+        "authority": {
+          "kind": "run",
+          "reportHash": "5d9ff4d35f4ba86aad448b17e4183f35677bcd63e6373137c9f7703e6c5da8b8",
+          "runId": "run-muy8umtu-170acfb8abb95"
+        },
+        "declaration": {
+          "declarationId": "decl-muy8umtq7p0jqcgm",
+          "sha256": "1add8719c27ab9ba4c217227ad88bd80d9f181734c397dd08241cfff8b82d6fe"
+        },
+        "kind": "pile-disposition",
+        "memberKeys": [
+          "member-muy8umtquo8vqtaz"
+        ],
+        "operations": [
+          {
+            "evidence": {
+              "content": {
+                "encoding": "blob",
+                "observedModifiedTime": "2026-10-07T15:09:56.484Z",
+                "provenance": "fake-stored",
+                "sha256": "382fce6e1b5aeb83db785d8971f83fa249dfddf7cfec88100190641e1c43a9b6",
+                "size": 55
+              },
+              "file": {
+                "fileId": "f90",
+                "folder": false,
+                "modifiedTime": "2026-10-07T15:09:56.484Z",
+                "name": "insurer.example, renewal.url",
+                "parents": [
+                  "f27"
+                ]
+              },
+              "provenance": "fake-stored",
+              "trashed": false
+            },
+            "operationId": "76d686e2af58f23518c4e07c55951d7aa8159f4a6ddaae17e84b48d1e6255660"
+          },
+          {
+            "evidence": {
+              "content": null,
+              "file": {
+                "fileId": "f88",
+                "folder": true,
+                "modifiedTime": "2026-10-07T15:09:56.452Z",
+                "name": "2026-10-07 Car insurance",
+                "parents": [
+                  "f2"
+                ]
+              },
+              "provenance": "fake-stored",
+              "trashed": true
+            },
+            "operationId": "a91b80e4285156cc207c481d715ccd25088aebc8892a67814e53c10888fd77b6"
+          }
+        ],
+        "pileId": "pile-muy8umtqhhuxrazr",
+        "scope": {
+          "rootId": "f1"
+        },
+        "v": 1
+      }
+    }
+  ]
+}
