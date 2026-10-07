@@ -6,7 +6,7 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
 
 - **P3 is closed. On hold.**
   - Dossier: [2026-10-07-p3-dossier.md](2026-10-07-p3-dossier.md). The lead reviewed it: accurate.
-  - P3 acceptance is the owner's decision, and P4 is not authorized. **Start nothing until the lead messages.**
+  - The owner accepted P3 (main 88bb7de). P4 is not authorized. **Start nothing until the lead messages.**
 - **Frozen code: `426a9fd`.** Staging runs `aeb99a4` (bundle `index-nkzmUjZs.js`).
   - The four suites are green, all 350 entries pass, and the freeze reviews passed.
   - C16 re-walk PASS.
