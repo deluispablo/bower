@@ -325,7 +325,9 @@ describe('recovery without the browser', () => {
           if (isCheckpoint(call) && written++ === at) process.killed = true;
         },
       }).catch((e: unknown) => e);
-      expect(first, `attempt 1 killed after checkpoint ${at} (${kinds[at] ?? ''})`).toBeInstanceOf(Error);
+      // Killed, it never tells the Worker the run is done.
+      expect(first, `attempt 1 killed after checkpoint ${at} (${kinds[at] ?? ''})`).not.toMatchObject({ phase: 'done' });
+      expect(w.wire.statuses.map((s) => s.phase)).not.toContain('done');
       expect((await chainOf(w.wire, w.root)).length, `checkpoint ${at}`).toBe(at + 1);
 
       const second = await tidy(w, 2);

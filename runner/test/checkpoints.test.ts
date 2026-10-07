@@ -196,7 +196,8 @@ describe('runner checkpoints', () => {
     expect(await chainOf(wire, root)).toHaveLength(length);
     expect([...effects.sent.values()]).toEqual(Array.from({ length: ops }, () => 1));
 
-    // An operation that may have been sent and shows no effect is never sent again: the run stops there.
+    // An operation that may have been sent and cannot be read back (these effects cannot tell one that did not land)
+    // is never sent again: the run stops there.
     const other = await seeded();
     const unsure = new CountedEffects();
     unsure.refuseAt = 0;

@@ -11,11 +11,12 @@
  *   Drive v3 has no conditional write on files, so another client can still
  *   change the file in the window between that read and the write; the
  *   window is kept short (writes go one at a time) but it is not closed.
- * - Attempt: once per write batch (`batch()`), the token route is asked again
- *   and its `attempt` must equal this runner's. A takeover after that read
- *   can let the rest of the batch land; that attempt's next status report is
- *   refused (409 `stale-attempt`), so it can waste a batch but never finish
- *   the run.
+ * - Attempt: at each write batch (`batch()`) and again right before each
+ *   fenced write, the token route is asked again and its `attempt` must equal
+ *   this runner's (TL-P3-23). An old attempt woken after a takeover sends no
+ *   write; only a takeover inside the window between that read and the write
+ *   itself can still let one land (a precheck, not a lock), and that attempt's
+ *   next status report is refused (409 `stale-attempt`).
  *
  * Faults for tests come through the fetch: `fault` sees each fenced write's
  * request once, as the fake's `FaultHook` does (`refuse`: nothing is sent;
@@ -90,12 +91,17 @@ export class RunnerDrive {
    * attempt is still the current one. Call it again for each batch.
    */
   async batch(): Promise<FencedDrive> {
+    await this.stillCurrent();
+    return this.seen.wrap(this.writes);
+  }
+
+  /** The token route's attempt is still this runner's; otherwise a newer attempt took the run over. */
+  private async stillCurrent(): Promise<void> {
     const grant = await this.token.grant();
     if (grant.attempt !== this.attempt) {
       console.error(`Attempt ${this.attempt} was taken over by attempt ${grant.attempt}`);
       throw staleAttempt();
     }
-    return this.seen.wrap(this.writes);
   }
 
   // --- Evidence reads: each file read is what later writes are checked against. ---
@@ -162,6 +168,9 @@ export class RunnerDrive {
   /** One fenced write: one at a time, after its still-as-seen read. */
   private fenced<T>(call: FencedCall, write: () => Promise<T>): Promise<T> {
     const run = this.queue.then(async () => {
+      // The attempt again, right before this write: a runner that stalled after its batch began and woke after a
+      // takeover sends nothing more (TL-P3-23).
+      await this.stillCurrent();
       const target = targetOf(call);
       this.seen.assert(target, await this.peek(target.id));
       this.current = { call, action: null };
