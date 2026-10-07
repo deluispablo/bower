@@ -96,3 +96,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: behavior-suites-real-adapters passes — chore(harness): behavior-suites-real-adapters passes
 - 2026-10-07: deploy-staging-production-check passes — chore(harness): deploy-staging-production-check passes
 - 2026-10-07: security-review passes — chore(harness): security-review passes (recorded, 8 findings to fix entries)
+- 2026-10-07: token-key-rotation-reconsent passes — chore(harness): token-key-rotation-reconsent passes

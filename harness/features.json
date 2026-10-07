@@ -4411,7 +4411,7 @@
       "The runbook rotation section says what happens."
     ],
     "verify": "pnpm -C api exec vitest run -t \"an unreadable refresh token signs the person out and the next sign-in asks for consent\"",
-    "passes": false,
+    "passes": true,
     "note": "P3 security review F1 (Important); ASVS V13.3.4, V16.5.1."
   },
   {
