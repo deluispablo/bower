@@ -26,4 +26,4 @@ Starting model: `bower-evaluator` (Sonnet). Reason: P3_ACCEPTANCE C16 asks for t
   - press a run button yourself;
   - cancel or re-run Actions;
   - delete anything.
-- **Reply:** the evaluation card in `docs/harness/WORKER.md`. Its cells are the journeys × {phone, desktop}. Notes go to `/private/tmp/p3-c16/notes.md`.
+- **Reply:** the evaluation card in `docs/harness/WORKER.md`, every line under 120 characters (TL-P3-29). Its cells are the journeys × {phone, desktop}. Notes go to `/private/tmp/p3-c16/notes.md`.

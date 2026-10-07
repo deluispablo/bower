@@ -17,4 +17,4 @@ Starting model: `bower-escalated` (Opus), fresh and read-only. This is a short d
     - Does a rule typed in the app now get worded on the real adapter?
   - **Upload line.** Is only `^Uploaded <name> \(` taken as the Worker upload line? Does `Uploaded bower-api (` give the production alarm?
 - **Run:** single test files only, one at a time. Never run the scripts outside their stubbed tests, `wrangler`, `gh` or any network call.
-- **Reply:** the review card in `docs/harness/WORKER.md`.
+- **Reply:** the review card in `docs/harness/WORKER.md`, every line under 120 characters (TL-P3-29).
