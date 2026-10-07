@@ -1,0 +1,20 @@
+{
+  "id": "c11-rule-worded",
+  "capability": "C11",
+  "title": "A typed rule is worded clearly",
+  "covers": "scripted",
+  "source": "p2-journey:C11 (rules)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "rule",
+      "text": "anything from the dentist goes in health"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": [
+    "Rules.md"
+  ]
+}

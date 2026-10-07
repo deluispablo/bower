@@ -1,0 +1,20 @@
+{
+  "id": "c15-scanned-letter",
+  "capability": "C15",
+  "title": "A scan with no text to read",
+  "covers": "model",
+  "source": "bench:4-scanned-pdf, adapted (made-up; the original is in bench-4-scanned-pdf)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "",
+      "files": [
+        "scan0001.pdf"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}

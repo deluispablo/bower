@@ -1,0 +1,1 @@
+The two documents' prepared text is partial. The run may ask for more of one at most twice; after that it files by what it has and says what it could not read, never loops. The result is truthful about what was and was not read.

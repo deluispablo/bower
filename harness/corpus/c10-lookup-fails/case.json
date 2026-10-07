@@ -1,0 +1,18 @@
+{
+  "id": "c10-lookup-fails",
+  "capability": "C10",
+  "title": "A lookup that fails",
+  "covers": "model",
+  "source": "new (failed and stale lookups are not scripted)",
+  "scope": "instructions",
+  "allowWeb": true,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Look up the bus timetable for Saltmere"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": []
+}

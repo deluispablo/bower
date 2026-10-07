@@ -1,0 +1,31 @@
+{
+  "files": {
+    "present": [
+      "Projects/Job hunt/*Data analyst*.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "notes": [
+    {
+      "path": "Projects/Job hunt/*Data analyst*.md",
+      "contains": [
+        "36,000",
+        "40,000",
+        "17 October",
+        "Ferrowick",
+        "[[Job hunt]]"
+      ]
+    },
+    {
+      "path": "Projects/Job hunt/Job hunt.md",
+      "timelineMin": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "createdAtLeast": 1,
+    "updatedAtLeast": 1
+  }
+}

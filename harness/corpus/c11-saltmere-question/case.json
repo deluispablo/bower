@@ -1,0 +1,21 @@
+{
+  "id": "c11-saltmere-question",
+  "capability": "C11",
+  "title": "A pile of receipts that raises a question",
+  "covers": "scripted",
+  "source": "p2-journey:C11 (question lifecycle)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Receipts from the Saltmere weekend",
+      "files": [
+        "Taxi.pdf",
+        "Hotel invoice (2).pdf"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}

@@ -1,0 +1,1 @@
+The rule is worded in plain, unambiguous words that keep the meaning (letters, reminders and invoices from the dentist go to Areas / Health) and the person's own words are kept beside it. No second rule is invented.

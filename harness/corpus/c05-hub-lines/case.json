@@ -1,0 +1,21 @@
+{
+  "id": "c05-hub-lines",
+  "capability": "C05",
+  "title": "The offer updates the job hunt, the listing the flat hunt",
+  "covers": "scripted",
+  "source": "p2-journey:C05, the hub lines of the same press as C04",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Job offer and a flat near it. Compare the commute.",
+      "files": [
+        "Offer_letter_final(2).pdf",
+        "listing-88213.example.url"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}

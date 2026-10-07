@@ -1,0 +1,27 @@
+{
+  "files": {
+    "present": [
+      "Resources/*ewsletter*.pdf",
+      "Resources/*ewsletter*.md"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "notes": [
+    {
+      "path": "Resources/*ewsletter*.md",
+      "contains": [
+        "18 October",
+        "8 November",
+        "7 December",
+        "31 January"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "createdAtLeast": 1
+  }
+}

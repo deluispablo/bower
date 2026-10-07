@@ -1,0 +1,33 @@
+{
+  "files": {
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Flat 2, 40 Tanners Walk.md",
+    "Projects/Flat hunt/Flat 7, Cobble Row.md",
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Job hunt/Job hunt.md"
+  ],
+  "notes": [
+    {
+      "path": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+      "timeline": [
+        "You said the rent is now £1,550."
+      ],
+      "timelineCount": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [
+      "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md"
+    ],
+    "setAside": 0,
+    "questions": [],
+    "yourChanges": 1
+  }
+}

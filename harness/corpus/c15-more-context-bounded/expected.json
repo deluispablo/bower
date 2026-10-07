@@ -1,0 +1,12 @@
+{
+  "files": {
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "linksResolve": true,
+  "report": {
+    "filed": 2,
+    "questionsAtMost": 2
+  }
+}
