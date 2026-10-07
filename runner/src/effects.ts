@@ -82,7 +82,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
     const bytes = ev.trashed ? new Uint8Array() : await drive.readBytes(e.before.fileId);
     const read = await readBackEdit(e, { fileId: ev.file.id, name: ev.file.name, parents: ev.file.parents, trashed: ev.trashed, bytes });
     if (read === 'applied' && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256) return toEvidence(ev, 'utf8');
-    console.error(`The edit of ${e.path} reads back as ${read === 'applied' ? 'unresolved' : read}`);
+    console.error(`The edit of file ${e.before.fileId} reads back as ${read === 'applied' ? 'unresolved' : read}`);
     return null;
   };
 

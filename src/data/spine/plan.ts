@@ -297,8 +297,8 @@ async function journalOf(read: SpineRead, ix: VaultIndex): Promise<DriveFile[]> 
       rec = JSON.parse(await read.readText(f.id));
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
-      // A line that cannot be read stays where it is; the run says so.
-      console.error(e);
+      // A line that cannot be read stays where it is; the run says so, by file id: a parser's message quotes the text.
+      console.error(`Journal file ${f.id} is not valid JSON`);
       continue;
     }
     if (isJournalRecord(rec) && recordableRecordId(rec.id)) out.push(f);
