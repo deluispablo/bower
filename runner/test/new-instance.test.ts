@@ -137,3 +137,14 @@ describe('new-instance.sh', () => {
     expect(git(at.remote, 'rev-list', '--count', 'main').trim()).toBe('1');
   });
 });
+
+describe('tidy.yml', () => {
+  it('every action in tidy.yml is pinned to a commit SHA', () => {
+    const tidy = readFileSync(join(ROOT, 'runner', 'workflows', 'tidy.yml'), 'utf8');
+    const usesLines = tidy.split('\n').filter((line) => line.includes('uses:'));
+    expect(usesLines.length).toBeGreaterThan(0);
+    for (const line of usesLines) {
+      expect(line, line).toMatch(/@[0-9a-f]{40}\b/);
+    }
+  });
+});
