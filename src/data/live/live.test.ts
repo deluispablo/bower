@@ -1068,6 +1068,42 @@ describe('LiveRuns', () => {
       await vi.advanceTimersByTimeAsync(3 * 60_000);
       expect(status.mock.calls.length).toBeGreaterThanOrEqual(3);
     });
+
+    it('a good answer after a 4xx restarts the run status beat', async () => {
+      const s = await open();
+      const status = answering(s, 404);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      await readers(s, 3);
+      const asked = status.mock.calls.length;
+      status.mockResolvedValue(null);
+      await expect(s.runs.current({ again: true })).resolves.toBeNull();
+      expect(status.mock.calls.length).toBe(asked + 1);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(status.mock.calls.length).toBeGreaterThan(asked + 1);
+    });
+
+    it('a late 4xx from an older ask does not stop the beat', async () => {
+      const s = await open();
+      const older = deferred<RunWire | null>();
+      const status = vi.spyOn(s.worker, 'status');
+      let callCount = 0;
+      status.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return older.promise;
+        return Promise.resolve(null);
+      });
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      s.runs.subscribe(() => undefined);
+      const first = s.runs.current().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(61_000);
+      const afterPoll = status.mock.calls.length;
+      older.reject(new BowerError('not-found', 'Not found.'));
+      await first;
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(status.mock.calls.length).toBeGreaterThan(afterPoll);
+    });
   });
 });
 
