@@ -151,3 +151,4 @@ P3-9 is closed.
 - P4-1 suites at 62a9a3e: check 3608/175/66, e2e:fake 250 (green).
 - `p4-corpus` re-closed (767ad48, known-green; red at 1e33a4a by hand). `runner-overhead` closed (a325441, known-green; red at dcc7005): 61.4 s → 43.4 s modelled; the real figure is unmeasured (expect about 80 s). Two more cuts (checkpoint read-back, merged checkpoints) are with the lead. 353/354.
 - Running: `provider-contract` (bower-p4-provcontract, at a325441).
+- Lead (a217fdd): no to the two checkpoint cuts for now. At the P4-2 close, after the deploy: 3 scripted runs on staging as A (one press each), then the live C04 smoke; all four go in p4-speed-baseline.md.
