@@ -9,8 +9,14 @@ import { MANIFEST } from './drive-v3.js';
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
 
-/** Takes back schema step 9 (the run's admission manifest), for the tests that rewind further. */
+/** Takes back schema step 10 (the phase of an attempt's last report), for the tests that rewind further. */
+function undoV10(sql: SqlStorage): void {
+  sql.exec('ALTER TABLE run_ticket DROP COLUMN report_phase');
+}
+
+/** Takes back schema steps 10 and 9 (the run's admission manifest), for the tests that rewind further. */
 function undoV9(sql: SqlStorage): void {
+  undoV10(sql);
   sql.exec('ALTER TABLE runs DROP COLUMN manifest');
 }
 
@@ -326,12 +332,11 @@ describe('person storage migration', () => {
     });
     expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
     expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
-    expect(after.run_ticket).toEqual([{ hash: 'hash-1', run_id: 'run-1', epoch: 2, retired: 0, expires_at: 0, report_seq: null }]);
+    expect(after.run_ticket).toEqual([{ hash: 'hash-1', run_id: 'run-1', epoch: 2, retired: 0, expires_at: 0, report_seq: null, report_phase: null }]);
     expect((await alex.runStatus(2_000)).revision).toBe(1);
   });
 
   it('person storage migrates from v8 to v9 keeping every run', async () => {
-    expect(SCHEMA_VERSION).toBe(9);
     const alex = personFor('sub-alex-v8');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
     const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
@@ -352,7 +357,26 @@ describe('person storage migration', () => {
     });
     // Every v8 row is there as it was; a run admitted before has no manifest.
     expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({ ...before, schema_version: undefined, runs: undefined });
-    expect(after.schema_version).toEqual([{ id: 1, version: 9 }]);
+    expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
     expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
+  });
+
+  it('person storage migrates from v9 to v10 keeping every ticket', async () => {
+    expect(SCHEMA_VERSION).toBe(10);
+    const alex = personFor('sub-alex-v9');
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    // Put the database back as P3-12 shipped it: tickets with no report phase, a version row of 9.
+    const before = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      sql.exec('INSERT INTO run_ticket (hash, run_id, epoch, retired, expires_at, report_seq) VALUES (?, ?, ?, 0, 5, 3)', 'hash-1', 'run-1', 2);
+      undoV10(sql);
+      sql.exec('UPDATE schema_version SET version = 9 WHERE id = 1');
+      return sql.exec('SELECT hash, run_id, epoch, retired, expires_at, report_seq FROM run_ticket').toArray();
+    });
+    await evictDurableObject(alex);
+
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    const after = await runInDurableObject(alex, (_instance, state) => state.storage.sql.exec('SELECT * FROM run_ticket').toArray());
+    expect(after).toEqual(before.map((t) => ({ ...t, report_phase: null })));
   });
 });
