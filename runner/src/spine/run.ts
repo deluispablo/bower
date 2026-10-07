@@ -59,6 +59,11 @@ export interface SpineRun {
   records: RunRecords;
   /** The fenced writes of the next batch (the adapter's `batch()`, which checks the attempt first). */
   batch(): Promise<FencedDrive>;
+  /**
+   * The fenced writes with no attempt read of their own, for a checkpoint: it is a write, and the adapter reads the
+   * attempt right before every write anyway, so a batch read just before it only repeats that one. Without it, `batch`.
+   */
+  fenced?(): FencedDrive;
   effects: Effects;
   /** The run's manifest; asked only when its folder holds none (see `admittedPlan`). */
   plan(): Promise<RunManifest>;
@@ -126,7 +131,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
   const commit = async (patch: CheckpointPatch): Promise<void> => {
     const next = nextCheckpoint(at, atHash, mark, patch);
     const c = await canonical(next);
-    await run.records.putNew(await run.batch(), where, checkpointName(next.revision, c.hash), c.text);
+    await run.records.putNew(run.fenced?.() ?? (await run.batch()), where, checkpointName(next.revision, c.hash), c.text);
     at = next;
     atHash = c.hash;
     chain = [...chain, next];
@@ -153,7 +158,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
       }
       // Not landed: sent once more, under this attempt's fence (its attempt checked again right before the send).
       let checked = false;
-      const again = await run.effects.apply(op, at, await run.batch(), manifest, async () => {
+      const again = await run.effects.apply(op, at, run.fenced?.() ?? (await run.batch()), manifest, async () => {
         await run.batch();
         checked = true;
       });
@@ -172,7 +177,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     }
     // Possibly sent only once its send is attempted: a check that cannot read, or refuses, leaves it unsent.
     let sent = false;
-    const settled = await run.effects.apply(op, at, await run.batch(), manifest, async () => {
+    const settled = await run.effects.apply(op, at, run.fenced?.() ?? (await run.batch()), manifest, async () => {
       if (sent) return;
       await resolve(op, { operationId, state: 'possible-effect', dispatchId: run.newId() });
       sent = true;

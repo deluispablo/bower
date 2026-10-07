@@ -45,6 +45,8 @@ const API = 'https://www.googleapis.com/drive/v3';
 const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
 const FOLDER = 'application/vnd.google-apps.folder';
 const WAITS = [500, 1000, 2000];
+/** How long a plan read is answered again from the first (`planReads`). */
+const PLAN_KEEP_MS = 5000;
 
 interface WireFile {
   id: string;
@@ -72,6 +74,8 @@ export class RunnerDrive {
   /** The fenced write whose request is in flight, and what the fault hook said of it. */
   private current: { call: FencedCall; action: FaultAction | null } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
+  /** Rises when a fenced write is about to be sent and again when it ends: a listing read at one value is current at it. */
+  generation = 0;
 
   constructor(opts: RunnerDriveOptions) {
     this.token = opts.token;
@@ -93,6 +97,14 @@ export class RunnerDrive {
    */
   async batch(): Promise<FencedDrive> {
     await this.stillCurrent();
+    return this.seen.wrap(this.writes);
+  }
+
+  /**
+   * The same fenced writes with no attempt read of their own: for a write whose caller ran `batch()` moments before (or
+   * has no other read to guard), since every fenced write reads the attempt again right before it is sent.
+   */
+  fencedWrites(): FencedDrive {
     return this.seen.wrap(this.writes);
   }
 
@@ -134,7 +146,26 @@ export class RunnerDrive {
    * a plan is fixed before any write, and every write later reads its target again (`get`) before it is fenced.
    */
   planReads(): SpineRead {
-    return driveRead(this.http);
+    const reads = driveRead(this.http);
+    // The same read asked again before any write was sent (the plan looks at the listing and at a file more than once)
+    // is answered from the first, for a few seconds at most; a write sent in between, or a later time, reads afresh.
+    const kept = new Map<string, { at: number; generation: number; value: Promise<unknown> }>();
+    const once = <T>(key: string, read: () => Promise<T>): Promise<T> => {
+      const hit = kept.get(key);
+      const now = Date.now();
+      if (hit && hit.generation === this.generation && now - hit.at < PLAN_KEEP_MS) return hit.value as Promise<T>;
+      const value = read();
+      kept.set(key, { at: now, generation: this.generation, value });
+      value.catch(() => kept.delete(key));
+      return value;
+    };
+    return {
+      ...reads,
+      listAll: async (rootId) => [...(await once(`all:${rootId}`, () => reads.listAll(rootId)))],
+      readBytes: async (id) => (await once(`bytes:${id}`, () => reads.readBytes(id))).slice(),
+      readText: (id) => once(`text:${id}`, () => reads.readText(id)),
+      digest: (file) => once(`digest:${file.id}`, () => reads.digest(file)),
+    };
   }
 
   /**
@@ -171,13 +202,16 @@ export class RunnerDrive {
     const run = this.queue.then(async () => {
       // The attempt again, right before this write: a runner that stalled after its batch began and woke after a
       // takeover sends nothing more (TL-P3-23).
-      await this.stillCurrent();
+      // and the target read again (still as seen). Both must pass before anything is sent; neither waits for the other.
       const target = targetOf(call);
-      this.seen.assert(target, await this.peek(target.id));
+      const [, now] = await Promise.all([this.stillCurrent(), this.peek(target.id)]);
+      this.seen.assert(target, now);
       this.current = { call, action: null };
+      this.generation++;
       try {
         return await write();
       } finally {
+        this.generation++;
         this.current = null;
       }
     });
