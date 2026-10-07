@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -86,6 +86,12 @@ const STEPS: readonly (readonly string[])[] = [
     // The claim that lets one POST /vault at a time work on the folder, and when it lapses.
     'ALTER TABLE account ADD COLUMN vault_claim TEXT',
     'ALTER TABLE account ADD COLUMN vault_claim_until INTEGER',
+  ],
+  [
+    // The ids reserved (files.generateIds) for the template's folders and files, as JSON
+    // {"folderId": ..., "ids": {path: id}}, kept until the folder is complete: a fill that
+    // resumes after its claim lapsed creates the same ids, and Drive refuses a second file.
+    'ALTER TABLE account ADD COLUMN pending_template_ids TEXT',
   ],
 ];
 

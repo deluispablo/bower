@@ -1,4 +1,4 @@
-import { env as testEnv } from 'cloudflare:test';
+import { env as testEnv, runInDurableObject } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
@@ -56,6 +56,10 @@ class FakeGoogle {
   markedListDelayMs = 0;
   /** The marker search finds nothing (Drive's search lags behind a create). */
   searchBlind = false;
+  /** Hold the next upload of a file with this name until `release` is called; `stalled` resolves when it is held. */
+  stallUploadNamed: string | null = null;
+  release: () => void = () => undefined;
+  stalled: Promise<void> = Promise.resolve();
   private n = 0;
   private reserved = 0;
 
@@ -66,8 +70,9 @@ class FakeGoogle {
     this.calls.push({ method, url: `${url.pathname}${url.search}` });
     if (url.origin !== DRIVE) throw new Error(`unexpected fetch in test: ${input}`);
     if (url.pathname === '/drive/v3/files/generateIds' && method === 'GET') {
-      this.reserved += 1;
-      return Response.json({ ids: [`reserved-${this.reserved}`], space: 'drive', kind: 'drive#generatedIds' });
+      const count = Number(url.searchParams.get('count') ?? '10');
+      const ids = Array.from({ length: count }, () => `reserved-${(this.reserved += 1)}`);
+      return Response.json({ ids, space: 'drive', kind: 'drive#generatedIds' });
     }
     if (url.pathname === '/drive/v3/files' && method === 'GET') {
       const q = url.searchParams.get('q') ?? '';
@@ -100,6 +105,14 @@ class FakeGoogle {
     if (url.pathname === '/upload/drive/v3/files' && method === 'POST') {
       const [meta] = String(init?.body).split(/--bower-[0-9a-f-]+(?:--)?\r\n?/).filter((p) => p.trim() !== '');
       const metadata = JSON.parse((meta ?? '').split('\r\n\r\n')[1] ?? '{}') as Partial<Item>;
+      if (this.stallUploadNamed !== null && metadata.name === this.stallUploadNamed) {
+        this.stallUploadNamed = null;
+        await new Promise<void>((resolve) => {
+          this.release = resolve;
+          this.markStalled();
+        });
+      }
+      if (metadata.id !== undefined && this.items.has(metadata.id)) return Response.json({ error: { code: 409 } }, { status: 409 });
       if (this.failUploadNamed !== null && metadata.name === this.failUploadNamed) {
         this.failUploadNamed = null;
         return Response.json({ error: { code: 503 } }, { status: 503 });
@@ -108,6 +121,15 @@ class FakeGoogle {
     }
     return Response.json({ error: 'unexpected' }, { status: 500 });
   };
+
+  private markStalled: () => void = () => undefined;
+  /** Arm a stall: the next upload named `name` waits for `release()`. */
+  stallNext(name: string): void {
+    this.stallUploadNamed = name;
+    this.stalled = new Promise<void>((resolve) => {
+      this.markStalled = resolve;
+    });
+  }
 
   add(partial: Partial<Item>): Item {
     this.n += 1;
@@ -279,6 +301,52 @@ describe('POST /vault', () => {
     expect(new Set(paths).size).toBe(paths.length);
     expect(g.marked).toHaveLength(1);
     expect(await person(sub).folderId()).toBe(retry.folderId);
+  });
+
+  it("the template files' ids are reserved with the folder's", async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    g.failUploadNamed = 'Rules.md';
+    expect((await post(g, cookie)).status).toBe(500);
+    // One generateIds call reserved the folder id and one id per template folder and file.
+    const generate = g.calls.filter((c) => c.url.startsWith('/drive/v3/files/generateIds'));
+    expect(generate).toHaveLength(1);
+    expect(new URLSearchParams(generate[0]?.url.split('?')[1]).get('count')).toBe(String(expectedPaths().length + 1));
+    // All of them are kept in the person object, with the pointer, and every create used one.
+    const state = await person(sub).vaultState();
+    expect(state.pending).toBe('reserved-1');
+    expect(state.templateIds?.folderId).toBe('reserved-1');
+    expect(Object.keys(state.templateIds?.ids ?? {}).sort()).toEqual(expectedPaths().sort());
+    const reservedIds = new Set(Object.values(state.templateIds?.ids ?? {}));
+    expect(reservedIds.size).toBe(expectedPaths().length);
+    expect(g.created.every((i) => i.id === 'reserved-1' || reservedIds.has(i.id))).toBe(true);
+    // The retry reserves nothing new and, once complete, the ids are forgotten.
+    const retry = await body(await post(g, cookie));
+    expect(g.calls.filter((c) => c.url.startsWith('/drive/v3/files/generateIds'))).toHaveLength(1);
+    expect(g.paths(retry.folderId).sort()).toEqual(expectedPaths().sort());
+    expect((await person(sub).vaultState()).templateIds).toBeNull();
+  });
+
+  it('a fill resumed after the claim expires makes no duplicate file', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    g.stallNext('Rules.md');
+    const first = post(g, cookie);
+    await g.stalled;
+    // The first call is stuck past its 60 s claim (lapsed here without waiting).
+    await runInDurableObject(person(sub), (_instance, state) => {
+      state.storage.sql.exec('UPDATE account SET vault_claim_until = 0 WHERE id = 1');
+    });
+    const second = await post(g, cookie);
+    expect(second.status).toBe(200);
+    const done = await body(second);
+    g.release();
+    const resumed = await first;
+    expect(resumed.status).toBe(200);
+    const paths = g.paths(done.folderId);
+    expect(paths.sort()).toEqual(expectedPaths().sort());
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(g.marked).toHaveLength(1);
   });
 
   it('a complete folder is not filled again', async () => {

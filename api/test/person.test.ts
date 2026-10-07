@@ -165,7 +165,7 @@ describe('person storage migration', () => {
     // Put the database back as P3-4 shipped it: no pointer or token columns, a version row of 2.
     await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
-      for (const column of ['folder_id', 'access_token', 'access_expires_at', 'folder_complete', 'pending_folder_id', 'vault_claim', 'vault_claim_until']) {
+      for (const column of ['folder_id', 'access_token', 'access_expires_at', 'folder_complete', 'pending_folder_id', 'vault_claim', 'vault_claim_until', 'pending_template_ids']) {
         sql.exec(`ALTER TABLE account DROP COLUMN ${column}`);
       }
       sql.exec('UPDATE schema_version SET version = 2 WHERE id = 1');
@@ -174,7 +174,7 @@ describe('person storage migration', () => {
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
     expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0 });
-    expect(await alex.vaultState()).toEqual({ folderId: null, complete: false, pending: null });
+    expect(await alex.vaultState()).toEqual({ folderId: null, complete: false, pending: null, templateIds: null });
     expect(await alex.encryptedRefreshToken()).toBe('enc-token');
     expect(await alex.folderId()).toBeNull();
     expect(await alex.setFolderId('FOLDER_ID')).toBe(true);

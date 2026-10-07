@@ -22,6 +22,13 @@ export interface VaultState {
   folderId: string | null;
   complete: boolean;
   pending: string | null;
+  /** Ids reserved for the template's folders and files (by path), and the folder they were reserved for. */
+  templateIds: TemplateIds | null;
+}
+
+export interface TemplateIds {
+  folderId: string;
+  ids: Record<string, string>;
 }
 
 /** What a sign-in leaves: the generation to sign into the cookie, and whether a refresh token is kept. */
@@ -158,14 +165,20 @@ export class Person extends DurableObject<Env> {
   /** Everything `POST /vault` keeps about the folder. */
   vaultState(): VaultState {
     const row = this.ctx.storage.sql
-      .exec<{ folder_id: string | null; folder_complete: number; pending_folder_id: string | null }>(
-        'SELECT folder_id, folder_complete, pending_folder_id FROM account WHERE id = 1',
+      .exec<{
+        folder_id: string | null;
+        folder_complete: number;
+        pending_folder_id: string | null;
+        pending_template_ids: string | null;
+      }>(
+        'SELECT folder_id, folder_complete, pending_folder_id, pending_template_ids FROM account WHERE id = 1',
       )
       .toArray()[0];
     return {
       folderId: row?.folder_id ?? null,
       complete: row?.folder_complete === 1,
       pending: row?.pending_folder_id ?? null,
+      templateIds: row?.pending_template_ids == null ? null : (JSON.parse(row.pending_template_ids) as TemplateIds),
     };
   }
 
@@ -196,14 +209,26 @@ export class Person extends DurableObject<Env> {
   }
 
   /** Keeps a folder id reserved with files.generateIds, before it is created. */
-  reserveFolder(folderId: string): void {
-    this.ctx.storage.sql.exec('UPDATE account SET pending_folder_id = ? WHERE id = 1', folderId);
+  reserveFolder(folderId: string, templateIds: TemplateIds): void {
+    this.ctx.storage.sql.exec(
+      'UPDATE account SET pending_folder_id = ?, pending_template_ids = ? WHERE id = 1',
+      folderId,
+      JSON.stringify(templateIds),
+    );
+  }
+
+  /** Keeps the ids reserved for the template's items in `templateIds.folderId`, before any is created. */
+  reserveTemplate(templateIds: TemplateIds): void {
+    this.ctx.storage.sql.exec(
+      'UPDATE account SET pending_template_ids = ? WHERE id = 1',
+      JSON.stringify(templateIds),
+    );
   }
 
   /** Forgets a reservation that can no longer be used (that file is in the Bin or is not a folder). */
   dropReservation(folderId: string): void {
     this.ctx.storage.sql.exec(
-      'UPDATE account SET pending_folder_id = NULL WHERE id = 1 AND pending_folder_id = ?',
+      'UPDATE account SET pending_folder_id = NULL, pending_template_ids = NULL WHERE id = 1 AND pending_folder_id = ?',
       folderId,
     );
   }
@@ -215,6 +240,11 @@ export class Person extends DurableObject<Env> {
          pending_folder_id = CASE WHEN pending_folder_id = ? THEN NULL ELSE pending_folder_id END
        WHERE id = 1 AND folder_id = ?`,
       folderId,
+      folderId,
+    );
+    this.ctx.storage.sql.exec(
+      `UPDATE account SET pending_template_ids = NULL
+       WHERE id = 1 AND folder_id = ? AND folder_complete = 1`,
       folderId,
     );
   }
