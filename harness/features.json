@@ -3807,5 +3807,32 @@
     "verify": "pnpm -C api exec vitest run -t \"sign-in always shows Google's account chooser|the consent re-prompt also shows the account chooser\"",
     "passes": true,
     "note": "Lead ruling after R2 attempt 1: the pane's silent Google sign-in picked a non-allowlisted account (Google OAuth 2.0 docs: prompt=select_account)."
+  },
+  {
+    "id": "client-retry-policy",
+    "task": "p3-6",
+    "category": "fix",
+    "what": "The client never asks again after a 4xx answer (other than Drive's one 401 token refresh and 429): only network failures, 5xx and 429 are retried, with backoff. A run status the Worker answers with 404 is not asked again on every beat.",
+    "steps": [
+      "With GET /status answering 404 and the home screen's run subscribers live for 10 minutes of fake time, the status is asked at most twice.",
+      "A run status that fails offline or with a 5xx is still asked again on the next beat.",
+      "Drive never retries a 4xx other than 429 (and the one 401 token refresh); 5xx and 429 keep their three growing waits."
+    ],
+    "verify": "pnpm exec vitest run src/data src/app -t \"the run status is not asked again after a 4xx|a run status that fails offline or with a server error is asked again|Drive never retries a client error other than 429\"",
+    "passes": false,
+    "note": "TL-P3-10 ruling 3, after R2 on staging: a missing /status route made the real bundle ask about 100 times in a few minutes (Google Cloud retry strategy)."
+  },
+  {
+    "id": "worker-logs-and-version",
+    "task": "p3-6",
+    "category": "tooling",
+    "what": "The staging Worker keeps its logs (Workers Logs enabled) and /health names the deployed build: the deploy passes the main SHA as APP_VERSION with --var.",
+    "steps": [
+      "api/wrangler.jsonc has \"observability\": { \"enabled\": true }.",
+      "The staging deploy line in docs/harness/STAGING.md passes --var APP_VERSION:<main short SHA> and the checks say /health must name that SHA."
+    ],
+    "verify": "pnpm exec vitest run src/docs.test.ts -t \"the staging Worker keeps its logs and names its build\"",
+    "passes": false,
+    "note": "TL-P3-10 ruling 4: one ?signin=failed in R2 could not be read; /health said only 0.1.0 (Cloudflare Workers Logs docs)."
   }
 ]
