@@ -4640,7 +4640,7 @@
       "The scripted provider contract fixtures pass through the Claude provider on recorded replies."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the Claude provider passes the scripted provider contract fixtures|a Claude reply that targets a thing not admitted is refused and writes nothing|the runner computes ids and digests, never the model|claude runs with no checkout or home settings and the secret only reaches the claude step\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-01 P4-2; P4-1 review Important (notAdmitted) and two minors; lead 1089bd1. Live C04 smoke after it closes."
   }
 ]
