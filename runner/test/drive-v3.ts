@@ -71,7 +71,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
   return wire;
 }
 
-async function answer(drive: FakeDrive, method: string, url: URL, body: BodyInit | null): Promise<Response> {
+async function answer(drive: FakeDrive, method: string, url: URL, body: RequestInit["body"]): Promise<Response> {
   const path = url.pathname;
   const one = /^\/(upload\/)?drive\/v3\/files\/([^/]+)$/.exec(path);
   if (method === 'GET' && path === '/drive/v3/files') return list(drive, url);
@@ -130,7 +130,7 @@ async function list(drive: FakeDrive, url: URL): Promise<Response> {
   return json(200, { kind: 'drive#fileList', files: page.map((f) => wireFile(f, false)), ...next });
 }
 
-async function multipart(body: BodyInit | null): Promise<{ meta: { name: string; parents: string[]; appProperties?: Record<string, string> }; content: string }> {
+async function multipart(body: RequestInit["body"]): Promise<{ meta: { name: string; parents: string[]; appProperties?: Record<string, string> }; content: string }> {
   const text = await new Response(body).text();
   const boundary = /^--([^\r\n]+)\r\n/.exec(text)?.[1] ?? '';
   const parts = text.split(`--${boundary}`).slice(1, -1).map((p) => p.slice(p.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, ''));
