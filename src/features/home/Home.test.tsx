@@ -3,7 +3,9 @@ import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-route
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import type { Sources } from '@/data/sources';
-import { BowerError, type Pile } from '@/data/types';
+import { BowerError, type Pile, type RunState } from '@/data/types';
+import { useUi } from '@/app/ui-store';
+import { TidySheet } from '@/features/tidy/TidySheet';
 import { loadingSources } from '@/testing/loading-sources';
 import { useToasts } from '@/ui/toast';
 import { Home } from './Home';
@@ -197,5 +199,75 @@ describe('a reselected file must match its declared member', () => {
     done();
     expect(await screen.findByText('Pile missing ready at member-c')).toBeVisible();
     expect(retryPile).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the tidy-up sheet and Home focus', () => {
+  const at = Date.now();
+  const pile: Pile = { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: at, items: [{ id: 'f', name: 'f.pdf', kind: 'pdf', origin: 'From this computer' }] };
+  const finished: RunState = {
+    id: 'run-1',
+    scope: 'all',
+    phase: 'done',
+    requestedAt: at - 9000,
+    phaseAt: at - 1000,
+    finishedAt: at - 1000,
+    seen: false,
+    report: { filed: [{ name: 'f.pdf', title: 'Budget', kind: 'pdf', to: 'Areas/Money' }], created: [], updated: [], setAside: [], questions: [] } as unknown as RunState['report'],
+  };
+
+  it('Home does not reopen a finished run sheet on load', async () => {
+    const base = loadingSources();
+    const doors: Record<string, unknown> = { piles: async () => [pile], uploadNotice: async () => null, questions: async () => [], changes: async () => [], suggestions: async () => [] };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    useUi.setState({ tidyOpen: false });
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => finished } }}><Home /><TidySheet /></DataProvider></MemoryRouter>);
+    const press = await screen.findByRole('button', { name: 'Tidy up 1 thing' });
+    await screen.findByText(/Tidy-up finished/);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // The first press does what its label says: it asks, it does not show the old result.
+    fireEvent.click(press);
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).queryByRole('button', { name: 'Done' })).toBeNull();
+    expect(within(sheet).queryByRole('button', { name: 'Watch what Bower did' })).toBeNull();
+    expect(within(sheet).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
+  });
+
+  it('focus never drops to body after a question is answered', async () => {
+    const base = loadingSources();
+    let qs = [
+      { id: 'q1', text: 'Is this a receipt?', yes: 'Yes', no: 'No', askedAt: at },
+      { id: 'q2', text: 'Is this a lease?', yes: 'Yes, a lease', no: 'No', askedAt: at },
+    ];
+    const listeners = new Set<() => void>();
+    const doors: Record<string, unknown> = {
+      piles: async () => [],
+      uploadNotice: async () => null,
+      questions: async () => qs,
+      changes: async () => [],
+      suggestions: async () => [],
+      answer: async (id: string) => {
+        qs = qs.filter((q) => q.id !== id);
+        setTimeout(() => listeners.forEach((cb) => cb()), 20);
+      },
+      subscribe: (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); },
+    };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><main id="main" tabIndex={-1}><Home /></main></DataProvider></MemoryRouter>);
+    const first = await screen.findByRole('button', { name: 'Yes' });
+    first.focus();
+    fireEvent.click(first);
+    await waitFor(() => expect(screen.queryByText('Is this a receipt?')).toBeNull());
+    await new Promise((r) => setTimeout(r, 100));
+    // On to the next question.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Yes, a lease' }));
+    const last = screen.getByRole('button', { name: 'Yes, a lease' });
+    fireEvent.click(last);
+    await waitFor(() => expect(screen.queryByText('Is this a lease?')).toBeNull());
+    await new Promise((r) => setTimeout(r, 100));
+    // No question left: the Home heading, never the body.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
   });
 });
