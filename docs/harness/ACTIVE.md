@@ -32,7 +32,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 **P3-14 (TL-P3-24):** `runner-reports-reading-total` passes (41d9a36, red fixed in 5699b61); `dispositions-match-report` passes (7bfe871, red fixed in 03bf8f6). Its verify moved to the runner tests, and the coordinator added `reading` to its expected sequence after the merge. 327/329. P3-15: `upload-queue-real` passes (ae6d9c4, red fixed in 0b05ec4; it marks a file sent by its sha256, and checks the reserved id before asking for lost bytes again). `declare-piles-real` passes (d32dc5e, known-green: the red was proven by hand after the `choose.ts` merge). P3-F: `deploy-and-migrations` passes (217fc57, red fixed in 30fc4d5; `scripts/deploy-staging.sh`, pinned schema steps). 330/330.
 - Suites at d32dc5e (idle): e2e 226, e2e:fake 250, e2e:pwa 4.
 - Closed:
-  - the P3-14..16 Opus delta review PASSES (dcab8d7, 7 minors to polish). P3-14, P3-15 and P3-16 are closed.
+  - the P3-14..16 Opus delta review PASSES (dcab8d7, 7 minors to polish). P3-14, P3-15 and P3-16 are closed: main = backup = `0abbbac`; deploy SHA sent to the lead.
   - `runbook-p3` passes (3906a42, known-green; red proven with a stub runbook). 331/331.
 - Next for P3-E: `behavior-suites-real-adapters` and `compatibility-accepted-app`. These need the lead's scope. P3-14 and P3-15 close together (suites on an idle machine, Opus delta review). "Try again" retries that run's scope, as in P2; recheck it at C16.
 - Next is P3-E: `upload-queue-real` (it folds in `upload-queue-persistent`) in parallel with `declare-piles-real`, then `behavior-suites-real-adapters` and `compatibility-accepted-app`.
