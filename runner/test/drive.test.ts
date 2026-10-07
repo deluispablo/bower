@@ -80,6 +80,30 @@ describe('runner drive adapter', () => {
     expect((await wire.drive.get(note.id)).name).toBe('Kept.md');
   });
 
+  it('the adapter refuses with stale-attempt on the Worker\'s real reply', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, note } = await seeded();
+    const adapter = adapterOn(wire, 1);
+    await adapter.get(note.id);
+    await adapter.batch();
+    // The Worker answers a superseded attempt's ticket 409 with a nested code.
+    wire.tokenRefusal = { status: 409, error: 'stale-attempt' };
+    const sent = writesSent(wire).length;
+    await expect(adapter.batch()).rejects.toMatchObject(STALE);
+    expect(writesSent(wire).length).toBe(sent);
+  });
+
+  it('a refused ticket stays an auth error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, note } = await seeded();
+    const adapter = adapterOn(wire, 1);
+    await adapter.get(note.id);
+    await adapter.batch();
+    // A 401 is never read as a takeover, even after an earlier grant.
+    wire.tokenRefusal = { status: 401, error: 'signed-out' };
+    await expect(adapter.batch()).rejects.toMatchObject({ code: 'auth' });
+  });
+
   it('the adapter and the fake agree on the fenced scenario', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const fake = fixedDrive();

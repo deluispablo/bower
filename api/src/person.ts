@@ -626,13 +626,13 @@ export class Person extends DurableObject<Env> {
 
   /** The run's current attempt: its ticket's, or 1 before any ticket was minted. */
   private attemptOf(runId: string): number {
-    return this.ctx.storage.sql.exec<{ epoch: number }>('SELECT epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0]?.epoch ?? 1;
+    return this.ctx.storage.sql.exec<{ epoch: number }>('SELECT MAX(epoch) AS epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0]?.epoch ?? 1;
   }
 
   /**
    * Mints the ticket of `attempt` of the going run `runId` (worker contract, "Runner wire"; TL-P3-18), for
    * `worker-dispatch` to send in the payload. Only its SHA-256 is kept, with the attempt and an expiry at
-   * `now` + 60 min; it replaces the run's earlier ticket, so an older attempt's ticket stops working. Null,
+   * `now` + 60 min; it retires the run's earlier tickets (kept, never deleted), so an older attempt's ticket answers `stale-attempt`. Null,
    * with nothing written, for an attempt not newer than the kept one or a run unknown or ended. The ticket
    * is never logged.
    */
@@ -649,10 +649,12 @@ export class Person extends DurableObject<Env> {
     const sql = this.ctx.storage.sql;
     const run = sql.exec<{ phase: RunPhase }>('SELECT phase FROM runs WHERE id = ?', runId).toArray()[0];
     if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) return false;
-    const held = sql.exec<{ epoch: number }>('SELECT epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0];
-    if (held !== undefined && attempt <= held.epoch) return false;
-    // The run's earlier ticket goes, and so do the tickets of runs no longer kept.
-    sql.exec('DELETE FROM run_ticket WHERE run_id = ? OR run_id NOT IN (SELECT id FROM runs)', runId);
+    const held = sql.exec<{ epoch: number }>('SELECT MAX(epoch) AS epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0];
+    if (held?.epoch != null && attempt <= held.epoch) return false;
+    // The run's earlier tickets are retired, not deleted: a lower attempt than the newest is superseded.
+    // The tickets of runs no longer kept go.
+    sql.exec('UPDATE run_ticket SET retired = 1 WHERE run_id = ?', runId);
+    sql.exec('DELETE FROM run_ticket WHERE run_id NOT IN (SELECT id FROM runs)');
     sql.exec(
       'INSERT INTO run_ticket (hash, run_id, epoch, retired, expires_at) VALUES (?, ?, ?, 0, ?)',
       hash,
@@ -665,20 +667,22 @@ export class Person extends DurableObject<Env> {
 
   /**
    * `GET /runner/runs/:id/token`: the attempt and folder that the ticket hashed to `hash` opens for run
-   * `runId`, or null when it is missing, wrong, retired or expired at `now`. A stale run is ended first,
-   * as `runStatus` does, so its ticket no longer works.
+   * `runId`; `stale-attempt` for a ticket a newer attempt superseded, null for one that is unknown, wrong,
+   * retired or expired at `now`. A stale run is ended first, as `runStatus` does, so its ticket no longer works.
    */
-  runnerAccess(runId: string, hash: string, now: number): RunnerAccess | null {
-    return this.ctx.storage.transactionSync((): RunnerAccess | null => {
+  runnerAccess(runId: string, hash: string, now: number): RunnerAccess | 'stale-attempt' | null {
+    return this.ctx.storage.transactionSync((): RunnerAccess | 'stale-attempt' | null => {
       this.expire(now);
-      const ticket = this.liveTicket(runId, hash, now);
-      return ticket === undefined ? null : { attempt: ticket.epoch, folderId: this.folderId() };
+      const found = this.findTicket(runId, hash, now);
+      if (found.kind === 'superseded') return 'stale-attempt';
+      return found.kind === 'live' ? { attempt: found.row.epoch, folderId: this.folderId() } : null;
     });
   }
 
   /**
    * `POST /runner/runs/:id/status` (worker contract, "Runner wire"). One synchronous transaction, in order:
-   * 1. the ticket: live and matching, else `signed-out`;
+   * 1. the ticket: live and matching; a superseded one is `stale-attempt`; one retired by the run's end
+   *    answers the current state to a repeat of its last report (same attempt and `seq`); else `signed-out`;
    * 2. the attempt: the ticket's own, else `stale-attempt`;
    * 3. a repeat of the last `seq` answers the current state and changes nothing;
    * 4. a lower `seq`, a phase going back, or a run already ended is `stale-report`;
@@ -690,8 +694,16 @@ export class Person extends DurableObject<Env> {
     return this.ctx.storage.transactionSync((): RunnerReportResult => {
       const sql = this.ctx.storage.sql;
       this.expire(now);
-      const ticket = this.liveTicket(runId, hash, now);
-      if (ticket === undefined) return { accepted: false, refused: 'signed-out' };
+      const found = this.findTicket(runId, hash, now);
+      if (found.kind === 'superseded') return { accepted: false, refused: 'stale-attempt' };
+      if (found.kind === 'retired') {
+        const again = report.attempt === found.row.epoch && report.seq === found.row.report_seq;
+        const ended = sql.exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`, runId).toArray()[0];
+        if (!again || ended === undefined) return { accepted: false, refused: 'signed-out' };
+        return { accepted: true, reply: { run: toWire(ended), revision: this.revision() } };
+      }
+      if (found.kind !== 'live') return { accepted: false, refused: 'signed-out' };
+      const ticket = found.row;
       if (report.attempt !== ticket.epoch) return { accepted: false, refused: 'stale-attempt' };
       const run = sql.exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`, runId).toArray()[0];
       if (run === undefined) return { accepted: false, refused: 'signed-out' };
@@ -717,18 +729,31 @@ export class Person extends DurableObject<Env> {
           runId,
         )
         .one();
-      sql.exec('UPDATE run_ticket SET report_seq = ?, retired = ? WHERE run_id = ?', report.seq, ended ? 1 : 0, runId);
+      sql.exec('UPDATE run_ticket SET report_seq = ?, retired = ? WHERE hash = ?', report.seq, ended ? 1 : 0, hash);
       return { accepted: true, reply: { run: toWire(row), revision: this.raiseRevision() } };
     });
   }
 
-  /** The run's ticket when it is live at `now` and its hash equals `hash` (compared in constant time). */
-  private liveTicket(runId: string, hash: string, now: number): TicketRow | undefined {
-    const row = this.ctx.storage.sql
-      .exec<TicketRow>('SELECT hash, epoch, expires_at, retired, report_seq FROM run_ticket WHERE run_id = ?', runId)
+  /**
+   * The ticket hashed to `hash` for `runId` (compared in constant time), and what it is at `now`: `live`;
+   * `superseded` (retired, with a newer attempt's ticket kept for the run); `retired` (its run ended); or
+   * `unknown` (no such ticket, or expired).
+   */
+  private findTicket(
+    runId: string,
+    hash: string,
+    now: number,
+  ): { kind: 'live' | 'retired'; row: TicketRow } | { kind: 'superseded' | 'unknown' } {
+    const sql = this.ctx.storage.sql;
+    const row = sql
+      .exec<TicketRow>('SELECT hash, epoch, expires_at, retired, report_seq FROM run_ticket WHERE run_id = ? AND hash = ?', runId, hash)
       .toArray()[0];
-    if (row === undefined || row.retired === 1 || row.expires_at <= now) return undefined;
-    return timingSafeEqual(row.hash, hash) ? row : undefined;
+    if (row === undefined || !timingSafeEqual(row.hash, hash)) return { kind: 'unknown' };
+    if (row.retired === 1) {
+      const newer = sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM run_ticket WHERE run_id = ? AND epoch > ?', runId, row.epoch).one().n;
+      return newer > 0 ? { kind: 'superseded' } : { kind: 'retired', row };
+    }
+    return row.expires_at <= now ? { kind: 'unknown' } : { kind: 'live', row };
   }
 
   /** `GET /status`: writes a stale run's expiry first (as `admit` does), then the current run and revision. */
