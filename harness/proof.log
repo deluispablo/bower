@@ -301,3 +301,4 @@ auth-select-account	5f8dd136a2ed2529	2026-10-07	red (fixed in b5618b7)
 worker-logs-and-version	b1d9059e524dd475	2026-10-07	known-green: red proven twice by done.sh --fixed-in 1478e39; lint fix b32b46c on the same lines
 lost-reply-reconcile	db1013b271a642b6	2026-10-07	red (fixed in 8e7c710)
 client-retry-policy	77fd82ee21458b0a	2026-10-07	red (fixed in dfb5c7f)
+runs-beat-rearm	f25e9f31a06a388a	2026-10-07	red (fixed in 7af7932)

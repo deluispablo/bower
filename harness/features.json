@@ -3877,7 +3877,7 @@
       "An older pending ask that rejects not-found after a newer one resolved does not set refused; the beat keeps going."
     ],
     "verify": "pnpm exec vitest run src/data/live/live.test.ts -t \"a good answer after a 4xx restarts the run status beat|a late 4xx from an older ask does not stop the beat\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-14 addendum, from the P3-6 delta review minors (a) and (b): set refused only when ticket > accepted, and schedule() when a good answer clears it."
   }
 ]
