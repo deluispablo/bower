@@ -30,13 +30,12 @@ describe('the persistent upload queue by source', () => {
     expect(made).toEqual([{ uploadQueue: true }]);
   });
 
-  it('the real source keeps sending them straight until P3', async () => {
+  it('the real source sends pile files through the upload queue', async () => {
     vi.stubEnv('VITE_API_URL', 'https://api.example');
     // Hermetic: nothing may reach a network.
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))));
     const { sources } = await buildSources('real', 'default', 'instant');
     expect(sources.vault).toBeDefined();
-    expect(made).toHaveLength(1);
-    expect(made[0]?.uploadQueue).not.toBe(true);
+    expect(made).toEqual([{ uploadQueue: true }]);
   });
 });

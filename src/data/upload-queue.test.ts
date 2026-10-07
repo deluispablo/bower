@@ -727,7 +727,7 @@ describe('uploads survive a reload without a second file', () => {
     env.drive.offline = false;
     await gone.queue.start(ACCOUNT, FOLDER);
     await gone.queue.idle();
-    expect(gone.queue.items()[0]?.error?.message).toBe('This device no longer has this file. Choose it again.');
+    expect(gone.queue.items()[0]?.error?.message).toBe('This device no longer has this file. Choose the file again.');
     // Its bytes are gone for good: the record goes too.
     expect(await indexedDbUploadStore(env.idb).list(ACCOUNT, FOLDER)).toEqual([]);
     gone.queue.stop();
