@@ -80,3 +80,4 @@ Metrics:
 One dated line per change to targets or assumptions, with the reason.
 
 - 2026-10-06: baseline and targets created from 3 Opus entries. Projections are estimates; replace the assumed cost mix with the measured split once the new columns exist.
+- 2026-10-07: TL-P3-17 output discipline (no text for a reader in the coordinator, fixed worker cards, thinking unchanged). Expected −8 to −15% coordinator cost, −2 to −5% per worker; compare the coordinator's output and cache-read tokens per batch, three batches before and after.

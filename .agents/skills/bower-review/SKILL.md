@@ -5,4 +5,4 @@ description: Independently review a pinned bower-app diff range, reading only th
 
 # Review a pinned range
 
-Read `docs/harness/WORKER.md`, the packet and the diff range only. Read-only: no init, builds or edits. Judge against the packet's acceptance contract. Report Critical and Important findings against it with a reproduction, and Minor findings in one line each (they never block). Flag a home-made mechanism where a standard one fits. Up to 20 lines.
+Read `docs/harness/WORKER.md`, the packet and the diff range only. Read-only: no init, builds or edits. Judge against the packet's acceptance contract. Report Critical and Important findings against it with a reproduction, and Minor findings in one line each (they never block). Flag a home-made mechanism where a standard one fits. Reply with the review card in `WORKER.md`.
