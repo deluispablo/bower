@@ -38,7 +38,12 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - `app-security-headers`: `public/_headers` sets the CSP with the index script by hash. The landing alone needs `'unsafe-eval'` (its exported `support.js` uses `new Function`), detached with `!`; that Cloudflare detach must be checked on the deploy. The Worker sends `default-src 'none'`.
 - The deploy-staging script tests now have a 30 s timeout.
 - All 8 security findings are fixed; 344/344.
-- **Freeze at da34905.** The four suites pass there (idle): `pnpm check` (app 3598, api 173, runner 51), e2e 226, e2e:fake 250, e2e:pwa 4. The Opus fallback review of the P3-19/20 delta (a22f288..da34905) PASSES (5 minors to polish). Local main is f5d365e (its code is da34905). **Backup pending:** at 16:58Z GitHub answered `remote rejected (Internal Server Error)` to every push, even the smallest commit after a22f288. githubstatus reported no incident, and the repo is fine (private, not archived, no rulesets). Retry later; remote main stays a22f288. Next: deploy the frozen build, then the C16 walk (packet `2026-10-07-p3-c16-walk-packet.md`), then the dossier. Order:
+- **Freeze at da34905.** The four suites pass there (idle): `pnpm check` (app 3598, api 173, runner 51), e2e 226, e2e:fake 250, e2e:pwa 4. The Opus fallback review of the P3-19/20 delta (a22f288..da34905) PASSES (5 minors to polish). Local main is f5d365e (its code is da34905). **Backup pending:** at 16:58Z GitHub answered `remote rejected (Internal Server Error)` to every push, even the smallest commit after a22f288. githubstatus reported no incident, and the repo is fine (private, not archived, no rulesets). Retry later; remote main stays a22f288. Staging is at bd7e261 (code da34905, version 81a73283); bower-home is at 8703a4f with SHA-pinned actions. The lead also hit the backup 500, so it's on GitHub's side. Retry later; if it persists the owner opens a ticket, and the dossier records the SHA reached. TL-P3-27:
+- The coordinator presses, under the owner's standing OK.
+- The owner signs in on a fresh origin and does the revocation last.
+- Made-up inputs come with expected outcomes.
+- The subdomain isn't secret.
+Running: `deploy-staging-upload-line` (mechanical; the script took "Uploaded 6 of 10 assets" as the upload line) and the C04–C11 inputs prep (to /private/tmp/p3-c16/inputs.md, not committed). Then the C16 walk (packet `2026-10-07-p3-c16-walk-packet.md`), with one message to the lead/owner giving the exact pane steps; then the dossier. Order:
     1. `token-key-rotation-reconsent` and `tidy-pin-actions`;
     2. `app-security-headers` and `log-no-folder-content`;
     3. `cookie-host-prefix` and `instance-private-check`;
