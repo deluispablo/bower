@@ -149,6 +149,18 @@ describe('the Claude provider', () => {
       ['a run manifest instead of intent', { stdout: recorded('reply-manifest.json') }],
       ['intent of another version', { stdout: edited((m) => (m.v = 2)) }],
       ['a thing placed twice', { stdout: edited((m) => (m.things as unknown[]).push((m.things as unknown[])[0])) }],
+      ['a name past the app\'s longest', { stdout: edited((m) => {
+        for (const t of (m.things as Array<{ name: string }>).slice(0, 1)) t.name = `${'P'.repeat(121)}.pdf`;
+      }) }],
+      ['a name with a bidi control', { stdout: edited((m) => {
+        for (const t of (m.things as Array<{ name: string }>).slice(0, 1)) t.name = 'Payslip \u202Efdp.pdf';
+      }) }],
+      ['a folder part with a trailing space', { stdout: edited((m) => {
+        for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Areas/Money ';
+      }) }],
+      ['a folder part with a bidi control', { stdout: edited((m) => {
+        for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Areas/\u2067Money';
+      }) }],
       ['a name that turns a PDF into a picture', { stdout: edited((m) => {
         for (const t of (m.things as Array<{ name: string }>).slice(0, 1)) t.name = 'Payslip.jpg';
       }) }],
@@ -283,14 +295,18 @@ const intent = (things: unknown[], extra: Record<string, unknown> = {}): string 
 
 describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
   it('the Claude provider passes the scripted provider contract fixtures', async () => {
-    // The folder with the demo's cases: the same intent the scripted plan carries gives the very same manifest, every
-    // id included: hub lines and their marks, the link's note, the offer's own note and the note from words.
+    // The folder with the demo's cases: the same intent the scripted plan carries files every thing and writes the
+    // note from words exactly as the scripted plan does; the demo's own extras (hub lines, the offer's own note) are
+    // the script's stand-in, never the model's, so they are left out (the next test).
     const seeded = await wired(true);
     const took = { taken: seeded.admission, deferred: [] };
     const onRich = await both(seeded.wire.drive, seeded.root, took, recorded('reply-rich.json'));
-    const kinds = new Set(onRich.scripted.operations.map((o) => o.effect.kind));
-    for (const kind of ['create-folder', 'create-text', 'move', 'bin', 'edit-text']) expect(kinds).toContain(kind);
-    expect(onRich.claude).toEqual(onRich.scripted);
+    const filed = (m: RunManifest): unknown[] => m.operations.flatMap((o) => (o.effect.kind === 'move' && o.effect.properties.bowerNew === '1' ? [[o.effect.before.fileId, o.effect.name]] : o.effect.kind === 'bin' ? [[o.effect.before.fileId]] : []));
+    expect(filed(onRich.claude)).toEqual(filed(onRich.scripted).filter((f) => !['f16', 'f18'].includes(String((f as string[])[0]))));
+    const { piles, members, journal } = onRich.scripted.capture;
+    expect(onRich.claude.capture).toMatchObject({ piles, members, journal });
+    const notes = (m: RunManifest): string[] => m.operations.flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect.name] : []));
+    expect(notes(onRich.claude)).toEqual(notes(onRich.scripted).filter((n) => n !== 'Industrial Designer, Ferrowick.md'));
     // Deterministic, as the scripted provider is: the same folder and reply give the same plan.
     expect(await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: recorded('reply-rich.json') }).spawn }, { rootId: seeded.root, runId: RUN_ID, allowWeb: false }, fakeScripted(seeded.wire.drive))(took)).toEqual(onRich.claude);
 
@@ -441,5 +457,42 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     const others = steps.filter((s) => s.includes('runner.mjs') && !/secrets\./.test(s));
     expect(others).toHaveLength(1);
     expect(others[0]).toMatch(/\n {8}if: vars\.BOWER_PROVIDER != 'claude'\n/);
+  });
+});
+
+describe('the Claude provider writes only what it proposed (P4-2 review I1)', () => {
+  it('a Claude run writes no hub line or demo extra it did not propose', async () => {
+    // Alex's folder with Bower's own Job hunt hub, a Saltmere pile and one of each journal line the script acts on;
+    // the reply files the payslip only. The demo's hub lines, own notes, questions and request answers are the
+    // scripted stand-in's, never this reply's: none of them is written.
+    const { wire, root } = await wired(true);
+    const listing = await wire.drive.listAll(root);
+    const jobHunt = listing.find((f) => f.name === 'Job hunt.md');
+    const flatHunt = listing.find((f) => f.name === 'Flat hunt.md');
+    if (!jobHunt || !flatHunt) throw new Error('no hub notes');
+    const hubText = { job: await wire.drive.readText(jobHunt.id), flat: await wire.drive.readText(flatHunt.id) };
+    const offer = { fileId: 'f20', to: 'Projects/Job hunt/Applications', name: 'Offer, Industrial Designer, Ferrowick.pdf' };
+    const ok = (JSON.parse((JSON.parse(recorded('reply-ok.json')) as { result: string }).result) as { things: unknown[] }).things;
+    // The offer filed exactly as the demo's plan would, the listing too: still no extra of the demo's.
+    const reply = intent([...ok, offer, { fileId: 'f19', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' }], { notes: [{ pileId: 'p-garden', to: 'Resources/Ideas', name: 'Garden ideas.md' }] });
+    const run = { rootId: root, runId: RUN_ID, allowWeb: true };
+    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: reply }).spawn }, run, fakeScripted(wire.drive))({ taken: (await wired(true)).admission, deferred: [] });
+    expect(planned.operations.filter((o) => o.effect.kind === 'edit-text')).toEqual([]);
+    const made = planned.operations.flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect.name] : []));
+    expect(made).not.toContain('Industrial Designer, Ferrowick.md');
+    expect(made).toEqual(expect.arrayContaining(['Flat 9, Wrenfield Road.md', 'Garden ideas.md']));
+    expect(planned.operations.filter((o) => o.effect.kind === 'write-runner-json' && o.effect.path === '.bower/questions.json')).toEqual([]);
+    const said = JSON.stringify(planned.reportPlan);
+    expect(said).not.toMatch(/Ferrowick, scored|fourth flat|Saltmere/);
+
+    // Through the runner: the hub notes are as they were, and Bower asked nothing.
+    const ran = await wired(true);
+    const questions = (await ran.wire.drive.listAll(ran.root)).find((f) => f.name === 'questions.json');
+    const asked = questions ? await ran.wire.drive.readText(questions.id) : '';
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: ran.wire.fetch, claude: recordedClaude({ stdout: reply }).spawn })).toBe(0);
+    expect(ran.wire.statuses.at(-1)?.phase).toBe('done');
+    expect(await ran.wire.drive.readText(jobHunt.id)).toBe(hubText.job);
+    expect(await ran.wire.drive.readText(flatHunt.id)).toBe(hubText.flat);
+    expect(questions ? await ran.wire.drive.readText(questions.id) : '').toBe(asked);
   });
 });
