@@ -4020,5 +4020,20 @@
     "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"done.sh sees a change under runner/ as code and runner tests as tests|the harness check finds a verify.s titles among the runner tests\"",
     "passes": true,
     "note": "Found closing runner-drive-adapter: done.sh said \"d35e5c7 changes no code\" because CODE_PATHS has no runner/. Same shape as done-sh-api-paths."
+  },
+  {
+    "id": "worker-stale-run-recovery",
+    "task": "p3-c",
+    "category": "feature",
+    "what": "With no browser, the person object's alarm recovers a stuck run: at the stale deadline it looks the run up in GitHub Actions by run-name (tidy <run_id> <attempt>), leaves a live job alone until its own deadline, redispatches once as attempt + 1 with a new ticket when no job holds the run, and otherwise marks the run failed stale.",
+    "steps": [
+      "An alarm on a run that progressed reschedules for the new deadline and changes nothing.",
+      "A stale queued run with no job found for its attempt is redispatched once as attempt 2 with a new ticket (the old one fenced), and the alarm is set again.",
+      "A job still queued or in progress for the current attempt is left alone; the alarm moves to that job's running deadline.",
+      "A second stale deadline, a completed job whose run never reported an end, or no GitHub token marks the run failed stale once, raising the revision."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"an alarm on a run that progressed changes nothing|a lost dispatch is redispatched once with a new ticket|a live job is left alone until its own deadline|a run stuck twice is marked failed stale|a finished job with no report is marked failed stale\"",
+    "passes": false,
+    "note": "TL-P3-18 (DO alarm, lookup by run-name, one redispatch, then failed stale), TL-P3-15 (17/30 min), R3 (run-name lookup and job started_at/completed_at reconcile)."
   }
 ]
