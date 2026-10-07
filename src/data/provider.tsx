@@ -27,7 +27,7 @@ export interface Loaded<T> {
  * screens do not flash.
  */
 export function useLoad<T>(
-  load: (s: Sources) => Promise<T>,
+  load: (s: Sources, again: boolean) => Promise<T>,
   subscribe: (s: Sources, cb: () => void) => Unsubscribe,
   deps: readonly unknown[] = [],
 ): Loaded<T> {
@@ -43,9 +43,9 @@ export function useLoad<T>(
   });
   const seq = useRef(0);
 
-  const run = useCallback(() => {
+  const run = useCallback((again = false) => {
     const n = ++seq.current;
-    loadRef.current(sources).then(
+    loadRef.current(sources, again).then(
       (data) => n === seq.current && setState({ data, error: null, loading: false }),
       (e: unknown) => {
         if (n !== seq.current) return;
@@ -57,13 +57,15 @@ export function useLoad<T>(
   }, [sources]);
 
   useEffect(() => {
-    run();
-    return subscribe(sources, run);
+    run(false);
+    return subscribe(sources, () => run(false));
     // deps are the caller's own (a path, an id).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sources, run, ...deps]);
 
-  return { ...state, reload: run };
+  // Only the person's reload asks again after a client error; mounts and listeners do not.
+  const reload = useCallback(() => run(true), [run]);
+  return { ...state, reload };
 }
 
 export const useTree = () => useLoad((s) => s.vault.tree(), (s, cb) => s.vault.subscribe(cb));
@@ -71,7 +73,7 @@ export const usePiles = () => useLoad((s) => s.vault.piles(), (s, cb) => s.vault
 export const useQuestions = () => useLoad((s) => s.vault.questions(), (s, cb) => s.vault.subscribe(cb));
 export const useRules = () => useLoad((s) => s.vault.rules(), (s, cb) => s.vault.subscribe(cb));
 export const useSuggestions = () => useLoad((s) => s.vault.suggestions(), (s, cb) => s.vault.subscribe(cb));
-export const useRun = () => useLoad((s) => s.runs.current(), (s, cb) => s.runs.subscribe(cb));
+export const useRun = () => useLoad((s, again) => s.runs.current({ again }), (s, cb) => s.runs.subscribe(cb));
 export const useNote = (path: string) =>
   useLoad((s) => s.vault.note(path), (s, cb) => s.vault.subscribe(cb), [path]);
 export const useChanges = () => useLoad((s) => s.vault.changes(), (s, cb) => s.vault.subscribe(cb));

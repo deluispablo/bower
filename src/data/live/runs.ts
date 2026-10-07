@@ -3,17 +3,28 @@
  * report is in the Bower folder (`.bower/last-run.json`), read once when the
  * run ends. Whether this device has seen the result is kept on the device.
  * Screens hear about changes: the Worker is asked every 4 s while a run is
- * going, every 60 s otherwise, and when the app comes back into view.
+ * going, every 60 s otherwise, and when the app comes back into view. A
+ * client error (a 4xx: the Worker has no such route, or refuses) is not
+ * asked again until the app comes back into view or a tidy-up starts; offline
+ * and server errors keep the beat (retry only what can change: Google Cloud
+ * retry strategy, https://cloud.google.com/storage/docs/retry-strategy).
  */
 import type { RunSource, Unsubscribe } from '../sources';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
-import type { RunWire, WorkerApi } from '../worker/worker-api';
+import { httpStatusOf, type RunWire, type WorkerApi } from '../worker/worker-api';
 
 const FAST_MS = 4_000;
 const SLOW_MS = 60_000;
 const SEEN = 'bower:run-seen';
 const ACTIVE: readonly RunWire['phase'][] = ['queued', 'reading', 'writing', 'saving'];
+
+const clientError = (e: unknown): e is BowerError => {
+  if (!(e instanceof BowerError)) return false;
+  if (e.code === 'not-found' || e.code === 'conflict') return true;
+  const status = httpStatusOf(e);
+  return status !== null && status >= 400 && status < 500 && status !== 401 && status !== 429;
+};
 
 const finished = (r: RunWire | null): boolean => !!r && (r.phase === 'done' || r.phase === 'failed');
 
@@ -44,6 +55,8 @@ export class LiveRuns implements RunSource {
   private disposed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private took = new Set<string>();
+  /** The 4xx the Worker last answered the status with; while set, it is not asked. */
+  private refused: BowerError | null = null;
   private readonly onVisible = (): void => {
     if (document.visibilityState === 'visible') void this.returnToForeground();
   };
@@ -100,6 +113,7 @@ export class LiveRuns implements RunSource {
     this.checkOpen();
     // Successful admission supersedes even status requests issued while process waited.
     this.generation++;
+    this.refused = null;
     this.accepted = ++this.issued;
     this.take(wire, piles);
     await this.hydrate();
@@ -113,11 +127,21 @@ export class LiveRuns implements RunSource {
     if (this.disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
   }
 
-  async current(): Promise<RunState | null> {
+  async current(opts: { again?: boolean } = {}): Promise<RunState | null> {
     if (this.disposed) return this.last ? this.state(this.last) : null;
+    if (this.refused && !opts.again) throw this.refused;
     const generation = this.generation;
     const ticket = ++this.issued;
-    const wire = await this.worker.status();
+    let wire: RunWire | null;
+    try {
+      wire = await this.worker.status();
+    } catch (e) {
+      // 401 is the session's to handle and 429 can pass; any other 4xx is a client error that asking again cannot fix.
+      if (clientError(e) && !this.disposed && generation === this.generation) this.refused = e;
+      else if (opts.again) this.refused = null;
+      throw e;
+    }
+    this.refused = null;
     if (!this.disposed && generation === this.generation && ticket > this.accepted) {
       this.accepted = ticket;
       this.take(wire);
@@ -161,6 +185,7 @@ export class LiveRuns implements RunSource {
   /** A visible return discovers idle external changes; ordinary status polling stays lightweight. */
   private returnToForeground(): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.refused = null;
     if (this.foreground) return this.foreground;
     const before = this.refreshIssued;
     const work = (async () => {
@@ -198,6 +223,10 @@ export class LiveRuns implements RunSource {
   private schedule(): void {
     if (this.disposed || !this.listeners.size) return;
     if (this.timer) clearTimeout(this.timer);
+    if (this.refused) {
+      this.timer = null;
+      return;
+    }
     this.timer = setTimeout(() => void this.poll(), this.last && !finished(this.last) ? this.fastMs : SLOW_MS);
   }
 

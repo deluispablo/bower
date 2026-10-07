@@ -8,6 +8,7 @@ import { seedFakeDrive } from '../fake/seed';
 import type { Scenario } from '../demo/scenario';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { Me, RunWire } from '../worker/worker-api';
+import { WorkerHttp } from '../worker/worker-http';
 import { makeLiveSources, type LiveSources } from './index';
 
 let live: LiveSources | null = null;
@@ -985,6 +986,88 @@ describe('LiveRuns', () => {
     const pile = (await s.vault.piles())[0];
     await expect(s.vault.removePile(pile?.id ?? '')).rejects.toMatchObject({ code: 'conflict' });
     await until(s, (x) => x?.phase === 'done');
+  });
+
+  describe('the run status beat', () => {
+    afterEach(() => vi.useRealTimers());
+
+    /** Home's run readers: each asks once when it mounts and listens, as `useRun` does. */
+    async function readers(s: LiveSources, count: number): Promise<void> {
+      for (let i = 0; i < count; i++) {
+        s.runs.subscribe(() => undefined);
+        await s.runs.current().catch(() => undefined);
+      }
+    }
+
+    /** The real client over a stub fetch, so the status code goes through its own mapping. */
+    function answering(s: LiveSources, httpStatus: number) {
+      const http = new WorkerHttp('https://worker.example', () => Promise.resolve(new Response('{}', { status: httpStatus, headers: { 'content-type': 'application/json' } })));
+      return vi.spyOn(s.worker, 'status').mockImplementation(() => http.status());
+    }
+
+    it('the run status is not asked again after a 4xx', async () => {
+      for (const code of [400, 403, 404, 409]) {
+        const s = await open();
+        const status = answering(s, code);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.useFakeTimers();
+        await readers(s, 3);
+        await vi.advanceTimersByTimeAsync(10 * 60_000);
+        expect(status.mock.calls.length, `after a ${code}`).toBeLessThanOrEqual(2);
+        // Coming back into view asks again.
+        const asked = status.mock.calls.length;
+        status.mockResolvedValue(null);
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(status.mock.calls.length, `after a ${code}`).toBeGreaterThan(asked);
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        s.dispose();
+      }
+    });
+
+    it.each([429, 500, 503])('the run status keeps its beat after a %i', async (code) => {
+      const s = await open();
+      const status = answering(s, code);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      s.runs.subscribe(() => undefined);
+      await s.runs.current().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+      expect(status.mock.calls.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("the person's try again asks the run status once after a 4xx", async () => {
+      const s = await open();
+      const status = answering(s, 404);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      await readers(s, 3);
+      const asked = status.mock.calls.length;
+      await expect(s.runs.current()).rejects.toMatchObject({ code: 'not-found' });
+      expect(status.mock.calls.length).toBe(asked);
+      status.mockResolvedValue(null);
+      await expect(s.runs.current({ again: true })).resolves.toBeNull();
+      expect(status.mock.calls.length).toBe(asked + 1);
+      // The good answer clears it: mounts ask again as before.
+      await s.runs.current();
+      expect(status.mock.calls.length).toBe(asked + 2);
+    });
+
+    it('a run status that fails offline or with a server error is asked again', async () => {
+      const s = await open();
+      const status = vi.spyOn(s.worker, 'status')
+        .mockRejectedValueOnce(new BowerError('offline', 'Offline.'))
+        .mockRejectedValueOnce(new BowerError('unknown', 'Server error.'))
+        .mockResolvedValue(null);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      s.runs.subscribe(() => undefined);
+      await s.runs.current().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+      expect(status.mock.calls.length).toBeGreaterThanOrEqual(3);
+    });
   });
 });
 
