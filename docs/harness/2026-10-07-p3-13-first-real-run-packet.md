@@ -5,9 +5,9 @@ Starting model: `bower-evaluator` (Sonnet). Reason: the first tidy-up that runs 
 - **Where:**
   - Use the staging origin from your prompt, with the real source, in the **built-in browser pane** only, as test account A, who is already signed in. Open every tab with `?source=real`.
   - Don't clear site data, sign in or sign out. On a 401 from `/me`, stop. Never act on Google's pages. **Never use "Delete my account".**
-- **Folder:** A's Bower folder is the probe folder whose id is in your prompt.
-  - If the app shows a different folder, stop and report it.
-  - Write only inside that folder.
+- **Folder:** the run acts on A's Bower folder, the test folder made for A at R2 (the one the app opens; `/me` or `GET /vault` gives its id). Record its id as a fingerprint only.
+  - If the app asks to choose or create a folder, stop and report it.
+  - Write only inside that folder, and only through the app.
 - **Record first:** the bundle name, the `/health` version and the time (UTC).
 - **Journey.** For each step, give expected vs actual, with the times and the network answers.
   1. **One synthetic pile.** In the app, add one short made-up thing to the inbox. Use a plain sentence about Alex's houseplants and no real names. Confirm it shows in the inbox.
