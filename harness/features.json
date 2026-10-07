@@ -3788,10 +3788,11 @@
     "what": "The whole folder fill is idempotent: the template files' ids are reserved in the same files.generateIds call as the folder's and stored with it, so a retry or a second call after the 60 s claim expires never makes a duplicate file.",
     "steps": [
       "One generateIds call reserves the folder id and one id per template item; all are stored before any create.",
-      "A fill that stalls past the claim and is resumed by a second call makes no duplicate file: Drive refuses the second create of each reserved id, and the call treats that as already made."
+      "A fill that stalls past the claim and is resumed by a second call makes no duplicate file: Drive refuses the second create of each reserved id, and the call treats that as already made.",
+      "Every write to the person object is conditional: reserving keeps an id already stored, the pointer moves only from null or to the same folder, so a call whose claim lapsed cannot make a second folder or a duplicate item."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"the template files' ids are reserved with the folder's|a fill resumed after the claim expires makes no duplicate file\"",
+    "verify": "pnpm -C api exec vitest run -t \"the template files' ids are reserved with the folder's|a fill resumed after the claim expires makes no duplicate file|a call whose claim lapsed before reserving makes no second folder|a lapsed call on a found folder makes no duplicate item\"",
     "passes": false,
-    "note": "Lead ruling on the P3-5 vault fix round (60 s claim accepted, no renewal)."
+    "note": "Lead ruling on the P3-5 vault fix round (60 s claim accepted, no renewal). Delta review (Opus): BLOCKING, two Important (lapsed claim writes unconditionally); fix round adds conditional writes."
   }
 ]

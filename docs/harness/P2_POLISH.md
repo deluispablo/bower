@@ -64,3 +64,5 @@ From the worker-skeleton review (CLEAN): Hono cors sends Allow-Credentials/Expos
 - Tooling: `harness/done.sh` code paths (`paths=` line 49) do not include `api/`, so `--fixed-in` and red mode cannot show a red for Worker entries.
 
 
+
+From the P3-5 delta review (minor): a 409 counts as made even when that template item is now in the Bin; `vaultState` parses stored ids without a shape check; the folder listing has no paging past 1000 children.
