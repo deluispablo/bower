@@ -117,3 +117,4 @@ declare-piles-real,implementer,claude,opus,high,1,113900,,,,,,33,13.6,delivered,
 runbook-p3,implementer,claude,sonnet,medium,1,88864,,,,,,13,1.9,delivered,2026-10-07
 p3-16-delta-review,reviewer,claude,opus,medium,1,167027,,,,,,54,6.6,PASS (7 minor),2026-10-07
 deploy-staging-hardening,implementer,claude,sonnet,medium,1,77914,,,,,,9,2.2,delivered,2026-10-07
+compatibility-accepted-app,implementer,claude,sonnet,medium,1,158203,,,,,,48,5.2,delivered,2026-10-07
