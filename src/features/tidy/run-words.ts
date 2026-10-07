@@ -89,6 +89,7 @@ export function runDetail(r: RunState): string {
     case 'done': {
       const rep = r.report;
       if (!rep) return '';
+      if (rep.nothingReady) return 'Nothing in the inbox was ready yet, so it stays as it is.';
       const parts: string[] = [];
       if (rep.updated.length) parts.push(`${plural(rep.updated.length, 'note')} brought up to date`);
       if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'question')} for you`);

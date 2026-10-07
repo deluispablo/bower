@@ -150,11 +150,66 @@ describe('the runner process', () => {
 
   it('main reports reading with total before writing', async () => {
     const { wire, admission } = await wired(true);
-    const n = admission.piles.reduce((sum, p) => sum + p.items.length, 0) + admission.journal.length;
+    const n = admission.piles.reduce((sum, p) => sum + p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE)).length, 0);
     expect(n).toBeGreaterThan(0);
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
 
     expect(wire.statuses.map((s) => [s.phase, s.total])).toEqual([['reading', n], ['writing', n], ['saving', n], ['done', n]]);
+  });
+
+  it('total counts things only', async () => {
+    const { wire, root, admission } = await wired(true);
+    // The things: every admitted file of a pile but its note; your changes are not things.
+    const things = admission.piles.flatMap((p) => p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE)));
+    expect(things).toHaveLength(3);
+    expect(admission.journal).toHaveLength(1);
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
+
+    expect(wire.statuses.map((s) => [s.phase, s.total])).toEqual([['reading', 3], ['writing', 3], ['saving', 3], ['done', 3]]);
+    // last-run.json says the same.
+    const files = await wire.drive.listAll(root);
+    const view = files.find((f) => pathOf(files, root, f.id) === SYSTEM.lastRun);
+    const value: unknown = JSON.parse(await wire.drive.readText(view?.id ?? ''));
+    expect(isRunnerFile(SYSTEM.lastRun, value) ? value.run.total : null).toBe(3);
+  });
+
+  it('a run whose piles are all held ends done with nothing filed', async () => {
+    // Alex's inbox holds one pile, admitted ready; before the runner reads it, its note is damaged (a race).
+    const drive = fixedDrive();
+    const root = (await drive.createFolder('root', 'Bower')).id;
+    const inbox = (await drive.createFolder(root, 'Inbox')).id;
+    const sys = (await drive.createFolder(root, SYSTEM.dir)).id;
+    await drive.createFolder(sys, 'changes');
+    await drive.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
+    const pile = (await drive.createFolder(inbox, 'Flat photos', { pile: 'p-photos' })).id;
+    const note = await drive.createText(pile, PILE_NOTE, 'The kitchen at the Wrenfield Road viewing.\n');
+    await drive.createText(pile, 'IMG_2301.jpg', 'made-up photo bytes');
+    const admitted = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+    if (admitted.kind !== 'manifest') throw new Error(`nothing admitted: ${admitted.cause}`);
+    await drive.writeText(note.id, '---\nbower_format:  ownership/2\n---\nThe kitchen\n', note.modifiedTime);
+    const wire = driveV3(drive);
+    wire.folderId = root;
+    wire.manifest = admitted.manifest;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
+
+    // Done, never failed, and nothing in the folder moved.
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'done']);
+    expect(wire.statuses.some((s) => s.failure !== undefined)).toBe(false);
+    const files = await drive.listAll(root);
+    expect(pathOf(files, root, note.id)).toBe(`Inbox/Flat photos/${PILE_NOTE}`);
+    // Its report says nothing was ready yet, and every admitted item waits.
+    const view = files.find((f) => pathOf(files, root, f.id) === SYSTEM.lastRun);
+    const value: unknown = JSON.parse(await drive.readText(view?.id ?? ''));
+    if (!isRunnerFile(SYSTEM.lastRun, value)) throw new Error('no last-run.json');
+    expect(value.run).toMatchObject({ id: RUN_ID, phase: 'done', total: 0 });
+    expect(value.run.report).toMatchObject({ filed: [], setAside: [], nothingReady: true });
+    const kept = files.find((f) => pathOf(files, root, f.id) === `${SYSTEM.dir}/runs/${RUN_ID}/dispositions.json`);
+    const items = (JSON.parse(await drive.readText(kept?.id ?? '')) as { items: Array<{ disposition: string }> }).items;
+    expect(items.length).toBe(2);
+    expect(items.every((i) => i.disposition === 'waiting')).toBe(true);
   });
 });

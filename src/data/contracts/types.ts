@@ -202,6 +202,8 @@ export interface RunReport {
   requests?: string[];
   /** How many rules you added that this run worded. */
   rulesWorded?: number;
+  /** A tidy-up that found nothing in the inbox ready when it read it (TL-P3-25): it filed nothing. */
+  nothingReady?: true;
 }
 
 export interface RunState {

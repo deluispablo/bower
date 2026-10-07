@@ -5,7 +5,9 @@
  * person object cheaply whether this press would admit a new run (`Person.wouldAdmit`: not a repeat, no
  * run going). Only then, outside the object's synchronous section, it reads the inbox with the person's
  * Drive token and builds the admission manifest with the shared plan (`src/data/spine/plan.ts`, TL-P3-21):
- * metadata and Bower's own files, never a note. An empty one answers 409 `nothing` with its cause, before
+ * metadata, Bower's own files and each pile's note, read by the runner's own readiness rules so a pile it would
+ * hold is not admitted (TL-P3-25 point 2). A note is read transiently: the manifest keeps its id and modifiedTime,
+ * never its text, and nothing here logs it. An empty one answers 409 `nothing` with its cause, before
  * any quota count. Otherwise the person object (`Person.admit`) decides in one synchronous section:
  * expiry, idempotency by `requestId` (the Idempotency-Key pattern,
  * https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/), one active run,

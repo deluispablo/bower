@@ -1,7 +1,8 @@
 /**
  * The spine's shared plan (TL-P3-21, ARCHITECTURE "Reusable deterministic core"): what a tidy-up takes of the
  * inbox, decided from what Drive holds, over a small read interface, with time and ids handed in. The fake runner
- * captures its piles here (`capturePiles`), and the Worker admits a run with `planAdmission`. No browser globals,
+ * captures its piles here (`capturePiles`), and the Worker admits a run with `planAdmission`, both from the inbox as
+ * `listedPiles` reads it. No browser globals,
  * no network of its own: the adapters in `read.ts` own the I/O.
  */
 import type { BinnedItem, DriveFile } from '../drive/drive-api';
@@ -10,8 +11,8 @@ import { isJournalRecord } from '../contracts/journal-record';
 import { recordableId, recordableRecordId } from '../contracts/run-manifest';
 import { PILE_NOTE } from '../piles';
 import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordedNote, writable, type Digest } from '../pile-readiness';
-import { join } from '../tree';
-import { BowerError, type SetAside } from '../types';
+import { join, kindOf } from '../tree';
+import { BowerError, type FileKind, type Pile, type PileItem, type SetAside } from '../types';
 import { PROP } from '../vault/layout';
 import { noteRefusal, parseNote } from '../vault/note-format';
 import { VaultIndex } from '../vault/vault-index';
@@ -76,11 +77,20 @@ export interface PileShape {
 
 export interface CaptureOptions {
   /**
-   * Whether the pile's one recorded note is read and checked, as the runner records it. The Worker reads no note
-   * content (TL-P3-21): without it, a note's format and text are checked by the run, which holds what it refuses.
+   * Whether the pile's one recorded note is read and checked, as the runner records it. The Worker reads it too, at
+   * admission (TL-P3-25 point 2), transiently: what it keeps of a note is its id and version, never its text.
    */
   notes: boolean;
 }
+
+/** A pile as the Inbox reads it, in the shape the capture takes; the same for the Worker's admission and the run. */
+export const pileShape = (p: Pile): PileShape => ({
+  id: p.id,
+  ...(p.path ? { path: p.path } : {}),
+  itemIds: p.items.map((i) => i.id),
+  ...(p.setAside ? { setAside: p.setAside } : {}),
+  hasWords: !!p.text.trim(),
+});
 
 /** A file's stored size and hash; null when they cannot be checked now (logged). */
 async function digestOf(read: SpineRead, f: DriveFile): Promise<Digest | null> {
@@ -173,6 +183,11 @@ export async function capturePiles(read: SpineRead, rootId: string, piles: reado
       continue;
     }
     if (found.state === 'unmarked') {
+      // Nothing in it but a blank note (or nothing at all): the run has nothing to take, so it is held as empty.
+      if (!present.length && !pile.hasWords) {
+        out.set(pile.id, { blocked: SET_ASIDE.empty });
+        continue;
+      }
       out.set(pile.id, { blocked: null, captured: new Set([...pile.itemIds, ...notes]) });
       continue;
     }
@@ -252,8 +267,8 @@ const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 const admitted = (f: DriveFile): AdmittedFile => ({ fileId: f.id, name: f.name, parents: [...f.parents], modifiedTime: f.modifiedTime });
 
 /**
- * The inbox's piles as its listing shows them, with no note read: a pile folder (its things, and whether it has a
- * note with words), or a loose thing. The Inbox reads the same folders this way (`DriveVault.piles`).
+ * Whether anything waits in the inbox, from its listing alone: a loose thing, or a pile folder with a thing or a note
+ * that is not empty. Whether it is ready is the capture's to say.
  */
 function inboxPiles(ix: VaultIndex): PileShape[] {
   const out: PileShape[] = [];
@@ -294,10 +309,21 @@ async function journalOf(read: SpineRead, ix: VaultIndex): Promise<DriveFile[]> 
 /**
  * What a run would be admitted to take now, or why there is nothing (the worker contract's 409 `nothing`): the
  * ready piles of the inbox, each with its things by id, name, parents and modifiedTime and its declaration, and
- * your changes. It reads metadata and Bower's own files (declarations, dispositions, the journal), never a note.
+ * your changes. It reads metadata, Bower's own files (declarations, dispositions, the journal) and each pile's note,
+ * by the very rules the run holds a pile by (`listedPiles`, `capturePiles` with notes), so what it admits the run
+ * takes (TL-P3-25 point 2). A note is read transiently: the manifest keeps its id and modifiedTime, never its text,
+ * and nothing logged holds it. The folder is listed once.
  */
-export async function planAdmission(read: SpineRead, rootId: string, opts: AdmissionOptions): Promise<Admission> {
-  const listing = await read.listAll(rootId);
+export async function planAdmission(source: SpineRead, rootId: string, opts: AdmissionOptions): Promise<Admission> {
+  const listing = await source.listAll(rootId);
+  const binnedByItem = source.binnedByItem?.bind(source);
+  const read: SpineRead = {
+    listAll: async (id) => (id === rootId ? listing : await source.listAll(id)),
+    readBytes: (id) => source.readBytes(id),
+    readText: (id) => source.readText(id),
+    digest: (f) => source.digest(f),
+    ...(binnedByItem ? { binnedByItem } : {}),
+  };
   const ix = VaultIndex.build(rootId, listing);
   const journal = (await journalOf(read, ix)).map(admitted).sort((a, b) => byCodePoint(a.fileId, b.fileId));
   const manifest = (piles: AdmittedPile[]): Admission => {
@@ -305,9 +331,9 @@ export async function planAdmission(read: SpineRead, rootId: string, opts: Admis
     return { kind: 'manifest', manifest: value };
   };
   if (opts.scope === 'instructions') return journal.length ? manifest([]) : { kind: 'nothing', cause: 'new' };
-  const piles = inboxPiles(ix);
-  if (!piles.some((p) => p.itemIds.length || p.hasWords)) return { kind: 'nothing', cause: 'waiting' };
-  const capture = await capturePiles(read, rootId, piles, { notes: false });
+  if (!inboxPiles(ix).some((p) => p.itemIds.length || p.hasWords)) return { kind: 'nothing', cause: 'waiting' };
+  const piles = (await listedPiles(read, rootId)).map(pileShape);
+  const capture = await capturePiles(read, rootId, piles, { notes: true });
   const taken: AdmittedPile[] = [];
   for (const pile of piles) {
     const cap = capture.get(pile.id);
@@ -326,4 +352,49 @@ export async function planAdmission(read: SpineRead, rootId: string, opts: Admis
   taken.sort((a, b) => byCodePoint(a.pileId, b.pileId));
   if (!taken.length && !journal.length) return { kind: 'nothing', cause: 'ready' };
   return manifest(taken);
+}
+
+const FILE_KINDS: readonly string[] = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'] satisfies readonly FileKind[];
+
+/** A thing in the inbox as the Inbox lists it (`DriveVault`): the name it was added under and its kind. */
+function listedItem(f: DriveFile): PileItem {
+  const p = f.appProperties ?? {};
+  const kind = p[PROP.kind];
+  return { id: f.id, name: p[PROP.asAdded] ?? f.name, kind: kind && FILE_KINDS.includes(kind) ? (kind as FileKind) : kindOf(f.name), origin: p[PROP.origin] ?? 'Added in Drive' };
+}
+
+/**
+ * The inbox's piles from a listing, for a reader with no Inbox of its own (the runner): each folder with its things and
+ * the words of its first note, and each loose thing. A note Bower will not parse, or cannot read now, holds its pile
+ * with the Inbox's reason; a sign-out stops the run. What a run takes of each is decided by `capturePiles`, as in the fake.
+ */
+export async function listedPiles(read: SpineRead, rootId: string): Promise<Pile[]> {
+  const ix = VaultIndex.build(rootId, await read.listAll(rootId));
+  const out: Pile[] = [];
+  for (const f of ix.filesIn('Inbox')) {
+    const path = ix.pathOf(f.id);
+    if (!path) continue;
+    const id = f.appProperties?.[PROP.pile] ?? f.id;
+    const createdAt = Date.parse(f.createdTime);
+    if (!f.folder) {
+      out.push({ id, path, text: '', createdAt, items: [listedItem(f)] });
+      continue;
+    }
+    const kids = ix.filesIn(path).filter((k) => !k.folder);
+    const note = kids.find((k) => k.name === PILE_NOTE);
+    let text = '';
+    let setAside: SetAside | null = null;
+    if (note) {
+      try {
+        text = parseNote(join(path, PILE_NOTE), await read.readText(note.id)).body.trim();
+      } catch (e) {
+        if (!(e instanceof BowerError) || e.code === 'auth') throw e;
+        console.error(e);
+        const refusal = noteRefusal(e);
+        setAside = refusal === 'newer' ? 'note-format' : refusal ? 'note-damaged' : 'not-checked';
+      }
+    }
+    out.push({ id, path, text, createdAt, items: kids.filter((k) => k !== note).map(listedItem), ...(setAside ? { setAside } : {}) });
+  }
+  return out;
 }

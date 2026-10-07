@@ -34,7 +34,7 @@ Every call sends the session cookie (`credentials: 'include'`). A call that chan
 | `DELETE /me` | | 204: the Worker forgets the person (tokens, settings, runs, the pointer to their folder) and clears the cookie; the Drive folder is never touched, and signing in again starts at the folder step (`POST /vault` finds the folder they had) | 401 |
 | `GET /drive/token` (`?fresh=1` after Drive said 401) | | `{ accessToken, expiresAt }` (epoch ms, at most 1 h) | 401 signed out; 409 `no-folder` |
 | `POST /vault` | `{}` | `{ folderId, found }`: a new Bower folder made from the template (the five main folders, `Rules.md`, `About me.md`, `.bower/`), or the existing one (`found: true`, so the app says welcome back) | 401 |
-| `POST /process` | `{ scope: "all" \| "instructions", allowWeb: boolean, requestId }` (the person's "Look things up on the web"; the dispatch's `allow_web`). `requestId` is made by the app once per press: lowercase letters, digits and dashes, at most 64 ([TL-P3-15](../harness/2026-10-07-tl-p3-15-admission-and-revision.md)) | `{ run: RunWire, revision }`, the run it started, or the one already going. A repeat with the same `requestId` returns that request's run, and the first request's scope wins | 401; 409 `no-folder` "Choose a folder for Bower first."; 409 `nothing` "Nothing is waiting in the inbox." / "There is nothing new for Bower to read." / "Nothing in the inbox is ready yet." (only held piles wait, TL-P2-21); 409 `stale-session`; 429 over the daily limit |
+| `POST /process` | `{ scope: "all" \| "instructions", allowWeb: boolean, requestId }` (the person's "Look things up on the web"; the dispatch's `allow_web`). `requestId` is made by the app once per press: lowercase letters, digits and dashes, at most 64 ([TL-P3-15](../harness/2026-10-07-tl-p3-15-admission-and-revision.md)) | `{ run: RunWire, revision }`, the run it started, or the one already going. A repeat with the same `requestId` returns that request's run, and the first request's scope wins | 401; 409 `no-folder` "Choose a folder for Bower first."; 409 `nothing` "Nothing is waiting in the inbox." / "There is nothing new for Bower to read." / "Nothing in the inbox is ready yet." (only held piles wait, TL-P2-21; admission reads each pile's note by the runner's own rules, transiently, and keeps only its id and version, [TL-P3-25](../harness/2026-10-07-tl-p3-25-pile-notes-and-the-last-p3-e-entries.md)); 409 `stale-session`; 429 over the daily limit |
 | `POST /session` | `{ place, action: "check" \| "take" \| "leave", gen }` (`gen`, the place's leave generation; missing counts as 0, [TL-P3-14](../harness/2026-10-07-tl-p3-14-lease-and-limits.md)) | `{ active, epoch }`: one active session per person (TL-P2-13, TL-P2-14, TL-P2-25) | 401 |
 | `GET /status` | | `{ run: RunWire \| null, revision }`, the run going now or the last one. `revision` rises with every change to the person's runs; the app drops an answer older than the last it took | 401 |
 
@@ -71,7 +71,7 @@ interface RunWire {
   requestedAt: number;   // epoch ms, when the person tapped Tidy up
   phaseAt: number;       // when this phase started
   finishedAt?: number;
-  total?: number;        // things to file, known from `reading` on
+  total?: number;        // things to file (pile members; your changes are not counted), known from `reading` on
   failure?: string;      // one sentence, for a failed run
 }
 ```
@@ -107,6 +107,8 @@ This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runn
     - 200: a repeat of the last `seq`; a report that reaches or passes the run's phase; and a report from a later attempt whose phase is behind the run's (attempt 2 posting `writing` after attempt 1 reported `saving`). That last one is recorded as the attempt's last `seq` and phase and answers the current run and revision, the run unchanged.
     - 409 `stale-report`: a lower `seq`; a phase behind the same attempt's own last phase; a run already ended.
   - The status revision rises only when the run a person sees changes: its phase, `total` or `failure` (and so its `finishedAt`). A report that shows nothing new, or is only recorded, answers the same revision.
+  - `total` is the number of things (pile members) the run takes, on every report, in `last-run.json` and for a resumed attempt; your changes are not counted in it ([TL-P3-25](../harness/2026-10-07-tl-p3-25-pile-notes-and-the-last-p3-e-entries.md) point 3).
+  - A run whose admitted piles are all held when the runner reads them (a pile changed after admission) ends `done` with nothing filed; its report says nothing was ready yet (`nothingReady`) and every admitted item's disposition is `waiting`. It is never `failed` (TL-P3-25 point 2).
 - **Runner errors** use the same JSON shape:
   - 401 `signed-out` for a missing, wrong or expired ticket;
   - 409 `stale-attempt` "This tidy-up was taken over." for an attempt that is no longer current;

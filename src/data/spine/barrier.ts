@@ -139,6 +139,7 @@ export function fixedReport(r: RunReport): RunReport {
   if (r.yourChanges !== undefined) out.yourChanges = r.yourChanges;
   if (r.requests !== undefined) out.requests = [...r.requests];
   if (r.rulesWorded !== undefined) out.rulesWorded = r.rulesWorded;
+  if (r.nothingReady) out.nothingReady = true;
   return out;
 }
 
