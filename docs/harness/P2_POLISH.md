@@ -84,3 +84,9 @@ From the P3-6 delta review (PASS, minor):
 - `runs.ts`: a good answer to the person's Try again after a 4xx clears `refused` but does not re-arm the beat. Run status then stays off until a foreground return or a new tidy-up. Also, `refused` is set by generation, not ticket, so a late 4xx from an older ask can stop the beat after a newer good answer. Fix: set `refused` only when `ticket > accepted`, and `schedule()` when a good answer clears it.
 - `settle()`: a rename's read-back checks only the name, so a file moved elsewhere meanwhile counts as saved at the old path. A read-back 404 says "not sure… back online", which doesn't fit. A toggle conflict refreshes twice.
 - `api/test/status.test.ts` has no case for an address removed from the allowlist (`requireSession` covers it).
+
+From the P3-7 delta review (minor):
+- The Worker prunes leave rows after 24 h, but the fake never does. This is harmless, since no check can be in flight that long.
+- `DELETE /me` resets lease epochs to 1. This is harmless, because places are random per tab.
+- `requireLease` checks once per call, as the contract says.
+- `runs.ts` still clears `refused` on a stale good answer that is not accepted. It corrects itself on the next beat.

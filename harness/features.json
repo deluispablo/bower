@@ -3937,5 +3937,17 @@
     "verify": "pnpm -C api exec vitest run -t \"a cookie from before delete me stays refused after signing in again\"",
     "passes": false,
     "note": "P3-7 Opus delta review, BLOCKING Important: forget() reset session_generation to 0, so a never-signed-out cookie at generation 0 revived after re-sign-in."
+  },
+  {
+    "id": "delete-me-inflight-vault",
+    "task": "p3-8",
+    "category": "fix",
+    "what": "A POST /vault already in flight when DELETE /me runs writes no folder pointer afterwards: the pointer write is refused when the session generation changed since the request started, so delete really forgets the person.",
+    "steps": [
+      "A POST /vault whose Drive work is paused, a DELETE /me that completes, then the paused request resumes: the person object holds no folder pointer, and the request answers signed-out (401)."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a folder request that started before delete me writes nothing after it\"",
+    "passes": false,
+    "note": "TL-P3-14 addendum, from the P3-7 delta review minor 3; builds on delete-me-generation-floor."
   }
 ]
