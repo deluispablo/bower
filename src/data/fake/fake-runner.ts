@@ -30,7 +30,7 @@ import { VaultIndex } from '../vault/vault-index';
 import { NOT_FILED, canonical, grounded, groundedKeys, seen } from './fake-run-records';
 import { B_FAILURE } from './fake-run-service';
 import { SET_ASIDE, capturePiles } from '../spine/plan';
-import { fakeRead } from '../spine/read';
+import { fakeRead, type ScriptedRead } from '../spine/read';
 
 export { SET_ASIDE };
 
@@ -71,9 +71,20 @@ export interface PlanOptions {
   requestedAt: number;
   /** The hub notes a full run brings up to date; the demo's two by default. */
   updates?: readonly HubUpdate[];
+  /** Mints a create key (random by default). */
+  mintKey?: (kind: string) => string;
 }
 
 export type { HubUpdate };
+
+/** The scripted provider's reads over the pretend Drive: the plan's reads, and the piles as the Inbox reads them. */
+export function fakeScripted(drive: FakeDrive): ScriptedRead {
+  return {
+    ...fakeRead(drive),
+    piles: (rootId) => new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' }).piles(),
+    provenance: 'fake-stored',
+  };
+}
 
 /**
  * Plans a run on the B path: every effect it needs is a B effect (move, create-folder, a generated note's create-text

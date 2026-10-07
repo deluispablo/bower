@@ -11,24 +11,13 @@
 import { BowerError } from '../../../src/data/types';
 import type { DriveFile } from '../../../src/data/drive/drive-api';
 import type { AdmissionManifest, AdmittedFile, AdmittedPile } from '../../../src/data/spine/admission';
+import type { Admitted, Deferred } from '../../../src/data/spine/provider';
+
+export type { Admitted, Deferred };
 
 /** What the runner reads to check an item: its metadata now. */
 export interface AdmittedReader {
   get(id: string): Promise<DriveFile>;
-}
-
-export interface Deferred {
-  fileId: string;
-  /** The pile it belongs to; null for one of your changes. */
-  pileId: string | null;
-  /** `pile`: unchanged, but it waits with its pile. */
-  why: 'gone' | 'changed' | 'pile';
-}
-
-export interface Admitted {
-  /** The manifest with only what is still as admitted. */
-  taken: AdmissionManifest;
-  deferred: Deferred[];
 }
 
 const sameParents = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((p) => b.includes(p));

@@ -120,3 +120,8 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   await status.post('done');
   return { phase: 'done', dispositions: finished.dispositions };
 }
+
+/** The process's entry (stub). */
+export async function main(_env: Readonly<Record<string, string | undefined>>, _opts: { fetch?: typeof fetch } = {}): Promise<number> {
+  return 1;
+}
