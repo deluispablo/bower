@@ -11,7 +11,7 @@ Starting model: `bower-escalated` (Opus), fresh and read-only. Reason: the TL-P2
   - `11c0409` (shared run records, runner checkpoints, resume, retention; stubs `fd130bd`).
 - **Contracts:**
   - [TL-P3-21](2026-10-07-tl-p3-21-spine-start.md);
-  - the "Runner wire" and `POST /process` sections of `docs/specs/2026-10-04-worker-contract.md`;
+  - the `POST /process` row of the route table and the "Runner wire" section of `docs/specs/2026-10-04-worker-contract.md`;
   - the packets `2026-10-07-p3-10-admission-manifest-packet.md` and `2026-10-07-p3-10-operations-checkpoints-packet.md`.
 - **Look hardest at:**
   - **Admission.**
