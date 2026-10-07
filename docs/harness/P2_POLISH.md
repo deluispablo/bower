@@ -166,3 +166,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - runner/src/drive.ts:225: `res.json()` on Drive metadata is outside the try; a malformed listing would log a SyntaxError that might quote a file name. api/src/security.ts:7 points at a missing docs/security.md (P4 note).
   - (tidy.yml checkout SHA fbc6f39 verified by the coordinator with `git ls-remote`: v5 = v5.1.0.)
 - harness/done.sh: on the "no assertion failed" exit after --fixed-in, the reverted files stay in the working tree (seen on rules-template-bower); restore them on every exit path.
+- P3 re-freeze review (minor, PASS):
+  - typed-rule.test builds Rules.md by hand from a demo seed (never red); covered together with the contract test only.
+  - The fake/real Rules.md comparison is split across vault.test (constant) and fake-worker.test.
+  - Any unmarked Rules.md that is not the old text costs one list plus one full read on every POST /vault (the comment says one list).
+  - A failed Rules.md repair (403 Drive full, 5xx) fails the whole POST /vault on every start until it clears; best-effort log-and-skip would be safer.
+  - deploy-staging upload-line test changed every host to example.test (the packet kept one real line); any other Worker name still gets the generic sentence.
