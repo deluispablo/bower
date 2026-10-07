@@ -3992,5 +3992,20 @@
     "verify": "pnpm -C api exec vitest run -t \"a person object on the previous version answers 503 with Retry-After\"",
     "passes": false,
     "note": "Staging 0b64dcb: /status 500 \"The RPC receiver does not implement the method runStatus\" for minutes after deploy (Cloudflare, gradual deployments with Durable Objects: keep Worker-DO changes compatible). Lead ruling, P3-9."
+  },
+  {
+    "id": "worker-dispatch",
+    "task": "p3-c",
+    "category": "feature",
+    "what": "A newly admitted run is dispatched to the instance repository as repository_dispatch bower-tidy with { run_id, attempt, ticket, scope, allow_web }: the run id routes to the person object, a ticket is minted for attempt 1, a person-object alarm is set at the stale deadline, a 204 counts as accepted-not-observed, and a failed or unconfigured dispatch leaves the admitted run queued and discoverable.",
+    "steps": [
+      "Admission gives new runs ids of the form <person object id hex>-<random> (the tickets helper).",
+      "A new run gets one dispatch call through an injected fetch: POST /repos/<GITHUB_REPO>/dispatches with event_type bower-tidy and the payload; a repeat requestId or an active run dispatches nothing.",
+      "A 204 leaves the run queued (accepted, not observed); a non-204 or a network failure is logged by status only and the run stays queued; with no GITHUB_TOKEN nothing is sent.",
+      "The person object sets its alarm for the queued stale deadline; the alarm handler at least writes the stale expiry."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a new run is dispatched once with its ticket|a repeat or an active run dispatches nothing|a failed dispatch leaves the run queued|no GitHub token sends nothing|admission sets the stale alarm\"",
+    "passes": false,
+    "note": "TL-P3-18 (worker-dispatch after worker-runner-tickets), Worker contract \"Runner wire\", ARCHITECTURE invariant 2 (admission durable before dispatch; dispatch recoverable). Live dispatch waits for the owner's GITHUB_TOKEN."
   }
 ]
