@@ -142,3 +142,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - `FakeDrive` (src/data/drive/fake-drive.ts:429,532) records text size in UTF-16 units, not bytes; non-ASCII notes get the wrong size (real Drive reports bytes).
   - A pile note whose things were filed but whose folder's Bin was rejected is still marked filed.
   - e2e:fake `[phone] qa10.spec.ts:165` flaked once under load (passed 3/3 alone).
+- declare-piles-real (left out): the Worker still does not read the pile note (P3-10 limit): admission calls capturePiles with notes:false and checks a declared pile's note by key only; the declaration create goes through the lease-fenced bound(drive) but no test asserts that fencing.
