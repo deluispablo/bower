@@ -35,3 +35,8 @@ All of these come after the P3-6 delta review, R4 and R3, with two workers at mo
 ## Addendum, P3-6 close: an early entry for the status beat
 
 The P3-6 delta review passed with Minors only. Two of them, in `runs.ts`, change what the person sees: after a good "Try again", status updates stay off until the app comes back to the foreground; and a late refusal from an older ask can stop status after a newer good answer. They become one small entry, `runs-beat-rearm` (`bower-mechanical`, two tests red first): `refused` is set only for a ticket newer than the last accepted answer, and a good answer that clears it schedules the next beat. It goes next after R4, ahead of `worker-session-lease`. The other Minors stay in polish. Mentioning the owner's own GitHub instance repository in the backup range is allowed (AGENTS hard rules).
+
+## Addendum, P3-7: the lease's client generation, and revoking on delete
+
+- **`worker-session-lease`** keeps the place's leave generation in `sessionStorage` next to the place id. Without it, a reload's first `check` would be discarded and show "open elsewhere". It stays per tab, as the place does. Accepted.
+- **`worker-me-and-delete` revokes the Google grant best-effort, before `deleteAll()`.** A failed revoke is logged with Google's error code only, never a token, and the deletion still completes. Deleting the person's data never waits on a third party, and the original did the same (`admin.ts`, best-effort revoke). Google answering that the token is already invalid counts as revoked, not as a failure ([OAuth 2.0 revocation, RFC 7009](https://www.rfc-editor.org/rfc/rfc7009#section-2.2)). Telling the person where to review Google access after a failed revoke is a P4 copy item.
