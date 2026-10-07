@@ -4593,7 +4593,7 @@
       "The scorer passes on the scripted provider outputs for the cases it covers and fails on an assertion when an expected file is removed."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"every corpus capability has at least two cases|the corpus scorer passes on the scripted provider outputs|the corpus scorer fails when an expected file is missing\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-01 batch P4-1."
   },
   {

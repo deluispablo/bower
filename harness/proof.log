@@ -354,3 +354,4 @@ rules-repair-existing-folder	a115f87f1e325561	2026-10-07	red (fixed in 62fa8c5)
 home-sheet-and-focus	8f9ca0b302289800	2026-10-07	known-green: Red proven by hand at 747e8bb (tests only): 4 failed on assertions (activeElement body; old Done button present). Fix spans c8c7908+f5ba996 so the single revert does not apply.
 runner-network-retry	9b59fc5ff605e253	2026-10-07	known-green: Red proven by hand at f038611 (tests only): 3 failed on assertions (token sends 1 not 2; saving not done; exit 0). Reverting 71ee4ad removes the new retry.ts, so done.sh's red is a load failure.
 save-timeout-honest	555c8db39a8e2245	2026-10-07	red (fixed in 1bef02d)
+p4-corpus	9a42c669925581d5	2026-10-07	red (fixed in be43662)
