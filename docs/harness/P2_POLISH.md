@@ -165,3 +165,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - The landing's `'unsafe-eval'` is on the app's origin (a landing injection could call /drive/token with the cookie); narrower: precompile its x-dc script in fix-landing.mjs (P4).
   - runner/src/drive.ts:225: `res.json()` on Drive metadata is outside the try; a malformed listing would log a SyntaxError that might quote a file name. api/src/security.ts:7 points at a missing docs/security.md (P4 note).
   - (tidy.yml checkout SHA fbc6f39 verified by the coordinator with `git ls-remote`: v5 = v5.1.0.)
+- harness/done.sh: on the "no assertion failed" exit after --fixed-in, the reverted files stay in the working tree (seen on rules-template-bower); restore them on every exit path.
