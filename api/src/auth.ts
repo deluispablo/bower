@@ -134,6 +134,10 @@ export const requireSession: MiddlewareHandler<AppEnv> = async (c, next) => {
   } catch (err) {
     rejectSession(c, err);
   }
+  // The operator's allowlist is checked on every session (TL-P3-09): taking an address off ends its sessions.
+  if (!(await isAllowed(c.get('env').BOWER_KV, session.account.email))) {
+    rejectSession(c, signedOut('address is no longer on the allowlist'));
+  }
   c.set('userId', session.claims.sub);
   c.set('account', session.account);
   await next();

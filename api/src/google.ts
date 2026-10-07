@@ -256,3 +256,55 @@ export async function verifyIdToken(
           : '',
   };
 }
+
+/** A minted Drive access token and its lifetime in seconds (Google's `expires_in`). */
+export interface GoogleAccessToken {
+  accessToken: string;
+  expiresIn: number;
+}
+
+/**
+ * Mints an access token from a refresh token (`grant_type=refresh_token`,
+ * Google OAuth 2.0 for web server apps, "Refreshing an access token").
+ * `invalid_grant` (revoked or expired refresh token) is `signed-out`; any
+ * other failure is `internal`. Nothing from the body but the OAuth error
+ * code is read on failure, and nothing here logs a token.
+ */
+export async function refreshAccessToken(
+  params: { refreshToken: string; clientId: string; clientSecret: string },
+  fetchImpl: FetchLike = fetch,
+): Promise<GoogleAccessToken> {
+  let response: Response;
+  try {
+    response = await fetchImpl(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: params.refreshToken,
+        client_id: params.clientId,
+        client_secret: params.clientSecret,
+      }).toString(),
+    });
+  } catch (err) {
+    throw googleFailed('token endpoint unreachable', err);
+  }
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (err) {
+    throw googleFailed(`token endpoint returned ${response.status} without JSON`, err);
+  }
+  if (!response.ok) {
+    if (isRecord(body) && body.error === 'invalid_grant') throw notProven('token endpoint: invalid_grant');
+    throw googleFailed(`token endpoint returned ${response.status}`);
+  }
+  if (!isRecord(body) || typeof body.access_token !== 'string' || body.access_token.length === 0) {
+    throw googleFailed('token endpoint returned no access token');
+  }
+  const expiresIn = body.expires_in;
+  if (typeof expiresIn !== 'number' || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw googleFailed('token endpoint returned no token lifetime');
+  }
+  return { accessToken: body.access_token, expiresIn };
+}

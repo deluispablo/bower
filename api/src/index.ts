@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { createAuthRoutes } from './auth.js';
 import type { AuthDeps } from './auth.js';
+import { createDriveRoutes } from './drive-token.js';
 import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { HttpError, createErrorHandler } from './errors.js';
@@ -30,6 +31,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
 
   app.get('/health', (c) => c.json({ ok: true, version: c.get('env').APP_VERSION }));
   app.route('/', createAuthRoutes(deps));
+  app.route('/', createDriveRoutes(deps));
 
   app.notFound(() => {
     throw new HttpError(404, 'not-found');
