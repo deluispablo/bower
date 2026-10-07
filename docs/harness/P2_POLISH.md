@@ -103,3 +103,8 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - `process.ts:647`: if `mintTicket` throws after admission, `/process` answers 500. The run stays recoverable, and its requestId returns it.
 - The runner's own `done` or `failed` leaves `recoveryWatch` and the alarm in place. This is harmless; the next alarm clears itself.
 - The adapter's create-precheck skips the parent folder's `modifiedTime` (accepted by the reviewer: name, parents and Bin state are checked).
+- P3-9 re-review (minor):
+  - A ticket retired at the run's end answers the current state to any body with the same attempt and seq, not only an exact resend.
+  - Superseded and ended tickets skip the expiry check; this is read-only.
+  - `timingSafeEqual` after the SQL hash match does nothing now.
+  - `runner.ts:12` comment wording.
