@@ -9,55 +9,28 @@
  * and consumed dispositions. The pure record guards live in `contracts/`.
  */
 import type { DriveFile } from '../drive/drive-api';
-import type { FakeDrive, FencedDrive, StoredEvidence } from '../drive/fake-drive';
+import type { FencedDrive, StoredEvidence } from '../drive/fake-drive';
 import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
-import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
-import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
-import { parseRunManifestV2, type Effect, type Manifest, type OperationV2, type ReportContribution, type SeenFile, type Target } from '../contracts/run-manifest';
+import { parseRunReport, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
+import type { Effect, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
 import { displayName, join, nameOf, parentOf, thingName } from '../tree';
 import { BowerError, PARA_ROOTS, type Question, type RunReport } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import { parseRules } from '../vault/rules-format';
+import { RunRecords as SpineRecords, canonical, dispositionName, reportName, type RunManifest } from '../spine/records';
 
-/** `.bower/runs`, as Drive names it. */
-export const RUNS_NAME = 'runs';
+// The record names, writing and chain reading are shared with the runner (TL-P3-21 point 2).
+export { RUNS_NAME, canonical, checkpointName, dispositionName, manifestName, reportName, type RunManifest, type Where } from '../spine/records';
+
 /** The runner files a run may make again when they are missing (TL-P2-33 §2a). */
 const RUNNER_MADE: readonly string[] = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions];
 /** The one note rules are worded in, at the root of the Bower folder. */
 const RULES = 'Rules.md';
-const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
-
-export const manifestName = (hash: string): string => `manifest-${hash}.json`;
-export const checkpointName = (revision: number, hash: string): string => `checkpoint-${revision}-${hash}.json`;
-export const reportName = (hash: string): string => `report-${hash}.json`;
-export const dispositionName = (hash: string): string => `disposition-${hash}.json`;
-
-/**
- * A B run's manifest, v1 or v2 (v1 plus `edit-text`, TL-P2-20): both are read by `parseRunManifestV2`, and a v1
- * manifest is one of these as it is.
- */
-export type RunManifest = Omit<Manifest, 'v' | 'operations'> & { v: 1 | 2; operations: OperationV2[] };
-
-/** Where a record lives: one run's folder, or the pile records. */
-export type Where = { runId: string } | 'piles';
 
 const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
 const READ_FAILED = 'Bower could not read what it did. Try again later.';
-/** A manifest version later than this build reads (TL-P2-20 R3-7 m9): the run stays saving. */
-const NEWER_BOWER = 'This tidy-up needs a newer Bower.';
-
-/** Canonical text and identity of a record; a value outside the record domain is refused, never written. */
-export async function canonical(value: unknown): Promise<{ text: string; bytes: Uint8Array; hash: string }> {
-  const bytes = canonicalRecordJson(value);
-  const hash = await hashRecordJson(value);
-  if (!bytes.ok || !hash.ok) {
-    console.error(`A run record could not be encoded (${!bytes.ok ? bytes.reason : !hash.ok ? hash.reason : 'unknown'})`);
-    throw new BowerError('unknown', SAVE_FAILED);
-  }
-  return { text: new TextDecoder().decode(bytes.value), bytes: bytes.value, hash: hash.value };
-}
 
 /** SHA-256 of a text's exact UTF-8 bytes. */
 export async function textHash(text: string): Promise<string> {
@@ -662,174 +635,8 @@ export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcom
   return out;
 }
 
-/** The folders a record can be in, and the listing they were found in. */
-type Folders = { listing: DriveFile[]; bower: DriveFile[]; ns: DriveFile[]; run: DriveFile[] };
-
-/** One verified run's records over the fake Drive, scoped to one root. */
-export class RunRecords {
-  /**
-   * `placed` keeps, across instances, the record folder each run's records were last written to, so a record whose
-   * name no earlier write can have used is written there without listing the folder again (`putNew`).
-   */
-  constructor(
-    private readonly drive: FakeDrive,
-    private readonly rootId: string,
-    private readonly placed: Map<string, string> = new Map(),
-  ) {}
-
-  private placeOf(where: Where): string {
-    return `${this.rootId}/${where === 'piles' ? 'piles' : `runs/${where.runId}`}`;
-  }
-
-  /** The folders a record can be in, by real names and parents, duplicates included. */
-  private async folders(where: Where): Promise<Folders> {
-    const listing = await this.drive.listAll(this.rootId);
-    const bower = listing.filter((f) => f.folder && f.name === SYSTEM.dir && f.parents.includes(this.rootId));
-    const ns = listing.filter((f) => f.folder && f.name === (where === 'piles' ? PILES_NAME : RUNS_NAME) && f.parents.some((p) => bower.some((b) => b.id === p)));
-    const run = where === 'piles' ? ns : listing.filter((f) => f.folder && f.name === where.runId && f.parents.some((p) => ns.some((n) => n.id === p)));
-    return { listing, bower, ns, run };
-  }
-
-  /** Every record file there. */
-  async list(where: Where): Promise<DriveFile[]> {
-    const { listing, run } = await this.folders(where);
-    return listing.filter((f) => !f.folder && f.parents.some((p) => run.some((r) => r.id === p)));
-  }
-
-  /** The bytes of a record, when one is there; copies with other bytes refuse. */
-  async read(where: Where, name: string): Promise<Uint8Array | null> {
-    return this.readIn(await this.folders(where), name);
-  }
-
-  /** The same, from a listing already taken. */
-  private async readIn({ listing, run }: Folders, name: string): Promise<Uint8Array | null> {
-    let found: Uint8Array | null = null;
-    for (const copy of listing.filter((f) => !f.folder && f.name === name && f.parents.some((p) => run.some((r) => r.id === p)))) {
-      const bytes = await this.drive.readBytes(copy.id);
-      if (found && !same(found, bytes)) {
-        console.error(`Run record ${name} has copies with other bytes`);
-        throw new BowerError('conflict', READ_FAILED);
-      }
-      found = bytes;
-    }
-    return found;
-  }
-
-  /**
-   * Writes an immutable record once: already there with these bytes is done;
-   * other bytes refuse. A failed create whose record landed anyway (a lost
-   * reply) is reconciled by its exact body. Confirmed by reading it back.
-   */
-  async put(w: FencedDrive, where: Where, name: string, text: string): Promise<void> {
-    const bytes = new TextEncoder().encode(text);
-    /** Whether the record is there with these bytes, from a listing (one is taken when none is given). */
-    const there = async (found: Folders | null = null): Promise<boolean> => {
-      const stored = await this.readIn(found ?? (await this.folders(where)), name);
-      if (stored && !same(stored, bytes)) {
-        console.error(`Run record ${name} is there with other bytes`);
-        throw new BowerError('conflict', SAVE_FAILED);
-      }
-      return stored !== null;
-    };
-    // One listing answers both whether it is there already and where it goes.
-    const found = await this.folders(where);
-    if (await there(found)) return;
-    const parent = await this.ensure(w, where, found);
-    this.placed.set(this.placeOf(where), parent);
-    let made: DriveFile;
-    try {
-      made = await w.createText(parent, name, text);
-    } catch (e) {
-      if (!(await there())) throw e;
-      // The record landed and only its answer was lost: it is the same record, not a second one.
-      console.error(e);
-      return;
-    }
-    // Confirmed by reading back the very file written.
-    if (!same(await this.drive.readBytes(made.id), bytes)) {
-      console.error(`Run record ${name} could not be read back`);
-      throw new BowerError('unknown', SAVE_FAILED);
-    }
-  }
-
-  /**
-   * Writes a record whose name no earlier write can have used: a checkpoint names its revision and its own hash, and
-   * its body names the attempt that writes it. So it is written into the folder its run's records were last written
-   * to, with no listing first; confirmed by reading it back. With no folder known yet it goes through `put`; a write
-   * that fails is done only if the record landed with these bytes (a lost reply), and is never written twice.
-   */
-  async putNew(w: FencedDrive, where: Where, name: string, text: string): Promise<void> {
-    const parent = this.placed.get(this.placeOf(where));
-    if (!parent) return this.put(w, where, name, text);
-    let made: DriveFile;
-    try {
-      made = await w.createText(parent, name, text);
-    } catch (e) {
-      // The next write looks for its folder again; this one is done only if the record landed with these bytes.
-      this.placed.delete(this.placeOf(where));
-      const landed = await this.read(where, name);
-      if (!landed) throw e;
-      if (!same(landed, new TextEncoder().encode(text))) {
-        console.error(`Run record ${name} is there with other bytes`);
-        throw new BowerError('conflict', SAVE_FAILED);
-      }
-      // The record landed and only its answer was lost: it is the same record, not a second one.
-      console.error(e);
-      return;
-    }
-    if (!same(await this.drive.readBytes(made.id), new TextEncoder().encode(text))) {
-      console.error(`Run record ${name} could not be read back`);
-      throw new BowerError('unknown', SAVE_FAILED);
-    }
-  }
-
-  /** The verified manifest the control row names, v1 or v2; anything else refuses. */
-  async manifest(runId: string, hash: string): Promise<RunManifest> {
-    const bytes = await this.read({ runId }, manifestName(hash));
-    const parsed = bytes ? await parseRunManifestV2(bytes, this.rootId) : null;
-    if (!parsed?.ok || parsed.sha256 !== hash || parsed.value.runId !== runId) {
-      console.error(`The manifest of run ${runId} is ${parsed ? (parsed.ok ? 'another run' : parsed.reason) : 'missing'}`);
-      // A later version is named only for the very bytes the run recorded; damaged bytes stay a read failure.
-      const later = bytes !== null && parsed?.ok === false && parsed.reason === 'version' && (await sha256(new Blob([bytes.slice()]))) === hash;
-      throw new BowerError('unknown', later ? NEWER_BOWER : READ_FAILED);
-    }
-    return parsed.value;
-  }
-
-  /**
-   * The committed chain, from the control head back to revision zero by each
-   * record's own digest; orphan records are never taken as head. Verified as a
-   * monotonic chain (contracts/run-checkpoint).
-   */
-  async chain(manifest: RunManifest, manifestHash: string, head: string): Promise<Checkpoint[]> {
-    const runId = manifest.runId;
-    const files = (await this.list({ runId })).filter((f) => f.name.startsWith('checkpoint-'));
-    const expected = { rootId: this.rootId, runId, captureId: manifest.captureId, manifestHash, operationIds: manifest.operations.map((o) => o.operationId) };
-    const out: Checkpoint[] = [];
-    let at: string | null = head;
-    while (at) {
-      const hash: string = at;
-      const named = files.filter((f) => f.name.endsWith(`-${hash}.json`));
-      const name = named[0]?.name;
-      const bytes = name ? await this.read({ runId }, name) : null;
-      const parsed = bytes ? await parseRunCheckpoint(bytes, expected) : null;
-      if (!name || !parsed?.ok || parsed.sha256 !== hash || name !== checkpointName(parsed.value.revision, hash)) {
-        console.error(`Checkpoint ${hash} of run ${runId} is ${parsed ? (parsed.ok ? 'misnamed' : parsed.reason) : 'missing'}`);
-        throw new BowerError('unknown', READ_FAILED);
-      }
-      out.unshift(parsed.value);
-      at = parsed.value.previous;
-      // More links than records means a loop: the chain check below refuses it.
-      if (out.length > files.length) break;
-    }
-    const verified = await verifyCheckpointChain(out);
-    if (!verified.ok || verified.head !== head) {
-      console.error(`The checkpoints of run ${runId} do not chain (${verified.ok ? 'head' : `${verified.reason} at ${verified.at}`})`);
-      throw new BowerError('unknown', READ_FAILED);
-    }
-    return out;
-  }
-
+/** One verified run's records over the fake Drive, scoped to one root: the shared records, and the report and dispositions. */
+export class RunRecords extends SpineRecords {
   /** The published report record, read back and bound to this run. */
   async report(manifest: RunManifest, manifestHash: string, hash: string): Promise<ReportRecord> {
     const bytes = await this.read({ runId: manifest.runId }, reportName(hash));
@@ -851,27 +658,4 @@ export class RunRecords {
     }
     await this.put(w, 'piles', dispositionName(c.hash), c.text);
   }
-
-  /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed. */
-  private async ensure(w: FencedDrive, where: Where, { bower, ns, run }: Folders): Promise<string> {
-    if (run[0]) return run[0].id;
-    const sys = bower[0]?.id ?? (await this.folder(w, this.rootId, SYSTEM.dir));
-    const space = ns[0]?.id ?? (await this.folder(w, sys, where === 'piles' ? PILES_NAME : RUNS_NAME));
-    return where === 'piles' ? space : this.folder(w, space, where.runId);
-  }
-
-  private async folder(w: FencedDrive, parent: string, name: string): Promise<string> {
-    try {
-      return (await w.createFolder(parent, name)).id;
-    } catch (e) {
-      const landed = (await this.drive.listAll(parent)).find((f) => f.folder && f.name === name && f.parents[0] === parent);
-      if (!landed) throw e;
-      console.error(e);
-      return landed.id;
-    }
-  }
-}
-
-function same(a: Uint8Array, b: Uint8Array): boolean {
-  return a.byteLength === b.byteLength && a.every((x, i) => x === b[i]);
 }

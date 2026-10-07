@@ -29,6 +29,7 @@ import { BowerError, type RunReport } from '../types';
 import { SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { RunWire } from '../worker/worker-api';
 import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, SOURCE_NOT_AS_SEEN, textHash, toEvidence, type RunManifest } from './fake-run-records';
+import { firstCheckpoint, nextCheckpoint, type CheckpointPatch } from '../spine/records';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
 export interface Binding {
@@ -228,12 +229,7 @@ export class FakeRunService {
     const m = await canonical(manifest);
     const records = new RunRecords(this.drive, binding.rootId, this.placed);
     const attempt: Attempt = { key, attemptId: this.mint('attempt'), epoch: (before?.lastEpoch ?? 0) + 1, original: true };
-    const first: Checkpoint = {
-      v: 1, kind: 'run-checkpoint', scope: { rootId: binding.rootId }, runId: manifest.runId, manifestHash: m.hash,
-      revision: 0, previous: null, attemptId: attempt.attemptId, epoch: attempt.epoch, phase: 'queued', phaseAt: this.clock(),
-      outcomes: manifest.operations.map((o): Outcome => ({ operationId: o.operationId, state: 'not-dispatched' })),
-      report: { state: 'not-ready' }, retainedPileIds: [],
-    };
+    const first = firstCheckpoint(manifest, m.hash, attempt, this.clock());
     const c = await canonical(first);
     const viewBefore = await this.viewHash(binding.rootId);
     // Admission writes only while this binding is authorized and no other run took the row meanwhile.
@@ -705,10 +701,10 @@ export class FakeRunService {
    * advances in the same step as a last check. A refused or failed write
    * leaves the head where it was.
    */
-  private async commit(attempt: Attempt, head: Checkpoint, patch: Partial<Pick<Checkpoint, 'phase' | 'phaseAt' | 'outcomes' | 'report' | 'retainedPileIds'>>): Promise<Checkpoint> {
+  private async commit(attempt: Attempt, head: Checkpoint, patch: CheckpointPatch): Promise<Checkpoint> {
     const row = this.row(attempt.key);
     const expected = row.control.head;
-    const next: Checkpoint = { ...head, ...patch, revision: head.revision + 1, previous: expected, attemptId: attempt.attemptId, epoch: attempt.epoch };
+    const next = nextCheckpoint(head, expected, attempt, patch);
     const c = await canonical(next);
     const cache = this.cache.get(attempt.key);
     if (!cache) throw new BowerError('unknown', SAVE_FAILED);
