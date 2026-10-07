@@ -53,6 +53,15 @@ import type { TemplateFile } from './template.generated.js';
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
 
+/** The text the first template put in `Rules.md`: plain, without Bower's mark. Only a file with exactly these bytes is repaired. */
+export const OLD_RULES_TEMPLATE = `## Rules
+
+Your own rules for Bower, one per line. Where they disagree with Bower's own, these win.
+`;
+
+/** Every file a new Bower folder gets. */
+export const VAULT_TEMPLATE: readonly TemplateFile[] = TEMPLATE_FILES;
+
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
