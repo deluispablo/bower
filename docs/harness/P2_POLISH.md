@@ -198,3 +198,7 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - runner/test/corpus.test.ts hard-codes the owner's local path to the original bench folder (skip when absent).
   - provider-contract left out: the intent has no note text, and the model sees no file contents (C15/P4-C).
 - (P4-2 provider-contract, left out) Claude runs leave requests and answers waiting (not archived): P4-C, the semantic slices.
+- (P4-2 fix-round check, PASS at 61b3c6e) Minors:
+  - claude.ts:204 nameOk: partOk(name) counts the extension, though the comment says not; a 118-character name plus ".pdf" refuses the whole run.
+  - scripted.ts:1174: Claude runs still word rules through RULE_WORDING (the demo table, Rules.md only). P4-C.
+  - drive.ts:165: readText and readBytes are still cached by id. It fails closed (effects.ts:138 checks beforeContent).
