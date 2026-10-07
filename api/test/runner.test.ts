@@ -1,6 +1,7 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
 import type { RunPhase, RunReply } from '../src/process.js';
@@ -100,6 +101,21 @@ describe('runner wire', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ hash: hex, run_id: runner.runId, epoch: 1, retired: 0 });
     expect(JSON.stringify(rows)).not.toContain(runner.ticket);
+  });
+
+  it('a runner token call with an unreadable refresh token is signed out and retires the sessions', async () => {
+    const { sub, runner } = await aRun();
+    const p = person(sub);
+    // No cached Drive token, and the kept refresh token cannot be read (TOKEN_ENC_KEY rotated).
+    const oldKey = await importEncryptionKey(btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))));
+    await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: await encrypt('test-refresh-token', oldKey) });
+    await p.cacheDriveToken({ accessToken: 'access-old', expiresAt: Date.now() - HOUR });
+    const before = (await p.account())?.generation ?? -1;
+    const r = await runner.token();
+    expect(r.status).toBe(401);
+    expect(await code(r)).toBe('signed-out');
+    expect((await p.account())?.generation).toBe(before + 1);
+    expect(await p.encryptedRefreshToken()).toBeNull();
   });
 
   it('a wrong or expired ticket is signed out', async () => {

@@ -4,7 +4,7 @@ import type { JWK, JWTVerifyGetKey } from 'jose';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OAUTH_COOKIE } from '../src/auth.js';
-import { decrypt, importEncryptionKey } from '../src/crypto.js';
+import { decrypt, encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { GOOGLE_AUTH_URL, GOOGLE_JWKS_URL, GOOGLE_TOKEN_URL, codeChallenge } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
@@ -375,6 +375,40 @@ describe('GET /auth/callback', () => {
     expect(again.response.status).toBe(302);
     expect(again.response.headers.get('location')).toBe(env.APP_ORIGIN);
     expect(await person(sub).encryptedRefreshToken()).not.toBeNull();
+  });
+
+  it('an unreadable refresh token signs the person out and the next sign-in asks for consent', async () => {
+    // A refresh token kept under a key the Worker no longer has (TOKEN_ENC_KEY rotated).
+    const oldKey = await importEncryptionKey(btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))));
+    const unreadable = await encrypt(REFRESH_TOKEN, oldKey);
+    const sub = newSub();
+    const cookie = await sessionOf(sub);
+    await person(sub).setFolderId('FOLDER_ID');
+    await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: unreadable });
+    const before = (await person(sub).account())?.generation ?? -1;
+
+    // Its Drive token call signs the person out, never 500.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const token = await createApp({ keys }).request(`${API}/drive/token`, { headers: { cookie } }, env);
+      expect(token.status).toBe(401);
+      expect(await errorCode(token)).toBe('signed-out');
+      expect(token.headers.getSetCookie().some((c) => c.startsWith(`${SESSION_COOKIE}=;`))).toBe(true);
+      expect((await person(sub).account())?.generation).toBe(before + 1);
+      expect(await person(sub).encryptedRefreshToken()).toBeNull();
+      expect((await me(cookie)).status).toBe(401);
+
+      // Signing in before any token call: the unreadable token is not kept, and Google is asked for consent.
+      await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: unreadable });
+      const again = await signIn((nonce) => ({ sub, nonce }), null);
+      expect(again.response.status).toBe(302);
+      expect(again.response.headers.get('location')).toBe(`${env.API_ORIGIN}/auth/login?consent=1`);
+      expect(cookieValue(again.response, SESSION_COOKIE)).toBeUndefined();
+      expect(await person(sub).encryptedRefreshToken()).toBeNull();
+      expect(logged(spy)).not.toContain(REFRESH_TOKEN);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
