@@ -407,6 +407,60 @@ describe('what the review found', () => {
   });
 });
 
+describe('a lost reply to a write', () => {
+  const TART = 'Resources/Cooking/Lemon tart.md';
+  /** Calls to `get` made after the first `update`/`writeText` call, i.e. the read-back. */
+  const readBacks = (): { writes: () => number; gets: () => number } => {
+    let writes = 0;
+    let gets = 0;
+    const update = drive.update.bind(drive);
+    const writeText = drive.writeText.bind(drive);
+    const get = drive.get.bind(drive);
+    drive.update = async (id, patch) => { writes++; return update(id, patch); };
+    drive.writeText = async (id, text, at) => { writes++; return writeText(id, text, at); };
+    drive.get = async (id) => { if (writes > 0) gets++; return get(id); };
+    return { writes: () => writes, gets: () => gets };
+  };
+
+  it('a lost reply to a rename that landed counts as saved', async () => {
+    await vault.tree();
+    const seen = readBacks();
+    drive.loseNextReply();
+    const to = await vault.rename(TART, 'Lemon cake');
+    expect(to).toBe('Resources/Cooking/Lemon cake.md');
+    expect(seen.gets()).toBeGreaterThan(0);
+    expect(findNode(await vault.tree(), to)).not.toBeNull();
+    expect(findNode(await vault.tree(), TART)).toBeNull();
+    const renames = (await vault.changes()).filter((r) => r.kind === 'rename');
+    expect(renames).toHaveLength(1);
+  });
+
+  it('a lost reply to a move that did not land says offline', async () => {
+    await vault.tree();
+    const seen = readBacks();
+    const update = drive.update.bind(drive);
+    drive.update = async (id) => { await update(id, {}); throw driveError('offline'); };
+    await expect(vault.move(TART, 'Areas')).rejects.toMatchObject({ code: 'offline', message: "You're offline. Try again when you're back." });
+    expect(seen.gets()).toBeGreaterThan(0);
+    expect(findNode(await vault.tree(), TART)).not.toBeNull();
+    expect((await vault.changes()).some((r) => r.kind === 'move')).toBe(false);
+  });
+
+  it('a lost reply to a task toggle that cannot be read back says not sure', async () => {
+    await vault.tree();
+    const seen = readBacks();
+    const writeText = drive.writeText.bind(drive);
+    drive.writeText = async (id, text, at) => {
+      await writeText(id, text, at);
+      drive.get = async () => { throw driveError('offline'); };
+      drive.readText = async () => { throw driveError('offline'); };
+      throw driveError('offline');
+    };
+    await expect(vault.toggleTask(PASSPORT, 4)).rejects.toMatchObject({ name: 'BowerError', message: "Bower isn't sure that saved. Check again when you're back online." });
+    expect(seen.writes()).toBe(1);
+  });
+});
+
 describe('what the code review found', () => {
   it('a rename or move of something changed elsewhere writes nothing', async () => {
     await vault.tree();
