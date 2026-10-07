@@ -133,3 +133,11 @@ describe('what the repository promises', () => {
     expect(findings.length).toBe(verdict?.[1] === 'PASS' ? 0 : Number(verdict?.[2]));
   });
 });
+
+describe('deletion-allowlist-doc', () => {
+  it('the runbook says the invitation stays after deletion', () => {
+    const runbook = read('docs/runbook.md');
+    expect(runbook).toMatch(/invitation.*stays.*after.*deletion|remains.*after.*delete|deletion.*invitation.*remains/i);
+    expect(runbook).toMatch(/operator.*remov|remov.*operator|remov.*by hand|by hand/i);
+  });
+});
