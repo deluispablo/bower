@@ -3,8 +3,9 @@
  * the shared run records (`src/data/spine/records.ts`) and the adapter's fenced writes.
  *
  * - A new run writes its manifest record and its first checkpoint before any operation.
- * - Each operation's intent (`possible-effect`) is committed before it is sent, and its outcome after; so a
- *   checkpoint follows every applied operation.
+ * - Each operation's intent (`possible-effect`) is committed once its send is about to be attempted (after the
+ *   effects' own reads before it), and its outcome after; so a checkpoint follows every applied operation, and an
+ *   operation refused or stopped before its send never counts as possibly sent.
  * - A restarted runner, or a new attempt, reads only its run's folder, verifies the chain and goes on after the
  *   last checkpoint; it never plans again. A broken or unverifiable chain stops the run as failed with nothing
  *   written.
@@ -27,8 +28,12 @@ export type Settled = { state: 'applied'; evidence: EffectEvidence } | { state: 
 
 /** The effects of operations on the folder: the adapter's sends and evidence reads. */
 export interface Effects {
-  /** Sends the operation once through these fenced writes; `manifest` is the run's, for what the operation relies on. */
-  apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest): Promise<Settled>;
+  /**
+   * Sends the operation once through these fenced writes; `manifest` is the run's, for what the operation relies on.
+   * `sending` is awaited right before the send is attempted, after every read that may refuse it; an operation that
+   * settles without it was refused before anything was sent.
+   */
+  apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest, sending: () => Promise<void>): Promise<Settled>;
   /** Stored evidence that the operation's effect landed; null when none is found. */
   observe(op: OperationV2, head: Checkpoint): Promise<EffectEvidence | null>;
 }
@@ -46,7 +51,10 @@ export interface SpineRun {
   plan(): Promise<RunManifest>;
   clock(): number;
   newId(): string;
-  /** Sees the chain each time it grows (the runner keeps it, to say truthfully how a run that stops ended). */
+  /**
+   * Sees the chain once it is read (empty for a run whose folder holds none yet), then each time it grows; the runner
+   * keeps it, to say truthfully how a run that stops ended. Not called when the folder cannot be read.
+   */
   onChain?(chain: Checkpoint[]): void;
 }
 
@@ -74,6 +82,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     ({ manifest, manifestHash, chain, head: headHash } = found);
     run.onChain?.(chain);
   } else {
+    run.onChain?.([]);
     manifest = await run.plan();
     const m = await canonical(manifest);
     const parsed = await parseRunManifestV2(m.bytes, run.rootId);
@@ -134,11 +143,23 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
       await resolve(op, { operationId, state: 'rejected', failure: STAYED });
       continue;
     }
-    await resolve(op, { operationId, state: 'possible-effect', dispatchId: run.newId() });
-    const settled = await run.effects.apply(op, at, await run.batch(), manifest);
-    await resolve(op, settled.state === 'applied'
-      ? { operationId, state: 'applied', evidence: settled.evidence }
-      : { operationId, state: 'rejected', failure: settled.failure });
+    // Possibly sent only once its send is attempted: a check that cannot read, or refuses, leaves it unsent.
+    let sent = false;
+    const settled = await run.effects.apply(op, at, await run.batch(), manifest, async () => {
+      if (sent) return;
+      await resolve(op, { operationId, state: 'possible-effect', dispatchId: run.newId() });
+      sent = true;
+    });
+    if (settled.state === 'applied') {
+      if (!sent) {
+        console.error(`Operation ${op.ordinal} of run ${run.runId} shows applied with no send attempted`);
+        throw new BowerError('unknown', UNRESOLVED);
+      }
+      await resolve(op, { operationId, state: 'applied', evidence: settled.evidence });
+      continue;
+    }
+    if (!sent && outcome.state === 'not-dispatched') await resolve(op, { operationId, state: 'before-effect-refused', failure: settled.failure });
+    await resolve(op, { operationId, state: 'rejected', failure: settled.failure });
   }
   return { state: 'settled', chain, manifest, manifestHash };
 }

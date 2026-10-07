@@ -60,9 +60,11 @@ ask() {
   IFS= read -r ANSWER || true
 }
 
+# OWNER/NAME, neither part starting with '-', so it can never be read as a flag
+# by gh or git, whether typed at the prompt or given on the command line.
 is_repo() {
   case "$1" in
-    */*/* | /* | */ | *' '*) return 1 ;;
+    */*/* | /* | */ | *' '* | -* | */-*) return 1 ;;
     ?*/?*) return 0 ;;
     *) return 1 ;;
   esac

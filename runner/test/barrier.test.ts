@@ -28,11 +28,12 @@ class StubEffects implements Effects {
   /** After this many sends, the next one stops on an error nobody caught. */
   breakAfter: number | null = null;
 
-  async apply(op: OperationV2): Promise<Settled> {
+  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<Settled> {
     if (this.breakAfter !== null && this.sent.size >= this.breakAfter) throw new Error('The runner stopped');
-    this.sent.set(op.operationId, (this.sent.get(op.operationId) ?? 0) + 1);
     const e = op.effect;
     if (e.kind === 'move' && (this.refused === 'all' || e.before.fileId === this.refused)) return { state: 'rejected', failure: { code: 'conflict', message: MOVED } };
+    await sending();
+    this.sent.set(op.operationId, (this.sent.get(op.operationId) ?? 0) + 1);
     return { state: 'applied', evidence: evidenceOf(op) };
   }
 
@@ -199,8 +200,8 @@ describe('the report barrier', () => {
     expect(of(refused.fileId)).toBe('set-aside');
     expect([of(item('p-receipt')?.fileId ?? ''), of(item('p-plan')?.fileId ?? '')]).toEqual(['filed', 'filed']);
     expect(new Set(end.dispositions.map((d) => d.disposition))).toEqual(new Set(['filed', 'set-aside', 'waiting']));
-    // What waits was never sent anything; the report says what was filed and what was set aside.
-    expect([...effects.sent.keys()]).toHaveLength(3);
+    // Only what was filed was sent: what waits and what was refused were not; the report says what was filed and what was set aside.
+    expect([...effects.sent.keys()]).toHaveLength(2);
     const view = await stored(wire, root, SYSTEM.lastRun);
     expect(view?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done', report: { setAside: [{ name: 'ticket.pdf' }] } } });
     expect((view?.value as { run: { report: { filed: unknown[] } } }).run.report.filed).toHaveLength(2);

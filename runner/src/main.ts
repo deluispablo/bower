@@ -17,7 +17,10 @@
  * - when its chain holds an effect that was applied (or may have been sent), it stays in `saving`, for a
  *   redispatch to finish; past the recovery ceiling the Worker ends it saying the changes were made and the
  *   summary was not saved. It never says nothing happened.
- * - otherwise it ends `failed` with "The tidy-up stopped before changing anything. Try again." (`B_FAILURE`).
+ * - otherwise, only when it read its run's chain and found no such effect in it, it ends `failed` with "The tidy-up
+ *   stopped before changing anything. Try again." (`B_FAILURE`).
+ * - when it could not read its run's chain (a restarted runner whose first Drive read fails, or a token that never
+ *   came), it says nothing: it throws, so the job fails visibly, and the Worker's recovery decides how the run ends.
  * A run taken over by a newer attempt, or no longer allowed, reports nothing more.
  *
  * The provider (what the run plans from what it took) and the effects (how an operation reaches Drive) are handed
@@ -88,7 +91,7 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   const fetchFn = opts.fetch;
   const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}) });
   const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
-  const seen: Seen = { chain: [], saving: false };
+  const seen: Seen = { chain: null, saving: false };
   let end: Ended;
   try {
     end = await tidy(opts, token, status, seen);
@@ -102,6 +105,8 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
     return end;
   }
   if (end.phase === 'failed') return end;
+  // Its chain never read: what it changed is unknown here, so nothing is said (TL-P3-22 addendum, I1).
+  if (seen.chain === null) throw end.error;
   console.error(end.error);
   // The one rule for a run that stops: saving when it changed something, never "nothing changed" then.
   if (changedSomething(seen.chain)) {
@@ -112,9 +117,9 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   return { phase: 'failed', why: end.why };
 }
 
-/** What `tidy` saw: the run's chain as it grew, and whether `saving` was reported. */
+/** What `tidy` saw: the run's chain as read and as it grew (null until it was read), and whether `saving` was reported. */
 interface Seen {
-  chain: Checkpoint[];
+  chain: Checkpoint[] | null;
   saving: boolean;
 }
 
@@ -139,8 +144,8 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
   if (await shownDone(reads, rootId, opts.runId)) {
     const found = await records.found(opts.runId);
+    if (found.kind === 'run') seen.chain = found.chain;
     if (found.kind === 'run' && found.chain.length) {
-      seen.chain = found.chain;
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
       return { phase: 'done', dispositions: finished.dispositions };
     }

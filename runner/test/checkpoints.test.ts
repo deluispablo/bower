@@ -55,10 +55,11 @@ class CountedEffects implements Effects {
   readonly landed = new Set<string>();
   /** The operation (by ordinal) whose reply is lost after it lands, once. */
   loseReplyAt: number | null = null;
-  /** The operation (by ordinal) refused before anything is sent, once. */
+  /** The operation (by ordinal) whose send is attempted and fails with no answer, nothing landing, once. */
   refuseAt: number | null = null;
 
-  async apply(op: OperationV2): Promise<{ state: 'applied'; evidence: EffectEvidence }> {
+  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<{ state: 'applied'; evidence: EffectEvidence }> {
+    await sending();
     if (this.refuseAt === op.ordinal) {
       this.refuseAt = null;
       throw driveError('offline');
