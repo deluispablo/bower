@@ -191,7 +191,7 @@ describe('GET /auth/login', () => {
     expect(p.get('prompt')).toBe('select_account');
     const line = response.headers.getSetCookie().find((c) => c.startsWith(`${OAUTH_COOKIE}=`)) ?? '';
     expect(line.split('; ').slice(1)).toEqual(
-      expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/auth', 'Max-Age=600']),
+      expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/', 'Max-Age=600']),
     );
   });
 

@@ -292,12 +292,12 @@ describe('session cookie helpers', () => {
   });
 
   it('reads the session cookie among others', () => {
-    expect(SESSION_COOKIE).toBe('bower_session');
-    expect(readSessionCookie('bower_session=abc.def.ghi')).toBe('abc.def.ghi');
+    expect(SESSION_COOKIE).toBe('__Host-bower_session');
+    expect(readSessionCookie('__Host-bower_session=abc.def.ghi')).toBe('abc.def.ghi');
     expect(
-      readSessionCookie('theme=dark; bower_session=abc.def.ghi; lang=en'),
+      readSessionCookie('theme=dark; __Host-bower_session=abc.def.ghi; lang=en'),
     ).toBe('abc.def.ghi');
-    expect(readSessionCookie('theme=dark;bower_session=abc.def.ghi')).toBe(
+    expect(readSessionCookie('theme=dark;__Host-bower_session=abc.def.ghi')).toBe(
       'abc.def.ghi',
     );
   });
@@ -307,9 +307,9 @@ describe('session cookie helpers', () => {
     expect(readSessionCookie('')).toBeUndefined();
     expect(readSessionCookie('theme=dark; lang=en')).toBeUndefined();
     expect(
-      readSessionCookie('xbower_session=abc; bower_session_old=def'),
+      readSessionCookie('x__Host-bower_session=abc; __Host-bower_session_old=def; bower_session=old'),
     ).toBeUndefined();
-    expect(readSessionCookie('bower_session=')).toBeUndefined();
+    expect(readSessionCookie('__Host-bower_session=')).toBeUndefined();
   });
 });
 
