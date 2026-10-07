@@ -356,6 +356,36 @@ describe('deploy-staging.sh', { timeout: 30_000 }, () => {
     expect(result.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
   });
 
+  it('deploy-staging ignores asset upload lines', () => {
+    const at = checkout();
+    // Real wrangler output includes asset progress lines before the Worker upload line.
+    const withAssets = `🌀 Building list of assets...
+🌀 Starting asset upload...
+🌀 Found 10 new or modified static assets to upload. Proceeding with upload...
++ /index.html
+Uploaded 6 of 10 assets
+Uploaded 10 of 10 assets
+✨ Success! Uploaded 10 files (3 already uploaded) (1.52 sec)
+Total Upload: 412.33 KiB / gzip: 98.10 KiB
+Your Worker has access to the following bindings:
+- Vars:
+  - APP_ORIGIN: "https://bower-staging.example.test"
+Uploaded bower-staging (4.21 sec)
+Deployed bower-staging triggers (0.31 sec)
+  https://bower-staging.example.test
+Current Version ID: 00000000-0000-0000-0000-000000000000`;
+    const result = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: withAssets });
+    expect(result.status).toBe(0);
+    expect(result.calls.filter((c) => c.startsWith('curl '))).not.toEqual([]);
+
+    // Same output with bower-api should fail with production alarm.
+    const withBowerApi = withAssets.replace('Uploaded bower-staging (4.21 sec)', 'Uploaded bower-api (4.21 sec)');
+    const failed = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: withBowerApi });
+    expect(failed.status).not.toBe(0);
+    expect(failed.stderr).toMatch(/production|bower-api/i);
+    expect(failed.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
+  });
+
   it('deploy-staging confirms the upload line', () => {
     const at = checkout();
     const echoed = 'Total Upload: 1.00 KiB\nYour Worker has access to the following bindings:\n- Vars:\n  - APP_ORIGIN: "https://bower-staging.example.test"\nUploaded bower-other (2.10 sec)\nDeployed bower-other triggers (0.80 sec)';

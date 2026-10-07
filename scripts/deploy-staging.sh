@@ -177,11 +177,16 @@ deploy() {
   }
   say "$out"
   # Extract the upload line to check the Worker name, ignoring URLs that may contain the production name.
-  upload_line=$(printf '%s\n' "$out" | grep -E "^Uploaded [^ ]+" | head -n 1)
+  # Match only "Uploaded <name> (" to avoid matching asset progress lines like "Uploaded 6 of 10 assets".
+  upload_line=$(printf '%s\n' "$out" | grep -E "^Uploaded [^ ]+ \(" | head -n 1)
   if [ -z "$upload_line" ]; then
     die "Wrangler's output has no upload line for $STAGING_NAME: check what was deployed."
   fi
   if ! printf '%s' "$upload_line" | grep -Eq "^Uploaded $STAGING_NAME( |\$)"; then
+    # Check if the production Worker was deployed, which is a critical error.
+    if printf '%s' "$upload_line" | grep -Eq "^Uploaded $PRODUCTION_NAME( |\$)"; then
+      die "Wrangler uploaded $PRODUCTION_NAME (the production Worker); only $STAGING_NAME is allowed here."
+    fi
     die "Wrangler's output has no upload line for $STAGING_NAME: check what was deployed."
   fi
 }
