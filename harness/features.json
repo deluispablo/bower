@@ -3761,7 +3761,7 @@
       "Taking an address off the allowlist makes its next request answer 401 signed-out (one KV read per request)."
     ],
     "verify": "pnpm -C api exec vitest run -t \"drive token answers no-folder before a folder exists|drive token is minted from the stored refresh token and lasts at most an hour|a fresh drive token skips the cache|removing someone from the allowlist ends their sessions\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-09 (main b600592). Also owns schema step 3 (the folder pointer column) that worker-vault-pointer writes."
   },
   {
