@@ -48,7 +48,16 @@ class FakeGoogle {
   calls: { method: string; url: string }[] = [];
   /** Create the next folder, then lose the answer (the network drops it). */
   loseNextFolderReply = false;
+  /** Fail the next folder create before Drive makes anything (503). */
+  failNextFolderCreate = false;
+  /** Fail the next upload of a file with this name (503), once. */
+  failUploadNamed: string | null = null;
+  /** Answer the marker search this many ms late (two calls overlap). */
+  markedListDelayMs = 0;
+  /** The marker search finds nothing (Drive's search lags behind a create). */
+  searchBlind = false;
   private n = 0;
+  private reserved = 0;
 
   readonly fetchImpl: FetchLike = async (input, init) => {
     const method = init?.method ?? 'GET';
@@ -56,13 +65,31 @@ class FakeGoogle {
     if (input === GOOGLE_TOKEN_URL) return Response.json({ access_token: 'access-1', expires_in: 3599 });
     this.calls.push({ method, url: `${url.pathname}${url.search}` });
     if (url.origin !== DRIVE) throw new Error(`unexpected fetch in test: ${input}`);
-    if (url.pathname === '/drive/v3/files' && method === 'GET') return this.list(url.searchParams.get('q') ?? '');
+    if (url.pathname === '/drive/v3/files/generateIds' && method === 'GET') {
+      this.reserved += 1;
+      return Response.json({ ids: [`reserved-${this.reserved}`], space: 'drive', kind: 'drive#generatedIds' });
+    }
+    if (url.pathname === '/drive/v3/files' && method === 'GET') {
+      const q = url.searchParams.get('q') ?? '';
+      // The answer is what Drive held when asked, delivered late.
+      const answer = this.list(q);
+      if (q.includes('appProperties has') && this.markedListDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.markedListDelayMs));
+      }
+      return answer;
+    }
     if (url.pathname.startsWith('/drive/v3/files/') && method === 'GET') {
       const item = this.items.get(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
       return item === undefined ? Response.json({ error: { code: 404 } }, { status: 404 }) : Response.json(item);
     }
     if (url.pathname === '/drive/v3/files' && method === 'POST') {
       const body = JSON.parse(String(init?.body)) as Partial<Item>;
+      if (this.failNextFolderCreate) {
+        this.failNextFolderCreate = false;
+        return Response.json({ error: { code: 503 } }, { status: 503 });
+      }
+      // Drive refuses a second file with an id it already has (files.create with a generated id).
+      if (body.id !== undefined && this.items.has(body.id)) return Response.json({ error: { code: 409 } }, { status: 409 });
       const item = this.add({ ...body, mimeType: body.mimeType ?? FOLDER });
       if (this.loseNextFolderReply) {
         this.loseNextFolderReply = false;
@@ -73,6 +100,10 @@ class FakeGoogle {
     if (url.pathname === '/upload/drive/v3/files' && method === 'POST') {
       const [meta] = String(init?.body).split(/--bower-[0-9a-f-]+(?:--)?\r\n?/).filter((p) => p.trim() !== '');
       const metadata = JSON.parse((meta ?? '').split('\r\n\r\n')[1] ?? '{}') as Partial<Item>;
+      if (this.failUploadNamed !== null && metadata.name === this.failUploadNamed) {
+        this.failUploadNamed = null;
+        return Response.json({ error: { code: 503 } }, { status: 503 });
+      }
       return Response.json(this.add({ ...metadata, mimeType: metadata.mimeType ?? 'text/plain' }));
     }
     return Response.json({ error: 'unexpected' }, { status: 500 });
@@ -81,7 +112,7 @@ class FakeGoogle {
   add(partial: Partial<Item>): Item {
     this.n += 1;
     const item: Item = {
-      id: `drive-${this.n}`,
+      id: partial.id ?? `drive-${this.n}`,
       name: partial.name ?? 'x',
       mimeType: partial.mimeType ?? FOLDER,
       parents: partial.parents ?? [],
@@ -95,6 +126,7 @@ class FakeGoogle {
   private list(q: string): Response {
     const parent = /'([^']+)' in parents/.exec(q)?.[1];
     const marked = q.includes('appProperties has');
+    if (marked && this.searchBlind) return Response.json({ files: [] });
     const files = [...this.items.values()].filter(
       (i) => !i.trashed && (parent === undefined || i.parents.includes(parent)) && (!marked || i.appProperties['bowerFolder'] === '1'),
     );
@@ -205,15 +237,93 @@ describe('POST /vault', () => {
     const { sub, cookie } = await someone();
     const g = new FakeGoogle();
     g.loseNextFolderReply = true;
+    // Drive's search has not caught up with the create yet: only the reserved id can tell.
+    g.searchBlind = true;
     const lost = await post(g, cookie);
     expect(lost.status).toBe(500);
     expect(g.marked).toHaveLength(1);
     const retry = await body(await post(g, cookie));
-    expect(retry.found).toBe(true);
+    // The retry is the first answer about a brand-new folder.
+    expect(retry.found).toBe(false);
     expect(g.marked).toHaveLength(1);
     expect(retry.folderId).toBe(g.marked[0]?.id);
     expect(g.paths(retry.folderId).sort()).toEqual(expectedPaths().sort());
     expect(await person(sub).folderId()).toBe(retry.folderId);
+  });
+
+  it('a reserved folder id that was never created is created on the next call', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    g.failNextFolderCreate = true;
+    expect((await post(g, cookie)).status).toBe(500);
+    expect(g.marked).toHaveLength(0);
+    const retry = await body(await post(g, cookie));
+    expect(retry).toEqual({ folderId: 'reserved-1', found: false });
+    expect(g.marked.map((i) => i.id)).toEqual(['reserved-1']);
+    expect(g.calls.filter((c) => c.url.startsWith('/drive/v3/files/generateIds'))).toHaveLength(1);
+    expect(g.paths(retry.folderId).sort()).toEqual(expectedPaths().sort());
+    expect(await person(sub).folderId()).toBe('reserved-1');
+  });
+
+  it('a failure mid-fill is completed on the next call', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    g.failUploadNamed = 'Rules.md';
+    expect((await post(g, cookie)).status).toBe(500);
+    expect(g.marked).toHaveLength(1);
+    const retry = await body(await post(g, cookie));
+    expect(retry.found).toBe(false);
+    const paths = g.paths(retry.folderId);
+    // Every path present, nothing created twice.
+    expect(paths.sort()).toEqual(expectedPaths().sort());
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(g.marked).toHaveLength(1);
+    expect(await person(sub).folderId()).toBe(retry.folderId);
+  });
+
+  it('a complete folder is not filled again', async () => {
+    const { cookie } = await someone();
+    const g = new FakeGoogle();
+    const first = await body(await post(g, cookie));
+    // The person deletes a file on purpose: once the folder was complete, Bower leaves it be.
+    const rules = [...g.items.values()].find((i) => i.name === 'Rules.md' && i.parents.includes(first.folderId));
+    if (rules === undefined) throw new Error('missing');
+    rules.trashed = true;
+    const before = g.calls.length;
+    expect(await body(await post(g, cookie))).toEqual({ folderId: first.folderId, found: true });
+    const later = g.calls.slice(before);
+    expect(later.every((c) => c.method === 'GET' && c.url.startsWith(`/drive/v3/files/${first.folderId}?`))).toBe(true);
+    expect([...g.items.values()].filter((i) => i.name === 'Rules.md' && !i.trashed)).toHaveLength(0);
+  });
+
+  it('two first calls at once make one Bower folder', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    g.markedListDelayMs = 50;
+    const [a, b] = await Promise.all([post(g, cookie), post(g, cookie)]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    const [ra, rb] = [await body(a), await body(b)];
+    expect(g.marked).toHaveLength(1);
+    expect(ra.folderId).toBe(g.marked[0]?.id);
+    expect(rb.folderId).toBe(ra.folderId);
+    expect([ra.found, rb.found].sort()).toEqual([false, true]);
+    const paths = g.paths(ra.folderId);
+    expect(paths.sort()).toEqual(expectedPaths().sort());
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(await person(sub).folderId()).toBe(ra.folderId);
+  });
+
+  it('GET /me answers the folder pointer after POST /vault', async () => {
+    const { cookie } = await someone();
+    const g = new FakeGoogle();
+    const me = async () =>
+      (await (await createApp({ fetchImpl: g.fetchImpl }).request(`${APP}/me`, { headers: { cookie } }, env)).json()) as {
+        folderId: string | null;
+      };
+    expect((await me()).folderId).toBeNull();
+    const made = await body(await post(g, cookie));
+    expect((await me()).folderId).toBe(made.folderId);
   });
 
   it('vault needs a session and the app origin', async () => {

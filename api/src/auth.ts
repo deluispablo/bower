@@ -285,11 +285,14 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     return c.body(null, 204);
   });
 
-  auth.get('/me', requireSession, (c) => {
+  auth.get('/me', requireSession, async (c) => {
     const account = c.get('account');
-    if (account === undefined) throw new HttpError(500, 'internal');
-    // The folder pointer comes with its own entry (worker-vault-pointer).
-    return c.json({ user: { name: account.name, email: account.email }, folderId: null });
+    const sub = c.get('userId');
+    if (account === undefined || sub === undefined) throw new HttpError(500, 'internal');
+    const env = c.get('env');
+    // The pointer POST /vault stored, or null before the first one.
+    const folderId = await reachPerson('folderId', () => personFor(env, sub).folderId());
+    return c.json({ user: { name: account.name, email: account.email }, folderId });
   });
 
   return auth;

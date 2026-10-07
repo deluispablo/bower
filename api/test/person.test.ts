@@ -159,21 +159,22 @@ describe('person storage migration', () => {
     expect(await alex.account()).toBeNull();
   });
 
-  it('a version 2 person migrates to version 3, keeps its account and gains an empty folder pointer', async () => {
+  it('a version 2 person migrates to the current version, keeps its account and gains an empty folder pointer', async () => {
     const alex = personFor('sub-alex-v2');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
     // Put the database back as P3-4 shipped it: no pointer or token columns, a version row of 2.
     await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
-      for (const column of ['folder_id', 'access_token', 'access_expires_at']) {
+      for (const column of ['folder_id', 'access_token', 'access_expires_at', 'folder_complete', 'pending_folder_id', 'vault_claim', 'vault_claim_until']) {
         sql.exec(`ALTER TABLE account DROP COLUMN ${column}`);
       }
       sql.exec('UPDATE schema_version SET version = 2 WHERE id = 1');
     });
     await evictDurableObject(alex);
 
-    expect(await alex.schemaVersion()).toBe(3);
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
     expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0 });
+    expect(await alex.vaultState()).toEqual({ folderId: null, complete: false, pending: null });
     expect(await alex.encryptedRefreshToken()).toBe('enc-token');
     expect(await alex.folderId()).toBeNull();
     expect(await alex.setFolderId('FOLDER_ID')).toBe(true);

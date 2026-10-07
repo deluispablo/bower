@@ -102,6 +102,36 @@ describe('GET /drive/token', () => {
     expect(g.calls).toHaveLength(1);
   });
 
+  it('the expiry counts from before Google was asked', async () => {
+    const { cookie } = await someone();
+    let asked = 0;
+    const g = google(() => Response.json({ access_token: 'slow', expires_in: 3599 }));
+    const slow: FetchLike = async (input, init) => {
+      asked = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return g.fetchImpl(input, init);
+    };
+    const response = await createApp({ fetchImpl: slow }).request(`${API}/drive/token`, { headers: { cookie } }, env);
+    const body = (await response.json()) as { expiresAt: number };
+    expect(body.expiresAt).toBeLessThanOrEqual(asked + 3599_000);
+  });
+
+  it('forgetting Google access keeps a refresh token that a newer sign-in left', async () => {
+    const { sub } = await someone();
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    const read = await person(sub).encryptedRefreshToken();
+    // Meanwhile the person signs in again and Google sends a new refresh token.
+    const newer = await encrypt('newer-refresh-token', key);
+    await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: newer });
+    expect(await person(sub).forgetGoogleAccess(read ?? '')).toBe(false);
+    expect(await person(sub).encryptedRefreshToken()).toBe(newer);
+    expect((await person(sub).account())?.generation).toBe(0);
+    // With the token it read, it forgets.
+    expect(await person(sub).forgetGoogleAccess(newer)).toBe(true);
+    expect(await person(sub).encryptedRefreshToken()).toBeNull();
+    expect((await person(sub).account())?.generation).toBe(1);
+  });
+
   it('a lifetime longer than an hour is cut to an hour', async () => {
     const { cookie } = await someone();
     const g = google(() => Response.json({ access_token: 'long', expires_in: 86400 }));
@@ -126,6 +156,7 @@ describe('GET /drive/token', () => {
     const g = google(() => Response.json({ error: 'invalid_grant' }, { status: 400 }));
     const response = await token(g, cookie);
     expect(response.status).toBe(401);
+    expect(response.headers.getSetCookie().some((c) => c.startsWith(`${SESSION_COOKIE}=;`))).toBe(true);
     expect(await errorCode(response)).toBe('signed-out');
     expect((await person(sub).account())?.generation).toBe(1);
     expect(await person(sub).encryptedRefreshToken()).toBeNull();

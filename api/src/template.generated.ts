@@ -65,7 +65,7 @@ Write a few lines about yourself: where you live, what you do, who is in your li
   },
   {
     path: 'Rules.md',
-    content: `# Rules
+    content: `## Rules
 
 Your own rules for Bower, one per line. Where they disagree with Bower's own, these win.
 `,

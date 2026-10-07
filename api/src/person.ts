@@ -17,6 +17,13 @@ export interface DriveAccessToken {
   expiresAt: number;
 }
 
+/** The folder pointer, whether the template is complete in it, and a reserved id not yet complete. */
+export interface VaultState {
+  folderId: string | null;
+  complete: boolean;
+  pending: string | null;
+}
+
 /** What a sign-in leaves: the generation to sign into the cookie, and whether a refresh token is kept. */
 export interface SignInResult {
   generation: number;
@@ -131,10 +138,84 @@ export class Person extends DurableObject<Env> {
     return row?.folder_id ?? null;
   }
 
-  /** Sets (or with null clears) the folder pointer. False when there is no account. */
+  /**
+   * Sets (or with null clears) the folder pointer. A different folder starts
+   * as not complete; the same one keeps its state. False when there is no account.
+   */
   setFolderId(folderId: string | null): boolean {
     return (
-      this.ctx.storage.sql.exec('UPDATE account SET folder_id = ? WHERE id = 1', folderId).rowsWritten > 0
+      this.ctx.storage.sql.exec(
+        `UPDATE account SET
+           folder_complete = CASE WHEN folder_id IS ? THEN folder_complete ELSE 0 END,
+           folder_id = ?
+         WHERE id = 1`,
+        folderId,
+        folderId,
+      ).rowsWritten > 0
+    );
+  }
+
+  /** Everything `POST /vault` keeps about the folder. */
+  vaultState(): VaultState {
+    const row = this.ctx.storage.sql
+      .exec<{ folder_id: string | null; folder_complete: number; pending_folder_id: string | null }>(
+        'SELECT folder_id, folder_complete, pending_folder_id FROM account WHERE id = 1',
+      )
+      .toArray()[0];
+    return {
+      folderId: row?.folder_id ?? null,
+      complete: row?.folder_complete === 1,
+      pending: row?.pending_folder_id ?? null,
+    };
+  }
+
+  /**
+   * Grants `holder` the right to work on the folder until `until` (epoch ms),
+   * when nobody else holds it or their claim lapsed at `now`. One `POST /vault`
+   * at a time per person: the read and the write here are one synchronous step.
+   */
+  claimVault(holder: string, now: number, until: number): boolean {
+    return (
+      this.ctx.storage.sql.exec(
+        `UPDATE account SET vault_claim = ?, vault_claim_until = ?
+         WHERE id = 1 AND (vault_claim IS NULL OR vault_claim = ? OR vault_claim_until <= ?)`,
+        holder,
+        until,
+        holder,
+        now,
+      ).rowsWritten > 0
+    );
+  }
+
+  /** Gives the claim back, only if `holder` still has it. */
+  releaseVault(holder: string): void {
+    this.ctx.storage.sql.exec(
+      'UPDATE account SET vault_claim = NULL, vault_claim_until = NULL WHERE id = 1 AND vault_claim = ?',
+      holder,
+    );
+  }
+
+  /** Keeps a folder id reserved with files.generateIds, before it is created. */
+  reserveFolder(folderId: string): void {
+    this.ctx.storage.sql.exec('UPDATE account SET pending_folder_id = ? WHERE id = 1', folderId);
+  }
+
+  /** Forgets a reservation that can no longer be used (that file is in the Bin or is not a folder). */
+  dropReservation(folderId: string): void {
+    this.ctx.storage.sql.exec(
+      'UPDATE account SET pending_folder_id = NULL WHERE id = 1 AND pending_folder_id = ?',
+      folderId,
+    );
+  }
+
+  /** The pointed folder `folderId` now holds the whole template: later calls skip the fill. */
+  markFolderComplete(folderId: string): void {
+    this.ctx.storage.sql.exec(
+      `UPDATE account SET folder_complete = 1,
+         pending_folder_id = CASE WHEN pending_folder_id = ? THEN NULL ELSE pending_folder_id END
+       WHERE id = 1 AND folder_id = ?`,
+      folderId,
+      folderId,
     );
   }
 
@@ -163,12 +244,17 @@ export class Person extends DurableObject<Env> {
   /**
    * Google no longer honours the refresh token (revoked): forgets it and the
    * cached access token, and retires every session. The next sign-in has no
-   * token kept, so the callback asks for consent again.
+   * token kept, so the callback asks for consent again. Compare-and-clear:
+   * only when the kept token is still `refused` (the one that was read), so
+   * a newer sign-in's token and sessions survive. True when it forgot.
    */
-  forgetGoogleAccess(): void {
-    this.ctx.storage.sql.exec(
-      `UPDATE account SET enc_refresh_token = NULL, access_token = NULL, access_expires_at = NULL,
-         session_generation = session_generation + 1 WHERE id = 1`,
+  forgetGoogleAccess(refused: string): boolean {
+    return (
+      this.ctx.storage.sql.exec(
+        `UPDATE account SET enc_refresh_token = NULL, access_token = NULL, access_expires_at = NULL,
+           session_generation = session_generation + 1 WHERE id = 1 AND enc_refresh_token = ?`,
+        refused,
+      ).rowsWritten > 0
     );
   }
 }
