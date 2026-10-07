@@ -422,6 +422,16 @@ export class Person extends DurableObject<Env> {
     };
   }
 
+  /**
+   * `DELETE /me`: empties the person object (account, tokens, folder pointer, claim, reserved ids, lease and
+   * leave rows) with `storage.deleteAll()`, then sets the schema up again, since this live instance will not
+   * run its constructor again: a later sign-in for the same sub starts fresh at the folder step.
+   */
+  async forget(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+    this.ctx.storage.transactionSync(() => migrate(this.ctx.storage.sql));
+  }
+
   /** The person's current run, or null before runs exist. */
   currentRun(): null {
     return null;
