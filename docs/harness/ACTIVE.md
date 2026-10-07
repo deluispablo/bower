@@ -29,7 +29,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
 
-**P3-14 (TL-P3-24):** `dispositions-match-report` (bower-escalated, `/private/tmp/bower-p3-disp`) and `runner-reports-reading-total` (bower-implementer, `/private/tmp/bower-p3-reading`) run in parallel. "Try again" retries that run's scope, as in P2; recheck it at C16.
+**P3-14 (TL-P3-24):** `runner-reports-reading-total` passes (41d9a36, red fixed in 5699b61); `dispositions-match-report` is running (bower-escalated, `/private/tmp/bower-p3-disp`). P3-15 started: `upload-queue-real` is running (`/private/tmp/bower-p3-upload`, port 5195); `declare-piles-real` goes out when the dispositions worker finishes (both packets `2026-10-07-p3-15-*`). "Try again" retries that run's scope, as in P2; recheck it at C16.
 - Next is P3-E: `upload-queue-real` (it folds in `upload-queue-persistent`) in parallel with `declare-piles-real`, then `behavior-suites-real-adapters` and `compatibility-accepted-app`.
 - P3-F runs alongside whenever a slot is free: `deploy-and-migrations` and `runbook-p3`, then `security-review` at the freeze (SHA-pinned actions, and the P4 rate-limit note).
 - Then the P3-G close: freeze, suites, the Opus fallback review, the C16 walk on the frozen SHA, and the dossier. Register the entries batch by batch.
