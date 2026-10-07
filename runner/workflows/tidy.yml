@@ -6,7 +6,11 @@
 # - The Worker sends `repository_dispatch` of type bower-tidy with `{ run_id, attempt, ticket, scope, allow_web }`.
 # - The run name is the one the Worker's recovery looks up; one concurrency group per run, never cancelled (R3).
 # - The runner reads the dispatch from the event file Actions keeps at GITHUB_EVENT_PATH, so the ticket is never put
-#   in the environment or the log; the runner masks it first. No secret is needed: the ticket is the credential.
+#   in the environment or the log; the runner masks it first. The ticket is the credential for Drive and the Worker.
+# - The provider is the BOWER_PROVIDER variable (scripted when unset). The Claude provider (TL-P4-01) needs Claude
+#   Code, installed pinned by version as the original's ingest.yml does, and the CLAUDE_CODE_OAUTH_TOKEN secret
+#   (https://code.claude.com/docs/en/github-actions), the one secret this workflow reads: Actions masks it in the log,
+#   and the runner hands it to claude's own environment only. BOWER_MODEL and BOWER_MAX_TURNS are optional variables.
 # - The job's own token can only read this repository, to check out the runner.
 name: tidy
 run-name: tidy ${{ github.event.client_payload.run_id }} ${{ github.event.client_payload.attempt }}
@@ -17,6 +21,10 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # Pinned to the version whose flags the runner was checked against (claude --help); bump deliberately.
+  CLAUDE_CODE_VERSION: '2.1.293'
 
 concurrency:
   group: tidy-${{ github.event.client_payload.run_id }}
@@ -34,7 +42,16 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '24'
+      - name: Install Claude Code
+        if: vars.BOWER_PROVIDER == 'claude'
+        run: |
+          npm install --prefix "$HOME/claude-cli" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+          printf '%s\n' "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Tidy up
         env:
           BOWER_API_URL: ${{ vars.BOWER_API_URL }}
+          BOWER_PROVIDER: ${{ vars.BOWER_PROVIDER }}
+          BOWER_MODEL: ${{ vars.BOWER_MODEL }}
+          BOWER_MAX_TURNS: ${{ vars.BOWER_MAX_TURNS }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: node runner/dist/runner.mjs

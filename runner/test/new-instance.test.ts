@@ -120,8 +120,10 @@ describe('new-instance.sh', () => {
     expect(tidy).toContain('node runner/dist/runner.mjs');
     expect(tidy).toContain('BOWER_API_URL: ${{ vars.BOWER_API_URL }}');
     expect(tidy).toMatch(/^permissions:/m);
-    // No expression reads a secret or the ticket, and nothing is echoed.
-    expect([...tidy.matchAll(/\$\{\{[^}]*\}\}/g)].map((m) => m[0]).join(' ')).not.toMatch(/secrets|ticket/i);
+    // No expression reads the ticket, the one secret read is the Claude credential (TL-P4-01), and nothing is echoed.
+    const expressions = [...tidy.matchAll(/\$\{\{[^}]*\}\}/g)].map((m) => m[0]);
+    expect(expressions.join(' ')).not.toMatch(/ticket/i);
+    expect(expressions.filter((e) => /secrets/i.test(e))).toEqual(['${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}']);
     expect(tidy).not.toMatch(/\becho\b/);
 
     // The Worker's address set as a variable; no secret asked for, read, listed or set.
