@@ -77,3 +77,4 @@ From drive-real-behavior-suite (TL-P3-11, minor):
 - F8: "It may have been moved, renamed or put in the Bin." leaves the person at a dead end.
 
 - `src/data/fake/fake-worker.test.ts` times out (5 s, 30 s) in `pnpm check` while two workers load the machine; seen in client-retry round 1 and in the worker-logs-and-version close (2026-10-07). Gate reliability.
+- The note screen: a click on a task's label does nothing; only the box toggles (a native label should toggle its box). From the check 4 rerun, TL-P3-11 amendment.
