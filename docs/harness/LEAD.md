@@ -10,7 +10,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **P3-B is complete (2026-10-07):** R2, R3, R4 and the Drive suite.
 - **Codex review on 2026-10-12** (TL-P3-16): check that `codex exec` answers, then one review of the P3 Worker and spine range, before P4.
 - **Waiting on the coordinator:** batch P3-10: `spine-admission-manifest` (with the 409 `nothing`) and `spine-operations-checkpoints`; the `bower-home` replacement with the first spine entry that runs on Actions; `session-lease-real` (C14) as an evaluator journey on staging.
-- **Owner asks coming:** a fine-grained `GITHUB_TOKEN` for `bower-home`, set with `wrangler secret put` when `worker-dispatch` is ready; the Claude credential in `bower-home` at its replacement (TL-P3-13).
+- **Owner ask coming:** a fine-grained `GITHUB_TOKEN` for `bower-home`, set with `wrangler secret put` at the `bower-home` replacement (with `scripted-semantic-provider`). The Claude credential moves to P4 (TL-P3-22).
 - **Message budget.** The app pauses a session's messages to other sessions after 10 sends without an owner message. On the night of 2026-10-06 this left the coordinator waiting about 6.5 hours for an unblock it never received. Rules:
   - send one combined message per decision;
   - never leave the coordinator blocked on a message alone: a STOP names the `main` commit or DECISIONS line that lifts it, so the coordinator can lift it itself;
