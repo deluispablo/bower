@@ -120,3 +120,4 @@ deploy-staging-hardening,implementer,claude,sonnet,medium,1,77914,,,,,,9,2.2,del
 compatibility-accepted-app,implementer,claude,sonnet,medium,1,158203,,,,,,48,5.2,delivered,2026-10-07
 worker-reads-pile-notes,implementer,claude,opus,high,1,184948,,,,,,68,14.0,delivered,2026-10-07
 behavior-suites-real-adapters,implementer,claude,opus,high,1,285986,,,,,,119,31.3,delivered,2026-10-07
+p3-18-delta-review,reviewer,claude,opus,medium,1,199806,,,,,,65,7.2,PASS (5 minor),2026-10-07

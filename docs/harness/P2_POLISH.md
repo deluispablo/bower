@@ -151,3 +151,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - resumable-upload: no `sha256Checksum` after read-back says "Google Drive has a different file…" (never shown as sent); a reserved id whose file is only in the Bin asks to choose the file again.
   - plan.ts: the Worker reads no pile note, so it can admit a pile the runner holds (newer, damaged or whitespace-only note); if it is the only pile, the run fails "stopped before changing anything" and Try again repeats it.
 - worker-reads-pile-notes (left out): piles the runner skips for reasons other than readiness (a words-only pile with no folder it can guess) are still admitted; after the all-held race the `done` status sends the admitted things count while last-run.json says 0.
+- P3-17/18 delta review (minor, PASS):
+  - All-held race: the Worker gets total 1 (admitted things) while last-run.json says 0 (captured); they also differ when only some admitted piles are held.
+  - Admission and runner still disagree in rare cases (two "Pile note.md" with the first blank; names passing `writable` but failing `recordablePile`): the run ends done nothingReady after using a quota slot, never failed.
+  - The duplicate-dispatch and lost-callback suites check the ending, not a single guard (re-planning and runnerReport step 6 make both idempotent).
+  - Compatibility row for 3cc965f: P2 `parseRunReport` is closed and would refuse `nothingReady`; only the P2 fake runner used it.
+  - `admission holds a pile whose note is not ready` passes with notes:false too; nothing tests the notes:true branch alone (e.g. a declared pile whose bound note differs from the first).
