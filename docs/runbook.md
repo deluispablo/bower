@@ -111,6 +111,8 @@ Rotate a secret by running `npx wrangler secret put NAME` from `api/` with the n
 
 What stays: the folder in the person's own Drive, and everything in it. Bower never deletes in Drive and never touches the folder on deletion. If the person signs in again, they start at the folder step and Bower finds the folder it had. The person can revoke Bower's access in their Google account settings, and can move the folder to the Bin themselves.
 
+The person's invitation stays after deletion: their address remains on the operator's allowlist in KV as an `allow:<address>` key. The operator removes the invitation by hand with `npx wrangler kv:key delete allow:<address> --namespace-id=<id>`.
+
 The instance repository keeps its run history, which holds no folder content.
 
 ## Recovery
