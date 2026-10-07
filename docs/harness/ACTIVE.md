@@ -30,7 +30,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **6** (expiry nobody took) was skipped.
 
 **P3-17/18 (TL-P3-25):** staging is at 0abbbac (736eb6b7); bower-home is at dbd3f36.
-- Running: `deploy-staging-hardening` (implementer, `/private/tmp/bower-p3-hardening`) and `worker-reads-pile-notes` (escalated, `/private/tmp/bower-p3-notes`, port 5196).
+- `deploy-staging-hardening` passes (d208635, red fixed in ba11eef). Running: `worker-reads-pile-notes` (escalated, `/private/tmp/bower-p3-notes`, port 5196) and `compatibility-accepted-app` (implementer, `/private/tmp/bower-p3-compat`).
 - Registered for when slots free up: `behavior-suites-real-adapters` (escalated) and `compatibility-accepted-app` (implementer); packets `2026-10-07-p3-18-*`.
 - Live revocation is one owner step in the C16 walk.
 - After P3-17/18: `security-review` at the freeze, then P3-G.
