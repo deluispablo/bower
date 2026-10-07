@@ -29,6 +29,12 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
 
+**P3-17/18 (TL-P3-25):** staging is at 0abbbac (736eb6b7); bower-home is at dbd3f36.
+- Running: `deploy-staging-hardening` (implementer, `/private/tmp/bower-p3-hardening`) and `worker-reads-pile-notes` (escalated, `/private/tmp/bower-p3-notes`, port 5196).
+- Registered for when slots free up: `behavior-suites-real-adapters` (escalated) and `compatibility-accepted-app` (implementer); packets `2026-10-07-p3-18-*`.
+- Live revocation is one owner step in the C16 walk.
+- After P3-17/18: `security-review` at the freeze, then P3-G.
+
 **P3-14 (TL-P3-24):** `runner-reports-reading-total` passes (41d9a36, red fixed in 5699b61); `dispositions-match-report` passes (7bfe871, red fixed in 03bf8f6). Its verify moved to the runner tests, and the coordinator added `reading` to its expected sequence after the merge. 327/329. P3-15: `upload-queue-real` passes (ae6d9c4, red fixed in 0b05ec4; it marks a file sent by its sha256, and checks the reserved id before asking for lost bytes again). `declare-piles-real` passes (d32dc5e, known-green: the red was proven by hand after the `choose.ts` merge). P3-F: `deploy-and-migrations` passes (217fc57, red fixed in 30fc4d5; `scripts/deploy-staging.sh`, pinned schema steps). 330/330.
 - Suites at d32dc5e (idle): e2e 226, e2e:fake 250, e2e:pwa 4.
 - Closed:
