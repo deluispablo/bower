@@ -50,16 +50,13 @@ import { requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
 import { TEMPLATE_FILES } from './template.generated.js';
 import type { TemplateFile } from './template.generated.js';
-import { RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
+import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
 
-/** The text the first template put in `Rules.md`: plain, without Bower's mark. Only a file with exactly these bytes is repaired. */
-export const OLD_RULES_TEMPLATE = `## Rules
-
-Your own rules for Bower, one per line. Where they disagree with Bower's own, these win.
-`;
+/** The text the first template put in `Rules.md` (shared with the runner's repair). Only a file with exactly these bytes is repaired. */
+export { OLD_RULES_TEMPLATE };
 
 /** A template file, with the app properties it is created with. */
 export interface VaultFile extends TemplateFile {
@@ -278,9 +275,10 @@ class Drive {
  * The one-time repair: a folder made before the fix has `Rules.md` as plain text without Bower's mark, so a rule
  * typed in the app is refused as not Bower's to word. When the file's bytes are exactly the old template text, it
  * becomes the new template's file. Anything else (a file the person edited, the original app's plain file, two
- * files of the name) is left as it is. It runs where the folder is opened, which every app start passes (one list
- * and, only for the old text, one read), and needs no new state: once rewritten, the old text is gone, so a
- * second check finds nothing to do. Still as seen: the file's modifiedTime is read before the text and again
+ * files of the name) is left as it is. It runs only inside `POST /vault`, which the app calls when the person has
+ * no folder yet (one list and, only for the old text, one read); an existing folder is repaired by the runner
+ * before it plans (`runner/src/rules-repair.ts`). It needs no new state: once rewritten, the old text is gone, so
+ * a second check finds nothing to do. Still as seen: the file's modifiedTime is read before the text and again
  * just before the write, and a change between them leaves the file alone (Drive v3 has no conditional write).
  */
 async function repairRules(drive: Drive, folderId: string): Promise<void> {

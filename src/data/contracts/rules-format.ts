@@ -51,3 +51,13 @@ export const RULES_TEMPLATE: { readonly text: string; readonly appProperties: Re
   text: serializeRules([]),
   appProperties: { by: 'bower' },
 };
+
+/**
+ * The text the first template put in `Rules.md`: plain, without Bower's mark. A root `Rules.md` with exactly these
+ * bytes is repaired to `RULES_TEMPLATE` (by the Worker's `POST /vault` and by the runner before it plans); any other
+ * text is never touched. Shared, so the two cannot disagree on what the old file was.
+ */
+export const OLD_RULES_TEMPLATE = `## Rules
+
+Your own rules for Bower, one per line. Where they disagree with Bower's own, these win.
+`;
