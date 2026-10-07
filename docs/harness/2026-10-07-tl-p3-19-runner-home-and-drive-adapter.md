@@ -8,3 +8,9 @@
    - **Faults** are injected through the fetch hook, as in the fake.
 3. **Tests, as drafted.** Unit tests run against a fake fetch that replays Drive v3 shapes. One contract test runs the same scenario against the fake's `FencedDrive` and against the adapter. No real Drive in this entry.
 4. **The attempt check reuses the token route's `attempt`,** re-read once per write batch. There is no new route. A stale attempt is also refused at its next status report (409 `stale-attempt`), so a batch can be wasted but can never finalize.
+
+## Amendment, 2026-10-07: check the attempt before every fenced write
+
+Rule 4's "once per write batch" is replaced: the runner reads the attempt from the token route **before every fenced write**. In `spine-recovery-without-browser`, an attempt 1 woken after a takeover created a second folder inside one batch. One extra Worker call per write is cheap next to a duplicate in the person's folder. This is still a precheck, not compare-and-set: the window between the check and the write is the documented R1 limitation.
+
+The first real run on Actions also showed that `run_worker_first` lacked `/runner/*`, so the token route answered the app page with a 200. `staging-runner-routes` adds the pattern and a test that every mounted Worker route runs the Worker first. After it, P3-13 closes and the first-run journey reruns. A run whose runner cannot fetch its token waits until the stale deadline; that, and one press sending two idempotent `/process` calls, go to polish.
