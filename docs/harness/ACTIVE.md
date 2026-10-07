@@ -29,7 +29,16 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
 
-**P3-13 (TL-P3-23):** staging runs 7a96c5e (version 32dc0f74, with `GITHUB_REPO` set). The instance repository has been replaced (its ed952c4). `GITHUB_TOKEN` is set (no redeploy needed). The first real run on Actions was BLOCKED at the press: the permission system refused the evaluator's click, and the owner must allow it or press. The lead confirms "Try again" on the stopped-run sheet is the way in (evaluator, packet `2026-10-07-p3-13-first-real-run-packet.md`, as A on their Bower folder, staging 7a96c5e). `spine-ordered-status` passes (40be7b2, red fixed in 186ddc3; Worker schema v10, `run_ticket.report_phase`); 321/322. Running in parallel: `spine-recovery-without-browser` (bower-escalated, `/private/tmp/bower-p3-resume`, port 5197) and `spine-ordered-status` (bower-implementer, `/private/tmp/bower-p3-ordered`, port 5196). Their packets are `2026-10-07-p3-13-*`.
+**P3-13 (TL-P3-23):** staging runs 7a96c5e (version 32dc0f74, `GITHUB_REPO` set). The instance repository has been replaced (ed952c4), and `GITHUB_TOKEN` is set.
+- `spine-ordered-status` passes (40be7b2; Worker schema v10).
+- `spine-recovery-without-browser` passes (1a9955a). It reads the attempt before every fenced write; whether that may change TL-P3-19 is asked of the lead.
+- 322/323.
+- **First real run, attempt 1:** blocked at the press. The permission system refused the evaluator's click; the owner then allowed presses and pressed in the pane.
+- **First real run, attempt 2:** FAILED. Run 37619425172 failed in 13 s because `run_worker_first` lacks `/runner/*`, so the token route served the app's page.
+  - The fix entry `staging-runner-routes` (mechanical, `/private/tmp/bower-p3-routes`) is running.
+  - The app stayed `queued` until the stale deadline.
+  - One press sent two POST /process calls, with the same run id.
+- After the fix: P3-13 closes, the lead deploys, and the first-run journey runs again with one press.
 
 **P3-11 (TL-P3-22):** staging is at ca8e94e (version 47e2dd74); schema v9 applies on first use. `spine-report-barrier-dispositions` passes (6959b04, red fixed in 76f0c2f; stubs 4cce9a4); 317/317. C14 accepted by the lead (step 6 covered by lease tests, not walked). P3-11 closes with that entry alone: suites at 6959b04 (idle) e2e 226, e2e:fake 250, e2e:pwa 4; the Opus delta review BLOCKS (b5246fd) on I1 (a run that changed nothing, with a failed save, says changes were made), I2 (seq restarts at 1 and a refused `done` is swallowed) and I3 (dispositions not recorded; journal lines get none). The lead adopted the drafts (TL-P3-22 addendum, fb689e8): `report-barrier-truth-fix` is registered (packet `2026-10-07-p3-12-truth-fix-packet.md`) and is dispatched after `scripted-semantic-provider` merges; then a re-review, then P3-11 and P3-12 close together. The lead is at 8 of 10 sends: batch the questions. Minors: `saving` is posted before the chain commit; there is no catch in runTidy; the done-shortcut skips the read-back; the bundle never calls runTidy (the provider entry wires it).
 
