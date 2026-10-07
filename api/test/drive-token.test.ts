@@ -56,8 +56,8 @@ function google(answer: (n: number) => Response = (n) => Response.json({ access_
   return { fetchImpl, calls };
 }
 
-function token(g: Google, cookie: string, query = ''): Promise<Response> {
-  return createApp({ fetchImpl: g.fetchImpl }).request(`${API}/drive/token${query}`, { headers: { cookie } }, env);
+async function token(g: Google, cookie: string, query = ''): Promise<Response> {
+  return await createApp({ fetchImpl: g.fetchImpl }).request(`${API}/drive/token${query}`, { headers: { cookie } }, env);
 }
 
 async function errorCode(response: Response): Promise<string> {
