@@ -4113,5 +4113,20 @@
     "verify": "pnpm exec vitest run src/data -t \"the shared barrier writes the same report on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"every admitted item ends with one disposition|last-run.json is written last and read back before done|a failed report save stays in saving and a redispatch only writes the report|main runs token, spine, barrier and status end to end\" && pnpm -C api exec vitest run -t \"a run past the ceiling in saving fails saying changes were made\"",
     "passes": true,
     "note": "TL-P3-22 point 2; ARCHITECTURE invariant 6."
+  },
+  {
+    "id": "scripted-semantic-provider",
+    "task": "p3-d",
+    "category": "feature",
+    "what": "The runner plans with a deterministic scripted semantic provider, extracted from the fake runner's planning into src/data/spine/ behind one provider interface, and applies real Drive effects on the runner-drive-adapter FencedDrive, so a run on GitHub Actions changes the folder. A tidy.yml workflow (event bower-tidy, Node 24) runs the built runner, and scripts/new-instance.sh, adapted from the original, copies only the built runner and tidy.yml into the instance repository and sets BOWER_API_URL, with nothing secret.",
+    "steps": [
+      "One provider interface in src/data/spine/; the scripted provider is the fake runner's planning extracted over a read port, and the fake runner calls it and keeps its behaviour.",
+      "runner/src/main.ts picks the scripted provider by env and builds the real Drive effects on the adapter's FencedDrive; no injected effect outside tests.",
+      "runner/workflows/tidy.yml runs on repository_dispatch bower-tidy with Node 24, the run name tidy <run_id> <attempt>, and the built runner; it needs no secret.",
+      "scripts/new-instance.sh, adapted from the original, copies the built runner and tidy.yml, removes the original's workflows, sets BOWER_API_URL, and never reads or writes a secret; a test runs it against a local repository with gh stubbed."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"the scripted provider plans the same run as the fake runner\" && pnpm -C runner exec vitest run -t \"main applies real Drive effects through the adapter and the folder changes|main picks the scripted provider|new-instance copies the built runner and tidy.yml and nothing secret\"",
+    "passes": false,
+    "note": "TL-P3-22 point 3 and its addendum (real effects on the adapter for C12; the lead pushes the replacement); TL-P3-13."
   }
 ]
