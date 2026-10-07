@@ -1,6 +1,7 @@
 packages:
   - .
   - api
+  - runner
 allowBuilds:
   esbuild: true
   workerd: true
