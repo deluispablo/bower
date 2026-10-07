@@ -143,3 +143,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - A pile note whose things were filed but whose folder's Bin was rejected is still marked filed.
   - e2e:fake `[phone] qa10.spec.ts:165` flaked once under load (passed 3/3 alone).
 - declare-piles-real (left out): the Worker still does not read the pile note (P3-10 limit): admission calls capturePiles with notes:false and checks a declared pile's note by key only; the declaration create goes through the lease-fenced bound(drive) but no test asserts that fencing.
+- runbook-p3 (unproven against code): after a TOKEN_ENC_KEY rotation each person signs in again with consent; a stale-run redispatch fails again when GITHUB_TOKEN is missing or wrong. Check both at security-review.

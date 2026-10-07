@@ -33,7 +33,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - Suites at d32dc5e (idle): e2e 226, e2e:fake 250, e2e:pwa 4.
 - Running:
   - the P3-14..16 Opus delta review (packet `2026-10-07-p3-16-delta-review-packet.md`, HEAD dcab8d7);
-  - `runbook-p3` (bower-implementer, `/private/tmp/bower-p3-runbook`).
+  - `runbook-p3` passes (3906a42, known-green; red proven with a stub runbook). 331/331.
 - Next for P3-E: `behavior-suites-real-adapters` and `compatibility-accepted-app`. These need the lead's scope. P3-14 and P3-15 close together (suites on an idle machine, Opus delta review). "Try again" retries that run's scope, as in P2; recheck it at C16.
 - Next is P3-E: `upload-queue-real` (it folds in `upload-queue-persistent`) in parallel with `declare-piles-real`, then `behavior-suites-real-adapters` and `compatibility-accepted-app`.
 - P3-F runs alongside whenever a slot is free: `deploy-and-migrations` and `runbook-p3`, then `security-review` at the freeze (SHA-pinned actions, and the P4 rate-limit note).
