@@ -312,3 +312,25 @@ export async function refreshAccessToken(
   }
   return { accessToken: body.access_token, expiresIn };
 }
+
+/** Google's token revocation endpoint (OAuth 2.0 for web server apps, "Revoking a token"). */
+export const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
+
+/**
+ * Revokes a refresh token (and the grant it belongs to) at Google: `POST` with `token=` in a form body
+ * (OAuth 2.0 for web server apps, "Revoking a token"). Throws `internal` when Google is unreachable or
+ * refuses; the cause carries the status only, never the token.
+ */
+export async function revokeToken(token: string, fetchImpl: FetchLike = fetch): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetchImpl(GOOGLE_REVOKE_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }).toString(),
+    });
+  } catch (err) {
+    throw googleFailed('revoke endpoint unreachable', err);
+  }
+  if (!response.ok) throw googleFailed(`revoke endpoint returned ${response.status}`);
+}
