@@ -50,4 +50,18 @@ describe('the harness and git', () => {
     // In a commit (fixed-in): the same selection.
     expect(codeInCommit('HEAD', dir)).toEqual(['api/src/x.ts']);
   });
+
+  it('done.sh sees a change under runner/ as code and runner tests as tests', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'runner/src'), { recursive: true });
+    mkdirSync(join(dir, 'runner/test'), { recursive: true });
+    writeFileSync(join(dir, 'runner/src/x.ts'), 'export const x = 1;\n');
+    writeFileSync(join(dir, 'runner/test/x.ts'), 'old\n');
+    git('add -A && git commit -qm base');
+    writeFileSync(join(dir, 'runner/src/x.ts'), 'export const x = 2;\n');
+    writeFileSync(join(dir, 'runner/test/x.ts'), 'new\n');
+    expect(codeInWorktree(dir)).toEqual(['runner/src/x.ts']);
+    git('commit -qam change');
+    expect(codeInCommit('HEAD', dir)).toEqual(['runner/src/x.ts']);
+  });
 });

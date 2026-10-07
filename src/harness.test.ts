@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -179,5 +179,21 @@ describe('the harness', () => {
     expect(check('pnpm -C api exec vitest run -t "a title that is gone"')).toContainEqual(expect.stringMatching(/a title that is gone.*matches no test/));
     // An app verify does not see the api's tests.
     expect(check('pnpm vitest run src -t "skeleton answers health"')).toContainEqual(expect.stringMatching(/matches no test/));
+  });
+
+  it('the harness check finds a verify\'s titles among the runner tests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'harness-runner-'));
+    mkdirSync(join(root, 'runner/test-results'), { recursive: true });
+    const report = { testResults: [{ name: join(root, 'runner/test/fence.test.ts'), assertionResults: [{ fullName: 'the fence refuses a stale write' }] }] };
+    writeFileSync(join(root, 'runner/test-results/unit.json'), JSON.stringify(report));
+    const runner = runnerTests(root, root);
+    expect(runner).toEqual([{ name: 'the fence refuses a stale write', file: 'runner/test/fence.test.ts', config: 'runner/vitest.config.ts', project: '' }]);
+    const tests = { unit: [], e2e: [], runner };
+    const entry = (verify: string): Entry => ({ id: 'runner-entry', task: 'p3-9', steps: S, verify, passes: true });
+    const check = (verify: string): string[] => problems([entry(verify)], proofOf(entry(verify)), tests) as string[];
+    expect(check('pnpm -C runner exec vitest run -t "fence refuses a stale write"')).toEqual([]);
+    expect(check('pnpm --dir runner exec vitest run test/fence.test.ts -t "fence refuses a stale write"')).toEqual([]);
+    expect(check('pnpm -C runner exec vitest run -t "a title that is gone"')).toContainEqual(expect.stringMatching(/a title that is gone.*matches no test/));
+    expect(check('pnpm vitest run src -t "fence refuses a stale write"')).toContainEqual(expect.stringMatching(/matches no test/));
   });
 });
