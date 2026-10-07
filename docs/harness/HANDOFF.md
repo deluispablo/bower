@@ -25,6 +25,7 @@ Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; inte
 ## Traps on this machine
 
 - A browser evaluation on a reused preview port can run an old build from the PWA service worker's cache: use a fresh port or clear service workers and caches, and check the loaded `index-*.js` against `dist/assets`.
+- Stopping a background suite run: kill the parent shell and the orphaned `pnpm e2e` by PID (`ps -eo pid,ppid,command`), then check that port 5191 is free; a `pkill -f` pattern on the quoted command line does not match, and a surviving run overlaps the next one on port 5191.
 - Playwright stalls when the display sleeps (`system_profiler SPDisplaysDataType | grep Asleep`); never edit `src/` while e2e or `done.sh` runs.
 - macOS has no `timeout`; chain gates with `&&`, not `;`.
 - A jsdom teardown race can fail `pnpm check` once under load; rerun before blaming code.
