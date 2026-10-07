@@ -17,3 +17,12 @@ Starting model: `bower-evaluator` (Sonnet). Reason: a guided probe of real Drive
 - **Console:** `GET /status` 404 errors are known (TL-P3-10, route not built yet); any other console error is a finding.
 - **Never:** delete for good, write outside the probe folder, read or act on Google's pages.
 - **Return under 25 lines:** bundle, a table of checks with pass, FAIL or NOT RUN, findings (each with step, expected vs actual, redacted), and the screenshots taken (under `/private/tmp/p3-drive/`, staging origin only).
+
+## Rerun of check 4 only ([TL-P3-11](2026-10-07-tl-p3-11-drive-suite-findings.md) F1)
+
+C03's "edit" is the note screen's task checkbox. As A, in the probe folder:
+1. By script, create a synthetic note `Probe tasks` whose text has one task line (`- [ ] Water the probe plant`). Open it in the app.
+2. By script, change the note's text through the Drive API, adding a line `Changed elsewhere`.
+3. Toggle the task in the app. Expected: "changed somewhere else" (or the app's equivalent), no overwrite. Drive's text still has the outside line, with the task unticked. After a reload, the app shows the outside change. Record `modifiedTime` and `version` before and after (redacted fingerprints are fine).
+
+**Never read or list outside the probe folder or A's Bower folder** (TL-P3-11): every `files.list` names the probe folder as parent.
