@@ -1,6 +1,7 @@
 /// <reference types="node" />
 /** Things the repository promises its agents and its pages, checked. */
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -102,5 +103,19 @@ describe('what the repository promises', () => {
     expect(runbook).not.toMatch(/-----BEGIN [A-Z ]*PRIVATE KEY-----/);
     const addresses = runbook.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g) ?? [];
     expect(addresses.filter((a) => a !== 'you@example.com')).toEqual([]);
+  });
+
+  it('every change since the P2 freeze is listed', () => {
+    const doc = 'docs/harness/2026-10-07-p3-compatibility.md';
+    expect(existsSync(join(ROOT, doc)), `${doc} exists`).toBe(true);
+    const list = read(doc);
+    const log = execFileSync('git', ['log', '--format=%h', '00ec9a5..HEAD', '--', 'src/features', 'src/data/contracts'], { cwd: ROOT, encoding: 'utf8' });
+    const commits = log.split('\n').filter(Boolean);
+    expect(commits.length).toBeGreaterThan(0);
+    // One row per commit: `| sha | entry | what it changes for the accepted app's files |`, never an empty cell.
+    const rows = new Map([...list.matchAll(/^\|\s*`?([0-9a-f]{7,40})`?\s*\|\s*([^|\s][^|]*?)\s*\|\s*([^|\s][^|]*?)\s*\|\s*$/gm)].map((m) => [m[1] ?? '', m[2] ?? '']));
+    const listed = (sha: string): boolean => [...rows.keys()].some((k) => k.startsWith(sha) || sha.startsWith(k));
+    expect(commits.filter((sha) => !listed(sha)), 'commits missing from the list').toEqual([]);
+    for (const entry of rows.values()) expect(entry).toMatch(/^[a-z][a-z0-9-]+$/);
   });
 });
