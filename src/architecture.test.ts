@@ -144,6 +144,18 @@ describe('the shape of the code', () => {
       expect({ outside, external, impure }, 'The contracts run in the Worker too. Move the pure helper under src/data/contracts/ (leave a re-export at the old path), or split the module so only its pure part moves.').toEqual({ outside: [], external: [], impure: [] });
     });
 
+    it('the spine runs in every runtime: its closure uses no browser or environment globals', () => {
+      // TL-P3-21: the shared plan runs in the fake, the Worker and the runner. Its adapters own the I/O (spine/read.ts).
+      // The explorer's "new" dot (vault/seen.ts, behind VaultIndex.entries) reads localStorage in a try; the spine never
+      // calls it, and where there is no localStorage it reads nothing.
+      const KNOWN = new Set(['data/vault/seen.ts']);
+      const { seen, external } = closure(files(join(SRC, 'data', 'spine')));
+      const impure = [...seen].filter((f) => FORBIDDEN.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, ''))).map((f) => relative(SRC, f)).filter((f) => !KNOWN.has(f));
+      expect({ external, impure }, 'The spine runs in the Worker and the runner too. Keep browser and network code in an adapter, outside src/data/spine and what it imports.').toEqual({ external: [], impure: [] });
+    });
+
+    // TL-P3-21 widens this rule: the Worker also builds the admission manifest with the spine and the Drive adapter.
+    // The title stays as harness/features.json names it (shared-domain-package) until the coordinator renames it.
     it('api imports nothing from src except contracts', () => {
       const API = join(SRC, '..', 'api');
       let exists = true;
@@ -156,10 +168,10 @@ describe('the shape of the code', () => {
       const bad: string[] = [];
       for (const f of files(API)) {
         for (const spec of specs(readFileSync(f, 'utf8'))) {
-          if (/(^|\/)src\//.test(spec) && !/src\/data\/contracts(\/|$)/.test(spec)) bad.push(`${relative(API, f)} imports '${spec}'`);
+          if (/(^|\/)src\//.test(spec) && !/src\/data\/(contracts|spine)(\/|$)|src\/data\/(types|drive\/drive-http|drive\/drive-api|drive\/fake-drive)(\.js)?$/.test(spec)) bad.push(`${relative(API, f)} imports '${spec}'`);
         }
       }
-      expect(bad, 'api/ may import only src/data/contracts.').toEqual([]);
+      expect(bad, 'api/ may import only src/data/contracts, src/data/spine and the Drive adapter (TL-P3-21).').toEqual([]);
     });
   });
 });

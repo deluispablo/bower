@@ -5,6 +5,7 @@ import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
 import type { RunPhase, RunReply } from '../src/process.js';
 import { makeRunId } from '../src/run-ticket.js';
+import { MANIFEST } from './drive-v3.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -58,7 +59,7 @@ async function aRun(minted = Date.now()): Promise<{ sub: string; runner: FakeRun
   await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
   await p.setFolderId('FOLDER_ID');
   await p.cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + HOUR });
-  const admitted = await p.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100 });
+  const admitted = await p.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
   if (!admitted.admitted) throw new Error('not admitted');
   const runId = makeRunId(env.PERSON.idFromName(sub).toString());
   await runInDurableObject(p, (_instance, state) => {

@@ -351,7 +351,7 @@ function manifestV2(value: unknown): value is ManifestV2 {
 /** Raw text content: utf8 with the size and SHA-256 of the exact UTF-8 bytes, not of C(text). */
 async function describes(content: Content, text: string): Promise<boolean> {
   const raw = new TextEncoder().encode(text);
-  return content.encoding === 'utf8' && content.size === raw.byteLength && content.sha256 === await sha256(new Blob([raw.buffer]));
+  return content.encoding === 'utf8' && content.size === raw.byteLength && content.sha256 === await sha256(new Blob([raw]));
 }
 function texts(value: Manifest | ManifestV2): { text: string; content: Content }[] {
   const found: { text: string; content: Content }[] = value.capture.piles.flatMap((pile) => pile.context.kind === 'text' ? [pile.context] : []);

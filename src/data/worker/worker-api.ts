@@ -4,19 +4,12 @@
  * (contract: docs/specs/2026-10-04-worker-contract.md); `FakeWorker` stands
  * in for it, with a scripted runner, in tests and behind `?source=fake`.
  */
-import type { RunPhase, User } from '../types';
+import type { User } from '../types';
 import type { LeaseReply, SessionAction } from '../session';
 
-export interface RunWire {
-  id: string;
-  scope: 'all' | 'instructions';
-  phase: RunPhase;
-  requestedAt: number;
-  phaseAt: number;
-  finishedAt?: number;
-  total?: number;
-  failure?: string;
-}
+export type { RunWire } from '../contracts/run-wire';
+export { isRunWire } from '../contracts/run-wire';
+import type { RunWire } from '../contracts/run-wire';
 
 /** A run received from the Worker or read from the runner's report. */
 /**
@@ -25,20 +18,6 @@ export interface RunWire {
  */
 export interface RunReply { run: RunWire; revision: number }
 export interface StatusReply { run: RunWire | null; revision: number }
-
-export function isRunWire(value: unknown): value is RunWire {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const r = value as Record<string, unknown>;
-  const number = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
-  const phases: readonly string[] = ['queued', 'reading', 'writing', 'saving', 'done', 'failed'];
-  return typeof r.id === 'string' && r.id.trim().length > 0
-    && (r.scope === 'all' || r.scope === 'instructions')
-    && typeof r.phase === 'string' && phases.includes(r.phase)
-    && number(r.requestedAt) && number(r.phaseAt)
-    && (r.finishedAt === undefined || number(r.finishedAt))
-    && (r.total === undefined || (number(r.total) && Number.isSafeInteger(r.total)))
-    && (r.failure === undefined || (typeof r.failure === 'string' && r.failure.trim().length > 0));
-}
 
 export interface Me {
   user: User;

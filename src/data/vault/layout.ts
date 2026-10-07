@@ -13,7 +13,7 @@
  * the runner moves them to `changes/archive/` after reading them; `piles/`,
  * one immutable declaration per pile, written before any of its things.
  */
-import { isRunWire } from '../worker/worker-api';
+import { isRunWire } from '../contracts/run-wire';
 import type { Question, Request, RunState, Suggestion } from '../types';
 
 export const BOWER_FOLDER = 'Bower';

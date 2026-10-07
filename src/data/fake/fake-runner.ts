@@ -13,23 +13,26 @@ import { applyChanges, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkK
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import type { FakeDrive } from '../drive/fake-drive';
-import type { DeclarationResult } from '../contracts/pile-declaration';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
 import { PILE_NOTE, safeInboxName } from '../piles';
-import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, findDeclaration, journalValues, looseSetAside, recordablePile, recordedNote, sameText, writable, type Digest } from '../pile-readiness';
+import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request, type SetAside } from '../types';
+import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { isJournalRecord, type JournalRecord } from '../vault/journal';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
-import { noteRefusal, parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
+import { parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { NOT_FILED, canonical, grounded, groundedKeys, seen } from './fake-run-records';
 import { B_FAILURE } from './fake-run-service';
+import { SET_ASIDE, capturePiles } from '../spine/plan';
+import { fakeRead } from '../spine/read';
+
+export { SET_ASIDE };
 
 /** The demo's plan for each sample inbox thing, by the name it was added under. */
 const PLAN_BY_NAME = new Map(
@@ -44,39 +47,6 @@ const PLAN_BY_NAME = new Map(
 /** Hub notes a full tidy-up brings up to date, as the demo does: on the B path, a Timeline line on Bower's notes only. */
 const UPDATES = HUB_UPDATES;
 
-/** Why a declared pile waits for a later tidy-up, and what you can do about it. */
-export const SET_ASIDE = {
-  notArrived: 'Some of its things have not arrived yet.',
-  notChecked: 'Bower could not check some of its things. Try again.',
-  unreadable: 'Bower could not read the list of what is in this pile. Try again.',
-  changed: 'Some of its things changed after they were added. Remove it and add them again.',
-  declaration: 'Bower found two different lists of what is in this pile. Remove it and add it again.',
-  empty: 'Nothing is left in it. Remove it from your inbox.',
-  noteFormat: "This pile's note needs a newer Bower.",
-  noteDamaged: "Bower can't read this pile's note.",
-  notTidied: "Bower couldn't tidy this up yet. Try again.",
-} as const;
-
-/** The Inbox's refusals of a pile's note that hold it from a run, worded as the report says them. */
-const HELD_BY_INBOX: Partial<Record<SetAside, string>> = { 'note-format': SET_ASIDE.noteFormat, 'note-damaged': SET_ASIDE.noteDamaged };
-
-/**
- * What a run takes of a pile folder, fixed when it starts: every child it
- * accounts for, and a declared note to write again first. The folder goes to
- * the Bin only when nothing else is left in it.
- */
-type Capture = { blocked: string } | { blocked: null; captured: Set<string>; declared?: Declared; leftover?: Leftover };
-/**
- * A ready declared pile's declaration, as the B path captures it. `memberKeys` are the members still in its
- * folder: those accounted for (disposed of, or arrived and left) count as filed (TL-P2-29 second amendment).
- */
-type Declared = { ref: { declarationId: string; sha256: string }; contextKey: string | null; memberKeys: ReadonlySet<string> };
-/**
- * What is left in a declared pile's folder once every declared member is accounted for (TL-P2-29): an
- * ordinary observed pile, whose context is the note bound by this key when it is there, otherwise the first.
- */
-type Leftover = { contextKey: string | null };
-
 /** A file's size and hash from the pretend Drive's stored bytes (`fake-stored`); null when they cannot be read. */
 async function storedDigest(drive: FakeDrive, f: DriveFile): Promise<Digest | null> {
   try {
@@ -85,143 +55,6 @@ async function storedDigest(drive: FakeDrive, f: DriveFile): Promise<Digest | nu
     console.error(e);
     return null;
   }
-}
-
-/** Declared piles are taken only when every member arrived with the bytes declared for it, or was filed with them. */
-async function captureOf(drive: FakeDrive, rootId: string, piles: readonly Pile[]): Promise<Map<string, Capture>> {
-  const listing = await drive.listAll(rootId);
-  const ix = VaultIndex.build(rootId, listing);
-  let records: Promise<unknown[]> | null = null;
-  const journal = (): Promise<unknown[]> => (records ??= journalValues(ix.journalFiles(true), (id) => drive.readText(id)));
-  const out = new Map<string, Capture>();
-  // Each declaration copy is read once per run, whichever pile names it.
-  const cache = new Map<string, DeclarationResult>();
-  for (const pile of piles) {
-    const folder = pile.path ? ix.file(pile.path) : undefined;
-    // What a run record cannot carry holds only its pile, with the reason the Inbox shows too (TL-P2-38).
-    if (pile.setAside === 'not-tidied') {
-      out.set(pile.id, { blocked: SET_ASIDE.notTidied });
-      continue;
-    }
-    if (folder && !folder.folder) {
-      out.set(pile.id, await looseCapture(drive, rootId, listing, ix.file('Inbox'), folder, cache));
-      continue;
-    }
-    if (!pile.path || !folder?.folder) continue;
-    const children = listing.filter((f) => f.parents[0] === folder.id);
-    const notes = children.filter((f) => !f.folder && f.name === PILE_NOTE).map((f) => f.id);
-    const present = pile.items.map((i) => i.id).filter((id) => children.some((f) => f.id === id));
-    // A note Bower will not parse holds its pile with the Inbox's own reason, checked first as the Inbox does.
-    const refused = pile.setAside === 'note-format' || pile.setAside === 'note-damaged' ? HELD_BY_INBOX[pile.setAside] : undefined;
-    if (refused) {
-      out.set(pile.id, { blocked: refused });
-      continue;
-    }
-    const found = await findDeclaration(listing, rootId, folder, (id) => drive.readBytes(id), cache);
-    // What a run record cannot carry waits, with the reason the Inbox shows too (TL-P2-21): the names, and the raw
-    // text (front matter included) of the one note the run records. Another pile note is never read here.
-    const contextKey = found.state === 'found' && found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
-    const recorded = recordedNote(children, contextKey);
-    let raw: string;
-    try {
-      raw = recorded ? await drive.readText(recorded.id) : '';
-    } catch (e) {
-      // A note Drive cannot give back now holds only this pile, as in the Inbox (TL-P2-08 (a)); a sign-out stops all.
-      if (!(e instanceof BowerError) || e.code === 'auth') throw e;
-      console.error(e);
-      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
-      continue;
-    }
-    // A note with text no record can carry is a damaged note, as in the Inbox (TL-P2-36 (9)).
-    if (!writable([raw])) {
-      console.error(new BowerError('unknown', SET_ASIDE.noteDamaged), 'A pile note has text no run record can carry');
-      out.set(pile.id, { blocked: SET_ASIDE.noteDamaged });
-      continue;
-    }
-    // The note a run records is refused by its format or its damage as in the Inbox; nothing else of the pile is read.
-    if (recorded) {
-      let refusal: ReturnType<typeof noteRefusal> = null;
-      try {
-        parseNote(join(pile.path, PILE_NOTE), raw);
-      } catch (e) {
-        refusal = noteRefusal(e);
-        if (!refusal) throw e;
-        console.error(e);
-      }
-      if (refusal) {
-        out.set(pile.id, { blocked: refusal === 'newer' ? SET_ASIDE.noteFormat : SET_ASIDE.noteDamaged });
-        continue;
-      }
-    }
-    if (!writable([folder.name, ...children.filter((f) => !f.folder).map((f) => f.name)])) {
-      console.error(new BowerError('unknown', SET_ASIDE.notChecked), 'A pile has text no run record can carry; it waits as not checked');
-      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
-      continue;
-    }
-    // A pile the Inbox could not check (its note could not be read there) is held too, and only it (TL-P2-08 (a)).
-    if (pile.setAside === 'not-checked') {
-      out.set(pile.id, { blocked: SET_ASIDE.notChecked });
-      continue;
-    }
-    if (found.state === 'unmarked') {
-      out.set(pile.id, { blocked: null, captured: new Set([...pile.items.map((i) => i.id), ...notes]) });
-      continue;
-    }
-    // A list that cannot be read holds only its own pile (TL-P2-08 (a)); the reader's listing logged it once.
-    if (found.state !== 'found') {
-      out.set(pile.id, { blocked: found.state === 'conflict' ? SET_ASIDE.declaration : found.state === 'unreadable' ? SET_ASIDE.unreadable : SET_ASIDE.notChecked });
-      continue;
-    }
-    // The accounting the Inbox shares: disposed members are filed, the rest looked up (TL-P2-29 second amendment).
-    const readiness = await accountPile(found.declaration, found.sha256, folder, listing, (id) => drive.readBytes(id), (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
-    if (readiness.blocked) {
-      out.set(pile.id, { blocked: readiness.blocked === 'changed' ? SET_ASIDE.changed : readiness.blocked === 'not-arrived' ? SET_ASIDE.notArrived : SET_ASIDE.notChecked });
-      continue;
-    }
-    // The context only has to have arrived: any note is the person's words. Missing though never removed
-    // through Bower, the pile waits, held (TL-P2-21): the runner never writes into the Inbox (TL-P2-32); Try
-    // again in the app writes it again from its first words (TL-P2-08 b).
-    const context = found.declaration.context;
-    if (context.kind === 'text' && !children.some((f) => f.appProperties?.[PROP.item] === context.memberKey) && !contextRemoved(await journal(), pile.path)) {
-      out.set(pile.id, { blocked: SET_ASIDE.notArrived });
-      continue;
-    }
-    // A blank note is context removed: with no member left, the pile is empty.
-    if (!present.length && !pile.text.trim()) {
-      out.set(pile.id, { blocked: SET_ASIDE.empty });
-      continue;
-    }
-    // Ready, so every member not disposed of is either still in the folder or arrived and left (accounted for).
-    const remaining = readiness.remaining;
-    // Every declared member accounted for: what is left is an ordinary pile (TL-P2-29).
-    if (found.declaration.members.length && !remaining.length) {
-      out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), leftover: { contextKey: context.kind === 'text' ? context.memberKey : null } });
-      continue;
-    }
-    const declared: Declared = {
-      ref: { declarationId: found.declaration.declarationId, sha256: found.sha256 },
-      contextKey: context.kind === 'text' ? context.memberKey : null,
-      memberKeys: new Set(remaining),
-    };
-    out.set(pile.id, { blocked: null, captured: new Set([...present, ...notes]), declared });
-  }
-  return out;
-}
-
-/**
- * A loose file (fixture 07), by the rule the Inbox shares (`accountLoose`): observed when it carries no declaration
- * or every copy is gone; declared, it is ready when its one member is in the inbox with the declared bytes.
- */
-async function looseCapture(drive: FakeDrive, rootId: string, listing: readonly DriveFile[], inbox: DriveFile | undefined, file: DriveFile, cache: Map<string, DeclarationResult>): Promise<Capture> {
-  const lookup = await findDeclaration(listing, rootId, file, (id) => drive.readBytes(id), cache);
-  const loose = await accountLoose(lookup, inbox, listing, (id) => drive.readBytes(id), (f) => storedDigest(drive, f), (keys) => drive.binnedByItem(rootId, keys));
-  const why = looseSetAside(loose);
-  if (why) return { blocked: SET_ASIDE_TEXT[why] };
-  if (!loose.found) return { blocked: null, captured: new Set([file.id]) };
-  const { declaration, sha256: hash, accounting } = loose.found;
-  // Filed already (a consumed disposition) and put back in the inbox: an ordinary loose file now.
-  if (!accounting.remaining.length) return { blocked: null, captured: new Set([file.id]), leftover: { contextKey: null } };
-  return { blocked: null, captured: new Set([file.id]), declared: { ref: { declarationId: declaration.declarationId, sha256: hash }, contextKey: null, memberKeys: new Set(accounting.remaining) } };
 }
 
 /**
@@ -336,7 +169,8 @@ export async function planRun(drive: FakeDrive, rootId: string, opts: PlanOption
   const piles = all ? await reader.piles() : [];
   // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect.
   if (all && !piles.length) throw new BowerError('conflict', NOTHING_WAITING);
-  const capture = await captureOf(drive, rootId, piles);
+  // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
+  const capture = await capturePiles(fakeRead(drive), rootId, piles.map((p) => ({ id: p.id, ...(p.path ? { path: p.path } : {}), itemIds: p.items.map((i) => i.id), ...(p.setAside ? { setAside: p.setAside } : {}), hasWords: !!p.text.trim() })), { notes: true });
   const verified = async (f: DriveFile, encoding: 'utf8' | 'blob'): Promise<VerifiedContent | null> => {
     const d = await storedDigest(drive, f);
     return d ? { encoding, size: d.size, sha256: d.sha256, provenance: 'fake-stored', observedModifiedTime: f.modifiedTime } : null;

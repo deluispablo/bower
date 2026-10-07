@@ -7,23 +7,13 @@
  * copy always checks Drive afresh.
  */
 import type { DriveApi, DriveFile } from '../drive/drive-api';
-import type { ChangeEntry, ChangeKind } from '../types';
+import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
 
-export interface JournalExtra {
-  path?: string;
-  /** Where a move or rename came from. */
-  from?: string;
-  /** Your words: a rule, a request, an answer. */
-  text?: string;
-  questionId?: string;
-  /** The Drive file the change is about, so the runner finds it whatever its path became. */
-  fileId?: string;
-  /** A rule taken out: its wording, as Rules.md has it. */
-  removes?: string;
-}
-
-export type JournalRecord = ChangeEntry & JournalExtra & { v: 1; device: string };
+export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
+export { isJournalRecord } from '../contracts/journal-record';
+import type { JournalExtra, JournalRecord } from '../contracts/journal-record';
+import { isJournalRecord } from '../contracts/journal-record';
 
 export interface JournalPlace {
   /** The id of `.bower/changes/`, made if missing. */
@@ -41,13 +31,6 @@ export interface JournalPlace {
   waiting?: () => void;
 }
 
-const KINDS: readonly ChangeKind[] = ['rule', 'request', 'move', 'rename', 'create', 'trash', 'task', 'answer'];
-
-export function isJournalRecord(v: unknown): v is JournalRecord {
-  if (!v || typeof v !== 'object') return false;
-  const r = v as Record<string, unknown>;
-  return r.v === 1 && typeof r.id === 'string' && !!r.id && typeof r.device === 'string' && !!r.device && typeof r.at === 'number' && Number.isFinite(r.at) && typeof r.what === 'string' && KINDS.includes(r.kind as ChangeKind) && ['path', 'from', 'text', 'questionId', 'fileId', 'removes'].every((key) => r[key] === undefined || typeof r[key] === 'string');
-}
 
 /** This device's unsent lines, per Bower folder, so one person's never reach another's. */
 /** Where this device keeps a folder's change outbox (live sources read it to know lines wait). */
