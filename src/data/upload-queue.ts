@@ -19,7 +19,7 @@
  * app/src/upload-queue.ts, the queue part; FSL-1.1-MIT, owner's copyright).
  */
 import { driveError, type DriveFile } from './drive/drive-api';
-import { RESUMABLE_CHUNK_BYTES, sendResumable, type ResumableClient } from './drive/resumable-upload';
+import { arrivedFile, RESUMABLE_CHUNK_BYTES, sendResumable, type ResumableClient } from './drive/resumable-upload';
 import { isOpenElsewhere, OPEN_ELSEWHERE_TEXT } from './session';
 import { BowerError } from './types';
 import { uploadId, type PendingUpload, type UploadStore } from './upload-store';
@@ -47,6 +47,9 @@ const KIND_PROP = 'kind';
 export function stoppedText(kind: string | undefined): string {
   return `Bower stopped before sending this. ${kind === 'link' || kind === 'note' ? 'Add' : 'Choose'} it again.`;
 }
+
+/** A kept file whose bytes the browser lost (storage cleared or evicted): only choosing it again sends it. */
+export const LOST_TEXT = 'This device no longer has this file. Choose the file again.';
 
 /** Said once when what this device kept cannot be read. */
 export const UNREADABLE_TEXT = "Bower couldn't read what it kept on this device. Choose those files again to send them.";
@@ -387,6 +390,18 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         demote(error);
       }
     };
+    /** Drive confirmed the file (its id and checksum checked): only now is it sent. */
+    const finish = async (file: DriveFile): Promise<void> => {
+      if (entry.kept) {
+        // Drive has it: the bytes go, whichever start this was.
+        await store.remove(record).catch((error: unknown) => console.error(error));
+        bus?.post();
+      }
+      item.state = 'done';
+      item.file = file;
+      item.sent = item.size;
+      entry.body = null;
+    };
     try {
       let body = entry.body;
       if (body === null) {
@@ -399,9 +414,15 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
           throw new BowerError('unknown', "This device couldn't read this file back. Choose it again.");
         }
         if (body === null) {
+          // Drive may have made it before its reply was lost: then it is sent, and nothing is chosen again.
+          const there = record.fileId === null ? null : await arrivedFile(fenced, { id: record.fileId, size: record.size, sha256: record.sha256 });
+          if (there !== null) {
+            await finish(there);
+            return;
+          }
           console.error('A pending upload lost its bytes on this device');
           gone = 'lost';
-          throw new BowerError('unknown', 'This device no longer has this file. Choose it again.');
+          throw new BowerError('unknown', LOST_TEXT);
         }
         // Kept in memory while it is sent, so a storage failure on the way does not stop it.
         entry.body = body;
@@ -434,15 +455,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         },
         chunkSize,
       );
-      if (entry.kept) {
-        // Drive has it: the bytes go, whichever start this was.
-        await store.remove(record).catch((error: unknown) => console.error(error));
-        bus?.post();
-      }
-      item.state = 'done';
-      item.file = file;
-      item.sent = item.size;
-      entry.body = null;
+      await finish(file);
     } catch (error) {
       item.state = 'waiting';
       if (refused || isOpenElsewhere(error)) {

@@ -72,9 +72,10 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   }
   if (kind === 'real') {
     const worker = new WorkerHttp(apiBase());
+    // Pile files go through the persistent upload queue (C02): reserved ids, Drive's resumable protocol, resumed after a reload.
     // The real Worker answers POST /session and fences its own writes (TL-P3-14): this tab holds a place,
     // and its Worker calls carry the place and epoch.
-    return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), place: { world: 'real' } }) };
+    return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), uploadQueue: true, place: { world: 'real' } }) };
   }
   const [{ pretendDrive, pretendRuns }, { FakeWorker }, { FakeLease, leaseKey }, { ALEX }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker'), import('./fake/fake-lease'), import('./demo/fixture')]);
   const { drive, rootId, fresh } = await pretendDrive(scenario);

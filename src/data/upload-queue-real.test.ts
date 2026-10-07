@@ -25,7 +25,7 @@ const SIZE = 3 * UNIT + 100;
 const CHUNKS = Math.ceil(SIZE / UNIT);
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 
-function bytesOf(n: number, seed: number): Uint8Array {
+function bytesOf(n: number, seed: number): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(n);
   for (let i = 0; i < n; i++) out[i] = (i * 31 + seed) % 251;
   return out;
@@ -164,7 +164,7 @@ function device(env: Env, store: UploadStore = indexedDbUploadStore(env.idb)): {
   return { queue: createUploadQueue({ drive: http, store, chunkSize: UNIT }), store };
 }
 
-async function member(n: number, size = SIZE): Promise<AddUpload & { bytes: Uint8Array }> {
+async function member(n: number, size = SIZE): Promise<AddUpload & { bytes: Uint8Array<ArrayBuffer> }> {
   const bytes = bytesOf(size, n);
   const body = new Blob([bytes], { type: 'application/pdf' });
   return { declarationId: 'decl-1', memberKey: `member-${n}`, sha256: await sha256(body), pileId: 'pile-1', parentId: INBOX, name: `scan-${n}.pdf`, body, appProperties: { item: `member-${n}` }, bytes };
