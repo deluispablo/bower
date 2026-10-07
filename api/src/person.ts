@@ -713,7 +713,8 @@ export class Person extends DurableObject<Env> {
    *    answers the current state to a repeat of its last report (same attempt and `seq`); else `signed-out`;
    * 2. the attempt: the ticket's own, else `stale-attempt`;
    * 3. a repeat of the last `seq` answers the current state and changes nothing;
-   * 4. a lower `seq`, a phase going back, or a run already ended is `stale-report`;
+   * 4. a lower `seq`, a phase going back, or a run already ended is `stale-report`, with the current `seq` of this
+   *    attempt and the run's phase;
    * 5. the run's phase (`phaseAt` when it changes), `total`, `failure` and `finishedAt` as given, the
    *    report's `seq` kept, and the revision raised;
    * 6. `done` or `failed` retires the ticket.
@@ -740,7 +741,7 @@ export class Person extends DurableObject<Env> {
       }
       const late = ticket.report_seq !== null && report.seq < ticket.report_seq;
       if (late || !ACTIVE_PHASES.includes(run.phase) || PHASE_RANK[report.phase] < PHASE_RANK[run.phase]) {
-        return { accepted: false, refused: 'stale-report' };
+        return { accepted: false, refused: 'stale-report', current: { seq: ticket.report_seq ?? 0, phase: run.phase } };
       }
       const ended = !ACTIVE_PHASES.includes(report.phase);
       const row = sql

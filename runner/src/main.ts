@@ -4,13 +4,21 @@
  *
  * 1. Token: the Worker's token route gives the Drive token, the folder and the admission manifest.
  * 2. Before any write, the folder is checked for this run's report (`last-run.json` showing it done): a run whose
- *    report already landed only reports `done`, so nothing is repeated (worker contract, "Runner wire").
+ *    report already landed is not repeated. It reads the report back, commits `done` to its chain (when a runner
+ *    stopped before that), then reports `done` (worker contract, "Runner wire").
  * 3. Spine: the operations, each behind a checkpoint (`spine/run.ts`); `writing` is reported first.
- * 4. Barrier: once every operation is settled, `saving` is reported, then the report is saved and read back
- *    (`spine/barrier.ts`). A report that cannot be saved leaves the run in `saving`, with "effects done, report
- *    pending" in its chain, for a redispatch to finish; past the recovery ceiling the Worker ends it saying the
- *    changes were made and the summary was not saved.
- * 5. Status: `done`, only after the barrier.
+ * 4. Barrier: once every operation is settled, "effects done, report pending" is committed to the chain, and only
+ *    then, when the chain holds an applied effect, is `saving` reported. The report is saved and read back
+ *    (`spine/barrier.ts`).
+ * 5. Status: `done`, only after the barrier. A `done` the Worker refuses is never swallowed: the job fails.
+ *
+ * How a run that stops ends (ARCHITECTURE invariant 6; TL-P3-22 addendum, I1), for a report that cannot be saved
+ * and for any error nobody caught from the token to the last report, alike:
+ * - when its chain holds an effect that was applied (or may have been sent), it stays in `saving`, for a
+ *   redispatch to finish; past the recovery ceiling the Worker ends it saying the changes were made and the
+ *   summary was not saved. It never says nothing happened.
+ * - otherwise it ends `failed` with "The tidy-up stopped before changing anything. Try again." (`B_FAILURE`).
+ * A run taken over by a newer attempt, or no longer allowed, reports nothing more.
  *
  * The provider (what the run plans from what it took) and the effects (how an operation reaches Drive) are handed
  * in to `runTidy`; `main`, the process on GitHub Actions, hands in the provider `BOWER_PROVIDER` names (scripted by
@@ -20,13 +28,16 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import type { RunProvider } from '../../src/data/spine/provider';
+import { B_FAILURE } from '../../src/data/spine/scripted';
+import { BowerError } from '../../src/data/types';
 import { RunRecords } from '../../src/data/spine/records';
 import type { ItemDisposition } from '../../src/data/spine/report';
 import { shownDone, type Checksum } from '../../src/data/spine/barrier';
 import { RunnerDrive } from './drive';
 import { RunnerStatus } from './status';
-import { RunnerToken } from './token';
+import { RunnerToken, isStaleAttempt } from './token';
 import { admittedPlan, runOperations, type Effects } from './spine/run';
 import { driveEffects } from './effects';
 import { providerFor, providerNamed, type ProviderName } from './provider';
@@ -66,12 +77,54 @@ const UNREADABLE = 'Bower could not read what it did. Try again later.';
 /** Drive's `md5Checksum`: the MD5 of the stored bytes, hex. */
 const md5 = (bytes: Uint8Array): string => createHash('md5').update(bytes).digest('hex');
 
+/** Whether a chain holds an effect that changed the folder, or may have: applied, or sent with no answer kept. */
+const changedSomething = (chain: readonly Checkpoint[]): boolean =>
+  chain.at(-1)?.outcomes.some((o) => o.state === 'applied' || o.state === 'possible-effect') ?? false;
+
+/** An error after which this runner may not report at all: a newer attempt took the run, or the ticket was refused. */
+const mayNotReport = (e: unknown): boolean => isStaleAttempt(e) || (e instanceof BowerError && e.code === 'auth');
+
 export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
+  const fetchFn = opts.fetch;
+  const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}) });
+  const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
+  const seen: Seen = { chain: [], saving: false };
+  let end: Ended;
+  try {
+    end = await tidy(opts, token, status, seen);
+  } catch (e) {
+    if (mayNotReport(e) || status.finished) throw e;
+    end = { phase: 'stopped', why: e instanceof Error ? e.message : String(e), error: e };
+  }
+  if (end.phase === 'done') {
+    // 5. Status, only after the report is read back; refused, it throws.
+    await status.post('done');
+    return end;
+  }
+  if (end.phase === 'failed') return end;
+  console.error(end.error);
+  // The one rule for a run that stops: saving when it changed something, never "nothing changed" then.
+  if (changedSomething(seen.chain)) {
+    if (!seen.saving) await status.post('saving');
+    return { phase: 'saving', why: end.why };
+  }
+  await status.post('failed', { failure: B_FAILURE });
+  return { phase: 'failed', why: end.why };
+}
+
+/** What `tidy` saw: the run's chain as it grew, and whether `saving` was reported. */
+interface Seen {
+  chain: Checkpoint[];
+  saving: boolean;
+}
+
+type Ended = Exclude<TidyEnd, { phase: 'saving' }> | { phase: 'stopped'; why: string; error: unknown };
+
+/** Steps 1 to 4; a run that stops in them throws, and `runTidy` says how it ended. */
+async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus, seen: Seen): Promise<Ended> {
   const fetchFn = opts.fetch;
   const clock = opts.clock ?? Date.now;
   const newId = opts.newId ?? (() => crypto.randomUUID());
-  const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}) });
-  const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
 
   // 1. Token.
   const grant = await token.grant();
@@ -81,10 +134,18 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
   const checksum: Checksum = { stored: (id) => drive.md5(id), of: async (bytes) => md5(bytes) };
+  const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), admission: grant.manifest, clock, newId };
 
-  // 2. This run's report already in the folder: nothing to repeat.
+  // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
   if (await shownDone(reads, rootId, opts.runId)) {
-    await status.post('done');
+    const found = await records.found(opts.runId);
+    if (found.kind === 'run' && found.chain.length) {
+      seen.chain = found.chain;
+      const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
+      return { phase: 'done', dispositions: finished.dispositions };
+    }
+    // No chain to say it in (its records already let go of): the report itself is what landed.
+    console.error(`Run ${opts.runId} shows done with no chain of its own`);
     return { phase: 'done', dispositions: [] };
   }
 
@@ -100,6 +161,9 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
     plan: admittedPlan(token, drive, opts.provider(drive, rootId)),
     clock,
     newId,
+    onChain: (chain) => {
+      seen.chain = chain;
+    },
   });
   if (end.state === 'failed') {
     console.error(end.why);
@@ -107,26 +171,23 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
     return { phase: 'failed', why: end.why };
   }
 
-  // 4. Barrier: every effect settled, the report pending.
-  await status.post('saving', { total: end.manifest.capture.members.length });
-  let finished;
-  try {
-    finished = await finishRun(
-      { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), admission: grant.manifest, clock, newId },
-      end.manifest,
-      end.manifestHash,
-      end.chain,
-    );
-  } catch (e) {
-    console.error(e);
-    return { phase: 'saving', why: e instanceof Error ? e.message : String(e) };
-  }
-
-  // 5. Status, only after the report is read back.
-  await status.post('done');
+  // 4. Barrier: `saving` only once "effects done, report pending" is in the chain, and only when it changed something.
+  const finished = await finishRun(
+    {
+      ...barrier,
+      onPending: async (chain) => {
+        seen.chain = chain;
+        if (!changedSomething(chain)) return;
+        await status.post('saving', { total: end.manifest.capture.members.length });
+        seen.saving = true;
+      },
+    },
+    end.manifest,
+    end.manifestHash,
+    end.chain,
+  );
   return { phase: 'done', dispositions: finished.dispositions };
 }
-
 
 /** What a `bower-tidy` dispatch carries (worker contract, "Runner wire"). */
 export interface Dispatch {

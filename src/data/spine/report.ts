@@ -94,14 +94,16 @@ export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcom
 }
 
 
-/** Where an admitted item ends: exactly one of these. */
-export type ItemDisposition = { fileId: string; pileId: string; disposition: 'filed' | 'set-aside' | 'waiting' };
+/** Where an admitted item ends: exactly one of these. A journal line (one of your changes) has no pile. */
+export type ItemDisposition = { fileId: string; pileId: string | null; disposition: 'filed' | 'set-aside' | 'waiting' };
 
 /**
  * One disposition for every item in the admitted manifest, none left out and none twice. An item the run did not
  * capture changed since admission and waits for the next run (`takeAdmitted` leaves its whole pile out). A captured
  * thing is filed when its filing move was applied, and set aside otherwise: it stays in the inbox, untouched. What
- * else is in a captured pile (its pile note) goes with its pile: filed when every thing in it was filed.
+ * else is in a captured pile (its pile note) goes with its pile: filed when every thing in it was filed. A journal
+ * line the run read is filed when its archive move was applied, and set aside (left in `.bower/changes`) otherwise;
+ * one it did not read waits.
  */
 export function itemDispositions(admission: AdmissionManifest, manifest: RunManifest, outcomes: readonly Outcome[]): ItemDisposition[] {
   const applied = new Set(outcomes.filter((o) => o.state === 'applied').map((o) => o.operationId));
@@ -123,6 +125,14 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
         : captured.has(pile.pileId) ? (whole(pile.pileId) ? 'filed' : 'set-aside') : 'waiting';
       out.push({ fileId: item.fileId, pileId: pile.pileId, disposition });
     }
+  }
+  const read = new Set(manifest.capture.journal.flatMap((j) => j.fileIds));
+  const archived = new Set(manifest.operations.flatMap((o) => (o.effect.kind === 'move' && applied.has(o.operationId) ? [o.effect.before.fileId] : [])));
+  for (const line of admission.journal) {
+    if (done.has(line.fileId)) continue;
+    done.add(line.fileId);
+    const disposition: ItemDisposition['disposition'] = read.has(line.fileId) ? (archived.has(line.fileId) ? 'filed' : 'set-aside') : 'waiting';
+    out.push({ fileId: line.fileId, pileId: null, disposition });
   }
   return out;
 }

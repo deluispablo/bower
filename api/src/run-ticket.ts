@@ -72,7 +72,11 @@ export interface RunnerAccess {
 export type RunnerRefusal = 'signed-out' | 'stale-attempt' | 'stale-report';
 
 /** What the person object decided on a report: the run and revision, or a refusal. */
-export type RunnerReportResult = { accepted: true; reply: RunReply } | { accepted: false; refused: RunnerRefusal };
+export type RunnerReportResult =
+  | { accepted: true; reply: RunReply }
+  | { accepted: false; refused: 'signed-out' | 'stale-attempt' }
+  /** A late report: with the Worker's current `seq` of this attempt (0 before any) and phase, so a runner can go on. */
+  | { accepted: false; refused: 'stale-report'; current: { seq: number; phase: RunPhase } };
 
 /** How far along a phase is: a report never moves a run to a lower rank (`done` and `failed` are both last). */
 export const PHASE_RANK: Readonly<Record<RunPhase, number>> = {

@@ -46,6 +46,8 @@ export interface SpineRun {
   plan(): Promise<RunManifest>;
   clock(): number;
   newId(): string;
+  /** Sees the chain each time it grows (the runner keeps it, to say truthfully how a run that stops ended). */
+  onChain?(chain: Checkpoint[]): void;
 }
 
 /** Settled: every operation applied or rejected (or the run already ended), with its verified manifest. */
@@ -70,6 +72,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
   let headHash: string | null;
   if (found.kind === 'run') {
     ({ manifest, manifestHash, chain, head: headHash } = found);
+    run.onChain?.(chain);
   } else {
     manifest = await run.plan();
     const m = await canonical(manifest);
@@ -92,6 +95,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     await run.records.put(await run.batch(), where, checkpointName(0, c.hash), c.text);
     chain = [head];
     headHash = c.hash;
+    run.onChain?.(chain);
   }
   if (ended(head)) return { state: 'settled', chain, manifest, manifestHash };
 
@@ -104,6 +108,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     at = next;
     atHash = c.hash;
     chain = [...chain, next];
+    run.onChain?.(chain);
   };
   const resolve = (op: OperationV2, outcome: Outcome): Promise<void> =>
     commit({ outcomes: at.outcomes.map((o) => (o.operationId === op.operationId ? outcome : o)) });

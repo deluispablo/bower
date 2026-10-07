@@ -244,6 +244,25 @@ describe('runner wire', () => {
     }
   });
 
+  it('a stale report answers the current seq and phase', async () => {
+    const { sub, runner } = await aRun();
+    await reply(await runner.report({ attempt: 1, seq: 1, phase: 'writing' }));
+    await reply(await runner.report({ attempt: 1, seq: 2, phase: 'saving' }));
+    // A restarted runner starts its seq again: the refusal says where the Worker is, so it can go on from there.
+    const late = await runner.report({ attempt: 1, seq: 1, phase: 'done' });
+    expect(late.status).toBe(409);
+    const body = (await late.json()) as { error: { code: string; message: string }; current?: { seq: number; phase: string } };
+    expect(body.error).toEqual({ code: 'stale-report', message: 'That update arrived late.' });
+    expect(body.current).toEqual({ seq: 2, phase: 'saving' });
+    // A phase going back answers the same, and changes nothing.
+    const back = await runner.report({ attempt: 1, seq: 3, phase: 'writing' });
+    expect(back.status).toBe(409);
+    expect(((await back.json()) as { current?: unknown }).current).toEqual({ seq: 2, phase: 'saving' });
+    expect((await person(sub).runStatus(Date.now())).run?.phase).toBe('saving');
+    // Going on from there is accepted.
+    expect((await reply(await runner.report({ attempt: 1, seq: 3, phase: 'done' }))).run?.phase).toBe('done');
+  });
+
   it('a repeated report changes nothing', async () => {
     const { sub, runner } = await aRun();
     const first = await reply(await runner.report({ attempt: 1, seq: 1, phase: 'reading', total: 3 }));
