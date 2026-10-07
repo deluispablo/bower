@@ -713,11 +713,13 @@ export class Person extends DurableObject<Env> {
    *    answers the current state to a repeat of its last report (same attempt and `seq`); else `signed-out`;
    * 2. the attempt: the ticket's own, else `stale-attempt`;
    * 3. a repeat of the last `seq` answers the current state and changes nothing;
-   * 4. a lower `seq`, a phase going back, or a run already ended is `stale-report`, with the current `seq` of this
-   *    attempt and the run's phase;
-   * 5. the run's phase (`phaseAt` when it changes), `total`, `failure` and `finishedAt` as given, the
-   *    report's `seq` kept, and the revision raised;
-   * 6. `done` or `failed` retires the ticket.
+   * 4. a lower `seq`, a phase behind this attempt's own last one, or a run already ended is `stale-report`, with the
+   *    current `seq` of this attempt and the run's phase;
+   * 5. a phase behind the run's own (a later attempt starting over) is kept, with its `seq`, and answers the current
+   *    run and revision: the run a person sees never moves back;
+   * 6. else the run's phase (`phaseAt` when it changes), `total`, `failure` and `finishedAt` as given, the report's
+   *    `seq` kept, and the revision raised only when the run shows something new (phase, `total` or `failure`);
+   * 7. `done` or `failed` retires the ticket.
    */
   runnerReport(runId: string, hash: string, report: RunnerReport, now: number): RunnerReportResult {
     return this.ctx.storage.transactionSync((): RunnerReportResult => {
@@ -740,26 +742,38 @@ export class Person extends DurableObject<Env> {
         return { accepted: true, reply: { run: toWire(run), revision: this.revision() } };
       }
       const late = ticket.report_seq !== null && report.seq < ticket.report_seq;
-      if (late || !ACTIVE_PHASES.includes(run.phase) || PHASE_RANK[report.phase] < PHASE_RANK[run.phase]) {
+      // Behind this attempt's own last phase is out of order; behind the run's phase alone is a later attempt starting over.
+      const behindItself = ticket.report_phase !== null && PHASE_RANK[report.phase] < PHASE_RANK[ticket.report_phase];
+      if (late || behindItself || !ACTIVE_PHASES.includes(run.phase)) {
         return { accepted: false, refused: 'stale-report', current: { seq: ticket.report_seq ?? 0, phase: run.phase } };
       }
+      if (PHASE_RANK[report.phase] < PHASE_RANK[run.phase]) {
+        // Recorded, never shown: the run and its revision stay as they were.
+        sql.exec('UPDATE run_ticket SET report_seq = ?, report_phase = ? WHERE hash = ?', report.seq, report.phase, hash);
+        return { accepted: true, reply: { run: toWire(run), revision: this.revision() } };
+      }
       const ended = !ACTIVE_PHASES.includes(report.phase);
-      const row = sql
-        .exec<RunRow>(
-          `UPDATE runs SET phase = ?1, phase_at = CASE WHEN phase = ?1 THEN phase_at ELSE ?2 END,
-             total = COALESCE(?3, total), failure = ?4, finished_at = ?5
-           WHERE id = ?6
-           RETURNING ${RUN_COLUMNS}`,
-          report.phase,
-          now,
-          report.total ?? null,
-          report.failure ?? null,
-          ended ? now : null,
-          runId,
-        )
-        .one();
-      sql.exec('UPDATE run_ticket SET report_seq = ?, retired = ? WHERE hash = ?', report.seq, ended ? 1 : 0, hash);
-      return { accepted: true, reply: { run: toWire(row), revision: this.raiseRevision() } };
+      const total = report.total ?? run.total;
+      const failure = report.failure ?? null;
+      const shows = report.phase !== run.phase || total !== run.total || failure !== run.failure;
+      const row = shows
+        ? sql
+            .exec<RunRow>(
+              `UPDATE runs SET phase = ?1, phase_at = CASE WHEN phase = ?1 THEN phase_at ELSE ?2 END,
+                 total = ?3, failure = ?4, finished_at = ?5
+               WHERE id = ?6
+               RETURNING ${RUN_COLUMNS}`,
+              report.phase,
+              now,
+              total,
+              failure,
+              ended ? now : null,
+              runId,
+            )
+            .one()
+        : run;
+      sql.exec('UPDATE run_ticket SET report_seq = ?, report_phase = ?, retired = ? WHERE hash = ?', report.seq, report.phase, ended ? 1 : 0, hash);
+      return { accepted: true, reply: { run: toWire(row), revision: shows ? this.raiseRevision() : this.revision() } };
     });
   }
 
@@ -775,7 +789,7 @@ export class Person extends DurableObject<Env> {
   ): { kind: 'live' | 'retired'; row: TicketRow } | { kind: 'superseded' | 'unknown' } {
     const sql = this.ctx.storage.sql;
     const row = sql
-      .exec<TicketRow>('SELECT hash, epoch, expires_at, retired, report_seq FROM run_ticket WHERE run_id = ? AND hash = ?', runId, hash)
+      .exec<TicketRow>('SELECT hash, epoch, expires_at, retired, report_seq, report_phase FROM run_ticket WHERE run_id = ? AND hash = ?', runId, hash)
       .toArray()[0];
     if (row === undefined || !timingSafeEqual(row.hash, hash)) return { kind: 'unknown' };
     if (row.retired === 1) {
@@ -880,6 +894,8 @@ interface TicketRow extends Record<string, SqlStorageValue> {
   expires_at: number;
   retired: number;
   report_seq: number | null;
+  /** The phase of that last report. */
+  report_phase: RunPhase | null;
 }
 
 function toWire(row: RunRow): RunWire {

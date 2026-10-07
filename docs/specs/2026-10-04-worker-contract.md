@@ -103,12 +103,14 @@ This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runn
 - **`GET /runner/runs/:id/token`** with `Authorization: Bearer <ticket>` → `{ accessToken, expiresAt, folderId, attempt }`.
 - **`POST /runner/runs/:id/status`** with the same header and `{ attempt, seq, phase, total?, failure? }` → `{ run, revision }`.
   - `seq` rises with each report of an attempt. A repeat of the last `seq` returns the current state and changes nothing; a lower one is refused.
-  - A phase only moves forward along `queued` → `reading` → `writing` → `saving` → `done` | `failed`.
-  - Every accepted report raises the status revision.
+  - A phase only moves forward along `queued` → `reading` → `writing` → `saving` → `done` | `failed`. The phase a person sees never moves back, even across attempts.
+    - 200: a repeat of the last `seq`; a report that reaches or passes the run's phase; and a report from a later attempt whose phase is behind the run's (attempt 2 posting `writing` after attempt 1 reported `saving`). That last one is recorded as the attempt's last `seq` and phase and answers the current run and revision, the run unchanged.
+    - 409 `stale-report`: a lower `seq`; a phase behind the same attempt's own last phase; a run already ended.
+  - The status revision rises only when the run a person sees changes: its phase, `total` or `failure` (and so its `finishedAt`). A report that shows nothing new, or is only recorded, answers the same revision.
 - **Runner errors** use the same JSON shape:
   - 401 `signed-out` for a missing, wrong or expired ticket;
   - 409 `stale-attempt` "This tidy-up was taken over." for an attempt that is no longer current;
-  - 409 `stale-report` "That update arrived late." for a lower `seq`, a backward phase or a run already ended. Its body also carries `current: { seq, phase }`: the last `seq` the Worker took from this attempt (0 before any) and the run's phase. The runner resends once from `seq + 1`; when that phase is `done` or `failed` the run is finished and it sends nothing more, and a `done` refused again is a failed job, never swallowed.
+  - 409 `stale-report` "That update arrived late." for a lower `seq`, a phase behind the same attempt's own last one, or a run already ended. Its body also carries `current: { seq, phase }`: the last `seq` the Worker took from this attempt (0 before any) and the run's phase. The runner resends once from `seq + 1`; when that phase is `done` or `failed` the run is finished and it sends nothing more, and a `done` refused again is a failed job, never swallowed.
 - **Recovery without the browser.** At dispatch, the person object sets a [Durable Object alarm](https://developers.cloudflare.com/durable-objects/api/alarms/) for the stale deadline. When the alarm finds no progress, it looks up the run by `run-name` in GitHub Actions and reads the job's `started_at` and `completed_at`.
   - It redispatches once, as attempt + 1 with a new ticket, if no live job holds the run.
   - Otherwise, or after a second stale deadline, it marks the run failed `stale`.

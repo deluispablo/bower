@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -145,6 +145,11 @@ const STEPS: readonly (readonly string[])[] = [
     // item ids with their names, parents and modifiedTimes, and the piles' declarations; never note content. The
     // token route hands it to the runner. A run kept from before this step has none (null).
     'ALTER TABLE runs ADD COLUMN manifest TEXT',
+  ],
+  [
+    // The phase of the last report an attempt sent with its ticket (null before the first): a later attempt may
+    // report a phase behind the run's, which is kept without moving the run, so its own order needs its own mark.
+    'ALTER TABLE run_ticket ADD COLUMN report_phase TEXT',
   ],
 ];
 

@@ -20,6 +20,7 @@ import { planRun, type HubUpdate } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
 import { openElsewhere, type LeaseReply, type SessionAction } from '../session';
+import type { ReportBody } from './ordered-reports.fixture';
 
 export interface FakeWorkerOptions {
   drive: FakeDrive;
@@ -348,5 +349,65 @@ function forget(yes: boolean): void {
     else sessionStorage.removeItem(FORGOT);
   } catch (e) {
     console.error(e);
+  }
+}
+
+const RANK: Record<RunWire['phase'], number> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
+
+/** What a report answers: the run and revision when taken, or the refusal the Worker would give. */
+export type LedgerAnswer = { status: 200; reply: RunReply } | { status: 409; code: 'stale-report' | 'stale-attempt'; reply: RunReply };
+
+/**
+ * The Worker's report ordering (worker contract, "Runner wire"), kept for a run's reports in the fake: what a runner's
+ * reports do to the run a person sees and to its revision.
+ */
+export class ReportLedger {
+  private run: RunWire;
+  private revision = 1;
+  private attempt = 1;
+  private lastSeq: number | null = null;
+  private lastPhase: RunWire['phase'] | null = null;
+
+  constructor(run: RunWire) {
+    this.run = { ...run };
+  }
+
+  /** A new attempt: from now on the older one is refused, and the new one counts its own reports from the start. */
+  takeover(attempt: number): void {
+    this.attempt = attempt;
+    this.lastSeq = null;
+    this.lastPhase = null;
+  }
+
+  /**
+   * As the Worker's `runnerReport`: an older attempt, a lower `seq`, a phase behind the attempt's own last one or an
+   * ended run is refused; a phase behind the run's own (a later attempt starting over) is kept and shows nothing;
+   * otherwise the run takes it, and the revision rises only when the run shows something new.
+   */
+  report(r: ReportBody): LedgerAnswer {
+    const now = (): RunReply => ({ run: { ...this.run }, revision: this.revision });
+    if (r.attempt !== this.attempt) return { status: 409, code: 'stale-attempt', reply: now() };
+    if (r.seq === this.lastSeq) return { status: 200, reply: now() };
+    const late = this.lastSeq !== null && r.seq < this.lastSeq;
+    const behindItself = this.lastPhase !== null && RANK[r.phase] < RANK[this.lastPhase];
+    if (late || behindItself || ['done', 'failed'].includes(this.run.phase)) return { status: 409, code: 'stale-report', reply: now() };
+    this.lastSeq = r.seq;
+    this.lastPhase = r.phase;
+    if (RANK[r.phase] < RANK[this.run.phase]) return { status: 200, reply: now() };
+    const total = r.total ?? this.run.total;
+    const shows = r.phase !== this.run.phase || total !== this.run.total || r.failure !== this.run.failure;
+    if (!shows) return { status: 200, reply: now() };
+    const at = this.run.phaseAt + 1;
+    const { total: _total, failure: _failure, ...rest } = this.run;
+    this.run = {
+      ...rest,
+      phase: r.phase,
+      phaseAt: r.phase === this.run.phase ? this.run.phaseAt : at,
+      ...(total === undefined ? {} : { total }),
+      ...(r.failure === undefined ? {} : { failure: r.failure }),
+      ...(r.phase === 'done' || r.phase === 'failed' ? { finishedAt: at } : {}),
+    };
+    this.revision++;
+    return { status: 200, reply: now() };
   }
 }
