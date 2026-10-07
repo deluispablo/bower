@@ -34,7 +34,11 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - `nothingReady` is approved and in the contract. `parseRunReport` already accepts it (from worker-reads-pile-notes), so no fix is needed.
 - Running:
   - `security-review` passes as recorded (3f05ebf). It found 3 Important and 5 Minor (`2026-10-07-p3-security-review.md`) and corrected two runbook claims; `pnpm audit` is clean.
-  - P3-20 has seven fix entries, packet `2026-10-07-p3-20-security-fixes-packet.md`. The lead says all 8 findings are fixed before the freeze. `token-key-rotation-reconsent` passes (3e8091c) and so does `tidy-pin-actions` (a23da1f; checkout fbc6f39, setup-node a0853c2); 339/344. `log-no-folder-content` passes (42880d1). 340/344. `cookie-host-prefix` passes (2cd6e75). 341/344. `instance-private-check` passes (89bb7f6). 342/344. Running now: `app-security-headers` (`/private/tmp/bower-p3-headers`, port 5196) and `deletion-allowlist-doc` (`/private/tmp/bower-p3-allowdoc`, its test at the end of src/docs.test.ts). Order:
+  - P3-20 has seven fix entries, packet `2026-10-07-p3-20-security-fixes-packet.md`. The lead says all 8 findings are fixed before the freeze. `token-key-rotation-reconsent` passes (3e8091c) and so does `tidy-pin-actions` (a23da1f; checkout fbc6f39, setup-node a0853c2); 339/344. `log-no-folder-content` passes (42880d1). 340/344. `cookie-host-prefix` passes (2cd6e75). 341/344. `instance-private-check` (89bb7f6), `app-security-headers` (f9a3ab8) and `deletion-allowlist-doc` (060df21, known-green) all pass.
+- `app-security-headers`: `public/_headers` sets the CSP with the index script by hash. The landing alone needs `'unsafe-eval'` (its exported `support.js` uses `new Function`), detached with `!`; that Cloudflare detach must be checked on the deploy. The Worker sends `default-src 'none'`.
+- The deploy-staging script tests now have a 30 s timeout.
+- All 8 security findings are fixed; 344/344.
+- **Freeze:** the four suites run on the frozen SHA, then the Opus fallback review of the P3-19/20 delta (a22f288..freeze). Order:
     1. `token-key-rotation-reconsent` and `tidy-pin-actions`;
     2. `app-security-headers` and `log-no-folder-content`;
     3. `cookie-host-prefix` and `instance-private-check`;
