@@ -109,7 +109,7 @@ describe('what the repository promises', () => {
     const doc = 'docs/harness/2026-10-07-p3-compatibility.md';
     expect(existsSync(join(ROOT, doc)), `${doc} exists`).toBe(true);
     const list = read(doc);
-    const log = execFileSync('git', ['log', '--format=%h', '00ec9a5..HEAD', '--', 'src/features', 'src/data/contracts'], { cwd: ROOT, encoding: 'utf8' });
+    const log = execFileSync('git', ['log', '--no-merges', '--format=%h', '00ec9a5..HEAD', '--', 'src/features', 'src/data/contracts'], { cwd: ROOT, encoding: 'utf8' });
     const commits = log.split('\n').filter(Boolean);
     expect(commits.length).toBeGreaterThan(0);
     // One row per commit: `| sha | entry | what it changes for the accepted app's files |`, never an empty cell.
