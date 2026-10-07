@@ -149,3 +149,5 @@ P3-9 is closed.
 - Live Claude smoke after the review: the lead deploys, sets BOWER_PROVIDER=claude in bower-home, and I press one C04 case.
 - provider-contract entry and packet ready (lead 1089bd1); dispatch when a slot frees. Live C04 smoke after it closes. 351/354.
 - P4-1 suites at 62a9a3e: check 3608/175/66, e2e:fake 250 (green).
+- `p4-corpus` re-closed (767ad48, known-green; red at 1e33a4a by hand). `runner-overhead` closed (a325441, known-green; red at dcc7005): 61.4 s → 43.4 s modelled; the real figure is unmeasured (expect about 80 s). Two more cuts (checkpoint read-back, merged checkpoints) are with the lead. 353/354.
+- Running: `provider-contract` (bower-p4-provcontract, at a325441).
