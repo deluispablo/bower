@@ -1,5 +1,5 @@
 import { LoadError } from '@/ui/LoadError';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { report } from '@/ui/report';
 import { startRun } from './start-run';
 import { pileName, thingsIn, waitingIn } from '@/data/piles';
@@ -27,10 +27,9 @@ export function TidySheet() {
   // here); a finished run from before stays on Home's own card, so a press on "Tidy up" asks first.
   // A run that stopped and was not looked at still opens on why (the stopped card and chip lead here).
   const [watched, setWatched] = useState<string | null>(null);
-  useEffect(() => {
-    if (!tidyOpen) setWatched(null);
-    else if (running && run) setWatched(run.id);
-  }, [tidyOpen, running, run]);
+  // Adjusted while rendering (React: storing information from previous renders), not in an effect.
+  if (!tidyOpen && watched !== null) setWatched(null);
+  else if (tidyOpen && running && run && watched !== run.id) setWatched(run.id);
   const showRun = !!run && (running || (run.phase === 'failed' && !run.seen) || watched === run.id);
   const { runs } = useSources();
   const { data: piles } = usePiles();
