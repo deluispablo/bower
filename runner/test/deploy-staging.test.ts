@@ -338,6 +338,23 @@ describe('deploy-staging.sh', () => {
     expect(run(at, [at.sha, ORIGIN]).status).toBe(0);
   });
 
+  it('deploy-staging passes when only the URL holds bower-api', () => {
+    const at = checkout();
+    const withApiInUrl = 'Total Upload: 1.00 KiB\nYour Worker has access to the following bindings:\n- Vars:\n  - APP_ORIGIN: "https://bower-api.workers.dev"\nUploaded bower-staging (2.10 sec)\nDeployed bower-staging triggers (0.80 sec)';
+    const result = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: withApiInUrl });
+    expect(result.status).toBe(0);
+    expect(result.calls.filter((c) => c.startsWith('curl '))).not.toEqual([]);
+  });
+
+  it('deploy-staging fails when bower-api is uploaded', () => {
+    const at = checkout();
+    const uploadedBowerApi = 'Total Upload: 1.00 KiB\nUploaded bower-api (2.10 sec)\nDeployed bower-api triggers (0.80 sec)';
+    const result = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: uploadedBowerApi });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/bower-staging/);
+    expect(result.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
+  });
+
   it('deploy-staging confirms the upload line', () => {
     const at = checkout();
     const echoed = 'Total Upload: 1.00 KiB\nYour Worker has access to the following bindings:\n- Vars:\n  - APP_ORIGIN: "https://bower-staging.example.test"\nUploaded bower-other (2.10 sec)\nDeployed bower-other triggers (0.80 sec)';

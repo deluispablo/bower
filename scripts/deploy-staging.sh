@@ -120,21 +120,23 @@ check_env_files() {
 
 # 2. The Worker config targets staging only (TL-P3-08; the sensor in src/docs.test.ts).
 check_config() {
-  local first_name
+  local first_name stripped
   [ -f "$CONFIG" ] || die "Refusing: $CONFIG is missing."
   [ ! -e api/wrangler.json ] && [ ! -e api/wrangler.toml ] \
     || die "Refusing: api/ holds another wrangler config, which wrangler could read instead of $CONFIG."
-  if grep -q "$PRODUCTION_NAME" "$CONFIG"; then
+  # Strip comments before checking config content (matching api/test/routing.test.ts).
+  stripped=$(sed -E 's|//.*$||' "$CONFIG" | tr '\n' ' ')
+  if printf '%s' "$stripped" | grep -q "$PRODUCTION_NAME"; then
     die "Refusing: $CONFIG names $PRODUCTION_NAME, the original app's production Worker."
   fi
-  first_name=$(grep -Eo '"name":[[:space:]]*"[^"]*"' "$CONFIG" | head -n 1 | sed -E 's/.*"([^"]*)"$/\1/')
+  first_name=$(printf '%s' "$stripped" | grep -Eo '"name":[[:space:]]*"[^"]*"' | head -n 1 | sed -E 's/.*"([^"]*)"$/\1/')
   [ "$first_name" = "$STAGING_NAME" ] || die "Refusing: $CONFIG must name the Worker $STAGING_NAME."
-  grep -Eq '"not_found_handling":[[:space:]]*"single-page-application"' "$CONFIG" \
+  printf '%s' "$stripped" | grep -Eq '"not_found_handling":[[:space:]]*"single-page-application"' \
     || die "Refusing: $CONFIG must keep the single-page fallback."
-  if grep -q "$PRODUCTION_KV" "$CONFIG"; then
+  if printf '%s' "$stripped" | grep -q "$PRODUCTION_KV"; then
     die "Refusing: $CONFIG uses the production KV namespace."
   fi
-  grep -Eq "\"binding\":[[:space:]]*\"BOWER_KV\",[[:space:]]*\"id\":[[:space:]]*\"$STAGING_KV\"" "$CONFIG" \
+  printf '%s' "$stripped" | grep -Eq "\"binding\":[[:space:]]*\"BOWER_KV\",[[:space:]]*\"id\":[[:space:]]*\"$STAGING_KV\"" \
     || die "Refusing: $CONFIG must bind BOWER_KV to the staging KV namespace."
 }
 
@@ -167,18 +169,21 @@ scan() {
 
 # 5. The deploy, from api/. Wrangler's output must name the staging Worker.
 deploy() {
-  local out
+  local out upload_line
   say "Deploying $SHORT to $STAGING_NAME..."
   out=$(cd api && npx wrangler deploy --var "APP_ORIGIN:$ORIGIN" --var "API_ORIGIN:$ORIGIN" --var "APP_VERSION:$SHORT" --var "GITHUB_REPO:$REPO" </dev/null 2>&1) || {
     say "$out"
     die "wrangler deploy failed."
   }
   say "$out"
-  if printf '%s' "$out" | grep -q "$PRODUCTION_NAME"; then
-    die "Wrangler's output names $PRODUCTION_NAME, not $STAGING_NAME: check the original app's production Worker now."
+  # Extract the upload line to check the Worker name, ignoring URLs that may contain the production name.
+  upload_line=$(printf '%s\n' "$out" | grep -E "^Uploaded [^ ]+" | head -n 1)
+  if [ -z "$upload_line" ]; then
+    die "Wrangler's output has no upload line for $STAGING_NAME: check what was deployed."
   fi
-  printf '%s\n' "$out" | grep -Eq "^Uploaded $STAGING_NAME( |\$)" \
-    || die "Wrangler's output has no upload line for $STAGING_NAME: check what was deployed."
+  if ! printf '%s' "$upload_line" | grep -Eq "^Uploaded $STAGING_NAME( |\$)"; then
+    die "Wrangler's output has no upload line for $STAGING_NAME: check what was deployed."
+  fi
 }
 
 # get PATH: sets BODY, CODE and TYPE from one GET without a cookie; CODE is 000 when nothing answered.
