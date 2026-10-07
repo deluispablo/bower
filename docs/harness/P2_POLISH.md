@@ -90,3 +90,4 @@ From the P3-7 delta review (minor):
 - `DELETE /me` resets lease epochs to 1. This is harmless, because places are random per tab.
 - `requireLease` checks once per call, as the contract says.
 - `runs.ts` still clears `refused` on a stale good answer that is not accepted. It corrects itself on the next beat.
+- `forget()`: an `await` sits between `deleteAll()` and `kv.put(generationFloor)`. A crash in that gap would lose the floor and the 204 (P3-7 re-review, minor).
