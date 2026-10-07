@@ -65,3 +65,4 @@ p3-6-delta-review,reviewer,claude,opus,medium,1,99865,,,,,,26,3.2,"PASS; 6 minor
 r4-resumable-reserved-id-real,evaluator,claude,sonnet,medium,1,97056,,,,,,13,4.5,"A inconclusive (slot 10 triplet unstable), lifecycle clean; B pass",2026-10-07
 r3-executor-probe,evaluator,claude,sonnet,medium,1,60005,,,,,,9,2.0,"pass: 6/8 dispatches, created 2 s, completed 11-13 s; same-run duplicates serialize",2026-10-07
 runs-beat-rearm,mechanical,claude,haiku,low,1,109442,,,,,,37,5.1,delivered,2026-10-07
+worker-session-lease,implementer,claude,opus,high,1,172348,,,,,,56,8.7,delivered,2026-10-07

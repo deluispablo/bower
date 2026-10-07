@@ -57,3 +57,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: lost-reply-reconcile passes — chore(harness): lost-reply-reconcile passes
 - 2026-10-07: client-retry-policy passes — chore(harness): client-retry-policy passes
 - 2026-10-07: runs-beat-rearm passes — chore(harness): runs-beat-rearm passes
+- 2026-10-07: worker-session-lease passes — chore(harness): worker-session-lease passes

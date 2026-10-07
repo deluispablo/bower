@@ -3864,7 +3864,7 @@
       "The real source (choose.ts) holds a place, and its Worker calls carry the headers."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the session lease follows the contract|a check started before the place.s latest leave is discarded|person storage migrates from v5 to v6 keeping every row|POST /vault refuses a stale or missing session epoch\" && pnpm exec vitest run src/data -t \"the fake discards a check started before the place.s latest leave|the real source holds a place and sends its epoch\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-14 (adopted as the coordinator proposed), TL-P2-13/14/24/25, owed items of TL-P3-04: lease expiry and leave-generation columns with a tested migration."
   },
   {
