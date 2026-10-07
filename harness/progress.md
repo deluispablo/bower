@@ -67,3 +67,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: do-version-skew passes — chore(harness): do-version-skew passes
 - 2026-10-07: done-sh-runner-paths passes — chore(harness): done-sh-runner-paths passes
 - 2026-10-07: runner-drive-adapter passes — chore(harness): runner-drive-adapter passes
+- 2026-10-07: worker-dispatch passes — chore(harness): worker-dispatch passes

@@ -4005,7 +4005,7 @@
       "The person object sets its alarm for the queued stale deadline; the alarm handler at least writes the stale expiry."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a new run is dispatched once with its ticket|a repeat or an active run dispatches nothing|a failed dispatch leaves the run queued|no GitHub token sends nothing|admission sets the stale alarm\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-18 (worker-dispatch after worker-runner-tickets), Worker contract \"Runner wire\", ARCHITECTURE invariant 2 (admission durable before dispatch; dispatch recoverable). Live dispatch waits for the owner's GITHUB_TOKEN."
   },
   {
