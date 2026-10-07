@@ -10,6 +10,8 @@
     "run_worker_first": ["/auth/*", "/me", "/drive/*", "/vault", "/process", "/status", "/session", "/health"]
   },
   "kv_namespaces": [{ "binding": "BOWER_KV", "id": "6969d46bffdb4b1e90d068f84235fbec" }],
+  // Logs for sign-in failures, free tier.
+  "observability": { "enabled": true },
   // One SQLite-backed Durable Object per person, addressed by idFromName(sub).
   "durable_objects": { "bindings": [{ "name": "PERSON", "class_name": "Person" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Person"] }],

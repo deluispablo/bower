@@ -7,6 +7,7 @@ import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { HttpError, createErrorHandler } from './errors.js';
 import { appCors, requestId, securityHeaders } from './security.js';
+import { createStatusRoutes } from './status.js';
 import { createVaultRoutes } from './vault.js';
 
 /**
@@ -33,6 +34,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.get('/health', (c) => c.json({ ok: true, version: c.get('env').APP_VERSION }));
   app.route('/', createAuthRoutes(deps));
   app.route('/', createDriveRoutes(deps));
+  app.route('/', createStatusRoutes(deps));
   app.route('/', createVaultRoutes(deps));
 
   app.notFound(() => {

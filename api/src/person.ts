@@ -330,4 +330,9 @@ export class Person extends DurableObject<Env> {
       ).rowsWritten > 0
     );
   }
+
+  /** The person's current run, or null before runs exist. */
+  currentRun(): null {
+    return null;
+  }
 }

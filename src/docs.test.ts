@@ -72,4 +72,12 @@ describe('what the repository promises', () => {
     expect(config).not.toContain('dedd167004be415cbd90c4b154b1f4e2');
     expect(config).toMatch(/"binding":\s*"BOWER_KV",\s*"id":\s*"6969d46bffdb4b1e90d068f84235fbec"/);
   });
+
+  it('the staging Worker keeps its logs and names its build', () => {
+    const config = read('api/wrangler.jsonc');
+    expect(config).toMatch(/"observability":\s*\{\s*"enabled":\s*true\s*\}/);
+    const staging = read('docs/harness/STAGING.md');
+    expect(staging).toMatch(/--var APP_VERSION:<main short SHA>/);
+    expect(staging).toMatch(/\/health.*must name that SHA/);
+  });
 });
