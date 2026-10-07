@@ -98,3 +98,8 @@ From the P3-8 delta review (PASS, minor):
 - `vault.ts:322`: `signedOutNow()` runs after the final write. A sign-out right after `markFolderComplete` answers 401 though the folder is complete; nothing is lost.
 - `runs.ts:119`: `start()` raises `generation` and `accepted` even when it drops an older admission answer, so `/status` replies already in flight are dropped. The next poll recovers.
 - There is no direct test for a run that expires while its `requestId` is repeated.
+
+From the P3-9 delta review (minor, TL-P3-18 addendum):
+- `process.ts:647`: if `mintTicket` throws after admission, `/process` answers 500. The run stays recoverable, and its requestId returns it.
+- The runner's own `done` or `failed` leaves `recoveryWatch` and the alarm in place. This is harmless; the next alarm clears itself.
+- The adapter's create-precheck skips the parent folder's `modifiedTime` (accepted by the reviewer: name, parents and Bin state are checked).
