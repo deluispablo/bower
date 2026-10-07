@@ -193,3 +193,7 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - Important, rated for P4-2 provider-contract: claude.ts notAdmitted lets an in-contract reply bin Resources.
     Keep claude off live until provider-contract.
   - Model-supplied digests: a model with no tools cannot compute them, so every live reply is refused (provider-contract).
+- (P4-2 review, notes /private/tmp/p4-2-review-notes.md) Minors:
+  - runner/test/overhead.test.ts:88: the fence check `lastToken >= 0` cannot fail after the first token, and status order is not checked.
+  - runner/test/corpus.test.ts hard-codes the owner's local path to the original bench folder (skip when absent).
+  - provider-contract left out: the intent has no note text, and the model sees no file contents (C15/P4-C).
