@@ -57,3 +57,5 @@ staging-deploy-select-account,mechanical,claude,haiku,low,1,46182,,,,,,13,0.7,de
 r2-oidc-two-accounts (attempt 2),evaluator,claude,sonnet,medium,1,97839,,,,,,31,16.1,NOT RUN: owner timeout at the chooser (browser pane hidden; select_account confirmed),2026-10-07
 r2-oidc-two-accounts (attempt 2 resumed),evaluator,claude,sonnet,medium,1,115589,,,,,,33,6.1,steps 1-5 pass; 6 NOT RUN (HttpOnly cookie); /status 404 retried,2026-10-07
 drive-real-behavior-suite,evaluator,claude,sonnet,medium,1,130765,,,,,,142,9.1,"6 pass, 1 partial (lost reply says offline), 1 not run (no note edit); 2 Important",2026-10-07
+client-retry-policy,implementer,claude,sonnet,medium,1,98522,,,,,,31,15.6,"delivered with 2 contract gaps (Try again blocked; 400/403 keep beat); qa5:38 phone unsettled",2026-10-07
+drive-real-behavior-suite (check 4 rerun),evaluator,claude,sonnet,medium,1,66663,,,,,,24,2.2,"toggle merged into newer text, no overwrite; changed-elsewhere path not reached",2026-10-07

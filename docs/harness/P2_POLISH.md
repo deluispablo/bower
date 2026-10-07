@@ -75,3 +75,5 @@ From drive-real-behavior-suite (TL-P3-11, minor):
 - F6: an unknown `/search` route shows "Nothing here".
 - F7: the move sheet's current-place label "Now in …" reads like a success.
 - F8: "It may have been moved, renamed or put in the Bin." leaves the person at a dead end.
+
+- `src/data/fake/fake-worker.test.ts` times out (5 s, 30 s) in `pnpm check` while two workers load the machine; seen in client-retry round 1 and in the worker-logs-and-version close (2026-10-07). Gate reliability.
