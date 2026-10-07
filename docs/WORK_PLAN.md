@@ -1,6 +1,6 @@
 # Work plan for the app first rebuild
 
-Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](harness/GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P4 is not authorized.
+Current owner authorization: autonomous P2 completion, conditional P2 acceptance and continuation into P3, with periodic private main backups, follows [GOVERNANCE](harness/GOVERNANCE.md#owner-authorization-for-unattended-continuation-2026-10-05). It supersedes older wait-for-owner wording below; all objective gates remain required. P3 was accepted and P4 authorized on 2026-10-07 ([P4_PLAN](P4_PLAN.md)).
 
 Revision: `2026-10-05-contracts-2`. Adopted by the owner's 2026-10-05 request to make the planning permanent on local main. [PRODUCT.md](PRODUCT.md) defines the purpose; [P2_ACCEPTANCE.md](P2_ACCEPTANCE.md) defines what P2 must prove. This plan supersedes conflicting guidance in historical plans and the backend v2 proposal. It does not mark implementation complete.
 
