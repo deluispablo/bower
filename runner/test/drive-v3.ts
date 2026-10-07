@@ -130,7 +130,9 @@ async function answer(drive: FakeDrive, method: string, url: URL, body: RequestI
     if (!stored) return json(404, driveFailure(404, 'notFound'));
     // Drive keeps a stored file's SHA-256 and gives it when asked for (`sha256Checksum`).
     const sha = stored.content && (url.searchParams.get('fields') ?? '').includes('sha256Checksum') ? { sha256Checksum: stored.content.sha256 } : {};
-    return json(200, { ...wireFile(stored.file, stored.trashed), ...sha });
+    // Drive gives `size` in bytes (https://developers.google.com/drive/api/reference/rest/v3/files), not UTF-16 units.
+    const size = stored.content && !stored.file.folder ? { size: String(stored.content.size) } : {};
+    return json(200, { ...wireFile(stored.file, stored.trashed), ...size, ...sha });
   }
   if (method === 'POST' && path === '/drive/v3/files') {
     const meta = JSON.parse(await new Response(body).text()) as { name: string; mimeType?: string; parents: string[]; appProperties?: Record<string, string> };
