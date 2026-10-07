@@ -105,3 +105,4 @@ staging-runner-routes,implementer,claude,haiku,low,1,84957,,,,,,52,3.9,delivered
 p3-13-delta-review,reviewer,claude,opus,medium,1,141958,,,,,,34,3.7,BLOCK (2 important),2026-10-07
 recovery-redispatch-after-dead-job,implementer,claude,opus,high,1,84417,,,,,,12,2.1,delivered,2026-10-07
 routing-test-from-app,implementer,claude,haiku,low,1,98207,,,,,,55,6.0,delivered (runs/push kept by coordinator),2026-10-07
+p3-13-rereview,reviewer,claude,opus,medium,1,80131,,,,,,9,1.2,PASS (4 minor),2026-10-07

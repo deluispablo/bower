@@ -134,3 +134,7 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - A ticket in flight at the v9→v10 deploy has `report_phase` null, so a backward report from that attempt answers 200 (recorded, run unchanged).
   - Each operation makes about 6 token-route calls (was 3); the check in `batch()` repeats the per-write one; the check-to-write gap remains (TL-P3-19 amendment, R1).
   - The "landed" read-back is tested only for a folder create; a create whose file no longer lists in its parent (lag, moved or binned by the person) is sent again.
+- P3-13 re-review (minor, PASS):
+  - No test feeds `decide()` a completed job plus a queued one at attempt 1 (must wait, not redispatch).
+  - "No job listed means queued" is judged over all matched runs together; a second `tidy <id> 1` with no jobs beside a completed one redispatches (safe: the retired ticket fences it).
+  - routing.test skips middleware by path (`*`, `/*`), not kind; a real `app.get('*')` would go unchecked. The red test copies the parser and matcher; no test asserts `/authx` directly.
