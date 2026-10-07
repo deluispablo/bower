@@ -4283,7 +4283,7 @@
       "A contract test: the same declared pile on the fake and on the adapter over a fake fetch gives the same manifest and the same dispositions."
     ],
     "verify": "pnpm exec vitest run src/data -t \"the real source declares piles|a declared pile gives the same manifest on the fake and on Drive\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-24 point 4 (P3-E)."
   },
   {
