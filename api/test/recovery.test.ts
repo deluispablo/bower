@@ -1,5 +1,6 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 
 import type { Env } from '../src/env.js';
 import type { GitHubAccess } from '../src/github.js';
@@ -15,7 +16,7 @@ const MINUTE = 60_000;
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
 
-let log: ReturnType<typeof vi.spyOn>;
+let log: MockInstance<typeof console.error>;
 beforeEach(() => {
   log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });

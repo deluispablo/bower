@@ -8,6 +8,7 @@
  */
 import type { FetchLike } from './google.js';
 import type { RunScope } from './process.js';
+import type { TidyJob, TidyLookup } from './recovery.js';
 
 export interface TidyDispatch {
   /** The instance repository, `owner/name` (`GITHUB_REPO`). */
@@ -30,6 +31,16 @@ export interface GitHubAccess {
 
 const API_URL = 'https://api.github.com';
 
+/** GitHub's REST headers (https://docs.github.com/en/rest/about-the-rest-api/api-versions). */
+function headers(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'bower-api',
+  };
+}
+
 /** Sends the dispatch; resolves whether GitHub accepted it. Never throws, never logs a secret. */
 export async function dispatchTidy(input: TidyDispatch, fetchImpl: FetchLike): Promise<boolean> {
   if (input.token === undefined) {
@@ -40,13 +51,7 @@ export async function dispatchTidy(input: TidyDispatch, fetchImpl: FetchLike): P
   try {
     response = await fetchImpl(`${API_URL}/repos/${input.repo}/dispatches`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${input.token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'bower-api',
-        'Content-Type': 'application/json',
-      },
+      headers: { ...headers(input.token), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         event_type: 'bower-tidy',
         client_payload: {
@@ -68,4 +73,83 @@ export async function dispatchTidy(input: TidyDispatch, fetchImpl: FetchLike): P
     return false;
   }
   return true;
+}
+
+/** The run name the workflow gives an attempt (`run-name` in the workflow; GitHub's `display_title`). */
+export function tidyRunName(runId: string, attempt: number): string {
+  return `tidy ${runId} ${attempt}`;
+}
+
+/** How many recent `repository_dispatch` runs the lookup reads: one page (GitHub's largest). */
+const RUNS_PAGE = 100;
+/** At most this many runs with the attempt's name have their jobs read (R3: a duplicate dispatch makes two). */
+const MATCHES_READ = 3;
+
+/** One GET to GitHub; the parsed JSON, or null (logged by status only) when it fails. */
+async function getJson(url: string, token: string, fetchImpl: FetchLike): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetchImpl(url, { method: 'GET', headers: headers(token) });
+  } catch {
+    console.error('tidy lookup failed: network error');
+    return null;
+  }
+  if (!response.ok) {
+    console.error(`tidy lookup failed: status ${response.status}`);
+    return null;
+  }
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    console.error('tidy lookup failed: unreadable reply');
+    return null;
+  }
+}
+
+function listOf(value: unknown, key: string): Record<string, unknown>[] | null {
+  if (value === null || typeof value !== 'object') return null;
+  const list = (value as Record<string, unknown>)[key];
+  if (!Array.isArray(list)) return null;
+  return list.filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object');
+}
+
+function time(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Finds attempt `attempt` of run `runId` on GitHub Actions by its run name, and reads its jobs. GitHub
+ * documents both calls: "List workflow runs for a repository", filtered by `event`
+ * (https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository; a run's
+ * `display_title` is its `run-name`), and "List jobs for a workflow run"
+ * (https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run). Null when a call
+ * fails. Never throws, never logs a secret.
+ */
+export async function findTidyRun(
+  input: { repo: string; token: string; runId: string; attempt: number },
+  fetchImpl: FetchLike,
+): Promise<TidyLookup | null> {
+  const runs = listOf(
+    await getJson(`${API_URL}/repos/${input.repo}/actions/runs?event=repository_dispatch&per_page=${RUNS_PAGE}`, input.token, fetchImpl),
+    'workflow_runs',
+  );
+  if (runs === null) return null;
+  const name = tidyRunName(input.runId, input.attempt);
+  const matches = runs.filter((run) => run.display_title === name && typeof run.id === 'number').slice(0, MATCHES_READ);
+  if (matches.length === 0) return { found: false };
+  const jobs: TidyJob[] = [];
+  for (const run of matches) {
+    const list = listOf(await getJson(`${API_URL}/repos/${input.repo}/actions/runs/${String(run.id)}/jobs`, input.token, fetchImpl), 'jobs');
+    if (list === null) return null;
+    for (const job of list) {
+      jobs.push({
+        status: typeof job.status === 'string' ? job.status : 'queued',
+        startedAt: time(job.started_at),
+        completedAt: time(job.completed_at),
+      });
+    }
+  }
+  return { found: true, jobs };
 }
