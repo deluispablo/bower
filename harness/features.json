@@ -4369,7 +4369,7 @@
       "docs/harness/2026-10-07-p3-compatibility.md lists each change since 00ec9a5 under src/features and src/data/contracts with its entry id; a test fails on a change in those paths not in the list."
     ],
     "verify": "pnpm exec vitest run src/data/compat-p2.test.ts -t \"the accepted app's files read the same in P3\" && pnpm -C runner exec vitest run -t \"the accepted app's files read the same in P3\" && pnpm exec vitest run src/docs.test.ts -t \"every change since the P2 freeze is listed\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-25 point 4."
   }
 ]
