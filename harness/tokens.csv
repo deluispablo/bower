@@ -52,3 +52,4 @@ p3-5-delta-review,reviewer,claude,opus,medium,1,94183,,,,,,16,2.3,BLOCKING 2 Imp
 vault-template-ids (conditional writes),implementer,claude,opus,medium,2,80641,,,,,,13,2.3,delivered,2026-10-07
 staging-deploy-p3-5,mechanical,claude,haiku,low,1,51311,,,,,,8,0.9,delivered,2026-10-07
 r2-oidc-two-accounts (attempt 1),evaluator,claude,sonnet,medium,1,67512,,,,,,29,3.2,NOT RUN: pane silently signed in a non-allowlisted Google account (403 at callback),2026-10-07
+auth-select-account,mechanical,claude,haiku,,1,76581,,,,,,21,1.8,delivered (test titles renamed by coordinator to match the verify),2026-10-07
