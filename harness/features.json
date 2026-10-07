@@ -4438,7 +4438,7 @@
       "A test builds and asserts dist/_headers carries the four headers."
     ],
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the built app ships its security headers\"",
-    "passes": false,
+    "passes": true,
     "note": "P3 security review F3 (Important); ASVS V3.4.1, V3.4.3, V3.4.6."
   },
   {
