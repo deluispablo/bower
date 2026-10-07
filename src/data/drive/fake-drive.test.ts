@@ -48,3 +48,19 @@ describe('keeping the pretend Drive across reloads', () => {
     expect(photo?.size).toBe(3 * 1024 * 1024);
   });
 });
+
+describe('a lost reply to an update or a text write', () => {
+  it('the change lands, the answer is lost once', async () => {
+    const d = new FakeDrive();
+    const root = await d.createFolder('root', 'Bower');
+    const note = await d.createText(root.id, 'A.md', 'one');
+    d.loseNextReply();
+    await expect(d.update(note.id, { name: 'B.md' })).rejects.toMatchObject({ code: 'offline' });
+    const now = await d.get(note.id);
+    expect(now.name).toBe('B.md');
+    d.loseNextReply();
+    await expect(d.writeText(note.id, 'two', now.modifiedTime)).rejects.toMatchObject({ code: 'offline' });
+    expect(await d.readText(note.id)).toBe('two');
+    await expect(d.update(note.id, { name: 'C.md' })).resolves.toMatchObject({ name: 'C.md' });
+  });
+});

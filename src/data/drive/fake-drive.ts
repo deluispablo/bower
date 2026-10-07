@@ -237,12 +237,12 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
 
   async writeText(id: string, text: string, ifModified: string): Promise<DriveFile> {
     await this.gate();
-    return this.applyWrite(id, text, ifModified);
+    return this.reply(this.applyWrite(id, text, ifModified));
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
     await this.gate();
-    return this.applyUpdate(id, patch);
+    return this.reply(this.applyUpdate(id, patch));
   }
 
   async trash(id: string): Promise<void> {
@@ -286,7 +286,7 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     for (const session of this.sessions.values()) session.expired = true;
   }
 
-  /** The next resumable call does what it was asked, then its answer is lost. */
+  /** The next resumable call, `update` or `writeText` does what it was asked, then its answer is lost. */
   loseNextReply(): void {
     this.loseReply = true;
   }

@@ -275,7 +275,8 @@ export class DriveVault implements VaultSource {
     const last = opts?.undo ? [...(await this.journal.list())].reverse().find((c) => c.kind === 'move' && c.path === path) : undefined;
     await this.stillAsSeen(f);
     const name = nameOf(out);
-    ix.put(this.keepSeen(f, await this.drive.update(f.id, { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) })));
+    const patch = { ...(name !== f.name ? { name } : {}), addParent: to, ...(f.parents[0] ? { removeParent: f.parents[0] } : {}) };
+    ix.put(this.keepSeen(f, await this.settle(f, () => this.drive.update(f.id, patch), (now) => now.name === name && now.parents[0] === to)));
     let removed = false;
     if (last) {
       try { await this.journal.remove(last.id); removed = true; } catch (e) { console.error(e); }
@@ -294,7 +295,7 @@ export class DriveVault implements VaultSource {
     // Read before the mutation: unreadable device storage must not leave an unjournaled rename.
     const made = (await this.journal.list()).find((c) => c.kind === 'create' && c.path === path);
     await this.stillAsSeen(f);
-    ix.put(this.keepSeen(f, await this.drive.update(f.id, { name: nameOf(out) })));
+    ix.put(this.keepSeen(f, await this.settle(f, () => this.drive.update(f.id, { name: nameOf(out) }), (now) => now.name === nameOf(out))));
     // A thing made since the last tidy-up and named now is one change: its making, under its name.
     let removed = false;
     if (made) {
@@ -429,7 +430,7 @@ export class DriveVault implements VaultSource {
     const out = toggleTaskInText(await this.drive.readText(f.id), index);
     let written: DriveFile;
     try {
-      written = await this.drive.writeText(f.id, out.text, f.modifiedTime);
+      written = await this.settle(f, () => this.drive.writeText(f.id, out.text, f.modifiedTime), async () => (await this.drive.readText(f.id)) === out.text, true);
     } catch (e) {
       // Changed somewhere else: show the new version, write nothing.
       if (e instanceof BowerError && e.code === 'conflict') void this.refresh();
@@ -1570,6 +1571,33 @@ export class DriveVault implements VaultSource {
   protected async stillAsSeen(f: DriveFile): Promise<void> {
     const now = await this.drive.get(f.id);
     if (now.name !== f.name || now.parents[0] !== f.parents[0]) {
+      void this.refresh();
+      throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
+    }
+  }
+
+  /**
+   * A write whose reply was lost (offline from the write itself) may still have landed: read the file back
+   * before telling the person (Google Cloud retry strategy, idempotency: an ambiguous outcome is read, not assumed).
+   * Shows the intended change: it counts as saved. Shows the old state: offline, as before. Unreadable: not sure.
+   * Anything else is somebody else's change: the usual "changed somewhere else".
+   */
+  private async settle(f: DriveFile, write: () => Promise<DriveFile>, landed: (now: DriveFile) => boolean | Promise<boolean>, text = false): Promise<DriveFile> {
+    try {
+      return await write();
+    } catch (e) {
+      if (!(e instanceof BowerError) || e.code !== 'offline') throw e;
+      let now: DriveFile;
+      let intended: boolean;
+      try {
+        now = await this.drive.get(f.id);
+        intended = await landed(now);
+      } catch (again) {
+        console.error(again);
+        throw new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
+      }
+      if (intended) return now;
+      if (now.name === f.name && now.parents[0] === f.parents[0] && (!text || now.modifiedTime === f.modifiedTime)) throw e;
       void this.refresh();
       throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
     }
