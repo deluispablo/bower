@@ -20,7 +20,7 @@ import { HttpError } from './errors.js';
 import { refreshAccessToken } from './google.js';
 import { clearSessionCookie } from './session.js';
 import type { FetchLike } from './google.js';
-import type { DriveAccessToken } from './person.js';
+import type { DriveAccessToken, Person } from './person.js';
 
 export type DriveToken = DriveAccessToken;
 
@@ -45,8 +45,16 @@ export interface DriveTokenOptions {
  * route's, since making the folder itself needs a token.
  */
 export async function accessTokenFor(env: Env, sub: string, options: DriveTokenOptions = {}): Promise<DriveToken> {
+  return await accessTokenOf(env, env.PERSON.get(env.PERSON.idFromName(sub)), options);
+}
+
+/** `accessTokenFor` for a person object already in hand (the runner reaches it by its id, not by `sub`). */
+export async function accessTokenOf(
+  env: Env,
+  person: DurableObjectStub<Person>,
+  options: DriveTokenOptions = {},
+): Promise<DriveToken> {
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
-  const person = env.PERSON.get(env.PERSON.idFromName(sub));
   if (options.fresh !== true) {
     const cached = await person.cachedDriveToken(Date.now() + EXPIRY_MARGIN_MS);
     if (cached !== null) return cached;

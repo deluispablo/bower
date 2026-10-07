@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -131,6 +131,14 @@ const STEPS: readonly (readonly string[])[] = [
       total INTEGER CHECK (total >= 0),
       failure TEXT
     )`,
+  ],
+  [
+    // The runner wire (worker contract, "Runner wire"; TL-P3-18) on the v1 `run_ticket` table: `epoch` holds
+    // the attempt the ticket was minted for. One ticket per run (`Person.mintTicket` replaces it), when it stops
+    // working (epoch ms; a row kept from before this step has 0, so it never works), and the last report
+    // `seq` the runner sent with it (null before the first). Rows already there stay as they are.
+    'ALTER TABLE run_ticket ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE run_ticket ADD COLUMN report_seq INTEGER',
   ],
 ];
 

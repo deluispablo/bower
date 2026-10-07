@@ -8,8 +8,15 @@ import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
 
-/** Takes back schema step 7 (the runs table), for the tests that rewind further. */
+/** Takes back schema step 8 (the runner wire's ticket columns), for the tests that rewind further. */
+function undoV8(sql: SqlStorage): void {
+  sql.exec('ALTER TABLE run_ticket DROP COLUMN expires_at');
+  sql.exec('ALTER TABLE run_ticket DROP COLUMN report_seq');
+}
+
+/** Takes back schema steps 8 and 7 (the runs table), for the tests that rewind further. */
 function undoV7(sql: SqlStorage): void {
+  undoV8(sql);
   sql.exec('DROP TABLE IF EXISTS runs');
 }
 
@@ -262,19 +269,56 @@ describe('person storage migration', () => {
     await evictDurableObject(alex);
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBe(7);
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
-      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      return Object.fromEntries(
+        PERSON_TABLES.map((t) => [
+          t,
+          // v8's ticket columns aside: the v7 → v8 test covers them.
+          sql.exec(t === 'run_ticket' ? 'SELECT hash, run_id, epoch, retired FROM run_ticket' : `SELECT * FROM ${t}`).toArray(),
+        ]),
+      );
     });
     // Every v6 row is there as it was (the version row aside), and the runs table starts empty.
     expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({ ...before, schema_version: undefined, runs: undefined });
-    expect(after.schema_version).toEqual([{ id: 1, version: 7 }]);
+    expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
     expect(after.runs).toEqual([]);
     // The status revision carries on from the kept control row.
     expect((await alex.runStatus(2_000)).revision).toBe(4);
     const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: 2_000, dailyLimit: 100 });
     expect(admitted).toMatchObject({ admitted: true, revision: 5 });
     expect(await alex.holdsLease('laptop', 1)).toBe(true);
+  });
+
+  it('person storage migrates from v7 to v8 keeping every row', async () => {
+    const alex = personFor('sub-alex-v7');
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: 2_000, dailyLimit: 100 });
+    expect(admitted).toMatchObject({ admitted: true });
+    // Put the database back as P3-8 shipped it: no ticket columns, a version row of 7, a v1 ticket row.
+    const before = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      undoV8(sql);
+      sql.exec('INSERT INTO run_ticket (hash, run_id, epoch, retired) VALUES (?, ?, ?, 0)', 'hash-1', 'run-1', 2);
+      sql.exec('UPDATE schema_version SET version = 7 WHERE id = 1');
+      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+    });
+    await evictDurableObject(alex);
+
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    expect(SCHEMA_VERSION).toBe(8);
+    const after = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+    });
+    // Every v7 row is there as it was; a ticket kept from before has no expiry, so it never works.
+    expect({ ...after, schema_version: undefined, run_ticket: undefined }).toEqual({
+      ...before,
+      schema_version: undefined,
+      run_ticket: undefined,
+    });
+    expect(after.schema_version).toEqual([{ id: 1, version: 8 }]);
+    expect(after.run_ticket).toEqual([{ hash: 'hash-1', run_id: 'run-1', epoch: 2, retired: 0, expires_at: 0, report_seq: null }]);
+    expect((await alex.runStatus(2_000)).revision).toBe(1);
   });
 });
