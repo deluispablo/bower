@@ -64,3 +64,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: delete-me-inflight-vault passes — chore(harness): delete-me-inflight-vault passes
 - 2026-10-07: worker-status-revision passes — chore(harness): worker-status-revision passes
 - 2026-10-07: worker-runner-tickets passes — chore(harness): worker-runner-tickets passes
+- 2026-10-07: do-version-skew passes — chore(harness): do-version-skew passes

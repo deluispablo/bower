@@ -77,3 +77,6 @@ session-lease smoke,evaluator,claude,sonnet,low,1,69160,,,,,,28,2.0,"steps 1-3 p
 worker-status-revision,implementer,claude,sonnet,medium,1,141103,,,,,,58,8.9,delivered,2026-10-07
 p3-8-delta-review,reviewer,claude,opus,medium,1,94585,,,,,,12,1.7,PASS (5 minor),2026-10-07
 worker-runner-tickets,implementer,claude,opus,high,1,140628,,,,,,29,6.0,delivered,2026-10-07
+runner-drive-adapter,implementer,claude,opus,high,1,135848,,,,,,35,7.6,delivered (create precheck omits parent modifiedTime),2026-10-07
+do-version-skew,mechanical,claude,haiku,low,1,72534,,,,,,43,3.1,delivered,2026-10-07
+runner-drive-adapter,implementer,claude,opus,high,1,135848,,,,,,35,7.6,delivered (create precheck omits parent modifiedTime),2026-10-07

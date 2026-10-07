@@ -3990,7 +3990,7 @@
       "A test with a person stub that lacks the called method gets 503 and Retry-After."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a person object on the previous version answers 503 with Retry-After\"",
-    "passes": false,
+    "passes": true,
     "note": "Staging 0b64dcb: /status 500 \"The RPC receiver does not implement the method runStatus\" for minutes after deploy (Cloudflare, gradual deployments with Durable Objects: keep Worker-DO changes compatible). Lead ruling, P3-9."
   },
   {
