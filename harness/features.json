@@ -4126,7 +4126,7 @@
       "scripts/new-instance.sh, adapted from the original, copies the built runner and tidy.yml, removes the original's workflows, sets BOWER_API_URL, and never reads or writes a secret; a test runs it against a local repository with gh stubbed."
     ],
     "verify": "pnpm exec vitest run src/data -t \"the scripted provider plans the same run as the fake runner\" && pnpm -C runner exec vitest run -t \"main applies real Drive effects through the adapter and the folder changes|main picks the scripted provider|new-instance copies the built runner and tidy.yml and nothing secret\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-22 point 3 and its addendum (real effects on the adapter for C12; the lead pushes the replacement); TL-P3-13."
   },
   {
