@@ -3879,5 +3879,20 @@
     "verify": "pnpm exec vitest run src/data/live/live.test.ts -t \"a good answer after a 4xx restarts the run status beat|a late 4xx from an older ask does not stop the beat\"",
     "passes": true,
     "note": "TL-P3-14 addendum, from the P3-6 delta review minors (a) and (b): set refused only when ticket > accepted, and schedule() when a good answer clears it."
+  },
+  {
+    "id": "worker-me-and-delete",
+    "task": "p3-c",
+    "category": "feature",
+    "what": "DELETE /me forgets the person at Bower: it revokes the Google grant, empties their person object (tokens, folder pointer, lease, runs), clears the cookie and answers 204, fenced by the session epoch; their Drive folder is never touched, and signing in again starts at the folder step, where POST /vault finds the folder they had.",
+    "steps": [
+      "DELETE /me (same origin, session, lease) answers 204 with the cookie cleared; the old cookie then gets 401 signed-out; the person object holds nothing.",
+      "Without the lease's place and epoch it answers 409 stale-session and forgets nothing.",
+      "The refresh token is revoked at Google first; a failed revoke is logged (no token in the log) and the deletion still completes.",
+      "Signing in again afterwards gets a fresh person with no folder pointer; the Drive folder was not touched by DELETE /me."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"delete me forgets the person and clears the cookie|delete me needs the session epoch|delete me revokes the Google grant even if Google fails|signing in again after delete me starts at the folder step\"",
+    "passes": false,
+    "note": "Worker contract DELETE /me; TL-P2-14/25 (DELETE /me releases the lease, by forgetting it); TL-P3-14 (DELETE /me mounts requireLease in its own entry); C01 \"delete my account behaves truthfully\"."
   }
 ]
