@@ -1,9 +1,13 @@
 import { DurableObject } from 'cloudflare:workers';
 
 import type { Env } from './env.js';
+import { dispatchTidy, findTidyRun } from './github.js';
+import type { GitHubAccess } from './github.js';
+import { applyingWatch, decide, staleDeadline } from './recovery.js';
+import type { Recovery, RecoveryWatch } from './recovery.js';
 import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
-import { ACTIVE_PHASES, QUEUED_STALE_MS, STALE_FAILURE, isStale, utcDay } from './process.js';
+import { ACTIVE_PHASES, QUEUED_STALE_MS, STALE_FAILURE, utcDay } from './process.js';
 import type { AdmitInput, AdmitResult, RunPhase, RunReply, RunScope, RunWire } from './process.js';
 import { PHASE_RANK, TICKET_TTL_MS, hashTicket, makeRunId, newTicket } from './run-ticket.js';
 import type { RunnerAccess, RunnerReport, RunnerReportResult } from './run-ticket.js';
@@ -51,6 +55,17 @@ export interface SignInResult {
 
 /** Durable Object key-value entry that outlives `forget()`: the lowest session generation a new account may start at. */
 const GENERATION_FLOOR = 'generationFloor';
+/** Durable Object key-value entry: the extra time the alarm gave the current run's attempt (`RecoveryWatch`). */
+const RECOVERY_WATCH = 'recoveryWatch';
+/** When a run moved during the alarm's lookup and is somehow still due, the alarm looks again this much later. */
+const RECHECK_MS = 60 * 1000;
+
+/** A stale run the alarm looks up on GitHub: what it saw, so the second section can tell whether anything moved. */
+interface RecoveryLookup {
+  run: RunWire;
+  attempt: number;
+  watch: string;
+}
 
 /**
  * One person's Durable Object, addressed by `idFromName(sub)` (TL-P2-05:
@@ -506,11 +521,112 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
-   * The stale deadline of a queued run (https://developers.cloudflare.com/durable-objects/api/alarms/):
-   * writes the stale expiry. `worker-stale-run-recovery` adds the lookup and the redispatch here.
+   * The current run's stale deadline (https://developers.cloudflare.com/durable-objects/api/alarms/): recovery
+   * without the browser, with this object's own env and the Workers fetch (as `worker-dispatch` reaches GitHub).
    */
-  alarm(): void {
-    this.ctx.storage.transactionSync(() => this.expire(Date.now()));
+  async alarm(): Promise<void> {
+    await this.recover(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, fetchImpl: (i, init) => fetch(i, init) });
+  }
+
+  /**
+   * Recovery without the browser (worker contract, "Runner wire"; TL-P3-18; recovery.ts). Two synchronous
+   * sections around the GitHub lookup, each deciding with no `await` inside:
+   * 1. a run that ended needs no alarm; a run whose deadline moved (a report arrived, or a wait applies)
+   *    gets the alarm for it, and nothing changes; a stale run with no token, or past its one wait, is
+   *    failed `stale`; any other stale run is looked up;
+   * 2. if the run moved during the lookup, only the alarm is set again; else the lookup's outcome: a
+   *    redispatch as attempt + 1 with a new ticket (fencing the older one), a wait until the live job's
+   *    deadline, or failed `stale`.
+   * The redispatch is sent after the second section; if it is lost, the next deadline fails the run.
+   */
+  async recover(now: number, github: GitHubAccess): Promise<void> {
+    const token = github.token;
+    const lookup = this.ctx.storage.transactionSync(() => this.planRecovery(now, token !== undefined));
+    if (lookup === null || token === undefined) return;
+    const found = await findTidyRun({ repo: github.repo, token, runId: lookup.run.id, attempt: lookup.attempt }, github.fetchImpl);
+    const outcome = decide(found, lookup.attempt, now);
+    // A new ticket is hashed before the section, so nothing awaits inside it.
+    const ticket = outcome.kind === 'redispatch' ? newTicket() : null;
+    const hash = ticket === null ? null : await hashTicket(ticket);
+    const send = this.ctx.storage.transactionSync(() => this.applyRecovery(lookup, outcome, hash, now));
+    if (send === null || ticket === null) return;
+    await dispatchTidy(
+      { repo: github.repo, token, runId: lookup.run.id, attempt: send.attempt, ticket, scope: lookup.run.scope, allowWeb: send.allowWeb },
+      github.fetchImpl,
+    );
+  }
+
+  /** Section 1 of `recover`: the run to look up, or null when the alarm is set or the run ended here. */
+  private planRecovery(now: number, configured: boolean): RecoveryLookup | null {
+    const run = this.currentRunRow();
+    if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) {
+      void this.ctx.storage.deleteAlarm();
+      return null;
+    }
+    const wire = toWire(run);
+    const attempt = this.attemptOf(run.id);
+    const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
+    const deadline = staleDeadline(wire, attempt, watch);
+    if (deadline > now) {
+      void this.ctx.storage.setAlarm(deadline);
+      return null;
+    }
+    if (!configured) {
+      console.error('tidy recovery is not configured: no GitHub token');
+      this.failStale(run, now);
+      return null;
+    }
+    // The second stale deadline: the live job's one wait ran out with no news.
+    if (applyingWatch(wire, attempt, watch)?.graced === true) {
+      this.failStale(run, now);
+      return null;
+    }
+    return { run: wire, attempt, watch: JSON.stringify(watch ?? null) };
+  }
+
+  /** Section 2 of `recover`: applies the outcome; the attempt to send when it is a redispatch, else null. */
+  private applyRecovery(seen: RecoveryLookup, outcome: Recovery, hash: string | null, now: number): { attempt: number; allowWeb: boolean } | null {
+    const run = this.currentRunRow();
+    const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
+    const moved =
+      run === undefined ||
+      run.id !== seen.run.id ||
+      run.phase !== seen.run.phase ||
+      run.phase_at !== seen.run.phaseAt ||
+      this.attemptOf(run.id) !== seen.attempt ||
+      JSON.stringify(watch ?? null) !== seen.watch;
+    if (moved) {
+      if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) void this.ctx.storage.deleteAlarm();
+      else void this.ctx.storage.setAlarm(Math.max(staleDeadline(toWire(run), this.attemptOf(run.id), watch), now + RECHECK_MS));
+      return null;
+    }
+    if (outcome.kind === 'fail') {
+      this.failStale(run, now);
+      return null;
+    }
+    if (outcome.kind === 'wait') {
+      this.watch({ runId: run.id, attempt: seen.attempt, phaseAt: run.phase_at, until: outcome.until, graced: true });
+      return null;
+    }
+    const attempt = seen.attempt + 1;
+    if (hash === null || !this.keepTicket(run.id, attempt, hash, now)) {
+      this.failStale(run, now);
+      return null;
+    }
+    this.watch({ runId: run.id, attempt, phaseAt: run.phase_at, until: now + QUEUED_STALE_MS, graced: false });
+    const allowWeb = this.ctx.storage.sql.exec<{ allow_web: number }>('SELECT allow_web FROM runs WHERE id = ?', run.id).one().allow_web === 1;
+    return { attempt, allowWeb };
+  }
+
+  /** Keeps the extra time the alarm gave a run's attempt, and sets the alarm for its end. */
+  private watch(watch: RecoveryWatch): void {
+    this.ctx.storage.kv.put(RECOVERY_WATCH, watch);
+    void this.ctx.storage.setAlarm(watch.until);
+  }
+
+  /** The run's current attempt: its ticket's, or 1 before any ticket was minted. */
+  private attemptOf(runId: string): number {
+    return this.ctx.storage.sql.exec<{ epoch: number }>('SELECT epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0]?.epoch ?? 1;
   }
 
   /**
@@ -525,23 +641,26 @@ export class Person extends DurableObject<Env> {
     const ticket = newTicket();
     // Hashed before the transaction: nothing is read before this await, so no call can slip in between.
     const hash = await hashTicket(ticket);
-    return this.ctx.storage.transactionSync((): string | null => {
-      const sql = this.ctx.storage.sql;
-      const run = sql.exec<{ phase: RunPhase }>('SELECT phase FROM runs WHERE id = ?', runId).toArray()[0];
-      if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) return null;
-      const held = sql.exec<{ epoch: number }>('SELECT epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0];
-      if (held !== undefined && attempt <= held.epoch) return null;
-      // The run's earlier ticket goes, and so do the tickets of runs no longer kept.
-      sql.exec('DELETE FROM run_ticket WHERE run_id = ? OR run_id NOT IN (SELECT id FROM runs)', runId);
-      sql.exec(
-        'INSERT INTO run_ticket (hash, run_id, epoch, retired, expires_at) VALUES (?, ?, ?, 0, ?)',
-        hash,
-        runId,
-        attempt,
-        now + TICKET_TTL_MS,
-      );
-      return ticket;
-    });
+    return this.ctx.storage.transactionSync((): string | null => (this.keepTicket(runId, attempt, hash, now) ? ticket : null));
+  }
+
+  /** `mintTicket`'s synchronous part: keeps `hash` as `attempt`'s ticket, or false with nothing written. */
+  private keepTicket(runId: string, attempt: number, hash: string, now: number): boolean {
+    const sql = this.ctx.storage.sql;
+    const run = sql.exec<{ phase: RunPhase }>('SELECT phase FROM runs WHERE id = ?', runId).toArray()[0];
+    if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) return false;
+    const held = sql.exec<{ epoch: number }>('SELECT epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0];
+    if (held !== undefined && attempt <= held.epoch) return false;
+    // The run's earlier ticket goes, and so do the tickets of runs no longer kept.
+    sql.exec('DELETE FROM run_ticket WHERE run_id = ? OR run_id NOT IN (SELECT id FROM runs)', runId);
+    sql.exec(
+      'INSERT INTO run_ticket (hash, run_id, epoch, retired, expires_at) VALUES (?, ?, ?, 0, ?)',
+      hash,
+      runId,
+      attempt,
+      now + TICKET_TTL_MS,
+    );
+    return true;
   }
 
   /**
@@ -628,19 +747,31 @@ export class Person extends DurableObject<Env> {
       .toArray()[0];
   }
 
-  /** Marks the current run failed when it is stale at `now`, once: a run already ended is left alone. */
+  /**
+   * Marks the current run failed when it is stale at `now`, once: a run already ended is left alone. A wait
+   * the alarm gave the run (a redispatch, or a live job) holds off the expiry until it ends.
+   */
   private expire(now: number): void {
     const current = this.currentRunRow();
-    if (current === undefined || !isStale(toWire(current), now)) return;
+    if (current === undefined || !ACTIVE_PHASES.includes(current.phase)) return;
+    const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
+    if (staleDeadline(toWire(current), this.attemptOf(current.id), watch) > now) return;
+    this.failStale(current, now);
+  }
+
+  /** Ends `run` as failed `stale`: the revision rises once, its ticket is retired, and the alarm is done. */
+  private failStale(run: RunRow, now: number): void {
     this.ctx.storage.sql.exec(
       "UPDATE runs SET phase = 'failed', phase_at = ?, finished_at = ?, failure = ? WHERE id = ?",
       now,
       now,
       STALE_FAILURE,
-      current.id,
+      run.id,
     );
     // An ended run's ticket stops working, as a runner's own `done` or `failed` retires it.
-    this.ctx.storage.sql.exec('UPDATE run_ticket SET retired = 1 WHERE run_id = ?', current.id);
+    this.ctx.storage.sql.exec('UPDATE run_ticket SET retired = 1 WHERE run_id = ?', run.id);
+    this.ctx.storage.kv.delete(RECOVERY_WATCH);
+    void this.ctx.storage.deleteAlarm();
     this.raiseRevision();
   }
 

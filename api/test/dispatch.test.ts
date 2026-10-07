@@ -157,12 +157,22 @@ describe('dispatch on admission', () => {
     const p = person(who.sub);
     const alarm = await runInDurableObject(p, (_i, state) => state.storage.getAlarm());
     expect(alarm).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
-    // The deadline passes with no progress: the alarm writes the stale expiry.
-    const failed = await runInDurableObject(p, async (instance, state) => {
-      state.storage.sql.exec('UPDATE runs SET requested_at = requested_at - ?', QUEUED_STALE_MS + 1000);
-      await instance.alarm();
-      return state.storage.sql.exec<{ phase: string; failure: string }>('SELECT phase, failure FROM runs').one();
-    });
-    expect(failed).toEqual({ phase: 'failed', failure: STALE_FAILURE });
+    // The deadline passes with no progress: the alarm looks the run up with this object's env and the
+    // Workers fetch (answered here, never sent), and a failed lookup writes the stale expiry.
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const outbound = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 503 }));
+    try {
+      const failed = await runInDurableObject(p, async (instance, state) => {
+        state.storage.sql.exec('UPDATE runs SET requested_at = requested_at - ?', QUEUED_STALE_MS + 1000);
+        await instance.alarm();
+        return state.storage.sql.exec<{ phase: string; failure: string }>('SELECT phase, failure FROM runs').one();
+      });
+      expect(failed).toEqual({ phase: 'failed', failure: STALE_FAILURE });
+      expect(outbound).toHaveBeenCalledTimes(1);
+      expect(String(outbound.mock.calls[0]?.[0])).toContain(`/repos/${env.GITHUB_REPO}/actions/runs?event=repository_dispatch`);
+    } finally {
+      outbound.mockRestore();
+      log.mockRestore();
+    }
   });
 });
