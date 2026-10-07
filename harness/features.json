@@ -4300,5 +4300,19 @@
     "verify": "pnpm -C runner exec vitest run -t \"deploy-staging refuses production and dirty checkouts|deploy-staging deploys a clean main SHA and checks health\" && pnpm -C api exec vitest run -t \"shipped person schema steps never change\"",
     "passes": true,
     "note": "TL-P3-24 point 2 (P3-F); TL-P3-08 production guard; STAGING.md deploy line; TL-P3-20 version skew."
+  },
+  {
+    "id": "runbook-p3",
+    "task": "p3-f",
+    "category": "docs",
+    "what": "docs/runbook.md for the new app, adapted from the original's runbook: accounts, the Google OAuth client, the staging Worker (one origin) with its KV and every variable and secret the Worker reads, the instance repository from new-instance.sh, deploys with deploy-staging.sh, rotation (SESSION_SECRET with SESSION_SECRET_PREVIOUS, TOKEN_ENC_KEY, GITHUB_TOKEN), deletion (\"Delete my account\" and what it removes), and recovery (stale runs, version skew, a lost dispatch, restoring from the backup). A test checks every secret and variable the Worker reads is named in the runbook and no real value appears in it.",
+    "steps": [
+      "docs/runbook.md, adapted (not copied) from the original's structure, plain English, no real values (FOLDER_ID, you@example.com, <staging origin>).",
+      "Every name in api/src/env.ts's required and optional lists appears in the runbook with how it is set; the runbook links STAGING.md, BACKUP.md and the scripts.",
+      "A docs test fails when a Worker secret or variable is missing from the runbook or a secret pattern or real address appears in it."
+    ],
+    "verify": "pnpm exec vitest run src/docs.test.ts -t \"the runbook names every Worker secret and variable|the runbook holds no real values\"",
+    "passes": false,
+    "note": "TL-P3-24 point 2 (P3-F); P3_ACCEPTANCE owner setup step 4 and the runbook line."
   }
 ]
