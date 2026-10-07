@@ -29,6 +29,8 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
 
+**P3-11 (TL-P3-22):** staging is at ca8e94e (version 47e2dd74); schema v9 applies on first use. `spine-report-barrier-dispositions` is running (bower-escalated, `/private/tmp/bower-p3-barrier`, packet `2026-10-07-p3-11-report-barrier-packet.md`). Next: `scripted-semantic-provider` with the `bower-home` replacement. P3 owner setup is `GITHUB_TOKEN` only; tell the lead when the replacement needs it. The C14 result goes in the next combined message to the lead.
+
 **P3-10 (TL-P3-21):** `spine-admission-manifest` passes (9fe4042, red fixed in e52bdfd; stubs 6cc6453). `shared-domain-package` was re-closed known-green after its api import rule was renamed (72dfcdb). `spine-operations-checkpoints` passes (004c125, red fixed in 11c0409; stubs fd130bd). 316/316. Suites at 004c125 (idle): e2e 226, e2e:fake 250, e2e:pwa 4. The Opus delta review PASSES (5 minors to polish). P3-10 is closed: main = backup = `ca8e94e`; deploy SHA sent to the lead.
 - Checkpoints left for later: real per-effect sends and evidence reads are passed in, not built; nothing is wired into `runner/src/main.ts`; a run ends in `saving` until the report-barrier entry.
 - For the lead, at the close:
