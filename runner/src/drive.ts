@@ -72,6 +72,8 @@ export class RunnerDrive {
   /** The fenced write whose request is in flight, and what the fault hook said of it. */
   private current: { call: FencedCall; action: FaultAction | null } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
+  /** Rises when a fenced write is about to be sent and again when it ends: a listing read at one value is current at it. */
+  generation = 0;
 
   constructor(opts: RunnerDriveOptions) {
     this.token = opts.token;
@@ -93,6 +95,14 @@ export class RunnerDrive {
    */
   async batch(): Promise<FencedDrive> {
     await this.stillCurrent();
+    return this.seen.wrap(this.writes);
+  }
+
+  /**
+   * The same fenced writes with no attempt read of their own: for a write whose caller ran `batch()` moments before (or
+   * has no other read to guard), since every fenced write reads the attempt again right before it is sent.
+   */
+  fencedWrites(): FencedDrive {
     return this.seen.wrap(this.writes);
   }
 
@@ -175,9 +185,11 @@ export class RunnerDrive {
       const target = targetOf(call);
       this.seen.assert(target, await this.peek(target.id));
       this.current = { call, action: null };
+      this.generation++;
       try {
         return await write();
       } finally {
+        this.generation++;
         this.current = null;
       }
     });

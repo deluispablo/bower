@@ -199,6 +199,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     attempt: opts.attempt,
     records,
     batch: () => drive.batch(),
+    fenced: () => drive.fencedWrites(),
     effects: opts.effects(drive),
     // The old template's Rules.md is repaired first, so the planner sees a file Bower may word (`rules-repair.ts`).
     plan: () =>
