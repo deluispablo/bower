@@ -3778,7 +3778,7 @@
       "GET /me answers the stored folderId."
     ],
     "verify": "pnpm -C api exec vitest run -t \"vault makes a new Bower folder from the template|vault finds the existing Bower folder and says found|vault never deletes or overwrites anything in Drive|a failure mid-fill is completed on the next call|two first calls at once make one Bower folder|GET /me answers the folder pointer after POST /vault\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-09 (main b600592). Runs after worker-drive-token (it uses that entry's token function and folder column). P3-5 review: two Important findings (mid-fill, concurrent first calls) and the /me folderId gap go into the fix round."
   }
 ]

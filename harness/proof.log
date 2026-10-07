@@ -295,3 +295,4 @@ worker-person-object	2354b593fc992bc8	2026-10-06	known-green: New class: without
 worker-error-codes-contract	27656ffd087379c9	2026-10-06	red (fixed in 8aa066c)
 worker-google-oidc	85fc22d59705996c	2026-10-07	red (fixed in 592af95)
 worker-drive-token	6041ec360bd4c0ff	2026-10-07	red (fixed in ac8f5a8)
+worker-vault-pointer	c728a2894707cd80	2026-10-07	red (fixed in 66e60b2)
