@@ -3826,13 +3826,28 @@
     "id": "worker-logs-and-version",
     "task": "p3-6",
     "category": "tooling",
-    "what": "The staging Worker keeps its logs (Workers Logs enabled) and /health names the deployed build: the deploy passes the main SHA as APP_VERSION with --var.",
+    "what": "The staging Worker keeps its logs (Workers Logs enabled), /health names the deployed build (the deploy passes the main SHA as APP_VERSION with --var), and GET /status answers { run: null } from the person object until runs exist.",
     "steps": [
       "api/wrangler.jsonc has \"observability\": { \"enabled\": true }.",
-      "The staging deploy line in docs/harness/STAGING.md passes --var APP_VERSION:<main short SHA> and the checks say /health must name that SHA."
+      "The staging deploy line in docs/harness/STAGING.md passes --var APP_VERSION:<main short SHA> and the checks say /health must name that SHA.",
+      "GET /status with a session answers 200 { \"run\": null } from the person object; without a session, 401 signed-out."
     ],
-    "verify": "pnpm exec vitest run src/docs.test.ts -t \"the staging Worker keeps its logs and names its build\"",
+    "verify": "pnpm exec vitest run src/docs.test.ts -t \"the staging Worker keeps its logs and names its build\" && pnpm -C api exec vitest run -t \"status answers no run for a signed-in person|status without a session answers signed-out\"",
     "passes": false,
-    "note": "TL-P3-10 ruling 4: one ?signin=failed in R2 could not be read; /health said only 0.1.0 (Cloudflare Workers Logs docs)."
+    "note": "TL-P3-10 ruling 4: one ?signin=failed in R2 could not be read; /health said only 0.1.0 (Cloudflare Workers Logs docs). TL-P3-11 F3: GET /status { run: null } folded in, so the real bundle stops showing a banner; worker-status-revision replaces it."
+  },
+  {
+    "id": "lost-reply-reconcile",
+    "task": "p3-6",
+    "category": "fix",
+    "what": "When a rename, move or task toggle fails with a network error after the request may have reached Drive, the app re-reads the item before telling the person: \"Saved.\" if it shows the change, the offline sentence if it shows the old state, and \"Bower isn't sure that saved. Check again when you're back online.\" if it cannot be read.",
+    "steps": [
+      "A rename whose reply is lost but which landed says \"Saved.\" and shows the new name without a reload.",
+      "A move whose reply is lost and which did not land gives the offline sentence and keeps the note where it was.",
+      "A task toggle whose reply is lost and whose read-back fails says \"Bower isn't sure that saved. Check again when you're back online.\""
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"a lost reply to a rename that landed says Saved|a lost reply to a move that did not land says offline|a lost reply to a task toggle that cannot be read back says not sure\"",
+    "passes": false,
+    "note": "TL-P3-11 F2, from drive-real-behavior-suite check 7: Drive held the change once, but the app said \"You're offline\" (Google Cloud retry strategy, idempotency: read back, never assume)."
   }
 ]
