@@ -64,6 +64,13 @@ describe('real adapters: the old template Rules.md in an existing folder', () =>
     expect(worded[0]?.text).toMatch(/receipts go to money/i);
   });
 
+  it('a repair stopped between the text and the mark gets only its mark on the next run', async () => {
+    const { w, rulesId } = await folderWith(RULES_TEMPLATE.text);
+    expect(await runOnce(w)).toBe(0);
+    expect((await w.drive.get(rulesId)).appProperties?.[PROP.by]).toBe('bower');
+    expect(parseRules(await w.drive.readText(rulesId))[0]?.yourWords).toBe('receipts go to money');
+  });
+
   it('a Rules.md that is not the old template is never touched by the runner', async () => {
     // Edited by the person: the old text with one more line.
     {

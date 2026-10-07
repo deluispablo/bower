@@ -6,7 +6,8 @@
  * 2. Before any write, the folder is checked for this run's report (`last-run.json` showing it done): a run whose
  *    report already landed is not repeated. It reads the report back, commits `done` to its chain (when a runner
  *    stopped before that), then reports `done` (worker contract, "Runner wire").
- * 3. Spine: the operations, each behind a checkpoint (`spine/run.ts`); `writing` is reported first.
+ * 3. Spine: the operations, each behind a checkpoint (`spine/run.ts`); `writing` is reported first. A new run
+ *    repairs the old template's `Rules.md` (`rules-repair.ts`) just before it plans.
  * 4. Barrier: once every operation is settled, "effects done, report pending" is committed to the chain, and only
  *    then, when the chain holds an applied effect, is `saving` reported. The report is saved and read back
  *    (`spine/barrier.ts`).
@@ -47,6 +48,7 @@ import { driveEffects } from './effects';
 import { providerFor, providerNamed, type ProviderName } from './provider';
 import { finishRun } from './spine/barrier';
 import { runnerReads } from './spine/records';
+import { repairRules } from './rules-repair';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -167,6 +169,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   if (resumed.kind === 'run') seen.total ??= resumed.manifest.capture.members.length;
   else await status.post('reading', totalOf(seen.total));
   await status.post('writing', totalOf(seen.total));
+  const plan = admittedPlan(token, drive, opts.provider(drive, rootId));
   const end = await runOperations({
     rootId,
     runId: opts.runId,
@@ -174,7 +177,11 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     records,
     batch: () => drive.batch(),
     effects: opts.effects(drive),
-    plan: admittedPlan(token, drive, opts.provider(drive, rootId)),
+    // The old template's Rules.md is repaired first, so the planner sees a file Bower may word (`rules-repair.ts`).
+    plan: async () => {
+      await repairRules(drive, rootId);
+      return await plan();
+    },
     clock,
     newId,
     onChain: (chain) => {
