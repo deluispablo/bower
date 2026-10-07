@@ -169,7 +169,8 @@ describe('the shape of the code', () => {
       const bad: string[] = [];
       for (const f of files(API)) {
         for (const spec of specs(readFileSync(f, 'utf8'))) {
-          if (/(^|\/)src\//.test(spec) && !/src\/data\/(contracts|spine)(\/|$)|src\/data\/(types|drive\/drive-http|drive\/drive-api|drive\/fake-drive)(\.js)?$/.test(spec)) bad.push(`${relative(API, f)} imports '${spec}'`);
+          // Only the app's src counts: the Worker's own (`api/src`, as its test host imports it) is not the shared core.
+          if (/(^|\/)src\//.test(spec) && join(dirname(f), spec).startsWith(`${SRC}/`) && !/src\/data\/(contracts|spine)(\/|$)|src\/data\/(types|drive\/drive-http|drive\/drive-api|drive\/fake-drive)(\.js)?$/.test(spec)) bad.push(`${relative(API, f)} imports '${spec}'`);
         }
       }
       expect(bad, 'api/ may import only src/data/contracts, src/data/spine and the Drive adapter (TL-P3-21).').toEqual([]);
