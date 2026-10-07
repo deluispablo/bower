@@ -36,6 +36,6 @@ No session ever enters credentials. Each step below is the owner's, done once:
 - R2, R3 and R4 results are recorded with exact limitations. No data-safety guarantee rests on an unproven premise.
 - The shared behaviour suites pass against the real adapters. Covered cases: browser close, revoked auth, duplicate dispatch, expired attempts, lost callbacks and recovery.
 - `pnpm check`, `pnpm e2e`, `pnpm e2e:fake` and `pnpm e2e:pwa` pass on the frozen SHA. The staging journeys (C16) pass on the deployed build of that SHA.
-- One cross-provider review covers the Worker, the spine and the real adapters, and one evaluation covers staging.
+- One cross-provider review covers the Worker, the spine and the real adapters, and one evaluation covers staging. While Codex is unavailable, the review is the TL-P2-46 Opus fallback, and a Codex review follows before P4 ([TL-P3-16](harness/2026-10-07-tl-p3-16-codex-review-after-p3.md)).
 - `runbook-p3` covers setup, secrets, rotation, deletion and recovery. A security review of the Worker and the runner is done.
 - Free tiers only. Production and the original app are untouched until P4.
