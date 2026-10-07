@@ -3947,7 +3947,7 @@
       "A POST /vault whose Drive work is paused, a DELETE /me that completes, then the paused request resumes: the person object holds no folder pointer, and the request answers signed-out (401)."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a folder request that started before delete me writes nothing after it\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-14 addendum, from the P3-7 delta review minor 3; builds on delete-me-generation-floor."
   }
 ]

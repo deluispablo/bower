@@ -72,3 +72,4 @@ p3-7-delta-review,reviewer,claude,opus,medium,1,99674,,,,,,19,2.3,"BLOCKING 1 Im
 delete-me-generation-floor,implementer,claude,sonnet,medium,1,62181,,,,,,8,1.1,delivered,2026-10-07
 p3-7-delta-rereview,reviewer,claude,opus,medium,1,67202,,,,,,8,1.1,PASS,2026-10-07
 worker-process-admission,implementer,claude,opus,high,1,144338,,,,,,40,8.6,delivered,2026-10-07
+delete-me-inflight-vault,implementer,claude,sonnet,medium,1,82105,,,,,,12,1.7,delivered,2026-10-07
