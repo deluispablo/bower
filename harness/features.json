@@ -3772,10 +3772,13 @@
     "steps": [
       "A person with no Bower folder gets a new one made from the template; found is false and the pointer is stored.",
       "A person whose Bower folder exists (pointer lost or new device) gets it back with found true; nothing is created twice.",
-      "Nothing in Drive is ever deleted or overwritten by POST /vault."
+      "Nothing in Drive is ever deleted or overwritten by POST /vault.",
+      "A failure partway through filling the folder is completed on the next call (create only what is missing, by name).",
+      "Two first calls at once end with one marked folder and one pointer.",
+      "GET /me answers the stored folderId."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"vault makes a new Bower folder from the template|vault finds the existing Bower folder and says found|vault never deletes or overwrites anything in Drive\"",
+    "verify": "pnpm -C api exec vitest run -t \"vault makes a new Bower folder from the template|vault finds the existing Bower folder and says found|vault never deletes or overwrites anything in Drive|a failure mid-fill is completed on the next call|two first calls at once make one Bower folder|GET /me answers the folder pointer after POST /vault\"",
     "passes": false,
-    "note": "TL-P3-09 (main b600592). Runs after worker-drive-token (it uses that entry's token function and folder column)."
+    "note": "TL-P3-09 (main b600592). Runs after worker-drive-token (it uses that entry's token function and folder column). P3-5 review: two Important findings (mid-fill, concurrent first calls) and the /me folderId gap go into the fix round."
   }
 ]
