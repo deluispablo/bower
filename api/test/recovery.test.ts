@@ -252,11 +252,11 @@ describe('stale run recovery', () => {
     const after = await status(sub, now + MINUTE);
     expect(after.run).toMatchObject({ id: runId, phase: 'done' });
     expect(after.run?.failure).toBeUndefined();
-    expect(await alarmOf(sub)).toBeNull();
-    // A later alarm asks nobody and changes nothing.
+    // The next alarm asks nobody, changes nothing and is not set again.
     await recover(sub, now + 2 * QUEUED_STALE_MS, gh.access);
     expect(lookups(gh.sent)).toHaveLength(1);
     expect(await status(sub, now + 2 * QUEUED_STALE_MS)).toEqual(after);
+    expect(await alarmOf(sub)).toBeNull();
     expectNoSecretLogged(ticket, second);
   });
 

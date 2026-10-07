@@ -5,9 +5,11 @@
  * https://developers.cloudflare.com/durable-objects/api/alarms/) wakes at a run's stale deadline. A run that
  * moved on needs nothing. A stale one is looked up on GitHub Actions by its run name, `tidy <run_id> <attempt>`
  * (R3: the run name and the job's `started_at` and `completed_at` are enough to reconcile), and then:
- * - no run for attempt 1 (a lost dispatch): redispatched once as attempt 2;
+ * - no live job at attempt 1 (no run found, a lost dispatch, or every job completed with no report, as after
+ *   a cancel or a crash): redispatched once as attempt 2 with a new ticket, which retires attempt 1's;
  * - a job queued or in progress: left alone until that job's own deadline, once;
- * - otherwise (a job finished with no report, no run at attempt 2, or a second stale deadline): failed `stale`.
+ * - otherwise (no live job at attempt 2, a failed lookup, or a second stale deadline): failed `stale`, with the
+ *   sentence `staleFailure` gives its phase.
  *
  * The thresholds are the original app's (`process.ts`). Everything here is pure: the person object decides
  * with it inside one synchronous section.
@@ -89,10 +91,12 @@ export function staleDeadline(run: Pick<RunWire, 'id' | 'phase' | 'requestedAt' 
 /** What a stale run's lookup leads to, for its current `attempt`, at `now`. */
 export function decide(lookup: TidyLookup | null, attempt: number, now: number): Recovery {
   if (lookup === null) return { kind: 'fail' };
-  if (!lookup.found) return attempt === 1 ? { kind: 'redispatch' } : { kind: 'fail' };
+  // No live job holds the run: attempt 1 is redispatched once, a later attempt ends.
+  const noLiveJob: Recovery = attempt === 1 ? { kind: 'redispatch' } : { kind: 'fail' };
+  if (!lookup.found) return noLiveJob;
   // A run created with no job listed yet is waiting for a runner, as a queued job is.
   const live = lookup.jobs.length === 0 ? [{ status: 'queued', startedAt: null, completedAt: null }] : lookup.jobs.filter((j) => j.status !== 'completed');
-  if (live.length === 0) return { kind: 'fail' };
+  if (live.length === 0) return noLiveJob;
   const until = Math.max(
     ...live.map((job) => (job.status === 'in_progress' && job.startedAt !== null ? job.startedAt + RUNNING_STALE_MS : now + QUEUED_STALE_MS)),
   );

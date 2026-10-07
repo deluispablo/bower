@@ -560,8 +560,8 @@ export class Person extends DurableObject<Env> {
    *    gets the alarm for it, and nothing changes; a stale run with no token, or past its one wait, is
    *    failed `stale`; any other stale run is looked up;
    * 2. if the run moved during the lookup, only the alarm is set again; else the lookup's outcome: a
-   *    redispatch as attempt + 1 with a new ticket (fencing the older one), a wait until the live job's
-   *    deadline, or failed `stale`.
+   *    redispatch as attempt + 1 with a new ticket (fencing the older one) when attempt 1 has no live job
+   *    (none found, or every job completed), a wait until the live job's deadline, or failed `stale`.
    * The redispatch is sent after the second section; if it is lost, the next deadline fails the run.
    */
   async recover(now: number, github: GitHubAccess): Promise<void> {
