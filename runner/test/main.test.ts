@@ -79,7 +79,7 @@ describe('the runner process', () => {
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
 
-    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving', 'done']);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
     // The folder changed: every thing it took left the inbox, by writes Drive v3 received.
     const after = await wire.drive.listAll(root);
     const left = items.map((id) => pathOf(after, root, id));
@@ -146,5 +146,15 @@ describe('the runner process', () => {
       expect(record).toBeDefined();
       expect(JSON.parse(await wire.drive.readText(record?.id ?? ''))).toEqual(JSON.parse(JSON.stringify(expected)));
     }
+  });
+
+  it('main reports reading with total before writing', async () => {
+    const { wire, admission } = await wired(true);
+    const n = admission.piles.reduce((sum, p) => sum + p.items.length, 0) + admission.journal.length;
+    expect(n).toBeGreaterThan(0);
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
+
+    expect(wire.statuses.map((s) => [s.phase, s.total])).toEqual([['reading', n], ['writing', n], ['saving', n], ['done', n]]);
   });
 });

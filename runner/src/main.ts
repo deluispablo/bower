@@ -32,6 +32,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
+import type { AdmissionManifest } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { BowerError } from '../../src/data/types';
@@ -91,7 +92,7 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   const fetchFn = opts.fetch;
   const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}) });
   const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
-  const seen: Seen = { chain: null, saving: false };
+  const seen: Seen = { chain: null, saving: false, total: undefined };
   let end: Ended;
   try {
     end = await tidy(opts, token, status, seen);
@@ -101,7 +102,7 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   }
   if (end.phase === 'done') {
     // 5. Status, only after the report is read back; refused, it throws.
-    await status.post('done');
+    await status.post('done', totalOf(seen.total));
     return end;
   }
   if (end.phase === 'failed') return end;
@@ -110,7 +111,7 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   console.error(end.error);
   // The one rule for a run that stops: saving when it changed something, never "nothing changed" then.
   if (changedSomething(seen.chain)) {
-    if (!seen.saving) await status.post('saving');
+    if (!seen.saving) await status.post('saving', totalOf(seen.total));
     return { phase: 'saving', why: end.why };
   }
   await status.post('failed', { failure: B_FAILURE });
@@ -121,7 +122,14 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
 interface Seen {
   chain: Checkpoint[] | null;
   saving: boolean;
+  /** The admitted items the run reads, carried on every report after `reading` (undefined until known). */
+  total: number | undefined;
 }
+
+const totalOf = (total: number | undefined): { total?: number } => (total === undefined ? {} : { total });
+
+/** The things a run reads: every admitted file of every pile, and each of your changes (the admission manifest). */
+const admittedCount = (m: AdmissionManifest): number => m.piles.reduce((sum, p) => sum + p.items.length, 0) + m.journal.length;
 
 type Ended = Exclude<TidyEnd, { phase: 'saving' }> | { phase: 'stopped'; why: string; error: unknown };
 
@@ -134,6 +142,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   // 1. Token.
   const grant = await token.grant();
   const rootId = grant.folderId;
+  if (grant.manifest) seen.total = admittedCount(grant.manifest);
   const drive = new RunnerDrive({ token, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
   opts.onDrive?.(drive);
   const reads = runnerReads(drive, opts.runId);
@@ -145,6 +154,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   if (await shownDone(reads, rootId, opts.runId)) {
     const found = await records.found(opts.runId);
     if (found.kind === 'run') seen.chain = found.chain;
+    if (found.kind === 'run') seen.total ??= found.manifest.capture.members.length;
     if (found.kind === 'run' && found.chain.length) {
       const finished = await finishRun(barrier, found.manifest, found.manifestHash, found.chain);
       return { phase: 'done', dispositions: finished.dispositions };
@@ -154,8 +164,12 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     return { phase: 'done', dispositions: [] };
   }
 
-  // 3. Spine.
-  await status.post('writing');
+  // 3. Spine. A new run reads first: `reading` with the total, before any operation. A resumed attempt (its run already
+  // holds a manifest) is past `reading`, so it sends none and keeps the total.
+  const resumed = await records.found(opts.runId);
+  if (resumed.kind === 'run') seen.total ??= resumed.manifest.capture.members.length;
+  else await status.post('reading', totalOf(seen.total));
+  await status.post('writing', totalOf(seen.total));
   const end = await runOperations({
     rootId,
     runId: opts.runId,
@@ -183,7 +197,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
       onPending: async (chain) => {
         seen.chain = chain;
         if (!changedSomething(chain)) return;
-        await status.post('saving', { total: end.manifest.capture.members.length });
+        await status.post('saving', totalOf(seen.total ?? end.manifest.capture.members.length));
         seen.saving = true;
       },
     },
