@@ -191,7 +191,7 @@ describe('GET /auth/login', () => {
     expect(p.get('prompt')).toBe('select_account');
     const line = response.headers.getSetCookie().find((c) => c.startsWith(`${OAUTH_COOKIE}=`)) ?? '';
     expect(line.split('; ').slice(1)).toEqual(
-      expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/auth', 'Max-Age=600']),
+      expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/', 'Max-Age=600']),
     );
   });
 
@@ -522,5 +522,34 @@ describe('sessions', () => {
     } finally {
       log.mockRestore();
     }
+  });
+});
+
+describe('cookie names', () => {
+  it('the session and sign-in cookies carry the __Host- prefix', async () => {
+    expect(SESSION_COOKIE).toBe('__Host-bower_session');
+    expect(OAUTH_COOKIE).toBe('__Host-bower_oauth');
+
+    const start = await createApp({ keys }).request(`${API}/auth/login`, {}, env);
+    const line = start.headers.getSetCookie().find((c) => c.startsWith('__Host-bower_oauth=')) ?? '';
+    const attributes = line.split('; ').slice(1);
+    expect(attributes).toEqual(expect.arrayContaining(['Secure', 'Path=/']));
+    expect(attributes.some((a) => /^Domain=/i.test(a))).toBe(false);
+    expect(attributes).not.toContain('Path=/auth');
+
+    // The old names are expired on the next response, so everyone is signed out once.
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const old = await me('bower_session=old-token');
+      expect(old.status).toBe(401);
+      const cleared = old.headers.getSetCookie();
+      expect(cleared.some((c) => c.startsWith('bower_session=;') && c.includes('Max-Age=0') && c.includes('Path=/'))).toBe(true);
+    } finally {
+      log.mockRestore();
+    }
+    const again = await createApp({ keys }).request(`${API}/auth/login`, { headers: { cookie: 'bower_oauth=old' } }, env);
+    expect(
+      again.headers.getSetCookie().some((c) => c.startsWith('bower_oauth=;') && c.includes('Max-Age=0') && c.includes('Path=/auth')),
+    ).toBe(true);
   });
 });

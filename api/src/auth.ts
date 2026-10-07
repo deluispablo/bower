@@ -34,6 +34,7 @@ import {
   SessionError,
   assertCurrentGeneration,
   clearSessionCookie,
+  LEGACY_SESSION_COOKIE,
   readCookie,
   readSessionCookie,
   sessionCookie,
@@ -46,13 +47,27 @@ import type { SessionClaims } from './session.js';
 import { isAllowed } from './store.js';
 
 /** Cookie holding the OAuth `state`, `nonce` and PKCE verifier between login and callback. */
-export const OAUTH_COOKIE = 'bower_oauth';
+export const OAUTH_COOKIE = '__Host-bower_oauth';
+
+/** The old OAuth cookie name and its old `Path` (before the `__Host-` prefix, F4). */
+const LEGACY_OAUTH_COOKIE = 'bower_oauth';
 
 /** The OAuth cookie lives 10 minutes: long enough to click through consent. */
 const OAUTH_TTL_SECONDS = 10 * 60;
 
 function oauthCookie(token: string, maxAgeSeconds: number): string {
-  return `${OAUTH_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=${maxAgeSeconds}`;
+  return `${OAUTH_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`;
+}
+
+/** Expires the pre-prefix cookies a request still carries; they are never read again. */
+function expireLegacyCookies<E extends AppEnv>(c: Context<E>): void {
+  const header = c.req.header('cookie');
+  if (readCookie(header, LEGACY_SESSION_COOKIE) !== undefined) {
+    c.header('Set-Cookie', `${LEGACY_SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`, { append: true });
+  }
+  if (readCookie(header, LEGACY_OAUTH_COOKIE) !== undefined) {
+    c.header('Set-Cookie', `${LEGACY_OAUTH_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=0`, { append: true });
+  }
 }
 
 function redirectUri(env: Env): string {
@@ -139,6 +154,7 @@ function rejectSession<E extends AppEnv>(c: Context<E>, err: unknown): never {
  * and `account`. A refused session is 401 `signed-out` and clears the cookie.
  */
 export const requireSession: MiddlewareHandler<AppEnv> = async (c, next) => {
+  expireLegacyCookies(c);
   let session: Authenticated;
   try {
     session = await authenticate(c.req.header('cookie'), c.get('env'));
@@ -200,6 +216,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const verifier = createCodeVerifier();
     const token = await signToken({ state, nonce, verifier }, env.SESSION_SECRET, OAUTH_TTL_SECONDS);
     c.header('Set-Cookie', oauthCookie(token, OAUTH_TTL_SECONDS));
+    expireLegacyCookies(c);
     return c.redirect(
       buildAuthUrl({
         clientId: env.GOOGLE_CLIENT_ID,

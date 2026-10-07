@@ -45,7 +45,10 @@ export function assertCurrentGeneration(
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 /** Name of the cookie carrying the session token. */
-export const SESSION_COOKIE = 'bower_session';
+export const SESSION_COOKIE = '__Host-bower_session';
+
+/** The name before the `__Host-` prefix (F4): still expired on the next response, so everyone is signed out once. */
+export const LEGACY_SESSION_COOKIE = 'bower_session';
 
 const HEADER = { alg: 'HS256', typ: 'JWT' } as const;
 
