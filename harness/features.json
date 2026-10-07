@@ -4064,5 +4064,21 @@
     "verify": "pnpm -C api exec vitest run -t \"a superseded attempt.s ticket answers stale-attempt|an unknown ticket is signed out|a resent final report answers the current state\" && pnpm -C runner exec vitest run -t \"the adapter refuses with stale-attempt on the Worker.s real reply|a refused ticket stays an auth error\"",
     "passes": true,
     "note": "P3-9 Opus delta review, BLOCK Important 2, and TL-P3-18 addendum (the Worker keeps the contract; the runner never infers takeover from 401; the resent-final-report minor folded in)."
+  },
+  {
+    "id": "spine-admission-manifest",
+    "task": "p3-d",
+    "category": "feature",
+    "what": "The run's manifest is built once, at admission, by shared plan code (extracted from fake-runner.ts's planRun over a read interface, a clock and an id source) and stored whole in the run row: an empty manifest answers 409 nothing before any quota count, the token route hands the manifest to the runner, and the runner takes exactly that set, deferring any item changed since admission to the next run.",
+    "steps": [
+      "planRun's capture and planning move into a shared module under src/data/spine/ over a read interface; fake-runner.ts calls it and keeps its behaviour (its tests and the fake e2e stay green).",
+      "POST /process builds the manifest before the person object's synchronous section, with the person's Drive token; an empty one answers 409 nothing with the contract sentence for its cause, counting no quota.",
+      "The run row stores the manifest; GET /runner/runs/:id/token returns it with the token.",
+      "The runner keeps the manifest's items that are still as seen and defers the others, never failing for them.",
+      "A contract test plans the same folder through the fake drive and through DriveHttp on a fake fetch and gets the same manifest."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"the shared plan gives the same manifest on the fake and on Drive\" && pnpm -C api exec vitest run -t \"an empty manifest answers nothing before the quota|the run row keeps its manifest and the token route returns it\" && pnpm -C runner exec vitest run -t \"an item changed since admission waits for the next run\"",
+    "passes": false,
+    "note": "TL-P3-21 (manifest built at admission and stored whole; extract, not port; ARCHITECTURE \"Reusable deterministic core\")."
   }
 ]
