@@ -23,3 +23,23 @@
 ## Amendment, 2026-10-07: no "Saved." sentence
 
 The coordinator proposed that a read-back matching the intended change completes as a normal success, as if the reply had come: the index is updated, the journal is written once, and no sentence is shown. Accepted. The screens have no success sentence today, and a lost reply that landed is a success, so telling it differently would be inconsistent. The other three cases stand: the old state gives the offline sentence, an unreadable item gives "Bower isn't sure that saved…", and anything else takes the existing changed-elsewhere path.
+
+## Amendment, 2026-10-07: the check 4 rerun
+
+**Result.** As account A, the outside line was added (v3), then the task was toggled in the app (v5). Drive kept both. The app had refreshed its index before the toggle, so the write went through and no "changed somewhere else" appeared.
+
+**Ruling: C03 "edit" passes, once the Drive half of the premise is on record.** The conflict check has two halves:
+- **The comparison is the app's own code.** It refuses when Drive's current modifiedTime differs from the one in the index, and the fake-drive tests cover that branch.
+- **The input comes from real Drive.** The premise is that an outside content edit moves modifiedTime. Google documents this (`modifiedTime`: "the last time the file was modified by anyone", [Files resource](https://developers.google.com/workspace/drive/api/reference/rest/v3/files)).
+
+This run doesn't show that premise by itself. `toggleTask` reads the text fresh, so the outside line would have survived even if modifiedTime had not moved. The evidence therefore records the note's revisions from `revisions.list` on the probe note: the modifiedTime of v2, v3 and v5, showing v3 later than v2. This is one script call on the probe note, with no pane step.
+
+Making the app stale on purpose in the pane is not attempted. It relies on timing a refresh, which is not reliable; the unit tests cover the stale branch.
+
+**Minors, to polish:**
+- Clicking the task's label does nothing. A native `<label>` should toggle its checkbox ([HTML label](https://html.spec.whatwg.org/multipage/forms.html#the-label-element)).
+- The `fake-worker.test.ts` timeouts under load go to polish only as a note. If they fail the batch-close `pnpm check` on an idle machine, they become an entry.
+
+**Noted, no action:**
+- Drive can bump `version` without changing modifiedTime. The app compares modifiedTime only.
+- The one name-exact folder search to find the probe folder is accepted. From now on, packets give the probe folder's id.
