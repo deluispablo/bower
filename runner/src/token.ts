@@ -5,6 +5,7 @@
  * reports is current (one read per write batch, TL-P3-19).
  */
 import { BowerError } from '../../src/data/types';
+import { isAdmissionManifest, type AdmissionManifest } from '../../src/data/spine/admission';
 
 /** What `GET /runner/runs/:id/token` answers. */
 export interface TokenGrant {
@@ -13,6 +14,8 @@ export interface TokenGrant {
   expiresAt: number;
   folderId: string;
   attempt: number;
+  /** What the run was admitted to take (TL-P3-21); null when the Worker kept none. */
+  manifest: AdmissionManifest | null;
 }
 
 export interface RunnerTokenOptions {
@@ -86,5 +89,8 @@ function asGrant(body: unknown): TokenGrant | null {
   const b = body as Record<string, unknown>;
   const { accessToken, expiresAt, folderId, attempt } = b;
   if (typeof accessToken !== 'string' || typeof expiresAt !== 'number' || typeof folderId !== 'string' || typeof attempt !== 'number') return null;
-  return { accessToken, expiresAt, folderId, attempt };
+  // A manifest that is there and is not one is refused; none at all is a run admitted with none kept.
+  const manifest = b.manifest ?? null;
+  if (manifest !== null && !isAdmissionManifest(manifest)) return null;
+  return { accessToken, expiresAt, folderId, attempt, manifest };
 }
