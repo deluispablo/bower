@@ -49,3 +49,4 @@ p3-5-review,reviewer,claude,opus,medium,1,109957,,,,,,25,2.6,drive-token clean; 
 worker-vault-pointer (fix round),implementer,claude,opus,medium,2,113629,,,,,,20,4.9,delivered,2026-10-07
 vault-template-ids,implementer,claude,sonnet,medium,1,83447,,,,,,10,2.1,delivered,2026-10-07
 p3-5-delta-review,reviewer,claude,opus,medium,1,94183,,,,,,16,2.3,BLOCKING 2 Important (lapsed claim),2026-10-07
+vault-template-ids (conditional writes),implementer,claude,opus,medium,2,80641,,,,,,13,2.3,delivered,2026-10-07
