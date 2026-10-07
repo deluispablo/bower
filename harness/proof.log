@@ -332,3 +332,4 @@ routing-test-from-app	4a1f3c39324f0fc4	2026-10-07	known-green: test-only fix: th
 runner-reports-reading-total	b3fb5fb182df875b	2026-10-07	red (fixed in 5699b61)
 dispositions-match-report	bd48e2215702178d	2026-10-07	red (fixed in 03bf8f6)
 upload-queue-real	8478d393c331a8e7	2026-10-07	red (fixed in 0b05ec4)
+deploy-and-migrations	6cf83e7f59763965	2026-10-07	red (fixed in 30fc4d5)
