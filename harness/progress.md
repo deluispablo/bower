@@ -72,3 +72,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: recovery-status-poll-race passes — chore(harness): recovery-status-poll-race passes
 - 2026-10-07: runner-stale-attempt-signal passes — chore(harness): runner-stale-attempt-signal passes
 - 2026-10-07: shared-domain-package passes — chore(harness): shared-domain-package passes under its renamed api rule
+- 2026-10-07: spine-admission-manifest passes — chore(harness): spine-admission-manifest passes

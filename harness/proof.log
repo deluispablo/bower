@@ -317,3 +317,4 @@ worker-stale-run-recovery	8f0bae432cce225c	2026-10-07	red (fixed in 438e913)
 recovery-status-poll-race	cccff6ae69d8576b	2026-10-07	red (fixed in d5c0947)
 runner-stale-attempt-signal	3dfb43656d5798c5	2026-10-07	red (fixed in 2df1a60)
 shared-domain-package	2500fe8359cdd900	2026-10-07	known-green: verify renamed only (TL-P3-21 widens the api import rule); its red was proven at the original close
+spine-admission-manifest	cb5dd482f7c283ed	2026-10-07	red (fixed in e52bdfd)

@@ -4078,7 +4078,7 @@
       "A contract test plans the same folder through the fake drive and through DriveHttp on a fake fetch and gets the same manifest."
     ],
     "verify": "pnpm exec vitest run src/data -t \"the shared plan gives the same manifest on the fake and on Drive\" && pnpm -C api exec vitest run -t \"an empty manifest answers nothing before the quota|the run row keeps its manifest and the token route returns it\" && pnpm -C runner exec vitest run -t \"an item changed since admission waits for the next run\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-21 (manifest built at admission and stored whole; extract, not port; ARCHITECTURE \"Reusable deterministic core\")."
   },
   {
