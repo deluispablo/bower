@@ -5,7 +5,8 @@
 #
 #   scripts/deploy-staging.sh <sha> <staging origin>
 #
-# 1. Refuses unless the tree is clean, HEAD is <sha> and <sha> is local main's tip.
+# 1. Refuses unless the tree is clean (and holds no env file Vite would read,
+#    ignored or not; https://vite.dev/guide/env-and-mode), HEAD is <sha> and <sha> is local main's tip.
 # 2. Refuses unless api/wrangler.jsonc names bower-staging, keeps the
 #    single-page fallback and uses the staging KV namespace. It always refuses
 #    bower-api, the original app's production Worker (TL-P3-08).
@@ -13,10 +14,10 @@
 # 4. Scans dist/: no address but you@example.com, nothing shaped like a secret.
 # 5. From api/: npx wrangler deploy --var APP_ORIGIN, API_ORIGIN, APP_VERSION
 #    (the short SHA) and GITHUB_REPO (BOWER_GITHUB_REPO, default
-#    deluispablo/bower-home). The output must name bower-staging.
+#    deluispablo/bower-home). Wrangler's upload line must name bower-staging.
 # 6. /health must name the short SHA; a check that disagrees is rerun once.
 # 7. Version skew (TL-P3-20): waits until /status without a cookie answers 401
-#    JSON, at most 5 minutes.
+#    JSON, at most 15 checks, 5 minutes in the worst case.
 # 8. Builds and scans the runner bundle and says where it is for
 #    scripts/new-instance.sh, which it does not run.
 #
@@ -36,9 +37,10 @@ STAGING_KV='6969d46bffdb4b1e90d068f84235fbec'
 PRODUCTION_KV='dedd167004be415cbd90c4b154b1f4e2'
 ALLOWED_ADDRESS='you@example.com'
 ADDRESS_RE='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
-# Each wait is 10 seconds: one rerun of /health, and up to 30 checks of /status (5 minutes).
+# Each wait is 10 seconds and each check at most 10 more (curl --max-time): one rerun of /health, and up to
+# 15 checks of /status, 15*10 + 14*10 = 290 seconds in the worst case, under 5 minutes.
 WAIT_SECONDS=10
-STATUS_TRIES=30
+STATUS_TRIES=15
 
 SHA=''
 ORIGIN=''
@@ -99,6 +101,21 @@ check_checkout() {
   main=$(git rev-parse -q --verify refs/heads/main 2>/dev/null) || die "Refusing: this checkout has no local main."
   [ "$main" = "$full" ] || die "Refusing: $SHA is not the tip of local main."
   SHORT=$(git rev-parse --short "$full")
+  check_env_files
+}
+
+# Vite loads these for a production build and they beat the shell's env after `env -u`; wrangler reads api/.dev.vars.
+# https://vite.dev/guide/env-and-mode: .env, .env.local, .env.production, .env.production.local.
+check_env_files() {
+  local dir name file
+  for dir in . api; do
+    for name in .env .env.local .env.production .env.production.local; do
+      file="$dir/$name"
+      [ "$dir" != . ] || file=$name
+      [ ! -e "$file" ] || die "Refusing: $file exists, so the build could read another API address; move it away first."
+    done
+  done
+  [ ! -e api/.dev.vars ] || die "Refusing: api/.dev.vars exists; move it away first."
 }
 
 # 2. The Worker config targets staging only (TL-P3-08; the sensor in src/docs.test.ts).
@@ -134,17 +151,18 @@ build_app() {
 scan() {
   local label=$1 file hits=''
   shift
-  for file in $(grep -rlaE "$ADDRESS_RE" "$@" 2>/dev/null || true); do
+  # NUL-separated, so a name with a space stays one name.
+  while IFS= read -r -d '' file; do
     if grep -oaE "$ADDRESS_RE" "$file" | grep -vxqF "$ALLOWED_ADDRESS"; then hits="$hits ${file#"$ROOT"/}"; fi
-  done
+  done < <(grep -rlaE --null "$ADDRESS_RE" "$@" 2>/dev/null || true)
   [ -z "$hits" ] || die "Refusing: $label holds an address other than $ALLOWED_ADDRESS (in$hits)."
   hits=$(
     {
       grep -rlaF -e 'ghp_' -e 'github_pat_' -e 'sk-ant' -e 'AIza' -e 'ya29.' "$@" 2>/dev/null || true
       grep -rlaE -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' "$@" 2>/dev/null || true
-    } | sort -u | tr '\n' ' '
+    } | sort -u | paste -sd, - | sed 's/,/, /g'
   )
-  [ -z "$hits" ] || die "Refusing: $label holds something shaped like a secret (in ${hits% })."
+  [ -z "$hits" ] || die "Refusing: $label holds something shaped like a secret (in $hits)."
 }
 
 # 5. The deploy, from api/. Wrangler's output must name the staging Worker.
@@ -159,7 +177,8 @@ deploy() {
   if printf '%s' "$out" | grep -q "$PRODUCTION_NAME"; then
     die "Wrangler's output names $PRODUCTION_NAME, not $STAGING_NAME: check the original app's production Worker now."
   fi
-  printf '%s' "$out" | grep -q "$STAGING_NAME" || die "Wrangler's output does not name $STAGING_NAME: check what was deployed."
+  printf '%s\n' "$out" | grep -Eq "^Uploaded $STAGING_NAME( |\$)" \
+    || die "Wrangler's output has no upload line for $STAGING_NAME: check what was deployed."
 }
 
 # get PATH: sets BODY, CODE and TYPE from one GET without a cookie; CODE is 000 when nothing answered.
@@ -196,7 +215,7 @@ wait_for_status() {
       '401 application/json'*) break ;;
     esac
     [ "$try" -lt "$STATUS_TRIES" ] \
-      || die "/status still does not answer 401 JSON after 5 minutes: redeploy the same version to restart the person objects."
+      || die "/status still does not answer 401 JSON after $try checks (up to 5 minutes): redeploy the same version to restart the person objects."
     try=$((try + 1))
     sleep "$WAIT_SECONDS"
   done
