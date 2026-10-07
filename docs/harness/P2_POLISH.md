@@ -129,3 +129,8 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - First real run, attempt 2 (TL-P3-19 amendment):
   - A runner that dies before its first report (token fetch failed) leaves the app at `queued` until the stale deadline.
   - One press sent two POST /process 160 ms apart (same run id, idempotent).
+- P3-13 delta review (minor):
+  - After `done` a new report gets 401 from the Worker (retired ticket) but 409 `stale-report` from `ReportLedger` and the contract; person.ts's ended-run 409 branch is unreachable; `ReportLedger` is used only by the contract test.
+  - A ticket in flight at the v9→v10 deploy has `report_phase` null, so a backward report from that attempt answers 200 (recorded, run unchanged).
+  - Each operation makes about 6 token-route calls (was 3); the check in `batch()` repeats the per-write one; the check-to-write gap remains (TL-P3-19 amendment, R1).
+  - The "landed" read-back is tested only for a folder create; a create whose file no longer lists in its parent (lag, moved or binned by the person) is sent again.

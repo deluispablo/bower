@@ -4199,5 +4199,33 @@
     "verify": "pnpm -C api exec vitest run -t \"every Worker route runs the Worker first\"",
     "passes": true,
     "note": "First real run on Actions (2026-10-07, run 37619425172): GET /runner/runs/:id/token answered the SPA page with 200, so the runner failed in 13s."
+  },
+  {
+    "id": "routing-test-from-app",
+    "task": "p3-d",
+    "category": "fix",
+    "what": "The route coverage test builds its list from the Hono app itself (createApp().routes, every method and path), so a route added later that run_worker_first does not cover fails the test; a pattern ending in /* covers only that segment and below (/auth/* does not cover /authx); the service worker's navigateFallbackDenylist matches the Worker's browser-reachable paths.",
+    "steps": [
+      "api/test/routing.test.ts takes every method and path from createApp().routes instead of a typed list.",
+      "Pattern matching: exact path, or /prefix/* covering /prefix and /prefix/... only.",
+      "vite.config.ts navigateFallbackDenylist adds health and drops runs and push, which are not Worker routes."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"every Worker route runs the Worker first|a route added to the app is checked too\"",
+    "passes": false,
+    "note": "P3-13 delta review Important 1 plus the vite denylist and /authx minors."
+  },
+  {
+    "id": "recovery-redispatch-after-dead-job",
+    "task": "p3-d",
+    "category": "fix",
+    "what": "The alarm follows the contract's Runner wire rule: a stale run whose attempt-1 job finished (failed or cancelled) with no report, so no live job holds it, is redispatched once as attempt 2 with a new ticket, and the resumed runner ends it done; only attempt 2 with no live job, or a second stale deadline, ends failed stale.",
+    "steps": [
+      "decide(): at attempt 1, no live job (none found, or every job completed) redispatches; at attempt 2 it fails.",
+      "A live job still waits once until its own deadline, as today.",
+      "The existing test that asserts failed stale after a finished job at attempt 1 changes to the redispatch, and a test runs the alarm, the redispatch and a resumed runner to done."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the alarm redispatches a run whose first job finished without a report|a second attempt with no live job ends stale\"",
+    "passes": false,
+    "note": "P3-13 delta review Important 2: the contract says \"redispatches once, as attempt + 1 with a new ticket, if no live job holds the run\"; recovery.ts failed it instead, so the TL-P3-23 cancel journey would end stale."
   }
 ]
