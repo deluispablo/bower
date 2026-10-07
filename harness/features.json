@@ -4535,7 +4535,7 @@
       "A test runs over an existing folder (no POST /vault) and the typed rule is worded."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"an existing folder with the old template Rules.md is repaired at plan time and the rule is worded|a Rules.md that is not the old template is never touched by the runner\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-28 (1); C16 found POST /vault runs only when /me has no folder (src/data/live/session.ts:111)."
   },
   {
