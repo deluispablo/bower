@@ -4578,7 +4578,7 @@
       "No silent hang: the person always sees an outcome."
     ],
     "verify": "pnpm exec vitest run src/data -t \"a write that gets no answer ends in the lost-reply path after the bounded wait|adding a pile never sits on saving without an outcome\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-28 (4); C16 notes #7: Add sat on Saving… 100+ s, no request, no error."
   }
 ]
