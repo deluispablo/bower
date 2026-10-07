@@ -41,3 +41,13 @@ export function serializeRules(rules: readonly Rule[]): string {
   ]);
   return ['---', `summary: ${worded.length} ${worded.length === 1 ? 'rule' : 'rules'} Bower follows in every tidy-up.`, 'by: bower', 'kind: Rules', '---', '', RULES_HEADING, '', ...body, ''].join('\n');
 }
+
+/**
+ * The `Rules.md` a new Bower folder starts with: no rules yet, and the mark that makes the file Bower's to word
+ * (the key is `PROP.by`). The fake Worker and the real Worker's template both make the file from this, so the two
+ * cannot drift apart.
+ */
+export const RULES_TEMPLATE: { readonly text: string; readonly appProperties: Readonly<Record<string, string>> } = {
+  text: serializeRules([]),
+  appProperties: { by: 'bower' },
+};

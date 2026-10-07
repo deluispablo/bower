@@ -24,7 +24,7 @@ import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';
 import { ALEX, MERGES, saltmereQuestion, wordRule } from '../demo/fixture';
 import { PHASE_MS, type Scenario } from '../demo/scenario';
-import { parseRules, serializeRules } from '../vault/rules-format';
+import { RULES_TEMPLATE, parseRules, serializeRules } from '../vault/rules-format';
 import { nameOf } from '../tree';
 import { pretendDrive, pretendRuns } from './pretend';
 import { SET_ASIDE_TEXT } from '../pile-readiness';
@@ -51,6 +51,15 @@ describe('the fake Worker', () => {
     expect(await worker.me()).toBeNull();
     await worker.signIn();
     expect((await worker.me())?.user.name).toBe('Alex');
+  });
+
+  it('makes Rules.md from the template the real Worker uses', async () => {
+    const { drive, worker } = await world('first');
+    const { id } = await worker.createFolder();
+    const rules = (await drive.listAll(id)).find((f) => f.name === 'Rules.md');
+    expect(await drive.readText(rules?.id ?? '')).toBe(RULES_TEMPLATE.text);
+    expect(rules?.appProperties).toEqual(RULES_TEMPLATE.appProperties);
+    expect(Object.keys(RULES_TEMPLATE.appProperties)).toEqual([PROP.by]);
   });
 
   it('makes the Bower folder with the five main folders', async () => {

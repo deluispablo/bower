@@ -33,8 +33,9 @@
  *   create-only, as the original's `copyTemplate`; once it is, calls skip
  *   the fill (a file the person later deletes stays deleted).
  *
- * Only `files.create` (and reads) are ever sent: nothing is deleted, moved,
- * renamed or overwritten. Nothing here logs a file name, content or token.
+ * Only `files.create` (and reads) are ever sent: nothing is deleted, moved
+ * or renamed. The one overwrite is the repair of an untouched old-template
+ * `Rules.md` (`repairRules`). Nothing here logs a file name, content or token.
  */
 
 import { Hono } from 'hono';
@@ -49,9 +50,31 @@ import { requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
 import { TEMPLATE_FILES } from './template.generated.js';
 import type { TemplateFile } from './template.generated.js';
+import { RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
+
+/** The text the first template put in `Rules.md`: plain, without Bower's mark. Only a file with exactly these bytes is repaired. */
+export const OLD_RULES_TEMPLATE = `## Rules
+
+Your own rules for Bower, one per line. Where they disagree with Bower's own, these win.
+`;
+
+/** A template file, with the app properties it is created with. */
+export interface VaultFile extends TemplateFile {
+  appProperties?: Record<string, string>;
+}
+
+/**
+ * The file `Rules.md` a new folder gets: the contracts' `RULES_TEMPLATE`, which the fake Worker uses too, so a
+ * rule typed in the app is Bower's to word on real Drive too. It
+ * is not in `api/template/`, whose bundler cannot run the app's code.
+ */
+export const RULES_FILE: VaultFile = { path: 'Rules.md', content: RULES_TEMPLATE.text, appProperties: { ...RULES_TEMPLATE.appProperties } };
+
+/** Every file a new Bower folder gets. */
+export const VAULT_TEMPLATE: readonly VaultFile[] = [...TEMPLATE_FILES, RULES_FILE];
 
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
@@ -67,7 +90,7 @@ export interface VaultResult {
 
 export interface VaultOptions {
   fetchImpl?: FetchLike;
-  files?: readonly TemplateFile[];
+  files?: readonly VaultFile[];
 }
 
 interface DriveItem {
@@ -75,6 +98,8 @@ interface DriveItem {
   name?: string;
   trashed?: boolean;
   mimeType?: string;
+  modifiedTime?: string;
+  appProperties?: Record<string, string>;
 }
 
 /** How long one call may hold the person's claim, and how often a waiting call looks again. */
@@ -192,12 +217,12 @@ class Drive {
    * `files.create` with a multipart upload of a new text file. With `id`,
    * Drive answers 409 when that id exists: made by an earlier try, so done.
    */
-  async createText(name: string, parentId: string, content: string, id?: string): Promise<void> {
+  async createText(name: string, parentId: string, content: string, id?: string, appProperties?: Record<string, string>): Promise<void> {
     const mimeType = name.endsWith('.md') ? 'text/markdown' : name.endsWith('.json') ? 'application/json' : 'text/plain';
     const boundary = `bower-${crypto.randomUUID()}`;
     const body =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-      `${JSON.stringify({ name, mimeType, parents: [parentId], ...(id === undefined ? {} : { id }) })}\r\n` +
+      `${JSON.stringify({ name, mimeType, parents: [parentId], ...(id === undefined ? {} : { id }), ...(appProperties === undefined ? {} : { appProperties }) })}\r\n` +
       `--${boundary}\r\nContent-Type: ${mimeType}; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
     const params = new URLSearchParams({ uploadType: 'multipart', fields: 'id' });
     const response = await this.send(`${UPLOAD_URL}?${params}`, {
@@ -208,6 +233,63 @@ class Drive {
     if (response.status === 409 && id !== undefined) return;
     await this.json('upload', response);
   }
+
+  /** The one live file called `name` in `parentId` with what the repair checks, or null when there is none or more than one. */
+  async onlyNamed(parentId: string, name: string): Promise<DriveItem | null> {
+    const q = `${quote(parentId)} in parents and name = ${quote(name)} and trashed = false`;
+    const params = new URLSearchParams({ q, fields: 'files(id,mimeType,modifiedTime,appProperties)', pageSize: '2', spaces: 'drive' });
+    const body = await this.json<{ files?: DriveItem[] }>('list', await this.send(`${FILES_URL}?${params}`));
+    return Array.isArray(body.files) && body.files.length === 1 ? (body.files[0] ?? null) : null;
+  }
+
+  /** `files.get` with `alt=media`: the text of a file, or null when Drive says 404. */
+  async text(id: string): Promise<string | null> {
+    const response = await this.send(`${FILES_URL}/${encodeURIComponent(id)}?alt=media`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw driveError(`read answered ${response.status}`);
+    return response.text();
+  }
+
+  /** `files.get`: when the file last changed, or null when Drive says 404. */
+  async modifiedTime(id: string): Promise<string | null> {
+    const params = new URLSearchParams({ fields: 'modifiedTime' });
+    const response = await this.send(`${FILES_URL}/${encodeURIComponent(id)}?${params}`);
+    if (response.status === 404) return null;
+    return (await this.json<DriveItem>('get', response)).modifiedTime ?? null;
+  }
+
+  /** `files.update` with a multipart upload: new text and app properties for one file (Drive v3, "Upload file data"). */
+  async replaceText(id: string, content: string, appProperties: Record<string, string>): Promise<void> {
+    const boundary = `bower-${crypto.randomUUID()}`;
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ appProperties })}\r\n` +
+      `--${boundary}\r\nContent-Type: text/markdown; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
+    const params = new URLSearchParams({ uploadType: 'multipart', fields: 'id' });
+    const response = await this.send(`${UPLOAD_URL}/${encodeURIComponent(id)}?${params}`, {
+      method: 'PATCH',
+      headers: { 'content-type': `multipart/related; boundary=${boundary}` },
+      body,
+    });
+    await this.json('update', response);
+  }
+}
+
+/**
+ * The one-time repair: a folder made before the fix has `Rules.md` as plain text without Bower's mark, so a rule
+ * typed in the app is refused as not Bower's to word. When the file's bytes are exactly the old template text, it
+ * becomes the new template's file. Anything else (a file the person edited, the original app's plain file, two
+ * files of the name) is left as it is. It runs where the folder is opened, which every app start passes (one list
+ * and, only for the old text, one read), and needs no new state: once rewritten, the old text is gone, so a
+ * second check finds nothing to do. Still as seen: the file's modifiedTime is read before the text and again
+ * just before the write, and a change between them leaves the file alone (Drive v3 has no conditional write).
+ */
+async function repairRules(drive: Drive, folderId: string): Promise<void> {
+  const file = await drive.onlyNamed(folderId, RULES_FILE.path);
+  if (file === null || file.mimeType === FOLDER_MIME || file.modifiedTime === undefined) return;
+  if (file.appProperties?.['by'] === 'bower') return;
+  if ((await drive.text(file.id)) !== OLD_RULES_TEMPLATE) return;
+  if ((await drive.modifiedTime(file.id)) !== file.modifiedTime) return;
+  await drive.replaceText(file.id, RULES_FILE.content, RULES_FILE.appProperties ?? {});
 }
 
 /**
@@ -220,7 +302,7 @@ async function completeTemplate(
   drive: Drive,
   rootId: string,
   rootIsEmpty: boolean,
-  files: readonly TemplateFile[],
+  files: readonly VaultFile[],
   ids: Record<string, string>,
 ): Promise<void> {
   const folders = new Map<string, string>([['', rootId]]);
@@ -257,12 +339,12 @@ async function completeTemplate(
     const name = file.path.slice(slash + 1);
     if (name === PLACEHOLDER) continue;
     if ((await childrenOf(parent)).some((c) => c.name === name)) continue;
-    await drive.createText(name, parent, file.content, ids[file.path]);
+    await drive.createText(name, parent, file.content, ids[file.path], file.appProperties);
   }
 }
 
 /** The template's folders (one per path that holds a file) and files, each once: what needs an id. */
-function templateKeys(files: readonly TemplateFile[]): string[] {
+function templateKeys(files: readonly VaultFile[]): string[] {
   const keys = new Set<string>();
   for (const { path } of files) {
     const parts = path.split('/');
@@ -302,7 +384,7 @@ export async function ensureVault(
   options: VaultOptions = {},
 ): Promise<VaultResult> {
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
-  const files = options.files ?? TEMPLATE_FILES;
+  const files = options.files ?? VAULT_TEMPLATE;
   const person = env.PERSON.get(env.PERSON.idFromName(sub));
   const drive = new Drive(env, sub, fetchImpl);
 
@@ -348,7 +430,7 @@ async function attemptVault(
   person: PersonStub,
   gen: number,
   drive: Drive,
-  files: readonly TemplateFile[],
+  files: readonly VaultFile[],
 ): Promise<VaultResult | null> {
   const state = await person.vaultState();
   let folderId: string | null = null;
@@ -401,6 +483,7 @@ async function attemptVault(
     await completeTemplate(drive, folderId, made, files, templateIds);
     await person.markFolderComplete(gen, folderId);
   }
+  await repairRules(drive, folderId);
   return { folderId, found: !brandNew };
 }
 

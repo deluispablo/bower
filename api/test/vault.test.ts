@@ -8,7 +8,8 @@ import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
-import { TEMPLATE_FILES } from '../src/template.generated.js';
+import { OLD_RULES_TEMPLATE, VAULT_TEMPLATE } from '../src/vault.js';
+import { RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -46,6 +47,7 @@ interface Item {
   trashed: boolean;
   appProperties: Record<string, string>;
   content?: string;
+  modifiedTime?: string;
 }
 
 /** A pretend Google: the token endpoint plus the few Drive v3 calls the route may make, recording every one. */
@@ -66,8 +68,11 @@ class FakeGoogle {
   stallUploadNamed: string | null = null;
   release: () => void = () => undefined;
   stalled: Promise<void> = Promise.resolve();
+  /** Runs once, right after a file's text is read: another device changes it between our read and our write. */
+  afterMediaRead: (() => void) | null = null;
   private n = 0;
   private reserved = 0;
+  private clock = 0;
 
   readonly fetchImpl: FetchLike = async (input, init) => {
     const method = init?.method ?? 'GET';
@@ -91,7 +96,24 @@ class FakeGoogle {
     }
     if (url.pathname.startsWith('/drive/v3/files/') && method === 'GET') {
       const item = this.items.get(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
-      return item === undefined ? Response.json({ error: { code: 404 } }, { status: 404 }) : Response.json(item);
+      if (item === undefined) return Response.json({ error: { code: 404 } }, { status: 404 });
+      if (url.searchParams.get('alt') === 'media') {
+        const text = item.content ?? '';
+        const hook = this.afterMediaRead;
+        this.afterMediaRead = null;
+        hook?.();
+        return new Response(text);
+      }
+      return Response.json(item);
+    }
+    if (url.pathname.startsWith('/upload/drive/v3/files/') && method === 'PATCH') {
+      const item = this.items.get(decodeURIComponent(url.pathname.split('/').pop() ?? ''));
+      if (item === undefined) return Response.json({ error: { code: 404 } }, { status: 404 });
+      const { metadata, content } = parseMultipart(String(init?.body));
+      item.content = content;
+      item.appProperties = { ...item.appProperties, ...metadata.appProperties };
+      item.modifiedTime = this.tick();
+      return Response.json(item);
     }
     if (url.pathname === '/drive/v3/files' && method === 'POST') {
       const body = JSON.parse(String(init?.body)) as Partial<Item>;
@@ -109,8 +131,7 @@ class FakeGoogle {
       return Response.json(item);
     }
     if (url.pathname === '/upload/drive/v3/files' && method === 'POST') {
-      const [meta] = String(init?.body).split(/--bower-[0-9a-f-]+(?:--)?\r\n?/).filter((p) => p.trim() !== '');
-      const metadata = JSON.parse((meta ?? '').split('\r\n\r\n')[1] ?? '{}') as Partial<Item>;
+      const { metadata, content } = parseMultipart(String(init?.body));
       if (this.stallUploadNamed !== null && metadata.name === this.stallUploadNamed) {
         this.stallUploadNamed = null;
         await new Promise<void>((resolve) => {
@@ -123,7 +144,7 @@ class FakeGoogle {
         this.failUploadNamed = null;
         return Response.json({ error: { code: 503 } }, { status: 503 });
       }
-      return Response.json(this.add({ ...metadata, mimeType: metadata.mimeType ?? 'text/plain' }));
+      return Response.json(this.add({ ...metadata, content, mimeType: metadata.mimeType ?? 'text/plain' }));
     }
     return Response.json({ error: 'unexpected' }, { status: 500 });
   };
@@ -137,6 +158,11 @@ class FakeGoogle {
     });
   }
 
+  tick(): string {
+    this.clock += 1;
+    return new Date(Date.UTC(2026, 9, 7, 8, 0, 0) + this.clock * 1000).toISOString();
+  }
+
   add(partial: Partial<Item>): Item {
     this.n += 1;
     const item: Item = {
@@ -146,6 +172,8 @@ class FakeGoogle {
       parents: partial.parents ?? [],
       trashed: false,
       appProperties: partial.appProperties ?? {},
+      modifiedTime: this.tick(),
+      ...(partial.content === undefined ? {} : { content: partial.content }),
     };
     this.items.set(item.id, item);
     return item;
@@ -154,9 +182,10 @@ class FakeGoogle {
   private list(q: string): Response {
     const parent = /'([^']+)' in parents/.exec(q)?.[1];
     const marked = q.includes('appProperties has');
+    const named = /name = '([^']+)'/.exec(q)?.[1];
     if (marked && this.searchBlind) return Response.json({ files: [] });
     const files = [...this.items.values()].filter(
-      (i) => !i.trashed && (parent === undefined || i.parents.includes(parent)) && (!marked || i.appProperties['bowerFolder'] === '1'),
+      (i) => !i.trashed && (parent === undefined || i.parents.includes(parent)) && (named === undefined || i.name === named) && (!marked || i.appProperties['bowerFolder'] === '1'),
     );
     return Response.json({ files });
   }
@@ -182,6 +211,15 @@ class FakeGoogle {
   }
 }
 
+/** The metadata and the text of a Drive multipart upload. */
+function parseMultipart(raw: string): { metadata: Partial<Item>; content: string } {
+  const [meta, media] = `\r\n${raw}`.split(/\r\n--bower-[0-9a-f-]{36}(?:--)?(?:\r\n)?/).filter((p) => p.trim() !== '');
+  const metadata = JSON.parse((meta ?? '').split('\r\n\r\n')[1] ?? '{}') as Partial<Item>;
+  const text = media ?? '';
+  const content = text.slice(text.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, '');
+  return { metadata, content };
+}
+
 async function post(g: FakeGoogle, cookie: string, lease: Record<string, string> = leases.get(cookie) ?? {}): Promise<Response> {
   return await createApp({ fetchImpl: g.fetchImpl }).request(
     `${APP}/vault`,
@@ -194,7 +232,7 @@ const body = async (r: Response) => (await r.json()) as { folderId: string; foun
 /** What the template should leave in the folder: every file, and the folder of every path. */
 const expectedPaths = (): string[] => {
   const out = new Set<string>();
-  for (const { path } of TEMPLATE_FILES) {
+  for (const { path } of VAULT_TEMPLATE) {
     const parts = path.split('/');
     parts.forEach((_, i) => {
       const p = parts.slice(0, i + 1).join('/');
@@ -205,6 +243,64 @@ const expectedPaths = (): string[] => {
 };
 
 describe('POST /vault', () => {
+  it('the real template writes Rules.md as the fake does', async () => {
+    const { cookie } = await someone();
+    const g = new FakeGoogle();
+    const { folderId } = await body(await post(g, cookie));
+    const real = [...g.items.values()].find((i) => i.name === 'Rules.md' && i.parents.includes(folderId));
+
+    if (real === undefined) throw new Error('Rules.md missing');
+    // The fake Worker makes its Rules.md from the same constant (`fake-worker.test.ts` checks that side).
+    expect(real.content).toBe(RULES_TEMPLATE.text);
+    expect(real.appProperties).toEqual(RULES_TEMPLATE.appProperties);
+    expect(real.appProperties).toEqual({ by: 'bower' });
+  });
+
+  it('the old template Rules.md is repaired once and nothing else is touched', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    const { folderId } = await body(await post(g, cookie));
+    const rules = [...g.items.values()].find((i) => i.name === 'Rules.md' && i.parents.includes(folderId));
+    if (rules === undefined) throw new Error('Rules.md missing');
+    const patches = (): number => g.calls.filter((c) => c.method === 'PATCH').length;
+    const snapshot = (): string => JSON.stringify([...g.items.values()].filter((i) => i.id !== rules.id));
+
+    // A folder made before the fix: the old text, no mark.
+    rules.content = OLD_RULES_TEMPLATE;
+    rules.appProperties = {};
+    const others = snapshot();
+    await post(g, cookie);
+    expect(rules.content).toBe(RULES_TEMPLATE.text);
+    expect(rules.appProperties).toEqual({ by: 'bower' });
+    expect(patches()).toBe(1);
+    expect(snapshot()).toBe(others);
+    // Once: the second check sends no write.
+    await post(g, cookie);
+    expect(patches()).toBe(1);
+
+    // Anything else is left as it is: a Rules.md the person edited, and the original app's plain file.
+    for (const text of [`${OLD_RULES_TEMPLATE}\n- Receipts go to Money.\n`, '# Rules\n\nPlain file from the original app.\n', `${OLD_RULES_TEMPLATE} `]) {
+      rules.content = text;
+      rules.appProperties = {};
+      await post(g, cookie);
+      expect(rules.content).toBe(text);
+      expect(rules.appProperties).toEqual({});
+    }
+    expect(patches()).toBe(1);
+
+    // Changed between our read and our write: still as seen, or no write.
+    rules.content = OLD_RULES_TEMPLATE;
+    g.afterMediaRead = () => {
+      rules.content = `${OLD_RULES_TEMPLATE}\n- Typed on another device.\n`;
+      rules.modifiedTime = g.tick();
+    };
+    await post(g, cookie);
+    expect(rules.content).toBe(`${OLD_RULES_TEMPLATE}\n- Typed on another device.\n`);
+    expect(patches()).toBe(1);
+    expect(g.calls.some((c) => c.method === 'DELETE')).toBe(false);
+    expect(await person(sub).folderId()).toBe(folderId);
+  });
+
   it('vault makes a new Bower folder from the template', async () => {
     const { sub, cookie } = await someone();
     const g = new FakeGoogle();
@@ -257,7 +353,8 @@ describe('POST /vault', () => {
     const writes = g.calls.filter((c) => c.method !== 'GET');
     expect(writes.length).toBeGreaterThan(0);
     expect(writes.every((c) => c.method === 'POST' && (c.url.startsWith('/drive/v3/files?') || c.url.startsWith('/upload/drive/v3/files?')))).toBe(true);
-    expect(g.calls.some((c) => ['DELETE', 'PATCH', 'PUT'].includes(c.method))).toBe(false);
+    expect(g.calls.some((c) => ['DELETE', 'PUT'].includes(c.method))).toBe(false);
+    expect(g.calls.some((c) => c.method === 'PATCH')).toBe(false);
     expect(g.calls.some((c) => c.url.includes('/files/') && c.method !== 'GET')).toBe(false);
   });
 
@@ -366,7 +463,8 @@ describe('POST /vault', () => {
     const before = g.calls.length;
     expect(await body(await post(g, cookie))).toEqual({ folderId: first.folderId, found: true });
     const later = g.calls.slice(before);
-    expect(later.every((c) => c.method === 'GET' && c.url.startsWith(`/drive/v3/files/${first.folderId}?`))).toBe(true);
+    // One look at the pointed folder, and the one look for an old-template Rules.md (`repairRules`): reads only.
+    expect(later.every((c) => c.method === 'GET' && (c.url.startsWith(`/drive/v3/files/${first.folderId}?`) || c.url.startsWith('/drive/v3/files?')))).toBe(true);
     expect([...g.items.values()].filter((i) => i.name === 'Rules.md' && !i.trashed)).toHaveLength(0);
   });
 
