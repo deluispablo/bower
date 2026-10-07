@@ -4186,5 +4186,18 @@
     "verify": "pnpm -C api exec vitest run -t \"a later attempt never moves the phase backward|the revision rises only when the visible run changes\" && pnpm exec vitest run src/data -t \"the fake and the Worker order reports the same way\"",
     "passes": true,
     "note": "TL-P3-23 (ordered status); takes the P3-12 re-review polish item (attempt 2 posts writing after saving)."
+  },
+  {
+    "id": "staging-runner-routes",
+    "task": "p3-d",
+    "category": "fix",
+    "what": "Every path the Worker serves runs the Worker first on the one-origin deploy: api/wrangler.jsonc run_worker_first lists /runner/*, so the runner's token and status calls reach the Worker instead of the app's page. A test reads every route the Worker mounts and fails when one is not covered by run_worker_first.",
+    "steps": [
+      "api/wrangler.jsonc run_worker_first adds \"/runner/*\".",
+      "An api test parses wrangler.jsonc and every path registered by the route modules, and fails for any path the patterns do not cover."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"every Worker route runs the Worker first\"",
+    "passes": false,
+    "note": "First real run on Actions (2026-10-07, run 37619425172): GET /runner/runs/:id/token answered the SPA page with 200, so the runner failed in 13s."
   }
 ]
