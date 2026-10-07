@@ -1,11 +1,12 @@
 {
-  "name": "bower-api",
+  "name": "bower-staging",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-22",
   // One origin (TL-P3-06): the app's build is served as static assets, and the Worker runs
   // first only on its own paths, so the session cookie is first-party on Safari too.
   "assets": {
     "directory": "../dist",
+    "not_found_handling": "single-page-application",
     "run_worker_first": ["/auth/*", "/me", "/drive/*", "/vault", "/process", "/status", "/session", "/health"]
   },
   "kv_namespaces": [{ "binding": "BOWER_KV", "id": "6969d46bffdb4b1e90d068f84235fbec" }],
