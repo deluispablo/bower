@@ -4,7 +4,8 @@
  * 1. The report, made from the fixed plan and the settled outcomes, is committed in the chain as pending: "effects
  *    done, report pending". From here a run that stops stays in `saving`, and a redispatch resumes here: every
  *    operation is settled, so no effect is applied again.
- * 2. The report record goes in the run's folder, read back, and each declared pile filed whole gets its consumed
+ * 2. The report is checked against where every admitted item ended (`reportContradictions`): one that contradicts
+ *    them stops the run here, in `saving`, with nothing more written. The report record goes in the run's folder, read back, and each declared pile filed whole gets its consumed
  *    disposition in `.bower/piles`. Then `dispositions.json` in the run's folder: one line for every admitted item,
  *    journal lines included, filed, set aside or waiting (`itemDispositions`); one already there is left as it is.
  * 3. The report files, then `.bower/last-run.json` last, through the shared barrier (`src/data/spine/barrier.ts`),
@@ -20,7 +21,7 @@ import type { Checkpoint } from '../../../src/data/contracts/run-checkpoint';
 import { fixedReport, jsonText, lastRunText, olderView, saveReport, type Checksum } from '../../../src/data/spine/barrier';
 import type { AdmissionManifest } from '../../../src/data/spine/admission';
 import { canonical, checkpointName, nextCheckpoint, reportName, type AttemptMark, type CheckpointPatch, type RecordReads, type RunManifest, type RunRecords } from '../../../src/data/spine/records';
-import { dispositionsFor, itemDispositions, materialize, type ItemDisposition } from '../../../src/data/spine/report';
+import { dispositionsFor, itemDispositions, materialize, reportContradictions, type ItemDisposition } from '../../../src/data/spine/report';
 
 export interface BarrierRun {
   rootId: string;
@@ -97,6 +98,12 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   const body = pending.report.body;
   const r = await canonical(body);
   if (r.hash !== pending.report.reportHash) throw new BowerError('unknown', SAVE_FAILED);
+  // Never a summary that contradicts where the items ended (TL-P3-24 point 1): the run stops here, in `saving`.
+  const wrong = run.admission ? reportContradictions(run.admission, manifest, at.outcomes, body.report, dispositions(at.outcomes)) : [];
+  if (wrong.length) {
+    console.error(`Run ${run.runId}: its dispositions contradict its report`, wrong);
+    throw new BowerError('unknown', SAVE_FAILED);
+  }
 
   // 2. The report record, read back, and the consumed dispositions.
   await run.records.put(await run.batch(), where, reportName(r.hash), r.text);
