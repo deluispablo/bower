@@ -28,6 +28,13 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **5.** With tab 2 closed, Use here in tab 1 gives epoch 3. The `leave` call itself wasn't observable.
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
+
+**P3-10 (TL-P3-21):** `spine-admission-manifest` passes (9fe4042, red fixed in e52bdfd; stubs 6cc6453). `shared-domain-package` was re-closed known-green after its api import rule was renamed (72dfcdb). 315/316. `spine-operations-checkpoints` is running (bower-escalated, `/private/tmp/bower-p3-checkpoints`).
+- For the lead, at the close:
+  - POST /process answers 409 `no-folder` with no folder set; the contract table doesn't list it.
+  - api/tsconfig now uses Bundler resolution.
+  - process.test's fixed clock moved to 2036: its stale alarm fired once the real clock passed 09:17Z.
+- Known limits: a pile waits whole when one item changed; the Worker reads no pile note and does no Bin lookup.
 - The console's `/status` 500s date from the version-skew window before 09:15Z.
 
 **P3-9 (TL-P3-18/19):** `worker-runner-tickets`, `runner-drive-adapter`, `done-sh-runner-paths`, `do-version-skew`, `worker-dispatch` and `worker-stale-run-recovery` pass; 312/312. Close:
