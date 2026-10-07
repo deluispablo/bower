@@ -174,3 +174,10 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - deploy-staging upload-line test changed every host to example.test (the packet kept one real line); any other Worker name still gets the generic sentence.
 - (TL-P3-28, home-sheet-and-focus) A press on "Tidy up N things" next to an unseen *stopped* run card still opens that failure first (by design: the stopped card's "See why" leads there). Lead to confirm or move to P4.
 - (TL-P3-28, runner-network-retry) A Drive write that lands only after its read-back is counted as not done (the thing stays in the inbox; a later run may write it again). Rare; for the re-freeze Opus delta to judge. Changed tests: recovery.test "attempt 2 reconciles…", real-adapters "duplicate dispatch…cut mid-run", real.contract "browser close mid-run" (exit 0 → 1).
+- (P3 second re-freeze review, PASS at 426a9fd; notes /private/tmp/p3-refreeze2-review-notes.md) Minors:
+  - runner/src/effects.ts:241: a write landing after its read-back counts as rejected; may double a rule line.
+  - runner/src/drive.ts:206: a fenced records PATCH 5xx is no longer retried; run waits in saving for the alarm.
+  - src/data/wait.ts:16: an 8 MiB chunk gets ~194 s; uplink under 350 kbit/s is cut each time (resumes, may loop).
+  - src/data/vault/drive-vault.ts:895: addPile create has no read-back; landed late plus retry gives a 2nd pile.
+  - src/features/bower/BowerPanel.tsx:33: the "Done. N filed" card press now opens the start ask, not the result.
+  - Unbounded response-body reads.
