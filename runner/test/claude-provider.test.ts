@@ -3,7 +3,7 @@
  * the admitted set are the scripted provider's contract fixtures (the same seeded folder `main.test.ts` runs), and
  * each reply is a `claude -p --output-format json` result recorded in `fixtures/claude/`.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,7 +16,13 @@ import { hashRecordJson } from '../../src/data/contracts/record-json';
 import type { RunManifest } from '../../src/data/spine/records';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { SYSTEM } from '../../src/data/vault/layout';
-import type { ClaudeCall, ClaudeExit } from '../src/claude';
+import { serializeNote } from '../../src/data/vault/note-format';
+import { FakeDrive } from '../../src/data/drive/fake-drive';
+import type { Admitted } from '../../src/data/spine/provider';
+import type { ScriptedRead } from '../../src/data/spine/read';
+import { listedPiles, runKeys, scriptedProvider } from '../../src/data/spine/scripted';
+import { claudeProvider, type ClaudeCall, type ClaudeExit } from '../src/claude';
+import { outsideAdmitted } from '../src/spine/admitted';
 import { main } from '../src/main';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -28,8 +34,12 @@ afterEach(() => vi.restoreAllMocks());
 
 const recorded = (name: string): string => readFileSync(new URL(`./fixtures/claude/${name}`, import.meta.url), 'utf8');
 
-/** Alex's folder on a pretend Drive v3, as `main.test.ts` seeds it: two loose things and a pile with words. */
-async function wired(): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
+/**
+ * Alex's folder on a pretend Drive v3, as `main.test.ts` seeds it: two loose things and a pile with words. `rich` adds
+ * what the demo's folder has and the scripted plan does more for: two of Bower's hub notes it brings up to date, a
+ * saved link filed as a note, an offer that gets its own note, and a pile of words only that becomes a note.
+ */
+async function wired(rich = false): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const inbox = (await drive.createFolder(root, 'Inbox')).id;
@@ -42,6 +52,18 @@ async function wired(): Promise<{ wire: DriveV3; root: string; admission: Admiss
   const pile = (await drive.createFolder(inbox, 'Flat photos', { pile: 'p-photos' })).id;
   await drive.createText(pile, PILE_NOTE, 'The kitchen at the Wrenfield Road viewing.\n');
   await drive.createText(pile, 'IMG_2301.jpg', 'made-up photo bytes');
+  if (rich) {
+    const projects = (await drive.listAll(root)).find((f) => f.name === 'Projects')?.id ?? root;
+    const hub = (summary: string): string => serializeNote({ summary, properties: [], tags: [], currentState: [], body: '', timeline: [], byBower: true });
+    const flats = (await drive.createFolder(projects, 'Flat hunt')).id;
+    await drive.createText(flats, 'Flat hunt.md', hub('Flats Alex is looking at.'));
+    const jobs = (await drive.createFolder(projects, 'Job hunt')).id;
+    await drive.createText(jobs, 'Job hunt.md', hub('Jobs Alex applied for.'));
+    await drive.createText(inbox, 'listing-88213.example.url', '[InternetShortcut]\nURL=https://listing-88213.example\n', { pile: 'p-listing' });
+    await drive.createText(inbox, 'Offer_letter_final(2).pdf', '%PDF offer', { pile: 'p-offer' });
+    const words = (await drive.createFolder(inbox, 'Garden', { pile: 'p-garden' })).id;
+    await drive.createText(words, PILE_NOTE, 'Ideas for the garden in spring.\n');
+  }
   const admitted = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
   if (admitted.kind !== 'manifest') throw new Error(`nothing admitted: ${admitted.cause}`);
   const wire = driveV3(drive);
@@ -63,12 +85,12 @@ function recordedClaude(reply: Partial<ClaudeExit> & { stdout: string }): { call
   return { calls, spawn: async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, ...reply }) };
 }
 
-/** The recorded success with its manifest changed by `edit`: a reply that is JSON but outside the run manifest schema. */
-function edited(edit: (manifest: Record<string, unknown>) => void): string {
-  const envelope = JSON.parse(recorded('reply-ok.json')) as { result: string };
-  const manifest = JSON.parse(envelope.result) as Record<string, unknown>;
-  edit(manifest);
-  return JSON.stringify({ ...envelope, result: JSON.stringify(manifest) });
+/** The recorded success with its intent changed by `edit`: a reply that is JSON but outside the intent. */
+function edited(edit: (intent: Record<string, unknown>) => void, name = 'reply-ok.json'): string {
+  const envelope = JSON.parse(recorded(name)) as { result: string };
+  const intent = JSON.parse(envelope.result) as Record<string, unknown>;
+  edit(intent);
+  return JSON.stringify({ ...envelope, result: JSON.stringify(intent) });
 }
 
 async function hash(value: unknown): Promise<string> {
@@ -78,11 +100,11 @@ async function hash(value: unknown): Promise<string> {
 }
 
 /**
- * The recorded success edited by `edit`, then its capture id and operation ids made again as the planner makes them
+ * The recorded manifest reply (from before P4-2) edited by `edit`, then its capture id and operation ids made again as the planner makes them
  * (as `checkpoints.test.ts` does): a reply inside the contract that plans for another run, request or thing.
  */
 async function rehashed(edit: (text: string) => string): Promise<string> {
-  const envelope = JSON.parse(recorded('reply-ok.json')) as { result: string };
+  const envelope = JSON.parse(recorded('reply-manifest.json')) as { result: string };
   const value = JSON.parse(edit(envelope.result)) as RunManifest;
   value.captureId = await hash({ scope: value.scope, runScope: value.runScope, capture: value.capture });
   const renamed = new Map<string, string>();
@@ -124,25 +146,13 @@ describe('the Claude provider', () => {
       ['the turn cap reached', { stdout: recorded('reply-max-turns.json') }],
       ['not a result at all', { stdout: 'Error: something went wrong', code: 1 }],
       ['cut at the size cap', { stdout: recorded('reply-ok.json'), cut: 'size' }],
-      ['an effect the contract has no room for', { stdout: edited((m) => {
-        for (const op of (m.operations as Array<{ effect: { kind: string } }>).slice(0, 1)) op.effect.kind = 'delete';
+      ['a run manifest instead of intent', { stdout: recorded('reply-manifest.json') }],
+      ['intent of another version', { stdout: edited((m) => (m.v = 2)) }],
+      ['a thing placed twice', { stdout: edited((m) => (m.things as unknown[]).push((m.things as unknown[])[0])) }],
+      ['a name that turns a PDF into a picture', { stdout: edited((m) => {
+        for (const t of (m.things as Array<{ name: string }>).slice(0, 1)) t.name = 'Payslip.jpg';
       }) }],
-      ['a manifest for another run', { stdout: edited((m) => (m.runId = 'another-run')) }],
-      ['a thing it was not admitted to take', {
-        stdout: edited((m) => {
-          const members = (m.capture as { members: Array<{ file: { fileId: string } }> }).members;
-          for (const member of members.slice(0, 1)) member.file.fileId = 'not-admitted';
-        }),
-      }],
     ];
-    // Inside the contract, its hashes made again, but not this run's plan from what it took.
-    const payslip = (JSON.parse(JSON.parse(recorded('reply-ok.json')).result as string) as RunManifest).capture.members[0]?.file.fileId ?? '';
-    expect(payslip).not.toBe('');
-    replies.push(
-      ['the contract kept, for another run', { stdout: await rehashed((t) => t.replaceAll(`"runId":"${RUN_ID}"`, '"runId":"another-run"')) }],
-      ['the contract kept, for another request', { stdout: await rehashed((t) => t.replace('"requestId":"admission-1"', '"requestId":"admission-2"')) }],
-      ['the contract kept, with a thing not admitted', { stdout: await rehashed((t) => t.replaceAll(`"${payslip}"`, '"not-admitted"')) }],
-    );
     for (const [what, reply] of replies) {
       const { wire } = await wired();
       const before = await wire.drive.listAll(wire.folderId);
@@ -220,7 +230,7 @@ describe('the Claude provider', () => {
     }
     // The credential reaches claude through its own small environment only: never in an argument or the input.
     expect(call?.env.CLAUDE_CODE_OAUTH_TOKEN).toBe(TOKEN);
-    expect(Object.keys(call?.env ?? {}).sort()).toEqual(['CLAUDE_CODE_OAUTH_TOKEN', 'GITHUB_ACTIONS', 'HOME', 'PATH']);
+    expect(Object.keys(call?.env ?? {}).sort()).toEqual(['CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR', 'GITHUB_ACTIONS', 'HOME', 'PATH']);
     expect(args.join(' ')).not.toContain(TOKEN);
     expect(call?.input).not.toContain(TOKEN);
     // Nothing said anywhere repeats it.
@@ -234,5 +244,202 @@ describe('the Claude provider', () => {
     const setArgs = set.calls[0]?.args ?? [];
     expect(setArgs[setArgs.indexOf('--model') + 1]).toBe('claude-opus-5-5');
     expect(setArgs[setArgs.indexOf('--max-turns') + 1]).toBe('12');
+  });
+});
+
+/** The scripted provider's reads over the pretend Drive, as the runner makes them over Drive v3 (`runnerScripted`). */
+function fakeScripted(drive: FakeDrive): ScriptedRead {
+  const reads = fakeRead(drive);
+  return { ...reads, piles: (rootId) => listedPiles(reads, rootId), provenance: 'fake-stored' };
+}
+
+/** Runs the same folder through the scripted provider and the Claude provider (on a recorded reply). */
+async function both(drive: FakeDrive, root: string, took: Admitted, reply: string): Promise<{ scripted: RunManifest; claude: RunManifest; calls: ClaudeCall[] }> {
+  const run = { rootId: root, runId: RUN_ID, allowWeb: false };
+  const claude = recordedClaude({ stdout: reply });
+  const scripted = await scriptedProvider(fakeScripted(drive), run)(took);
+  const planned = await claudeProvider({ env: claudeEnv(), spawn: claude.spawn }, run, fakeScripted(drive))(took);
+  return { scripted, claude: planned, calls: claude.calls };
+}
+
+/** One recorded reply through `main` on Alex's folder: it must end failed, saying nothing changed, with no write. */
+async function refusedWhole(what: string, stdout: string, before?: (wire: DriveV3, root: string) => Promise<void>): Promise<void> {
+  const { wire, root } = await wired();
+  await before?.(wire, root);
+  const listed = await wire.drive.listAll(wire.folderId);
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout }).spawn }), what).toBe(0);
+  expect(wire.statuses.map((s) => s.phase), what).toEqual(['reading', 'writing', 'failed']);
+  expect(wire.statuses.at(-1)?.failure, what).toBe(B_FAILURE);
+  expect(wire.requests.filter((r) => r.method !== 'GET'), what).toEqual([]);
+  expect(await wire.drive.listAll(wire.folderId), what).toEqual(listed);
+  expect(errors, what).toHaveBeenCalled();
+  errors.mockRestore();
+}
+
+/** A recorded intent with `things` replaced. */
+const intent = (things: unknown[], extra: Record<string, unknown> = {}): string =>
+  edited((m) => Object.assign(m, { things, ...extra }));
+
+describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
+  it('the Claude provider passes the scripted provider contract fixtures', async () => {
+    // The folder with the demo's cases: the same intent the scripted plan carries gives the very same manifest, every
+    // id included: hub lines and their marks, the link's note, the offer's own note and the note from words.
+    const seeded = await wired(true);
+    const took = { taken: seeded.admission, deferred: [] };
+    const onRich = await both(seeded.wire.drive, seeded.root, took, recorded('reply-rich.json'));
+    const kinds = new Set(onRich.scripted.operations.map((o) => o.effect.kind));
+    for (const kind of ['create-folder', 'create-text', 'move', 'bin', 'edit-text']) expect(kinds).toContain(kind);
+    expect(onRich.claude).toEqual(onRich.scripted);
+    // Deterministic, as the scripted provider is: the same folder and reply give the same plan.
+    expect(await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: recorded('reply-rich.json') }).spawn }, { rootId: seeded.root, runId: RUN_ID, allowWeb: false }, fakeScripted(seeded.wire.drive))(took)).toEqual(onRich.claude);
+
+    // Alex's folder (main.test.ts's): the same, and the spine runs it to done.
+    const { wire, admission } = await wired();
+    const onAlex = await both(wire.drive, wire.folderId, { taken: admission, deferred: [] }, recorded('reply-ok.json'));
+    expect(onAlex.claude).toEqual(onAlex.scripted);
+    const ran = await wired();
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: ran.wire.fetch, claude: recordedClaude({ stdout: recorded('reply-ok.json') }).spawn })).toBe(0);
+    expect(ran.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
+
+    // A thing the reply leaves out waits with its whole pile: the plan is the scripted one without that pile.
+    const left = await wired();
+    const partial = intent([{ fileId: 'f10', to: 'Areas/Money/Payslips', name: 'Payslip August (2).pdf' }]);
+    const run = { rootId: left.wire.folderId, runId: RUN_ID, allowWeb: false };
+    const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: partial }).spawn }, run, fakeScripted(left.wire.drive))({ taken: left.admission, deferred: [] });
+    expect(planned.capture.piles.map((p) => p.pileId)).toEqual(['p-payslip']);
+    const alone = await scriptedProvider(fakeScripted(left.wire.drive), run)({ taken: { ...left.admission, piles: left.admission.piles.filter((p) => p.pileId === 'p-payslip') }, deferred: [] });
+    expect(planned.operations.map((o) => o.effect)).toEqual(alone.operations.map((o) => o.effect));
+  });
+
+  it('a Claude reply that targets a thing not admitted is refused and writes nothing', async () => {
+    const { wire, admission } = await wired();
+    const listing = await wire.drive.listAll(wire.folderId);
+    const id = (name: string): string => listing.find((f) => f.name === name)?.id ?? `no ${name}`;
+    const ok = (JSON.parse((JSON.parse(recorded('reply-ok.json')) as { result: string }).result) as { things: unknown[] }).things;
+    const note = admission.piles.flatMap((p) => p.items).find((i) => i.name === PILE_NOTE)?.fileId ?? '';
+    expect(note).not.toBe('');
+    // The recorded manifest reply with one more operation, its hashes made again: a Bin of Resources, never admitted.
+    const resources = id('Resources');
+    const binsResources = await rehashed((t) => {
+      const m = JSON.parse(t) as RunManifest;
+      m.operations.push({ operationId: 'x', ordinal: m.operations.length, dependsOn: [], effect: { kind: 'bin', before: { fileId: resources, name: 'Resources', parents: [wire.folderId], folder: true, modifiedTime: listing.find((f) => f.id === resources)?.modifiedTime ?? '' }, capturedChildIds: [] } });
+      return JSON.stringify(m);
+    });
+    const cases: Array<[string, string]> = [
+      ['a manifest that bins Resources', binsResources],
+      ['an intent that bins Resources', intent(ok, { bin: [resources] })],
+      ['Resources filed as a thing', intent([...ok, { fileId: resources, to: 'Archive', name: 'Resources' }])],
+      ['the inbox filed as a thing', intent([...ok, { fileId: id('Inbox'), to: 'Archive', name: 'Inbox' }])],
+      ["Bower's questions moved", intent([...ok, { fileId: id('questions.json'), to: 'Archive', name: 'questions.json' }])],
+      ['a pile note filed as a thing', intent([...ok, { fileId: note, to: 'Archive', name: 'Pile note.md' }])],
+      ['a pile not admitted', intent(ok, { notes: [{ pileId: 'p-other', to: 'Resources', name: 'Other.md' }] })],
+      ['a thing filed in the inbox', intent([{ ...(ok[0] as object), to: 'Inbox' }, ...ok.slice(1)])],
+      ["a thing filed in Bower's own files", intent([{ ...(ok[0] as object), to: '.bower/changes' }, ...ok.slice(1)])],
+      ['a thing filed at the top', intent([{ ...(ok[0] as object), to: '' }, ...ok.slice(1)])],
+      ['a thing filed up and out', intent([{ ...(ok[0] as object), to: 'Areas/../..' }, ...ok.slice(1)])],
+    ];
+    // Rules.md and a note outside the plan, there in the folder but never admitted.
+    let rules = '';
+    let other = '';
+    const made = async (w: DriveV3, root: string): Promise<void> => {
+      rules = (await w.drive.createText(root, 'Rules.md', '# Rules\n')).id;
+      const areas = (await w.drive.listAll(root)).find((f) => f.name === 'Areas')?.id ?? root;
+      other = (await w.drive.createText(areas, 'Car.md', 'My car.\n')).id;
+    };
+    for (const [what, stdout] of cases) await refusedWhole(what, stdout);
+    // Their ids are known once made: the pretend Drive gives the same ids to the same folder made the same way.
+    const probe = await wired();
+    await made(probe.wire, probe.wire.folderId);
+    for (const [what, fileId, name] of [['Rules.md filed as a thing', rules, 'Rules.md'], ['a note outside the plan filed', other, 'Car.md']] as const) {
+      await refusedWhole(what, intent([...ok, { fileId, to: 'Archive', name }]), made);
+    }
+
+    // The runner's own check on every plan it builds: nothing but what the run took, Bower's files, and its marks.
+    const run = { rootId: wire.folderId, runId: RUN_ID, allowWeb: false };
+    const took = { taken: admission, deferred: [] };
+    const planned = await scriptedProvider(fakeScripted(wire.drive), run)(took);
+    const own = id('.bower');
+    expect(outsideAdmitted(planned, took, own)).toBeNull();
+    const seen = (f: (typeof listing)[number]) => ({ fileId: f.id, name: f.name, parents: f.parents, folder: f.folder, modifiedTime: f.modifiedTime });
+    const res = listing.find((f) => f.id === resources);
+    if (!res) throw new Error('no Resources');
+    const plus = (effect: RunManifest['operations'][number]['effect']): RunManifest => ({ ...planned, operations: [...planned.operations, { operationId: 'x', ordinal: planned.operations.length, dependsOn: [], effect }] });
+    expect(outsideAdmitted(plus({ kind: 'bin', before: seen(res), capturedChildIds: [] }), took, own)).toMatch(/Bin/);
+    expect(outsideAdmitted(plus({ kind: 'move', before: seen(res), parent: { fileId: id('Archive') }, name: 'Resources', properties: {} }), took, own)).toMatch(/move/);
+    expect(outsideAdmitted(plus({ kind: 'move', before: seen(res), parent: { fileId: wire.folderId }, name: 'Resources', properties: { bowerNew: '1' } }), took, own)).toMatch(/move/);
+    // A runner-JSON write only to Bower's own files: never one that names a note somewhere else.
+    const questions = listing.find((f) => f.name === 'questions.json');
+    if (!questions) throw new Error('no questions.json');
+    const content = { encoding: 'utf8' as const, size: 1, sha256: 'a'.repeat(64), provenance: 'fake-stored' as const, observedModifiedTime: questions.modifiedTime };
+    const json = { kind: 'write-runner-json' as const, path: '.bower/questions.json' as const, beforeContent: content, text: '{}', content: { encoding: 'utf8' as const, size: 2, sha256: 'b'.repeat(64) } };
+    expect(outsideAdmitted(plus({ ...json, before: { ...seen(questions), parents: [id('Areas')] } }), took, own)).toMatch(/Bower's own/);
+    expect(outsideAdmitted(plus({ ...json, before: seen(questions) }), took, own)).toBeNull();
+  });
+
+  it('the runner computes ids and digests, never the model', async () => {
+    // A reply that brings its own id, hash or digest is refused whole: only the runner makes them.
+    const ok = (JSON.parse((JSON.parse(recorded('reply-ok.json')) as { result: string }).result) as { things: Array<Record<string, unknown>> }).things;
+    const first = ok[0] ?? {};
+    const sha = 'a'.repeat(64);
+    for (const [what, stdout] of [
+      ['an operation id', intent([{ ...first, operationId: sha }, ...ok.slice(1)])],
+      ['a content hash', intent([{ ...first, sha256: sha }, ...ok.slice(1)])],
+      ['a capture id', intent(ok, { captureId: sha })],
+      ['its own operations', intent(ok, { operations: [] })],
+    ] as const) await refusedWhole(`a reply with ${what}`, stdout);
+
+    // The plan from an intent: every id and digest is the runner's, made as the planner makes them.
+    const { wire, admission } = await wired();
+    const { claude, calls } = await both(wire.drive, wire.folderId, { taken: admission, deferred: [] }, recorded('reply-ok.json'));
+    // The model is asked for no id or digest, and shown none.
+    expect(calls[0]?.input).not.toMatch(/[a-f0-9]{64}/);
+    expect(claude.captureId).toBe(await hash({ scope: claude.scope, runScope: claude.runScope, capture: claude.capture }));
+    for (const op of claude.operations) expect(op.operationId).toBe(await hash({ runId: claude.runId, captureId: claude.captureId, ordinal: op.ordinal, effect: op.effect }));
+    for (const m of claude.capture.members) expect({ size: m.content.size, sha256: m.content.sha256 }).toEqual(await wire.drive.storedDigest(m.file.fileId));
+    // Create keys are minted from the run id (`runKeys`), never taken from a reply.
+    const base = (await runKeys(RUN_ID))('k').slice('k-'.length, -4);
+    const creates = claude.operations.flatMap((o) => ('createKey' in o.effect ? [o.effect.createKey] : []));
+    expect(creates.length).toBeGreaterThan(0);
+    for (const key of creates) expect(key).toMatch(new RegExp(`^[a-z]+-${base}[0-9a-f]{4}$`));
+  });
+
+  it('claude runs with no checkout or home settings and the secret only reaches the claude step', async () => {
+    const { wire } = await wired();
+    const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
+    const env = { BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), HOME: '/home/runner', PATH: '/usr/bin', ...claudeEnv() };
+    expect(await main(env, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
+    const call = claude.calls[0];
+    const args = call?.args ?? [];
+    // No user, project or local settings, so no CLAUDE.md, hooks or rules from the checkout or the home folder.
+    expect(args).toContain('--setting-sources');
+    expect(args[args.indexOf('--setting-sources') + 1]).toBe('');
+    const settings = JSON.parse(args[args.indexOf('--settings') + 1] ?? '{}') as { claudeMdExcludes?: string[]; autoMemoryEnabled?: boolean; disableAllHooks?: boolean };
+    expect(settings.claudeMdExcludes).toEqual(expect.arrayContaining(['**/CLAUDE.md', '**/CLAUDE.local.md']));
+    expect(settings.autoMemoryEnabled).toBe(false);
+    expect(settings.disableAllHooks).toBe(true);
+    // Its home and config are an empty folder of the run's own, outside the checkout, gone once it answered.
+    const home = call?.env.HOME ?? '';
+    expect(home).not.toBe('/home/runner');
+    expect(home.startsWith(tmpdir())).toBe(true);
+    expect(call?.env.CLAUDE_CONFIG_DIR).toBe(join(home, '.claude'));
+    expect(call?.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe('1');
+    expect(call?.cwd.startsWith(process.cwd())).toBe(false);
+    expect(join(call?.cwd ?? '', '..')).toBe(join(home, '..'));
+    expect(existsSync(home)).toBe(false);
+    expect(existsSync(call?.cwd ?? '')).toBe(false);
+
+    // tidy.yml: the secret is read in one place, the env of the one step that runs when the provider is claude.
+    const tidy = readFileSync(new URL('../workflows/tidy.yml', import.meta.url), 'utf8');
+    const [head = '', ...steps] = tidy.split(/\n(?= {6}- )/);
+    expect(head).not.toMatch(/secrets\./);
+    const secret = steps.filter((s) => /secrets\./.test(s));
+    expect(secret).toHaveLength(1);
+    expect(secret[0]).toMatch(/\n {8}if: vars\.BOWER_PROVIDER == 'claude'\n/);
+    expect(secret[0]).toMatch(/\n {10}CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN \}\}\n/);
+    // Every other step that runs the runner runs only when the provider is not claude.
+    const others = steps.filter((s) => s.includes('runner.mjs') && !/secrets\./.test(s));
+    expect(others).toHaveLength(1);
+    expect(others[0]).toMatch(/\n {8}if: vars\.BOWER_PROVIDER != 'claude'\n/);
   });
 });

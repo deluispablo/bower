@@ -9,6 +9,10 @@
  *   https://code.claude.com/docs/en/settings, https://code.claude.com/docs/en/iam): its deny list kept, and here no
  *   tool at all (`--tools ""`), every tool that writes, runs a shell or reaches the network denied as well, no MCP
  *   server (`--strict-mcp-config`, so nothing reaches Drive) and nothing that may ask (`--permission-mode dontAsk`).
+ * - With no checkout or home settings (TL-P4-01 P4-2): `--setting-sources ""` loads no user, project or local settings
+ *   or CLAUDE.md (https://code.claude.com/docs/en/cli-reference; https://code.claude.com/docs/en/agent-sdk/
+ *   claude-code-features, `settingSources: []`), only the policy passed with `--settings`, which excludes every
+ *   CLAUDE.md and turns auto memory off; and HOME and CLAUDE_CONFIG_DIR are an empty folder of the run's own.
  * - In an empty folder of its own, under `env -i`-style allow-list from `run.sh` (`CLAUDE_ENV_ALLOWLIST`): the
  *   credential is `CLAUDE_CODE_OAUTH_TOKEN` from the instance repository's secrets (Claude Code GitHub Actions,
  *   https://code.claude.com/docs/en/github-actions), passed in its environment only, never in an argument, the
@@ -16,20 +20,26 @@
  * - The model and the turn cap come from the environment, `BOWER_MODEL` and `BOWER_MAX_TURNS`, starting from the
  *   original's: Sonnet (`run.sh` DEFAULT_MODEL) and the Worker's `DEFAULT_MAX_TURNS` (60, runbook "Rulebook v22
  *   and the turn budget"). A setting that does not pass its check falls back with a warning naming the setting only.
- * - Its reply is a run manifest (the contract the scripted provider fills, `src/data/contracts/run-manifest.ts`). It
- *   is parsed and checked against that contract and against what the run was admitted to take; a reply that is not
- *   one, ran past its turn cap or size, or plans for another run or another thing, refuses the plan before any
- *   write. The run then ends failed, saying nothing changed (`runTidy`), which is the truth.
+ * - Its reply is intent only (TL-P4-01 P4-2): where each admitted thing goes and its new name (`intentOf`). The
+ *   runner builds the run manifest from it with the scripted provider's planner (`planScripted` with `filing`), so
+ *   every id, hash and digest is the runner's, then checks it against the contract and against what the run took
+ *   (`outsideAdmitted`). A reply that is not intent, ran past its turn cap or size, or names anything not admitted
+ *   refuses the plan before any write. The run then ends failed, saying nothing changed (`runTidy`), the truth.
  */
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MANIFEST_V2_LIMIT, parseRunManifestV2 } from '../../src/data/contracts/run-manifest';
+import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
+import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
+import type { ScriptedRead } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import type { ScriptedRun } from '../../src/data/spine/scripted';
-import { BowerError } from '../../src/data/types';
+import { planScripted, runKeys, type Filing, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { BowerError, PARA_ROOTS } from '../../src/data/types';
+import { SYSTEM } from '../../src/data/vault/layout';
+import { VaultIndex } from '../../src/data/vault/vault-index';
+import { outsideAdmitted } from './spine/admitted';
 import type { ModelStats, RunTiming } from './timing';
 
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
@@ -54,10 +64,13 @@ const NO_EFFECT_DENY = ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'W
 export const CLAUDE_SETTINGS = {
   permissions: { blockReadsOutsideWorkingDirectories: true, deny: [...ORIGINAL_DENY, ...NO_EFFECT_DENY] },
   disableAllHooks: true,
+  // No CLAUDE.md or rules from any folder, and no auto memory (https://code.claude.com/docs/en/memory).
+  claudeMdExcludes: ['**/CLAUDE.md', '**/CLAUDE.local.md', '**/.claude/**', '**/AGENTS.md'],
+  autoMemoryEnabled: false,
 } as const;
 
 /** `run.sh`'s CLAUDE_ENV_ALLOWLIST, with the OAuth token as the one credential. */
-const ENV_ALLOWLIST = ['HOME', 'PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'CI', 'GITHUB_ACTIONS', 'CLAUDE_CODE_OAUTH_TOKEN'] as const;
+const ENV_ALLOWLIST = ['PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'CI', 'GITHUB_ACTIONS', 'CLAUDE_CODE_OAUTH_TOKEN'] as const;
 
 /** One run of `claude`: what it is started with. */
 export interface ClaudeCall {
@@ -114,25 +127,118 @@ export function claudeArgs(model: string, maxTurns: number): string[] {
   return [
     '-p', '--output-format', 'json', '--model', model, '--max-turns', String(maxTurns),
     '--tools', '', '--strict-mcp-config', '--permission-mode', 'dontAsk', '--no-session-persistence',
+    // No user, project or local settings (the CLI's form of the Agent SDK's `settingSources: []`): only managed
+    // policy, if the machine has one, and the policy passed here apply (cli-reference, settings precedence).
+    '--setting-sources', '',
     '--settings', JSON.stringify(CLAUDE_SETTINGS),
   ];
 }
 
-/** The prompt and the prepared context: the run, and exactly what it was admitted to take. */
-function prepared(run: ScriptedRun, took: Admitted): string {
+/** What the model is shown of the folder: the piles it took, with their words and things, and the folders there are. */
+interface Shown {
+  /** Bower's own folder (`.bower`), for the check on what the plan writes; not shown to the model. */
+  own?: string;
+  piles: Array<{ pileId: string; words: string; things: Array<{ fileId: string; name: string; kind: string }> }>;
+  folders: string[];
+}
+
+/**
+ * The prompt and the prepared context. The model proposes intent only (TL-P4-01 P4-2): where each admitted thing goes
+ * and its new name, and where a pile of words becomes a note. The runner builds the manifest from it, with every id,
+ * hash and digest, as the scripted provider does; the model never supplies one.
+ */
+function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   return [
     'You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.',
-    'Reply with one JSON object and nothing else: the run manifest (kind "run-manifest", v 1, or v 2 when it holds an',
-    'edit-text) for the run below, planning only the piles, things and journal lines in "admitted".',
-    'Bower checks it against the contract and against what was admitted; anything else is refused and nothing changes.',
+    'Reply with one JSON object and nothing else, of exactly this shape:',
+    '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>"}],',
+    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md"}]}',
+    `A folder path starts with one of ${MAIN_FOLDERS.join(', ')}; missing folders are made. A thing keeps its extension`,
+    '(a saved link may become a ".md" note). A thing left out stays in the inbox with its whole pile.',
+    'Name only the things and piles below. Never add ids, hashes or other keys: Bower computes them, checks your reply,',
+    'and refuses the whole reply if it names anything else; then nothing changes.',
     '',
-    JSON.stringify({ run, admitted: took }),
+    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: shown.piles, folders: shown.folders }),
   ].join('\n');
 }
 
-/** The runner's environment cut down to the allow-list. */
-function claudeEnv(env: Readonly<Record<string, string | undefined>>): Record<string, string> {
-  const kept: Record<string, string> = {};
+/** The main folders a model may file into: never the inbox, Bower's own files or the top of the folder. */
+const MAIN_FOLDERS: readonly string[] = PARA_ROOTS.filter((root) => root !== 'Inbox');
+
+/** What the run shows the model: the admitted piles (their words and things) and the folder paths under main folders. */
+async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<Shown> {
+  const listing = await read.listAll(run.rootId);
+  const ix = VaultIndex.build(run.rootId, listing);
+  const folders = listing.flatMap((f) => {
+    const path = f.folder ? ix.pathOf(f.id) : undefined;
+    return path !== undefined && MAIN_FOLDERS.includes(path.split('/')[0] ?? '') ? [path] : [];
+  }).sort();
+  const words = new Map((await read.piles(run.rootId)).map((p) => [p.id, p]));
+  const piles = took.taken.piles.map((p) => {
+    const pile = words.get(p.pileId);
+    const kinds = new Map((pile?.items ?? []).map((i) => [i.id, i.kind]));
+    return { pileId: p.pileId, words: pile?.text ?? '', things: thingsOf(p).map((i) => ({ fileId: i.fileId, name: i.name, kind: kinds.get(i.fileId) ?? 'other' })) };
+  });
+  return { own: ix.file(SYSTEM.dir)?.id, piles, folders };
+}
+
+/** A pile's things: its admitted files, but a pile folder's notes (its words). */
+const thingsOf = (p: Admitted['taken']['piles'][number]): Admitted['taken']['piles'][number]['items'] => p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE));
+
+/** A file name's extension, lower case, with its dot; '' when it has none. */
+const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
+
+/** A folder path a model may file into: recordable parts under a main folder, none hidden. */
+const placeOk = (to: unknown): to is string =>
+  typeof to === 'string' && to.length <= 512 && MAIN_FOLDERS.includes(to.split('/')[0] ?? '') && to.split('/').every((part) => recordableName(part) && !part.startsWith('.'));
+/** A new name a model may give: one recordable part, not hidden, not too long. */
+const nameOk = (name: unknown): name is string => typeof name === 'string' && name.length <= 200 && recordableName(name) && !name.startsWith('.') && name.trim() === name;
+
+const exactly = (value: unknown, keys: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value)
+  && keys.every((k) => k in value) && Object.keys(value).every((k) => keys.includes(k) || optional.includes(k));
+
+type Intent = { ok: true; filing: Filing; held: Set<string> } | { ok: false; why: string };
+
+/**
+ * The model's intent, checked against what the run took: only admitted things and piles, only places under a main
+ * folder, names that keep their thing's kind, and no other key (no id, hash or digest of its own). Anything else
+ * refuses the whole reply. A pile with a thing left out waits whole for the next run.
+ */
+export function intentOf(value: unknown, took: Admitted): Intent {
+  if (!exactly(value, ['kind', 'v', 'things'], ['notes']) || value.kind !== 'tidy-intent' || value.v !== 1) return { ok: false, why: 'a reply that is not a tidy-up intent' };
+  const { things, notes = [] } = value;
+  if (!Array.isArray(things) || !Array.isArray(notes)) return { ok: false, why: 'a reply that is not a tidy-up intent' };
+  const piles = new Map(took.taken.piles.map((p) => [p.pileId, p]));
+  const admitted = new Map(took.taken.piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
+  const placed = new Map<string, Placement>();
+  for (const t of things as unknown[]) {
+    if (!exactly(t, ['fileId', 'to', 'name'])) return { ok: false, why: 'a thing with keys outside the intent' };
+    const thing = typeof t.fileId === 'string' ? admitted.get(t.fileId) : undefined;
+    if (!thing || typeof t.fileId !== 'string') return { ok: false, why: 'a thing it was not admitted to take' };
+    if (placed.has(t.fileId)) return { ok: false, why: 'a thing placed twice' };
+    if (!placeOk(t.to)) return { ok: false, why: 'a place outside the main folders' };
+    const was = extensionOf(thing.name);
+    if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return { ok: false, why: 'a name that changes what a thing is' };
+    placed.set(t.fileId, { to: t.to, name: t.name });
+  }
+  const worded = new Map<string, Placement>();
+  for (const n of notes as unknown[]) {
+    if (!exactly(n, ['pileId', 'to', 'name'])) return { ok: false, why: 'a note with keys outside the intent' };
+    if (typeof n.pileId !== 'string' || !piles.has(n.pileId)) return { ok: false, why: 'a pile it was not admitted to take' };
+    if (worded.has(n.pileId)) return { ok: false, why: 'a pile placed twice' };
+    if (!placeOk(n.to)) return { ok: false, why: 'a place outside the main folders' };
+    if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return { ok: false, why: 'a note name that is not a note' };
+    worded.set(n.pileId, { to: n.to, name: n.name });
+  }
+  const held = new Set(took.taken.piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId))).map((p) => p.pileId));
+  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => worded.get(id) ?? null } };
+}
+
+/** The runner's environment cut down to the allow-list, with a home of the run's own. */
+function claudeEnv(env: Readonly<Record<string, string | undefined>>, home: string): Record<string, string> {
+  // HOME and the config folder are an empty folder of the run's own: nothing of the runner's user reaches claude.
+  const kept: Record<string, string> = { HOME: home, CLAUDE_CONFIG_DIR: join(home, '.claude'), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
   for (const name of ENV_ALLOWLIST) {
     const value = env[name];
     if (value) kept[name] = value;
@@ -221,24 +327,10 @@ function statsOf(stdout: string): ModelStats | null {
   };
 }
 
-/** Why a manifest that passed the contract still is not this run's, planned from what it took; null when it is. */
-function notAdmitted(m: RunManifest, run: ScriptedRun, took: Admitted): string | null {
-  const t = took.taken;
-  if (m.runId !== run.runId) return 'planned for another run';
-  if (m.requestId !== t.id || m.runScope !== t.scope || m.requestedAt !== t.at || m.allowWeb !== run.allowWeb) return 'planned for another request';
-  const piles = new Map(t.piles.map((p) => [p.pileId, p]));
-  const things = new Set(t.piles.flatMap((p) => p.items.map((i) => i.fileId)));
-  const lines = new Set(t.journal.map((j) => j.fileId));
-  if (m.capture.piles.some((p) => !piles.has(p.pileId) || (p.anchor !== null && p.anchor.fileId !== piles.get(p.pileId)?.anchor?.fileId))) return 'a pile it was not admitted to take';
-  if (m.capture.members.some((x) => !things.has(x.file.fileId))) return 'a thing it was not admitted to take';
-  if (m.capture.journal.some((j) => j.fileIds.some((id) => !lines.has(id)))) return 'a change it was not admitted to read';
-  return null;
-}
-
 /** The token said nowhere: each place it shows in `text` replaced. */
 const hidden = (text: string, token: string | undefined): string => (token ? text.split(token).join('[hidden]') : text);
 
-export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun): RunProvider {
+export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: ScriptedRead): RunProvider {
   const token = setup.env.CLAUDE_CODE_OAUTH_TOKEN?.trim() || undefined;
   const refuse = (why: string, stderr = ''): never => {
     const tail = stderr.trim() ? `; claude said: ${stderr.trim().slice(-2000)}` : '';
@@ -249,15 +341,22 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun): RunProvide
     if (took.taken.rootId !== run.rootId) return refuse('the admitted set is for another folder');
     if (!token) return refuse('no Claude credential (CLAUDE_CODE_OAUTH_TOKEN is not set)');
     const { model, maxTurns } = claudeLimits(setup.env);
-    const cwd = await mkdtemp(join(tmpdir(), 'bower-claude-'));
+    const shown = await shownOf(read, run, took);
+    const input = prepared(run, took, shown);
+    // Its own empty folder, with an empty home in it: no checkout's or person's settings or CLAUDE.md to find.
+    const work = await mkdtemp(join(tmpdir(), 'bower-claude-'));
     let exit: ClaudeExit;
     try {
+      const home = join(work, 'home');
+      const cwd = join(work, 'run');
+      await mkdir(home);
+      await mkdir(cwd);
       const call = {
         command: 'claude',
         args: claudeArgs(model, maxTurns),
-        env: claudeEnv(setup.env),
+        env: claudeEnv(setup.env, home),
         cwd,
-        input: prepared(run, took),
+        input,
         timeoutMs: TIME_LIMIT_MS,
         maxBytes: REPLY_LIMIT,
       };
@@ -266,22 +365,21 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun): RunProvide
     } catch (e) {
       return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
     } finally {
-      await rm(cwd, { recursive: true, force: true });
+      await rm(work, { recursive: true, force: true });
     }
     const stats = statsOf(exit.stdout);
     if (setup.timing && stats) setup.timing.model = stats;
     const reply = replyOf(exit, maxTurns);
     if (!reply.ok) return refuse(reply.why, exit.stderr);
-    let bytes: Uint8Array;
-    try {
-      bytes = (await canonical(reply.value)).bytes;
-    } catch (e) {
-      return refuse(`a reply that cannot be recorded (${e instanceof Error ? e.message : String(e)})`);
-    }
-    const parsed = await parseRunManifestV2(bytes, run.rootId);
+    const intent = intentOf(reply.value, took);
+    if (!intent.ok) return refuse(intent.why);
+    // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
+    const t = took.taken;
+    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), filing: intent.filing }, undefined, intent.held);
+    const manifest: RunManifest = plan.manifest;
+    const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId);
     if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
-    const manifest: RunManifest = parsed.value;
-    const stray = notAdmitted(manifest, run, took);
+    const stray = outsideAdmitted(manifest, took, shown.own);
     if (stray) return refuse(stray);
     console.log(`The Claude provider planned ${manifest.operations.length} operations with ${model}.`);
     return manifest;

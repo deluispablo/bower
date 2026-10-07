@@ -10,7 +10,9 @@
 # - The provider is the BOWER_PROVIDER variable (scripted when unset). The Claude provider (TL-P4-01) needs Claude
 #   Code, installed pinned by version as the original's ingest.yml does, and the CLAUDE_CODE_OAUTH_TOKEN secret
 #   (https://code.claude.com/docs/en/github-actions), the one secret this workflow reads: Actions masks it in the log,
-#   and the runner hands it to claude's own environment only. BOWER_MODEL and BOWER_MAX_TURNS are optional variables.
+#   and the runner hands it to claude's own environment only. It is set in the env of the one step that runs when
+#   BOWER_PROVIDER is claude, never the job's (https://docs.github.com/en/actions/how-tos/write-workflows/
+#   choose-what-workflows-do/use-secrets). BOWER_MODEL and BOWER_MAX_TURNS are optional variables.
 # - The job's own token can only read this repository, to check out the runner.
 name: tidy
 run-name: tidy ${{ github.event.client_payload.run_id }} ${{ github.event.client_payload.attempt }}
@@ -47,7 +49,16 @@ jobs:
         run: |
           npm install --prefix "$HOME/claude-cli" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
           printf '%s\n' "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
+      # The scripted provider's step: no secret in its environment.
       - name: Tidy up
+        if: vars.BOWER_PROVIDER != 'claude'
+        env:
+          BOWER_API_URL: ${{ vars.BOWER_API_URL }}
+          BOWER_PROVIDER: ${{ vars.BOWER_PROVIDER }}
+        run: node runner/dist/runner.mjs
+      # The Claude provider's step: the only one the secret reaches (secrets set per step, in its env).
+      - name: Tidy up with Claude
+        if: vars.BOWER_PROVIDER == 'claude'
         env:
           BOWER_API_URL: ${{ vars.BOWER_API_URL }}
           BOWER_PROVIDER: ${{ vars.BOWER_PROVIDER }}

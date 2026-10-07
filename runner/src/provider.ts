@@ -33,6 +33,6 @@ export function providerFor(name: ProviderName, drive: RunnerDrive, run: Scripte
     case 'scripted':
       return scriptedProvider(runnerScripted(drive), run);
     case 'claude':
-      return claudeProvider(claude, run);
+      return claudeProvider(claude, run, runnerScripted(drive));
   }
 }
