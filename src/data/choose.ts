@@ -73,8 +73,9 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   if (kind === 'real') {
     const worker = new WorkerHttp(apiBase());
     // The real Worker answers POST /session and fences its own writes (TL-P3-14): this tab holds a place,
-    // and its Worker calls carry the place and epoch.
-    return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), place: { world: 'real' } }) };
+    // and its Worker calls carry the place and epoch. Each new pile is declared first, through the same fenced
+    // Drive client, since the Worker's admission and the runner read declarations as the fake does (P3-15).
+    return { sources: makeLiveSources({ worker, driveLinks: true, declarePiles: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), place: { world: 'real' } }) };
   }
   const [{ pretendDrive, pretendRuns }, { FakeWorker }, { FakeLease, leaseKey }, { ALEX }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker'), import('./fake/fake-lease'), import('./demo/fixture')]);
   const { drive, rootId, fresh } = await pretendDrive(scenario);

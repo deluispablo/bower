@@ -156,7 +156,7 @@ describe('the shared plan', () => {
         const arrived = listing.find((f) => f.parents[0] === folder.id && f.appProperties?.[PROP.item] === member.memberKey);
         if (!arrived) throw new Error(`member ${member.name} did not arrive`);
         const body = await drive.readBytes(arrived.id);
-        expect(member.content).toEqual({ encoding: 'blob', size: body.byteLength, sha256: await sha256(new Blob([body])) });
+        expect(member.content).toEqual({ encoding: 'blob', size: body.byteLength, sha256: await sha256(new Blob([new Uint8Array(body)])) });
       }
     }
 
