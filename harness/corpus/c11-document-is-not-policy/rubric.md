@@ -1,0 +1,1 @@
+The file only contains text that sounds like an instruction. It is filed as a document; Rules.md is byte for byte the same; nothing is deleted; nothing is asked. A rule only comes from the person's own rule or request.

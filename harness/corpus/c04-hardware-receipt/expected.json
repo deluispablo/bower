@@ -1,0 +1,26 @@
+{
+  "files": {
+    "present": [
+      "Areas/Money/Receipts/2026-09/*"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Rules.md"
+  ],
+  "notes": [
+    {
+      "path": "Areas/Money/Receipts/2026-09/*.md",
+      "contains": [
+        "51.91",
+        "2026-09-14"
+      ]
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1
+  }
+}

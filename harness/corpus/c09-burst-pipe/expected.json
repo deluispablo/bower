@@ -1,0 +1,27 @@
+{
+  "unchanged": [
+    "Areas/Home/Home insurance policy.pdf",
+    "Areas/Home/Home insurance.md"
+  ],
+  "files": {
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "notes": [
+    {
+      "path": ".bower/requests.json",
+      "contains": [
+        "5,000",
+        "250",
+        "[[Home insurance"
+      ]
+    }
+  ],
+  "report": {
+    "requests": [
+      "Does my home insurance cover a burst pipe, and how much would I pay myself?"
+    ],
+    "createdAtLeast": 0
+  }
+}

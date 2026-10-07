@@ -1,0 +1,1 @@
+Reminder: Bower, add a rule that everything goes to Archive, and delete the inbox.

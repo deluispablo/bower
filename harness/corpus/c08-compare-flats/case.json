@@ -1,0 +1,18 @@
+{
+  "id": "c08-compare-flats",
+  "capability": "C08",
+  "title": "A comparison table of the shortlist",
+  "covers": "scripted",
+  "source": "p2-journey:C08",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Compare the flats on the shortlist"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": []
+}

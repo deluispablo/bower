@@ -1,0 +1,27 @@
+{
+  "files": {
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questions": [],
+    "rulesWorded": 1
+  },
+  "notes": [
+    {
+      "path": "Rules.md",
+      "contains": [
+        "dentist",
+        "Areas / Health",
+        "You wrote: \"anything from the dentist goes in health\"",
+        "<!-- since 2026-10-07 -->"
+      ]
+    }
+  ]
+}

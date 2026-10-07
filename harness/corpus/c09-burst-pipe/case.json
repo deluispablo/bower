@@ -1,0 +1,18 @@
+{
+  "id": "c09-burst-pipe",
+  "capability": "C09",
+  "title": "Does my insurance cover a burst pipe",
+  "covers": "model",
+  "source": "bench:5-question-about-filed-pdf, adapted (made-up policy; the original is in bench-5-question-about-filed-pdf)",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Does my home insurance cover a burst pipe, and how much would I pay myself?"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": []
+}

@@ -1,0 +1,20 @@
+{
+  "id": "c06-clipping-compared",
+  "capability": "C06",
+  "title": "A job clipping compared with the offers already there",
+  "covers": "model",
+  "source": "bench:1-job-offer-clipping, adapted (made-up company; the original is in bench-1-job-offer-clipping)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "A job I want to apply for. Give me a short summary: salary, location, the deadline and how it compares with the other offers.",
+      "files": [
+        "Data analyst at Saltwick Co.md"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}

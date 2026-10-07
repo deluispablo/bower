@@ -1,0 +1,26 @@
+{
+  "files": {
+    "present": [
+      "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md"
+    ],
+    "absent": [
+      "Projects/Flat hunt/Flat 3 (second).md"
+    ]
+  },
+  "notes": [
+    {
+      "path": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+      "contains": [
+        "Alex liked the light in the kitchen.",
+        "Two bedrooms, second floor.",
+        "The listing says the lease is twelve months"
+      ],
+      "timelineMin": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "updatedAtLeast": 1,
+    "questions": []
+  }
+}

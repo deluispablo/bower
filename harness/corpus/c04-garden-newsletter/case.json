@@ -1,0 +1,20 @@
+{
+  "id": "c04-garden-newsletter",
+  "capability": "C04",
+  "title": "A text PDF newsletter of no listed kind",
+  "covers": "model",
+  "source": "bench:2-text-pdf, adapted (made-up garden and dates; the original PDF is in bench-2-text-pdf)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "",
+      "files": [
+        "Community garden newsletter, autumn.pdf"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}

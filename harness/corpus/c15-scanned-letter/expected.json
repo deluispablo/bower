@@ -1,0 +1,15 @@
+{
+  "files": {
+    "present": [
+      "Resources/*scan0001.pdf"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "questionsAtMost": 1
+  }
+}

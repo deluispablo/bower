@@ -1,0 +1,21 @@
+{
+  "files": {
+    "present": [
+      "Resources/Ideas/Reminder.txt"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Rules.md"
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questions": []
+  }
+}

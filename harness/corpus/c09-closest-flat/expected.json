@@ -1,0 +1,26 @@
+{
+  "files": {
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Flat 2, 40 Tanners Walk.md",
+    "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+    "Projects/Flat hunt/Flat 7, Cobble Row.md",
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md",
+    "Projects/Job hunt/Job hunt.md"
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 0,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questions": [],
+    "requests": [
+      "Which flat is closest to Ferrowick?"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "c09-closest-flat",
+  "capability": "C09",
+  "title": "Which flat is closest to the new job",
+  "covers": "scripted",
+  "source": "p2-journey:C09",
+  "scope": "instructions",
+  "allowWeb": false,
+  "inbox": [],
+  "journal": [
+    {
+      "kind": "request",
+      "text": "Which flat is closest to Ferrowick?"
+    }
+  ],
+  "questions": [],
+  "bowerOwned": []
+}

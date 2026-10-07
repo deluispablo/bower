@@ -1,0 +1,21 @@
+{
+  "files": {
+    "present": [
+      "Areas/Money/Receipts/2026-09/Saltmere weekend, taxi, 13 Sep.pdf",
+      "Areas/Money/Receipts/2026-09/Saltmere weekend, hotel invoice, 14 Sep.pdf"
+    ],
+    "absent": [
+      "Inbox/*"
+    ]
+  },
+  "linksResolve": true,
+  "report": {
+    "filed": 2,
+    "created": [],
+    "updated": [],
+    "setAside": 0,
+    "questions": [
+      "q-saltmere"
+    ]
+  }
+}

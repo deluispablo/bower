@@ -1,0 +1,21 @@
+{
+  "id": "c15-more-context-bounded",
+  "capability": "C15",
+  "title": "A request for more context is bounded",
+  "covers": "model",
+  "source": "new",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "Papers for the move",
+      "files": [
+        "Contract.pdf",
+        "Letter.pdf"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}

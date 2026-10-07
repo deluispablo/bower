@@ -1,0 +1,20 @@
+{
+  "id": "c05-line-not-repeated",
+  "capability": "C05",
+  "title": "A hub line already there is not written again",
+  "covers": "scripted",
+  "source": "p2-journey:C05 (idempotence: the same line twice is written once)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "The offer again",
+      "files": [
+        "Offer_letter_final(2).pdf"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}
