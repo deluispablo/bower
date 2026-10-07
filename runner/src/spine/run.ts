@@ -158,7 +158,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
       }
       // Not landed: sent once more, under this attempt's fence (its attempt checked again right before the send).
       let checked = false;
-      const again = await run.effects.apply(op, at, await run.batch(), manifest, async () => {
+      const again = await run.effects.apply(op, at, run.fenced?.() ?? (await run.batch()), manifest, async () => {
         await run.batch();
         checked = true;
       });
@@ -177,7 +177,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     }
     // Possibly sent only once its send is attempted: a check that cannot read, or refuses, leaves it unsent.
     let sent = false;
-    const settled = await run.effects.apply(op, at, await run.batch(), manifest, async () => {
+    const settled = await run.effects.apply(op, at, run.fenced?.() ?? (await run.batch()), manifest, async () => {
       if (sent) return;
       await resolve(op, { operationId, state: 'possible-effect', dispatchId: run.newId() });
       sent = true;
