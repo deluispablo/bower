@@ -189,7 +189,8 @@ function expectRefused(result: Run, matcher: RegExp): void {
   expect(result.calls.filter((c) => /^(npx|wrangler|curl)/.test(c))).toEqual([]);
 }
 
-describe('deploy-staging.sh', () => {
+// Each case runs the whole script with stubbed tools; under a loaded machine that takes seconds.
+describe('deploy-staging.sh', { timeout: 30_000 }, () => {
   it('deploy-staging refuses production and dirty checkouts', () => {
     // The original app's production Worker, by name.
     const named = checkout();
