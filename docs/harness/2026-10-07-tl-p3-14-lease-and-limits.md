@@ -31,3 +31,7 @@ As proposed:
 3. `worker-process-admission` with the daily quota, and `worker-status-revision`.
 
 All of these come after the P3-6 delta review, R4 and R3, with two workers at most.
+
+## Addendum, P3-6 close: an early entry for the status beat
+
+The P3-6 delta review passed with Minors only. Two of them, in `runs.ts`, change what the person sees: after a good "Try again", status updates stay off until the app comes back to the foreground; and a late refusal from an older ask can stop status after a newer good answer. They become one small entry, `runs-beat-rearm` (`bower-mechanical`, two tests red first): `refused` is set only for a ticket newer than the last accepted answer, and a good answer that clears it schedules the next beat. It goes next after R4, ahead of `worker-session-lease`. The other Minors stay in polish. Mentioning the owner's own GitHub instance repository in the backup range is allowed (AGENTS hard rules).
