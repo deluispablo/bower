@@ -4157,5 +4157,34 @@
     "verify": "pnpm -C runner exec vitest run -t \"a restarted runner that cannot read its folder never says nothing changed|a check that cannot read never counts as a change|new-instance refuses a repository that looks like a flag\"",
     "passes": true,
     "note": "P3-12 delta review: Important I1-restart plus two minors (possible-effect before the check read; new-instance flag-like name). Within the TL-P3-22 addendum rule."
+  },
+  {
+    "id": "spine-recovery-without-browser",
+    "task": "p3-d",
+    "category": "feature",
+    "what": "A redispatched attempt finishes the run as if it had never been interrupted, with no app call: it resumes from the checkpoint chain, skips applied operations, reconciles an in-flight one by read-back (landed, not landed, unreadable) and never redoes it blindly; journal lines are archived once and dispositions stay consistent; the old attempt cannot write after a takeover. A kill after every checkpoint kind, then attempt 2, gives the same Drive state and report as an uninterrupted run, on the fake and on the adapter contract test.",
+    "steps": [
+      "Attempt 2 reads the run's chain, skips applied operations, and reconciles a possible-effect by read-back before anything else; it never resends one that landed.",
+      "The old attempt woken after a takeover changes nothing: its attempt check or report is refused.",
+      "For each checkpoint kind, a kill right after it and a resume as attempt 2 end with the same Drive state and report as an uninterrupted run, on the fake and on the adapter contract test.",
+      "The Worker alarm, the redispatch and the runner alone complete the run; no app call is needed."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"a run killed after any checkpoint ends like an uninterrupted run on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"attempt 2 reconciles an in-flight operation by read-back and never redoes it|the old attempt changes nothing after a takeover|a run killed after any checkpoint ends like an uninterrupted run\"",
+    "passes": false,
+    "note": "TL-P3-23 (recovery without the browser). The live cancel-and-recover is a later evaluator journey (behavior-suites-real-adapters, C16)."
+  },
+  {
+    "id": "spine-ordered-status",
+    "task": "p3-d",
+    "category": "feature",
+    "what": "The person-visible phase never moves backward, even across attempts: a report that would move the run earlier (attempt 2 posting writing after attempt 1 reported saving) is recorded without changing the phase, and the revision rises only when the visible run changes. Contract tests on the Worker and the fake cover out-of-order and duplicate reports within and across attempts.",
+    "steps": [
+      "The Worker records a report that would move the phase earlier without changing the visible run, and its revision does not rise.",
+      "The revision rises only when the visible run (phase, total, failure, report) changes.",
+      "The fake applies the same rule; one contract test runs the same report sequences on the Worker and the fake and gets the same visible runs and revisions."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a later attempt never moves the phase backward|the revision rises only when the visible run changes\" && pnpm exec vitest run src/data -t \"the fake and the Worker order reports the same way\"",
+    "passes": false,
+    "note": "TL-P3-23 (ordered status); takes the P3-12 re-review polish item (attempt 2 posts writing after saving)."
   }
 ]
