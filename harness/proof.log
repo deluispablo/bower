@@ -338,3 +338,4 @@ runbook-p3	ffef85cb70fe8e72	2026-10-07	known-green: docs entry: with docs/runboo
 deploy-staging-hardening	82fa8519e475e1c9	2026-10-07	red (fixed in ba11eef)
 compatibility-accepted-app	5ccd2e294ccb4b87	2026-10-07	known-green: test entry: at 4b5626c (tests only) all three named tests failed on assertions (no fixtures; the compatibility doc missing); 2650a73 and a5023a0 add data and docs, which done.sh cannot revert as code
 worker-reads-pile-notes	9325959c117d7788	2026-10-07	red (fixed in 3cc965f)
+behavior-suites-real-adapters	19c46ba27a3d3d20	2026-10-07	known-green: test entry over existing behaviour: each case was proven red by breaking its guard in an uncommitted scratch edit (recovery redispatch, session generation bump, ticket retirement, applied-op skip, superseded ticket, seq repeat and lost done reply), logged by the worker; suites committed in c48186f

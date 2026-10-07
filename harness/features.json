@@ -4355,7 +4355,7 @@
       "A table in the entry's doc cites the staging runs (first real run, cancel-and-recover, C14) for the live side."
     ],
     "verify": "pnpm exec vitest run src/data/contract -t \"real adapters\" && pnpm -C runner exec vitest run -t \"real adapters\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-25 point 4; P3_ACCEPTANCE C12; WORK_PLAN P3 step 3 (shared behavioral suites against the real adapters)."
   },
   {
