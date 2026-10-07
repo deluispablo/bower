@@ -44,6 +44,9 @@ export interface SignInResult {
   hasRefreshToken: boolean;
 }
 
+/** Durable Object key-value entry that outlives `forget()`: the lowest session generation a new account may start at. */
+const GENERATION_FLOOR = 'generationFloor';
+
 /**
  * One person's Durable Object, addressed by `idFromName(sub)` (TL-P2-05:
  * people are keyed by their OIDC sub). It holds that person's session
@@ -97,7 +100,7 @@ export class Person extends DurableObject<Env> {
   signIn(input: { email: string; name: string; encRefreshToken: string | null }): SignInResult {
     const row = this.ctx.storage.sql
       .exec<{ session_generation: number; enc_refresh_token: string | null }>(
-        `INSERT INTO account (id, email, name, enc_refresh_token) VALUES (1, ?, ?, ?)
+        `INSERT INTO account (id, email, name, enc_refresh_token, session_generation) VALUES (1, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET
            email = excluded.email,
            name = excluded.name,
@@ -106,6 +109,7 @@ export class Person extends DurableObject<Env> {
         input.email,
         input.name,
         input.encRefreshToken,
+        this.ctx.storage.kv.get<number>(GENERATION_FLOOR) ?? 0,
       )
       .one();
     return { generation: row.session_generation, hasRefreshToken: row.enc_refresh_token !== null };
@@ -428,7 +432,13 @@ export class Person extends DurableObject<Env> {
    * run its constructor again: a later sign-in for the same sub starts fresh at the folder step.
    */
   async forget(): Promise<void> {
+    // One integer survives, nothing personal: a new account starts at the old generation + 1, so every
+    // cookie signed before the deletion stays refused after the person signs in again.
+    const kv = this.ctx.storage.kv;
+    const now = this.account()?.generation;
+    const floor = Math.max(kv.get<number>(GENERATION_FLOOR) ?? 0, now === undefined ? 0 : now + 1);
     await this.ctx.storage.deleteAll();
+    kv.put(GENERATION_FLOOR, floor);
     this.ctx.storage.transactionSync(() => migrate(this.ctx.storage.sql));
   }
 

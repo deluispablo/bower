@@ -111,4 +111,15 @@ describe('DELETE /me', () => {
     expect(await p.folderId()).toBeNull();
     expect(g.urls.some((u) => u.includes('googleapis.com/drive'))).toBe(false);
   });
+
+  it('a cookie from before delete me stays refused after signing in again', async () => {
+    const { sub, cookie, epoch } = await someone();
+    const other = `${SESSION_COOKIE}=${await signSession({ sub, gen: 0 }, env.SESSION_SECRET)}`;
+    expect((await getMe(other)).status).toBe(200);
+    expect((await del(google(), cookie, fenceOf(epoch))).status).toBe(204);
+    const { generation } = await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: null });
+    expect((await getMe(other)).status).toBe(401);
+    const fresh = `${SESSION_COOKIE}=${await signSession({ sub, gen: generation }, env.SESSION_SECRET)}`;
+    expect((await getMe(fresh)).status).toBe(200);
+  });
 });
