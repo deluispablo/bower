@@ -4371,5 +4371,33 @@
     "verify": "pnpm exec vitest run src/data/compat-p2.test.ts -t \"the accepted app's files read the same in P3\" && pnpm -C runner exec vitest run -t \"the accepted app's files read the same in P3\" && pnpm exec vitest run src/docs.test.ts -t \"every change since the P2 freeze is listed\"",
     "passes": true,
     "note": "TL-P3-25 point 4."
+  },
+  {
+    "id": "deploy-staging-production-check",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "deploy-staging.sh judges production only by wrangler's \"Uploaded <name>\" line and by the config's \"name\" field, never by any mention of bower-api elsewhere (the staging URL holds the account subdomain bower-api.workers.dev), so a staging deploy is not stopped by a false production alarm, while an upload named bower-api still fails loudly.",
+    "steps": [
+      "The post-deploy check reads the Uploaded line's Worker name: bower-staging passes, bower-api or anything else fails.",
+      "The config check reads the parsed \"name\" field, not a grep of the whole file.",
+      "Tests: a wrangler output whose URL contains bower-api but uploads bower-staging passes; an upload of bower-api fails."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"deploy-staging passes when only the URL holds bower-api|deploy-staging fails when bower-api is uploaded\"",
+    "passes": false,
+    "note": "TL-P3-26; the lead's 5a4ab04 deploy stopped on a false production alarm (production untouched, last deployed 10-01)."
+  },
+  {
+    "id": "security-review",
+    "task": "p3-f",
+    "category": "review",
+    "what": "A read-only security review of the Worker, the runner, tidy.yml and the scripts against OWASP ASVS 5.0 and GitHub Actions hardening: cookies and origin/CORS; runner tickets (hash, expiry, fencing, masking); no secret or note text in logs; only the generation floor left after delete; tidy.yml pinned by commit SHA and client_payload injection; deploy guards; pnpm audit; the two runbook claims (TOKEN_ENC_KEY rotation forces re-consent; a redispatch with a missing GITHUB_TOKEN). Each finding becomes its own fix entry; rate limits and drive-scope verification are recorded as P4 notes.",
+    "steps": [
+      "The review card lists each ASVS 5.0 requirement checked with pass or finding, and each Actions hardening item.",
+      "docs/harness/2026-10-07-p3-security-review.md records the review, the P4 notes and the fix entries it calls for.",
+      "A docs test checks the review file exists with a verdict line and every finding names an entry or a P4 note."
+    ],
+    "verify": "pnpm exec vitest run src/docs.test.ts -t \"the P3 security review is recorded\"",
+    "passes": false,
+    "note": "TL-P3-26 point 2."
   }
 ]
