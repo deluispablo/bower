@@ -131,3 +131,4 @@ instance-private-check,implementer,claude,haiku,low,1,72268,,,,,,30,3.4,delivere
 app-security-headers,implementer,claude,sonnet,medium,1,84994,,,,,,28,17.4,delivered,2026-10-07
 deletion-allowlist-doc,implementer,claude,haiku,low,1,70229,,,,,,24,4.5,delivered,2026-10-07
 p3-freeze-review,reviewer,claude,opus,high,1,155312,,,,,,65,5.9,PASS (5 minor),2026-10-07
+deploy-staging-upload-line,implementer,claude,haiku,low,1,77157,,,,,,24,3.2,delivered,2026-10-07
