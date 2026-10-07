@@ -4253,7 +4253,7 @@
       "A test of main end to end asserts the status sequence reading(total) → writing → saving → done with the same total."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"main reports reading with total before writing\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-24 point 2; staging runs showed revision 9 queued → 10 writing and /status total 0 throughout."
   },
   {

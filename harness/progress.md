@@ -84,3 +84,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: worker-stale-run-recovery passes — chore(harness): worker-stale-run-recovery passes under the contract's redispatch
 - 2026-10-07: recovery-redispatch-after-dead-job passes — chore(harness): recovery-redispatch-after-dead-job passes
 - 2026-10-07: routing-test-from-app passes — chore(harness): routing-test-from-app passes
+- 2026-10-07: runner-reports-reading-total passes — chore(harness): runner-reports-reading-total passes
