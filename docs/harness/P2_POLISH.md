@@ -158,3 +158,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - Compatibility row for 3cc965f: P2 `parseRunReport` is closed and would refuse `nothingReady`; only the P2 fake runner used it.
   - `admission holds a pile whose note is not ready` passes with notes:false too; nothing tests the notes:true branch alone (e.g. a declared pile whose bound note differs from the first).
 - log-no-folder-content (left out, check at the freeze review): `console.error(e)` of caught Drive/fetch errors (runner/src/drive.ts:222; src/data/spine/records.ts:183, :215, :370) were not traced for what the error carries.
+- runner/test/deploy-staging.test.ts 'refuses production and dirty checkouts' timed out at 5000ms under load 26 once (passed on retry): give the script tests a longer timeout.
