@@ -4,6 +4,7 @@
  * own sentence; anything else gets one plain sentence.
  */
 import { BowerError, type ErrorCode } from '../types';
+import { answered } from '../wait';
 import { isRunWire, type Me, type RunReply, type StatusReply, type WorkerApi } from './worker-api';
 import { isLeaseReply, openElsewhere, type LeaseReply, type SessionAction } from '../session';
 
@@ -107,7 +108,7 @@ export class WorkerHttp implements WorkerApi {
     let res: Response;
     try {
       const headers = { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...extra };
-      res = await this.fetchFn(`${this.base}${path}`, {
+      res = await answered(this.fetchFn, `${this.base}${path}`, {
         method,
         credentials: 'include',
         ...(Object.keys(headers).length ? { headers } : {}),
