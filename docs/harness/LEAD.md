@@ -8,6 +8,10 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Open with the owner:** the R2 sign-in session, after P3-5 is deployed. The Google secrets and URIs were set by the owner on 2026-10-07: `/health` is 200, `/me` gives 401 `signed-out`, and `/auth/login` reaches Google's sign-in with the staging redirect, with no client or redirect error.
 - **Waiting on the coordinator:** batch P3-1 ([TL-P3-01](2026-10-06-tl-p3-01-p3-start.md)).
 - **Lead's own P3-1 work:** done, in [P3_ACCEPTANCE](../P3_ACCEPTANCE.md) (the P3 column and the owner setup).
+- **Message budget.** The app pauses a session's messages to other sessions after 10 sends without an owner message. On the night of 2026-10-06 this left the coordinator waiting about 6.5 hours for an unblock it never received. Rules:
+  - send one combined message per decision;
+  - never leave the coordinator blocked on a message alone: a STOP names the `main` commit or DECISIONS line that lifts it, so the coordinator can lift it itself;
+  - after about 8 sends, tell the owner.
 - **Session rule:** never clear this session; the owner compacts by hand ([TL-P2-45](2026-10-06-tl-p2-45-manual-compact.md)). After a compaction, re-read this file.
 - **Recurring duties:**
   - Measure tokens per batch with `npx ccusage session`, reporting cache reads and cost by session, and log the lead's own row in `harness/tokens.csv` through the coordinator.
