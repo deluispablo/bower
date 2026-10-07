@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'vitest';
 
 import wrangler from '../wrangler.jsonc?raw';
 
@@ -6,7 +6,7 @@ describe('routing', () => {
   it('every Worker route runs the Worker first', () => {
     // Strip comments from wrangler.jsonc and parse
     // Remove line comments (//...) but preserve // in strings
-    let configStr = wrangler
+    const configStr = wrangler
       .split('\n')
       .map((line) => {
         let inString = false;
@@ -63,14 +63,14 @@ describe('routing', () => {
 
     // Check that each route is covered by a pattern in run_worker_first
     const uncovered = routes.filter((route) => {
-      return !runWorkerFirst.some((pattern) => {
+      return !runWorkerFirst.some((pattern: string) => {
         // Exact match
         if (pattern === route) return true;
         // Wildcard pattern match
         if (pattern.endsWith('/*')) {
           const prefix = pattern.slice(0, -2);
           // For parameterized paths, treat :param as matching anything
-          const routePrefix = route.split(':')[0];
+          const routePrefix = route.split(':')[0] ?? '';
           return routePrefix.startsWith(prefix);
         }
         return false;
