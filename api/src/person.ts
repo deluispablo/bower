@@ -5,11 +5,11 @@ import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import type { Env } from './env.js';
 import { dispatchTidy, findTidyRun } from './github.js';
 import type { GitHubAccess } from './github.js';
-import { applyingWatch, decide, staleDeadline, unrecoveredCeiling } from './recovery.js';
+import { applyingWatch, decide, staleDeadline, staleFailure, unrecoveredCeiling } from './recovery.js';
 import type { Recovery, RecoveryWatch } from './recovery.js';
 import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
-import { ACTIVE_PHASES, QUEUED_STALE_MS, STALE_FAILURE, utcDay } from './process.js';
+import { ACTIVE_PHASES, QUEUED_STALE_MS, utcDay } from './process.js';
 import type { AdmitInput, AdmitResult, RunPhase, RunReply, RunScope, RunWire } from './process.js';
 import { PHASE_RANK, TICKET_TTL_MS, hashTicket, makeRunId, newTicket } from './run-ticket.js';
 import type { RunnerAccess, RunnerReport, RunnerReportResult } from './run-ticket.js';
@@ -824,7 +824,7 @@ export class Person extends DurableObject<Env> {
       "UPDATE runs SET phase = 'failed', phase_at = ?, finished_at = ?, failure = ? WHERE id = ?",
       now,
       now,
-      STALE_FAILURE,
+      staleFailure(run.phase),
       run.id,
     );
     // An ended run's ticket stops working, as a runner's own `done` or `failed` retires it.

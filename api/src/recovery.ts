@@ -12,8 +12,17 @@
  * The thresholds are the original app's (`process.ts`). Everything here is pure: the person object decides
  * with it inside one synchronous section.
  */
-import { QUEUED_STALE_MS, RUNNING_STALE_MS } from './process.js';
+import { QUEUED_STALE_MS, RUNNING_STALE_MS, SAVING_FAILURE, STALE_FAILURE } from './process.js';
 import type { RunWire } from './process.js';
+
+/**
+ * The sentence a run ended for staleness is given, by the phase it was in (TL-P3-22 point 2). The runner reports
+ * `saving` only once every effect is settled and the report is pending, so a run still in `saving` made its changes
+ * and only its summary was not saved: it never says that nothing happened. Other phases keep `STALE_FAILURE`.
+ */
+export function staleFailure(phase: RunWire['phase']): string {
+  return phase === 'saving' ? SAVING_FAILURE : STALE_FAILURE;
+}
 
 /**
  * How long past a run's stale deadline the read and write paths wait for the alarm's recovery when dispatch

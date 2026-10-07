@@ -20,7 +20,6 @@
  * exactly-once delivery.
  */
 import type { FakeDrive, FencedDrive, Peek } from '../drive/fake-drive';
-import { canonicalRecordJson } from '../contracts/record-json';
 import type { Checkpoint, EffectEvidence, Outcome } from '../contracts/run-checkpoint';
 import { readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit';
 import type { EditText, OperationV2, SeenFile } from '../contracts/run-manifest';
@@ -30,6 +29,8 @@ import { SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { RunWire } from '../worker/worker-api';
 import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, SOURCE_NOT_AS_SEEN, textHash, toEvidence, type RunManifest } from './fake-run-records';
 import { firstCheckpoint, nextCheckpoint, type CheckpointPatch } from '../spine/records';
+import { fixedReport, lastRunText, sameView, saveReport } from '../spine/barrier';
+import { sha256 } from '../vault/hashes';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
 export interface Binding {
@@ -721,34 +722,23 @@ export class FakeRunService {
   }
 
   /**
-   * Writes the v1 view with the modified time it read and reads it back. It
-   * replaces only the view the folder showed at admission; another run's view
-   * is never written over, and a mismatch is never taken as confirmation.
+   * The report barrier (`spine/barrier.ts`, shared with the runner): the report files the run changes, then the v1
+   * view, each with the modified time it read and read back. It replaces only the view the folder showed at
+   * admission; another run's view is never written over, and a mismatch is never taken as confirmation.
    */
   private async publish(attempt: Attempt): Promise<void> {
     const key = attempt.key;
     const row = this.row(key);
-    const text = await this.viewTextOf(key);
-    const stored = await this.storedView(row.binding.rootId);
-    if (!sameView(stored?.text ?? null, text)) {
-      if (!(await this.replaceable(row, stored?.text ?? null))) {
-        console.error(`${SYSTEM.lastRun} shows another run; run ${row.control.runId} is not saved over it`);
-        throw new BowerError('conflict', SAVE_FAILED);
-      }
-      const w = this.fence(attempt);
-      try {
-        if (stored) await w.writeText(stored.file, text, stored.modifiedTime);
-        else await w.createText(await this.systemFolder(attempt), 'last-run.json', text);
-      } catch (e) {
-        // A reply lost after the view landed: the exact body is there.
-        if (!sameView((await this.storedView(row.binding.rootId))?.text ?? null, text)) throw e;
-        console.error(e);
-      }
-      if (!sameView((await this.storedView(row.binding.rootId))?.text ?? null, text)) {
-        console.error(`${SYSTEM.lastRun} could not be read back for run ${row.control.runId}`);
-        throw new BowerError('unknown', SAVE_FAILED);
-      }
-    }
+    const { text, report } = await this.viewOf(key);
+    await saveReport({
+      rootId: row.binding.rootId,
+      reads: this.drive,
+      checksum: { stored: async (id) => sha256(new Blob([(await this.drive.readBytes(id)).slice()])), of: (bytes) => sha256(new Blob([bytes.slice()])) },
+      batch: async () => this.fence(attempt),
+      report,
+      view: text,
+      mayReplace: (stored) => this.replaceable(row, stored),
+    });
     const cache = this.cache.get(key);
     if (cache) cache.confirmed = true;
   }
@@ -816,6 +806,11 @@ export class FakeRunService {
   }
 
   private async viewTextOf(key: string): Promise<string> {
+    return (await this.viewOf(key)).text;
+  }
+
+  /** The terminal view's text, and the report it holds (null for a failed run). */
+  private async viewOf(key: string): Promise<{ text: string; report: RunReport | null }> {
     const { manifest, chain } = await this.loaded(key, false);
     const head = chain.at(-1);
     if (!head) throw new BowerError('unknown', SAVE_FAILED);
@@ -827,7 +822,7 @@ export class FakeRunService {
       report = fixedReport(pending.report.body.report);
     }
     const body: LastRunFile = { v: 1, run: this.viewRun(manifest, head, report) };
-    return `${JSON.stringify(body, null, 2)}\n`;
+    return { text: lastRunText(body), report };
   }
 
   /** The manifest and committed chain: cached, or read and verified from the folder (always, for a recovery). */
@@ -854,12 +849,6 @@ export class FakeRunService {
   private async viewHash(rootId: string): Promise<string | null> {
     const stored = await this.storedView(rootId);
     return stored ? textHash(stored.text) : null;
-  }
-
-  private async systemFolder(attempt: Attempt): Promise<string> {
-    const rootId = this.row(attempt.key).binding.rootId;
-    const sys = (await this.drive.listAll(rootId)).find((f) => f.folder && f.name === SYSTEM.dir && f.parents[0] === rootId);
-    return sys?.id ?? (await this.fence(attempt).createFolder(rootId, SYSTEM.dir)).id;
   }
 
   private records(key: string): RunRecords {
@@ -901,43 +890,6 @@ export class FakeRunService {
   private changed(): void {
     this.onChange?.();
   }
-}
-
-/**
- * A report with its keys in one fixed order, whatever object it came from (in
- * memory, or parsed back from a canonical record with its keys sorted).
- */
-function fixedReport(r: RunReport): RunReport {
-  const out: RunReport = {
-    filed: r.filed.map((f) => ({ name: f.name, title: f.title, kind: f.kind, to: f.to, ...(f.note !== undefined ? { note: f.note } : {}) })),
-    created: r.created.map((c) => ({ path: c.path, what: c.what })),
-    updated: r.updated.map((u) => ({ path: u.path, what: u.what })),
-    setAside: r.setAside.map((a) => ({ name: a.name, why: a.why })),
-    questions: r.questions.map((q) => ({ id: q.id, text: q.text, yes: q.yes, no: q.no, ...(q.about !== undefined ? { about: q.about } : {}), askedAt: q.askedAt })),
-  };
-  if (r.yourChanges !== undefined) out.yourChanges = r.yourChanges;
-  if (r.requests !== undefined) out.requests = [...r.requests];
-  if (r.rulesWorded !== undefined) out.rulesWorded = r.rulesWorded;
-  return out;
-}
-
-/** Whether two view texts hold the same body, compared in canonical form (key order and spacing aside). */
-function sameView(a: string | null, b: string | null): boolean {
-  if (a === null || b === null) return a === b;
-  const canon = (text: string): string | null => {
-    let value: unknown;
-    try {
-      value = JSON.parse(text);
-    } catch (e) {
-      if (!(e instanceof SyntaxError)) throw e;
-      console.error(e);
-      return null;
-    }
-    const bytes = canonicalRecordJson(value);
-    return bytes.ok ? new TextDecoder().decode(bytes.value) : null;
-  };
-  const x = canon(a);
-  return x !== null && x === canon(b);
 }
 
 /** How many admitted run ids a row remembers for the view order. */

@@ -78,6 +78,8 @@ export const QUEUED_STALE_MS = 17 * 60 * 1000;
 export const RUNNING_STALE_MS = 30 * 60 * 1000;
 /** The failure a stale run is given (TL-P3-15; the original's "it took too long", #1000). */
 export const STALE_FAILURE = 'This tidy-up took too long and stopped. Try again.';
+/** The failure a run stuck in `saving` is given: its changes were made, its summary was not saved (TL-P3-22). */
+export const SAVING_FAILURE = "Bower made changes but couldn't save the summary of this tidy-up.";
 
 export const ACTIVE_PHASES: readonly RunPhase[] = ['queued', 'reading', 'writing', 'saving'];
 
