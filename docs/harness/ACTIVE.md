@@ -29,7 +29,8 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
 
-**P3-10 (TL-P3-21):** `spine-admission-manifest` passes (9fe4042, red fixed in e52bdfd; stubs 6cc6453). `shared-domain-package` was re-closed known-green after its api import rule was renamed (72dfcdb). 315/316. `spine-operations-checkpoints` is running (bower-escalated, `/private/tmp/bower-p3-checkpoints`).
+**P3-10 (TL-P3-21):** `spine-admission-manifest` passes (9fe4042, red fixed in e52bdfd; stubs 6cc6453). `shared-domain-package` was re-closed known-green after its api import rule was renamed (72dfcdb). `spine-operations-checkpoints` passes (004c125, red fixed in 11c0409; stubs fd130bd). 316/316. Suites at 004c125 (idle): e2e 226, e2e:fake 250, e2e:pwa 4. The Opus delta review is running (packet `2026-10-07-p3-10-delta-review-packet.md`, HEAD f909f7d).
+- Checkpoints left for later: real per-effect sends and evidence reads are passed in, not built; nothing is wired into `runner/src/main.ts`; a run ends in `saving` until the report-barrier entry.
 - For the lead, at the close:
   - POST /process answers 409 `no-folder` with no folder set; the contract table doesn't list it.
   - api/tsconfig now uses Bundler resolution.
