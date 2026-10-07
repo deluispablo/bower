@@ -13,6 +13,7 @@ import { B_FAILURE } from '../../src/data/spine/scripted';
 import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
 import type { Admitted } from '../src/spine/admitted';
 import type { Effects, Settled } from '../src/spine/run';
+import { driveEffects } from '../src/effects';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 const AT = Date.UTC(2026, 9, 7, 9);
@@ -154,6 +155,15 @@ async function stored(wire: DriveV3, root: string, path: string): Promise<{ file
   const sys = await systemFolder(wire, root);
   const file = (await wire.drive.listAll(root)).find((f) => !f.folder && f.name === path.slice(SYSTEM.dir.length + 1) && f.parents[0] === sys.id);
   return file ? { file, value: JSON.parse(await wire.drive.readText(file.id)) as unknown } : null;
+}
+
+/** The wire's fetch, with every Drive request failing as with no network while `failing()` holds. */
+function noDrive(wire: DriveV3, failing: (url: URL, method: string) => boolean): typeof fetch {
+  return async (input, init = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    if (url.origin !== API && failing(url, (init.method ?? 'GET').toUpperCase())) throw new TypeError('fetch failed');
+    return wire.fetch(input, init);
+  };
 }
 
 async function chainOf(wire: DriveV3, root: string): Promise<Checkpoint[]> {
@@ -330,6 +340,57 @@ describe('the report barrier', () => {
     expect(committed).toHaveLength(1);
     const saving = whole.wire.statuses.find((s) => s.phase === 'saving');
     expect(saving?.after).toBeGreaterThan(committed[0]?.at ?? Infinity);
+  });
+
+  it('a restarted runner that cannot read its folder never says nothing changed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Attempt 1 applies two effects, then stops in saving.
+    const { wire, root } = await demo();
+    const effects = new StubEffects();
+    effects.breakAfter = 2;
+    expect((await tidy(wire, root, 1, effects)).phase).toBe('saving');
+    expect(effects.sent.size).toBe(2);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
+    const sent = new Map(effects.sent);
+
+    // The same attempt runs again, and Drive fails on its first read (whether the report landed): the job fails, visibly.
+    const again = await tidy(wire, root, 1, effects, [], () => false, { fetch: noDrive(wire, () => true) }).catch((e: unknown) => e);
+    expect(wire.statuses.filter((s) => s.phase === 'failed')).toEqual([]);
+    expect(again).toBeInstanceOf(Error);
+
+    // Attempt 2 reads the report, then cannot read its chain: the same.
+    let reported = false;
+    const afterWriting = noDrive(wire, () => reported);
+    const watched: typeof fetch = async (input, init = {}) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === API && url.pathname.endsWith('/status')) reported = true;
+      return afterWriting(input, init);
+    };
+    const next = await tidy(wire, root, 2, effects, [], () => false, { fetch: watched }).catch((e: unknown) => e);
+    expect(reported).toBe(true);
+    expect(wire.statuses.filter((s) => s.phase === 'failed')).toEqual([]);
+    expect(next).toBeInstanceOf(Error);
+
+    expect(wire.statuses.filter((s) => s.phase === 'failed')).toEqual([]);
+    expect(wire.statuses.some((s) => s.failure === B_FAILURE)).toBe(false);
+    expect(effects.sent).toEqual(sent);
+  });
+
+  it('a check that cannot read never counts as a change', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const projects = (await wire.drive.listAll(root)).find((f) => f.folder && f.name === 'Projects');
+    if (!projects) throw new Error('no Projects');
+    // The real effects, whose check before the first move cannot read the folder it moves to.
+    const end = await tidy(wire, root, 1, new StubEffects(), [], () => false, {
+      effects: driveEffects,
+      fetch: noDrive(wire, (url, method) => method === 'GET' && url.pathname.endsWith(`/files/${projects.id}`)),
+    });
+    expect((await chainOf(wire, root)).at(-1)?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
+    expect(end.phase).toBe('failed');
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'failed']);
+    expect(wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
+    expect((await wire.drive.listAll(projects.id)).filter((f) => f.parents[0] === projects.id)).toEqual([]);
   });
 
   it("a restarted runner's done reaches the Worker", async () => {
