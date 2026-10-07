@@ -4035,5 +4035,33 @@
     "verify": "pnpm -C api exec vitest run -t \"an alarm on a run that progressed changes nothing|a lost dispatch is redispatched once with a new ticket|a live job is left alone until its own deadline|a run stuck twice is marked failed stale|a finished job with no report is marked failed stale\"",
     "passes": true,
     "note": "TL-P3-18 (DO alarm, lookup by run-name, one redispatch, then failed stale), TL-P3-15 (17/30 min), R3 (run-name lookup and job started_at/completed_at reconcile)."
+  },
+  {
+    "id": "recovery-status-poll-race",
+    "task": "p3-9",
+    "category": "fix",
+    "what": "With a GitHub token configured, a /status poll, an admission or a runner call never fails a run stale before recovery has looked it up: only the alarm's recovery (or a hard ceiling past it) decides, so a job still queued or in progress on GitHub keeps its run and ticket. Without a token, today's expiry at the deadline stays.",
+    "steps": [
+      "A /status poll after the deadline but before the alarm's lookup leaves the run queued and its ticket alive.",
+      "A /status poll while recover() awaits GitHub does not fail the run; recovery then leaves a live job alone.",
+      "With no GitHub token, /status still fails the run stale at the deadline."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a status poll during the lookup leaves a live job.s run alone|a status poll past the deadline waits for recovery when dispatch is configured|without a GitHub token a status poll still expires the run\"",
+    "passes": false,
+    "note": "P3-9 Opus delta review, BLOCK Important 1: expire() at person.ts:753, called from runStatus, admit and the runner routes, failed runs at the deadline before recover() looked them up."
+  },
+  {
+    "id": "runner-stale-attempt-signal",
+    "task": "p3-9",
+    "category": "fix",
+    "what": "The runner adapter reports a takeover as its stale-attempt error against the real Worker's replies: the nested { error: { code } } shape, with 409 stale-attempt, and 401 signed-out from the token route after an earlier grant in the same run, both stop writes with stale-attempt; the test fakes replay the Worker's real shapes.",
+    "steps": [
+      "After a successful grant, a 401 { error: { code: \"signed-out\" } } from the token route makes batch() refuse with the stale-attempt error.",
+      "A 409 { error: { code: \"stale-attempt\" } } does the same.",
+      "A 401 on the very first grant stays an auth error."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the adapter refuses with stale-attempt when the Worker signs out an older attempt.s ticket|a first grant refused stays an auth error\"",
+    "passes": false,
+    "note": "P3-9 Opus delta review, BLOCK Important 2: runner/src/token.ts:64 matched a flat { error: \"stale-attempt\" } the Worker never sends."
   }
 ]
