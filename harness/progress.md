@@ -51,3 +51,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: worker-google-oidc passes — chore(harness): worker-google-oidc passes (P3-4)
 - 2026-10-07: worker-drive-token passes — chore(harness): worker-drive-token passes (P3-5)
 - 2026-10-07: worker-vault-pointer passes — chore(harness): worker-vault-pointer passes (P3-5)
+- 2026-10-07: vault-template-ids passes — chore(harness): vault-template-ids passes (P3-5)

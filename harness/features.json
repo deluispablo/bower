@@ -3792,7 +3792,7 @@
       "Every write to the person object is conditional: reserving keeps an id already stored, the pointer moves only from null or to the same folder, so a call whose claim lapsed cannot make a second folder or a duplicate item."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the template files' ids are reserved with the folder's|a fill resumed after the claim expires makes no duplicate file|a call whose claim lapsed before reserving makes no second folder|a lapsed call on a found folder makes no duplicate item\"",
-    "passes": false,
+    "passes": true,
     "note": "Lead ruling on the P3-5 vault fix round (60 s claim accepted, no renewal). Delta review (Opus): BLOCKING, two Important (lapsed claim writes unconditionally); fix round adds conditional writes."
   }
 ]
