@@ -106,9 +106,16 @@ build_runner() {
   [ -s "$WORKFLOW" ] || die "The workflow is missing: $WORKFLOW"
 }
 
+check_private() {
+  local visibility
+  visibility=$(gh repo view "$REPO" --json visibility -q .visibility </dev/null 2>&1) || die "Could not check repository visibility."
+  [ "$visibility" = "PRIVATE" ] || die "Instance repository must be private."
+}
+
 ensure_repo() {
   if gh repo view "$REPO" >/dev/null 2>&1 </dev/null; then
     log "Instance repository $REPO exists; updating it."
+    check_private
   else
     log "Creating the private repository $REPO..."
     gh repo create "$REPO" --private </dev/null >/dev/null
