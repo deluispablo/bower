@@ -104,6 +104,32 @@ describe('DriveHttp', () => {
     expect(s.calls).toHaveLength(4);
   });
 
+  it('Drive never retries a client error other than 429', async () => {
+    for (const status of [400, 403, 404, 409]) {
+      const s = stub(() => json({ error: { code: status, errors: [{ reason: 'forbidden' }] } }, status));
+      const t = tokens();
+      const d = new DriveHttp({ token: t.token, fetch: s.fetch });
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      await expect(d.get('f1')).rejects.toBeInstanceOf(Error);
+      expect(s.calls, `status ${status}`).toHaveLength(1);
+      expect(t.asked).toEqual([false]);
+    }
+    // 401: one fresh token, one more try.
+    const u = stub(() => new Response('', { status: 401 }));
+    const t = tokens();
+    await expect(new DriveHttp({ token: t.token, fetch: u.fetch }).get('f1')).rejects.toMatchObject({ code: 'auth' });
+    expect(u.calls).toHaveLength(2);
+    expect(t.asked).toEqual([false, true]);
+    // 5xx keeps its three growing waits.
+    vi.useFakeTimers();
+    const e = stub(() => new Response('', { status: 503 }));
+    const p = new DriveHttp({ token: tokens().token, fetch: e.fetch }).get('f1');
+    const seen = expect(p).rejects.toMatchObject({ code: 'unknown' });
+    await vi.advanceTimersByTimeAsync(4000);
+    await seen;
+    expect(e.calls).toHaveLength(4);
+  });
+
   it('a network TypeError rejects offline', async () => {
     const s = stub(() => {
       throw new TypeError('Failed to fetch');

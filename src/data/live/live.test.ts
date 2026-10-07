@@ -986,6 +986,49 @@ describe('LiveRuns', () => {
     await expect(s.vault.removePile(pile?.id ?? '')).rejects.toMatchObject({ code: 'conflict' });
     await until(s, (x) => x?.phase === 'done');
   });
+
+  describe('the run status beat', () => {
+    afterEach(() => vi.useRealTimers());
+
+    /** Home's run readers: each asks once when it mounts and listens, as `useRun` does. */
+    async function readers(s: LiveSources, count: number): Promise<void> {
+      for (let i = 0; i < count; i++) {
+        s.runs.subscribe(() => undefined);
+        await s.runs.current().catch(() => undefined);
+      }
+    }
+
+    it('the run status is not asked again after a 4xx', async () => {
+      const s = await open();
+      const status = vi.spyOn(s.worker, 'status').mockRejectedValue(new BowerError('not-found', 'Not found.'));
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      await readers(s, 3);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(status.mock.calls.length).toBeLessThanOrEqual(2);
+      // Coming back into view asks again.
+      const asked = status.mock.calls.length;
+      status.mockResolvedValue(null);
+      vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(status.mock.calls.length).toBeGreaterThan(asked);
+    });
+
+    it('a run status that fails offline or with a server error is asked again', async () => {
+      const s = await open();
+      const status = vi.spyOn(s.worker, 'status')
+        .mockRejectedValueOnce(new BowerError('offline', 'Offline.'))
+        .mockRejectedValueOnce(new BowerError('unknown', 'Server error.'))
+        .mockResolvedValue(null);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      s.runs.subscribe(() => undefined);
+      await s.runs.current().catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+      expect(status.mock.calls.length).toBeGreaterThanOrEqual(3);
+    });
+  });
 });
 
 describe('LiveSession', () => {
