@@ -90,3 +90,27 @@ The app counts a run from `requestedAt` on every device. It asks `/status` every
 - `appProperties.bowerNew = "1"` on what it filed or changed, cleared from the previous run's things first.
 
 A run takes the piles in the inbox when it starts. Piles added during the run wait for the next one.
+
+### Runner wire (P3, [TL-P3-18](../harness/2026-10-07-tl-p3-18-runner-wire.md))
+
+This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runner.ts`) to the per-person object and to R3's results.
+
+- **Dispatch.** `repository_dispatch` to the instance repository with `event_type: "bower-tidy"` and `client_payload: { run_id, attempt, ticket, scope, allow_web }`. The folder id is not in the payload; the token route gives it.
+  - `run_id` is `<person object id, hex>-<random>`, so the Worker routes a runner call to the right person object without any lookup. It reveals nothing about the person.
+  - The workflow's `run-name` is `tidy <run_id> <attempt>`, with a concurrency group per `run_id` and no `cancel-in-progress` (R3).
+  - A 204 means "accepted, not yet observed", never "started".
+- **Ticket.** 32 random bytes, base64url, minted per attempt. The person object keeps only its SHA-256, the `run_id`, the attempt and an expiry of 60 minutes. A new attempt replaces the ticket, so an older attempt's ticket stops working. A ticket is retired when its run reaches `done` or `failed`. It is never logged.
+- **`GET /runner/runs/:id/token`** with `Authorization: Bearer <ticket>` → `{ accessToken, expiresAt, folderId, attempt }`.
+- **`POST /runner/runs/:id/status`** with the same header and `{ attempt, seq, phase, total?, failure? }` → `{ run, revision }`.
+  - `seq` rises with each report of an attempt. A repeat of the last `seq` returns the current state and changes nothing; a lower one is refused.
+  - A phase only moves forward along `queued` → `reading` → `writing` → `saving` → `done` | `failed`.
+  - Every accepted report raises the status revision.
+- **Runner errors** use the same JSON shape:
+  - 401 `signed-out` for a missing, wrong or expired ticket;
+  - 409 `stale-attempt` "This tidy-up was taken over." for an attempt that is no longer current;
+  - 409 `stale-report` "That update arrived late." for a lower `seq` or a backward phase.
+- **Recovery without the browser.** At dispatch, the person object sets a [Durable Object alarm](https://developers.cloudflare.com/durable-objects/api/alarms/) for the stale deadline. When the alarm finds no progress, it looks up the run by `run-name` in GitHub Actions and reads the job's `started_at` and `completed_at`.
+  - It redispatches once, as attempt + 1 with a new ticket, if no live job holds the run.
+  - Otherwise, or after a second stale deadline, it marks the run failed `stale`.
+  - The runner never repeats work that has already landed: before any write, it checks the folder for this `run_id`'s report (spine entries).
+- **GitHub credential.** A Worker secret `GITHUB_TOKEN`: a fine-grained token limited to the instance repository, with Contents read and write (needed for `repository_dispatch`) and Actions read. The owner creates it and sets it with `wrangler secret put`.
