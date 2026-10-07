@@ -20,6 +20,16 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - At 08:33Z `/status` answered 200 `{run:null, revision:0}`.
 - **/process smoke as A:** one press at 08:33:46Z gave `queued` (scope instructions), revision 1, and no dispatch. At 08:52:38Z `/status` gave `failed` with "This tidy-up took too long and stopped. Try again." after 17.0 min, revision 2. A second read stayed at revision 2, so the expiry was written once. Pass.
 
+**Staging at `b83dc98` (bundle `index-Csl_E64l.js`): the C14 session-lease journey (session-lease-real) passes 1–5 and 7, as A on `?source=real` tabs.**
+- **1.** A reload keeps the same place at epoch 1.
+- **2.** A second tab shows the block screen with no Drive write and no `/process` call. The same-browser block comes from locks and the broadcast channel, with no `/session` call.
+- **3.** Use here gives epoch 2; tab 1 blocks and stops polling.
+- **4.** `POST /vault` with tab 1's old epoch gives 409 `stale-session`.
+- **5.** With tab 2 closed, Use here in tab 1 gives epoch 3. The `leave` call itself wasn't observable.
+- **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
+- **6** (expiry nobody took) was skipped.
+- The console's `/status` 500s date from the version-skew window before 09:15Z.
+
 **P3-9 (TL-P3-18/19):** `worker-runner-tickets`, `runner-drive-adapter`, `done-sh-runner-paths`, `do-version-skew`, `worker-dispatch` and `worker-stale-run-recovery` pass; 312/312. Close:
 - suites at 29cc8b5 (idle): e2e 226, e2e:fake 250, e2e:pwa 4;
 - the Opus delta review BLOCKED on two Important findings, fixed by `recovery-status-poll-race` (red fixed in d5c0947) and `runner-stale-attempt-signal` (red fixed in 2df1a60, per the TL-P3-18 addendum);
