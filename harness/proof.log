@@ -335,3 +335,4 @@ upload-queue-real	8478d393c331a8e7	2026-10-07	red (fixed in 0b05ec4)
 deploy-and-migrations	6cf83e7f59763965	2026-10-07	red (fixed in 30fc4d5)
 declare-piles-real	4a3dd78c1a9a63a5	2026-10-07	known-green: red proven by hand after the choose.ts merge: with declarePiles removed from the real source, 'the real source declares piles' fails (expected false to be true); the shared-manifest test passed before the change (plan already reads declarations)
 runbook-p3	ffef85cb70fe8e72	2026-10-07	known-green: docs entry: with docs/runbook.md replaced by a '# Runbook' stub, 'the runbook names every Worker secret and variable' fails (GOOGLE_CLIENT_ID missing); a revert deletes the file, which is a load failure, not a red
+deploy-staging-hardening	82fa8519e475e1c9	2026-10-07	red (fixed in ba11eef)

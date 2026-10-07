@@ -4326,7 +4326,7 @@
       "The skew wait message matches its bound; tests cover give-up, a failed /health rerun and a spaced file name."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"deploy-staging refuses an env file Vite would read|deploy-staging confirms the upload line|deploy-staging gives up on the skew wait and says so\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-25 point 1; P3-14..16 delta review minors."
   },
   {
