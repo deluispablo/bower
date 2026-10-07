@@ -4580,5 +4580,35 @@
     "verify": "pnpm exec vitest run src/data -t \"a write that gets no answer ends in the lost-reply path after the bounded wait|adding a pile never sits on saving without an outcome\"",
     "passes": true,
     "note": "TL-P3-28 (4); C16 notes #7: Add sat on Saving… 100+ s, no request, no error."
+  },
+  {
+    "id": "p4-corpus",
+    "task": "p4-a",
+    "category": "evidence",
+    "what": "A synthetic capability corpus under harness/corpus/ with at least two cases each for C04–C11, C13 and C15, reusing the original agent/bench/cases and the P2 scripted inputs; each case lists inputs, starting folder and expected outcomes; a structural scorer checks files, links, sections and report fields; semantic expectations are short rubrics for the quality reviewer.",
+    "steps": [
+      "harness/corpus/ cases, made-up data only, at least two per capability C04–C11, C13, C15.",
+      "A structural scorer over a run result (files, links, sections, report fields).",
+      "Semantic rubrics per case for the reviewer.",
+      "The scorer passes on the scripted provider outputs for the cases it covers and fails on an assertion when an expected file is removed."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"every corpus capability has at least two cases|the corpus scorer passes on the scripted provider outputs|the corpus scorer fails when an expected file is missing\"",
+    "passes": false,
+    "note": "TL-P4-01 batch P4-1."
+  },
+  {
+    "id": "claude-provider",
+    "task": "p4-b",
+    "category": "feature",
+    "what": "A ClaudeProvider behind the semantic-provider interface runs headless Claude Code in the runner (claude -p, JSON output) with CLAUDE_CODE_OAUTH_TOKEN, under the original agent/claude-settings.json policy (no Drive, write or shell tools), receives the prepared context and returns structured operations only, which the spine validates; a malformed or out-of-schema reply is a truthful failure, never a write; model and turn cap from the environment; recorded-reply tests; the token is never logged.",
+    "steps": [
+      "ClaudeProvider implements the provider interface and spawns claude -p with JSON output under the original permission policy.",
+      "Replies are parsed and schema-validated into operations; anything else fails truthfully with no write.",
+      "Model and max turns from env (start Sonnet, the original DEFAULT_MAX_TURNS).",
+      "Recorded-reply tests with the scripted provider contract fixtures; no live call; the token never appears in logs."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a recorded Claude reply becomes operations the spine validates|a malformed or out-of-schema Claude reply fails truthfully and writes nothing|the Claude provider runs under the original permission policy and never logs the token\"",
+    "passes": false,
+    "note": "TL-P4-01 batch P4-1; live use waits for the owner secret."
   }
 ]
