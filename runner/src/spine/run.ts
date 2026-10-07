@@ -24,7 +24,10 @@ import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoin
 import { takeAdmitted, type Admitted, type AdmittedReader } from './admitted';
 import type { RunnerToken } from '../token';
 
-/** How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent. */
+/**
+ * How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent, or
+ * when a send whose answer was lost reads back as not landed (the folder still as the plan saw it).
+ */
 export type Settled = { state: 'applied'; evidence: EffectEvidence } | { state: 'rejected'; failure: Failure };
 
 /**

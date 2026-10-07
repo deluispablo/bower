@@ -88,7 +88,8 @@ describe('real adapters: failure cases in the runner', () => {
         if (isStatus(url) && phaseOf(init) === 'saving') cut = true;
         return res;
       }),
-    ).toBe(0);
+      // Left in saving with no terminal report, the job fails (TL-P3-28); the redispatch finishes the run.
+    ).toBe(1);
     expect((await status(w)).run?.phase).toBe('saving');
     expect(await w.runJob(0)).toBe(0);
     expect((await status(w)).run?.phase).toBe('done');

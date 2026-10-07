@@ -11,6 +11,9 @@
  *   only for this runner's attempt; a content write carries the modifiedTime it read.
  * - After it, stored evidence decides: the effect applied is read back from Drive (`shows`, `readBackEdit`). A write
  *   sent that shows no effect stops the run unresolved; it is never sent again blindly (TL-P2-16).
+ * - A write whose answer never came (a network error, or a 5xx the adapter does not retry) is read back the same way
+ *   (`reconcile`, TL-P3-28): landed, it counts as applied; the folder still as the plan saw it, it is not done and
+ *   settles rejected with what stays as it was; anything else stops the run unresolved, for a redispatch to read back.
  *
  * Drive v3 offers no compare-and-swap on files: these are prechecks with a short window, not a lock (ARCHITECTURE,
  * "Safety at the actual storage boundary").
@@ -37,6 +40,7 @@ const NAME_TAKEN = 'Something else has that name there, so Bower left it as it w
 const ARRIVED = 'Something new arrived in it, so it stays in your inbox.';
 const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
+const NOT_REACHED = "Bower couldn't reach Google Drive, so it stayed as it was.";
 
 type Effect = OperationV2['effect'];
 
@@ -230,6 +234,14 @@ export function driveEffects(drive: RunnerDrive): Effects {
         if (e instanceof BowerError && e.code === 'conflict' && (e.message === notAsSeen().message || op.effect.kind === 'write-runner-json' || op.effect.kind === 'edit-text')) {
           console.error(e);
           return refused('conflict', op.effect.kind === 'edit-text' ? NOTE_CHANGED : op.effect.kind === 'write-runner-json' ? LIST_CHANGED : NOT_AS_SEEN);
+        }
+        // No answer kept (a network error, or Google's 5xx): read back once, never sent again blindly (TL-P3-28).
+        if (e instanceof BowerError && e.code === 'offline') {
+          console.error(e);
+          const back = await reconcile(op, head);
+          if (back.state === 'landed') return { state: 'applied', evidence: back.evidence };
+          if (back.state === 'not-landed') return refused('offline', NOT_REACHED);
+          console.error(back.why);
         }
         throw e;
       }

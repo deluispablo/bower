@@ -31,6 +31,7 @@ import type { SpineRead } from '../../src/data/spine/plan';
 import { driveRead } from '../../src/data/spine/read';
 import { sha256 } from '../../src/data/contracts/hashes';
 import { SeenFiles, targetOf, type StoredNow } from './still-as-seen';
+import { retried } from './retry';
 import { staleAttempt, type RunnerToken } from './token';
 
 export interface RunnerDriveOptions {
@@ -196,11 +197,18 @@ export class RunnerDrive {
   /** The fetch `DriveHttp` uses: a fenced write's own request meets the fault hook once. */
   private async hooked(input: string | URL | Request, init?: RequestInit): Promise<Response> {
     const now = this.current;
-    if (!now || (init?.method ?? 'GET').toUpperCase() === 'GET') return this.fetchFn(input, init);
+    // A read is safe to send again after a network error (`retry.ts`); DriveHttp retries its 429s and 5xx itself.
+    if ((init?.method ?? 'GET').toUpperCase() === 'GET') return retried(() => this.fetchFn(input, init), false);
+    if (!now) return this.fetchFn(input, init);
     now.action ??= this.fault?.before?.(now.call) ?? 'pass';
     // A TypeError is how fetch fails with no network; DriveHttp reads it as offline.
     if (now.action === 'refuse') throw new TypeError('A fault refused this write.');
     const res = await this.fetchFn(input, init);
+    // A write Google failed on may still have landed: read as a lost answer, so it is read back, never sent again.
+    if (res.status >= 500) {
+      console.error(`Drive answered ${res.status} to a write`);
+      throw new TypeError('Drive failed on this write; it may have landed.');
+    }
     if (!res.ok) return res;
     this.current = null;
     this.fault?.applied?.(now.call);
@@ -208,14 +216,15 @@ export class RunnerDrive {
     return res;
   }
 
-  /** A read with the token, its one refresh and the retries, as `DriveHttp` makes them. */
+  /** A read with the token, its one refresh and the retries (`retry.ts`; a 403 rate limit as `DriveHttp` does). */
   private async read(url: string): Promise<unknown> {
     let refreshed = false;
     let tries = 0;
     for (;;) {
       let res: Response;
       try {
-        res = await this.fetchFn(url, { headers: { authorization: `Bearer ${await this.token.token(refreshed)}` } });
+        const token = await this.token.token(refreshed);
+        res = await retried(() => this.fetchFn(url, { headers: { authorization: `Bearer ${token}` } }));
       } catch (e) {
         if (e instanceof BowerError) throw e;
         if (e instanceof TypeError) throw driveError('offline');
@@ -229,7 +238,7 @@ export class RunnerDrive {
         continue;
       }
       const wait = WAITS[tries];
-      if (wait !== undefined && (res.status === 429 || res.status >= 500 || (await rateLimited(res)))) {
+      if (wait !== undefined && (await rateLimited(res))) {
         tries++;
         await sleep(wait);
         continue;

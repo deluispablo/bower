@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
 import { main } from '../src/main';
+import { backoff } from '../src/retry';
 import { realDrive } from './drive-v3-real';
 import type { ApiHost, ApiOptions, Dispatched, Fetch, Hop, RealWorld } from './real-world-types';
 
@@ -33,6 +34,8 @@ const json = (status: number, body: unknown): Response => new Response(JSON.stri
 const urlOf = (input: string | URL | Request): URL => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 
 export async function realWorld(): Promise<RealWorld> {
+  // Replayed transports take no real time: the runner's retries wait none here (`src/retry.ts`).
+  backoff.baseMs = 0;
   const drive = new FakeDrive();
   // Loaded at run time: the seed reaches the demo's modules, which type-check with the browser's types, not Node's.
   const seedModule = new URL('../../src/data/fake/seed.ts', import.meta.url).pathname;
