@@ -7,6 +7,7 @@ import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { HttpError, createErrorHandler } from './errors.js';
 import { createProcessRoutes } from './process.js';
+import { createRunnerRoutes } from './runner.js';
 import { appCors, requestId, securityHeaders } from './security.js';
 import { createSessionRoutes } from './session-lease.js';
 import { createMeRoutes } from './me.js';
@@ -42,6 +43,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createProcessRoutes());
   app.route('/', createVaultRoutes(deps));
   app.route('/', createMeRoutes(deps));
+  app.route('/', createRunnerRoutes(deps));
 
   app.notFound(() => {
     throw new HttpError(404, 'not-found');

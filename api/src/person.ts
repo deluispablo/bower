@@ -500,6 +500,11 @@ export class Person extends DurableObject<Env> {
     });
   }
 
+  /** Mints the ticket of `attempt` of run `runId` (stub). */
+  async mintTicket(runId: string, attempt: number, now: number): Promise<string> {
+    return await Promise.resolve(`${runId}${attempt}${now}`.slice(0, 0));
+  }
+
   /** `GET /status`: writes a stale run's expiry first (as `admit` does), then the current run and revision. */
   runStatus(now: number): RunReply {
     return this.ctx.storage.transactionSync((): RunReply => {
