@@ -4018,7 +4018,7 @@
       "A verify with `pnpm -C runner exec vitest run -t \"…\"` finds its titles among the runner's tests in the harness check."
     ],
     "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"done.sh sees a change under runner/ as code and runner tests as tests|the harness check finds a verify.s titles among the runner tests\"",
-    "passes": false,
+    "passes": true,
     "note": "Found closing runner-drive-adapter: done.sh said \"d35e5c7 changes no code\" because CODE_PATHS has no runner/. Same shape as done-sh-api-paths."
   }
 ]
