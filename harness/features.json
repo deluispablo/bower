@@ -3834,7 +3834,7 @@
       "GET /status with a session answers 200 { \"run\": null } from the person object; without a session, 401 signed-out."
     ],
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the staging Worker keeps its logs and names its build\" && pnpm -C api exec vitest run -t \"status answers no run for a signed-in person|status without a session answers signed-out\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-10 ruling 4: one ?signin=failed in R2 could not be read; /health said only 0.1.0 (Cloudflare Workers Logs docs). TL-P3-11 F3: GET /status { run: null } folded in, so the real bundle stops showing a banner; worker-status-revision replaces it. Red proven by done.sh --fixed-in 1478e39 twice on 2026-10-07 (the verify failed on assertions with the change put back); both runs then stopped at pnpm check (a fake-worker load timeout, then lint in api/src/status.ts). The lint fix b32b46c touches the same lines, so 1478e39 no longer comes off cleanly: closed known-green."
   },
   {
