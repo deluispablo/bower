@@ -186,3 +186,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - The Home inbox sat on "Looking…" for about 2.5 min with 5 piles (3 orphans).
   - A new service worker waits until every tab closes (registerType autoUpdate with injectRegister script-defer, no skipWaiting):
     a reload keeps the old bundle.
+- (P3 pause) Local-only branch `archive/p2-o5-snapshot` (never pushed; base b3c2eb7): uncommitted P2 O5 work kept as a P4 candidate (fake-drive WTF-8 bytes, fake-runner, pile-readiness, drive-vault).

@@ -16,7 +16,7 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
   - Push per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then check the remote SHA.
   - Bash runs outside the sandbox (keychain).
 - **Cleanup done:** coordinator worktrees removed; nothing was left on port 5198.
-  - **Kept:** `/private/tmp/bower-p2-o5-snapshot` holds **uncommitted P2 work** (fake-drive WTF-8 bytes, fake-runner, pile-readiness, drive-vault; base `b3c2eb7`). The lead decides whether it is wanted or dropped.
+  - The o5 snapshot (uncommitted P2 work) is committed to the local-only branch `archive/p2-o5-snapshot` (never pushed), and its worktree is removed. It is a P4 candidate in P2_POLISH.
   - **Kept:** `/private/tmp/bower-tl-planning` (the lead's), `/private/tmp/p3-c16/` (walk inputs and notes, cited by the dossier), and the P2 `*-evidence` folders.
 
 ## How to run a round (unchanged)
