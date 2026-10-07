@@ -25,7 +25,7 @@ import { SOURCE_NOT_AS_SEEN, reusedNoteOf, shows } from '../../src/data/fake/fak
 import type { RunManifest } from '../../src/data/spine/records';
 import type { RunnerDrive } from './drive';
 import { notAsSeen } from './still-as-seen';
-import type { Effects, Settled } from './spine/run';
+import type { Effects, ReadBack, Settled } from './spine/run';
 
 /** The fake run service's sentences for a refused operation, the same here. */
 const NOT_AS_SEEN = SOURCE_NOT_AS_SEEN;
@@ -180,8 +180,15 @@ export function driveEffects(drive: RunnerDrive): Effects {
     }
   };
 
+  /** Stub: landed on evidence, otherwise unreadable. */
+  const readBackOp = async (op: OperationV2, head: Checkpoint): Promise<ReadBack> => {
+    const seen = await observe(op, head);
+    return seen ? { state: 'landed', evidence: seen } : { state: 'unreadable', why: 'no evidence' };
+  };
+
   return {
     observe,
+    readBack: readBackOp,
     async apply(op, head, w, manifest, sending) {
       const ok = await check(op, head, manifest);
       if ('refused' in ok) return ok.refused;

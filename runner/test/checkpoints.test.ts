@@ -8,7 +8,7 @@ import { RunRecords, canonical, checkpointName, firstCheckpoint, manifestName, n
 import { RunnerDrive } from '../src/drive';
 import { runnerReads } from '../src/spine/records';
 import { keepFinished } from '../src/spine/retention';
-import { runOperations, type Effects, type RunEnd } from '../src/spine/run';
+import { runOperations, type Effects, type ReadBack, type RunEnd } from '../src/spine/run';
 import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -75,6 +75,11 @@ class CountedEffects implements Effects {
 
   async observe(op: OperationV2): Promise<EffectEvidence | null> {
     return this.landed.has(op.operationId) ? evidenceOf(op) : null;
+  }
+
+  async readBack(op: OperationV2): Promise<ReadBack> {
+    const evidence = await this.observe(op);
+    return evidence ? { state: 'landed', evidence } : { state: 'unreadable', why: 'no evidence' };
   }
 }
 

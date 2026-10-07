@@ -26,6 +26,13 @@ import type { RunnerToken } from '../token';
 /** How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent. */
 export type Settled = { state: 'applied'; evidence: EffectEvidence } | { state: 'rejected'; failure: Failure };
 
+/**
+ * What reading an operation back says of a send whose answer was never kept (as the adapter's lost-reply read-back
+ * does): it landed (with its stored evidence), it did not (the folder still shows what the plan saw), or neither can
+ * be told (a read failed, or the folder shows something else).
+ */
+export type ReadBack = { state: 'landed'; evidence: EffectEvidence } | { state: 'not-landed' } | { state: 'unreadable'; why: string };
+
 /** The effects of operations on the folder: the adapter's sends and evidence reads. */
 export interface Effects {
   /**
@@ -36,6 +43,8 @@ export interface Effects {
   apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest, sending: () => Promise<void>): Promise<Settled>;
   /** Stored evidence that the operation's effect landed; null when none is found. */
   observe(op: OperationV2, head: Checkpoint): Promise<EffectEvidence | null>;
+  /** An operation possibly sent by an earlier runner, read back: landed, not landed, or unreadable. */
+  readBack(op: OperationV2, head: Checkpoint): Promise<ReadBack>;
 }
 
 export interface SpineRun {
@@ -129,12 +138,12 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     if (!outcome || outcome.state === 'applied' || outcome.state === 'rejected') continue;
     if (outcome.state === 'possible-effect') {
       // Possibly sent by an earlier runner: applied only on evidence, never sent again.
-      const evidence = await run.effects.observe(op, at);
-      if (!evidence) {
+      const back = await run.effects.readBack(op, at);
+      if (back.state !== 'landed') {
         console.error(`Operation ${op.ordinal} of run ${run.runId} may have been sent and shows no effect; it is not sent again`);
         throw new BowerError('unknown', UNRESOLVED);
       }
-      await resolve(op, { operationId, state: 'applied', evidence });
+      await resolve(op, { operationId, state: 'applied', evidence: back.evidence });
       continue;
     }
     // What it depends on must have happened; otherwise it is refused before anything is sent.

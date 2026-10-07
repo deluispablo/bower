@@ -12,7 +12,7 @@ import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
 import type { Admitted } from '../src/spine/admitted';
-import type { Effects, Settled } from '../src/spine/run';
+import type { Effects, ReadBack, Settled } from '../src/spine/run';
 import { driveEffects } from '../src/effects';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -40,6 +40,11 @@ class StubEffects implements Effects {
   async observe(op: OperationV2): Promise<EffectEvidence | null> {
     this.observed++;
     return this.sent.has(op.operationId) ? evidenceOf(op) : null;
+  }
+
+  async readBack(op: OperationV2): Promise<ReadBack> {
+    const evidence = await this.observe(op);
+    return evidence ? { state: 'landed', evidence } : { state: 'unreadable', why: 'no evidence' };
   }
 }
 
