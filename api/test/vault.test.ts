@@ -71,9 +71,8 @@ class FakeGoogle {
       return Response.json(item);
     }
     if (url.pathname === '/upload/drive/v3/files' && method === 'POST') {
-      const [, meta, content] = String(init?.body).split(/--bower-[0-9a-f-]+(?:--)?\r\n?/).filter((p) => p.trim() !== '');
+      const [meta] = String(init?.body).split(/--bower-[0-9a-f-]+(?:--)?\r\n?/).filter((p) => p.trim() !== '');
       const metadata = JSON.parse((meta ?? '').split('\r\n\r\n')[1] ?? '{}') as Partial<Item>;
-      void content;
       return Response.json(this.add({ ...metadata, mimeType: metadata.mimeType ?? 'text/plain' }));
     }
     return Response.json({ error: 'unexpected' }, { status: 500 });
