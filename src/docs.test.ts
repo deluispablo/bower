@@ -1,5 +1,6 @@
 /// <reference types="node" />
 /** Things the repository promises its agents and its pages, checked. */
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -131,5 +132,34 @@ describe('what the repository promises', () => {
       expect(line).toMatch(/(entry: `[a-z][a-z0-9-]+`|P4 note)\s*$/);
     }
     expect(findings.length).toBe(verdict?.[1] === 'PASS' ? 0 : Number(verdict?.[2]));
+  });
+  it('the built app ships its security headers', () => {
+    const file = existsSync(join(ROOT, 'public/_headers')) ? read('public/_headers') : '';
+    const block = (path: string): Record<string, string> => {
+      const out: Record<string, string> = {};
+      let on = false;
+      for (const line of file.split('\n')) {
+        if (/^\S/.test(line)) on = line.trim() === path;
+        else if (on && line.trim()) {
+          const at = line.indexOf(':');
+          if (at > 0) out[line.slice(0, at).trim().toLowerCase()] = line.slice(at + 1).trim();
+        }
+      }
+      return out;
+    };
+    const app = block('/*');
+    expect(app['content-security-policy'] ?? '').toMatch(/default-src 'self'/);
+    expect(app['content-security-policy'] ?? '').toMatch(/frame-ancestors 'none'/);
+    expect(app['content-security-policy'] ?? '').toMatch(/object-src 'none'/);
+    expect(app['content-security-policy'] ?? '').not.toMatch(/script-src[^;]*'unsafe-(inline|eval)'/);
+    expect(app['strict-transport-security'] ?? '').toMatch(/max-age=\d{7,}/);
+    expect(app['x-content-type-options'] ?? '').toBe('nosniff');
+    // The one inline script in index.html is allowed by its hash.
+    const inline = /<script>([\s\S]*?)<\/script>/.exec(read('index.html'))?.[1] ?? '';
+    const hash = createHash('sha256').update(inline).digest('base64');
+    expect(app['content-security-policy'] ?? '').toContain(`'sha256-${hash}'`);
+    // The landing keeps all four; its exported script needs its own script policy.
+    const landing = block('/landing/*');
+    expect(landing['content-security-policy'] ?? '').toMatch(/frame-ancestors 'none'/);
   });
 });
