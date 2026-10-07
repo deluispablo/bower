@@ -114,3 +114,6 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - The contract's `/process` row does not list 409 `no-folder` (asked of the lead).
   - runner `takeAdmitted` does not check `manifest.rootId` against the grant's `folderId`.
   - runner `records.ts`: with no run id (retention), the walk also lists root-level folders named `.bower`, `runs` or `piles` (names and dates only; filtered out after).
+- P3-12 delta review (minor):
+  - runner/test/drive-v3.ts: the test Worker never retires a ticket, so "already done, send nothing" is tested against a 409 the real Worker never sends (a re-run after an accepted done gets 401 at token.grant, folder untouched: acceptable).
+  - scripted.ts `listedPiles` never sets the Inbox's `not-tidied` flag; parity with the Inbox reader rests on capturePiles overlapping, not on a test.
