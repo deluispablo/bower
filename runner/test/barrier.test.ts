@@ -13,6 +13,7 @@ import { B_FAILURE } from '../../src/data/spine/scripted';
 import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
 import type { Admitted } from '../src/spine/admitted';
 import type { Effects, Settled } from '../src/spine/run';
+import { driveEffects } from '../src/effects';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 const AT = Date.UTC(2026, 9, 7, 9);
@@ -27,11 +28,12 @@ class StubEffects implements Effects {
   /** After this many sends, the next one stops on an error nobody caught. */
   breakAfter: number | null = null;
 
-  async apply(op: OperationV2): Promise<Settled> {
+  async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<Settled> {
     if (this.breakAfter !== null && this.sent.size >= this.breakAfter) throw new Error('The runner stopped');
-    this.sent.set(op.operationId, (this.sent.get(op.operationId) ?? 0) + 1);
     const e = op.effect;
     if (e.kind === 'move' && (this.refused === 'all' || e.before.fileId === this.refused)) return { state: 'rejected', failure: { code: 'conflict', message: MOVED } };
+    await sending();
+    this.sent.set(op.operationId, (this.sent.get(op.operationId) ?? 0) + 1);
     return { state: 'applied', evidence: evidenceOf(op) };
   }
 
@@ -156,6 +158,15 @@ async function stored(wire: DriveV3, root: string, path: string): Promise<{ file
   return file ? { file, value: JSON.parse(await wire.drive.readText(file.id)) as unknown } : null;
 }
 
+/** The wire's fetch, with every Drive request failing as with no network while `failing()` holds. */
+function noDrive(wire: DriveV3, failing: (url: URL, method: string) => boolean): typeof fetch {
+  return async (input, init = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    if (url.origin !== API && failing(url, (init.method ?? 'GET').toUpperCase())) throw new TypeError('fetch failed');
+    return wire.fetch(input, init);
+  };
+}
+
 async function chainOf(wire: DriveV3, root: string): Promise<Checkpoint[]> {
   const found = await new RunRecords(wire.drive, root).found(RUN_ID);
   return found.kind === 'run' ? found.chain : [];
@@ -189,8 +200,8 @@ describe('the report barrier', () => {
     expect(of(refused.fileId)).toBe('set-aside');
     expect([of(item('p-receipt')?.fileId ?? ''), of(item('p-plan')?.fileId ?? '')]).toEqual(['filed', 'filed']);
     expect(new Set(end.dispositions.map((d) => d.disposition))).toEqual(new Set(['filed', 'set-aside', 'waiting']));
-    // What waits was never sent anything; the report says what was filed and what was set aside.
-    expect([...effects.sent.keys()]).toHaveLength(3);
+    // Only what was filed was sent: what waits and what was refused were not; the report says what was filed and what was set aside.
+    expect([...effects.sent.keys()]).toHaveLength(2);
     const view = await stored(wire, root, SYSTEM.lastRun);
     expect(view?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done', report: { setAside: [{ name: 'ticket.pdf' }] } } });
     expect((view?.value as { run: { report: { filed: unknown[] } } }).run.report.filed).toHaveLength(2);
@@ -330,6 +341,57 @@ describe('the report barrier', () => {
     expect(committed).toHaveLength(1);
     const saving = whole.wire.statuses.find((s) => s.phase === 'saving');
     expect(saving?.after).toBeGreaterThan(committed[0]?.at ?? Infinity);
+  });
+
+  it('a restarted runner that cannot read its folder never says nothing changed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Attempt 1 applies two effects, then stops in saving.
+    const { wire, root } = await demo();
+    const effects = new StubEffects();
+    effects.breakAfter = 2;
+    expect((await tidy(wire, root, 1, effects)).phase).toBe('saving');
+    expect(effects.sent.size).toBe(2);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
+    const sent = new Map(effects.sent);
+
+    // The same attempt runs again, and Drive fails on its first read (whether the report landed): the job fails, visibly.
+    const again = await tidy(wire, root, 1, effects, [], () => false, { fetch: noDrive(wire, () => true) }).catch((e: unknown) => e);
+    expect(wire.statuses.filter((s) => s.phase === 'failed')).toEqual([]);
+    expect(again).toBeInstanceOf(Error);
+
+    // Attempt 2 reads the report, then cannot read its chain: the same.
+    let reported = false;
+    const afterWriting = noDrive(wire, () => reported);
+    const watched: typeof fetch = async (input, init = {}) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === API && url.pathname.endsWith('/status')) reported = true;
+      return afterWriting(input, init);
+    };
+    const next = await tidy(wire, root, 2, effects, [], () => false, { fetch: watched }).catch((e: unknown) => e);
+    expect(reported).toBe(true);
+    expect(wire.statuses.filter((s) => s.phase === 'failed')).toEqual([]);
+    expect(next).toBeInstanceOf(Error);
+
+    expect(wire.statuses.filter((s) => s.phase === 'failed')).toEqual([]);
+    expect(wire.statuses.some((s) => s.failure === B_FAILURE)).toBe(false);
+    expect(effects.sent).toEqual(sent);
+  });
+
+  it('a check that cannot read never counts as a change', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const projects = (await wire.drive.listAll(root)).find((f) => f.folder && f.name === 'Projects');
+    if (!projects) throw new Error('no Projects');
+    // The real effects, whose check before the first move cannot read the folder it moves to.
+    const end = await tidy(wire, root, 1, new StubEffects(), [], () => false, {
+      effects: driveEffects,
+      fetch: noDrive(wire, (url, method) => method === 'GET' && url.pathname.endsWith(`/files/${projects.id}`)),
+    });
+    expect((await chainOf(wire, root)).at(-1)?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
+    expect(end.phase).toBe('failed');
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'failed']);
+    expect(wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
+    expect((await wire.drive.listAll(projects.id)).filter((f) => f.parents[0] === projects.id)).toEqual([]);
   });
 
   it("a restarted runner's done reaches the Worker", async () => {

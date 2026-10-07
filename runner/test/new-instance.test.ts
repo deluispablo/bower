@@ -1,8 +1,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'new-instance.sh');
@@ -40,9 +40,16 @@ const gitEnv = (): NodeJS.ProcessEnv => ({
 
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, env: gitEnv(), encoding: 'utf8' });
 
+/** The temporary folders made here, removed after each test. */
+const made: string[] = [];
+afterEach(() => {
+  for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
 /** The instance repository as the original left it: its workflows and agent files, and a readme. */
 function instance(): { remote: string; bin: string; log: string; vars: string } {
   const dir = mkdtempSync(join(tmpdir(), 'bower-instance-'));
+  made.push(dir);
   const remote = join(dir, 'remote.git');
   const seed = join(dir, 'seed');
   git(dir, 'init', '-q', '--bare', '-b', 'main', remote);
@@ -66,12 +73,12 @@ function instance(): { remote: string; bin: string; log: string; vars: string } 
   return { remote, bin, log: join(dir, 'gh.log'), vars };
 }
 
-/** Runs the script with macOS's stock bash, `gh` stubbed on PATH, and no terminal to ask from. */
-function run(at: ReturnType<typeof instance>): { status: number | null; output: string } {
-  const out = spawnSync('/bin/bash', [SCRIPT, REPO, ORIGIN], {
+/** Runs the script with macOS's stock bash, `gh` stubbed on PATH, and `input` as what is typed at its prompts. */
+function run(at: ReturnType<typeof instance>, args: string[] = [REPO, ORIGIN], input = ''): { status: number | null; output: string } {
+  const out = spawnSync('/bin/bash', [SCRIPT, ...args], {
     cwd: ROOT,
     env: { ...gitEnv(), PATH: `${at.bin}:${process.env.PATH ?? ''}`, GH_LOG: at.log, GH_REMOTE: at.remote, GH_VARS: at.vars },
-    input: '',
+    input,
     encoding: 'utf8',
     timeout: 120_000,
   });
@@ -113,5 +120,20 @@ describe('new-instance.sh', () => {
     expect(again.status).toBe(0);
     expect(git(at.remote, 'rev-list', '--count', 'main').trim()).toBe('2');
     expect(readFileSync(at.log, 'utf8').split('variable set').length).toBe(2);
+  });
+
+  it('new-instance refuses a repository that looks like a flag', () => {
+    const at = instance();
+    const typed = ['-R/bower-home', 'OWNER/-bower-home', '--help/bower-home'];
+    for (const repo of typed) {
+      const asked = run(at, [], `${repo}\n${ORIGIN}\n`);
+      expect(asked.status, repo).not.toBe(0);
+      expect(asked.output, repo).toContain('Not an owner/name repository');
+    }
+    for (const repo of typed) expect(run(at, [repo, ORIGIN]).status, repo).not.toBe(0);
+    // Refused before any repository was looked at, made or changed.
+    const calls = existsSync(at.log) ? readFileSync(at.log, 'utf8') : '';
+    expect(calls.split('\n').filter((c) => c && c !== 'auth status')).toEqual([]);
+    expect(git(at.remote, 'rev-list', '--count', 'main').trim()).toBe('1');
   });
 });

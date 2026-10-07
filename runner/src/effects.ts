@@ -182,9 +182,11 @@ export function driveEffects(drive: RunnerDrive): Effects {
 
   return {
     observe,
-    async apply(op, head, w, manifest) {
+    async apply(op, head, w, manifest, sending) {
       const ok = await check(op, head, manifest);
       if ('refused' in ok) return ok.refused;
+      // Possibly sent from here on: everything before it only read.
+      await sending();
       try {
         await send(op.effect, w, ok.parentId, ok.modifiedTime);
       } catch (e) {
