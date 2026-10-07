@@ -3892,7 +3892,7 @@
       "Signing in again afterwards gets a fresh person with no folder pointer; the Drive folder was not touched by DELETE /me."
     ],
     "verify": "pnpm -C api exec vitest run -t \"delete me forgets the person and clears the cookie|delete me needs the session epoch|delete me revokes the Google grant even if Google fails|signing in again after delete me starts at the folder step\"",
-    "passes": false,
+    "passes": true,
     "note": "Worker contract DELETE /me; TL-P2-14/25 (DELETE /me releases the lease, by forgetting it); TL-P3-14 (DELETE /me mounts requireLease in its own entry); C01 \"delete my account behaves truthfully\"."
   }
 ]
