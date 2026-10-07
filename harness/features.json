@@ -4255,5 +4255,35 @@
     "verify": "pnpm -C runner exec vitest run -t \"main reports reading with total before writing\"",
     "passes": false,
     "note": "TL-P3-24 point 2; staging runs showed revision 9 queued → 10 writing and /status total 0 throughout."
+  },
+  {
+    "id": "upload-queue-real",
+    "task": "p3-e",
+    "category": "feature",
+    "what": "The real source sends pile files through the persistent upload queue (upload-queue-persistent, now on real Drive): bytes stay on the device until Drive confirms, a reload resumes from the server's offset of the same resumable session and reserved id, never two files, and when the browser lost the bytes the person is asked to choose the file again; nothing is reported as sent that Drive did not confirm (C02, R4 evidence).",
+    "steps": [
+      "choose.ts turns uploadQueue on for the real source.",
+      "Resume asks Drive for the session's committed offset (PUT with Content-Range bytes */total) and sends only the rest; a 404 or expired session restarts with the same reserved file id, never a second file.",
+      "Lost bytes (IndexedDB cleared or evicted) show \"Choose the file again.\" on that item, and nothing else in the pile is lost.",
+      "Tests on the DriveHttp adapter over a fake fetch: interrupted at each chunk, reload, resume from the offset, one file; expired session; lost bytes."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"the real source sends pile files through the upload queue|a reload resumes from Drive's offset and makes one file|an expired session restarts with the same reserved id|lost bytes ask to choose the file again\"",
+    "passes": false,
+    "note": "TL-P3-24 point 4 (P3-E); folds in upload-queue-persistent for the real source; R4 Part B evidence."
+  },
+  {
+    "id": "declare-piles-real",
+    "task": "p3-e",
+    "category": "feature",
+    "what": "The real source declares piles (pile-declaration.ts), as the fake does: a pile's declaration is written to real Drive with its members and bytes, the Worker's admission manifest and the runner take a declared pile only when every member arrived with the declared bytes, and the scripted run files it whole; a declaration that disagrees waits with its sentence.",
+    "steps": [
+      "choose.ts turns declarePiles on for the real source.",
+      "The declaration write goes through the real adapter with the same fencing and still-as-seen as other writes.",
+      "The shared plan (src/data/spine/plan.ts) reads the declaration through the read port on the Worker and the runner, so admission and the run agree with the fake.",
+      "A contract test: the same declared pile on the fake and on the adapter over a fake fetch gives the same manifest and the same dispositions."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"the real source declares piles|a declared pile gives the same manifest on the fake and on Drive\"",
+    "passes": false,
+    "note": "TL-P3-24 point 4 (P3-E)."
   }
 ]
