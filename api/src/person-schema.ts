@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -76,6 +76,16 @@ const STEPS: readonly (readonly string[])[] = [
     'ALTER TABLE account ADD COLUMN folder_id TEXT',
     'ALTER TABLE account ADD COLUMN access_token TEXT',
     'ALTER TABLE account ADD COLUMN access_expires_at INTEGER',
+  ],
+  [
+    // Whether the pointed folder holds the whole template (calls skip the fill once it does).
+    'ALTER TABLE account ADD COLUMN folder_complete INTEGER NOT NULL DEFAULT 0 CHECK (folder_complete IN (0, 1))',
+    // The folder id reserved with Drive's files.generateIds before creating it, kept until
+    // the folder is complete: a retry creates that same id (Drive refuses a second one).
+    'ALTER TABLE account ADD COLUMN pending_folder_id TEXT',
+    // The claim that lets one POST /vault at a time work on the folder, and when it lapses.
+    'ALTER TABLE account ADD COLUMN vault_claim TEXT',
+    'ALTER TABLE account ADD COLUMN vault_claim_until INTEGER',
   ],
 ];
 

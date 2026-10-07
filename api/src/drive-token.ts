@@ -18,6 +18,7 @@ import { decrypt, importEncryptionKey } from './crypto.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import { refreshAccessToken } from './google.js';
+import { clearSessionCookie } from './session.js';
 import type { FetchLike } from './google.js';
 import type { DriveAccessToken } from './person.js';
 
@@ -53,6 +54,8 @@ export async function accessTokenFor(env: Env, sub: string, options: DriveTokenO
   const encrypted = await person.encryptedRefreshToken();
   if (encrypted === null) throw new HttpError(401, 'signed-out', undefined, { cause: new Error('no refresh token kept') });
   const refreshToken = await decrypt(encrypted, await importEncryptionKey(env.TOKEN_ENC_KEY));
+  // The lifetime counts from before Google was asked, so the token is never kept past its real end.
+  const asked = Date.now();
   let minted;
   try {
     minted = await refreshAccessToken(
@@ -60,11 +63,10 @@ export async function accessTokenFor(env: Env, sub: string, options: DriveTokenO
       fetchImpl,
     );
   } catch (err) {
-    if (err instanceof HttpError && err.code === 'signed-out') await person.forgetGoogleAccess();
+    if (err instanceof HttpError && err.code === 'signed-out') await person.forgetGoogleAccess(encrypted);
     throw err;
   }
-  const now = Date.now();
-  const token = { accessToken: minted.accessToken, expiresAt: now + Math.min(minted.expiresIn * 1000, MAX_LIFETIME_MS) };
+  const token = { accessToken: minted.accessToken, expiresAt: asked + Math.min(minted.expiresIn * 1000, MAX_LIFETIME_MS) };
   await person.cacheDriveToken(token);
   return token;
 }
@@ -83,7 +85,15 @@ export function createDriveRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     }
     const options: DriveTokenOptions = { fresh: c.req.query('fresh') === '1' };
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
-    const { accessToken, expiresAt } = await accessTokenFor(env, sub, options);
+    let minted: DriveToken;
+    try {
+      minted = await accessTokenFor(env, sub, options);
+    } catch (err) {
+      // Google refused the refresh token: the sessions are retired, so the cookie goes too.
+      if (err instanceof HttpError && err.code === 'signed-out') c.header('Set-Cookie', clearSessionCookie(), { append: true });
+      throw err;
+    }
+    const { accessToken, expiresAt } = minted;
     return c.json({ accessToken, expiresAt });
   });
 
