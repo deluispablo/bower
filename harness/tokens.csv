@@ -96,3 +96,4 @@ scripted-semantic-provider,implementer,claude,opus,high,1,263557,,,,,,94,19.8,de
 report-barrier-truth-fix,implementer,claude,opus,high,1,171073,,,,,,45,12.6,delivered,2026-10-07
 p3-12-delta-review,reviewer,claude,opus,medium,1,172501,,,,,,43,5.1,BLOCK (1 important),2026-10-07
 runner-restart-truth-fix,implementer,claude,opus,high,1,126593,,,,,,33,9.8,delivered,2026-10-07
+p3-12-rereview,reviewer,claude,opus,medium,1,82152,,,,,,11,1.4,PASS (3 minor),2026-10-07

@@ -117,3 +117,7 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P3-12 delta review (minor):
   - runner/test/drive-v3.ts: the test Worker never retires a ticket, so "already done, send nothing" is tested against a 409 the real Worker never sends (a re-run after an accepted done gets 401 at token.grant, folder untouched: acceptable).
   - scripted.ts `listedPiles` never sets the Inbox's `not-tidied` flag; parity with the Inbox reader rests on capturePiles overlapping, not on a test.
+- P3-12 re-review (minor, PASS):
+  - run.ts: an `Effects` that returns `applied` without calling `sending()` throws UNRESOLVED and may post B_FAILURE (driveEffects cannot reach it).
+  - A redispatched attempt posts `writing` after attempt 1 reported `saving` (backward phase across attempts; for spine-ordered-status).
+  - 14 `bower-instance-*` temp folders from earlier test runs remain in $TMPDIR.
