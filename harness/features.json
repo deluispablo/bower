@@ -4479,7 +4479,7 @@
       "The stubbed-gh test covers a public repository."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"new-instance refuses a public repository\"",
-    "passes": false,
+    "passes": true,
     "note": "P3 security review F7 (Minor)."
   },
   {
