@@ -31,7 +31,8 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 
 **P3-17/18 (TL-P3-25):** staging is at 0abbbac (736eb6b7); bower-home is at dbd3f36.
 - `deploy-staging-hardening` passes (d208635, red fixed in ba11eef). `compatibility-accepted-app` passes (4748037). It closed known-green, with its red at 4b5626c. It added 20 P2 fixtures, and its docs test requires a row in `2026-10-07-p3-compatibility.md` for every new commit under `src/features` or `src/data/contracts`. 333/335. `worker-reads-pile-notes` passes (aeaeff8, red fixed in 3cc965f). It adds an optional report field `nothingReady: true`, which needs the lead's approval; it is listed in the compatibility table. The change-list test now skips merge commits. 334/335.
-- Running: `behavior-suites-real-adapters` (escalated, `/private/tmp/bower-p3-suites`, port 5197).
+- `behavior-suites-real-adapters` passes (1e66aff). It closed known-green: each of the six cases was proven red by breaking its guard. No product bug was found. P3-E is complete; 335/335.
+- The P3-17/18 suites are running at 1e66aff. The Opus delta review follows (packet `2026-10-07-p3-18-delta-review-packet.md`).
 - Registered for when slots free up: `behavior-suites-real-adapters` (escalated) and `compatibility-accepted-app` (implementer); packets `2026-10-07-p3-18-*`.
 - Live revocation is one owner step in the C16 walk.
 - After P3-17/18: `security-review` at the freeze, then P3-G.
