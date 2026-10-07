@@ -9,7 +9,8 @@ export function itemLine(it: PileItem): string {
   // Not sent again: Drive has other bytes than were added.
   if (it.changed) return 'Changed';
   if (it.upload === undefined) return it.origin;
-  if (it.upload < 0) return "Didn't arrive";
+  // Its bytes are not on this device: only choosing the file again sends it.
+  if (it.upload < 0) return it.chooseAgain && it.kind !== 'link' ? "Didn't arrive. Choose the file again." : "Didn't arrive";
   return it.upload > 0 && it.upload < 0.99 ? `Sending… ${Math.round(it.upload * 100)}%` : 'Sending…';
 }
 

@@ -63,7 +63,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
  * Its place may have changed since: filed by a tidy-up or moved by the person,
  * it still arrived.
  */
-function check(target: CheckedTarget, file: DriveFile): DriveFile {
+function check(target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>, file: DriveFile): DriveFile {
   if (file.id === target.id && (file.size === undefined || file.size === target.size) && file.sha256 === target.sha256) return file;
   console.error('A reserved upload id holds a different file', { want: { id: target.id, size: target.size }, got: { id: file.id, size: file.size, checked: file.sha256 !== undefined } });
   throw new BowerError('unknown', 'Google Drive has a different file where this one should go. Remove this one and add it again.');
@@ -72,6 +72,23 @@ function check(target: CheckedTarget, file: DriveFile): DriveFile {
 /** Drive refused the reserved id: a file has it. Read it back instead of making another. */
 async function readBack(drive: ResumableClient, target: CheckedTarget): Promise<DriveFile> {
   return check(target, await drive.getUploaded(target.id));
+}
+
+/**
+ * The file Drive already made under a reserved id, checked as `sendResumable`
+ * checks it; `null` when Drive has none there (or only in the Bin). For an
+ * upload whose bytes this device lost: one Drive made before its reply was
+ * lost is sent, not one to choose again.
+ */
+export async function arrivedFile(drive: ResumableClient, target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>): Promise<DriveFile | null> {
+  let file: DriveFile;
+  try {
+    file = await drive.getUploaded(target.id);
+  } catch (e) {
+    if (e instanceof BowerError && e.code === 'not-found') return null;
+    throw e;
+  }
+  return check(target, file);
 }
 
 const isConflict = (e: unknown): boolean => e instanceof BowerError && e.code === 'conflict';
