@@ -16,7 +16,7 @@ Read this and your packet. Do not read other planning or harness documents unles
   - A content write passes the modifiedTime it read.
 - **Reviewers.** Read only the diff range and the packet. Judge against the acceptance contract: only Critical and Important findings against it block, each with a reproduction. List Minor findings in one line each; they never block.
 - **Fix rounds** start in a fresh session with the packet, the finding and the diff range; nobody resumes a finished worker.
-- **Output ([TL-P3-17](2026-10-07-tl-p3-17-output-discipline.md)).** Only the coordinator reads you, and only your final reply. Write no text between tool calls: think, act, and keep notes in files. Your final reply is one card of `key: value` lines and nothing else, with no greeting, recap or narrative. Point to files and SHAs instead of pasting them. Never leave out a fact the coordinator needs to decide; a missing fact costs more than a line.
+- **Output ([TL-P3-17](2026-10-07-tl-p3-17-output-discipline.md)).** Only the coordinator reads you, and only your final reply. Write no text between tool calls: think, act, and keep notes in files. Your final reply is one card of `key: value` lines and nothing else, with no greeting, recap or narrative. Point to files and SHAs instead of pasting them. Keep each card line under 120 characters: list SHAs, test names and paths, never explanations. Never leave out a fact the coordinator needs to decide; a missing fact costs more than a line.
 - **Delivery card (implementer), at most 8 lines:**
   ```
   status: done | blocked | stalled
