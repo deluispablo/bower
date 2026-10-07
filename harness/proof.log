@@ -337,3 +337,4 @@ declare-piles-real	4a3dd78c1a9a63a5	2026-10-07	known-green: red proven by hand a
 runbook-p3	ffef85cb70fe8e72	2026-10-07	known-green: docs entry: with docs/runbook.md replaced by a '# Runbook' stub, 'the runbook names every Worker secret and variable' fails (GOOGLE_CLIENT_ID missing); a revert deletes the file, which is a load failure, not a red
 deploy-staging-hardening	82fa8519e475e1c9	2026-10-07	red (fixed in ba11eef)
 compatibility-accepted-app	5ccd2e294ccb4b87	2026-10-07	known-green: test entry: at 4b5626c (tests only) all three named tests failed on assertions (no fixtures; the compatibility doc missing); 2650a73 and a5023a0 add data and docs, which done.sh cannot revert as code
+worker-reads-pile-notes	9325959c117d7788	2026-10-07	red (fixed in 3cc965f)

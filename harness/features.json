@@ -4341,7 +4341,7 @@
       "total is the number of things (pile members) on every report and in last-run.json; your changes are not counted in it."
     ],
     "verify": "pnpm -C api exec vitest run -t \"admission holds a pile whose note is not ready|admission stores no note text\" && pnpm -C runner exec vitest run -t \"a run whose piles are all held ends done with nothing filed|total counts things only\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-25 points 2 and 3; P3-10 known limit; P3-14..16 review minors (total meanings, admitted pile held)."
   },
   {

@@ -92,3 +92,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: runbook-p3 passes — chore(harness): runbook-p3 passes
 - 2026-10-07: deploy-staging-hardening passes — chore(harness): deploy-staging-hardening passes
 - 2026-10-07: compatibility-accepted-app passes — chore(harness): compatibility-accepted-app passes
+- 2026-10-07: worker-reads-pile-notes passes — chore(harness): worker-reads-pile-notes passes
