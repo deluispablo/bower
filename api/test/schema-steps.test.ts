@@ -7,7 +7,18 @@ import { migrate, SCHEMA_VERSION } from '../src/person-schema.js';
  * steps 1 to n, so changing one of them would leave old and new objects with different tables. Each step's
  * SHA-256 is pinned here. Appending a step means adding its hash at the end; changing a shipped one fails.
  */
-const SHIPPED: readonly string[] = [];
+const SHIPPED: readonly string[] = [
+  '231c35e559ce6858a5fe8180251faf4857a59243ddbf56b50fe04cb4f21b9a26', // 1: lease, admission, quota, control, run_ticket
+  'f497153aee1941258b183b9b52d392c3b5a1edd563d18b1fc7557cc10e963544', // 2: account
+  '777a36288229d7a3f7a9110be595f5ec1c0c6c33d0916ed9a11aab3436701aaa', // 3: folder pointer, access token
+  '83b32e71b7cfa199d3230bdb90af48e78114568fc166d5d1ac794036fe8d5841', // 4: folder fill claim
+  '52f8e42becb517ba326f1152322d00f44a65861a320a7a70221c9d810a8dd585', // 5: reserved template ids
+  '2d8150cce7839a917571af6d93b971673fded5d0b66cd8457cbbc2e8079a66fb', // 6: session lease beat and leave
+  '8bdc7b638bd31cb1d283e114aa811caeaafe71e2e7a41859cd925fc548796e54', // 7: runs
+  'c25824c0a29b7fb09296b7a5a38491bcdeeaf28200b3fb4817252e9e22f0cbb4', // 8: runner ticket expiry and report seq
+  '5a808d58e22843ac85679a9aaa1c2266d61e62588008171fc66db87aec0198f4', // 9: admission manifest
+  '57176deac8fffcf05cbb607fb1a5787436538f67190f29fefa5e2900a756f989', // 10: ticket report phase
+];
 
 /** The statements `migrate` runs on a database recorded at `current`, without its own schema_version bookkeeping. */
 function statementsFrom(current: number): string[] {
