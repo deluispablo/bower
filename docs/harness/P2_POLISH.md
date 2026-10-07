@@ -144,3 +144,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - e2e:fake `[phone] qa10.spec.ts:165` flaked once under load (passed 3/3 alone).
 - declare-piles-real (left out): the Worker still does not read the pile note (P3-10 limit): admission calls capturePiles with notes:false and checks a declared pile's note by key only; the declaration create goes through the lease-fenced bound(drive) but no test asserts that fencing.
 - runbook-p3 (unproven against code): after a TOKEN_ENC_KEY rotation each person signs in again with consent; a stale-run redispatch fails again when GITHUB_TOKEN is missing or wrong. Check both at security-review.
+- P3-14..16 delta review (minor, PASS):
+  - `total` has three meanings (fresh: pile notes plus journal lines; resumed with no grant manifest: captured things; last-run.json: captured things); run-words shows all as "Reading N things".
+  - A new attempt reposts `reading` when the previous one stopped before saving its manifest (recorded, not shown).
+  - deploy-staging.sh: the `bower-staging` output check matches the --var echo (match `Uploaded bower-staging`); the clean-tree check ignores ignored `.env*`, and Vite reads `VITE_API_URL` from `.env.local`/`.env.production` after `env -u`; the /status wait can last ~10 min while the message says 5; the test skips give-up, a failed /health rerun and a spaced file name in the scan.
+  - resumable-upload: no `sha256Checksum` after read-back says "Google Drive has a different file…" (never shown as sent); a reserved id whose file is only in the Bin asks to choose the file again.
+  - plan.ts: the Worker reads no pile note, so it can admit a pile the runner holds (newer, damaged or whitespace-only note); if it is the only pile, the run fails "stopped before changing anything" and Try again repeats it.
