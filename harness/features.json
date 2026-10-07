@@ -3949,5 +3949,20 @@
     "verify": "pnpm -C api exec vitest run -t \"a folder request that started before delete me writes nothing after it\"",
     "passes": true,
     "note": "TL-P3-14 addendum, from the P3-7 delta review minor 3; builds on delete-me-generation-floor."
+  },
+  {
+    "id": "worker-runner-tickets",
+    "task": "p3-c",
+    "category": "feature",
+    "what": "The Worker mints a per-attempt runner ticket (32 random bytes, only its SHA-256 kept, 60 min), and serves GET /runner/runs/:id/token and POST /runner/runs/:id/status by ticket, routed by the run id to the person object, with attempt fencing, seq and phase ordering, a revision raise per accepted report, and the ticket retired when the run ends.",
+    "steps": [
+      "A valid ticket gets { accessToken, expiresAt, folderId, attempt }; a missing, wrong or expired one gets 401 signed-out.",
+      "A new attempt replaces the ticket: the older attempt's ticket and reports get 409 stale-attempt.",
+      "Reports: a rising seq moves the phase forward and raises the revision; a repeat of the last seq changes nothing and answers the current state; a lower seq or a backward phase gets 409 stale-report.",
+      "done or failed retires the ticket; the ticket is never logged."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a runner ticket gets the folder and a Drive token|a wrong or expired ticket is signed out|a new attempt fences the old one|reports move forward by seq and phase|a repeated report changes nothing|an ended run retires its ticket\"",
+    "passes": false,
+    "note": "TL-P3-18; Worker contract \"Runner wire\"; reuses the original app's run-ticket.ts and runner.ts."
   }
 ]
