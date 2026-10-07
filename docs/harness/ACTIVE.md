@@ -29,6 +29,21 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
 
+**P3-19 (TL-P3-26):**
+- Staging is at 5a4ab04 (f3e43b66); bower-home is at b7a0a82.
+- `nothingReady` is approved and in the contract. `parseRunReport` already accepts it (from worker-reads-pile-notes), so no fix is needed.
+- Running:
+  - `security-review` (escalated, `/private/tmp/bower-p3-security`; ASVS 5.0 and Actions hardening; findings become fix entries);
+  - `deploy-staging-production-check` (mechanical, `/private/tmp/bower-p3-prodcheck`; the script false-alarmed on the bower-api.workers.dev subdomain).
+- Then:
+  1. the security fixes;
+  2. the freeze;
+  3. the four suites;
+  4. the Opus fallback review;
+  5. the frozen deploy and the C16 walk (with the owner's revocation step);
+  6. the dossier.
+- The freeze does not wait for Codex (TL-P3-16); Codex reviews before P4.
+
 **P3-17/18 (TL-P3-25):** staging is at 0abbbac (736eb6b7); bower-home is at dbd3f36.
 - `deploy-staging-hardening` passes (d208635, red fixed in ba11eef). `compatibility-accepted-app` passes (4748037). It closed known-green, with its red at 4b5626c. It added 20 P2 fixtures, and its docs test requires a row in `2026-10-07-p3-compatibility.md` for every new commit under `src/features` or `src/data/contracts`. 333/335. `worker-reads-pile-notes` passes (aeaeff8, red fixed in 3cc965f). It adds an optional report field `nothingReady: true`, which needs the lead's approval; it is listed in the compatibility table. The change-list test now skips merge commits. 334/335.
 - `behavior-suites-real-adapters` passes (1e66aff). It closed known-green: each of the six cases was proven red by breaking its guard. No product bug was found. P3-E is complete; 335/335.
