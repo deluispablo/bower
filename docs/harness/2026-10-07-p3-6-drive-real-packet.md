@@ -26,3 +26,12 @@ C03's "edit" is the note screen's task checkbox. As A, in the probe folder:
 3. Toggle the task in the app. Expected: "changed somewhere else" (or the app's equivalent), no overwrite. Drive's text still has the outside line, with the task unticked. After a reload, the app shows the outside change. Record `modifiedTime` and `version` before and after (redacted fingerprints are fine).
 
 **Never read or list outside the probe folder or A's Bower folder** (TL-P3-11): every `files.list` names the probe folder as parent.
+
+## Rerun of check 7 only, after `lost-reply-reconcile` (staging at `7bd77ce`)
+
+The same recipe as check 7 above, on the new bundle (check its name first). Use one probe note for a rename and another for a move, and drop each write's reply after the request is sent. Expected:
+- the app treats each as saved (no error, the new name or place shows without a reload);
+- Drive holds each change once;
+- after the fetch wrap is removed and the app reloaded, it agrees with Drive.
+
+Also confirm that no "Bower couldn't find that." banner shows on any screen visited, and that no `/status` 404 appears in the console.
