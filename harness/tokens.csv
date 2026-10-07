@@ -92,3 +92,4 @@ spine-operations-checkpoints,implementer,claude,opus,high,1,225036,,,,,,78,18.3,
 p3-10-delta-review,reviewer,claude,opus,medium,1,129599,,,,,,26,2.6,PASS (5 minor),2026-10-07
 spine-report-barrier-dispositions,implementer,claude,opus,high,1,258576,,,,,,88,21.0,delivered,2026-10-07
 p3-11-delta-review,reviewer,claude,opus,medium,1,145253,,,,,,25,4.7,BLOCK (3 important),2026-10-07
+scripted-semantic-provider,implementer,claude,opus,high,1,263557,,,,,,94,19.8,delivered,2026-10-07
