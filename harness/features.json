@@ -3979,5 +3979,18 @@
     "verify": "pnpm -C runner exec vitest run -t \"the adapter refuses a write when the file moved since it was read|the adapter refuses a write after a newer attempt took over|the adapter and the fake agree on the fenced scenario\"",
     "passes": false,
     "note": "TL-P3-18, TL-P3-19 (runner/ beside api/, built on drive-http.ts; precheck not CAS, ARCHITECTURE line 57)."
+  },
+  {
+    "id": "do-version-skew",
+    "task": "p3-9",
+    "category": "fix",
+    "what": "While a deploy's person objects still run the previous class, a call to a method the old class lacks answers 503 internal with Retry-After (no cause named), so the client's existing retry of 5xx covers the window instead of a hard 500.",
+    "steps": [
+      "reach() maps the TypeError \"The RPC receiver does not implement the method …\" to 503 internal with a Retry-After header; every other error stays 500 internal.",
+      "A test with a person stub that lacks the called method gets 503 and Retry-After."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a person object on the previous version answers 503 with Retry-After\"",
+    "passes": false,
+    "note": "Staging 0b64dcb: /status 500 \"The RPC receiver does not implement the method runStatus\" for minutes after deploy (Cloudflare, gradual deployments with Durable Objects: keep Worker-DO changes compatible). Lead ruling, P3-9."
   }
 ]
