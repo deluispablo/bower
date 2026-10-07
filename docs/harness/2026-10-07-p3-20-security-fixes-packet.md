@@ -48,7 +48,11 @@ Seven fix entries come from the security review: `docs/harness/2026-10-07-p3-sec
 - **Extra gates:**
   - `pnpm e2e`, `pnpm e2e:fake` and `pnpm e2e:pwa` in full on private port 5196.
   - `vite preview` serves no `_headers`, so also check the CSP by loading `dist/` with the headers applied (a tiny static server in a test or script), and confirm the app and the landing log no CSP violation.
-- **Scope:** `public/_headers`, `api/src/security.ts` (comment only), `src/docs.test.ts`, and a test helper if needed.
+- **Lead's addendum (TL-P3-26):**
+  - Set the headers in two places: the static-assets `_headers` file, and the Worker's own responses (`api/src/security.ts`). Both carry the CSP, HSTS, nosniff and `frame-ancestors 'none'`.
+  - The CSP must pass all four suites, the landing and the PWA.
+  - The landing is exported, so don't edit it inline. Allow its inline scripts and styles by hash. Use `'unsafe-inline'` for styles only, and only if the landing needs it.
+- **Scope:** `public/_headers`, `api/src/security.ts` (the Worker's headers and comment), `src/docs.test.ts`, and a test helper if needed. `scripts/fix-landing.mjs` is in scope only if hashes must be generated after each export.
 
 ## cookie-host-prefix (bower-implementer; F4, Minor), after token-key-rotation-reconsent
 
@@ -59,7 +63,7 @@ Seven fix entries come from the security review: `docs/harness/2026-10-07-p3-sec
 - **Named test:** `the session and sign-in cookies carry the __Host- prefix`.
 - **Scope:** `api/src/session.ts`, `api/src/auth.ts` and their tests.
 
-## log-no-folder-content (bower-implementer; F5 and F6, Minor)
+## log-no-folder-content (bower-implementer; F5 and F6, raised by the lead: a log with folder content breaks a hard rule)
 
 - **Read:** `runner/src/effects.ts` (about line 85), `runner/src/still-as-seen.ts` (about line 61, the pattern to follow) and `src/data/spine/plan.ts` (about line 301).
 - **Fix:**
