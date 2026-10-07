@@ -121,3 +121,8 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - run.ts: an `Effects` that returns `applied` without calling `sending()` throws UNRESOLVED and may post B_FAILURE (driveEffects cannot reach it).
   - A redispatched attempt posts `writing` after attempt 1 reported `saving` (backward phase across attempts; for spine-ordered-status).
   - 14 `bower-instance-*` temp folders from earlier test runs remain in $TMPDIR.
+- First real run, staging 7a96c5e (recheck in the C16 walk):
+  - When the stopped run was already seen, the button reads "Tidy up 1 thing" yet opens the old failure's sheet; the label promises a new tidy-up ("Try again" on the sheet is the way in, P2 behaviour).
+  - The floating "The tidy-up stopped. See why" pill covers "Put the note in the inbox" on the add screen.
+  - A stale "The tidy-up stopped" banner stays on Home.
+  - `?source=real` drops from the URL after in-app navigation (data stays real).
