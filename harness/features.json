@@ -4343,5 +4343,33 @@
     "verify": "pnpm -C api exec vitest run -t \"admission holds a pile whose note is not ready|admission stores no note text\" && pnpm -C runner exec vitest run -t \"a run whose piles are all held ends done with nothing filed|total counts things only\"",
     "passes": false,
     "note": "TL-P3-25 points 2 and 3; P3-10 known limit; P3-14..16 review minors (total meanings, admitted pile held)."
+  },
+  {
+    "id": "behavior-suites-real-adapters",
+    "task": "p3-e",
+    "category": "test",
+    "what": "The P2 shared suites (src/data/contract/vault-contract.ts and the fake's behaviour tests) run against the real Drive client (DriveHttp), the real Worker HTTP client (WorkerHttp against the api app) and the runner, over replayed transports with no network: browser close mid-run, revoked auth (invalid_grant leads to signed out), duplicate dispatch, expired attempts, lost callbacks and recovery each pass; the live staging evidence is cited, not repeated.",
+    "steps": [
+      "A real-adapter world for the vault contract: DriveHttp over a Drive v3 transport, WorkerHttp over the api app in-process, the runner over the same transports.",
+      "Cases: browser close mid-run, invalid_grant to signed out, duplicate dispatch, expired attempt, lost callback, alarm recovery; each ends as the fake ends.",
+      "A table in the entry's doc cites the staging runs (first real run, cancel-and-recover, C14) for the live side."
+    ],
+    "verify": "pnpm exec vitest run src/data/contract -t \"real adapters\" && pnpm -C runner exec vitest run -t \"real adapters\"",
+    "passes": false,
+    "note": "TL-P3-25 point 4; P3_ACCEPTANCE C12; WORK_PLAN P3 step 3 (shared behavioral suites against the real adapters)."
+  },
+  {
+    "id": "compatibility-accepted-app",
+    "task": "p3-e",
+    "category": "test",
+    "what": "Versioned fixtures of every .bower shape and journal line the accepted P2 app writes are read by the shared core and the runner without loss; and a listed check of every change under src/features and src/data/contracts since 00ec9a5 (the P2 freeze), each tied to its entry, shows nothing changed what the accepted app writes or reads without an entry and a ruling.",
+    "steps": [
+      "Fixtures under src/data/contracts/fixtures/p2/: one file per .bower shape (last-run, questions, suggestions, requests, hashes, piles, runs records, pile-declaration, pile-disposition) and per journal line kind, as the P2 app writes them, with a version tag.",
+      "The shared core and the runner parse each fixture; a test fails if any field is dropped or refused.",
+      "docs/harness/2026-10-07-p3-compatibility.md lists each change since 00ec9a5 under src/features and src/data/contracts with its entry id; a test fails on a change in those paths not in the list."
+    ],
+    "verify": "pnpm exec vitest run src/data/contracts -t \"the accepted app's files read the same in P3\" && pnpm -C runner exec vitest run -t \"the accepted app's files read the same in P3\" && pnpm exec vitest run src/docs.test.ts -t \"every change since the P2 freeze is listed\"",
+    "passes": false,
+    "note": "TL-P3-25 point 4."
   }
 ]
