@@ -38,7 +38,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - `app-security-headers`: `public/_headers` sets the CSP with the index script by hash. The landing alone needs `'unsafe-eval'` (its exported `support.js` uses `new Function`), detached with `!`; that Cloudflare detach must be checked on the deploy. The Worker sends `default-src 'none'`.
 - The deploy-staging script tests now have a 30 s timeout.
 - All 8 security findings are fixed; 344/344.
-- **Freeze:** the four suites run on the frozen SHA, then the Opus fallback review of the P3-19/20 delta (a22f288..freeze). Order:
+- **Freeze at da34905.** The four suites pass there (idle): `pnpm check` (app 3598, api 173, runner 51), e2e 226, e2e:fake 250, e2e:pwa 4. The Opus fallback review of the P3-19/20 delta (a22f288..da34905) is running, packet `2026-10-07-p3-freeze-review-packet.md`. Order:
     1. `token-key-rotation-reconsent` and `tidy-pin-actions`;
     2. `app-security-headers` and `log-no-folder-content`;
     3. `cookie-host-prefix` and `instance-private-check`;
