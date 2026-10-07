@@ -4007,5 +4007,18 @@
     "verify": "pnpm -C api exec vitest run -t \"a new run is dispatched once with its ticket|a repeat or an active run dispatches nothing|a failed dispatch leaves the run queued|no GitHub token sends nothing|admission sets the stale alarm\"",
     "passes": false,
     "note": "TL-P3-18 (worker-dispatch after worker-runner-tickets), Worker contract \"Runner wire\", ARCHITECTURE invariant 2 (admission durable before dispatch; dispatch recoverable). Live dispatch waits for the owner's GITHUB_TOKEN."
+  },
+  {
+    "id": "done-sh-runner-paths",
+    "task": "p3-9",
+    "category": "tooling",
+    "what": "The harness knows the runner: done.sh treats runner/ as code (runner/test/ and runner/**/*.test.ts as tests), and the harness check resolves `pnpm -C runner exec vitest` verifies against the runner's own tests (runner/test-results/unit.json).",
+    "steps": [
+      "A change under runner/src is code for done.sh; runner/test files are tests.",
+      "A verify with `pnpm -C runner exec vitest run -t \"…\"` finds its titles among the runner's tests in the harness check."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts src/harness.test.ts -t \"done.sh sees a change under runner/ as code and runner tests as tests|the harness check finds a verify.s titles among the runner tests\"",
+    "passes": false,
+    "note": "Found closing runner-drive-adapter: done.sh said \"d35e5c7 changes no code\" because CODE_PATHS has no runner/. Same shape as done-sh-api-paths."
   }
 ]
