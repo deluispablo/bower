@@ -3924,5 +3924,18 @@
     "verify": "pnpm exec vitest run src/data -t \"an older status revision arriving last is dropped|the fake answers rising revisions\"",
     "passes": false,
     "note": "TL-P3-15 ruling 5: the server half folded into worker-process-admission; runner-report ordering belongs to worker-runner-tickets."
+  },
+  {
+    "id": "delete-me-generation-floor",
+    "task": "p3-7",
+    "category": "fix",
+    "what": "A session cookie signed before DELETE /me stays refused for good, also after the person signs in again: forgetting keeps a non-personal session-generation floor, and the next account starts above it.",
+    "steps": [
+      "Sign in, sign two cookies (laptop, phone) at the same generation; DELETE /me with the laptop; sign in again; GET /me with the phone cookie answers 401 signed-out.",
+      "The floor holds no personal data (one integer) and survives only what DELETE /me does; a fresh sign-in's new cookie works."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a cookie from before delete me stays refused after signing in again\"",
+    "passes": false,
+    "note": "P3-7 Opus delta review, BLOCKING Important: forget() reset session_generation to 0, so a never-signed-out cookie at generation 0 revived after re-sign-in."
   }
 ]
