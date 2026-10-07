@@ -43,3 +43,4 @@ worker-error-codes-contract,implementer,claude,sonnet,medium,1,92081,,,,,,18,2.6
 worker-google-oidc,implementer,claude,opus,medium,1,161037,,,,,,51,7.8,delivered,2026-10-07
 worker-google-oidc,reviewer,claude,opus,medium,1,99206,,,,,,14,2.2,clean (TL-P2-46 fallback),2026-10-07
 worker-google-oidc (fix round),implementer,claude,sonnet,medium,2,123386,,,,,,30,3.3,delivered,2026-10-07
+worker-drive-token,implementer,claude,sonnet,medium,1,97752,,,,,,13,2.6,delivered,2026-10-07
