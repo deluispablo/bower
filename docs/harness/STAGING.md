@@ -42,3 +42,4 @@ P3 replaces this preview with the real staging environment: Worker plus real ser
 - 2026-10-06, `main` `cc54d83` (P2 closed, dossier `3e6e7da`), version `0996fb05`.
 - 2026-10-06, `main` `605bbaa` (P2 re-closed, dossier `00ec9a5`), version `ec070ce8`.
 - 2026-10-07, `main` `d5e4a74` (P3-4, first app plus Worker deploy), version `082fbde9`. `/health` and `/me` answer 500 `internal` until the owner sets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+- 2026-10-07, `main` `1bd434c` (P3-5: Drive token, Bower folder, /me pointer), version `7c93f7e6`. All Worker checks are green.
