@@ -126,3 +126,6 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - The floating "The tidy-up stopped. See why" pill covers "Put the note in the inbox" on the add screen.
   - A stale "The tidy-up stopped" banner stays on Home.
   - `?source=real` drops from the URL after in-app navigation (data stays real).
+- First real run, attempt 2 (TL-P3-19 amendment):
+  - A runner that dies before its first report (token fetch failed) leaves the app at `queued` until the stale deadline.
+  - One press sent two POST /process 160 ms apart (same run id, idempotent).
