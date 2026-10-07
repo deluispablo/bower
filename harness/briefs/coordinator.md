@@ -15,6 +15,12 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - one review from the other provider, against the contract, only for contracts, data safety and shared persistence, plus one batch review at the freeze; every fix round and every climb is a fresh session, never a resumed worker;
   - logs to files;
   - messages of 10 lines at most;
+  - output ([TL-P3-17](../../docs/harness/2026-10-07-tl-p3-17-output-discipline.md)): the owner reads only the lead, never this session, so write no text for a reader:
+    - no narration between tool calls;
+    - the end of a turn is at most one line, such as `waiting: <what>`;
+    - a "user hasn't heard from you" reminder gets one line too;
+    - all communication goes to the lead through cross-session messages, and to workers through packets;
+  - messages to the lead are the channel, so keep them complete. Give facts, SHAs and file paths, and number each question with your draft answer. Send one combined message per event, never a restatement of the state files;
   - keep HANDOFF at 5 KB or less and ACTIVE at 3 KB or less, archiving the rest;
   - compact at batch boundaries.
 - Session state ([TL-P2-43](../../docs/harness/2026-10-06-tl-p2-43-session-state.md), [TL-P2-45](../../docs/harness/2026-10-06-tl-p2-45-manual-compact.md)): at each batch boundary commit the exact resume state in HANDOFF and ACTIVE. Never clear your own session; the owner compacts it by hand, and after a compaction you re-read HANDOFF and ACTIVE.

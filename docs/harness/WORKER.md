@@ -16,4 +16,17 @@ Read this and your packet. Do not read other planning or harness documents unles
   - A content write passes the modifiedTime it read.
 - **Reviewers.** Read only the diff range and the packet. Judge against the acceptance contract: only Critical and Important findings against it block, each with a reproduction. List Minor findings in one line each; they never block.
 - **Fix rounds** start in a fresh session with the packet, the finding and the diff range; nobody resumes a finished worker.
-- **Deliver, under 15 lines:** commit SHAs, the files changed, red→green evidence, gate results, sources cited, anything left out.
+- **Output ([TL-P3-17](2026-10-07-tl-p3-17-output-discipline.md)).** Only the coordinator reads you, and only your final reply. Write no text between tool calls: think, act, and keep notes in files. Your final reply is one card of `key: value` lines and nothing else, with no greeting, recap or narrative. Point to files and SHAs instead of pasting them. Never leave out a fact the coordinator needs to decide; a missing fact costs more than a line.
+- **Delivery card (implementer), at most 8 lines:**
+  ```
+  status: done | blocked | stalled
+  commits: <sha>[, <sha>]
+  red: <test name>: <the assertion that failed>
+  green: verify pass; pnpm check pass|fail; e2e <names> pass|fail; logs <paths>
+  files: <paths>
+  sources: <urls>
+  left out: <one line, or none>
+  tokens: <total if known>
+  ```
+- **Review card, at most 12 lines:** `verdict: PASS | BLOCK`, `range: <sha>..<sha>`, then one line per Critical or Important finding (`<severity> <file:line>: <failing scenario>; missing test: <name>`), then one line per Minor finding (at most five), then `tokens:`.
+- **Evaluation card, at most 12 lines:** `verdict`, `bundle`, `cells`, one line per finding (`<severity> <cell>: <what>; steps in <notes file>#<n>`), then `tokens:`.
