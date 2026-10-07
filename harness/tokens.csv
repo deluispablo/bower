@@ -47,3 +47,4 @@ worker-drive-token,implementer,claude,sonnet,medium,1,97752,,,,,,13,2.6,delivere
 worker-vault-pointer,implementer,claude,sonnet,medium,1,108769,,,,,,15,2.9,delivered,2026-10-07
 p3-5-review,reviewer,claude,opus,medium,1,109957,,,,,,25,2.6,drive-token clean; vault-pointer 2 Important,2026-10-07
 worker-vault-pointer (fix round),implementer,claude,opus,medium,2,113629,,,,,,20,4.9,delivered,2026-10-07
+vault-template-ids,implementer,claude,sonnet,medium,1,83447,,,,,,10,2.1,delivered,2026-10-07
