@@ -34,7 +34,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - `nothingReady` is approved and in the contract. `parseRunReport` already accepts it (from worker-reads-pile-notes), so no fix is needed.
 - Running:
   - `security-review` (escalated, `/private/tmp/bower-p3-security`; ASVS 5.0 and Actions hardening; findings become fix entries);
-  - `deploy-staging-production-check` (mechanical, `/private/tmp/bower-p3-prodcheck`; the script false-alarmed on the bower-api.workers.dev subdomain).
+  - `deploy-staging-production-check` passes (6ef7934, red fixed in dab6b02). 336/337.
 - Then:
   1. the security fixes;
   2. the freeze;
