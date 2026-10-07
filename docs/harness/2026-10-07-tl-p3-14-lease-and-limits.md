@@ -40,3 +40,11 @@ The P3-6 delta review passed with Minors only. Two of them, in `runs.ts`, change
 
 - **`worker-session-lease`** keeps the place's leave generation in `sessionStorage` next to the place id. Without it, a reload's first `check` would be discarded and show "open elsewhere". It stays per tab, as the place does. Accepted.
 - **`worker-me-and-delete` revokes the Google grant best-effort, before `deleteAll()`.** A failed revoke is logged with Google's error code only, never a token, and the deletion still completes. Deleting the person's data never waits on a third party, and the original did the same (`admin.ts`, best-effort revoke). Google answering that the token is already invalid counts as revoked, not as a failure ([OAuth 2.0 revocation, RFC 7009](https://www.rfc-editor.org/rfc/rfc7009#section-2.2)). Telling the person where to review Google access after a failed revoke is a P4 copy item.
+
+## Addendum, P3-7 review: delete must end every session
+
+**Finding.** The P3-7 delta review blocked on one Important finding: after "Delete my account", the person object restarts its session generation at 0. An old cookie from another device then becomes valid again once the person signs in again. Deleting an account must end every session on every device, so the fix round `delete-me-generation-floor` is correct as packeted. `forget()` keeps one non-personal integer, the generation floor, and the next sign-in starts above it. This is the usual shape of session revocation by generation counter ([OWASP Session Management, session expiration](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#session-expiration)).
+
+**One Minor is raised to an entry.** A `POST /vault` in flight during `DELETE /me` could write a folder pointer into the emptied object, so delete would not have forgotten the person. It becomes `delete-me-inflight-vault` (`bower-implementer`), after the floor fix and using it: the pointer write is refused when the session generation changed since the request started. Test: "a folder request that started before delete me writes nothing after it". The running fix round is not widened.
+
+**The other Minors go to polish:** leave pruning in the fake, epochs reset to 1, and the stale good answer in `runs.ts`.
