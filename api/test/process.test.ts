@@ -413,7 +413,7 @@ describe('the admission manifest', () => {
     for (const w of words) expect(rowText).not.toContain(w);
     // The held note was read and its refusal logged, with none of its words.
     expect(errors).toHaveBeenCalled();
-    const logged = logs.flatMap((spy) => spy.mock.calls.map((args) => args.map(deepText).join(' ')));
+    const logged = logs.flatMap((spy) => spy.mock.calls.map((args) => args.map((a) => deepText(a)).join(' ')));
     for (const line of logged) for (const w of words) expect(line).not.toContain(w);
   });
 

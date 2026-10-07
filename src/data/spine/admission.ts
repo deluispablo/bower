@@ -4,6 +4,7 @@
  * declaration. The run takes exactly that set, and what changed since waits for the next run.
  */
 import type { DeclarationRef } from '../contracts/run-manifest';
+import { PILE_NOTE } from '../piles';
 
 export type AdmissionScope = 'all' | 'instructions';
 
@@ -45,6 +46,14 @@ export const NOTHING = {
 export type NothingCause = keyof typeof NOTHING;
 
 export type Admission = { kind: 'nothing'; cause: NothingCause } | { kind: 'manifest'; manifest: AdmissionManifest };
+
+/**
+ * The things a run was admitted to take: every admitted file of every pile but a pile folder's notes (its words, not
+ * a thing). Your changes are not things. This is the `total` the app shows ("Reading N things").
+ */
+export function admittedThings(m: AdmissionManifest): number {
+  return m.piles.reduce((sum, p) => sum + p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE)).length, 0);
+}
 
 /** Whether `value` is an admission manifest, as stored with the run and handed to the runner. */
 export function isAdmissionManifest(value: unknown): value is AdmissionManifest {

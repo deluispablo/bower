@@ -52,6 +52,9 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
   }
   // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
   if (report.yourChanges === 0) delete report.yourChanges;
+  // A full run that captured nothing (every pile it was admitted to take was held when it read them, TL-P3-25):
+  // its report says nothing was ready yet, rather than that everything has its place.
+  if (manifest.runScope === 'all' && !manifest.capture.piles.length && !manifest.capture.journal.length) report.nothingReady = true;
   return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
 }
 

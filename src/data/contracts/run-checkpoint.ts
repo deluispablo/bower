@@ -154,12 +154,13 @@ function question(value: unknown): boolean {
 }
 /** The existing RunReport shape, closed; optional counts and requests are omitted, never null. */
 function runReport(value: unknown): value is RunReport {
-  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded'])
+  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady'])
     || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, pathChange)
     || !every(value.setAside, setAside) || !every(value.questions, question)) return false;
   if (Object.hasOwn(value, 'yourChanges') && !integer(value.yourChanges)) return false;
   if (Object.hasOwn(value, 'rulesWorded') && !integer(value.rulesWorded)) return false;
   if (Object.hasOwn(value, 'requests') && !list(value.requests, text)) return false;
+  if (Object.hasOwn(value, 'nothingReady') && value.nothingReady !== true) return false;
   // Question IDs are identities; a materialized report never repeats one.
   return unique(value.questions.map((item) => (item as { id: unknown }).id));
 }

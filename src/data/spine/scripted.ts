@@ -19,23 +19,22 @@ import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, d
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type FileKind, type Pile, type PileItem, type Question, type Request, type SetAside } from '../types';
+import { BowerError, PARA_ROOTS, type Pile, type PileItem, type Question, type Request } from '../types';
 import { isJournalRecord, type JournalRecord } from '../contracts/journal-record';
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
 import { sha256 } from '../vault/hashes';
-import { noteRefusal, parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
+import { parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { NOT_FILED, canonical, grounded, groundedKeys, seen } from '../fake/fake-run-records';
-import { SET_ASIDE, capturePiles } from './plan';
+import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
 import type { AdmissionManifest } from './admission';
 import type { RunProvider } from './provider';
 import type { ScriptedRead } from './read';
-import type { SpineRead } from './plan';
 
-export { SET_ASIDE };
+export { SET_ASIDE, listedPiles };
 
 /** A B run that failed, or a plan refused before admission: the honest-phase rule guarantees no effect applied. */
 export const B_FAILURE = 'The tidy-up stopped before changing anything. Try again.';
@@ -179,11 +178,12 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
 
   // An instructions run takes no pile: it reads only your changes.
   const inbox = all ? await drive.piles(rootId) : [];
-  // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect.
-  if (all && !inbox.length) throw new BowerError('conflict', NOTHING_WAITING);
+  // An inbox emptied after the Worker looked at it: the Worker's own refusal, before any effect. A run the Worker
+  // admitted is past refusing: what it took and finds gone waits, and it ends with nothing filed (TL-P3-25 point 2).
+  if (all && !inbox.length && !opts.taken) throw new BowerError('conflict', NOTHING_WAITING);
   const piles = opts.taken ? tookPiles(inbox, opts.taken) : inbox;
   // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
-  const capture = await capturePiles(drive, rootId, piles.map((p) => ({ id: p.id, ...(p.path ? { path: p.path } : {}), itemIds: p.items.map((i) => i.id), ...(p.setAside ? { setAside: p.setAside } : {}), hasWords: !!p.text.trim() })), { notes: true });
+  const capture = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true });
   const verified = async (f: DriveFile, encoding: 'utf8' | 'blob'): Promise<VerifiedContent | null> => {
     const d = await storedDigest(drive, f);
     return d ? { encoding, size: d.size, sha256: d.sha256, provenance: drive.provenance, observedModifiedTime: f.modifiedTime } : null;
@@ -332,8 +332,13 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (/saltmere/i.test(pile.text)) asking.add(pile.id);
   }
 
-  // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal.
-  if (all && !capturedPiles.length && !journal.length) throw new BowerError('conflict', NOTHING_READY);
+  // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal. A run already
+  // admitted (a pile changed between admission and the run) plans nothing instead: it ends done, with nothing filed,
+  // its report saying nothing was ready yet, and every item it took waiting (TL-P3-25 point 2). It is no failure.
+  if (all && !capturedPiles.length && !journal.length) {
+    if (opts.taken) return nothingReadyPlan(rootId, opts);
+    throw new BowerError('conflict', NOTHING_READY);
+  }
 
   // Where each thing goes and under which name, against the folder as it will be.
   const planned = new Map(ix.entries());
@@ -1024,6 +1029,23 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
 }
 
 /**
+ * The plan of an admitted full run that finds every pile it took held, and none of your changes: nothing captured,
+ * no operation, no report row. Its report says nothing was ready yet (`materialize`).
+ */
+async function nothingReadyPlan(rootId: string, opts: PlanOptions): Promise<RunPlan> {
+  const scope = { rootId };
+  const capture: ManifestCapture = { piles: [], members: [], journal: [], places: [] };
+  const captureId = (await canonical({ scope, runScope: opts.scope, capture })).hash;
+  const manifest: Manifest = {
+    v: 1, kind: 'run-manifest', scope, runId: opts.runId, requestId: opts.requestId, runScope: opts.scope,
+    allowWeb: opts.allowWeb, requestedAt: opts.requestedAt, captureId, capture, reportPlan: [], operations: [],
+  };
+  const checked = await parseRunManifestV2((await canonical(manifest)).bytes, rootId);
+  if (!checked.ok) return refused(`the manifest guard refused the plan (${checked.reason})`);
+  return { path: 'b', manifest };
+}
+
+/**
  * A plan Bower's own checks refuse fails closed (TL-P2-37 Q2, TL-P2-38): refused before admission and any effect,
  * with no other path to run on, the way a failed check denies (OWASP, Fail securely).
  */
@@ -1356,51 +1378,6 @@ export async function runKeys(runId: string): Promise<(kind: string) => string> 
   const base = (await sha256(new Blob([new TextEncoder().encode(`bower-create-key\n${runId}`)]))).slice(0, 20);
   let n = 0;
   return (kind) => `${kind}-${base}${(++n).toString(16).padStart(4, '0')}`;
-}
-
-const FILE_KINDS: readonly string[] = ['note', 'pdf', 'image', 'link', 'doc', 'sheet', 'audio', 'other'] satisfies readonly FileKind[];
-
-/** A thing in the inbox as the Inbox lists it (`DriveVault`): the name it was added under and its kind. */
-function listedItem(f: DriveFile): PileItem {
-  const p = f.appProperties ?? {};
-  const kind = p[PROP.kind];
-  return { id: f.id, name: p[PROP.asAdded] ?? f.name, kind: kind && FILE_KINDS.includes(kind) ? (kind as FileKind) : kindOf(f.name), origin: p[PROP.origin] ?? 'Added in Drive' };
-}
-
-/**
- * The inbox's piles from a listing, for a reader with no Inbox of its own (the runner): each folder with its things and
- * the words of its first note, and each loose thing. A note Bower will not parse, or cannot read now, holds its pile
- * with the Inbox's reason; a sign-out stops the run. What a run takes of each is decided by `capturePiles`, as in the fake.
- */
-export async function listedPiles(read: SpineRead, rootId: string): Promise<Pile[]> {
-  const ix = VaultIndex.build(rootId, await read.listAll(rootId));
-  const out: Pile[] = [];
-  for (const f of ix.filesIn('Inbox')) {
-    const path = ix.pathOf(f.id);
-    if (!path) continue;
-    const id = f.appProperties?.[PROP.pile] ?? f.id;
-    const createdAt = Date.parse(f.createdTime);
-    if (!f.folder) {
-      out.push({ id, path, text: '', createdAt, items: [listedItem(f)] });
-      continue;
-    }
-    const kids = ix.filesIn(path).filter((k) => !k.folder);
-    const note = kids.find((k) => k.name === PILE_NOTE);
-    let text = '';
-    let setAside: SetAside | null = null;
-    if (note) {
-      try {
-        text = parseNote(join(path, PILE_NOTE), await read.readText(note.id)).body.trim();
-      } catch (e) {
-        if (!(e instanceof BowerError) || e.code === 'auth') throw e;
-        console.error(e);
-        const refusal = noteRefusal(e);
-        setAside = refusal === 'newer' ? 'note-format' : refusal ? 'note-damaged' : 'not-checked';
-      }
-    }
-    out.push({ id, path, text, createdAt, items: kids.filter((k) => k !== note).map(listedItem), ...(setAside ? { setAside } : {}) });
-  }
-  return out;
 }
 
 /** Who a scripted run is: its folder, its id, and whether it may look things up on the web. */

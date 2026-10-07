@@ -32,7 +32,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
-import type { AdmissionManifest } from '../../src/data/spine/admission';
+import { admittedThings } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { BowerError } from '../../src/data/types';
@@ -122,14 +122,11 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
 interface Seen {
   chain: Checkpoint[] | null;
   saving: boolean;
-  /** The admitted items the run reads, carried on every report after `reading` (undefined until known). */
+  /** The admitted things (pile members; your changes are not things), on every report from `reading` (undefined until known). */
   total: number | undefined;
 }
 
 const totalOf = (total: number | undefined): { total?: number } => (total === undefined ? {} : { total });
-
-/** The things a run reads: every admitted file of every pile, and each of your changes (the admission manifest). */
-const admittedCount = (m: AdmissionManifest): number => m.piles.reduce((sum, p) => sum + p.items.length, 0) + m.journal.length;
 
 type Ended = Exclude<TidyEnd, { phase: 'saving' }> | { phase: 'stopped'; why: string; error: unknown };
 
@@ -142,7 +139,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   // 1. Token.
   const grant = await token.grant();
   const rootId = grant.folderId;
-  if (grant.manifest) seen.total = admittedCount(grant.manifest);
+  if (grant.manifest) seen.total = admittedThings(grant.manifest);
   const drive = new RunnerDrive({ token, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
   opts.onDrive?.(drive);
   const reads = runnerReads(drive, opts.runId);

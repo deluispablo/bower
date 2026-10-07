@@ -148,6 +148,16 @@ describe('the runner process', () => {
     }
   });
 
+  it('main reports reading with total before writing', async () => {
+    const { wire, admission } = await wired(true);
+    const n = admission.piles.reduce((sum, p) => sum + p.items.filter((i) => !(p.anchor && i.name === PILE_NOTE)).length, 0);
+    expect(n).toBeGreaterThan(0);
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
+
+    expect(wire.statuses.map((s) => [s.phase, s.total])).toEqual([['reading', n], ['writing', n], ['saving', n], ['done', n]]);
+  });
+
   it('total counts things only', async () => {
     const { wire, root, admission } = await wired(true);
     // The things: every admitted file of a pile but its note; your changes are not things.
