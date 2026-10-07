@@ -118,4 +118,18 @@ describe('what the repository promises', () => {
     expect(commits.filter((sha) => !listed(sha)), 'commits missing from the list').toEqual([]);
     for (const entry of rows.values()) expect(entry).toMatch(/^[a-z][a-z0-9-]+$/);
   });
+  it('the P3 security review is recorded', () => {
+    const doc = 'docs/harness/2026-10-07-p3-security-review.md';
+    expect(existsSync(join(ROOT, doc)), `${doc} exists`).toBe(true);
+    const review = read(doc);
+    const verdict = /^verdict: (PASS|FINDINGS \((\d+)\))$/m.exec(review);
+    expect(verdict, 'verdict line').not.toBeNull();
+    // One finding per line: `- F<n> <Critical|Important|Minor> ...; entry: <fix-entry-id>` or `...; P4 note`.
+    const findings = review.match(/^- F\d+ .*$/gm) ?? [];
+    for (const line of findings) {
+      expect(line).toMatch(/^- F\d+ (Critical|Important|Minor) /);
+      expect(line).toMatch(/(entry: `[a-z][a-z0-9-]+`|P4 note)\s*$/);
+    }
+    expect(findings.length).toBe(verdict?.[1] === 'PASS' ? 0 : Number(verdict?.[2]));
+  });
 });
