@@ -154,3 +154,4 @@ P3-9 is closed.
 - Lead (a217fdd): no to the two checkpoint cuts for now. At the P4-2 close, after the deploy: 3 scripted runs on staging as A (one press each), then the live C04 smoke; all four go in p4-speed-baseline.md.
 - provider-contract closed (ba70b60). 354/354. P4-2 close: suites and Opus delta (packet 2026-10-08-p4-2-review) running; then main, the lead's deploy, 3 scripted runs and the live C04 smoke.
 - P4-2 review BLOCK (provider-contract: scripted demo hub line on a non-admitted note). Reopened (40e7577); fix round with the same worker, folding in the digest cache key and the name limits. 353/354.
+- provider-contract re-closed (61b3c6e). 354/354. Suites must re-run on the final HEAD: the fix touched src/data/spine/scripted.ts mid-run.

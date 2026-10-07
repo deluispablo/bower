@@ -197,3 +197,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - runner/test/overhead.test.ts:88: the fence check `lastToken >= 0` cannot fail after the first token, and status order is not checked.
   - runner/test/corpus.test.ts hard-codes the owner's local path to the original bench folder (skip when absent).
   - provider-contract left out: the intent has no note text, and the model sees no file contents (C15/P4-C).
+- (P4-2 provider-contract, left out) Claude runs leave requests and answers waiting (not archived): P4-C, the semantic slices.
