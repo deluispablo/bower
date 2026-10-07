@@ -4314,5 +4314,34 @@
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the runbook names every Worker secret and variable|the runbook holds no real values\"",
     "passes": true,
     "note": "TL-P3-24 point 2 (P3-F); P3_ACCEPTANCE owner setup step 4 and the runbook line."
+  },
+  {
+    "id": "deploy-staging-hardening",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "scripts/deploy-staging.sh refuses when any .env* file exists in the app or api (Vite reads VITE_API_URL from them even after env -u), confirms the deploy by wrangler's \"Uploaded bower-staging\" line rather than any mention of the name, and states its real skew wait; its test covers giving up on the wait, a failed /health rerun and a scanned file name with a space.",
+    "steps": [
+      "Refuse any .env, .env.* or api/.dev.vars-like file Vite or wrangler would read at build or deploy, ignored or not, with one sentence.",
+      "Match wrangler's upload line for bower-staging, not the echoed --var values.",
+      "The skew wait message matches its bound; tests cover give-up, a failed /health rerun and a spaced file name."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"deploy-staging refuses an env file Vite would read|deploy-staging confirms the upload line|deploy-staging gives up on the skew wait and says so\"",
+    "passes": false,
+    "note": "TL-P3-25 point 1; P3-14..16 delta review minors."
+  },
+  {
+    "id": "worker-reads-pile-notes",
+    "task": "p3-e",
+    "category": "fix",
+    "what": "The Worker's admission reads each pile's note transiently with the shared readiness code (capturePiles with notes), storing only id and version, never the text or a log of it, so it admits exactly the piles the runner will take; only-held piles answer 409 \"Nothing in the inbox is ready yet.\"; if a race still leaves every admitted pile held in the runner, the run ends done with nothing filed and a \"nothing was ready yet\" report, never a failure Try again repeats; total counts things only.",
+    "steps": [
+      "Admission (src/data/spine/plan.ts via api/src/process.ts) reads pile notes with the shared readiness code; the manifest keeps id and version only; nothing of the note text is stored or logged.",
+      "Only held piles: 409 nothing with \"Nothing in the inbox is ready yet.\" before any quota count.",
+      "Runner: every admitted pile held at run time ends done, nothing filed, report says nothing was ready yet.",
+      "total is the number of things (pile members) on every report and in last-run.json; your changes are not counted in it."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"admission holds a pile whose note is not ready|admission stores no note text\" && pnpm -C runner exec vitest run -t \"a run whose piles are all held ends done with nothing filed|total counts things only\"",
+    "passes": false,
+    "note": "TL-P3-25 points 2 and 3; P3-10 known limit; P3-14..16 review minors (total meanings, admitted pile held)."
   }
 ]
