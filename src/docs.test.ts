@@ -80,4 +80,27 @@ describe('what the repository promises', () => {
     expect(staging).toMatch(/--var APP_VERSION:<main short SHA>/);
     expect(staging).toMatch(/\/health.*must name that SHA/);
   });
+
+  it('the runbook names every Worker secret and variable', () => {
+    const runbook = read('docs/runbook.md');
+    const env = read('api/src/env.ts');
+    const list = (name: string): string[] => {
+      const body = new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(env)?.[1] ?? '';
+      return [...body.matchAll(/'([A-Z_]+)'/g)].map((m) => m[1] ?? '');
+    };
+    const names = [...list('REQUIRED_SECRETS'), ...list('OPTIONAL_SECRETS'), ...list('REQUIRED_VARS')];
+    const defaults = /const DEFAULTS = \{([^}]*)\}/.exec(env)?.[1] ?? '';
+    names.push(...[...defaults.matchAll(/^\s*([A-Z_]+):/gm)].map((m) => m[1] ?? ''));
+    expect(names.length).toBeGreaterThanOrEqual(12);
+    for (const name of names) expect(runbook, name).toContain(name);
+    expect(runbook).toContain('APP_VERSION');
+  });
+
+  it('the runbook holds no real values', () => {
+    const runbook = read('docs/runbook.md');
+    for (const pattern of ['ghp_', 'github_pat_', 'sk-ant', 'AIza', 'ya29.', 'workers.dev']) expect(runbook, pattern).not.toContain(pattern);
+    expect(runbook).not.toMatch(/-----BEGIN [A-Z ]*PRIVATE KEY-----/);
+    const addresses = runbook.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g) ?? [];
+    expect(addresses.filter((a) => a !== 'you@example.com')).toEqual([]);
+  });
 });
