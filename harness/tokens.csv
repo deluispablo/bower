@@ -129,3 +129,4 @@ log-no-folder-content,implementer,claude,sonnet,medium,1,87481,,,,,,17,1.9,deliv
 cookie-host-prefix,implementer,claude,sonnet,medium,1,74040,,,,,,15,2.3,delivered,2026-10-07
 instance-private-check,implementer,claude,haiku,low,1,72268,,,,,,30,3.4,delivered,2026-10-07
 app-security-headers,implementer,claude,sonnet,medium,1,84994,,,,,,28,17.4,delivered,2026-10-07
+deletion-allowlist-doc,implementer,claude,haiku,low,1,70229,,,,,,24,4.5,delivered,2026-10-07
