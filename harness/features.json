@@ -3816,9 +3816,10 @@
     "steps": [
       "With GET /status answering 404 and the home screen's run subscribers live for 10 minutes of fake time, the status is asked at most twice.",
       "A run status that fails offline or with a 5xx is still asked again on the next beat.",
-      "Drive never retries a 4xx other than 429 (and the one 401 token refresh); 5xx and 429 keep their three growing waits."
+      "Drive never retries a 4xx other than 429 (and the one 401 token refresh); 5xx and 429 keep their three growing waits.",
+      "After a remembered 4xx, the person's Try again asks the run status once; mounts and the beat do not."
     ],
-    "verify": "pnpm exec vitest run src/data src/app -t \"the run status is not asked again after a 4xx|a run status that fails offline or with a server error is asked again|Drive never retries a client error other than 429\"",
+    "verify": "pnpm exec vitest run src/data src/app -t \"the run status is not asked again after a 4xx|a run status that fails offline or with a server error is asked again|the person.s try again asks the run status once after a 4xx|Drive never retries a client error other than 429\"",
     "passes": false,
     "note": "TL-P3-10 ruling 3, after R2 on staging: a missing /status route made the real bundle ask about 100 times in a few minutes (Google Cloud retry strategy)."
   },
