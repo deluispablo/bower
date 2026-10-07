@@ -92,7 +92,11 @@ export function buildAuthUrl(params: {
     code_challenge: params.codeChallenge,
     code_challenge_method: 'S256',
   });
-  if (params.consent) query.set('prompt', 'consent');
+  if (params.consent) {
+    query.set('prompt', 'select_account consent');
+  } else {
+    query.set('prompt', 'select_account');
+  }
   return `${GOOGLE_AUTH_URL}?${query.toString()}`;
 }
 

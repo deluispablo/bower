@@ -172,7 +172,7 @@ function logged(spy: { mock: { calls: unknown[][] } }): string {
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
 
 describe('GET /auth/login', () => {
-  it('redirects to Google with PKCE, state, nonce and the contract scopes', async () => {
+  it('sign-in always shows Google account chooser', async () => {
     const response = await createApp({ keys }).request(`${API}/auth/login`, {}, env);
     expect(response.status).toBe(302);
     const location = new URL(response.headers.get('location') ?? '');
@@ -187,17 +187,17 @@ describe('GET /auth/login', () => {
     expect(p.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(p.get('state')).toMatch(/^[A-Za-z0-9_-]{22,}$/);
     expect(p.get('nonce')).toMatch(/^[A-Za-z0-9_-]{22,}$/);
-    // Consent only when needed: a returning person keeps their refresh token.
-    expect(p.get('prompt')).toBeNull();
+    // Always show account chooser with select_account.
+    expect(p.get('prompt')).toBe('select_account');
     const line = response.headers.getSetCookie().find((c) => c.startsWith(`${OAUTH_COOKIE}=`)) ?? '';
     expect(line.split('; ').slice(1)).toEqual(
       expect.arrayContaining(['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/auth', 'Max-Age=600']),
     );
   });
 
-  it('asks for consent only when the callback says it is needed', async () => {
+  it('the consent re-prompt also shows account chooser', async () => {
     const { location } = await login(createApp({ keys }), '?consent=1');
-    expect(location.searchParams.get('prompt')).toBe('consent');
+    expect(location.searchParams.get('prompt')).toBe('select_account consent');
   });
 });
 
