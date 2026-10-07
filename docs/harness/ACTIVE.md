@@ -35,7 +35,8 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - 322/323.
 - **First real run, attempt 1:** blocked at the press. The permission system refused the evaluator's click; the owner then allowed presses and pressed in the pane.
 - **First real run, attempt 2:** FAILED. Run 37619425172 failed in 13 s because `run_worker_first` lacks `/runner/*`, so the token route served the app's page.
-  - The fix entry `staging-runner-routes` (mechanical, `/private/tmp/bower-p3-routes`) is running.
+  - Fixed by `staging-runner-routes` (a0dcc95, red fixed in 4edd8e9; the coordinator turned its thrown error into an assertion, a2a02ad). 323/323. TL-P3-19 amendment: the runner checks the attempt before every fenced write (accepted).
+  - P3-13 suites are running at a0dcc95; the Opus delta review (packet `2026-10-07-p3-13-delta-review-packet.md`) follows.
   - The app stayed `queued` until the stale deadline.
   - One press sent two POST /process calls, with the same run id.
 - After the fix: P3-13 closes, the lead deploys, and the first-run journey runs again with one press.
