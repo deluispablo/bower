@@ -5,6 +5,7 @@
  * else becomes one of `DRIVE_MESSAGES`.
  */
 import { BowerError } from '../types';
+import { answered } from '../wait';
 import { confirmedFrom, chunkRange } from './resumable-upload';
 import { driveError, RESUMABLE_UNIT, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
@@ -271,7 +272,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     for (;;) {
       let res: Response;
       try {
-        res = await this.fetchFn(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } });
+        res = await answered(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } });
       } catch (e) {
         if (e instanceof BowerError) throw e;
         // Stopped on purpose: the queue tells this from a failure.
@@ -352,7 +353,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     for (;;) {
       let res: Response;
       try {
-        res = await this.fetchFn(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } });
+        res = await answered(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } });
       } catch (e) {
         if (e instanceof BowerError) throw e;
         if (e instanceof TypeError) throw driveError('offline');
