@@ -16,3 +16,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `2650a73` | compatibility-accepted-app | none: the fixtures themselves, and nothing else |
 | `3cc965f` | worker-reads-pile-notes | adds an optional `nothingReady: true` to the run report (`types.ts`, `run-checkpoint.ts`, `layout.ts`): files the accepted app wrote never carry it and still read the same; a P3 report with it reads in the accepted app as an empty report. The done line "Nothing in the inbox was ready yet, so it stays as it is." is screen words |
 | `8f74a46` | rules-template-bower | none: `RULES_TEMPLATE` (the empty Rules.md text and its `by: bower` mark) is added to the contracts and the fake Worker makes the file from it with the same bytes as before; no check or file shape changed |
+| `747e8bb` | home-sheet-and-focus | none: tests only (Home, palette), no file of the folder is read or written |
+| `c8c7908` | home-sheet-and-focus | none: the tidy-up sheet shows a finished run's end only for a run it watched, and focus returns to what opened the palette, a Home question or the Undo toast; screen behaviour only, no file shape or check changed |
