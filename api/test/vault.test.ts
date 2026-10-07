@@ -23,13 +23,19 @@ beforeEach(async () => {
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
 
+/** The lease headers each person's window holds (the Worker fences POST /vault), by cookie. */
+const leases = new Map<string, Record<string, string>>();
+
 async function someone(): Promise<{ sub: string; cookie: string }> {
   const sub = `vault-sub-${crypto.randomUUID()}`;
   await kv.put(allowKey(EMAIL), '1');
   const enc = await encrypt('test-refresh-token', await importEncryptionKey(env.TOKEN_ENC_KEY));
   const { generation } = await person(sub).signIn({ email: EMAIL, name: 'Alex', encRefreshToken: enc });
   const token = await signSession({ sub, gen: generation }, env.SESSION_SECRET);
-  return { sub, cookie: `${SESSION_COOKIE}=${token}` };
+  const cookie = `${SESSION_COOKIE}=${token}`;
+  const { epoch } = await person(sub).session('laptop', 'take', 0, Date.now());
+  leases.set(cookie, { 'x-bower-place': 'laptop', 'x-bower-epoch': String(epoch) });
+  return { sub, cookie };
 }
 
 interface Item {
@@ -176,10 +182,10 @@ class FakeGoogle {
   }
 }
 
-async function post(g: FakeGoogle, cookie: string): Promise<Response> {
+async function post(g: FakeGoogle, cookie: string, lease: Record<string, string> = leases.get(cookie) ?? {}): Promise<Response> {
   return await createApp({ fetchImpl: g.fetchImpl }).request(
     `${APP}/vault`,
-    { method: 'POST', headers: { cookie, origin: APP, 'content-type': 'application/json' }, body: '{}' },
+    { method: 'POST', headers: { cookie, origin: APP, 'content-type': 'application/json', ...lease }, body: '{}' },
     env,
   );
 }
@@ -402,6 +408,30 @@ describe('POST /vault', () => {
     const wrong = await createApp({ fetchImpl: g.fetchImpl }).request(`${APP}/vault`, { method: 'POST', headers: { cookie, origin: 'https://evil.example.com' } }, env);
     expect(wrong.status).toBe(403);
     expect(g.calls).toHaveLength(0);
+  });
+
+  it('POST /vault refuses a stale or missing session epoch', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    const holder = leases.get(cookie) ?? {};
+    const epoch = Number(holder['x-bower-epoch']);
+    const refused = async (lease: Record<string, string>) => {
+      const r = await post(g, cookie, lease);
+      expect(r.status, JSON.stringify(lease)).toBe(409);
+      expect(await r.json()).toEqual({ error: { code: 'stale-session', message: 'Bower is open in another window.' } });
+    };
+    await refused({});
+    await refused({ 'x-bower-place': 'laptop' });
+    await refused({ 'x-bower-place': 'laptop', 'x-bower-epoch': 'one' });
+    await refused({ 'x-bower-place': 'laptop', 'x-bower-epoch': String(epoch - 1) });
+    await refused({ 'x-bower-place': 'phone', 'x-bower-epoch': String(epoch) });
+    expect(g.calls).toHaveLength(0);
+    // The holder's epoch works as before.
+    expect((await post(g, cookie)).status).toBe(200);
+    // Another place takes it: the old holder's epoch is stale now, the new one's works.
+    const moved = await person(sub).session('phone', 'take', 0, Date.now());
+    await refused(holder);
+    expect((await post(g, cookie, { 'x-bower-place': 'phone', 'x-bower-epoch': String(moved.epoch) })).status).toBe(200);
   });
 });
 

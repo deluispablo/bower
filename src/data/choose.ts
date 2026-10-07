@@ -59,7 +59,7 @@ export function chooseSource(kind: SourceKind): void {
 
 export async function buildSources(kind: SourceKind, scenario: Scenario, scale: TimeScale): Promise<{ sources: Sources; world?: DemoWorld }> {
   // The demo and the pretend Drive load only when asked for: the real app never downloads them.
-  // One active place per person (TL-P2-13) on demo and fake (real waits for P3, below): demo and each fake
+  // One active place per person (TL-P2-13) on every source: demo and each fake
   // scenario are separate worlds that never block each other, and the person is a hash of their email.
   if (kind === 'demo') {
     const [{ DemoWorld }, { ALEX }, { localPlace }] = await Promise.all([import('./demo/world'), import('./demo/fixture'), import('./fake/fake-lease')]);
@@ -72,9 +72,9 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   }
   if (kind === 'real') {
     const worker = new WorkerHttp(apiBase());
-    // P3 obligation (TL-P2-14/24/25): no place here yet, because today's real Worker has no POST /session
-    // and asking it would stop the app at start. Once the P3 Worker answers it, wire `place: { world: 'real' }`.
-    return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }) }) };
+    // The real Worker answers POST /session and fences its own writes (TL-P3-14): this tab holds a place,
+    // and its Worker calls carry the place and epoch.
+    return { sources: makeLiveSources({ worker, driveLinks: true, drive: new DriveHttp({ token: (fresh) => worker.driveToken(fresh) }), place: { world: 'real' } }) };
   }
   const [{ pretendDrive, pretendRuns }, { FakeWorker }, { FakeLease, leaseKey }, { ALEX }] = await Promise.all([import('./fake/pretend'), import('./fake/fake-worker'), import('./fake/fake-lease'), import('./demo/fixture')]);
   const { drive, rootId, fresh } = await pretendDrive(scenario);

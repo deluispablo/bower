@@ -59,7 +59,8 @@ export interface WorkerApi {
    * one), `take` moves it here with a higher epoch, `leave` lets it go. Every client has it (TL-P2-24):
    * the real Worker, and the fake (with a `FakeLease`; without one every place is active).
    */
-  session(place: string, action: SessionAction): Promise<LeaseReply>;
+  /** `gen`: the place's leave generation (TL-P3-14); a missing one counts as 0. */
+  session(place: string, action: SessionAction, gen?: number): Promise<LeaseReply>;
 }
 
 /** The HTTP status a Worker error came with, kept as its typed cause; never read from its words. */

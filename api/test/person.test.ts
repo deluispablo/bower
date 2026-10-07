@@ -8,6 +8,13 @@ import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
 
+/** Takes back schema step 6 (the lease columns and the leave table), for the tests that rewind further. */
+function undoV6(sql: SqlStorage): void {
+  sql.exec('DROP TABLE session_leave');
+  sql.exec('ALTER TABLE session_lease DROP COLUMN beat_at');
+  sql.exec('ALTER TABLE session_lease DROP COLUMN left_place');
+}
+
 function rowCount(sql: SqlStorage, table: string): number {
   return sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`).one().n;
 }
@@ -63,6 +70,7 @@ describe('person object', () => {
     expect(samCounts).toEqual({
       schema_version: 1,
       session_lease: 0,
+      session_leave: 0,
       admission: 0,
       quota: 1,
       control: 0,
@@ -76,6 +84,7 @@ describe('person object', () => {
     expect(alexCounts).toEqual({
       schema_version: 1,
       session_lease: 1,
+      session_leave: 0,
       admission: 1,
       quota: 1,
       control: 1,
@@ -142,6 +151,7 @@ describe('person storage migration', () => {
     // Put the database back as P3-3 shipped it: no account table, a version row of 1.
     await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
+      undoV6(sql);
       sql.exec('DROP TABLE account');
       sql.exec('UPDATE schema_version SET version = 1 WHERE id = 1');
     });
@@ -165,6 +175,7 @@ describe('person storage migration', () => {
     // Put the database back as P3-4 shipped it: no pointer or token columns, a version row of 2.
     await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
+      undoV6(sql);
       for (const column of ['folder_id', 'access_token', 'access_expires_at', 'folder_complete', 'pending_folder_id', 'vault_claim', 'vault_claim_until', 'pending_template_ids']) {
         sql.exec(`ALTER TABLE account DROP COLUMN ${column}`);
       }
@@ -179,5 +190,45 @@ describe('person storage migration', () => {
     expect(await alex.folderId()).toBeNull();
     expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
     expect(await alex.folderId()).toBe('FOLDER_ID');
+  });
+
+  it('person storage migrates from v5 to v6 keeping every row', async () => {
+    const alex = personFor('sub-alex-v5');
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
+    expect(await alex.claimVault('call-1', 1_000, 61_000)).toBe(true);
+    await alex.cacheDriveToken({ accessToken: 'access-1', expiresAt: 9_999_999_999_999 });
+    // Put the database back as P3-6 shipped it: the v5 lease table (place, epoch) and a version row of 5.
+    await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      sql.exec('DROP TABLE IF EXISTS session_leave');
+      sql.exec('DROP TABLE session_lease');
+      sql.exec(`CREATE TABLE session_lease (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        place TEXT NOT NULL,
+        epoch INTEGER NOT NULL CHECK (epoch >= 0)
+      )`);
+      sql.exec('INSERT INTO session_lease (id, place, epoch) VALUES (1, ?, ?)', 'laptop', 7);
+      sql.exec('UPDATE schema_version SET version = 5 WHERE id = 1');
+    });
+    await evictDurableObject(alex);
+
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    expect(SCHEMA_VERSION).toBe(6);
+    // Every value survives: the account, the folder, the claim, the token and the lease.
+    expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0 });
+    expect(await alex.encryptedRefreshToken()).toBe('enc-token');
+    expect(await alex.folderId()).toBe('FOLDER_ID');
+    expect(await alex.cachedDriveToken(0)).toEqual({ accessToken: 'access-1', expiresAt: 9_999_999_999_999 });
+    expect(await alex.claimVault('call-2', 2_000, 62_000)).toBe(false);
+    const kept = await runInDurableObject(alex, (_instance, state) => ({
+      claim: state.storage.sql.exec<{ vault_claim: string; vault_claim_until: number }>('SELECT vault_claim, vault_claim_until FROM account WHERE id = 1').one(),
+      leaves: rowCount(state.storage.sql, 'session_leave'),
+    }));
+    expect(kept).toEqual({ claim: { vault_claim: 'call-1', vault_claim_until: 61_000 }, leaves: 0 });
+    // The lease kept its holder and epoch: the holder's epoch still holds, and its check renews it.
+    expect(await alex.holdsLease('laptop', 7)).toBe(true);
+    expect(await alex.session('laptop', 'check', 0, 5_000)).toEqual({ active: true, epoch: 7 });
+    expect(await alex.session('phone', 'check', 0, 5_001)).toEqual({ active: false, epoch: 7 });
   });
 });

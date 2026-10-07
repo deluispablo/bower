@@ -46,6 +46,7 @@ import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import type { FetchLike } from './google.js';
 import { requireSameOrigin } from './security.js';
+import { requireLease } from './session-lease.js';
 import { TEMPLATE_FILES } from './template.generated.js';
 import type { TemplateFile } from './template.generated.js';
 
@@ -384,7 +385,8 @@ async function attemptVault(
 export function createVaultRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const vault = new Hono<AppEnv>();
 
-  vault.post('/vault', requireSameOrigin, requireSession, async (c) => {
+  // Only the window holding the person's session lease may make or find the folder (TL-P3-14).
+  vault.post('/vault', requireSameOrigin, requireSession, requireLease, async (c) => {
     const sub = c.get('userId');
     if (sub === undefined) throw new HttpError(500, 'internal');
     const options: VaultOptions = {};

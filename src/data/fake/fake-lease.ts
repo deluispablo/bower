@@ -11,6 +11,9 @@
  * - `leave` by the holder frees it at once (the epoch stays). A `check` by
  *   the place that left, with nobody in between, takes it back with the
  *   same epoch (a failed sign-out, a reload); any other grant raises it.
+ * - Each place's latest `leave` generation is kept (TL-P3-14): a `check` with
+ *   an older one (a missing one counts as 0) began before that leave, so it
+ *   grants and renews nothing and answers how things stand for that place.
  */
 import { LEASE_TTL_MS, createPlaceGuard, sessionBus, type LeaseReply, type PlaceDeps, type PlaceGuard, type PlaceOptions, type SessionAction } from '../session';
 
@@ -20,6 +23,8 @@ export interface LeaseRecord {
   beatAt: number;
   /** The place that let it go, while nobody else has had it since. */
   left?: string;
+  /** Each place's latest leave generation. */
+  gens?: Record<string, number>;
 }
 
 export interface FakeLeaseOptions {
@@ -37,10 +42,13 @@ export function leaseKey(world: string, person: string): string {
 
 const FREE: LeaseRecord = { holder: null, epoch: 0, beatAt: 0 };
 
+const isGens = (v: unknown): v is Record<string, number> =>
+  !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every((n) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0);
+
 const isRecord = (v: unknown): v is LeaseRecord => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const r = v as Record<string, unknown>;
-  return (r.holder === null || typeof r.holder === 'string') && typeof r.epoch === 'number' && Number.isSafeInteger(r.epoch) && r.epoch >= 0 && typeof r.beatAt === 'number' && Number.isFinite(r.beatAt) && (r.left === undefined || typeof r.left === 'string');
+  return (r.holder === null || typeof r.holder === 'string') && typeof r.epoch === 'number' && Number.isSafeInteger(r.epoch) && r.epoch >= 0 && typeof r.beatAt === 'number' && Number.isFinite(r.beatAt) && (r.left === undefined || typeof r.left === 'string') && (r.gens === undefined || isGens(r.gens));
 };
 
 export class FakeLease {
@@ -54,21 +62,27 @@ export class FakeLease {
     this.ttl = opts.ttlMs ?? LEASE_TTL_MS;
   }
 
-  async session(place: string, action: SessionAction): Promise<LeaseReply> {
+  async session(place: string, action: SessionAction, gen = 0): Promise<LeaseReply> {
     const lease = this.read();
+    const gens = lease.gens ?? {};
+    const write = (next: Omit<LeaseRecord, 'gens'>, kept = gens): void => this.write({ ...next, ...(Object.keys(kept).length ? { gens: kept } : {}) });
     const live = this.live(lease);
     if (action === 'leave') {
-      if (lease.holder === place) this.write({ holder: null, epoch: lease.epoch, beatAt: lease.beatAt, left: place });
+      const kept = { ...gens, [place]: Math.max(gens[place] ?? 0, gen) };
+      if (lease.holder === place) write({ holder: null, epoch: lease.epoch, beatAt: lease.beatAt, left: place }, kept);
+      else write({ holder: lease.holder, epoch: lease.epoch, beatAt: lease.beatAt, ...(lease.left !== undefined ? { left: lease.left } : {}) }, kept);
       return { active: false, epoch: lease.epoch };
     }
+    // Begun before this place's latest leave: it says nothing about the lease now (TL-P3-14).
+    if (action === 'check' && gen < (gens[place] ?? 0)) return { active: lease.holder === place, epoch: lease.epoch };
     // Back after the TTL with nobody in between, or back after letting it go: the same epoch carries on (TL-P2-25).
     if (action === 'check' && (lease.holder === place || (lease.holder === null && lease.left === place))) {
-      this.write({ holder: place, epoch: lease.epoch, beatAt: this.now() });
+      write({ holder: place, epoch: lease.epoch, beatAt: this.now() });
       return { active: true, epoch: lease.epoch };
     }
     if (action === 'take' || !live) {
       const next = { holder: place, epoch: lease.epoch + 1, beatAt: this.now() };
-      this.write(next);
+      write(next);
       return { active: true, epoch: next.epoch };
     }
     return { active: false, epoch: lease.epoch };
@@ -139,7 +153,7 @@ export function localPlace(opts: LocalPlaceOptions): PlaceGuard {
     ...(opts.onActive ? { onActive: opts.onActive } : {}),
     ...(opts.onBlocked ? { onBlocked: opts.onBlocked } : {}),
     ...(opts.pageOnly ? { pageOnly: opts.pageOnly } : {}),
-    lease: (place, action) => lease.session(place, action),
+    lease: (place, action, gen) => lease.session(place, action, gen),
     scope: async () => `${opts.world}:${opts.person}`,
   });
 }

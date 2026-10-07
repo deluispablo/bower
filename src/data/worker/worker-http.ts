@@ -85,9 +85,9 @@ export class WorkerHttp implements WorkerApi {
   }
 
   /** POST /session: the Worker binds the lease to the signed-in person; `place` is a random tab id, no secret. */
-  async session(place: string, action: SessionAction): Promise<LeaseReply> {
+  async session(place: string, action: SessionAction, gen = 0): Promise<LeaseReply> {
     // Leaving is sent as the page closes: keepalive lets it outlive the page (sendBeacon cannot set headers).
-    const reply = await this.call<LeaseReply>('POST', '/session', { place, action }, isLeaseReply, {}, action === 'leave');
+    const reply = await this.call<LeaseReply>('POST', '/session', { place, action, gen }, isLeaseReply, {}, action === 'leave');
     if (reply.active) this.place = { place, epoch: reply.epoch };
     else if (this.place?.place === place) this.place = null;
     return { active: reply.active, epoch: reply.epoch };

@@ -8,12 +8,13 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
   'schema_version',
   'session_lease',
+  'session_leave',
   'admission',
   'quota',
   'control',
@@ -92,6 +93,23 @@ const STEPS: readonly (readonly string[])[] = [
     // {"folderId": ..., "ids": {path: id}}, kept until the folder is complete: a fill that
     // resumes after its claim lapsed creates the same ids, and Drive refuses a second file.
     'ALTER TABLE account ADD COLUMN pending_template_ids TEXT',
+  ],
+  [
+    // The lease as POST /session keeps it (worker contract, "One active session"; TL-P3-14).
+    // Columns are added rather than the table rebuilt, so every v5 row stays as it is: `place`
+    // stays NOT NULL and holds '' while nobody has the lease (a real place is 1 to 64 characters).
+    // When the holder last checked (epoch ms): 3 minutes after it, the lease is free for others.
+    'ALTER TABLE session_lease ADD COLUMN beat_at INTEGER NOT NULL DEFAULT 0',
+    // The place that let the lease go, while nobody else has had it since (it gets the same epoch back).
+    'ALTER TABLE session_lease ADD COLUMN left_place TEXT',
+    // Each place's latest leave generation, in its own table keyed by place (places are many and
+    // short-lived): a check sent with an older one began before that leave and is discarded.
+    // `left_at` lets old rows go (session-lease.ts).
+    `CREATE TABLE session_leave (
+      place TEXT PRIMARY KEY,
+      gen INTEGER NOT NULL CHECK (gen >= 0),
+      left_at INTEGER NOT NULL
+    )`,
   ],
 ];
 

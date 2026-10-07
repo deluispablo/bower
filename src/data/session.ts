@@ -36,7 +36,11 @@ export interface LeaseReply {
   active: boolean;
   epoch: number;
 }
-export type LeaseCall = (place: string, action: SessionAction) => Promise<LeaseReply>;
+/**
+ * `gen` is the place's leave generation (TL-P3-14): it goes with every `check` and `leave`, so the Worker
+ * discards a check that began before the place's latest leave. A call without it counts as 0.
+ */
+export type LeaseCall = (place: string, action: SessionAction, gen: number) => Promise<LeaseReply>;
 
 export function isLeaseReply(value: unknown): value is LeaseReply {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -216,8 +220,31 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
   let disposed = false;
   /** A sign-out in progress from this active place (see `leaveFor`). */
   let leaving: Promise<unknown> | null = null;
-  /** Bumped whenever this place lets its lease go (sign-out, leave, reset): an answer to a check begun before says nothing now. */
-  let leaveGen = 0;
+  const genKey = `bower:place-gen:${place}`;
+  /**
+   * Bumped whenever this place lets its lease go (sign-out, leave, reset): an answer to a check begun before
+   * says nothing now, and the Worker discards such a check (TL-P3-14). Kept for the tab's life with the
+   * place id, so a reload after the leave on `pagehide` is not taken for a check from before it.
+   */
+  let leaveGen = ((): number => {
+    try {
+      const n = Number((deps.memory ?? sessionStorage).getItem(genKey) ?? '0');
+      return Number.isSafeInteger(n) && n >= 0 ? n : 0;
+    } catch (e) {
+      console.error(e);
+      return 0;
+    }
+  })();
+  function nextLeave(): void {
+    leaveGen++;
+    try {
+      (deps.memory ?? sessionStorage).setItem(genKey, String(leaveGen));
+    } catch (e) {
+      // Without it, a reload of this place may be refused until Use here; nothing is lost.
+      console.error(e);
+    }
+  }
+  const lease = (action: SessionAction): Promise<LeaseReply> => deps.lease(place, action, leaveGen);
 
   const emit = (): void => listeners.forEach((l) => l());
   const lockName = (s: string): string => `bower-place:${s}`;
@@ -322,9 +349,9 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
   }
 
   const ask = (action: 'check' | 'take'): Promise<LeaseReply> => {
-    if (action === 'take') return deps.lease(place, 'take');
+    if (action === 'take') return lease('take');
     if (!checking) {
-      const p = deps.lease(place, 'check');
+      const p = lease('check');
       checking = p;
       const clear = (): void => {
         if (checking === p) checking = null;
@@ -345,7 +372,7 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
       return;
     }
     // The lease was granted again with a new epoch: someone held it meanwhile (TL-P2-25), so let it go.
-    if (reply.active) void deps.lease(place, 'leave').catch((e: unknown) => console.error(e));
+    if (reply.active) void lease('leave').catch((e: unknown) => console.error(e));
     block();
   }
 
@@ -397,7 +424,7 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
     if (state !== 'active' || disposed) return false;
     let moved = false;
     try {
-      const reply = await deps.lease(place, 'check');
+      const reply = await lease('check');
       if (state !== 'active' || disposed) return false;
       if (!reply.active) {
         block();
@@ -555,14 +582,14 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
       stopBeat();
       stopBeat = () => undefined;
       // Checks already on their way answer for before the leave: forget them.
-      leaveGen++;
+      nextLeave();
       checking = null;
       const before = held;
       /** This sign-out, so its own failure path can stop writes waiting for it. */
       const mine: { p: Promise<unknown> | null } = { p: null };
       const p = (async (): Promise<T> => {
         try {
-          await deps.lease(place, 'leave');
+          await lease('leave');
         } catch (e) {
           // The TTL lets it go instead.
           console.error(e);
@@ -602,10 +629,10 @@ export function createPlaceGuard(deps: PlaceDeps): PlaceGuard {
       guard.reset();
       if (was !== 'active') return;
       forget();
-      await deps.lease(place, 'leave');
+      await lease('leave');
     },
     reset(): void {
-      leaveGen++;
+      nextLeave();
       checking = null;
       letGo();
       const changed = state !== 'starting';

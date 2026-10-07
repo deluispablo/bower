@@ -130,16 +130,29 @@ describe('every source has one active place per person', () => {
     close(a, b, c, demo);
   });
 
-  it('the real source has no place until the P3 Worker answers the session', async () => {
+  it('the real source holds a place and sends its epoch', async () => {
     vi.stubEnv('VITE_API_URL', 'https://api.example');
-    // Hermetic: nothing may reach a network.
-    const fetchFn = vi.fn(async (_url: RequestInfo | URL): Promise<Response> => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // A pretend Worker: nothing reaches a network.
+    const asked: { path: string; method: string; headers: Record<string, string>; body: unknown }[] = [];
+    const fetchFn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const path = new URL(String(url)).pathname;
+      const method = init?.method ?? 'GET';
+      asked.push({ path, method, headers: { ...(init?.headers as Record<string, string> | undefined) }, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (path === '/me') return Response.json({ user: { name: 'Alex', email: 'you@example.com' }, folderId: null });
+      if (path === '/session') return Response.json({ active: true, epoch: 7 });
+      if (path === '/vault') return Response.json({ folderId: 'FOLDER_ID', found: true });
       throw new TypeError('Failed to fetch');
     });
     vi.stubGlobal('fetch', fetchFn);
     const { sources } = await buildSources('real', 'default', 'instant');
-    expect(sources.place).toBeUndefined();
-    expect(fetchFn.mock.calls.some(([u]) => new URL(String(u)).pathname === '/session')).toBe(false);
+    expect(sources.place).toBeDefined();
+    expect(await sources.place?.start()).toBe('active');
+    const session = asked.find((a) => a.path === '/session');
+    expect(session?.body).toEqual({ place: (sources.place as PlaceGuard).place, action: 'check', gen: 0 });
+    await sources.session.createFolder(() => undefined).catch(() => undefined);
+    const write = asked.find((a) => a.path === '/vault');
+    expect(write?.headers).toMatchObject({ 'x-bower-place': (sources.place as PlaceGuard).place, 'x-bower-epoch': '7' });
     expect(leases()).toEqual([]);
     close(sources);
   });

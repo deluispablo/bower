@@ -162,7 +162,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       ...(o.clock ? { clock: o.clock } : {}),
       ...(o.reload ? { reload: o.reload } : {}),
       ...(target ? { target } : {}),
-      lease: (place, action) => authed.session(place, action),
+      lease: (place, action, gen) => authed.session(place, action, gen),
       // The world and a hash of the person: demo, each fake scenario and real never block each other.
       scope: async () => `${o.world ?? 'live'}:${await account()}`,
       onActive: (how) => activeHere(how),

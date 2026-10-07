@@ -110,10 +110,10 @@ export class FakeWorker implements WorkerApi {
   }
 
   /** The person's one active place (TL-P2-14); without a lease every place is active. */
-  async session(place: string, action: SessionAction): Promise<LeaseReply> {
+  async session(place: string, action: SessionAction, gen?: number): Promise<LeaseReply> {
     this.online();
     if (!this.lease) return { active: action !== 'leave', epoch: 0 };
-    const reply = await this.lease.session(place, action);
+    const reply = await this.lease.session(place, action, gen);
     if (reply.active) this.holder = { place, epoch: reply.epoch };
     else if (this.holder?.place === place) this.holder = null;
     return reply;

@@ -27,13 +27,13 @@ describe('WorkerHttp', () => {
     await expect(new WorkerHttp(BASE, bad.fetch).deleteAccount()).rejects.toThrow('Try again later.');
   });
 
-  it('session posts the place and action, and process, createFolder and deleteAccount carry the epoch', async () => {
+  it('session posts the place, action and leave generation, and process, createFolder and deleteAccount carry the epoch', async () => {
     const s = stub((url) => (url.pathname === '/session' ? json({ active: true, epoch: 7 }) : url.pathname === '/process' ? json({ run: { id: 'run-1', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 } }) : url.pathname === '/vault' ? json({ folderId: 'FOLDER_ID', found: false }) : new Response(null, { status: 204 })));
     const w = new WorkerHttp(BASE, s.fetch);
-    expect(await w.session('place-1', 'check')).toEqual({ active: true, epoch: 7 });
+    expect(await w.session('place-1', 'check', 2)).toEqual({ active: true, epoch: 7 });
     expect(s.calls[0]?.init.method).toBe('POST');
     expect(s.calls[0]?.init.credentials).toBe('include');
-    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ place: 'place-1', action: 'check' });
+    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ place: 'place-1', action: 'check', gen: 2 });
     await w.process('all');
     await w.createFolder();
     await w.deleteAccount();
@@ -58,7 +58,7 @@ describe('WorkerHttp', () => {
     const s = stub(() => json({ active: false, epoch: 2 }));
     await new WorkerHttp(BASE, s.fetch).session('place-1', 'leave');
     expect(s.calls[0]?.init.keepalive).toBe(true);
-    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ place: 'place-1', action: 'leave' });
+    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ place: 'place-1', action: 'leave', gen: 0 });
   });
 
   it('401 on /me gives null', async () => {

@@ -2,6 +2,13 @@ import { DurableObject } from 'cloudflare:workers';
 
 import type { Env } from './env.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
+import { LEASE_TTL_MS } from './session-lease.js';
+import type { LeaseReply, SessionAction } from './session-lease.js';
+
+/** `session_lease.place` while nobody holds the lease (a real place is 1 to 64 characters). */
+const FREE_PLACE = '';
+/** How long a place's latest leave generation is kept. */
+const LEAVE_KEPT_MS = 24 * 60 * 60 * 1000;
 
 /** The person's account row, as `GET /me` and the session check read it. */
 export interface PersonAccount {
@@ -329,6 +336,90 @@ export class Person extends DurableObject<Env> {
         refused,
       ).rowsWritten > 0
     );
+  }
+
+  /**
+   * `POST /session` (worker contract, "One active session"; TL-P2-14/25, TL-P3-14), the same rules as the
+   * app's pretend lease (`src/data/fake/fake-lease.ts`):
+   * - a `check` whose `gen` is older than its place's latest `leave` began before that leave: it grants and
+   *   renews nothing, and answers the current state for that place;
+   * - a `check` by the holder renews it with the same epoch, even after the TTL when nobody took it, and so
+   *   does one by the place that let it go while nobody had it since;
+   * - a free or expired lease goes to whoever checks, and `take` always moves it, with epoch + 1;
+   * - `leave` records the place's generation (never lowering it) and, by the holder, frees the lease with
+   *   its epoch kept.
+   * One synchronous transaction, so no other call reads between the read and the write (a fencing token in
+   * Kleppmann's sense: the epoch only grows while anyone has had the lease).
+   */
+  session(place: string, action: SessionAction, gen: number, now: number): LeaseReply {
+    return this.ctx.storage.transactionSync(() => {
+      const sql = this.ctx.storage.sql;
+      const lease = this.lease();
+      const write = (holder: string | null, epoch: number, beatAt: number, left: string | null): void => {
+        sql.exec(
+          `INSERT INTO session_lease (id, place, epoch, beat_at, left_place) VALUES (1, ?, ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET place = excluded.place, epoch = excluded.epoch,
+             beat_at = excluded.beat_at, left_place = excluded.left_place`,
+          holder ?? FREE_PLACE,
+          epoch,
+          beatAt,
+          left,
+        );
+      };
+      if (action === 'leave') {
+        sql.exec(
+          `INSERT INTO session_leave (place, gen, left_at) VALUES (?, ?, ?)
+           ON CONFLICT (place) DO UPDATE SET gen = MAX(gen, excluded.gen), left_at = excluded.left_at`,
+          place,
+          gen,
+          now,
+        );
+        // A check in flight lasts seconds; a place that left long ago has nothing on its way.
+        sql.exec('DELETE FROM session_leave WHERE left_at < ?', now - LEAVE_KEPT_MS);
+        if (lease.holder === place) write(null, lease.epoch, lease.beatAt, place);
+        return { active: false, epoch: lease.epoch };
+      }
+      if (action === 'check') {
+        const last = sql
+          .exec<{ gen: number }>('SELECT gen FROM session_leave WHERE place = ?', place)
+          .toArray()[0]?.gen;
+        if (last !== undefined && gen < last) return { active: lease.holder === place, epoch: lease.epoch };
+        if (lease.holder === place || (lease.holder === null && lease.left === place)) {
+          write(place, lease.epoch, now, null);
+          return { active: true, epoch: lease.epoch };
+        }
+      }
+      const live = lease.holder !== null && now - lease.beatAt < LEASE_TTL_MS;
+      if (action === 'take' || !live) {
+        write(place, lease.epoch + 1, now, null);
+        return { active: true, epoch: lease.epoch + 1 };
+      }
+      return { active: false, epoch: lease.epoch };
+    });
+  }
+
+  /**
+   * Whether `place` holds the lease at `epoch`: the fence on the Worker's own endpoints. An expired lease
+   * nobody took is still its holder's (TL-P2-25); a stale epoch or another place is not.
+   */
+  holdsLease(place: string, epoch: number): boolean {
+    const lease = this.lease();
+    return lease.holder === place && lease.epoch === epoch;
+  }
+
+  private lease(): { holder: string | null; epoch: number; beatAt: number; left: string | null } {
+    const row = this.ctx.storage.sql
+      .exec<{ place: string; epoch: number; beat_at: number; left_place: string | null }>(
+        'SELECT place, epoch, beat_at, left_place FROM session_lease WHERE id = 1',
+      )
+      .toArray()[0];
+    if (row === undefined) return { holder: null, epoch: 0, beatAt: 0, left: null };
+    return {
+      holder: row.place === FREE_PLACE ? null : row.place,
+      epoch: row.epoch,
+      beatAt: row.beat_at,
+      left: row.left_place,
+    };
   }
 
   /** The person's current run, or null before runs exist. */

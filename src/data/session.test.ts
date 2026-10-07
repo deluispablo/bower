@@ -363,7 +363,7 @@ describe('one active session per person fences the old place', () => {
     await drain();
     expect(status.mock.calls.length).toBeGreaterThan(asked);
     await w.clock.advance(HEARTBEAT_MS);
-    expect(beat).toHaveBeenCalledWith('laptop', 'check');
+    expect(beat).toHaveBeenCalledWith('laptop', 'check', 0);
     await leaseOn(w.storage, w.clock).session('phone', 'take');
     await w.clock.advance(HEARTBEAT_MS);
     expect(a.place.state()).toBe('elsewhere');
@@ -843,7 +843,7 @@ describe('review findings and TL-P2-25: blocked is not closed, nothing stale lan
     await drain();
     const beat = vi.spyOn(a.worker, 'session');
     await a.live.vault.flushJournal();
-    expect(beat).toHaveBeenCalledWith('laptop', 'check');
+    expect(beat).toHaveBeenCalledWith('laptop', 'check', 0);
   });
 
   it('a Worker refusal blocks the place at once, and is told apart from other conflicts', async () => {
@@ -1268,5 +1268,62 @@ describe('one way to let the lease go (qa-25)', () => {
       a.close();
       b.close();
     }
+  });
+});
+
+describe('the leave generation (TL-P3-14)', () => {
+  it("the fake discards a check started before the place's latest leave", async () => {
+    const storage = memoryStorage();
+    const clock = new TestClock();
+    const lease = leaseOn(storage, clock);
+    expect(await lease.session('laptop', 'check', 0)).toEqual({ active: true, epoch: 1 });
+    expect(await lease.session('laptop', 'leave', 1)).toEqual({ active: false, epoch: 1 });
+    // A check sent before that leave arrives late: it grants and renews nothing.
+    expect(await lease.session('laptop', 'check', 0)).toEqual({ active: false, epoch: 1 });
+    // A missing gen counts as 0: discarded too.
+    expect(await lease.session('laptop', 'check')).toEqual({ active: false, epoch: 1 });
+    expect(lease.holds('laptop', 1)).toBe(false);
+    expect(await lease.session('phone', 'check', 0)).toEqual({ active: true, epoch: 2 });
+    expect(await lease.session('laptop', 'check', 0)).toEqual({ active: false, epoch: 2 });
+    // The holder leaves: a check begun before its leave is discarded, one after takes it back with the same epoch.
+    expect(await lease.session('phone', 'leave', 3)).toEqual({ active: false, epoch: 2 });
+    expect(await lease.session('phone', 'check', 2)).toEqual({ active: false, epoch: 2 });
+    expect(await lease.session('phone', 'check', 3)).toEqual({ active: true, epoch: 2 });
+    // An older leave arriving late never lowers the generation.
+    expect(await lease.session('laptop', 'leave', 0)).toEqual({ active: false, epoch: 2 });
+    expect(await lease.session('laptop', 'check', 0)).toEqual({ active: false, epoch: 2 });
+
+    // The pretend Worker passes the generation on.
+    const w = await world();
+    const worker = new FakeWorker({ drive: w.drive, runs: new FakeRunService({ drive: w.drive, scale: 'instant' }), rootId: w.root, scenario: 'empty', lease: leaseOn(w.storage, w.clock) });
+    expect(await worker.session('tab-a', 'check', 0)).toEqual({ active: true, epoch: 1 });
+    expect(await worker.session('tab-a', 'leave', 1)).toEqual({ active: false, epoch: 1 });
+    expect(await worker.session('tab-a', 'check', 0)).toEqual({ active: false, epoch: 1 });
+    expect(await worker.session('tab-a', 'check', 1)).toEqual({ active: true, epoch: 1 });
+  });
+
+  it('a place sends its leave generation on every check and leave, and keeps it across a reload', async () => {
+    const w = await world();
+    const memory = memoryStorage();
+    const sent: { action: string; gen: number | undefined }[] = [];
+    const lease = leaseOn(w.storage, w.clock);
+    const open = (): PlaceGuard =>
+      guardOn(browser(), 'laptop', lease, w.clock, undefined, {
+        memory,
+        lease: (p, action, gen) => {
+          sent.push({ action, gen });
+          return lease.session(p, action, gen);
+        },
+      });
+    const first = open();
+    expect(await first.start()).toBe('active');
+    await first.leave();
+    expect(sent).toEqual([{ action: 'check', gen: 0 }, { action: 'leave', gen: 1 }]);
+    first.dispose();
+    // The page reloads after its leave on pagehide: the same place starts again and is heard.
+    const again = open();
+    expect(await again.start()).toBe('active');
+    expect(again.epoch()).toBe(1);
+    expect(sent.at(-1)).toEqual({ action: 'check', gen: 1 });
   });
 });
