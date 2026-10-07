@@ -44,3 +44,4 @@ P3 replaces this preview with the real staging environment: Worker plus real ser
 - 2026-10-07, `main` `d5e4a74` (P3-4, first app plus Worker deploy), version `082fbde9`. `/health` and `/me` answer 500 `internal` until the owner sets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 - 2026-10-07, `main` `1bd434c` (P3-5: Drive token, Bower folder, /me pointer), version `7c93f7e6`. All Worker checks are green.
 - 2026-10-07, `main` `11825b5` (sign-in always shows Google's account chooser), version `6134569a`.
+- 2026-10-07, `main` `7bd77ce` (P3-6: client retry policy, lost-reply reconcile, Worker logs and version, `GET /status`), version `b3ad5f8f`. `/health` names `7bd77ce`; `/status` and `/me` answer 401 `signed-out` without a cookie. The first check right after the deploy still saw the previous version, so a check that disagrees is rerun once before it counts.
