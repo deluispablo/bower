@@ -404,3 +404,54 @@ describe('POST /vault', () => {
     expect(g.calls).toHaveLength(0);
   });
 });
+
+describe('POST /vault after a lapsed claim', () => {
+  const lapse = async (sub: string) =>
+    runInDurableObject(person(sub), (_i, state) => {
+      state.storage.sql.exec('UPDATE account SET vault_claim_until = 0 WHERE id = 1');
+    });
+  const until = async (cond: () => boolean) => {
+    for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setTimeout(r, 5));
+  };
+
+  it('a call whose claim lapsed before reserving makes no second folder', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    g.markedListDelayMs = 300;
+    const a = post(g, cookie);
+    await until(() => g.calls.some((c) => c.url.includes('appProperties')));
+    await lapse(sub);
+    const b = await body(await post(g, cookie));
+    expect((await a).status).toBe(200);
+    expect(g.marked).toHaveLength(1);
+    expect(await person(sub).folderId()).toBe(b.folderId);
+  });
+
+  it('a lapsed call on a found folder makes no duplicate item', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    const m = g.add({ name: 'Bower', mimeType: FOLDER, appProperties: { bowerFolder: '1' } });
+    const inner = g.fetchImpl;
+    let held = false;
+    let releaseGen: () => void = () => undefined;
+    (g as unknown as { fetchImpl: typeof inner }).fetchImpl = async (input, init) => {
+      if (String(input).includes('generateIds') && !held) {
+        held = true;
+        await new Promise<void>((r) => { releaseGen = r; });
+      }
+      return inner(input, init);
+    };
+    const a = post(g, cookie);
+    await until(() => held);
+    await lapse(sub);
+    g.stallNext('Rules.md');
+    const b = post(g, cookie);
+    await g.stalled;
+    releaseGen();
+    expect((await a).status).toBe(200);
+    g.release();
+    expect((await b).status).toBe(200);
+    const paths = g.paths(m.id);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+});

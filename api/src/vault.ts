@@ -23,6 +23,11 @@
  *   pointer; every create sends its id, and a 409 (Drive: the id exists) means
  *   an earlier or stalled fill made it. So a fill resumed after its 60 s claim
  *   lapsed makes no duplicate (ids do not depend on the by-name listing).
+ * - Every person-object write is a compare-and-set against what the call
+ *   read (a reservation only when none is kept, template ids only when none
+ *   are kept for that folder, the pointer only from the value read). A call
+ *   whose claim lapsed and finds a write refused reads the state again and
+ *   continues with what is stored: never a second folder or duplicate item.
  * - The person object records whether the template is complete in the
  *   pointed folder. Until it is, each call adds what is missing by name,
  *   create-only, as the original's `copyTemplate`; once it is, calls skip
@@ -296,53 +301,83 @@ export async function ensureVault(env: Env, sub: string, options: VaultOptions =
   const drive = new Drive(env, sub, fetchImpl);
 
   return withVaultClaim(person, async () => {
-    const state = await person.vaultState();
-    let folderId: string | null = null;
-    let made = false;
-    if (state.folderId !== null && isLiveFolder(await drive.get(state.folderId))) folderId = state.folderId;
-
-    // A reserved id: made by an earlier try (adopt it), never made (make it now), or unusable (drop it).
-    let reserved = state.pending;
-    if (folderId === null && reserved !== null) {
-      const item = await drive.get(reserved);
-      if (isLiveFolder(item)) folderId = reserved;
-      else if (item !== null) {
-        await person.dropReservation(reserved);
-        reserved = null;
-      }
+    // A refused write means another call (this one's claim lapsed) changed the state: read it again.
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      const result = await attemptVault(env, person, drive, files);
+      if (result !== null) return result;
     }
-    folderId ??= reserved === null ? ((await drive.findMarked())?.id ?? null) : null;
-
-    if (folderId === null) {
-      if (reserved === null) {
-        // One call reserves the folder's id and one per template folder and file.
-        const keys = templateKeys(files);
-        const [folder, ...rest] = await drive.generateIds(keys.length + 1);
-        reserved = folder ?? '';
-        await person.reserveFolder(reserved, { folderId: reserved, ids: Object.fromEntries(keys.map((k, i) => [k, rest[i] ?? ''])) });
-      }
-      folderId = await drive.createFolder(env.TEMPLATE_FOLDER_NAME, null, { appProperties: FOLDER_MARKER, id: reserved });
-      made = true;
-    }
-
-    // A folder this app reserved is brand-new until its template is complete: its first answer says found false.
-    const brandNew = made || folderId === reserved;
-    await person.setFolderId(folderId);
-    const kept = await person.vaultState();
-    if (!kept.complete) {
-      let templateIds = kept.templateIds?.folderId === folderId ? kept.templateIds.ids : null;
-      if (templateIds === null) {
-        // A folder found rather than reserved here: reserve its template ids before any create.
-        const keys = templateKeys(files);
-        const fresh = await drive.generateIds(keys.length);
-        templateIds = Object.fromEntries(keys.map((k, i) => [k, fresh[i] ?? '']));
-        await person.reserveTemplate({ folderId, ids: templateIds });
-      }
-      await completeTemplate(drive, folderId, made, files, templateIds);
-      await person.markFolderComplete(folderId);
-    }
-    return { folderId, found: !brandNew };
+    throw driveError('POST /vault kept finding the state changed under it');
   });
+}
+
+/** How many times one call reads the state again after a refused write. */
+const MAX_ATTEMPTS = 5;
+
+/**
+ * One pass from the state as read. Every person-object write is a
+ * compare-and-set against that read (TL-P3-09, delta review): a call whose
+ * claim lapsed never reserves a second folder, never replaces template ids
+ * kept for its folder and never moves a pointer another call set. Null when a
+ * write was refused.
+ */
+async function attemptVault(
+  env: Env,
+  person: PersonStub,
+  drive: Drive,
+  files: readonly TemplateFile[],
+): Promise<VaultResult | null> {
+  const state = await person.vaultState();
+  let folderId: string | null = null;
+  let made = false;
+  if (state.folderId !== null && isLiveFolder(await drive.get(state.folderId))) folderId = state.folderId;
+
+  // A reserved id: made by an earlier try (adopt it), never made (make it now), or unusable (drop it).
+  let reserved = state.pending;
+  if (folderId === null && reserved !== null) {
+    const item = await drive.get(reserved);
+    if (isLiveFolder(item)) folderId = reserved;
+    else if (item !== null) {
+      await person.dropReservation(reserved);
+      return null;
+    }
+  }
+  folderId ??= reserved === null ? ((await drive.findMarked())?.id ?? null) : null;
+
+  if (folderId === null) {
+    if (reserved === null) {
+      // One call reserves the folder's id and one per template folder and file.
+      const keys = templateKeys(files);
+      const [folder, ...rest] = await drive.generateIds(keys.length + 1);
+      reserved = folder ?? '';
+      const ids = Object.fromEntries(keys.map((k, i) => [k, rest[i] ?? '']));
+      if (!(await person.reserveFolder(reserved, { folderId: reserved, ids }, state.folderId))) return null;
+    }
+    folderId = await drive.createFolder(env.TEMPLATE_FOLDER_NAME, null, { appProperties: FOLDER_MARKER, id: reserved });
+    made = true;
+  }
+
+  // A folder this app reserved is brand-new until its template is complete: its first answer says found false.
+  const brandNew = made || folderId === reserved;
+  if (!(await person.pointFolder(state.folderId, folderId))) return null;
+  const kept = await person.vaultState();
+  if (kept.folderId !== folderId) return null;
+  if (!kept.complete) {
+    let templateIds = kept.templateIds?.folderId === folderId ? kept.templateIds.ids : null;
+    if (templateIds === null) {
+      // A folder found rather than reserved here: reserve its template ids before any create,
+      // or use the ones another call kept for it meanwhile.
+      const keys = templateKeys(files);
+      const fresh = await drive.generateIds(keys.length);
+      templateIds = await person.reserveTemplate({
+        folderId,
+        ids: Object.fromEntries(keys.map((k, i) => [k, fresh[i] ?? ''])),
+      });
+      if (templateIds === null) return null;
+    }
+    await completeTemplate(drive, folderId, made, files, templateIds);
+    await person.markFolderComplete(folderId);
+  }
+  return { folderId, found: !brandNew };
 }
 
 /** `POST /vault`, mounted at `/` by `index.ts`. */

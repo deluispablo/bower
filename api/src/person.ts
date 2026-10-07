@@ -208,21 +208,64 @@ export class Person extends DurableObject<Env> {
     );
   }
 
-  /** Keeps a folder id reserved with files.generateIds, before it is created. */
-  reserveFolder(folderId: string, templateIds: TemplateIds): void {
-    this.ctx.storage.sql.exec(
-      'UPDATE account SET pending_folder_id = ?, pending_template_ids = ? WHERE id = 1',
-      folderId,
-      JSON.stringify(templateIds),
+  /**
+   * Moves the pointer to `folderId` only if it still holds `seen` (what the
+   * caller read): a compare-and-set, so a call whose claim lapsed cannot move
+   * a pointer another call set meanwhile. A different folder starts as not
+   * complete. False when refused: the caller reads the state again.
+   */
+  pointFolder(seen: string | null, folderId: string): boolean {
+    return (
+      this.ctx.storage.sql.exec(
+        `UPDATE account SET
+           folder_complete = CASE WHEN folder_id IS ? THEN folder_complete ELSE 0 END,
+           folder_id = ?
+         WHERE id = 1 AND folder_id IS ?`,
+        folderId,
+        folderId,
+        seen,
+      ).rowsWritten > 0
     );
   }
 
-  /** Keeps the ids reserved for the template's items in `templateIds.folderId`, before any is created. */
-  reserveTemplate(templateIds: TemplateIds): void {
-    this.ctx.storage.sql.exec(
-      'UPDATE account SET pending_template_ids = ? WHERE id = 1',
-      JSON.stringify(templateIds),
+  /**
+   * Keeps a folder id reserved with files.generateIds, before it is created,
+   * only when no reservation is kept and the pointer still holds `seenPointer`.
+   * False when refused: another call reserved or chose a folder meanwhile.
+   */
+  reserveFolder(folderId: string, templateIds: TemplateIds, seenPointer: string | null): boolean {
+    return (
+      this.ctx.storage.sql.exec(
+        `UPDATE account SET pending_folder_id = ?, pending_template_ids = ?
+         WHERE id = 1 AND pending_folder_id IS NULL AND folder_id IS ?`,
+        folderId,
+        JSON.stringify(templateIds),
+        seenPointer,
+      ).rowsWritten > 0
     );
+  }
+
+  /**
+   * Keeps the ids reserved for the template's items in `templateIds.folderId`,
+   * before any is created, unless ids are kept for that folder already; only
+   * while that folder is the pointer and not complete. Answers the ids kept
+   * for that folder (the earlier ones when there were any), or null when
+   * refused: the caller reads the state again.
+   */
+  reserveTemplate(templateIds: TemplateIds): Record<string, string> | null {
+    const { folderId } = templateIds;
+    this.ctx.storage.sql.exec(
+      `UPDATE account SET pending_template_ids = ?
+       WHERE id = 1 AND folder_id = ? AND folder_complete = 0
+         AND (pending_template_ids IS NULL OR json_extract(pending_template_ids, '$.folderId') IS NOT ?)`,
+      JSON.stringify(templateIds),
+      folderId,
+      folderId,
+    );
+    const state = this.vaultState();
+    return state.folderId === folderId && !state.complete && state.templateIds?.folderId === folderId
+      ? state.templateIds.ids
+      : null;
   }
 
   /** Forgets a reservation that can no longer be used (that file is in the Bin or is not a folder). */
