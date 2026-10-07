@@ -299,3 +299,4 @@ worker-vault-pointer	c728a2894707cd80	2026-10-07	red (fixed in 66e60b2)
 vault-template-ids	766006804cf88d47	2026-10-07	red (fixed in 1932c1b)
 auth-select-account	5f8dd136a2ed2529	2026-10-07	red (fixed in b5618b7)
 worker-logs-and-version	b1d9059e524dd475	2026-10-07	known-green: red proven twice by done.sh --fixed-in 1478e39; lint fix b32b46c on the same lines
+lost-reply-reconcile	db1013b271a642b6	2026-10-07	red (fixed in 8e7c710)

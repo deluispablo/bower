@@ -3848,7 +3848,7 @@
       "A task toggle whose reply is lost and whose read-back fails says \"Bower isn't sure that saved. Check again when you're back online.\""
     ],
     "verify": "pnpm exec vitest run src/data -t \"a lost reply to a rename that landed counts as saved|a lost reply to a move that did not land says offline|a lost reply to a task toggle that cannot be read back says not sure\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-11 F2, from drive-real-behavior-suite check 7: Drive held the change once, but the app said \"You're offline\" (Google Cloud retry strategy, idempotency: read back, never assume)."
   }
 ]
