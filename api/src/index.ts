@@ -34,7 +34,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.get('/health', (c) => c.json({ ok: true, version: c.get('env').APP_VERSION }));
   app.route('/', createAuthRoutes(deps));
   app.route('/', createDriveRoutes(deps));
-  app.route('/', createStatusRoutes(deps));
+  app.route('/', createStatusRoutes());
   app.route('/', createVaultRoutes(deps));
 
   app.notFound(() => {
