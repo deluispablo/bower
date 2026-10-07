@@ -9,7 +9,8 @@ import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { RunRecords, type RunManifest } from '../../src/data/spine/records';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
-import { runTidy, type TidyEnd } from '../src/main';
+import { B_FAILURE } from '../../src/data/spine/scripted';
+import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
 import type { Admitted } from '../src/spine/admitted';
 import type { Effects, Settled } from '../src/spine/run';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
@@ -21,12 +22,16 @@ const MOVED = 'It was moved, renamed or removed before Bower could get to it.';
 class StubEffects implements Effects {
   readonly sent = new Map<string, number>();
   observed = 0;
+  /** A move of this thing is refused; `all`, every move. */
   refused: string | null = null;
+  /** After this many sends, the next one stops on an error nobody caught. */
+  breakAfter: number | null = null;
 
   async apply(op: OperationV2): Promise<Settled> {
+    if (this.breakAfter !== null && this.sent.size >= this.breakAfter) throw new Error('The runner stopped');
     this.sent.set(op.operationId, (this.sent.get(op.operationId) ?? 0) + 1);
     const e = op.effect;
-    if (e.kind === 'move' && e.before.fileId === this.refused) return { state: 'rejected', failure: { code: 'conflict', message: MOVED } };
+    if (e.kind === 'move' && (this.refused === 'all' || e.before.fileId === this.refused)) return { state: 'rejected', failure: { code: 'conflict', message: MOVED } };
     return { state: 'applied', evidence: evidenceOf(op) };
   }
 
@@ -110,7 +115,7 @@ interface Write {
 }
 
 /** One runner process for `attempt`, from its entry; `refuse` fails those writes as with no network. */
-function tidy(wire: DriveV3, root: string, attempt: number, effects: Effects, writes: Write[] = [], refuse: (call: FencedCall) => boolean = () => false): Promise<TidyEnd> {
+function tidy(wire: DriveV3, root: string, attempt: number, effects: Effects, writes: Write[] = [], refuse: (call: FencedCall) => boolean = () => false, over: Partial<TidyOptions> = {}): Promise<TidyEnd> {
   wire.attempt = attempt;
   let ids = 0;
   return runTidy({
@@ -131,6 +136,7 @@ function tidy(wire: DriveV3, root: string, attempt: number, effects: Effects, wr
         },
       };
     },
+    ...over,
   });
 }
 
@@ -279,5 +285,89 @@ describe('the report barrier', () => {
     expect(writes).toEqual([]);
     expect(effects.sent).toEqual(sent);
     expect(wire.statuses.at(-1)).toMatchObject({ attempt: 2, seq: 1, phase: 'done' });
+  });
+
+  it('a run that changed nothing never says changes were made', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const isView = (call: FencedCall): boolean => 'name' in call && call.name === 'last-run.json';
+
+    // Every move refused before it was sent, and the report cannot be saved: nothing changed, and it says so.
+    const refusedAll = await demo();
+    const none = new StubEffects();
+    none.refused = 'all';
+    const nothing = await tidy(refusedAll.wire, refusedAll.root, 1, none, [], isView);
+    expect(nothing.phase).toBe('failed');
+    expect(refusedAll.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'failed']);
+    expect(refusedAll.wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
+
+    // An error nobody caught before any effect: the same.
+    const early = await demo();
+    const broke = await tidy(early.wire, early.root, 1, new StubEffects(), [], () => false, {
+      provider: () => async () => {
+        throw new Error('The plan could not be made');
+      },
+    });
+    expect(broke.phase).toBe('failed');
+    expect(early.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'failed']);
+    expect(early.wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
+
+    // After an applied effect, an error nobody caught leaves the run saving, never "nothing changed".
+    const late = await demo();
+    const some = new StubEffects();
+    some.breakAfter = 1;
+    const stopped = await tidy(late.wire, late.root, 1, some, []);
+    expect(stopped.phase).toBe('saving');
+    expect(late.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
+
+    // A run that changed something says `saving` only once "effects done, report pending" is in its chain.
+    const whole = await demo();
+    const writes: Write[] = [];
+    expect((await tidy(whole.wire, whole.root, 1, new StubEffects(), writes)).phase).toBe('done');
+    const pending = (await chainOf(whole.wire, whole.root)).find((c) => c.report.state === 'pending');
+    if (!pending) throw new Error('no pending report in the chain');
+    const committed: Write[] = [];
+    for (const w of writes) if ((await nameOf(whole.wire, w.call)).startsWith(`checkpoint-${pending.revision}-`)) committed.push(w);
+    expect(committed).toHaveLength(1);
+    const saving = whole.wire.statuses.find((s) => s.phase === 'saving');
+    expect(saving?.after).toBeGreaterThan(committed[0]?.at ?? Infinity);
+  });
+
+  it("a restarted runner's done reaches the Worker", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const effects = new StubEffects();
+    // The report lands, then the runner stops before "done" is in its chain.
+    let viewWritten = false;
+    const stopAfterView = (call: FencedCall): boolean => {
+      if ('name' in call && call.name === 'last-run.json') viewWritten = true;
+      return viewWritten && 'name' in call && call.name.startsWith('checkpoint-');
+    };
+    expect((await tidy(wire, root, 1, effects, [], stopAfterView)).phase).toBe('saving');
+    expect((await chainOf(wire, root)).at(-1)?.report.state).toBe('pending');
+    expect((await stored(wire, root, SYSTEM.lastRun))?.value).toMatchObject({ run: { id: RUN_ID, phase: 'done' } });
+    expect(wire.statuses.at(-1)).toMatchObject({ attempt: 1, seq: 2, phase: 'saving' });
+
+    // The same attempt runs again (its seq starts over): it commits done to its chain, then the Worker hears it.
+    const sent = new Map(effects.sent);
+    const writes: Write[] = [];
+    expect((await tidy(wire, root, 1, effects, writes)).phase).toBe('done');
+    expect(effects.sent).toEqual(sent);
+    const names = await Promise.all(writes.map((w) => nameOf(wire, w.call)));
+    expect(names).toEqual([expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/)]);
+    expect((await chainOf(wire, root)).at(-1)).toMatchObject({ phase: 'done', report: { state: 'published' } });
+    const done = wire.statuses.at(-1);
+    expect(done).toMatchObject({ attempt: 1, seq: 3, phase: 'done' });
+    expect(done?.after).toBeGreaterThan(writes[0]?.at ?? Infinity);
+
+    // Run once more, the Worker already holds it done: the run is finished, and nothing more is sent.
+    const heard = wire.statuses.length;
+    expect((await tidy(wire, root, 1, effects)).phase).toBe('done');
+    expect(wire.statuses).toHaveLength(heard);
+
+    // A done the Worker refuses even from its current seq is never swallowed: the job fails, visibly.
+    const other = await demo();
+    other.wire.refuseDone = true;
+    await expect(tidy(other.wire, other.root, 1, new StubEffects())).rejects.toBeInstanceOf(Error);
+    expect(other.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
   });
 });

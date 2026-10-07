@@ -21,14 +21,16 @@ afterEach(() => vi.restoreAllMocks());
  * Alex's folder on a pretend Drive v3, admitted by the Worker's rules: two loose things the demo files into folders
  * not there yet (made by the run), and a pile with words whose folder goes to the Bin once its photo is filed.
  */
-async function seeded(): Promise<{ drive: FakeDrive; root: string; admission: AdmissionManifest }> {
+async function seeded(journal = false): Promise<{ drive: FakeDrive; root: string; admission: AdmissionManifest }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const inbox = (await drive.createFolder(root, 'Inbox')).id;
   for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root, name);
   const sys = (await drive.createFolder(root, SYSTEM.dir)).id;
-  await drive.createFolder(sys, 'changes');
+  const changes = (await drive.createFolder(sys, 'changes')).id;
   await drive.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
+  // One of your changes, when asked for: a note Alex made, as the app records it.
+  if (journal) await drive.createText(changes, 'change-1.json', `${JSON.stringify({ v: 1, id: 'change-1', device: 'device-1', at: AT - 60_000, kind: 'create', what: 'Made Ideas.md', path: 'Projects/Ideas.md' })}\n`);
   await drive.createText(inbox, 'Payslip_Aug.pdf', '%PDF payslip', { pile: 'p-payslip' });
   await drive.createText(inbox, 'Dentist reminder.pdf', '%PDF dentist', { pile: 'p-dentist' });
   const pile = (await drive.createFolder(inbox, 'Flat photos', { pile: 'p-photos' })).id;
@@ -47,8 +49,8 @@ async function eventFile(payload: Record<string, unknown> = {}): Promise<string>
   return file;
 }
 
-async function wired(): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
-  const { drive, root, admission } = await seeded();
+async function wired(journal = false): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
+  const { drive, root, admission } = await seeded(journal);
   const wire = driveV3(drive);
   wire.folderId = root;
   wire.manifest = admission;
@@ -92,6 +94,33 @@ describe('the runner process', () => {
     expect(isRunnerFile(SYSTEM.lastRun, value) && value.run.id === RUN_ID && value.run.phase === 'done').toBe(true);
     if (!isRunnerFile(SYSTEM.lastRun, value)) return;
     expect(value.run.report?.filed.length).toBe(items.length);
+  });
+
+  it("every admitted item's disposition is readable after the run, journal lines included", async () => {
+    const { wire, root, admission } = await wired(true);
+    const things = admission.piles.flatMap((p) => p.items.map((i) => i.fileId));
+    const lines = admission.journal.map((l) => l.fileId);
+    expect(lines).toHaveLength(1);
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
+    expect(wire.statuses.at(-1)?.phase).toBe('done');
+
+    // In the run's own folder, with one line for every admitted item, none twice.
+    const files = await wire.drive.listAll(root);
+    const file = files.find((f) => !f.folder && pathOf(files, root, f.id) === `${SYSTEM.dir}/runs/${RUN_ID}/dispositions.json`);
+    expect(file).toBeDefined();
+    const value = JSON.parse(await wire.drive.readText(file?.id ?? '')) as { v: number; runId: string; items: Array<{ fileId: string; pileId: string | null; disposition: string }> };
+    expect(value).toMatchObject({ v: 1, runId: RUN_ID });
+    expect(value.items.map((i) => i.fileId).sort()).toEqual([...things, ...lines].sort());
+    expect(value.items.every((i) => ['filed', 'set-aside', 'waiting'].includes(i.disposition))).toBe(true);
+    // Every thing taken was filed, and your change was read and archived: filed too, with no pile.
+    expect(value.items.filter((i) => things.includes(i.fileId)).map((i) => i.disposition)).toEqual(things.map(() => 'filed'));
+    expect(value.items.find((i) => i.fileId === lines[0])).toEqual({ fileId: lines[0], pileId: null, disposition: 'filed' });
+    // Written before last-run.json.
+    const view = files.find((f) => pathOf(files, root, f.id) === SYSTEM.lastRun);
+    const created = (id: string | undefined) => wire.requests.findIndex((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media' && r.url.pathname.endsWith(`/${id ?? ''}`));
+    expect(created(file?.id)).toBeGreaterThanOrEqual(0);
+    expect(created(file?.id)).toBeLessThan(created(view?.id));
   });
 
   it('main picks the scripted provider', async () => {

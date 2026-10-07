@@ -37,6 +37,8 @@ export interface DriveV3 {
   statuses: StatusPost[];
   /** When set, a `done` report is answered with this status and not taken (a lost report). */
   dropDone: number | null;
+  /** When set, every `done` report is answered `stale-report` (a Worker that refuses it). */
+  refuseDone: boolean;
 }
 
 export interface StatusPost {
@@ -68,6 +70,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     manifest: null,
     statuses: [],
     dropDone: null,
+    refuseDone: false,
     fetch: async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
       const method = (init.method ?? 'GET').toUpperCase();
@@ -106,8 +109,11 @@ function status(wire: DriveV3, body: Omit<StatusPost, 'after'>): Response {
   const last = wire.statuses.at(-1);
   const same = last?.attempt === body.attempt;
   const backward = last !== undefined && (RANK[body.phase] ?? -1) < (RANK[last.phase] ?? -1);
-  if ((same && body.seq <= last.seq) || backward || last?.phase === 'done' || last?.phase === 'failed') {
-    return json(409, { error: { code: 'stale-report', message: 'That update arrived late.' } });
+  const refused = body.phase === 'done' && wire.refuseDone;
+  if ((same && body.seq <= last.seq) || backward || last?.phase === 'done' || last?.phase === 'failed' || refused) {
+    // The Worker's current seq (of this attempt) and phase, so a restarted runner can go on from there.
+    const current = { seq: last && same ? last.seq : 0, phase: last?.phase ?? 'queued' };
+    return json(409, { error: { code: 'stale-report', message: 'That update arrived late.' }, current });
   }
   wire.statuses.push({ ...body, after: wire.requests.length });
   return json(200, { run: { id: RUN_ID, phase: body.phase }, revision: wire.statuses.length });
