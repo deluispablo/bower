@@ -347,3 +347,4 @@ log-no-folder-content	c192318131c8b5a2	2026-10-07	red (fixed in 88f4424)
 cookie-host-prefix	0dddf5e7feb81845	2026-10-07	red (fixed in 28ca281)
 instance-private-check	cc23bf0c1f0016c4	2026-10-07	red (fixed in 3e313a8)
 app-security-headers	0ed48ba0c9e4d05d	2026-10-07	red (fixed in ac960c2)
+deletion-allowlist-doc	b7fab1684b029d0f	2026-10-07	known-green: docs entry: at 7d6a771 (test only) 'the runbook says the invitation stays after deletion' failed on its runbook patterns; 78ae68c adds the runbook lines

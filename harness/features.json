@@ -4492,7 +4492,7 @@
       "A docs test checks the runbook names the allowlist under Deletion."
     ],
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the runbook says the invitation stays after deletion\"",
-    "passes": false,
+    "passes": true,
     "note": "P3 security review F8 (Minor)."
   }
 ]
