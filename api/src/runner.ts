@@ -3,7 +3,8 @@
  * original app's `api/src/runner.ts` (a per-run ticket as the bearer credential, a Drive token from the
  * refresh token, phase reports) to the per-person object:
  *
- * - `GET /runner/runs/:id/token` answers `{ accessToken, expiresAt, folderId, attempt }`;
+ * - `GET /runner/runs/:id/token` answers `{ accessToken, expiresAt, folderId, attempt, manifest }`, the
+ *   manifest being what the run was admitted to take (TL-P3-21);
  * - `POST /runner/runs/:id/status` takes `{ attempt, seq, phase, total?, failure? }` and answers
  *   `{ run, revision }`.
  *
@@ -23,19 +24,21 @@ import { accessTokenOf } from './drive-token.js';
 import type { DriveTokenOptions } from './drive-token.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
-import type { Person } from './person.js';
+import type { AdmissionManifest } from '../../src/data/spine/admission.js';
+import type { Person, RunnerGrant } from './person.js';
 import type { RunPhase, RunReply } from './process.js';
 import { reach } from './process.js';
 import { PHASE_RANK, hashTicket, personIdOf } from './run-ticket.js';
-import type { RunnerAccess, RunnerRefusal, RunnerReport, RunnerReportResult } from './run-ticket.js';
+import type { RunnerRefusal, RunnerReport, RunnerReportResult } from './run-ticket.js';
 import { limitBody, requireJsonBody } from './security.js';
 
-/** What `GET /runner/runs/:id/token` answers. */
+/** What `GET /runner/runs/:id/token` answers: with what the run was admitted to take (TL-P3-21). */
 export interface RunnerToken {
   accessToken: string;
   expiresAt: number;
   folderId: string;
   attempt: number;
+  manifest: AdmissionManifest | null;
 }
 
 /** Longest `failure` sentence kept on a run. */
@@ -110,14 +113,14 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const hash = await hashTicket(ticket);
     const access = await reach(
       'runner access',
-      async (): Promise<RunnerAccess | 'stale-attempt' | null> => await person.runnerAccess(runId, hash, Date.now()),
+      async (): Promise<RunnerGrant | 'stale-attempt' | null> => await person.runnerAccess(runId, hash, Date.now()),
     );
     if (access === 'stale-attempt') throw refusal('stale-attempt');
     if (access?.folderId == null) throw signedOut();
     const options: DriveTokenOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
     const { accessToken, expiresAt } = await accessTokenOf(env, person, options);
-    const reply: RunnerToken = { accessToken, expiresAt, folderId: access.folderId, attempt: access.attempt };
+    const reply: RunnerToken = { accessToken, expiresAt, folderId: access.folderId, attempt: access.attempt, manifest: access.manifest };
     return c.json(reply);
   });
 

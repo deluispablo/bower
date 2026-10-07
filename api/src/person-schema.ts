@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -139,6 +139,12 @@ const STEPS: readonly (readonly string[])[] = [
     // `seq` the runner sent with it (null before the first). Rows already there stay as they are.
     'ALTER TABLE run_ticket ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE run_ticket ADD COLUMN report_seq INTEGER',
+  ],
+  [
+    // What the run was admitted to take (TL-P3-21): the admission manifest as JSON (`src/data/spine/admission.ts`),
+    // item ids with their names, parents and modifiedTimes, and the piles' declarations; never note content. The
+    // token route hands it to the runner. A run kept from before this step has none (null).
+    'ALTER TABLE runs ADD COLUMN manifest TEXT',
   ],
 ];
 

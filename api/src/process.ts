@@ -1,18 +1,29 @@
 /**
  * `POST /process`: admitting a tidy-up (worker contract, `POST /process`; TL-P3-15).
  *
- * The route checks the caller (same origin, session, the lease's epoch) and the body, then hands
- * everything else to the person object (`Person.admit`), which decides in one synchronous section:
+ * The route checks the caller (same origin, session, the lease's epoch) and the body, then asks the
+ * person object cheaply whether this press would admit a new run (`Person.wouldAdmit`: not a repeat, no
+ * run going). Only then, outside the object's synchronous section, it reads the inbox with the person's
+ * Drive token and builds the admission manifest with the shared plan (`src/data/spine/plan.ts`, TL-P3-21):
+ * metadata and Bower's own files, never a note. An empty one answers 409 `nothing` with its cause, before
+ * any quota count. Otherwise the person object (`Person.admit`) decides in one synchronous section:
  * expiry, idempotency by `requestId` (the Idempotency-Key pattern,
  * https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/), one active run,
- * the daily quota, then admission. An admitted run stays `queued` until dispatch exists.
+ * the daily quota, then admission, keeping the manifest with the run.
  *
  * Staleness reuses the original app's thresholds and rule (bower `api/src/process.ts`,
  * `runStaleness`/`markStale`), measured on this contract's `requestedAt` and `phaseAt`.
  */
 import { Hono } from 'hono';
 
+import { DriveHttp } from '../../src/data/drive/drive-http.js';
+import type { AdmissionManifest } from '../../src/data/spine/admission.js';
+import { NOTHING } from '../../src/data/spine/admission.js';
+import { planAdmission } from '../../src/data/spine/plan.js';
+import { driveRead } from '../../src/data/spine/read.js';
+import { BowerError } from '../../src/data/types.js';
 import { requireSession } from './auth.js';
+import { accessTokenFor } from './drive-token.js';
 import type { AppEnv, Env } from './env.js';
 import type { FetchLike } from './google.js';
 import { HttpError } from './errors.js';
@@ -42,8 +53,13 @@ export interface RunReply {
   revision: number;
 }
 
-/** What admission decided: the run (admitted, repeated or already going), or the day's limit reached. */
-export type AdmitResult = { admitted: true; run: RunWire; revision: number; created?: true } | { admitted: false; refused: 'rate-limited' };
+/**
+ * What admission decided: the run (admitted, repeated or already going), the day's limit reached, or a new run
+ * that needs its manifest first (the press was asked with none, and in between it became one that admits).
+ */
+export type AdmitResult =
+  | { admitted: true; run: RunWire; revision: number; created?: true }
+  | { admitted: false; refused: 'rate-limited' | 'needs-manifest' };
 
 export interface AdmitInput {
   scope: RunScope;
@@ -52,6 +68,8 @@ export interface AdmitInput {
   now: number;
   /** `DAILY_RUN_LIMIT`: new runs a person may start per UTC day. */
   dailyLimit: number;
+  /** What a new run takes (TL-P3-21); null when none was built, because the press looked like a repeat or a run going. */
+  manifest: AdmissionManifest | null;
 }
 
 /** A queued run nobody started within this long is stale (the original's `QUEUED_STALE_MS`). */
@@ -139,6 +157,29 @@ async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolea
   );
 }
 
+/**
+ * The admission manifest for the person's folder, read now with their Drive token. Drive trouble answers as the
+ * contract's codes with no cause: a refused token is `signed-out`, anything else `internal` (logged only).
+ */
+async function admission(env: Env, sub: string, scope: RunScope, now: number, fetchImpl: FetchLike): Promise<AdmissionManifest> {
+  const folderId = await reach('folder', async () => await personFor(env, sub).folderId());
+  if (folderId === null) throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
+  const drive = new DriveHttp({
+    token: async (fresh) => (await accessTokenFor(env, sub, { fresh, fetchImpl })).accessToken,
+    fetch: async (input, init) => await fetchImpl(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init),
+  });
+  let planned;
+  try {
+    planned = await planAdmission(driveRead(drive), folderId, { scope, clock: () => now, newId: () => crypto.randomUUID() });
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    if (err instanceof BowerError && err.code === 'auth') throw new HttpError(401, 'signed-out', undefined, { cause: err });
+    throw new HttpError(500, 'internal', undefined, { cause: err });
+  }
+  if (planned.kind === 'nothing') throw new HttpError(409, 'nothing', NOTHING[planned.cause]);
+  return planned.manifest;
+}
+
 /** `POST /process`, mounted at `/` by `index.ts`. */
 export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const fetchImpl: FetchLike = deps.fetchImpl ?? ((input, init) => fetch(input, init));
@@ -155,17 +196,30 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     }
     const body = parseBody(value);
     const env = c.get('env');
-    const input: AdmitInput = {
+    const now = Date.now();
+    const requestId = body.requestId ?? crypto.randomUUID();
+    const person = personFor(env, sub);
+    // Drive is read only for a press that would admit a new run; a repeat or a run going answers from the object.
+    const fresh = await reach('would admit', async (): Promise<boolean> => await person.wouldAdmit(requestId, now));
+    let manifest = fresh ? await admission(env, sub, body.scope, now, fetchImpl) : null;
+    const input = (): AdmitInput => ({
       scope: body.scope,
       allowWeb: body.allowWeb,
-      requestId: body.requestId ?? crypto.randomUUID(),
-      now: Date.now(),
+      requestId,
+      now,
       dailyLimit: Number(env.DAILY_RUN_LIMIT),
-    };
-    const result = await reach('admit', async (): Promise<AdmitResult> => await personFor(env, sub).admit(input));
+      manifest,
+    });
+    let result = await reach('admit', async (): Promise<AdmitResult> => await person.admit(input()));
+    // The run it looked like ended in between: this press is new after all, so it reads the inbox once.
+    if (!result.admitted && result.refused === 'needs-manifest' && manifest === null) {
+      manifest = await admission(env, sub, body.scope, now, fetchImpl);
+      result = await reach('admit', async (): Promise<AdmitResult> => await person.admit(input()));
+    }
+    if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
     if (!result.admitted) throw new HttpError(429, 'rate-limited');
     if (result.created === true) {
-      await dispatchNew(env, sub, result.run, body.allowWeb, input.now, fetchImpl);
+      await dispatchNew(env, sub, result.run, body.allowWeb, now, fetchImpl);
     }
     const reply: RunReply = { run: result.run, revision: result.revision };
     return c.json(reply);

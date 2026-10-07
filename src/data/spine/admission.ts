@@ -48,6 +48,17 @@ export type Admission = { kind: 'nothing'; cause: NothingCause } | { kind: 'mani
 
 /** Whether `value` is an admission manifest, as stored with the run and handed to the runner. */
 export function isAdmissionManifest(value: unknown): value is AdmissionManifest {
-  void value;
-  throw new Error('not implemented');
+  if (!object(value)) return false;
+  return value.v === 1 && id(value.id) && id(value.rootId) && (value.scope === 'all' || value.scope === 'instructions')
+    && typeof value.at === 'number' && Number.isSafeInteger(value.at) && value.at >= 0
+    && Array.isArray(value.piles) && value.piles.every(pile) && Array.isArray(value.journal) && value.journal.every(file);
 }
+
+type JsonObject = Record<string, unknown>;
+const object = (v: unknown): v is JsonObject => !!v && typeof v === 'object' && !Array.isArray(v);
+const id = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+const file = (v: unknown): boolean => object(v) && id(v.fileId) && typeof v.name === 'string'
+  && Array.isArray(v.parents) && v.parents.every(id) && id(v.modifiedTime);
+const declaration = (v: unknown): boolean => v === null || (object(v) && id(v.declarationId) && typeof v.sha256 === 'string' && /^[0-9a-f]{64}$/.test(v.sha256));
+const pile = (v: unknown): boolean => object(v) && id(v.pileId) && (v.anchor === null || file(v.anchor)) && declaration(v.declaration)
+  && Array.isArray(v.items) && v.items.every(file);

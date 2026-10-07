@@ -1,5 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 
+import { isAdmissionManifest } from '../../src/data/spine/admission.js';
+import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import type { Env } from './env.js';
 import { dispatchTidy, findTidyRun } from './github.js';
 import type { GitHubAccess } from './github.js';
@@ -13,6 +15,11 @@ import { PHASE_RANK, TICKET_TTL_MS, hashTicket, makeRunId, newTicket } from './r
 import type { RunnerAccess, RunnerReport, RunnerReportResult } from './run-ticket.js';
 import { LEASE_TTL_MS } from './session-lease.js';
 import type { LeaseReply, SessionAction } from './session-lease.js';
+
+/** What a live runner ticket opens: its attempt and folder, and what the run was admitted to take (null for a run from before v9). */
+export interface RunnerGrant extends RunnerAccess {
+  manifest: AdmissionManifest | null;
+}
 
 /** `session_lease.place` while nobody holds the lease (a real place is 1 to 64 characters). */
 const FREE_PLACE = '';
@@ -471,13 +478,29 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
+   * `POST /process`, before Drive is read (TL-P3-21): whether a press with `requestId` would admit a new run at
+   * `now`, that is neither a repeat of a known request nor while a run is going. Writes only a stale run's expiry,
+   * as `admit` does. `admit` checks both again in its own section.
+   */
+  wouldAdmit(requestId: string, now: number): boolean {
+    return this.ctx.storage.transactionSync((): boolean => {
+      this.expire(now);
+      const repeat = this.ctx.storage.sql.exec<{ id: string }>('SELECT id FROM runs WHERE request_id = ?', requestId).toArray()[0];
+      if (repeat !== undefined) return false;
+      const current = this.currentRunRow();
+      return current === undefined || !ACTIVE_PHASES.includes(current.phase);
+    });
+  }
+
+  /**
    * `POST /process` (process.ts; TL-P3-15). One synchronous transaction, no `await`, in this order:
    * 1. expiry: a stale current run is marked failed once, and the revision rises;
    * 2. idempotency: a known `requestId` answers its own run, ended or not, with nothing changed
    *    (the first request's scope and allowWeb win);
    * 3. one active run: a run going is answered, with nothing changed;
-   * 4. quota: today's UTC counter at or over `dailyLimit` refuses with nothing written, else counts;
-   * 5. admission: a `queued` run bound to the requestId, and the revision rises.
+   * 4. the manifest: a new run with none built is refused as `needs-manifest`, with nothing written;
+   * 5. quota: today's UTC counter at or over `dailyLimit` refuses with nothing written, else counts;
+   * 6. admission: a `queued` run bound to the requestId, keeping its manifest, and the revision rises.
    */
   admit(input: AdmitInput): AdmitResult {
     return this.ctx.storage.transactionSync((): AdmitResult => {
@@ -491,6 +514,7 @@ export class Person extends DurableObject<Env> {
       if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) {
         return { admitted: true, run: toWire(current), revision: this.revision() };
       }
+      if (input.manifest === null) return { admitted: false, refused: 'needs-manifest' };
       const day = utcDay(input.now);
       const used = sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', day).toArray()[0]?.counter ?? 0;
       if (used >= input.dailyLimit) return { admitted: false, refused: 'rate-limited' };
@@ -500,8 +524,8 @@ export class Person extends DurableObject<Env> {
       const seq = (current?.seq ?? 0) + 1;
       const row = sql
         .exec<RunRow>(
-          `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at)
-           VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+          `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at, manifest)
+           VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)
            RETURNING ${RUN_COLUMNS}`,
           makeRunId(this.ctx.id.toString()),
           seq,
@@ -510,6 +534,7 @@ export class Person extends DurableObject<Env> {
           input.allowWeb ? 1 : 0,
           input.now,
           input.now,
+          JSON.stringify(input.manifest),
         )
         .one();
       // The history is bounded: older runs go, and with them their requestIds (a repeat that late is new).
@@ -666,16 +691,19 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
-   * `GET /runner/runs/:id/token`: the attempt and folder that the ticket hashed to `hash` opens for run
+   * `GET /runner/runs/:id/token`: the attempt, folder and admission manifest that the ticket hashed to `hash` opens for run
    * `runId`; `stale-attempt` for a ticket a newer attempt superseded, null for one that is unknown, wrong,
    * retired or expired at `now`. A stale run is ended first, as `runStatus` does, so its ticket no longer works.
    */
-  runnerAccess(runId: string, hash: string, now: number): RunnerAccess | 'stale-attempt' | null {
-    return this.ctx.storage.transactionSync((): RunnerAccess | 'stale-attempt' | null => {
+  runnerAccess(runId: string, hash: string, now: number): RunnerGrant | 'stale-attempt' | null {
+    return this.ctx.storage.transactionSync((): RunnerGrant | 'stale-attempt' | null => {
       this.expire(now);
       const found = this.findTicket(runId, hash, now);
       if (found.kind === 'superseded') return 'stale-attempt';
-      return found.kind === 'live' ? { attempt: found.row.epoch, folderId: this.folderId() } : null;
+      if (found.kind !== 'live') return null;
+      const kept = this.ctx.storage.sql.exec<{ manifest: string | null }>('SELECT manifest FROM runs WHERE id = ?', runId).toArray()[0]?.manifest ?? null;
+      const manifest: unknown = kept === null ? null : JSON.parse(kept);
+      return { attempt: found.row.epoch, folderId: this.folderId(), manifest: isAdmissionManifest(manifest) ? manifest : null };
     });
   }
 

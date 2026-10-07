@@ -9,6 +9,7 @@ import { QUEUED_STALE_MS, RUNNING_STALE_MS, STALE_FAILURE } from '../src/process
 import { unrecoveredCeiling } from '../src/recovery.js';
 import type { RunReply } from '../src/process.js';
 import { hashTicket } from '../src/run-ticket.js';
+import { MANIFEST } from './drive-v3.js';
 
 const env = testEnv as unknown as Env;
 const API = 'https://api.example.com';
@@ -75,7 +76,7 @@ async function aRun(): Promise<{ sub: string; runId: string; ticket: string; t0:
   await p.setFolderId('FOLDER_ID');
   await p.cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 120 * MINUTE });
   const t0 = Date.now();
-  const admitted = await p.admit({ scope: 'instructions', allowWeb: true, requestId: 'press-1', now: t0, dailyLimit: 100 });
+  const admitted = await p.admit({ scope: 'instructions', allowWeb: true, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
   if (!admitted.admitted) throw new Error('not admitted');
   const ticket = await p.mintTicket(admitted.run.id, 1, t0);
   if (ticket === null) throw new Error('no ticket');

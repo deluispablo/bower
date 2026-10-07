@@ -8,6 +8,9 @@ import { QUEUED_STALE_MS, RUNNING_STALE_MS, STALE_FAILURE } from '../src/process
 import type { AdmitInput, RunReply, RunWire } from '../src/process.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
+import { makeRunId } from '../src/run-ticket.js';
+import type { AdmissionManifest } from '../../src/data/spine/admission.js';
+import { MANIFEST, driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -36,8 +39,21 @@ async function holder(): Promise<{ sub: string; cookie: string; fence: Record<st
   return { ...who, fence: { 'x-bower-place': 'laptop', 'x-bower-epoch': String(epoch) } };
 }
 
+/** The Drive the routes read: the last folder `withThings` gave someone. */
+let wire: DriveFolder | null = null;
+
+/** A holder whose folder has a thing in the inbox and one of your changes, read with a cached Drive token. */
+async function withThings(): Promise<{ sub: string; cookie: string; fence: Record<string, string> }> {
+  const who = await holder();
+  wire = await driveFolder();
+  await withThingsIn(wire);
+  await person(who.sub).setFolderId(wire.root);
+  await person(who.sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 3600_000 });
+  return who;
+}
+
 async function post(cookie: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
-  return await createApp().request(
+  return await createApp(wire ? { fetchImpl: wire.fetchImpl } : {}).request(
     `${APP}/process`,
     {
       method: 'POST',
@@ -54,13 +70,15 @@ async function status(cookie: string): Promise<RunReply> {
   return (await r.json()) as RunReply;
 }
 
-const T0 = Date.UTC(2026, 9, 7, 9, 0, 0);
+// Far ahead of the wall clock, so a stale alarm set from it never fires during a test.
+const T0 = Date.UTC(2036, 9, 7, 9, 0, 0);
 const ask = (requestId: string, now: number, more: Partial<AdmitInput> = {}): AdmitInput => ({
   scope: 'all',
   allowWeb: false,
   requestId,
   now,
   dailyLimit: 100,
+  manifest: MANIFEST,
   ...more,
 });
 
@@ -81,7 +99,7 @@ async function finish(sub: string, runId: string): Promise<void> {
 
 describe('POST /process', () => {
   it('process needs the session epoch', async () => {
-    const { cookie, fence } = await holder();
+    const { cookie, fence } = await withThings();
     const body = { scope: 'all', allowWeb: false, requestId: 'press-1' };
     // No place or epoch, a wrong epoch, another place: refused as another window.
     for (const headers of [{}, { ...fence, 'x-bower-epoch': '99' }, { ...fence, 'x-bower-place': 'phone' }]) {
@@ -99,7 +117,7 @@ describe('POST /process', () => {
   });
 
   it('a process body that fails validation answers 415', async () => {
-    const { cookie, fence } = await holder();
+    const { cookie, fence } = await withThings();
     const bad: unknown[] = [
       'not json',
       [],
@@ -124,7 +142,7 @@ describe('POST /process', () => {
   });
 
   it('process and status answer the revision', async () => {
-    const { cookie, fence } = await holder();
+    const { cookie, fence } = await withThings();
     expect(await status(cookie)).toEqual({ run: null, revision: 0 });
     const r = await post(cookie, { scope: 'instructions', allowWeb: true, requestId: crypto.randomUUID() }, fence);
     expect(r.status).toBe(200);
@@ -161,7 +179,7 @@ describe('admission in the person object', () => {
     expect(late.run.phase).toBe('done');
     expect(late.revision).toBe(second.revision);
     const counted = await runInDurableObject(person(sub), (_instance, state) =>
-      state.storage.sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', '2026-10-07').one().counter,
+      state.storage.sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', '2036-10-07').one().counter,
     );
     expect(counted).toBe(2);
   });
@@ -204,7 +222,7 @@ describe('admission in the person object', () => {
     const before = await runInDurableObject(person(sub), (_instance, state) => ({
       runs: state.storage.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM runs').one().n,
       revision: state.storage.sql.exec<{ status_revision: number }>('SELECT status_revision FROM control').one().status_revision,
-      counter: state.storage.sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', '2026-10-07').one().counter,
+      counter: state.storage.sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', '2036-10-07').one().counter,
     }));
     expect(before.counter).toBe(2);
     expect(await person(sub).admit(ask('press-c', T0 + 4, { dailyLimit: limit }))).toEqual({ admitted: false, refused: 'rate-limited' });
@@ -212,13 +230,13 @@ describe('admission in the person object', () => {
     const after = await runInDurableObject(person(sub), (_instance, state) => ({
       runs: state.storage.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM runs').one().n,
       revision: state.storage.sql.exec<{ status_revision: number }>('SELECT status_revision FROM control').one().status_revision,
-      counter: state.storage.sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', '2026-10-07').one().counter,
+      counter: state.storage.sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', '2036-10-07').one().counter,
     }));
     expect(after).toEqual(before);
     // A repeat of a counted request is still answered past the limit.
     expect((await admitted(sub, ask('press-b', T0 + 6, { dailyLimit: limit }))).run.id).toBe(b.run.id);
     // The next UTC day has its own counter.
-    const tomorrow = Date.UTC(2026, 9, 8, 0, 0, 1);
+    const tomorrow = Date.UTC(2036, 9, 8, 0, 0, 1);
     expect((await admitted(sub, ask('press-c', tomorrow, { dailyLimit: limit }))).run.phase).toBe('queued');
   });
 
@@ -260,6 +278,26 @@ describe('admission in the person object', () => {
     expect(ended.run).toMatchObject({ id: next.run.id, phase: 'failed', finishedAt: stop, failure: STALE_FAILURE });
   });
 
+  it('a new run is admitted only with its manifest', async () => {
+    const { sub } = await someone();
+    // A press that would admit reads the inbox first; with no manifest, nothing is written or counted.
+    expect(await person(sub).wouldAdmit('press-1', T0)).toBe(true);
+    expect(await person(sub).admit(ask('press-1', T0, { manifest: null }))).toEqual({ admitted: false, refused: 'needs-manifest' });
+    const empty = await runInDurableObject(person(sub), (_instance, state) => ({
+      runs: state.storage.sql.exec('SELECT id FROM runs').toArray(),
+      quota: state.storage.sql.exec('SELECT * FROM quota').toArray(),
+    }));
+    expect(empty).toEqual({ runs: [], quota: [] });
+    const first = await admitted(sub, ask('press-1', T0));
+    // A repeat, or a press while it is going, needs no manifest and reads nothing.
+    expect(await person(sub).wouldAdmit('press-1', T0 + 1)).toBe(false);
+    expect(await person(sub).wouldAdmit('press-2', T0 + 1)).toBe(false);
+    expect(await admitted(sub, ask('press-1', T0 + 2, { manifest: null }))).toEqual(first);
+    expect(await admitted(sub, ask('press-2', T0 + 3, { manifest: null }))).toEqual(first);
+    await finish(sub, first.run.id);
+    expect(await person(sub).wouldAdmit('press-2', T0 + 4)).toBe(true);
+  });
+
   it('the run history is bounded and keeps the newest runs', async () => {
     const { sub } = await someone();
     let last = '';
@@ -273,5 +311,82 @@ describe('admission in the person object', () => {
     );
     expect(kept).toBe(20);
     expect((await person(sub).runStatus(T0 + 30_000)).run?.id).toBe(last);
+  });
+});
+
+describe('the admission manifest', () => {
+  /** A person holding the lease, whose folder is a pretend Drive the Worker reads with a cached token. */
+  async function withFolder(): Promise<{ sub: string; cookie: string; fence: Record<string, string>; folder: DriveFolder }> {
+    const who = await holder();
+    const folder = await driveFolder();
+    await person(who.sub).setFolderId(folder.root);
+    await person(who.sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 3600_000 });
+    return { ...who, folder };
+  }
+
+  async function press(who: { cookie: string; fence: Record<string, string>; folder: DriveFolder }, body: Record<string, unknown>): Promise<Response> {
+    return await createApp({ fetchImpl: who.folder.fetchImpl }).request(
+      `${APP}/process`,
+      { method: 'POST', headers: { cookie: who.cookie, origin: APP, 'content-type': 'application/json', ...who.fence }, body: JSON.stringify(body) },
+      env,
+    );
+  }
+
+  const stored = async (sub: string) =>
+    await runInDurableObject(person(sub), (_instance, state) => ({
+      runs: state.storage.sql.exec('SELECT * FROM runs').toArray(),
+      quota: state.storage.sql.exec('SELECT * FROM quota').toArray(),
+    }));
+
+  it('an empty manifest answers nothing before the quota', async () => {
+    const who = await withFolder();
+    const nothing = async (body: Record<string, unknown>, message: string): Promise<void> => {
+      const r = await press(who, body);
+      expect(r.status, message).toBe(409);
+      expect(await r.json()).toEqual({ error: { code: 'nothing', message } });
+    };
+    // An empty inbox, and an instructions run with none of your changes.
+    await nothing({ scope: 'all', allowWeb: false, requestId: 'press-1' }, 'Nothing is waiting in the inbox.');
+    await nothing({ scope: 'instructions', allowWeb: false, requestId: 'press-2' }, 'There is nothing new for Bower to read.');
+    // Only a held pile: its list of what is in it cannot be read.
+    const { drive, root, inbox, bower } = who.folder;
+    const piles = await drive.createFolder(bower, 'piles');
+    await drive.createText(piles.id, `declaration-d1-${'0'.repeat(64)}.json`, 'not a declaration');
+    const held = await drive.createFolder(inbox, 'Papers', { pile: 'p-held', bowerDeclaration: 'd1' });
+    await drive.createText(held.id, 'scan.pdf', '%PDF scan', { bowerItem: 'k1', bowerDeclaration: 'd1' });
+    await nothing({ scope: 'all', allowWeb: false, requestId: 'press-3' }, 'Nothing in the inbox is ready yet.');
+    // Nothing was admitted or counted, and no note was read: Drive saw reads of metadata and Bower's own files.
+    expect(await stored(who.sub)).toEqual({ runs: [], quota: [] });
+    expect(who.folder.sent.every((s) => s.startsWith('GET '))).toBe(true);
+    expect(root).not.toBe('');
+  });
+
+  it('the run row keeps its manifest and the token route returns it', async () => {
+    const who = await withFolder();
+    const { drive, inbox } = who.folder;
+    const receipt = await drive.createText(inbox, 'receipt.pdf', '%PDF receipt', { pile: 'p-receipt' });
+    const r = await press(who, { scope: 'all', allowWeb: false, requestId: 'press-1' });
+    expect(r.status).toBe(200);
+    const { run } = (await r.json()) as RunReply;
+    const row = (await stored(who.sub)).runs[0] as Record<string, unknown> | undefined;
+    expect(typeof row?.manifest).toBe('string');
+    const manifest = JSON.parse(String(row?.manifest)) as AdmissionManifest;
+    expect(manifest).toMatchObject({ v: 1, rootId: who.folder.root, scope: 'all' });
+    expect(manifest.piles).toEqual([
+      { pileId: 'p-receipt', anchor: null, declaration: null, items: [{ fileId: receipt.id, name: 'receipt.pdf', parents: [inbox], modifiedTime: receipt.modifiedTime }] },
+    ]);
+    // A repeat of the press answers the same run and reads nothing again.
+    const sent = who.folder.sent.length;
+    expect((await press(who, { scope: 'all', allowWeb: false, requestId: 'press-1' })).status).toBe(200);
+    expect(who.folder.sent.length).toBe(sent);
+    // The runner's token route hands it the same manifest.
+    const runId = makeRunId(env.PERSON.idFromName(who.sub).toString());
+    await runInDurableObject(person(who.sub), (_instance, state) => {
+      state.storage.sql.exec('UPDATE runs SET id = ? WHERE id = ?', runId, run?.id ?? '');
+    });
+    const ticket = await person(who.sub).mintTicket(runId, 1, Date.now());
+    const token = await createApp().request(`https://api.example.com/runner/runs/${runId}/token`, { headers: { authorization: `Bearer ${ticket ?? ''}` } }, env);
+    expect(token.status).toBe(200);
+    expect(((await token.json()) as { manifest?: unknown }).manifest).toEqual(manifest);
   });
 });

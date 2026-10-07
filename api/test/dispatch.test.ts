@@ -9,6 +9,7 @@ import type { RunReply } from '../src/process.js';
 import { personIdOf } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
+import { driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -41,12 +42,14 @@ function github(status: number | null = 204) {
   return { sent, fetchImpl };
 }
 
-async function holder(): Promise<{ sub: string; cookie: string; fence: Record<string, string> }> {
+async function holder(): Promise<{ sub: string; cookie: string; fence: Record<string, string>; folder: DriveFolder }> {
   const sub = `dispatch-sub-${crypto.randomUUID()}`;
   await kv.put(allowKey('you@example.com'), '1');
   const enc = await encrypt('test-refresh-token', await importEncryptionKey(env.TOKEN_ENC_KEY));
   const { generation } = await person(sub).signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: enc });
-  await person(sub).setFolderId('FOLDER_ID');
+  const folder = await driveFolder();
+  await withThingsIn(folder);
+  await person(sub).setFolderId(folder.root);
   await person(sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 3600_000 });
   const epoch = (await person(sub).session('laptop', 'check', 0, Date.now())).epoch;
   const token = await signSession({ sub, gen: generation }, env.SESSION_SECRET);
@@ -54,15 +57,19 @@ async function holder(): Promise<{ sub: string; cookie: string; fence: Record<st
     sub,
     cookie: `${SESSION_COOKIE}=${token}`,
     fence: { 'x-bower-place': 'laptop', 'x-bower-epoch': String(epoch) },
+    folder,
   };
 }
 
 async function process(
-  who: { cookie: string; fence: Record<string, string> },
-  fetchImpl: (url: string, init?: RequestInit) => Promise<Response>,
+  who: { cookie: string; fence: Record<string, string>; folder: DriveFolder },
+  github: (url: string, init?: RequestInit) => Promise<Response>,
   requestId: string,
   bindings: Env = env,
 ): Promise<RunReply> {
+  // Drive is the person's pretend folder; everything else goes to the pretend GitHub.
+  const fetchImpl = (url: string, init?: RequestInit): Promise<Response> =>
+    url.startsWith('https://www.googleapis.com/') ? who.folder.fetchImpl(url, init) : github(url, init);
   const r = await createApp({ fetchImpl }).request(
     `${APP}/process`,
     {
@@ -102,7 +109,7 @@ describe('dispatch on admission', () => {
       env,
     );
     expect(token.status).toBe(200);
-    expect(await token.json()).toMatchObject({ folderId: 'FOLDER_ID', attempt: 1 });
+    expect(await token.json()).toMatchObject({ folderId: who.folder.root, attempt: 1 });
   });
 
   it('a repeat or an active run dispatches nothing', async () => {

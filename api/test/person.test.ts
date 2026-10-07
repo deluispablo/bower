@@ -4,12 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
 import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
+import { MANIFEST } from './drive-v3.js';
 
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
 
-/** Takes back schema step 8 (the runner wire's ticket columns), for the tests that rewind further. */
+/** Takes back schema step 9 (the run's admission manifest), for the tests that rewind further. */
+function undoV9(sql: SqlStorage): void {
+  sql.exec('ALTER TABLE runs DROP COLUMN manifest');
+}
+
+/** Takes back schema steps 9 and 8 (the runner wire's ticket columns), for the tests that rewind further. */
 function undoV8(sql: SqlStorage): void {
+  undoV9(sql);
   sql.exec('ALTER TABLE run_ticket DROP COLUMN expires_at');
   sql.exec('ALTER TABLE run_ticket DROP COLUMN report_seq');
 }
@@ -285,7 +292,7 @@ describe('person storage migration', () => {
     expect(after.runs).toEqual([]);
     // The status revision carries on from the kept control row.
     expect((await alex.runStatus(2_000)).revision).toBe(4);
-    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: 2_000, dailyLimit: 100 });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: 2_000, dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true, revision: 5 });
     expect(await alex.holdsLease('laptop', 1)).toBe(true);
   });
@@ -293,7 +300,7 @@ describe('person storage migration', () => {
   it('person storage migrates from v7 to v8 keeping every row', async () => {
     const alex = personFor('sub-alex-v7');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100 });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true });
     // Put the database back as P3-8 shipped it: no ticket columns, a version row of 7, a v1 ticket row.
     const before = await runInDurableObject(alex, (_instance, state) => {
@@ -306,19 +313,46 @@ describe('person storage migration', () => {
     await evictDurableObject(alex);
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBe(8);
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
       return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
     });
     // Every v7 row is there as it was; a ticket kept from before has no expiry, so it never works.
-    expect({ ...after, schema_version: undefined, run_ticket: undefined }).toEqual({
+    expect({ ...after, schema_version: undefined, run_ticket: undefined, runs: undefined }).toEqual({
       ...before,
       schema_version: undefined,
       run_ticket: undefined,
+      runs: undefined,
     });
-    expect(after.schema_version).toEqual([{ id: 1, version: 8 }]);
+    expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
+    expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
     expect(after.run_ticket).toEqual([{ hash: 'hash-1', run_id: 'run-1', epoch: 2, retired: 0, expires_at: 0, report_seq: null }]);
     expect((await alex.runStatus(2_000)).revision).toBe(1);
+  });
+
+  it('person storage migrates from v8 to v9 keeping every run', async () => {
+    expect(SCHEMA_VERSION).toBe(9);
+    const alex = personFor('sub-alex-v8');
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
+    expect(admitted).toMatchObject({ admitted: true });
+    // Put the database back as P3-9 shipped it: runs with no manifest column, a version row of 8.
+    const before = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      undoV9(sql);
+      sql.exec('UPDATE schema_version SET version = 8 WHERE id = 1');
+      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+    });
+    await evictDurableObject(alex);
+
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    const after = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+    });
+    // Every v8 row is there as it was; a run admitted before has no manifest.
+    expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({ ...before, schema_version: undefined, runs: undefined });
+    expect(after.schema_version).toEqual([{ id: 1, version: 9 }]);
+    expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
   });
 });
