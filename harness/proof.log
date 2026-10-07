@@ -330,3 +330,4 @@ worker-stale-run-recovery	c6a6ca1f8f9c4bac	2026-10-07	known-green: verify rename
 recovery-redispatch-after-dead-job	9c10b6d2a6855cd1	2026-10-07	red (fixed in f04a306)
 routing-test-from-app	4a1f3c39324f0fc4	2026-10-07	known-green: test-only fix: the new test failed against the typed list at ce513eb (a route added to the app went unchecked); e291669 builds the list from app.routes
 runner-reports-reading-total	b3fb5fb182df875b	2026-10-07	red (fixed in 5699b61)
+dispositions-match-report	bd48e2215702178d	2026-10-07	red (fixed in 03bf8f6)

@@ -85,3 +85,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: recovery-redispatch-after-dead-job passes — chore(harness): recovery-redispatch-after-dead-job passes
 - 2026-10-07: routing-test-from-app passes — chore(harness): routing-test-from-app passes
 - 2026-10-07: runner-reports-reading-total passes — chore(harness): runner-reports-reading-total passes
+- 2026-10-07: dispositions-match-report passes — chore(harness): dispositions-match-report passes

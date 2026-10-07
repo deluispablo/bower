@@ -4239,7 +4239,7 @@
       "A contract check: every filed or setAside row in the report has a matching disposition, and no disposition contradicts the report."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a pile written into a new note is filed in its dispositions|dispositions never contradict the report\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-24 point 1; first real inbox run on staging (run 37629481616): dispositions said set-aside for a filed pile file."
   },
   {
