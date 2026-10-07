@@ -31,6 +31,7 @@ import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, m
 import { firstCheckpoint, nextCheckpoint, type CheckpointPatch } from '../spine/records';
 import { fixedReport, lastRunText, sameView, saveReport } from '../spine/barrier';
 import { sha256 } from '../vault/hashes';
+import { B_FAILURE } from '../spine/scripted';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
 export interface Binding {
@@ -66,8 +67,8 @@ export interface FakeRunServiceOptions {
   persist?: () => Promise<void>;
 }
 
-/** A B run that failed: the honest-phase rule guarantees no effect applied. */
-export const B_FAILURE = 'The tidy-up stopped before changing anything. Try again.';
+/** A B run that failed: the honest-phase rule guarantees no effect applied (said by the scripted plan's refusal too). */
+export { B_FAILURE };
 
 /** How long an attempt's claim lasts without progress: longer than any phase of the slowest clock. */
 export const CLAIM_MS = 300_000;

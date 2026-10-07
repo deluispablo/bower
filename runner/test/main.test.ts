@@ -1,0 +1,121 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DriveFile } from '../../src/data/drive/drive-api';
+import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import { PILE_NOTE } from '../../src/data/piles';
+import type { AdmissionManifest } from '../../src/data/spine/admission';
+import { planAdmission } from '../../src/data/spine/plan';
+import { fakeRead } from '../../src/data/spine/read';
+import { listedPiles, scriptedProvider } from '../../src/data/spine/scripted';
+import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
+import { main } from '../src/main';
+import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
+
+const AT = Date.UTC(2026, 9, 7, 9);
+
+afterEach(() => vi.restoreAllMocks());
+
+/**
+ * Alex's folder on a pretend Drive v3, admitted by the Worker's rules: two loose things the demo files into folders
+ * not there yet (made by the run), and a pile with words whose folder goes to the Bin once its photo is filed.
+ */
+async function seeded(): Promise<{ drive: FakeDrive; root: string; admission: AdmissionManifest }> {
+  const drive = fixedDrive();
+  const root = (await drive.createFolder('root', 'Bower')).id;
+  const inbox = (await drive.createFolder(root, 'Inbox')).id;
+  for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(root, name);
+  const sys = (await drive.createFolder(root, SYSTEM.dir)).id;
+  await drive.createFolder(sys, 'changes');
+  await drive.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
+  await drive.createText(inbox, 'Payslip_Aug.pdf', '%PDF payslip', { pile: 'p-payslip' });
+  await drive.createText(inbox, 'Dentist reminder.pdf', '%PDF dentist', { pile: 'p-dentist' });
+  const pile = (await drive.createFolder(inbox, 'Flat photos', { pile: 'p-photos' })).id;
+  await drive.createText(pile, PILE_NOTE, 'The kitchen at the Wrenfield Road viewing.\n');
+  await drive.createText(pile, 'IMG_2301.jpg', 'made-up photo bytes');
+  const admitted = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+  if (admitted.kind !== 'manifest') throw new Error(`nothing admitted: ${admitted.cause}`);
+  return { drive, root, admission: admitted.manifest };
+}
+
+/** The dispatch as Actions hands it to the job: the event file at `GITHUB_EVENT_PATH`. */
+async function eventFile(payload: Record<string, unknown> = {}): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'bower-runner-'));
+  const file = join(dir, 'event.json');
+  await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: RUN_ID, attempt: 1, ticket: TICKET, scope: 'all', allow_web: false, ...payload } }));
+  return file;
+}
+
+async function wired(): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
+  const { drive, root, admission } = await seeded();
+  const wire = driveV3(drive);
+  wire.folderId = root;
+  wire.manifest = admission;
+  return { wire, root, admission };
+}
+
+/** The path of a file in the folder, from a listing. */
+function pathOf(listing: readonly DriveFile[], root: string, id: string): string | null {
+  const byId = new Map(listing.map((f) => [f.id, f]));
+  const parts: string[] = [];
+  for (let f = byId.get(id); f; f = byId.get(f.parents[0] ?? '')) {
+    parts.unshift(f.name);
+    if (f.parents[0] === root) return parts.join('/');
+  }
+  return null;
+}
+
+describe('the runner process', () => {
+  it('main applies real Drive effects through the adapter and the folder changes', async () => {
+    const { wire, root, admission } = await wired();
+    const before = await wire.drive.listAll(root);
+    // The things it took; a pile's note is its words, and goes to the Bin with its folder.
+    const items = admission.piles.flatMap((p) => p.items.filter((i) => i.name !== PILE_NOTE).map((i) => i.fileId));
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((id) => pathOf(before, root, id)?.startsWith('Inbox/'))).toBe(true);
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile() }, { fetch: wire.fetch })).toBe(0);
+
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving', 'done']);
+    // The folder changed: every thing it took left the inbox, by writes Drive v3 received.
+    const after = await wire.drive.listAll(root);
+    const left = items.map((id) => pathOf(after, root, id));
+    expect(left.filter((p) => p === null || p.startsWith('Inbox/'))).toEqual([]);
+    expect(wire.requests.filter((r) => r.method === 'PATCH').length).toBeGreaterThanOrEqual(items.length);
+    const anchor = admission.piles.find((p) => p.anchor)?.anchor;
+    expect((await wire.drive.evidence(anchor?.fileId ?? ''))?.trashed).toBe(true);
+    // The report landed last, and says what was filed.
+    const lastRun = after.find((f) => pathOf(after, root, f.id) === SYSTEM.lastRun);
+    expect(lastRun).toBeDefined();
+    const value: unknown = JSON.parse(await wire.drive.readText(lastRun?.id ?? ''));
+    expect(isRunnerFile(SYSTEM.lastRun, value) && value.run.id === RUN_ID && value.run.phase === 'done').toBe(true);
+    if (!isRunnerFile(SYSTEM.lastRun, value)) return;
+    expect(value.run.report?.filed.length).toBe(items.length);
+  });
+
+  it('main picks the scripted provider', async () => {
+    // Unknown: it refuses to start, saying which names it knows, before any call.
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const refused = await wired();
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), BOWER_PROVIDER: 'model' }, { fetch: refused.wire.fetch })).toBe(1);
+    expect(refused.wire.tokenCalls + refused.wire.requests.length).toBe(0);
+    expect(errors.mock.calls.flat().map(String).join('\n')).toMatch(/model.*scripted|scripted.*model/);
+    errors.mockRestore();
+
+    // Default and named: the scripted provider plans the run, exactly as it plans over the pretend Drive.
+    for (const env of [{}, { BOWER_PROVIDER: 'scripted' }]) {
+      const { wire, root, admission } = await wired();
+      const twin = await seeded();
+      const reads = fakeRead(twin.drive);
+      const port = { ...reads, piles: (rootId: string) => listedPiles(reads, rootId), provenance: 'adapter-read' as const };
+      const expected = await scriptedProvider(port, { rootId: twin.root, runId: RUN_ID, allowWeb: false })({ taken: admission, deferred: [] });
+      expect(expected.operations.map((o) => o.effect.kind).sort()).toEqual(expect.arrayContaining(['bin', 'create-folder', 'create-text', 'move']));
+      expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...env }, { fetch: wire.fetch })).toBe(0);
+      const files = await wire.drive.listAll(root);
+      const record = files.find((f) => f.name.startsWith('manifest-') && pathOf(files, root, f.id)?.startsWith(`${SYSTEM.dir}/runs/${RUN_ID}/`));
+      expect(record).toBeDefined();
+      expect(JSON.parse(await wire.drive.readText(record?.id ?? ''))).toEqual(JSON.parse(JSON.stringify(expected)));
+    }
+  });
+});

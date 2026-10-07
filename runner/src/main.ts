@@ -13,17 +13,23 @@
  * 5. Status: `done`, only after the barrier.
  *
  * The provider (what the run plans from what it took) and the effects (how an operation reaches Drive) are handed
- * in: the scripted provider and the Drive effects come with their own entries.
+ * in to `runTidy`; `main`, the process on GitHub Actions, hands in the provider `BOWER_PROVIDER` names (scripted by
+ * default) and the real Drive effects (`effects.ts`), so a run there really changes the folder. Injected effects
+ * are for tests only.
  */
 import { createHash } from 'node:crypto';
-import { RunRecords, type RunManifest } from '../../src/data/spine/records';
+import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import type { RunProvider } from '../../src/data/spine/provider';
+import { RunRecords } from '../../src/data/spine/records';
 import type { ItemDisposition } from '../../src/data/spine/report';
 import { shownDone, type Checksum } from '../../src/data/spine/barrier';
 import { RunnerDrive } from './drive';
 import { RunnerStatus } from './status';
 import { RunnerToken } from './token';
 import { admittedPlan, runOperations, type Effects } from './spine/run';
-import type { Admitted } from './spine/admitted';
+import { driveEffects } from './effects';
+import { providerFor, providerNamed, type ProviderName } from './provider';
 import { finishRun } from './spine/barrier';
 import { runnerReads } from './spine/records';
 
@@ -39,8 +45,8 @@ export interface TidyOptions {
   /** This runner's attempt, from its dispatch. */
   attempt: number;
   fetch?: typeof fetch;
-  /** Plans a new run from what it took (the scripted provider; a stub in tests). */
-  provider(taken: Admitted): Promise<RunManifest>;
+  /** What plans a new run from what it took, read through this runner's adapter in the folder (`rootId`). */
+  provider(drive: RunnerDrive, rootId: string): RunProvider;
   /** How operations reach Drive through this runner's adapter. */
   effects(drive: RunnerDrive): Effects;
   clock?: () => number;
@@ -91,7 +97,7 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
     records,
     batch: () => drive.batch(),
     effects: opts.effects(drive),
-    plan: admittedPlan(token, drive, opts.provider),
+    plan: admittedPlan(token, drive, opts.provider(drive, rootId)),
     clock,
     newId,
   });
@@ -119,4 +125,93 @@ export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   // 5. Status, only after the report is read back.
   await status.post('done');
   return { phase: 'done', dispositions: finished.dispositions };
+}
+
+
+/** What a `bower-tidy` dispatch carries (worker contract, "Runner wire"). */
+export interface Dispatch {
+  runId: string;
+  attempt: number;
+  ticket: string;
+  scope: 'all' | 'instructions';
+  allowWeb: boolean;
+}
+
+/** The dispatch's `client_payload`, from the event file Actions writes; null when it is not one. */
+export function dispatchOf(event: unknown): Dispatch | null {
+  const p = (event as { client_payload?: Record<string, unknown> } | null)?.client_payload;
+  if (!p || typeof p !== 'object') return null;
+  const { run_id: runId, attempt, ticket, scope, allow_web: allowWeb } = p;
+  if (typeof runId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(runId)) return null;
+  if (typeof attempt !== 'number' || !Number.isSafeInteger(attempt) || attempt < 1) return null;
+  if (typeof ticket !== 'string' || !ticket) return null;
+  if (scope !== 'all' && scope !== 'instructions') return null;
+  return { runId, attempt, ticket, scope, allowWeb: allowWeb === true };
+}
+
+export interface MainOptions {
+  fetch?: typeof fetch;
+}
+
+/**
+ * The process on GitHub Actions: the provider `BOWER_PROVIDER` names (scripted when unset), the Worker at
+ * `BOWER_API_URL`, and the dispatch from the event file at `GITHUB_EVENT_PATH`, which is where the ticket stays: it
+ * is never put in the environment or printed, and on Actions it is masked in the log first
+ * (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log).
+ * Gives the exit code: 0 once the run ended (done, failed, or saving for a redispatch to finish), 1 when it could
+ * not start or stopped on an error, said in the log.
+ */
+export async function main(env: Readonly<Record<string, string | undefined>>, opts: MainOptions = {}): Promise<number> {
+  let name: ProviderName;
+  try {
+    name = providerNamed(env.BOWER_PROVIDER);
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : e);
+    return 1;
+  }
+  const api = env.BOWER_API_URL?.trim();
+  if (!api || !/^https?:\/\/[^/]+$/.test(api)) {
+    console.error('BOWER_API_URL must be the Worker\'s origin, for example https://api.example.com (a repository variable).');
+    return 1;
+  }
+  let dispatch: Dispatch | null = null;
+  try {
+    dispatch = env.GITHUB_EVENT_PATH ? dispatchOf(JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'))) : null;
+  } catch (e) {
+    console.error(e);
+  }
+  if (!dispatch) {
+    console.error('No bower-tidy dispatch to run: GITHUB_EVENT_PATH must hold its client_payload (run_id, attempt, ticket, scope, allow_web).');
+    return 1;
+  }
+  if (env.GITHUB_ACTIONS === 'true') process.stdout.write(`::add-mask::${dispatch.ticket}\n`);
+  const { runId, attempt, ticket, allowWeb } = dispatch;
+  console.log(`Tidy-up ${runId}, attempt ${attempt}, with the ${name} provider.`);
+  try {
+    const end = await runTidy({
+      api,
+      runId,
+      ticket,
+      attempt,
+      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+      provider: (drive, rootId) => providerFor(name, drive, { rootId, runId, allowWeb }),
+      effects: driveEffects,
+    });
+    console.log(`Tidy-up ${runId} ended ${end.phase}.`);
+    if (end.phase !== 'done') console.error(end.why);
+    return 0;
+  } catch (e) {
+    console.error(e);
+    return 1;
+  }
+}
+
+// Run as the bundle's entry (`node runner/dist/runner.mjs`), never when imported.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main(process.env).then((code) => {
+    process.exitCode = code;
+  }, (e: unknown) => {
+    console.error(e);
+    process.exitCode = 1;
+  });
 }

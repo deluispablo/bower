@@ -25,7 +25,10 @@ import { createHash } from 'node:crypto';
 import { BowerError } from '../../src/data/types';
 import { driveError, type DriveFile, type DrivePatch } from '../../src/data/drive/drive-api';
 import { DriveHttp } from '../../src/data/drive/drive-http';
-import type { FaultAction, FaultHook, FencedCall, FencedDrive } from '../../src/data/drive/fake-drive';
+import type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from '../../src/data/drive/fake-drive';
+import type { SpineRead } from '../../src/data/spine/plan';
+import { driveRead } from '../../src/data/spine/read';
+import { sha256 } from '../../src/data/contracts/hashes';
 import { SeenFiles, targetOf, type StoredNow } from './still-as-seen';
 import { staleAttempt, type RunnerToken } from './token';
 
@@ -117,6 +120,38 @@ export class RunnerDrive {
 
   async readText(id: string): Promise<string> {
     return this.http.readText(id);
+  }
+
+  /**
+   * The plan's reads (`spine/read.ts` `driveRead`): the listing, Bower's own files and stored digests. Reads only;
+   * a plan is fixed before any write, and every write later reads its target again (`get`) before it is fenced.
+   */
+  planReads(): SpineRead {
+    return driveRead(this.http);
+  }
+
+  /**
+   * What Drive stores for a file now, as evidence of an effect: its metadata, whether it is in the Bin, and its
+   * content's size and SHA-256 (`sha256Checksum`, or the bytes read when Drive keeps none). Null when it is gone.
+   */
+  async evidence(id: string): Promise<StoredEvidence | null> {
+    let w: WireFile & { trashed?: boolean; sha256Checksum?: string };
+    try {
+      w = (await this.read(`${API}/files/${encodeURIComponent(id)}?fields=${FIELDS},sha256Checksum`)) as typeof w;
+    } catch (e) {
+      if (e instanceof BowerError && e.code === 'not-found') return null;
+      throw e;
+    }
+    const file = toFile(w);
+    if (file.folder) return { file, trashed: w.trashed === true, content: null };
+    if (w.sha256Checksum !== undefined && file.size !== undefined) return { file, trashed: w.trashed === true, content: { size: file.size, sha256: w.sha256Checksum } };
+    const bytes = await this.http.readBytes(id);
+    return { file, trashed: w.trashed === true, content: { size: bytes.byteLength, sha256: await sha256(new Blob([bytes.slice()])) } };
+  }
+
+  /** The bytes of a file. */
+  async readBytes(id: string): Promise<Uint8Array> {
+    return this.http.readBytes(id);
   }
 
   /** The MD5 of a file's stored bytes, hex, as Drive's `md5Checksum` gives it. */

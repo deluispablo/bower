@@ -121,7 +121,10 @@ async function answer(drive: FakeDrive, method: string, url: URL, body: RequestI
     const id = decodeURIComponent(one[2] ?? '');
     if (url.searchParams.get('alt') === 'media') return new Response((await drive.readBytes(id)).slice());
     const stored = await drive.evidence(id);
-    return stored ? json(200, wireFile(stored.file, stored.trashed)) : json(404, driveFailure(404, 'notFound'));
+    if (!stored) return json(404, driveFailure(404, 'notFound'));
+    // Drive keeps a stored file's SHA-256 and gives it when asked for (`sha256Checksum`).
+    const sha = stored.content && (url.searchParams.get('fields') ?? '').includes('sha256Checksum') ? { sha256Checksum: stored.content.sha256 } : {};
+    return json(200, { ...wireFile(stored.file, stored.trashed), ...sha });
   }
   if (method === 'POST' && path === '/drive/v3/files') {
     const meta = JSON.parse(await new Response(body).text()) as { name: string; mimeType?: string; parents: string[]; appProperties?: Record<string, string> };

@@ -5,7 +5,18 @@
  */
 import type { DriveApi, ResumableDrive } from '../drive/drive-api';
 import type { FakeDrive } from '../drive/fake-drive';
+import type { Pile } from '../types';
 import type { SpineRead } from './plan';
+
+/**
+ * What the scripted provider reads (`scripted.ts`): the plan's reads, the inbox's piles as the Inbox reads them, and
+ * what the stored digests it records are (`fake-stored` from the pretend Drive, `adapter-read` from Drive v3). Its
+ * adapters build the piles over their own Drive (`DriveVault.piles`), outside the spine.
+ */
+export interface ScriptedRead extends SpineRead {
+  piles(rootId: string): Promise<Pile[]>;
+  provenance: 'fake-stored' | 'adapter-read';
+}
 
 type DriveReads = Pick<DriveApi, 'listAll' | 'readBytes' | 'readText'> & Pick<ResumableDrive, 'getUploaded'>;
 
