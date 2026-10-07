@@ -144,3 +144,6 @@ P3-9 is closed.
   - `claude-provider`: bower-escalated, worktree `bower-p4-claudeprov`. Live use waits for the owner's secret.
 - Next: P4-2 = original-baseline, provider-contract, then C04.
 - TL-P4-01 addendum (7c80e10, speed baseline): the corpus includes the five bench cases unchanged, and the provider logs per-phase timing (both workers told). New P4-2 entry `runner-overhead` (scripted run under 60 s). Every live run goes in `p4-speed-baseline.md`; call a difference only after 3 or more runs per case.
+- P4-1 closed entries: `p4-corpus` (ac3411f; 29 cases, bench 1–5 unchanged) and `claude-provider` (c98c378; Claude Code 2.1.293 pinned, confirmed on npm). 352/353.
+- Running: `runner-overhead` (bower-p4-overhead, at c98c378); the P4-1 Opus delta (packet p4-1-review); check plus e2e:fake at 62a9a3e.
+- Live Claude smoke after the review: the lead deploys, sets BOWER_PROVIDER=claude in bower-home, and I press one C04 case.
