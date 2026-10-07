@@ -4285,5 +4285,20 @@
     "verify": "pnpm exec vitest run src/data -t \"the real source declares piles|a declared pile gives the same manifest on the fake and on Drive\"",
     "passes": false,
     "note": "TL-P3-24 point 4 (P3-E)."
+  },
+  {
+    "id": "deploy-and-migrations",
+    "task": "p3-f",
+    "category": "feature",
+    "what": "One script deploys a main SHA to staging the way STAGING.md does it by hand, with the production guards: it refuses unless the checkout is clean at that SHA and the config names bower-staging with the staging KV (never bower-api or production BOWER_KV), builds with VITE_API_URL unset, scans dist/ for personal data and secret patterns, deploys with the staging vars, checks /health names the SHA, waits out the version-skew window for one /status 401 or 200, and builds the runner bundle for new-instance.sh. Person-object schema steps are append-only, checked by a test.",
+    "steps": [
+      "scripts/deploy-staging.sh <sha>: clean-checkout and SHA check, config guard, frozen install, build with VITE_API_URL unset, dist scan, wrangler deploy with APP_ORIGIN, API_ORIGIN, APP_VERSION and GITHUB_REPO, /health check, skew wait, runner build; it prints no secret and never sets one.",
+      "It refuses bower-api, a production KV id, a dirty tree, a SHA that is not main's, and a scan hit; each refusal is one sentence and a non-zero exit.",
+      "A test runs it with wrangler, curl and git stubbed on PATH and asserts the refusals and the happy path.",
+      "A test pins the shipped person-schema steps (SCHEMA_VERSION 1..current) by hash, so a shipped step can never be edited, only a new one appended."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"deploy-staging refuses production and dirty checkouts|deploy-staging deploys a clean main SHA and checks health|shipped person schema steps never change\"",
+    "passes": false,
+    "note": "TL-P3-24 point 2 (P3-F); TL-P3-08 production guard; STAGING.md deploy line; TL-P3-20 version skew."
   }
 ]
