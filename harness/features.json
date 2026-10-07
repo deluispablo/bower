@@ -4268,7 +4268,7 @@
       "Tests on the DriveHttp adapter over a fake fetch: interrupted at each chunk, reload, resume from the offset, one file; expired session; lost bytes."
     ],
     "verify": "pnpm exec vitest run src/data -t \"the real source sends pile files through the upload queue|a reload resumes from Drive's offset and makes one file|an expired session restarts with the same reserved id|lost bytes ask to choose the file again\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-24 point 4 (P3-E); folds in upload-queue-persistent for the real source; R4 Part B evidence."
   },
   {
