@@ -84,3 +84,4 @@ worker-dispatch,implementer,claude,sonnet,medium,1,91895,,,,,,14,2.6,delivered,2
 worker-stale-run-recovery,implementer,claude,opus,high,1,127803,,,,,,23,6.6,delivered,2026-10-07
 p3-9-delta-review,reviewer,claude,opus,medium,1,122653,,,,,,19,2.5,"BLOCK 2 Important (status poll expires a live run; runner stale-attempt never fires)",2026-10-07
 recovery-status-poll-race,implementer,claude,opus,high,1,89015,,,,,,14,2.6,delivered,2026-10-07
+runner-stale-attempt-signal,implementer,claude,sonnet,medium,1,94490,,,,,,21,3.9,delivered,2026-10-07

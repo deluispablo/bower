@@ -4062,7 +4062,7 @@
       "The runner's batch() refuses with stale-attempt on the Worker's real 409, and with auth on a 401."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a superseded attempt.s ticket answers stale-attempt|an unknown ticket is signed out|a resent final report answers the current state\" && pnpm -C runner exec vitest run -t \"the adapter refuses with stale-attempt on the Worker.s real reply|a refused ticket stays an auth error\"",
-    "passes": false,
+    "passes": true,
     "note": "P3-9 Opus delta review, BLOCK Important 2, and TL-P3-18 addendum (the Worker keeps the contract; the runner never infers takeover from 401; the resent-final-report minor folded in)."
   }
 ]
