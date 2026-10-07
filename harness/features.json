@@ -4128,5 +4128,20 @@
     "verify": "pnpm exec vitest run src/data -t \"the scripted provider plans the same run as the fake runner\" && pnpm -C runner exec vitest run -t \"main applies real Drive effects through the adapter and the folder changes|main picks the scripted provider|new-instance copies the built runner and tidy.yml and nothing secret\"",
     "passes": false,
     "note": "TL-P3-22 point 3 and its addendum (real effects on the adapter for C12; the lead pushes the replacement); TL-P3-13."
+  },
+  {
+    "id": "report-barrier-truth-fix",
+    "task": "p3-d",
+    "category": "fix",
+    "what": "A run ends truthfully in every case the P3-11 delta review found. saving is sent only when the chain holds an applied outcome, and a run with none applied that cannot finish ends failed with \"The tidy-up stopped before changing anything. Try again.\" A 409 stale-report carries the Worker's seq and phase: the runner resends once with seq+1, never swallows a refused done, and sends nothing more when that phase is already done or failed. Every manifest item's disposition, journal lines included, is recorded in .bower/runs/<run_id>/dispositions.json before last-run.json.",
+    "steps": [
+      "saving is sent only when the chain holds an applied outcome, and after \"effects done, report pending\" is committed; with none applied, a failed report save or an uncaught error ends failed with the stopped-before-changing-anything sentence.",
+      "An uncaught error after an applied effect follows the same rule: the run goes to saving, never to the nothing-happened sentence.",
+      "The Worker's 409 stale-report body carries its {seq, phase}; the runner resends once with seq+1, never swallows a refused done, and stops when the phase is already done or failed.",
+      "The barrier writes .bower/runs/<run_id>/dispositions.json, one line per manifest item including journal lines, before last-run.json; pile-disposition.ts is unchanged."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a run that changed nothing never says changes were made|a restarted runner's done reaches the Worker|every admitted item's disposition is readable after the run, journal lines included\" && pnpm -C api exec vitest run -t \"a stale report answers the current seq and phase\"",
+    "passes": false,
+    "note": "P3-11 delta review I1–I3; TL-P3-22 addendum (drafts 1–4 adopted, plus: a 409 whose phase is done or failed ends the runner's reporting)."
   }
 ]
