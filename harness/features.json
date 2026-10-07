@@ -4399,5 +4399,100 @@
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the P3 security review is recorded\"",
     "passes": true,
     "note": "TL-P3-26 point 2."
+  },
+  {
+    "id": "token-key-rotation-reconsent",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "A refresh token the Worker cannot decrypt (after a TOKEN_ENC_KEY rotation) is treated like Google's invalid_grant: the person is signed out (forgetGoogleAccess, 401 signed-out) on the app's and the runner's token calls, the unreadable token is dropped, and the next sign-in asks for consent so Google issues a new refresh token.",
+    "steps": [
+      "decrypt_failed in drive-token.ts maps to forgetGoogleAccess and 401 signed-out, never 500.",
+      "signIn never keeps an unreadable token; the callback asks for consent when no readable refresh token is held.",
+      "The runbook rotation section says what happens."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"an unreadable refresh token signs the person out and the next sign-in asks for consent\"",
+    "passes": false,
+    "note": "P3 security review F1 (Important); ASVS V13.3.4, V16.5.1."
+  },
+  {
+    "id": "tidy-pin-actions",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "Every uses: in runner/workflows/tidy.yml is pinned to a full 40-hex commit SHA, with the tag in a comment, and a test fails on any unpinned action.",
+    "steps": [
+      "Pin actions/checkout and actions/setup-node to the commit SHAs of their current v5 tags, tag in a comment.",
+      "A test reads tidy.yml and requires @<40 hex> on every uses:."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"every action in tidy.yml is pinned to a commit SHA\"",
+    "passes": false,
+    "note": "P3 security review F2 (Important); GitHub Actions hardening."
+  },
+  {
+    "id": "app-security-headers",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "The built app ships its security headers: a generated public/_headers (Cloudflare static assets) gives the app's documents a Content-Security-Policy allowing only the app, Google's APIs and the Worker, frame-ancestors none, Strict-Transport-Security and X-Content-Type-Options nosniff, without breaking the landing, the service worker or sign-in; api/src/security.ts's comment says what is true.",
+    "steps": [
+      "public/_headers generated at build (or kept by hand if the build cannot) for / and the app routes and /landing/.",
+      "The CSP is checked against the app in e2e (no CSP violation in the console) and the landing.",
+      "A test builds and asserts dist/_headers carries the four headers."
+    ],
+    "verify": "pnpm exec vitest run src/docs.test.ts -t \"the built app ships its security headers\"",
+    "passes": false,
+    "note": "P3 security review F3 (Important); ASVS V3.4.1, V3.4.3, V3.4.6."
+  },
+  {
+    "id": "cookie-host-prefix",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "The session and OAuth cookies use the __Host- prefix (Secure, Path=/, no Domain), so a sibling subdomain cannot set or shadow them; the rename signs everyone out once and the old names are cleared.",
+    "steps": [
+      "bower_session becomes __Host-bower_session and bower_oauth becomes __Host-bower_oauth with Path=/.",
+      "Old cookies are expired on the next response.",
+      "Tests assert the Set-Cookie attributes."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the session and sign-in cookies carry the __Host- prefix\"",
+    "passes": false,
+    "note": "P3 security review F4 (Minor); ASVS V3.3.1, V3.3.3."
+  },
+  {
+    "id": "log-no-folder-content",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "No folder content reaches a log: the runner logs an operation ordinal or file id instead of a note's path when an edit does not read back, and an unreadable journal file is logged by file id and \"not valid JSON\" only, in the Worker and the runner.",
+    "steps": [
+      "runner/src/effects.ts logs the operation ordinal or file id, as still-as-seen.ts does.",
+      "src/data/spine/plan.ts logs the journal file id and \"not valid JSON\", never the parser's message.",
+      "Tests capture console output and assert no note path or file text appears."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a failed read-back logs no note path\" && pnpm exec vitest run src/data/spine -t \"an unreadable journal file logs no text\"",
+    "passes": false,
+    "note": "P3 security review F5 and F6 (Minor); ASVS V16.2.5, V14.2.4."
+  },
+  {
+    "id": "instance-private-check",
+    "task": "p3-f",
+    "category": "fix",
+    "what": "new-instance.sh refuses to update a repository unless gh repo view --json visibility says PRIVATE.",
+    "steps": [
+      "Check visibility before any clone or push; refuse with one sentence.",
+      "The stubbed-gh test covers a public repository."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"new-instance refuses a public repository\"",
+    "passes": false,
+    "note": "P3 security review F7 (Minor)."
+  },
+  {
+    "id": "deletion-allowlist-doc",
+    "task": "p3-f",
+    "category": "docs",
+    "what": "The runbook's Accounts and Deletion sections say that \"Delete my account\" leaves the operator's invitation (the allowlist entry) in KV, and how the operator removes it by hand.",
+    "steps": [
+      "docs/runbook.md says so in Accounts and Deletion.",
+      "A docs test checks the runbook names the allowlist under Deletion."
+    ],
+    "verify": "pnpm exec vitest run src/docs.test.ts -t \"the runbook says the invitation stays after deletion\"",
+    "passes": false,
+    "note": "P3 security review F8 (Minor)."
   }
 ]

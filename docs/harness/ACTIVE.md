@@ -33,7 +33,12 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - Staging is at 5a4ab04 (f3e43b66); bower-home is at b7a0a82.
 - `nothingReady` is approved and in the contract. `parseRunReport` already accepts it (from worker-reads-pile-notes), so no fix is needed.
 - Running:
-  - `security-review` (escalated, `/private/tmp/bower-p3-security`; ASVS 5.0 and Actions hardening; findings become fix entries);
+  - `security-review` passes as recorded (3f05ebf). It found 3 Important and 5 Minor (`2026-10-07-p3-security-review.md`) and corrected two runbook claims; `pnpm audit` is clean.
+  - P3-20 has seven fix entries, packet `2026-10-07-p3-20-security-fixes-packet.md`. Order:
+    1. `token-key-rotation-reconsent` and `tidy-pin-actions`;
+    2. `app-security-headers` and `log-no-folder-content`;
+    3. `cookie-host-prefix` and `instance-private-check`;
+    4. `deletion-allowlist-doc`.
   - `deploy-staging-production-check` passes (6ef7934, red fixed in dab6b02). 336/337.
 - Then:
   1. the security fixes;
