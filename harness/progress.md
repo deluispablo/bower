@@ -107,3 +107,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: rules-template-bower passes — chore(harness): rules-template-bower passes
 - 2026-10-07: rules-repair-existing-folder passes — Runner repairs the old template Rules.md at plan time on existing folders (TL-P3-28 point 1)
 - 2026-10-07: home-sheet-and-focus passes — Home no longer shows a finished run's sheet on the Tidy up press; focus returns to the opener (TL-P3-28 point 3)
+- 2026-10-07: runner-network-retry passes — Runner retries idempotent calls with backoff, reconciles writes by read-back, exits non-zero when unfinished (TL-P3-28 point 2)

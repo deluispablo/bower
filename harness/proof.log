@@ -352,3 +352,4 @@ deploy-staging-upload-line	14a1bc2e893a27b3	2026-10-07	red (fixed in 92c13d6)
 rules-template-bower	a4861cc0035e1f89	2026-10-07	known-green: a revert of 8f74a46 removes RULES_TEMPLATE, a load failure; the red is the tests-only commit 5c203da, where both api tests failed on assertions (old plain Rules.md bytes; old-text file left unrepaired)
 rules-repair-existing-folder	a115f87f1e325561	2026-10-07	red (fixed in 62fa8c5)
 home-sheet-and-focus	8f9ca0b302289800	2026-10-07	known-green: Red proven by hand at 747e8bb (tests only): 4 failed on assertions (activeElement body; old Done button present). Fix spans c8c7908+f5ba996 so the single revert does not apply.
+runner-network-retry	9b59fc5ff605e253	2026-10-07	known-green: Red proven by hand at f038611 (tests only): 3 failed on assertions (token sends 1 not 2; saving not done; exit 0). Reverting 71ee4ad removes the new retry.ts, so done.sh's red is a load failure.

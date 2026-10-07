@@ -4549,7 +4549,7 @@
       "main exits non-zero when the attempt ends without a terminal report (done or failed)."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a network error on an idempotent runner call is retried with backoff|a network error on a Drive write is reconciled by read-back, never retried blindly|an attempt that ends without a terminal report exits non-zero\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-28 (2); C16 run 37664576426 ended success on ECONNRESET in RunnerToken.grant while saving; the person waited 33 min."
   },
   {
