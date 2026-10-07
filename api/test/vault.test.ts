@@ -1,5 +1,5 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
@@ -9,11 +9,7 @@ import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
 import { OLD_RULES_TEMPLATE, VAULT_TEMPLATE } from '../src/vault.js';
-import { FakeDrive } from '../../src/data/drive/fake-drive.js';
-import { FakeWorker } from '../../src/data/fake/fake-worker.js';
-import { FakeRunService } from '../../src/data/fake/fake-run-service.js';
-import { serializeRules } from '../../src/data/contracts/rules-format.js';
-import { PROP } from '../../src/data/vault/layout.js';
+import { RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -186,9 +182,10 @@ class FakeGoogle {
   private list(q: string): Response {
     const parent = /'([^']+)' in parents/.exec(q)?.[1];
     const marked = q.includes('appProperties has');
+    const named = /name = '([^']+)'/.exec(q)?.[1];
     if (marked && this.searchBlind) return Response.json({ files: [] });
     const files = [...this.items.values()].filter(
-      (i) => !i.trashed && (parent === undefined || i.parents.includes(parent)) && (!marked || i.appProperties['bowerFolder'] === '1'),
+      (i) => !i.trashed && (parent === undefined || i.parents.includes(parent)) && (named === undefined || i.name === named) && (!marked || i.appProperties['bowerFolder'] === '1'),
     );
     return Response.json({ files });
   }
@@ -216,7 +213,7 @@ class FakeGoogle {
 
 /** The metadata and the text of a Drive multipart upload. */
 function parseMultipart(raw: string): { metadata: Partial<Item>; content: string } {
-  const [meta, media] = raw.split(/--bower-[0-9a-f-]+(?:--)?\r\n?/).filter((p) => p.trim() !== '');
+  const [meta, media] = `\r\n${raw}`.split(/\r\n--bower-[0-9a-f-]{36}(?:--)?(?:\r\n)?/).filter((p) => p.trim() !== '');
   const metadata = JSON.parse((meta ?? '').split('\r\n\r\n')[1] ?? '{}') as Partial<Item>;
   const text = media ?? '';
   const content = text.slice(text.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, '');
@@ -252,26 +249,11 @@ describe('POST /vault', () => {
     const { folderId } = await body(await post(g, cookie));
     const real = [...g.items.values()].find((i) => i.name === 'Rules.md' && i.parents.includes(folderId));
 
-    // The fake Worker keeps a flag in the browser's storage: a small stand-in for the Workers runtime, which has none.
-    const kept = new Map<string, string>();
-    const storage = {
-      getItem: (k: string) => kept.get(k) ?? null,
-      setItem: (k: string, v: string) => void kept.set(k, v),
-      removeItem: (k: string) => void kept.delete(k),
-      clear: () => kept.clear(),
-    };
-    vi.stubGlobal('localStorage', storage);
-    vi.stubGlobal('sessionStorage', storage);
-    const drive = new FakeDrive();
-    const worker = new FakeWorker({ drive, scenario: 'first', rootId: null, runs: new FakeRunService({ drive, scale: 'instant' }) });
-    const made = await worker.createFolder();
-    const fake = (await drive.listAll(made.id)).find((f) => f.name === 'Rules.md');
-    if (real === undefined || fake === undefined) throw new Error('Rules.md missing');
-
-    expect(real.content).toBe(await drive.readText(fake.id));
-    expect(real.content).toBe(serializeRules([]));
-    expect(real.appProperties).toEqual(fake.appProperties);
-    expect(real.appProperties).toEqual({ [PROP.by]: 'bower' });
+    if (real === undefined) throw new Error('Rules.md missing');
+    // The fake Worker makes its Rules.md from the same constant (`fake-worker.test.ts` checks that side).
+    expect(real.content).toBe(RULES_TEMPLATE.text);
+    expect(real.appProperties).toEqual(RULES_TEMPLATE.appProperties);
+    expect(real.appProperties).toEqual({ by: 'bower' });
   });
 
   it('the old template Rules.md is repaired once and nothing else is touched', async () => {
@@ -288,8 +270,8 @@ describe('POST /vault', () => {
     rules.appProperties = {};
     const others = snapshot();
     await post(g, cookie);
-    expect(rules.content).toBe(serializeRules([]));
-    expect(rules.appProperties).toEqual({ [PROP.by]: 'bower' });
+    expect(rules.content).toBe(RULES_TEMPLATE.text);
+    expect(rules.appProperties).toEqual({ by: 'bower' });
     expect(patches()).toBe(1);
     expect(snapshot()).toBe(others);
     // Once: the second check sends no write.
@@ -481,7 +463,8 @@ describe('POST /vault', () => {
     const before = g.calls.length;
     expect(await body(await post(g, cookie))).toEqual({ folderId: first.folderId, found: true });
     const later = g.calls.slice(before);
-    expect(later.every((c) => c.method === 'GET' && c.url.startsWith(`/drive/v3/files/${first.folderId}?`))).toBe(true);
+    // One look at the pointed folder, and the one look for an old-template Rules.md (`repairRules`): reads only.
+    expect(later.every((c) => c.method === 'GET' && (c.url.startsWith(`/drive/v3/files/${first.folderId}?`) || c.url.startsWith('/drive/v3/files?')))).toBe(true);
     expect([...g.items.values()].filter((i) => i.name === 'Rules.md' && !i.trashed)).toHaveLength(0);
   });
 
