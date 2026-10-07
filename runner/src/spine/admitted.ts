@@ -12,6 +12,8 @@ import { BowerError } from '../../../src/data/types';
 import type { DriveFile } from '../../../src/data/drive/drive-api';
 import type { AdmissionManifest, AdmittedFile, AdmittedPile } from '../../../src/data/spine/admission';
 import type { Admitted, Deferred } from '../../../src/data/spine/provider';
+import type { RunManifest } from '../../../src/data/spine/records';
+import { SYSTEM } from '../../../src/data/vault/layout';
 
 export type { Admitted, Deferred };
 
@@ -19,6 +21,9 @@ export type { Admitted, Deferred };
 export interface AdmittedReader {
   get(id: string): Promise<DriveFile>;
 }
+
+/** Your rules' note: edited only by `rules-wording` (and a link rewrite), as the manifest contract's `rules-path` rule. */
+const RULES_PATH = 'Rules.md';
 
 const sameParents = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((p) => b.includes(p));
 
@@ -65,4 +70,56 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
   }
   if (deferred.length) console.error(`${deferred.length} admitted items changed since admission; they wait for the next tidy-up`);
   return { taken: { ...manifest, piles, journal }, deferred };
+}
+
+/**
+ * Why a plan reaches past what the run took; null when it does not (TL-P4-01 P4-2, the P4-1 review's I2). Checked on
+ * every plan the Claude provider hands over, built by the runner from the model's intent, before any write:
+ *
+ * - a move's subject is a thing, a pile folder or one of your changes the run took; any other move only sets
+ *   Bower's "new" mark in place: cleared from last run's things, or set again on a note the plan edits;
+ * - a Bin's subject is a pile folder or a pile's note the run took (a pile of words, once its note is written);
+ * - a runner-JSON write's subject is one of Bower's own files in `.bower`;
+ * - a note edit carries only what the runner authors from your changes and its fixed hub list (`applyChanges`): a
+ *   Timeline line or a link rewrite on a note, and on `Rules.md` your typed rules (`rules-wording`) or a link
+ *   rewrite, never a Timeline line. That is how the rule-wording and hub-line exceptions stay inside the contract:
+ *   the model never names them, the runner plans them as the scripted provider does.
+ *
+ * Creates make new things in places the plan captured, so they take nothing. A plan that breaks any of this is
+ * refused whole, before any write.
+ */
+/** `own` is the id of Bower's own folder (`.bower`) in the run's folder, as the run listed it. */
+export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | undefined): string | null {
+  const t = took.taken;
+  const anchors = new Set(t.piles.flatMap((p) => (p.anchor ? [p.anchor.fileId] : [])));
+  const taken = new Set([...anchors, ...t.piles.flatMap((p) => p.items.map((i) => i.fileId)), ...t.journal.map((j) => j.fileId)]);
+  const edited = new Set(m.operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [o.effect.before.fileId] : [])));
+  const runnerFiles = new Set<string>([SYSTEM.questions, SYSTEM.suggestions, SYSTEM.requests, SYSTEM.lastRun, SYSTEM.hashes]);
+  for (const { effect: e } of m.operations) {
+    switch (e.kind) {
+      case 'move': {
+        // Not a thing it took: only Bower's "new" mark, in place, cleared from last run's things or set on a note it edits.
+        const inPlace = e.name === e.before.name && 'fileId' in e.parent && sameParents([e.parent.fileId], e.before.parents);
+        const mark = Object.keys(e.properties).join() === 'bowerNew' && (e.properties.bowerNew === null || edited.has(e.before.fileId));
+        if (!taken.has(e.before.fileId) && !(inPlace && mark)) return 'a move of a thing it was not admitted to take';
+        break;
+      }
+      case 'bin':
+        if (!taken.has(e.before.fileId)) return 'a Bin of a thing it was not admitted to take';
+        break;
+      case 'write-runner-json':
+        if (own === undefined || !sameParents([own], e.before.parents) || !runnerFiles.has(`${SYSTEM.dir}/${e.before.name}`)) return "a write to a file that is not Bower's own";
+        break;
+      case 'edit-text': {
+        const kinds = new Set(e.changes.map((c) => c.kind));
+        const rules = e.path === RULES_PATH;
+        if (rules ? kinds.has('timeline-append') : kinds.has('rules-wording')) return 'a note edit outside what the runner authors';
+        break;
+      }
+      case 'create-folder':
+      case 'create-text':
+        break;
+    }
+  }
+  return null;
 }

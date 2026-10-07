@@ -80,6 +80,23 @@ export interface PlanOptions {
   mintKey?: (kind: string) => string;
   /** The admitted set the run took: only its piles, their things and its journal lines are planned. */
   taken?: AdmissionManifest;
+  /**
+   * Where things go when a model chose (the Claude provider's intent, TL-P4-01 P4-2): only the place and the name.
+   * Everything else, and every id, hash and digest, the plan makes as it always does.
+   */
+  filing?: Filing;
+}
+
+/** A place in the folder (a path under a main folder) and a name, as a model proposes them. */
+export interface Placement {
+  to: string;
+  name: string;
+}
+
+/** A model's intent, by what it was admitted to take: a thing by its file id, a pile of words by its pile id. */
+export interface Filing {
+  thing(fileId: string): Placement | null;
+  words(pileId: string): Placement | null;
 }
 
 export type { HubUpdate };
@@ -176,6 +193,22 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   };
   /** Answers whose merge waits with its pile: they stay unarchived and keep their question (R4-1). */
   const heldAnswers = new Set<string>();
+  /** Where a pile of words goes and its note's name: the model's when it chose, else the script's guess. */
+  const wordsPlace = (pileId: string, words: string): Placement => {
+    if (!opts.filing) return { to: guessFolder(words, 'note'), name: generatedName(words) };
+    return opts.filing.words(pileId) ?? { to: '', name: '' };
+  };
+  /** Where a thing goes and its name: the model's when it chose (a thing it did not place is no plan), else null. */
+  const placeOf = (fileId: string): Placement | null => {
+    if (!opts.filing) return null;
+    return opts.filing.thing(fileId) ?? refused('a thing the model did not place');
+  };
+  /** Whether the demo's own extras (a hub line citing it, its own note) still fit: the model filed it as the plan does. */
+  const asPlanned = (fileId: string, name: string): boolean => {
+    const plan = PLAN_BY_NAME.get(name);
+    const place = opts.filing?.thing(fileId);
+    return !!plan && (!opts.filing || (place?.to === plan.to && place.name === plan.title));
+  };
 
   // An instructions run takes no pile: it reads only your changes.
   const inbox = all ? await drive.piles(rootId) : [];
@@ -290,7 +323,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     // under a main folder; its other pile notes stay as uncaptured children. A pile with no words either has nothing
     // to write, so it is left as it is, untouched, like a held pile.
     const wordsOnly = !pile.items.length || (!taken.length && !declared);
-    if (wordsOnly && (!words.trim() || !generatedPlace(guessFolder(words, 'note')))) continue;
+    if (wordsOnly && (!words.trim() || !generatedPlace(wordsPlace(pile.id, words).to))) continue;
     // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
     if (!lost && ((!taken.length && !wordsOnly) || (declared && keys.length !== declared.memberKeys.size))) lost = 'one of its members is not among its things';
     // Its names must be ones a run record can carry, as the Inbox checks them (`recordablePile`).
@@ -313,7 +346,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     }
     // Everything this pile puts in the plan must be text a record can carry; a pile whose words or names cannot
     // (half of a character) is held alone, untouched, and the rest of the run goes on (review b-dest-review-1).
-    const written = { folder: folder.name, words, context: context.kind === 'text' ? context.text : null, names: members.slice(marks.members).map((m) => m.file.name), note: wordsOnly ? generatedName(words) : null };
+    const written = { folder: folder.name, words, context: context.kind === 'text' ? context.text : null, names: members.slice(marks.members).map((m) => m.file.name), note: wordsOnly ? wordsPlace(pile.id, words).name : null };
     if (!canonicalRecordJson(written).ok) {
       members.length = marks.members;
       things.length = marks.things;
@@ -376,7 +409,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // The line waits for that thing's move, so it never cites what is not there.
   const citeOf = (name: string | undefined): { source: string; fileId: string } | null => {
     const thing = name === undefined ? undefined : things.find((t) => t.item.name === name && !t.merge);
-    const plan = thing ? PLAN_BY_NAME.get(thing.item.name) : undefined;
+    const plan = thing && asPlanned(thing.file.id, thing.item.name) ? PLAN_BY_NAME.get(thing.item.name) : undefined;
     return thing && plan ? { source: citedName(plan), fileId: thing.file.id } : null;
   };
   for (const u of all && date ? (opts.updates ?? UPDATES) : []) {
@@ -621,8 +654,9 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     }
     // A saved link is named from its address unless the plan names it (as the legacy runner did).
     const linkText = thing.item.kind === 'link' ? await drive.readText(thing.file.id) : null;
-    const url = linkText === null || PLAN_BY_NAME.has(thing.item.name) ? null : savedLinkUrl(linkText);
-    const title = PLAN_BY_NAME.get(thing.item.name)?.title ?? (url ? `${linkTitle(url)}.url` : thing.file.name);
+    const place = placeOf(thing.file.id);
+    const url = linkText === null || PLAN_BY_NAME.has(thing.item.name) || place ? null : savedLinkUrl(linkText);
+    const title = place?.name ?? PLAN_BY_NAME.get(thing.item.name)?.title ?? (url ? `${linkTitle(url)}.url` : thing.file.name);
     if (linkText !== null && kindOf(title) === 'note') {
       // A saved link filed as a note (TL-P2-20 M5, R3-6): a generated note keyed by the link file's id, and the
       // link file itself moved beside it, never rewritten. A note with that key already there is reused (R4-2).
@@ -641,7 +675,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       }
       const address = savedLinkAddress(linkText) ?? thing.item.name;
       const text = serializeNote({ summary: `Saved from ${address}.`, properties: [{ key: 'source', label: 'Source', value: address }], tags: [], currentState: [], body: `Saved from ${address}.`, timeline: [{ date: date ?? '', text: 'Saved by you, filed by Bower.', source: address }], byBower: true });
-      const to = guessOf(thing.words, thing.item);
+      const to = place?.to ?? guessOf(thing.words, thing.item);
       destination(to);
       const noteName = freeName(planned, to, title);
       plannedFile(join(to, noteName));
@@ -650,7 +684,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       filing.push({ thing, to, name, note: { name: noteName, key, text, what: `Saved from ${address}.` } });
       continue;
     }
-    const to = guessOf(thing.words, thing.item);
+    const to = place?.to ?? guessOf(thing.words, thing.item);
     destination(to);
     const name = freeName(planned, to, title);
     plannedFile(join(to, name));
@@ -662,7 +696,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
   const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string; context: DriveFile | null }> = [];
   for (const { thing, name } of filing) {
-    const own = PLAN_BY_NAME.get(thing.item.name)?.note;
+    const own = asPlanned(thing.file.id, thing.item.name) ? PLAN_BY_NAME.get(thing.item.name)?.note : undefined;
     if (!own || !generatedPlace(parentOf(own))) continue;
     if (freeName(planned, parentOf(own), nameOf(own)) !== nameOf(own)) continue;
     destination(parentOf(own));
@@ -672,9 +706,9 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
   }
   for (const { pileId, folder, words, context } of fromWords) {
-    const to = guessFolder(words, 'note');
+    const { to, name: title } = wordsPlace(pileId, words);
     destination(to);
-    const name = freeName(planned, to, generatedName(words));
+    const name = freeName(planned, to, title);
     plannedFile(join(to, name));
     const what = 'Written from a note you added.';
     const text = serializeNote({ summary: words, properties: [{ key: 'kind', label: 'Kind', value: 'Note' }], tags: [], currentState: [], body: words, timeline: [{ date: noteDate, text: what }], byBower: true });
