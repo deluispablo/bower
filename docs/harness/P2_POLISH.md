@@ -173,3 +173,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - A failed Rules.md repair (403 Drive full, 5xx) fails the whole POST /vault on every start until it clears; best-effort log-and-skip would be safer.
   - deploy-staging upload-line test changed every host to example.test (the packet kept one real line); any other Worker name still gets the generic sentence.
 - (TL-P3-28, home-sheet-and-focus) A press on "Tidy up N things" next to an unseen *stopped* run card still opens that failure first (by design: the stopped card's "See why" leads there). Lead to confirm or move to P4.
+- (TL-P3-28, runner-network-retry) A Drive write that lands only after its read-back is counted as not done (the thing stays in the inbox; a later run may write it again). Rare; for the re-freeze Opus delta to judge. Changed tests: recovery.test "attempt 2 reconciles…", real-adapters "duplicate dispatch…cut mid-run", real.contract "browser close mid-run" (exit 0 → 1).
