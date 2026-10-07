@@ -24,7 +24,7 @@ export interface LiveOptions {
   runningPiles?: () => ReadonlySet<string>;
   /** How often to ask the Worker while a run is going (ms); 4 s by default. */
   pollMs?: number;
-  /** Declares each new pile before sending it (the pretend Drive only, until the real runner reads declarations). */
+  /** Declares each new pile before sending it, through the same fenced Drive client as every other write. */
   declarePiles?: boolean;
   /**
    * Send pile files through the persistent upload queue: `true` builds it over

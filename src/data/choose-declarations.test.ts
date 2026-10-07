@@ -29,7 +29,7 @@ describe('pile declarations by source', () => {
     expect(made.filter((m) => !m.device)).toEqual([{ declarePiles: true }]);
   });
 
-  it('the real source does not declare piles yet', async () => {
+  it('the real source declares piles', async () => {
     vi.stubEnv('VITE_API_URL', 'https://api.example');
     // Hermetic: nothing may reach a network.
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))));
@@ -37,6 +37,6 @@ describe('pile declarations by source', () => {
     expect(sources.vault).toBeDefined();
     const app = made.filter((m) => !m.device);
     expect(app).toHaveLength(1);
-    expect(app[0]?.declarePiles).not.toBe(true);
+    expect(app[0]?.declarePiles).toBe(true);
   });
 });
