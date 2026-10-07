@@ -7,10 +7,8 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Staging.** Redeploy after each main batch, following [STAGING.md](STAGING.md), with `bower-mechanical` from a clean detached worktree of that SHA. Last deployed: `main` `7bd77ce` (P3-6), version `b3ad5f8f`.
 - **Pane:** signed in as test account A. The addresses stay only in the lead's memory.
 - **Instance repository** `deluispablo/bower-home` ([TL-P3-13](2026-10-07-tl-p3-13-instance-repository.md)): R3's `probe.yml` was added (`cca496b`) and deleted (`be9da88`); only the production workflows remain. The full replacement comes with the new runner. `gh` has the `workflow` scope.
-- **Waiting on the coordinator (2026-10-07):**
-  - R4 Part A rerun without `version` ([TL-P3-12](2026-10-07-tl-p3-12-r3-r4-and-p3-6-close.md));
-  - `runs-beat-rearm`, then `worker-session-lease`, `worker-me-and-delete`, and `worker-process-admission` plus `worker-status-revision` ([TL-P3-14](2026-10-07-tl-p3-14-lease-and-limits.md));
-  - drive suite check 7 rerun on the new deploy.
+- **P3-B is complete (2026-10-07):** R2, R3, R4 and the Drive suite.
+- **Waiting on the coordinator:** batch P3-7: `worker-me-and-delete` is running, then `worker-process-admission` with the quota and `worker-status-revision`, then the close with the suites and an Opus delta review. Deploy staging when the coordinator sends the closing SHA.
 - **Message budget.** The app pauses a session's messages to other sessions after 10 sends without an owner message. On the night of 2026-10-06 this left the coordinator waiting about 6.5 hours for an unblock it never received. Rules:
   - send one combined message per decision;
   - never leave the coordinator blocked on a message alone: a STOP names the `main` commit or DECISIONS line that lifts it, so the coordinator can lift it itself;
