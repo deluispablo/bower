@@ -4096,5 +4096,22 @@
     "verify": "pnpm exec vitest run src/data -t \"the shared operations give the same chain on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"a restarted runner resumes after its last checkpoint|an applied operation is never applied twice|only the last 20 finished run folders are kept\"",
     "passes": true,
     "note": "TL-P3-21 points 2 and 3 (extract, not port; checkpoints in .bower/runs/<run_id>/, retention 20 to the Bin)."
+  },
+  {
+    "id": "spine-report-barrier-dispositions",
+    "task": "p3-d",
+    "category": "feature",
+    "what": "A run ends truthfully through shared code: every manifest item ends with one recorded disposition (filed, set aside, or waiting), the contract's report files are written with .bower/last-run.json last and read back by md5Checksum before done, a failed report save stays in saving and a redispatch resumes at the report step only, a run past the recovery ceiling in saving fails with a sentence that says changes were made, and runner/src/main.ts runs token, spine, barrier and status end to end.",
+    "steps": [
+      "The report barrier and dispositions move from the fake run service into src/data/spine/ over FencedDrive; the fake calls them and keeps its behaviour.",
+      "Every manifest item ends with exactly one disposition (pile-disposition.ts): filed, set aside (untouched in the inbox) or waiting (changed since admission).",
+      "After the last operation checkpoint the runner writes the contract's report files, .bower/last-run.json last, reads it back by md5Checksum, and only then reports done.",
+      "A failed report save keeps the run in saving with an \"effects done, report pending\" checkpoint; a redispatch reads it and writes only the report.",
+      "The Worker ends a run still in saving past the recovery ceiling as failed with a sentence that says changes were made, never the nothing-happened one.",
+      "runner/src/main.ts calls token, spine, barrier and status; its test runs it end to end with a provider stub."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"the shared barrier writes the same report on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"every admitted item ends with one disposition|last-run.json is written last and read back before done|a failed report save stays in saving and a redispatch only writes the report|main runs token, spine, barrier and status end to end\" && pnpm -C api exec vitest run -t \"a run past the ceiling in saving fails saying changes were made\"",
+    "passes": false,
+    "note": "TL-P3-22 point 2; ARCHITECTURE invariant 6."
   }
 ]
