@@ -1,14 +1,16 @@
 /**
  * The runner's providers (TL-P3-22 addendum): what a run plans from the admitted set it took (`RunProvider`, in the
- * shared spine). P3 has one, the scripted provider, with no model; `BOWER_PROVIDER` names it, and a name this
- * runner does not know stops it before any call, so a dispatch never runs with a provider it did not ask for.
+ * shared spine). The scripted provider, with no model, and the Claude provider (`claude.ts`, TL-P4-01), which asks
+ * headless Claude Code; `BOWER_PROVIDER` names one, and a name this runner does not know stops it before any call,
+ * so a dispatch never runs with a provider it did not ask for.
  */
 import type { RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { listedPiles, scriptedProvider, type ScriptedRun } from '../../src/data/spine/scripted';
+import { claudeProvider, type ClaudeSetup } from './claude';
 import type { RunnerDrive } from './drive';
 
-export const PROVIDERS = ['scripted'] as const;
+export const PROVIDERS = ['scripted', 'claude'] as const;
 export type ProviderName = (typeof PROVIDERS)[number];
 
 /** The provider `BOWER_PROVIDER` names: scripted when unset; any other name throws, saying the names it knows. */
@@ -25,9 +27,12 @@ export function runnerScripted(drive: RunnerDrive): ScriptedRead {
   return { ...reads, piles: (rootId) => listedPiles(reads, rootId), provenance: 'adapter-read' };
 }
 
-export function providerFor(name: ProviderName, drive: RunnerDrive, run: ScriptedRun): RunProvider {
+/** `claude` is the Claude provider's setup: the runner's environment (its credential, model and turn cap). */
+export function providerFor(name: ProviderName, drive: RunnerDrive, run: ScriptedRun, claude: ClaudeSetup = { env: {} }): RunProvider {
   switch (name) {
     case 'scripted':
       return scriptedProvider(runnerScripted(drive), run);
+    case 'claude':
+      return claudeProvider(claude, run);
   }
 }

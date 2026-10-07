@@ -12,6 +12,7 @@
  *    then, when the chain holds an applied effect, is `saving` reported. The report is saved and read back
  *    (`spine/barrier.ts`).
  * 5. Status: `done`, only after the barrier. A `done` the Worker refuses is never swallowed: the job fails.
+ * 6. Timing: one line per run, however it ends, with each phase's own time and the model's numbers (`timing.ts`).
  *
  * How a run that stops ends (ARCHITECTURE invariant 6; TL-P3-22 addendum, I1), for a report that cannot be saved
  * and for any error nobody caught from the token to the last report, alike:
@@ -45,10 +46,12 @@ import { RunnerStatus } from './status';
 import { RunnerToken, isStaleAttempt } from './token';
 import { admittedPlan, runOperations, type Effects } from './spine/run';
 import { driveEffects } from './effects';
+import type { ClaudeSpawn } from './claude';
 import { providerFor, providerNamed, type ProviderName } from './provider';
 import { finishRun } from './spine/barrier';
 import { runnerReads } from './spine/records';
 import { repairRules } from './rules-repair';
+import { RunTiming } from './timing';
 
 export { RunnerDrive, type RunnerDriveOptions } from './drive';
 export { RunnerToken, isStaleAttempt, type RunnerTokenOptions, type TokenGrant } from './token';
@@ -70,6 +73,8 @@ export interface TidyOptions {
   newId?: () => string;
   /** Sees the adapter before the run starts (tests set its fault hook). */
   onDrive?: (drive: RunnerDrive) => void;
+  /** Where the run's time goes, logged as one line when it ends (`timing.ts`); the provider adds the model's. */
+  timing?: RunTiming;
 }
 
 export type TidyEnd =
@@ -91,13 +96,27 @@ const changedSomething = (chain: readonly Checkpoint[]): boolean =>
 const mayNotReport = (e: unknown): boolean => isStaleAttempt(e) || (e instanceof BowerError && e.code === 'auth');
 
 export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
+  const timing = opts.timing ?? new RunTiming();
+  let ended: 'done' | 'saving' | 'failed' | 'stopped' = 'stopped';
+  try {
+    const end = await tidyRun(opts, timing);
+    ended = end.phase;
+    return end;
+  } finally {
+    console.log(timing.line(ended));
+  }
+}
+
+async function tidyRun(opts: TidyOptions, timing: RunTiming): Promise<TidyEnd> {
   const fetchFn = opts.fetch;
   const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}) });
   const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
+  const post = status.post.bind(status);
+  status.post = (...args) => timing.time('status', () => post(...args));
   const seen: Seen = { chain: null, saving: false, total: undefined };
   let end: Ended;
   try {
-    end = await tidy(opts, token, status, seen);
+    end = await tidy(opts, token, status, seen, timing);
   } catch (e) {
     if (mayNotReport(e) || status.finished) throw e;
     end = { phase: 'stopped', why: e instanceof Error ? e.message : String(e), error: e };
@@ -133,24 +152,28 @@ const totalOf = (total: number | undefined): { total?: number } => (total === un
 type Ended = Exclude<TidyEnd, { phase: 'saving' }> | { phase: 'stopped'; why: string; error: unknown };
 
 /** Steps 1 to 4; a run that stops in them throws, and `runTidy` says how it ended. */
-async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus, seen: Seen): Promise<Ended> {
+async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus, seen: Seen, timing: RunTiming): Promise<Ended> {
   const fetchFn = opts.fetch;
   const clock = opts.clock ?? Date.now;
   const newId = opts.newId ?? (() => crypto.randomUUID());
 
   // 1. Token.
-  const grant = await token.grant();
+  const grant = await timing.time('token', () => token.grant());
   const rootId = grant.folderId;
   if (grant.manifest) seen.total = admittedThings(grant.manifest);
   const drive = new RunnerDrive({ token, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
   opts.onDrive?.(drive);
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
+  const put = records.put.bind(records);
+  const putNew = records.putNew.bind(records);
+  records.put = (...args) => timing.time('checkpoints', () => put(...args));
+  records.putNew = (...args) => timing.time('checkpoints', () => putNew(...args));
   const checksum: Checksum = { stored: (id) => drive.md5(id), of: async (bytes) => md5(bytes) };
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
-  if (await shownDone(reads, rootId, opts.runId)) {
+  if (await timing.time('reads', () => shownDone(reads, rootId, opts.runId))) {
     const found = await records.found(opts.runId);
     if (found.kind === 'run') seen.chain = found.chain;
     if (found.kind === 'run') seen.total ??= found.manifest.capture.members.length;
@@ -165,12 +188,12 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
 
   // 3. Spine. A new run reads first: `reading` with the total, before any operation. A resumed attempt (its run already
   // holds a manifest) is past `reading`, so it sends none and keeps the total.
-  const resumed = await records.found(opts.runId);
+  const resumed = await timing.time('reads', () => records.found(opts.runId));
   if (resumed.kind === 'run') seen.total ??= resumed.manifest.capture.members.length;
   else await status.post('reading', totalOf(seen.total));
   await status.post('writing', totalOf(seen.total));
   const plan = admittedPlan(token, drive, opts.provider(drive, rootId));
-  const end = await runOperations({
+  const end = await timing.time('apply', () => runOperations({
     rootId,
     runId: opts.runId,
     attempt: opts.attempt,
@@ -178,16 +201,17 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     batch: () => drive.batch(),
     effects: opts.effects(drive),
     // The old template's Rules.md is repaired first, so the planner sees a file Bower may word (`rules-repair.ts`).
-    plan: async () => {
-      await repairRules(drive, rootId);
-      return await plan();
-    },
+    plan: () =>
+      timing.time('reads', async () => {
+        await repairRules(drive, rootId);
+        return await plan();
+      }),
     clock,
     newId,
     onChain: (chain) => {
       seen.chain = chain;
     },
-  });
+  }));
   if (end.state === 'failed') {
     console.error(end.why);
     await status.post('failed', { failure: UNREADABLE });
@@ -195,7 +219,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   }
 
   // 4. Barrier: `saving` only once "effects done, report pending" is in the chain, and only when it changed something.
-  const finished = await finishRun(
+  const finished = await timing.time('report', () => finishRun(
     {
       ...barrier,
       onPending: async (chain) => {
@@ -208,7 +232,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     end.manifest,
     end.manifestHash,
     end.chain,
-  );
+  ));
   return { phase: 'done', dispositions: finished.dispositions };
 }
 
@@ -235,6 +259,8 @@ export function dispatchOf(event: unknown): Dispatch | null {
 
 export interface MainOptions {
   fetch?: typeof fetch;
+  /** A recorded `claude` for the Claude provider; tests only. */
+  claude?: ClaudeSpawn;
 }
 
 /**
@@ -273,6 +299,8 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
   if (env.GITHUB_ACTIONS === 'true') process.stdout.write(`::add-mask::${dispatch.ticket}\n`);
   const { runId, attempt, ticket, allowWeb } = dispatch;
   console.log(`Tidy-up ${runId}, attempt ${attempt}, with the ${name} provider.`);
+  // The job's start up to here: Node's uptime, as the original's queue and set-up row.
+  const timing = new RunTiming(process.uptime() * 1000);
   try {
     const end = await runTidy({
       api,
@@ -280,7 +308,8 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       ticket,
       attempt,
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
-      provider: (drive, rootId) => providerFor(name, drive, { rootId, runId, allowWeb }),
+      provider: (drive, rootId) => providerFor(name, drive, { rootId, runId, allowWeb }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) }),
+      timing,
       effects: driveEffects,
     });
     console.log(`Tidy-up ${runId} ended ${end.phase}.`);
