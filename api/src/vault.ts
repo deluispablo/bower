@@ -295,17 +295,39 @@ const isLiveFolder = (item: DriveItem | null): boolean =>
   item !== null && item.trashed !== true && item.mimeType === FOLDER_MIME;
 
 /** The pointer if it names a live folder, else a reserved one, else the marked one, else a new one from the template. */
-export async function ensureVault(env: Env, sub: string, options: VaultOptions = {}): Promise<VaultResult> {
+export async function ensureVault(
+  env: Env,
+  sub: string,
+  gen: number,
+  options: VaultOptions = {},
+): Promise<VaultResult> {
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
   const files = options.files ?? TEMPLATE_FILES;
   const person = env.PERSON.get(env.PERSON.idFromName(sub));
   const drive = new Drive(env, sub, fetchImpl);
 
+  // Delete me or a sign-out may land while this call waits on Drive: each person-object write below carries
+  // the generation the request was authenticated with and the person object refuses it when it differs
+  // (checked in the same synchronous section as the write). A refusal, or any trouble after it, is then
+  // 401 `signed-out`; nothing is cleaned up in Drive, and the next sign-in finds the folder by its marker.
+  const signedOutNow = async (): Promise<boolean> => (await person.account())?.generation !== gen;
+  const refuse = (): HttpError =>
+    new HttpError(401, 'signed-out', undefined, { cause: new Error('signed out during POST /vault') });
+
   return withVaultClaim(person, async () => {
-    // A refused write means another call (this one's claim lapsed) changed the state: read it again.
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      const result = await attemptVault(env, person, drive, files);
-      if (result !== null) return result;
+    try {
+      // A refused write means another call (this one's claim lapsed) changed the state: read it again.
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+        const result = await attemptVault(env, person, gen, drive, files);
+        if (result !== null) {
+          if (await signedOutNow()) throw refuse();
+          return result;
+        }
+        if (await signedOutNow()) throw refuse();
+      }
+    } catch (err) {
+      if (!(err instanceof HttpError && err.code === 'signed-out') && (await signedOutNow())) throw refuse();
+      throw err;
     }
     throw driveError('POST /vault kept finding the state changed under it');
   });
@@ -324,6 +346,7 @@ const MAX_ATTEMPTS = 5;
 async function attemptVault(
   env: Env,
   person: PersonStub,
+  gen: number,
   drive: Drive,
   files: readonly TemplateFile[],
 ): Promise<VaultResult | null> {
@@ -338,7 +361,7 @@ async function attemptVault(
     const item = await drive.get(reserved);
     if (isLiveFolder(item)) folderId = reserved;
     else if (item !== null) {
-      await person.dropReservation(reserved);
+      await person.dropReservation(gen, reserved);
       return null;
     }
   }
@@ -351,7 +374,7 @@ async function attemptVault(
       const [folder, ...rest] = await drive.generateIds(keys.length + 1);
       reserved = folder ?? '';
       const ids = Object.fromEntries(keys.map((k, i) => [k, rest[i] ?? '']));
-      if (!(await person.reserveFolder(reserved, { folderId: reserved, ids }, state.folderId))) return null;
+      if (!(await person.reserveFolder(gen, reserved, { folderId: reserved, ids }, state.folderId))) return null;
     }
     folderId = await drive.createFolder(env.TEMPLATE_FOLDER_NAME, null, { appProperties: FOLDER_MARKER, id: reserved });
     made = true;
@@ -359,7 +382,7 @@ async function attemptVault(
 
   // A folder this app reserved is brand-new until its template is complete: its first answer says found false.
   const brandNew = made || folderId === reserved;
-  if (!(await person.pointFolder(state.folderId, folderId))) return null;
+  if (!(await person.pointFolder(gen, state.folderId, folderId))) return null;
   const kept = await person.vaultState();
   if (kept.folderId !== folderId) return null;
   if (!kept.complete) {
@@ -369,14 +392,14 @@ async function attemptVault(
       // or use the ones another call kept for it meanwhile.
       const keys = templateKeys(files);
       const fresh = await drive.generateIds(keys.length);
-      templateIds = await person.reserveTemplate({
+      templateIds = await person.reserveTemplate(gen, {
         folderId,
         ids: Object.fromEntries(keys.map((k, i) => [k, fresh[i] ?? ''])),
       });
       if (templateIds === null) return null;
     }
     await completeTemplate(drive, folderId, made, files, templateIds);
-    await person.markFolderComplete(folderId);
+    await person.markFolderComplete(gen, folderId);
   }
   return { folderId, found: !brandNew };
 }
@@ -391,7 +414,9 @@ export function createVaultRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     if (sub === undefined) throw new HttpError(500, 'internal');
     const options: VaultOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
-    return c.json(await ensureVault(c.get('env'), sub, options));
+    const account = c.get('account');
+    if (account === undefined) throw new HttpError(500, 'internal');
+    return c.json(await ensureVault(c.get('env'), sub, account.generation, options));
   });
 
   return vault;
