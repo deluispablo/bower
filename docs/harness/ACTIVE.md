@@ -143,3 +143,4 @@ P3-9 is closed.
   - `p4-corpus`: bower-implementer, worktree `bower-p4-corpus`;
   - `claude-provider`: bower-escalated, worktree `bower-p4-claudeprov`. Live use waits for the owner's secret.
 - Next: P4-2 = original-baseline, provider-contract, then C04.
+- TL-P4-01 addendum (7c80e10, speed baseline): the corpus includes the five bench cases unchanged, and the provider logs per-phase timing (both workers told). New P4-2 entry `runner-overhead` (scripted run under 60 s). Every live run goes in `p4-speed-baseline.md`; call a difference only after 3 or more runs per case.

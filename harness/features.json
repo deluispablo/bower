@@ -4610,5 +4610,20 @@
     "verify": "pnpm -C runner exec vitest run -t \"a recorded Claude reply becomes operations the spine validates|a malformed or out-of-schema Claude reply fails truthfully and writes nothing|the Claude provider runs under the original permission policy and never logs the token\"",
     "passes": false,
     "note": "TL-P4-01 batch P4-1; live use waits for the owner secret."
+  },
+  {
+    "id": "runner-overhead",
+    "task": "p4-b",
+    "category": "perf",
+    "what": "A scripted tidy-up is profiled phase by phase and cut to under 60 s end to end (it takes about 2m07s with no model), by batching Drive round trips, checkpoints and attempt checks only where the recovery, ordered-status and dispositions tests still pass; each phase time is logged.",
+    "steps": [
+      "Profile a scripted run per phase (job, token, plan reads, apply, checkpoints, report, status) on the real adapter Drive fake with latency.",
+      "Batch Drive round trips, checkpoints and attempt checks where safe.",
+      "Recovery, ordered-status, dispositions and network-retry tests unchanged and green.",
+      "A test with a modelled per-call latency shows the run under the budget."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a scripted run with modelled Drive latency finishes under the runner budget|the runner overhead cuts keep recovery and ordered status\"",
+    "passes": false,
+    "note": "TL-P4-01 addendum (owner speed request); docs/harness/p4-speed-baseline.md."
   }
 ]
