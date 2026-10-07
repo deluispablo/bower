@@ -3922,7 +3922,7 @@
       "Out-of-order contract tests, on the real source with a fake fetch and on the fake: an older reply arriving last never replaces a newer run state."
     ],
     "verify": "pnpm exec vitest run src/data -t \"an older status revision arriving last is dropped|the fake answers rising revisions\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-15 ruling 5: the server half folded into worker-process-admission; runner-report ordering belongs to worker-runner-tickets."
   },
   {
