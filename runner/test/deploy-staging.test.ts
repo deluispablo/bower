@@ -31,7 +31,7 @@ const PNPM = `#!/bin/sh
 printf 'pnpm %s VITE_API_URL=%s in %s\\n' "$*" "\${VITE_API_URL-unset}" "\${PWD##*/}" >> "$CALLS"
 case "$*" in
   "install --frozen-lockfile") exit 0 ;;
-  build) mkdir -p dist/assets && printf '%s\\n' "$DIST_TEXT" > dist/assets/index.js && printf '<html></html>\\n' > dist/index.html; exit 0 ;;
+  build) mkdir -p dist/assets && printf '%s\\n' "$DIST_TEXT" > dist/assets/index.js && { [ -z "$DIST_EXTRA" ] || printf '%s\\n' "$DIST_EXTRA_TEXT" > "dist/assets/$DIST_EXTRA"; } && printf '<html></html>\\n' > dist/index.html; exit 0 ;;
   "-C runner build") mkdir -p runner/dist && printf '%s\\n' "$RUNNER_TEXT" > runner/dist/runner.mjs; exit 0 ;;
 esac
 echo "pnpm stub: unexpected call: $*" >&2
@@ -56,7 +56,8 @@ exit 1
  * as the script asks with -w.
  */
 const CURL = `#!/bin/sh
-for url in "$@"; do :; done
+prev=''
+for url in "$@"; do [ "$prev" = --max-time ] && printf '%s\\n' "$url" >> "$CALLS.maxtime"; prev=$url; done
 printf 'curl %s\\n' "$url" >> "$CALLS"
 next() {
   n=$(cat "$STATE/$1" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$STATE/$1"
@@ -118,7 +119,7 @@ function checkout(): Checkout {
   copyFileSync(SCRIPT, join(repo, 'scripts', 'deploy-staging.sh'));
   copyFileSync(join(ROOT, 'api', 'wrangler.jsonc'), join(repo, 'api', 'wrangler.jsonc'));
   writeFileSync(join(repo, 'runner', 'package.json'), '{}\n');
-  writeFileSync(join(repo, '.gitignore'), 'dist\nnode_modules\n');
+  writeFileSync(join(repo, '.gitignore'), 'dist\nnode_modules\n.env*\n.dev.vars\n');
   git(dir, 'init', '-q', '-b', 'main', repo);
   git(repo, 'add', '-A');
   git(repo, 'commit', '-q', '-m', 'The app');
@@ -163,6 +164,8 @@ function run(at: Checkout, args: string[], env: NodeJS.ProcessEnv = {}): Run {
       STATE: at.state,
       REAL_GIT,
       VITE_API_URL: 'https://wrong.example.test',
+      DIST_EXTRA: '',
+      DIST_EXTRA_TEXT: '',
       DIST_TEXT: 'const contact = "you@example.com";',
       RUNNER_TEXT: 'export {};',
       WRANGLER_OUT: 'Uploaded bower-staging (2.10 sec)\nDeployed bower-staging triggers (0.80 sec)\nCurrent Version ID: 0000aaaa',
@@ -318,5 +321,63 @@ describe('deploy-staging.sh', () => {
       expect(waited.reduce((a, b) => a + b, 0), codes).toBeLessThanOrEqual(310);
       expect(skew.calls.some((c) => c.startsWith('pnpm -C runner')), codes).toBe(false);
     }
+  });
+
+  it('deploy-staging refuses an env file Vite would read', () => {
+    const at = checkout();
+    const files = ['.env', '.env.local', '.env.production', '.env.production.local', 'api/.env', 'api/.env.local', 'api/.env.production', 'api/.env.production.local', 'api/.dev.vars'];
+    for (const file of files) {
+      writeFileSync(join(at.repo, file), 'VITE_API_URL=https://wrong.example.test\n');
+      expect(git(at.repo, 'status', '--porcelain', '--untracked-files=all'), `${file} is ignored`).toBe('');
+      const result = run(at, [at.sha, ORIGIN]);
+      expectRefused(result, /env|dev\.vars/i);
+      expect(result.stderr, file).toContain(file);
+      expect(result.calls.filter((c) => c.startsWith('pnpm ')), file).toEqual([]);
+      rmSync(join(at.repo, file));
+    }
+    expect(run(at, [at.sha, ORIGIN]).status).toBe(0);
+  });
+
+  it('deploy-staging confirms the upload line', () => {
+    const at = checkout();
+    const echoed = 'Total Upload: 1.00 KiB\nYour Worker has access to the following bindings:\n- Vars:\n  - APP_ORIGIN: "https://bower-staging.example.test"\nUploaded bower-other (2.10 sec)\nDeployed bower-other triggers (0.80 sec)';
+    const other = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: echoed });
+    expect(other.status).not.toBe(0);
+    expect(other.stderr).toMatch(/bower-staging/);
+    expect(other.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
+    const none = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: 'APP_ORIGIN: "https://bower-staging.example.test"' });
+    expect(none.status).not.toBe(0);
+    expect(none.calls.filter((c) => c.startsWith('curl '))).toEqual([]);
+    const fine = run(at, [at.sha, ORIGIN], { WRANGLER_OUT: `${echoed.split('Uploaded')[0]}Uploaded bower-staging (2.10 sec)` });
+    expect(fine.status).toBe(0);
+  });
+
+  it('deploy-staging gives up on the skew wait and says so', () => {
+    const at = checkout();
+    const skew = run(at, [at.sha, ORIGIN], { STATUS_CODES: '500' });
+    expect(skew.status).not.toBe(0);
+    const tries = skew.calls.filter((c) => c.endsWith('/status')).length;
+    const slept = skew.calls.filter((c) => c.startsWith('sleep ')).map((c) => Number(c.split(' ')[1]));
+    const maxTime = readFileSync(`${at.calls}.maxtime`, 'utf8').trim().split('\n').map(Number);
+    // The worst case is every check timing out: its time limit plus the wait between checks.
+    const worst = maxTime.slice(-tries).reduce((a, b) => a + b, 0) + slept.reduce((a, b) => a + b, 0);
+    const claimed = /up to (\d+) minutes/.exec(skew.stderr);
+    expect(claimed, skew.stderr).not.toBeNull();
+    expect(worst).toBeLessThanOrEqual(Number(claimed?.[1]) * 60);
+    expect(skew.stderr).toContain(`after ${tries} checks`);
+  });
+
+  it('deploy-staging reruns a failed first health check and reads names with spaces', () => {
+    const at = checkout();
+    const rerun = run(at, [at.sha, ORIGIN], { HEALTH_VERSIONS: `0000000,${at.short}` });
+    expect(rerun.status).toBe(0);
+    expect(rerun.calls.filter((c) => c.endsWith('/health'))).toHaveLength(2);
+
+    const spaced = run(at, [at.sha, ORIGIN], { DIST_EXTRA: 'my file.js', DIST_EXTRA_TEXT: 'const owner = "alex.real@company.test";' });
+    expectRefused(spaced, /address/i);
+    expect(spaced.stderr).toContain('dist/assets/my file.js');
+    const secret = run(at, [at.sha, ORIGIN], { DIST_EXTRA: 'my file.js', DIST_EXTRA_TEXT: 'ghp_FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE1234' });
+    expectRefused(secret, /secret/i);
+    expect(secret.stderr).toContain('dist/assets/my file.js');
   });
 });
