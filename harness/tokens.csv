@@ -109,3 +109,4 @@ p3-13-rereview,reviewer,claude,opus,medium,1,80131,,,,,,9,1.2,PASS (4 minor),202
 first-real-run rerun,evaluator,claude,sonnet,medium,1,82333,,,,,,28,3.8,done but scope instructions (Try again kept the old scope),2026-10-07
 first-real-run inbox,evaluator,claude,sonnet,medium,1,94262,,,,,,14,3.1,PASS (3 minor),2026-10-07
 cancel-and-recover,evaluator,claude,sonnet,medium,1,70082,,,,,,29,30.9,recovery pass (app and Drive checked by coordinator),2026-10-07
+runner-reports-reading-total,implementer,claude,sonnet,medium,1,81150,,,,,,15,1.6,delivered,2026-10-07
