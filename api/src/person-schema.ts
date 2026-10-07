@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -69,6 +69,13 @@ const STEPS: readonly (readonly string[])[] = [
       enc_refresh_token TEXT,
       session_generation INTEGER NOT NULL DEFAULT 0 CHECK (session_generation >= 0)
     )`,
+  ],
+  [
+    // The pointer to the person's Bower folder (an id only, never its content), and the
+    // short-lived Drive access token minted from the refresh token, kept until it nears expiry.
+    'ALTER TABLE account ADD COLUMN folder_id TEXT',
+    'ALTER TABLE account ADD COLUMN access_token TEXT',
+    'ALTER TABLE account ADD COLUMN access_expires_at INTEGER',
   ],
 ];
 

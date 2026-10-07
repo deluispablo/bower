@@ -11,6 +11,12 @@ export interface PersonAccount {
   generation: number;
 }
 
+/** A Drive access token and when it stops working (epoch ms). */
+export interface DriveAccessToken {
+  accessToken: string;
+  expiresAt: number;
+}
+
 /** What a sign-in leaves: the generation to sign into the cookie, and whether a refresh token is kept. */
 export interface SignInResult {
   generation: number;
@@ -115,5 +121,54 @@ export class Person extends DurableObject<Env> {
       )
       .toArray()[0];
     return row?.session_generation ?? null;
+  }
+
+  /** The pointer to the person's Bower folder, or null before one is chosen. */
+  folderId(): string | null {
+    const row = this.ctx.storage.sql
+      .exec<{ folder_id: string | null }>('SELECT folder_id FROM account WHERE id = 1')
+      .toArray()[0];
+    return row?.folder_id ?? null;
+  }
+
+  /** Sets (or with null clears) the folder pointer. False when there is no account. */
+  setFolderId(folderId: string | null): boolean {
+    return (
+      this.ctx.storage.sql.exec('UPDATE account SET folder_id = ? WHERE id = 1', folderId).rowsWritten > 0
+    );
+  }
+
+  /** The cached Drive access token, or null when none is kept or it expires before `usableUntil` (epoch ms). */
+  cachedDriveToken(usableUntil: number): DriveAccessToken | null {
+    const row = this.ctx.storage.sql
+      .exec<{ access_token: string | null; access_expires_at: number | null }>(
+        'SELECT access_token, access_expires_at FROM account WHERE id = 1',
+      )
+      .toArray()[0];
+    if (row?.access_token == null || row.access_expires_at == null || row.access_expires_at <= usableUntil) {
+      return null;
+    }
+    return { accessToken: row.access_token, expiresAt: row.access_expires_at };
+  }
+
+  /** Keeps a freshly minted access token until it expires. */
+  cacheDriveToken(token: DriveAccessToken): void {
+    this.ctx.storage.sql.exec(
+      'UPDATE account SET access_token = ?, access_expires_at = ? WHERE id = 1',
+      token.accessToken,
+      token.expiresAt,
+    );
+  }
+
+  /**
+   * Google no longer honours the refresh token (revoked): forgets it and the
+   * cached access token, and retires every session. The next sign-in has no
+   * token kept, so the callback asks for consent again.
+   */
+  forgetGoogleAccess(): void {
+    this.ctx.storage.sql.exec(
+      `UPDATE account SET enc_refresh_token = NULL, access_token = NULL, access_expires_at = NULL,
+         session_generation = session_generation + 1 WHERE id = 1`,
+    );
   }
 }
