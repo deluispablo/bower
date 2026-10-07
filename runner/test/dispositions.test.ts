@@ -165,7 +165,7 @@ describe('what dispositions.json says', () => {
 
     // The run stops before its summary: no dispositions.json, no last-run.json, never done. It changed something
     // (the first move landed), so it stays in saving for a redispatch, and past the ceiling the Worker ends it.
-    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving']);
     expect(end.phase).toBe('saving');
     expect(await dispositionsOf(wire, root)).toBeNull();
     expect(await lastRunOf(wire, root)).toBeNull();
