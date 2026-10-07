@@ -41,8 +41,17 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
   - It reached `done` on Actions (run 37624579267, success): dispatched in 7 s, done 100 s after the press.
   - But "Try again" kept the old run's scope, `instructions`, so the run read the 4 changes and filed none of the inbox. Its sheet says "Done. Bower read your changes".
   - The inbox note is still waiting.
-- An inbox run (scope all) needs the owner to confirm "Tidy up 1 thing" in the sheet. The permission classifier refused the coordinator's click on the confirm button.
-- Then comes cancel-and-recover (packet `2026-10-07-p3-13-cancel-recover-packet.md`).
+- **First real run, inbox (scope all): PASS.** The owner said "continua" and the coordinator confirmed at 13:33:42Z.
+  - Run 37629481616 was dispatched in 6 s and was done at 13:35:49Z, 2m07s after the press.
+  - The note was filed to Resources/Ideas, and its inbox pile went to the Bin.
+  - Findings:
+    - `dispositions.json` says `set-aside` for the pile's file, while the report says `filed`;
+    - `reading` is never reported (revision 9 → writing at 10);
+    - `/status` shows total 0.
+- **Cancel-and-recover:**
+  - The coordinator added a second note and confirmed at 13:39:16Z.
+  - At 13:40:00Z it cancelled run 37630230892 (attempt 1) while the run was `writing`. The app tab was moved off staging.
+  - The deadline is about 14:09:33Z. The evaluator is observing (packet `2026-10-07-p3-13-cancel-recover-packet.md`).
   - The app stayed `queued` until the stale deadline.
   - One press sent two POST /process calls, with the same run id.
 - After the fix: P3-13 closes, the lead deploys, and the first-run journey runs again with one press.
