@@ -225,6 +225,11 @@ describe('admission in the person object', () => {
   it('a stale run is marked failed once and raises the revision', async () => {
     const { sub } = await someone();
     const p = person(sub);
+    // With no GitHub token there is no recovery to wait for: the reads expire the run at its deadline.
+    await runInDurableObject(p, (instance) => {
+      const own = instance as unknown as { env: Env };
+      own.env = { ...own.env, GITHUB_TOKEN: undefined };
+    });
     const { run, revision } = await admitted(sub, ask('press-1', T0));
     // Within its window it stays queued.
     expect(await p.runStatus(T0 + QUEUED_STALE_MS - 1)).toEqual({ run, revision });
