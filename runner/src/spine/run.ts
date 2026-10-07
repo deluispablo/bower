@@ -27,8 +27,8 @@ export type Settled = { state: 'applied'; evidence: EffectEvidence } | { state: 
 
 /** The effects of operations on the folder: the adapter's sends and evidence reads. */
 export interface Effects {
-  /** Sends the operation once through these fenced writes. */
-  apply(op: OperationV2, head: Checkpoint, w: FencedDrive): Promise<Settled>;
+  /** Sends the operation once through these fenced writes; `manifest` is the run's, for what the operation relies on. */
+  apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest): Promise<Settled>;
   /** Stored evidence that the operation's effect landed; null when none is found. */
   observe(op: OperationV2, head: Checkpoint): Promise<EffectEvidence | null>;
 }
@@ -130,7 +130,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
       continue;
     }
     await resolve(op, { operationId, state: 'possible-effect', dispatchId: run.newId() });
-    const settled = await run.effects.apply(op, at, await run.batch());
+    const settled = await run.effects.apply(op, at, await run.batch(), manifest);
     await resolve(op, settled.state === 'applied'
       ? { operationId, state: 'applied', evidence: settled.evidence }
       : { operationId, state: 'rejected', failure: settled.failure });

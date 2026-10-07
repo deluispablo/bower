@@ -1,1 +1,40 @@
+# A tidy-up of one person's Bower folder, started by the Worker (worker contract, "Runner wire").
+#
+# This file lives in the instance repository as .github/workflows/tidy.yml; scripts/new-instance.sh copies it there
+# with the built runner. It is kept out of this repository's own .github/workflows/ so the backup never runs Actions.
+#
+# - The Worker sends `repository_dispatch` of type bower-tidy with `{ run_id, attempt, ticket, scope, allow_web }`.
+# - The run name is the one the Worker's recovery looks up; one concurrency group per run, never cancelled (R3).
+# - The runner reads the dispatch from the event file Actions keeps at GITHUB_EVENT_PATH, so the ticket is never put
+#   in the environment or the log; the runner masks it first. No secret is needed: the ticket is the credential.
+# - The job's own token can only read this repository, to check out the runner.
 name: tidy
+run-name: tidy ${{ github.event.client_payload.run_id }} ${{ github.event.client_payload.attempt }}
+
+on:
+  repository_dispatch:
+    types: [bower-tidy]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tidy-${{ github.event.client_payload.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: runner/dist
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Tidy up
+        env:
+          BOWER_API_URL: ${{ vars.BOWER_API_URL }}
+        run: node runner/dist/runner.mjs

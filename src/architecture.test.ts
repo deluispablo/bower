@@ -148,7 +148,9 @@ describe('the shape of the code', () => {
       // TL-P3-21: the shared plan runs in the fake, the Worker and the runner. Its adapters own the I/O (spine/read.ts).
       // The explorer's "new" dot (vault/seen.ts, behind VaultIndex.entries) reads localStorage in a try; the spine never
       // calls it, and where there is no localStorage it reads nothing.
-      const KNOWN = new Set(['data/vault/seen.ts']);
+      // The demo fixture is the scripted provider's data (TL-P3-22): its only match is the words "document numbers"
+      // in one rule's text.
+      const KNOWN = new Set(['data/vault/seen.ts', 'data/demo/fixture.ts']);
       const { seen, external } = closure(files(join(SRC, 'data', 'spine')));
       const impure = [...seen].filter((f) => FORBIDDEN.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, ''))).map((f) => relative(SRC, f)).filter((f) => !KNOWN.has(f));
       expect({ external, impure }, 'The spine runs in the Worker and the runner too. Keep browser and network code in an adapter, outside src/data/spine and what it imports.').toEqual({ external: [], impure: [] });
