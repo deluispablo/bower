@@ -4466,7 +4466,7 @@
       "Tests capture console output and assert no note path or file text appears."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a failed read-back logs no note path\" && pnpm exec vitest run src/data/spine -t \"an unreadable journal file logs no text\"",
-    "passes": false,
+    "passes": true,
     "note": "P3 security review F5 and F6 (Minor); ASVS V16.2.5, V14.2.4."
   },
   {

@@ -98,3 +98,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: security-review passes — chore(harness): security-review passes (recorded, 8 findings to fix entries)
 - 2026-10-07: token-key-rotation-reconsent passes — chore(harness): token-key-rotation-reconsent passes
 - 2026-10-07: tidy-pin-actions passes — chore(harness): tidy-pin-actions passes
+- 2026-10-07: log-no-folder-content passes — chore(harness): log-no-folder-content passes
