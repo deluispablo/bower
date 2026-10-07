@@ -155,3 +155,4 @@ P3-9 is closed.
 - provider-contract closed (ba70b60). 354/354. P4-2 close: suites and Opus delta (packet 2026-10-08-p4-2-review) running; then main, the lead's deploy, 3 scripted runs and the live C04 smoke.
 - P4-2 review BLOCK (provider-contract: scripted demo hub line on a non-admitted note). Reopened (40e7577); fix round with the same worker, folding in the digest cache key and the name limits. 353/354.
 - provider-contract re-closed (61b3c6e). 354/354. Suites must re-run on the final HEAD: the fix touched src/data/spine/scripted.ts mid-run.
+- P4-2 suites on fefd3f6 (re-run after the mid-run merge; the first pass had qa5:38 and qa5:94 failing on fake desktop): check 3608/175/76, e2e 226, e2e:fake 250, e2e:pwa 4. Short Opus check of the fix round running.
