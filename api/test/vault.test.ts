@@ -485,3 +485,69 @@ describe('POST /vault after a lapsed claim', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 });
+
+describe('POST /vault against delete me and sign-out', () => {
+  /** A Drive fetch that holds the first folder-id request until `release` is called. */
+  function held(g: FakeGoogle): { release: () => void; reached: () => boolean } {
+    const inner = g.fetchImpl;
+    let reached = false;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    (g as unknown as { fetchImpl: typeof inner }).fetchImpl = async (input, init) => {
+      if (String(input).includes('generateIds') && !reached) {
+        reached = true;
+        await gate;
+      }
+      return inner(input, init);
+    };
+    return { release, reached: () => reached };
+  }
+  const until = async (cond: () => boolean) => {
+    for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setTimeout(r, 5));
+  };
+  const code = async (r: Response) => ((await r.json()) as { error: { code: string } }).error.code;
+
+  it('a folder request that started before delete me writes nothing after it', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    const hold = held(g);
+    const a = post(g, cookie);
+    await until(hold.reached);
+    const del = await createApp({ fetchImpl: async () => new Response('{}') }).request(
+      `${APP}/me`,
+      { method: 'DELETE', headers: { cookie, origin: APP, ...leases.get(cookie) } },
+      env,
+    );
+    expect(del.status).toBe(204);
+    hold.release();
+    const r = await a;
+    expect(r.status).toBe(401);
+    expect(await code(r)).toBe('signed-out');
+    expect(await person(sub).account()).toBeNull();
+    expect(await person(sub).folderId()).toBeNull();
+    await runInDurableObject(person(sub), (_i, state) => {
+      const rows = state.storage.sql.exec('SELECT * FROM account').toArray();
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  it('a folder request that started before sign-out writes nothing after it', async () => {
+    const { sub, cookie } = await someone();
+    const g = new FakeGoogle();
+    const hold = held(g);
+    const a = post(g, cookie);
+    await until(hold.reached);
+    expect(await person(sub).retireSessions()).not.toBeNull();
+    hold.release();
+    const r = await a;
+    expect(r.status).toBe(401);
+    expect(await code(r)).toBe('signed-out');
+    expect(await person(sub).folderId()).toBeNull();
+    await runInDurableObject(person(sub), (_i, state) => {
+      const row = state.storage.sql
+        .exec<{ pending_folder_id: string | null }>('SELECT pending_folder_id FROM account WHERE id = 1')
+        .toArray()[0];
+      expect(row?.pending_folder_id).toBeNull();
+    });
+  });
+});

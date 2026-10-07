@@ -225,15 +225,16 @@ export class Person extends DurableObject<Env> {
    * a pointer another call set meanwhile. A different folder starts as not
    * complete. False when refused: the caller reads the state again.
    */
-  pointFolder(seen: string | null, folderId: string): boolean {
+  pointFolder(gen: number, seen: string | null, folderId: string): boolean {
     return (
       this.ctx.storage.sql.exec(
         `UPDATE account SET
            folder_complete = CASE WHEN folder_id IS ? THEN folder_complete ELSE 0 END,
            folder_id = ?
-         WHERE id = 1 AND folder_id IS ?`,
+         WHERE id = 1 AND session_generation = ? AND folder_id IS ?`,
         folderId,
         folderId,
+        gen,
         seen,
       ).rowsWritten > 0
     );
@@ -244,13 +245,14 @@ export class Person extends DurableObject<Env> {
    * only when no reservation is kept and the pointer still holds `seenPointer`.
    * False when refused: another call reserved or chose a folder meanwhile.
    */
-  reserveFolder(folderId: string, templateIds: TemplateIds, seenPointer: string | null): boolean {
+  reserveFolder(gen: number, folderId: string, templateIds: TemplateIds, seenPointer: string | null): boolean {
     return (
       this.ctx.storage.sql.exec(
         `UPDATE account SET pending_folder_id = ?, pending_template_ids = ?
-         WHERE id = 1 AND pending_folder_id IS NULL AND folder_id IS ?`,
+         WHERE id = 1 AND session_generation = ? AND pending_folder_id IS NULL AND folder_id IS ?`,
         folderId,
         JSON.stringify(templateIds),
+        gen,
         seenPointer,
       ).rowsWritten > 0
     );
@@ -263,13 +265,15 @@ export class Person extends DurableObject<Env> {
    * for that folder (the earlier ones when there were any), or null when
    * refused: the caller reads the state again.
    */
-  reserveTemplate(templateIds: TemplateIds): Record<string, string> | null {
+  reserveTemplate(gen: number, templateIds: TemplateIds): Record<string, string> | null {
     const { folderId } = templateIds;
+    if (this.account()?.generation !== gen) return null;
     this.ctx.storage.sql.exec(
       `UPDATE account SET pending_template_ids = ?
-       WHERE id = 1 AND folder_id = ? AND folder_complete = 0
+       WHERE id = 1 AND session_generation = ? AND folder_id = ? AND folder_complete = 0
          AND (pending_template_ids IS NULL OR json_extract(pending_template_ids, '$.folderId') IS NOT ?)`,
       JSON.stringify(templateIds),
+      gen,
       folderId,
       folderId,
     );
@@ -280,25 +284,29 @@ export class Person extends DurableObject<Env> {
   }
 
   /** Forgets a reservation that can no longer be used (that file is in the Bin or is not a folder). */
-  dropReservation(folderId: string): void {
+  dropReservation(gen: number, folderId: string): void {
     this.ctx.storage.sql.exec(
-      'UPDATE account SET pending_folder_id = NULL, pending_template_ids = NULL WHERE id = 1 AND pending_folder_id = ?',
+      `UPDATE account SET pending_folder_id = NULL, pending_template_ids = NULL
+       WHERE id = 1 AND session_generation = ? AND pending_folder_id = ?`,
+      gen,
       folderId,
     );
   }
 
   /** The pointed folder `folderId` now holds the whole template: later calls skip the fill. */
-  markFolderComplete(folderId: string): void {
+  markFolderComplete(gen: number, folderId: string): void {
     this.ctx.storage.sql.exec(
       `UPDATE account SET folder_complete = 1,
          pending_folder_id = CASE WHEN pending_folder_id = ? THEN NULL ELSE pending_folder_id END
-       WHERE id = 1 AND folder_id = ?`,
+       WHERE id = 1 AND session_generation = ? AND folder_id = ?`,
       folderId,
+      gen,
       folderId,
     );
     this.ctx.storage.sql.exec(
       `UPDATE account SET pending_template_ids = NULL
-       WHERE id = 1 AND folder_id = ? AND folder_complete = 1`,
+       WHERE id = 1 AND session_generation = ? AND folder_id = ? AND folder_complete = 1`,
+      gen,
       folderId,
     );
   }
