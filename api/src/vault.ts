@@ -19,6 +19,15 @@
  *   kept in the person object before `files.create` is sent with that id.
  *   Drive refuses a second file with the same id, so a retry after a lost
  *   reply adopts or creates that one folder, never a second one.
+ * - The same call reserves one id per template folder and file, kept with the
+ *   pointer; every create sends its id, and a 409 (Drive: the id exists) means
+ *   an earlier or stalled fill made it. So a fill resumed after its 60 s claim
+ *   lapsed makes no duplicate (ids do not depend on the by-name listing).
+ * - Every person-object write is a compare-and-set against what the call
+ *   read (a reservation only when none is kept, template ids only when none
+ *   are kept for that folder, the pointer only from the value read). A call
+ *   whose claim lapsed and finds a write refused reads the state again and
+ *   continues with what is stored: never a second folder or duplicate item.
  * - The person object records whether the template is complete in the
  *   pointed folder. Until it is, each call adds what is missing by name,
  *   create-only, as the original's `copyTemplate`; once it is, calls skip
@@ -141,13 +150,15 @@ class Drive {
     return this.list(`${quote(parentId)} in parents and trashed = false`);
   }
 
-  /** `files.generateIds`: one id to create a file with later. */
-  async generateId(): Promise<string> {
-    const params = new URLSearchParams({ count: '1', space: 'drive', type: 'files' });
-    const body = await this.json<{ ids?: unknown }>('generate id', await this.send(`${FILES_URL}/generateIds?${params}`));
-    const id = Array.isArray(body.ids) ? body.ids[0] : undefined;
-    if (typeof id !== 'string' || id === '') throw driveError('generate id answered no id');
-    return id;
+  /** `files.generateIds`: `count` ids (Drive allows 1 to 1000) to create files with later. */
+  async generateIds(count: number): Promise<string[]> {
+    const params = new URLSearchParams({ count: String(count), space: 'drive', type: 'files' });
+    const body = await this.json<{ ids?: unknown }>('generate ids', await this.send(`${FILES_URL}/generateIds?${params}`));
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+    if (ids.length !== count || !ids.every((id) => typeof id === 'string' && id !== '')) {
+      throw driveError('generate ids answered the wrong ids');
+    }
+    return ids as string[];
   }
 
   /**
@@ -176,23 +187,25 @@ class Drive {
     return created.id;
   }
 
-  /** `files.create` with a multipart upload of a new text file. */
-  async createText(name: string, parentId: string, content: string): Promise<void> {
+  /**
+   * `files.create` with a multipart upload of a new text file. With `id`,
+   * Drive answers 409 when that id exists: made by an earlier try, so done.
+   */
+  async createText(name: string, parentId: string, content: string, id?: string): Promise<void> {
     const mimeType = name.endsWith('.md') ? 'text/markdown' : name.endsWith('.json') ? 'application/json' : 'text/plain';
     const boundary = `bower-${crypto.randomUUID()}`;
     const body =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-      `${JSON.stringify({ name, mimeType, parents: [parentId] })}\r\n` +
+      `${JSON.stringify({ name, mimeType, parents: [parentId], ...(id === undefined ? {} : { id }) })}\r\n` +
       `--${boundary}\r\nContent-Type: ${mimeType}; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
     const params = new URLSearchParams({ uploadType: 'multipart', fields: 'id' });
-    await this.json(
-      'upload',
-      await this.send(`${UPLOAD_URL}?${params}`, {
-        method: 'POST',
-        headers: { 'content-type': `multipart/related; boundary=${boundary}` },
-        body,
-      }),
-    );
+    const response = await this.send(`${UPLOAD_URL}?${params}`, {
+      method: 'POST',
+      headers: { 'content-type': `multipart/related; boundary=${boundary}` },
+      body,
+    });
+    if (response.status === 409 && id !== undefined) return;
+    await this.json('upload', response);
   }
 }
 
@@ -207,6 +220,7 @@ async function completeTemplate(
   rootId: string,
   rootIsEmpty: boolean,
   files: readonly TemplateFile[],
+  ids: Record<string, string>,
 ): Promise<void> {
   const folders = new Map<string, string>([['', rootId]]);
   const children = new Map<string, DriveItem[]>();
@@ -228,7 +242,7 @@ async function completeTemplate(
     const existing = (await childrenOf(parent)).find((c) => c.name === name && c.mimeType === FOLDER_MIME);
     let id: string;
     if (existing === undefined) {
-      id = await drive.createFolder(name, parent);
+      id = await drive.createFolder(name, parent, ids[path] === undefined ? {} : { id: ids[path] });
       children.set(id, []);
     } else {
       id = existing.id;
@@ -242,8 +256,21 @@ async function completeTemplate(
     const name = file.path.slice(slash + 1);
     if (name === PLACEHOLDER) continue;
     if ((await childrenOf(parent)).some((c) => c.name === name)) continue;
-    await drive.createText(name, parent, file.content);
+    await drive.createText(name, parent, file.content, ids[file.path]);
   }
+}
+
+/** The template's folders (one per path that holds a file) and files, each once: what needs an id. */
+function templateKeys(files: readonly TemplateFile[]): string[] {
+  const keys = new Set<string>();
+  for (const { path } of files) {
+    const parts = path.split('/');
+    parts.forEach((_, i) => {
+      const key = parts.slice(0, i + 1).join('/');
+      if (!key.endsWith(PLACEHOLDER)) keys.add(key);
+    });
+  }
+  return [...keys];
 }
 
 type PersonStub = ReturnType<Env['PERSON']['get']>;
@@ -274,42 +301,83 @@ export async function ensureVault(env: Env, sub: string, options: VaultOptions =
   const drive = new Drive(env, sub, fetchImpl);
 
   return withVaultClaim(person, async () => {
-    const state = await person.vaultState();
-    let folderId: string | null = null;
-    let made = false;
-    if (state.folderId !== null && isLiveFolder(await drive.get(state.folderId))) folderId = state.folderId;
-
-    // A reserved id: made by an earlier try (adopt it), never made (make it now), or unusable (drop it).
-    let reserved = state.pending;
-    if (folderId === null && reserved !== null) {
-      const item = await drive.get(reserved);
-      if (isLiveFolder(item)) folderId = reserved;
-      else if (item !== null) {
-        await person.dropReservation(reserved);
-        reserved = null;
-      }
+    // A refused write means another call (this one's claim lapsed) changed the state: read it again.
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      const result = await attemptVault(env, person, drive, files);
+      if (result !== null) return result;
     }
-    folderId ??= reserved === null ? ((await drive.findMarked())?.id ?? null) : null;
-
-    if (folderId === null) {
-      if (reserved === null) {
-        reserved = await drive.generateId();
-        await person.reserveFolder(reserved);
-      }
-      folderId = await drive.createFolder(env.TEMPLATE_FOLDER_NAME, null, { appProperties: FOLDER_MARKER, id: reserved });
-      made = true;
-    }
-
-    // A folder this app reserved is brand-new until its template is complete: its first answer says found false.
-    const brandNew = made || folderId === reserved;
-    await person.setFolderId(folderId);
-    const kept = await person.vaultState();
-    if (!kept.complete) {
-      await completeTemplate(drive, folderId, made, files);
-      await person.markFolderComplete(folderId);
-    }
-    return { folderId, found: !brandNew };
+    throw driveError('POST /vault kept finding the state changed under it');
   });
+}
+
+/** How many times one call reads the state again after a refused write. */
+const MAX_ATTEMPTS = 5;
+
+/**
+ * One pass from the state as read. Every person-object write is a
+ * compare-and-set against that read (TL-P3-09, delta review): a call whose
+ * claim lapsed never reserves a second folder, never replaces template ids
+ * kept for its folder and never moves a pointer another call set. Null when a
+ * write was refused.
+ */
+async function attemptVault(
+  env: Env,
+  person: PersonStub,
+  drive: Drive,
+  files: readonly TemplateFile[],
+): Promise<VaultResult | null> {
+  const state = await person.vaultState();
+  let folderId: string | null = null;
+  let made = false;
+  if (state.folderId !== null && isLiveFolder(await drive.get(state.folderId))) folderId = state.folderId;
+
+  // A reserved id: made by an earlier try (adopt it), never made (make it now), or unusable (drop it).
+  let reserved = state.pending;
+  if (folderId === null && reserved !== null) {
+    const item = await drive.get(reserved);
+    if (isLiveFolder(item)) folderId = reserved;
+    else if (item !== null) {
+      await person.dropReservation(reserved);
+      return null;
+    }
+  }
+  folderId ??= reserved === null ? ((await drive.findMarked())?.id ?? null) : null;
+
+  if (folderId === null) {
+    if (reserved === null) {
+      // One call reserves the folder's id and one per template folder and file.
+      const keys = templateKeys(files);
+      const [folder, ...rest] = await drive.generateIds(keys.length + 1);
+      reserved = folder ?? '';
+      const ids = Object.fromEntries(keys.map((k, i) => [k, rest[i] ?? '']));
+      if (!(await person.reserveFolder(reserved, { folderId: reserved, ids }, state.folderId))) return null;
+    }
+    folderId = await drive.createFolder(env.TEMPLATE_FOLDER_NAME, null, { appProperties: FOLDER_MARKER, id: reserved });
+    made = true;
+  }
+
+  // A folder this app reserved is brand-new until its template is complete: its first answer says found false.
+  const brandNew = made || folderId === reserved;
+  if (!(await person.pointFolder(state.folderId, folderId))) return null;
+  const kept = await person.vaultState();
+  if (kept.folderId !== folderId) return null;
+  if (!kept.complete) {
+    let templateIds = kept.templateIds?.folderId === folderId ? kept.templateIds.ids : null;
+    if (templateIds === null) {
+      // A folder found rather than reserved here: reserve its template ids before any create,
+      // or use the ones another call kept for it meanwhile.
+      const keys = templateKeys(files);
+      const fresh = await drive.generateIds(keys.length);
+      templateIds = await person.reserveTemplate({
+        folderId,
+        ids: Object.fromEntries(keys.map((k, i) => [k, fresh[i] ?? ''])),
+      });
+      if (templateIds === null) return null;
+    }
+    await completeTemplate(drive, folderId, made, files, templateIds);
+    await person.markFolderComplete(folderId);
+  }
+  return { folderId, found: !brandNew };
 }
 
 /** `POST /vault`, mounted at `/` by `index.ts`. */
