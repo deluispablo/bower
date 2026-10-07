@@ -3,9 +3,9 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './env.js';
 import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
-import { ACTIVE_PHASES, STALE_FAILURE, isStale, utcDay } from './process.js';
+import { ACTIVE_PHASES, QUEUED_STALE_MS, STALE_FAILURE, isStale, utcDay } from './process.js';
 import type { AdmitInput, AdmitResult, RunPhase, RunReply, RunScope, RunWire } from './process.js';
-import { PHASE_RANK, TICKET_TTL_MS, hashTicket, newTicket } from './run-ticket.js';
+import { PHASE_RANK, TICKET_TTL_MS, hashTicket, makeRunId, newTicket } from './run-ticket.js';
 import type { RunnerAccess, RunnerReport, RunnerReportResult } from './run-ticket.js';
 import { LEASE_TTL_MS } from './session-lease.js';
 import type { LeaseReply, SessionAction } from './session-lease.js';
@@ -488,7 +488,7 @@ export class Person extends DurableObject<Env> {
           `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at)
            VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
            RETURNING ${RUN_COLUMNS}`,
-          crypto.randomUUID(),
+          makeRunId(this.ctx.id.toString()),
           seq,
           input.requestId,
           input.scope,
@@ -499,8 +499,18 @@ export class Person extends DurableObject<Env> {
         .one();
       // The history is bounded: older runs go, and with them their requestIds (a repeat that late is new).
       sql.exec('DELETE FROM runs WHERE seq <= ?', seq - RUNS_KEPT);
-      return { admitted: true, run: toWire(row), revision: this.raiseRevision() };
+      // Recovery: if nobody has started the run by its stale deadline, the alarm writes the expiry.
+      void this.ctx.storage.setAlarm(input.now + QUEUED_STALE_MS);
+      return { admitted: true, run: toWire(row), revision: this.raiseRevision(), created: true };
     });
+  }
+
+  /**
+   * The stale deadline of a queued run (https://developers.cloudflare.com/durable-objects/api/alarms/):
+   * writes the stale expiry. `worker-stale-run-recovery` adds the lookup and the redispatch here.
+   */
+  alarm(): void {
+    this.ctx.storage.transactionSync(() => this.expire(Date.now()));
   }
 
   /**

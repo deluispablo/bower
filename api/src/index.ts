@@ -40,7 +40,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createDriveRoutes(deps));
   app.route('/', createStatusRoutes());
   app.route('/', createSessionRoutes());
-  app.route('/', createProcessRoutes());
+  app.route('/', createProcessRoutes(deps));
   app.route('/', createVaultRoutes(deps));
   app.route('/', createMeRoutes(deps));
   app.route('/', createRunnerRoutes(deps));
