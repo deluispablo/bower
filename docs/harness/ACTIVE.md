@@ -29,6 +29,11 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **7.** An outside rename in the probe folder showed after a focus return, without a reload; it was renamed back (the coordinator ran this one, after the evaluator's token read was refused by the permission system).
 - **6** (expiry nobody took) was skipped.
 
+**P3-14 (TL-P3-24):** `dispositions-match-report` (bower-escalated, `/private/tmp/bower-p3-disp`) and `runner-reports-reading-total` (bower-implementer, `/private/tmp/bower-p3-reading`) run in parallel. "Try again" retries that run's scope, as in P2; recheck it at C16.
+- Next is P3-E: `upload-queue-real` (it folds in `upload-queue-persistent`) in parallel with `declare-piles-real`, then `behavior-suites-real-adapters` and `compatibility-accepted-app`.
+- P3-F runs alongside whenever a slot is free: `deploy-and-migrations` and `runbook-p3`, then `security-review` at the freeze (SHA-pinned actions, and the P4 rate-limit note).
+- Then the P3-G close: freeze, suites, the Opus fallback review, the C16 walk on the frozen SHA, and the dossier. Register the entries batch by batch.
+
 **P3-13 (TL-P3-23):** staging runs 7a96c5e (version 32dc0f74, `GITHUB_REPO` set). The instance repository has been replaced (ed952c4), and `GITHUB_TOKEN` is set.
 - `spine-ordered-status` passes (40be7b2; Worker schema v10).
 - `spine-recovery-without-browser` passes (1a9955a). It reads the attempt before every fenced write; whether that may change TL-P3-19 is asked of the lead.

@@ -4227,5 +4227,33 @@
     "verify": "pnpm -C api exec vitest run -t \"the alarm redispatches a run whose first job finished without a report|a second attempt with no live job ends stale\"",
     "passes": true,
     "note": "P3-13 delta review Important 2: the contract says \"redispatches once, as attempt + 1 with a new ticket, if no live job holds the run\"; recovery.ts failed it instead, so the TL-P3-23 cancel journey would end stale."
+  },
+  {
+    "id": "dispositions-match-report",
+    "task": "p3-d",
+    "category": "fix",
+    "what": "Every item's disposition in .bower/runs/<run_id>/dispositions.json agrees with the run's report: an inbox pile filed as a new note (its file consumed and its pile moved to the Bin) is filed, never set-aside; set-aside only for what the report lists under setAside; waiting only for what changed since admission.",
+    "steps": [
+      "itemDispositions (src/data/spine/report.ts) decides filed from the run's applied outcomes and report, including a pile written into a new note and binned.",
+      "A test runs the scripted provider on a one-note inbox pile and asserts dispositions.json says filed for its file, matching the report.",
+      "A contract check: every filed or setAside row in the report has a matching disposition, and no disposition contradicts the report."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"a pile written into a new note is filed in its dispositions|dispositions never contradict the report\"",
+    "passes": false,
+    "note": "TL-P3-24 point 1; first real inbox run on staging (run 37629481616): dispositions said set-aside for a filed pile file."
+  },
+  {
+    "id": "runner-reports-reading-total",
+    "task": "p3-d",
+    "category": "fix",
+    "what": "The runner reports reading with total (the admitted items it will read) before writing, as the contract's phase order says (queued → reading with total → writing → saving → done), and total stays the same through done, so /status never shows total 0 for a run with items.",
+    "steps": [
+      "runner/src/main.ts posts reading with total from the admitted manifest before any operation; a resumed attempt that already reported reading or later does not post it again (ordered status keeps the phase).",
+      "total is carried on every later report.",
+      "A test of main end to end asserts the status sequence reading(total) → writing → saving → done with the same total."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"main reports reading with total before writing\"",
+    "passes": false,
+    "note": "TL-P3-24 point 2; staging runs showed revision 9 queued → 10 writing and /status total 0 throughout."
   }
 ]
