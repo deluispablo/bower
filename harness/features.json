@@ -3820,7 +3820,7 @@
       "After a remembered 4xx, the person's Try again asks the run status once; mounts and the beat do not."
     ],
     "verify": "pnpm exec vitest run src/data src/app -t \"the run status is not asked again after a 4xx|a run status that fails offline or with a server error is asked again|the person.s try again asks the run status once after a 4xx|Drive never retries a client error other than 429\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-10 ruling 3, after R2 on staging: a missing /status route made the real bundle ask about 100 times in a few minutes (Google Cloud retry strategy)."
   },
   {
