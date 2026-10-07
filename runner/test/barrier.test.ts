@@ -286,7 +286,7 @@ describe('the report barrier', () => {
     await expect(tidy(wire, root, 1, effects)).rejects.toMatchObject({ code: 'unknown' });
 
     expect(wire.tokenCalls).toBeGreaterThan(0);
-    expect(wire.statuses.map((s) => [s.attempt, s.seq, s.phase])).toEqual([[1, 1, 'writing'], [1, 2, 'saving']]);
+    expect(wire.statuses.map((s) => [s.attempt, s.seq, s.phase])).toEqual([[1, 1, 'reading'], [1, 2, 'writing'], [1, 3, 'saving']]);
     const chain = await chainOf(wire, root);
     expect(chain.at(-1)).toMatchObject({ phase: 'done', report: { state: 'published' } });
     expect(effects.sent.size).toBe(chain.at(-1)?.outcomes.length);
@@ -313,7 +313,7 @@ describe('the report barrier', () => {
     none.refused = 'all';
     const nothing = await tidy(refusedAll.wire, refusedAll.root, 1, none, [], isView);
     expect(nothing.phase).toBe('failed');
-    expect(refusedAll.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'failed']);
+    expect(refusedAll.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'failed']);
     expect(refusedAll.wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
 
     // An error nobody caught before any effect: the same.
@@ -324,7 +324,7 @@ describe('the report barrier', () => {
       },
     });
     expect(broke.phase).toBe('failed');
-    expect(early.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'failed']);
+    expect(early.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'failed']);
     expect(early.wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
 
     // After an applied effect, an error nobody caught leaves the run saving, never "nothing changed".
@@ -333,7 +333,7 @@ describe('the report barrier', () => {
     some.breakAfter = 1;
     const stopped = await tidy(late.wire, late.root, 1, some, []);
     expect(stopped.phase).toBe('saving');
-    expect(late.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
+    expect(late.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving']);
 
     // A run that changed something says `saving` only once "effects done, report pending" is in its chain.
     const whole = await demo();
@@ -356,7 +356,7 @@ describe('the report barrier', () => {
     effects.breakAfter = 2;
     expect((await tidy(wire, root, 1, effects)).phase).toBe('saving');
     expect(effects.sent.size).toBe(2);
-    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving']);
     const sent = new Map(effects.sent);
 
     // The same attempt runs again, and Drive fails on its first read (whether the report landed): the job fails, visibly.
@@ -394,7 +394,7 @@ describe('the report barrier', () => {
     });
     expect((await chainOf(wire, root)).at(-1)?.outcomes.map((o) => o.state)).not.toContain('possible-effect');
     expect(end.phase).toBe('failed');
-    expect(wire.statuses.map((s) => s.phase)).toEqual(['writing', 'failed']);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'failed']);
     expect(wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
     expect((await wire.drive.listAll(projects.id)).filter((f) => f.parents[0] === projects.id)).toEqual([]);
   });
@@ -412,7 +412,7 @@ describe('the report barrier', () => {
     expect((await tidy(wire, root, 1, effects, [], stopAfterView)).phase).toBe('saving');
     expect((await chainOf(wire, root)).at(-1)?.report.state).toBe('pending');
     expect((await stored(wire, root, SYSTEM.lastRun))?.value).toMatchObject({ run: { id: RUN_ID, phase: 'done' } });
-    expect(wire.statuses.at(-1)).toMatchObject({ attempt: 1, seq: 2, phase: 'saving' });
+    expect(wire.statuses.at(-1)).toMatchObject({ attempt: 1, seq: 3, phase: 'saving' });
 
     // The same attempt runs again (its seq starts over): it commits done to its chain, then the Worker hears it.
     const sent = new Map(effects.sent);
@@ -423,7 +423,7 @@ describe('the report barrier', () => {
     expect(names).toEqual([expect.stringMatching(/^checkpoint-\d+-[0-9a-f]{64}\.json$/)]);
     expect((await chainOf(wire, root)).at(-1)).toMatchObject({ phase: 'done', report: { state: 'published' } });
     const done = wire.statuses.at(-1);
-    expect(done).toMatchObject({ attempt: 1, seq: 3, phase: 'done' });
+    expect(done).toMatchObject({ attempt: 1, seq: 4, phase: 'done' });
     expect(done?.after).toBeGreaterThan(writes[0]?.at ?? Infinity);
 
     // Run once more, the Worker already holds it done: the run is finished, and nothing more is sent.
@@ -435,6 +435,6 @@ describe('the report barrier', () => {
     const other = await demo();
     other.wire.refuseDone = true;
     await expect(tidy(other.wire, other.root, 1, new StubEffects())).rejects.toBeInstanceOf(Error);
-    expect(other.wire.statuses.map((s) => s.phase)).toEqual(['writing', 'saving']);
+    expect(other.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving']);
   });
 });
