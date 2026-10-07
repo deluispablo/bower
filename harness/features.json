@@ -3850,5 +3850,21 @@
     "verify": "pnpm exec vitest run src/data -t \"a lost reply to a rename that landed counts as saved|a lost reply to a move that did not land says offline|a lost reply to a task toggle that cannot be read back says not sure\"",
     "passes": true,
     "note": "TL-P3-11 F2, from drive-real-behavior-suite check 7: Drive held the change once, but the app said \"You're offline\" (Google Cloud retry strategy, idempotency: read back, never assume)."
+  },
+  {
+    "id": "worker-session-lease",
+    "task": "p3-c",
+    "category": "feature",
+    "what": "The real Worker holds one session lease per person (POST /session {place, action, gen?} -> {active, epoch}) in the person object, fences POST /vault with x-bower-place/x-bower-epoch (409 stale-session), and the real source holds a place, so the fence goes live with the client that sends the headers.",
+    "steps": [
+      "POST /session follows the fake lease exactly: check by the holder renews (even after the 3-minute TTL when nobody took it), take raises the epoch, leave frees it keeping the epoch, a check by the place that left with nobody in between gets the same epoch back.",
+      "A check whose gen is older than that place's last leave (a missing gen counts as 0) is discarded: it grants nothing and answers the current state. The fake does the same, and the client sends gen.",
+      "Schema v6 (lease beat time, the place that left, per-place leave generation) with a tested v5 -> v6 migration that keeps every existing row.",
+      "POST /vault without the lease's place and epoch answers 409 stale-session; with them it works as before.",
+      "The real source (choose.ts) holds a place, and its Worker calls carry the headers."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the session lease follows the contract|a check started before the place.s latest leave is discarded|person storage migrates from v5 to v6 keeping every row|POST /vault refuses a stale or missing session epoch\" && pnpm exec vitest run src/data -t \"the fake discards a check started before the place.s latest leave|the real source holds a place and sends its epoch\"",
+    "passes": false,
+    "note": "TL-P3-14 (adopted as the coordinator proposed), TL-P2-13/14/24/25, owed items of TL-P3-04: lease expiry and leave-generation columns with a tested migration."
   }
 ]
