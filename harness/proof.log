@@ -340,3 +340,4 @@ compatibility-accepted-app	5ccd2e294ccb4b87	2026-10-07	known-green: test entry: 
 worker-reads-pile-notes	9325959c117d7788	2026-10-07	red (fixed in 3cc965f)
 behavior-suites-real-adapters	19c46ba27a3d3d20	2026-10-07	known-green: test entry over existing behaviour: each case was proven red by breaking its guard in an uncommitted scratch edit (recovery redispatch, session generation bump, ticket retirement, applied-op skip, superseded ticket, seq repeat and lost done reply), logged by the worker; suites committed in c48186f
 deploy-staging-production-check	7659ef4194d46209	2026-10-07	red (fixed in dab6b02)
+security-review	3b6edd4b45607423	2026-10-07	known-green: review entry: at 5688b18 'the P3 security review is recorded' failed (file missing); 0d5eb6d adds the review record and runbook corrections (docs only)

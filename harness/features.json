@@ -4397,7 +4397,7 @@
       "A docs test checks the review file exists with a verdict line and every finding names an entry or a P4 note."
     ],
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the P3 security review is recorded\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-26 point 2."
   }
 ]
