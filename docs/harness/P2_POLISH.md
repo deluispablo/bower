@@ -78,3 +78,4 @@ From drive-real-behavior-suite (TL-P3-11, minor):
 
 - `src/data/fake/fake-worker.test.ts` times out (5 s, 30 s) in `pnpm check` while two workers load the machine; seen in client-retry round 1 and in the worker-logs-and-version close (2026-10-07). Gate reliability.
 - The note screen: a click on a task's label does nothing; only the box toggles (a native label should toggle its box). From the check 4 rerun, TL-P3-11 amendment.
+- Load-sensitive e2e (P3-6 close, 2026-10-07): with a game using the CPU (load 8), qa5:38 took 46 s against a 40 s wait and robustness:11 missed its 30 s wait, on base 0b48fe4 too. At load 3 both passed (29 s, 52 s), and the full e2e:fake went 250/250. Per TL-P3-12 a pass on an idle machine is a polish note: these waits sit within 1.5x of their timeouts.
