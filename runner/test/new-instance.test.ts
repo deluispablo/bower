@@ -13,7 +13,19 @@ const ORIGIN = 'https://api.example.test';
 const GH = `#!/bin/sh
 printf '%s\\n' "$*" >> "$GH_LOG"
 case "$1 $2" in
-  "auth status"|"repo view") exit 0 ;;
+  "auth status") exit 0 ;;
+  "repo view")
+    repo=$3
+    if grep -q "^public:$repo$" "$GH_REPOS" 2>/dev/null; then
+      if [ "$4" = "--json" ] && [ "$5" = "visibility" ] && [ "$6" = "-q" ] && [ "$7" = ".visibility" ]; then
+        printf 'PUBLIC\\n'
+      fi
+    else
+      if [ "$4" = "--json" ] && [ "$5" = "visibility" ] && [ "$6" = "-q" ] && [ "$7" = ".visibility" ]; then
+        printf 'PRIVATE\\n'
+      fi
+    fi
+    exit 0 ;;
   "repo clone") exec git clone -q "$GH_REMOTE" "$4" ;;
   "variable get") cat "$GH_VARS/$3" 2>/dev/null; exit $? ;;
   "variable set")
@@ -47,7 +59,7 @@ afterEach(() => {
 });
 
 /** The instance repository as the original left it: its workflows and agent files, and a readme. */
-function instance(): { remote: string; bin: string; log: string; vars: string } {
+function instance(): { remote: string; bin: string; log: string; vars: string; repos: string } {
   const dir = mkdtempSync(join(tmpdir(), 'bower-instance-'));
   made.push(dir);
   const remote = join(dir, 'remote.git');
@@ -70,14 +82,16 @@ function instance(): { remote: string; bin: string; log: string; vars: string } 
   chmodSync(join(bin, 'gh'), 0o755);
   const vars = join(dir, 'vars');
   mkdirSync(vars);
-  return { remote, bin, log: join(dir, 'gh.log'), vars };
+  const repos = join(dir, 'repos');
+  writeFileSync(repos, '');
+  return { remote, bin, log: join(dir, 'gh.log'), vars, repos };
 }
 
 /** Runs the script with macOS's stock bash, `gh` stubbed on PATH, and `input` as what is typed at its prompts. */
 function run(at: ReturnType<typeof instance>, args: string[] = [REPO, ORIGIN], input = ''): { status: number | null; output: string } {
   const out = spawnSync('/bin/bash', [SCRIPT, ...args], {
     cwd: ROOT,
-    env: { ...gitEnv(), PATH: `${at.bin}:${process.env.PATH ?? ''}`, GH_LOG: at.log, GH_REMOTE: at.remote, GH_VARS: at.vars },
+    env: { ...gitEnv(), PATH: `${at.bin}:${process.env.PATH ?? ''}`, GH_LOG: at.log, GH_REMOTE: at.remote, GH_VARS: at.vars, GH_REPOS: at.repos },
     input,
     encoding: 'utf8',
     timeout: 120_000,
@@ -135,6 +149,15 @@ describe('new-instance.sh', () => {
     const calls = existsSync(at.log) ? readFileSync(at.log, 'utf8') : '';
     expect(calls.split('\n').filter((c) => c && c !== 'auth status')).toEqual([]);
     expect(git(at.remote, 'rev-list', '--count', 'main').trim()).toBe('1');
+  });
+
+  it('new-instance refuses a public repository', () => {
+    const at = instance();
+    // Mark the repository as public in the stub's registry
+    writeFileSync(at.repos, `public:${REPO}\n`);
+    const result = run(at);
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain('must be private');
   });
 });
 
