@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import wrangler from '../wrangler.jsonc?raw';
 
@@ -77,8 +77,6 @@ describe('routing', () => {
       });
     });
 
-    if (uncovered.length > 0) {
-      throw new Error(`Routes not covered by run_worker_first: ${uncovered.join(', ')}`);
-    }
+    expect(uncovered, 'Routes not covered by run_worker_first in api/wrangler.jsonc').toEqual([]);
   });
 });
