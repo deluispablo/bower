@@ -4297,7 +4297,7 @@
       "A test runs it with wrangler, curl and git stubbed on PATH and asserts the refusals and the happy path.",
       "A test pins the shipped person-schema steps (SCHEMA_VERSION 1..current) by hash, so a shipped step can never be edited, only a new one appended."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"deploy-staging refuses production and dirty checkouts|deploy-staging deploys a clean main SHA and checks health|shipped person schema steps never change\"",
+    "verify": "pnpm -C runner exec vitest run -t \"deploy-staging refuses production and dirty checkouts|deploy-staging deploys a clean main SHA and checks health\" && pnpm -C api exec vitest run -t \"shipped person schema steps never change\"",
     "passes": false,
     "note": "TL-P3-24 point 2 (P3-F); TL-P3-08 production guard; STAGING.md deploy line; TL-P3-20 version skew."
   }

@@ -112,3 +112,4 @@ cancel-and-recover,evaluator,claude,sonnet,medium,1,70082,,,,,,29,30.9,recovery 
 runner-reports-reading-total,implementer,claude,sonnet,medium,1,81150,,,,,,15,1.6,delivered,2026-10-07
 dispositions-match-report,implementer,claude,opus,high,1,161619,,,,,,50,13.1,delivered,2026-10-07
 upload-queue-real,implementer,claude,opus,high,1,152178,,,,,,38,17.1,delivered,2026-10-07
+deploy-and-migrations,implementer,claude,opus,high,1,110043,,,,,,23,6.0,delivered,2026-10-07
