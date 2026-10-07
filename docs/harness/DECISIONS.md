@@ -82,3 +82,4 @@ One line per ruling, newest last. Read only the decision a task needs. Later rul
 - TL-P3-28 addendum: the C16 re-walk passes; the live revocation is deferred by the owner to a later check with another account (test-covered, recorded pending); P3 closes
 - 2026-10-07: owner accepted P3 (dossier 680e95e, code 426a9fd, staging aeb99a4); P4 not authorized; pending: live revocation with another account, the Codex review on 2026-10-12
 - TL-P4-01: owner authorized P4; P4_PLAN adopted (P4 column, owner setup, packages P4-A..F, exit); batch P4-1 = p4-corpus (implementer) ∥ claude-provider (escalated, headless Claude Code, structured operations only, spine validates) — [2026-10-07-tl-p4-01-p4-start.md](2026-10-07-tl-p4-01-p4-start.md)
+- TL-P4-01 addendum: speed vs the original (owner request); baseline in p4-speed-baseline.md; corpus includes the original's 5 bench cases; per-phase timing line; runner-overhead entry in P4-2 (scripted run under 60 s)
