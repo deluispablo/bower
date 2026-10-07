@@ -135,3 +135,11 @@ P3-9 is closed.
 - Evaluations: fresh origin and bundle name checked (TL-P3-01).
 - P2 evidence checkouts (`/private/tmp/bower-p2-*`) can be removed.
 - Resume (TL-P2-45): never clear; after a compaction re-read HANDOFF and this file; a worker gone with no delivery is redispatched fresh from its packet.
+
+## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
+
+- Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
+- **Batch P4-1** (packet `2026-10-07-p4-1-packet.md`, entries 352, 350 pass), from 54a7548:
+  - `p4-corpus`: bower-implementer, worktree `bower-p4-corpus`;
+  - `claude-provider`: bower-escalated, worktree `bower-p4-claudeprov`. Live use waits for the owner's secret.
+- Next: P4-2 = original-baseline, provider-contract, then C04.
