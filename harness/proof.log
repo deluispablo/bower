@@ -326,3 +326,4 @@ runner-restart-truth-fix	bc7ab57ba0c7003d	2026-10-07	red (fixed in 6cf8463)
 spine-ordered-status	0b4597d64603b0cd	2026-10-07	red (fixed in 186ddc3)
 spine-recovery-without-browser	37cca09612e9ec23	2026-10-07	red (fixed in a078625)
 staging-runner-routes	687e8a6511f7f00b	2026-10-07	red (fixed in 4edd8e9)
+worker-stale-run-recovery	c6a6ca1f8f9c4bac	2026-10-07	known-green: verify renamed: the stale-on-finished-job test is replaced by the contract's redispatch (P3-13 review I2); its other tests were proven red at the original close

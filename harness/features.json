@@ -4033,7 +4033,7 @@
       "A second stale deadline, a completed job whose run never reported an end, or no GitHub token marks the run failed stale once, raising the revision."
     ],
     "verify": "pnpm -C api exec vitest run -t \"an alarm on a run that progressed changes nothing|a lost dispatch is redispatched once with a new ticket|a live job is left alone until its own deadline|a run stuck twice is marked failed stale|the alarm redispatches a run whose first job finished without a report\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-18 (DO alarm, lookup by run-name, one redispatch, then failed stale), TL-P3-15 (17/30 min), R3 (run-name lookup and job started_at/completed_at reconcile)."
   },
   {
