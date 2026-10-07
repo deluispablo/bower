@@ -1,0 +1,18 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 41250,
+  "duration_api_ms": 40980,
+  "num_turns": 1,
+  "result": "I filed the payslip under Areas/Money and the dentist letter under Areas/Health, and put the flat photos with the Wrenfield Road viewing notes.",
+  "stop_reason": "end_turn",
+  "session_id": "6b1f2c4e-0000-4000-8000-000000000001",
+  "total_cost_usd": 0.0912,
+  "usage": {
+    "input_tokens": 5120,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 3890
+  }
+}
