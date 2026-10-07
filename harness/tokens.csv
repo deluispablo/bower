@@ -87,3 +87,4 @@ recovery-status-poll-race,implementer,claude,opus,high,1,89015,,,,,,14,2.6,deliv
 runner-stale-attempt-signal,implementer,claude,sonnet,medium,1,94490,,,,,,21,3.9,delivered,2026-10-07
 p3-9-delta-rereview,reviewer,claude,opus,medium,1,97916,,,,,,14,2.3,PASS (4 minor),2026-10-07
 session-lease-real (C14 journey),evaluator,claude,sonnet,medium,1,76335,,,,,,31,3.2,"1-5 pass, 6 skipped, 7 done by coordinator (pass)",2026-10-07
+spine-admission-manifest,implementer,claude,opus,high,1,309491,,,,,,101,22.5,delivered,2026-10-07

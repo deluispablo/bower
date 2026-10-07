@@ -155,8 +155,7 @@ describe('the shape of the code', () => {
     });
 
     // TL-P3-21 widens this rule: the Worker also builds the admission manifest with the spine and the Drive adapter.
-    // The title stays as harness/features.json names it (shared-domain-package) until the coordinator renames it.
-    it('api imports nothing from src except contracts', () => {
+    it('api imports from src only contracts, the spine and the Drive adapter', () => {
       const API = join(SRC, '..', 'api');
       let exists = true;
       try {
