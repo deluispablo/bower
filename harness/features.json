@@ -4624,7 +4624,7 @@
       "A test with a modelled per-call latency shows the run under the budget."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a scripted run with modelled Drive latency finishes under the runner budget|the runner overhead cuts keep recovery and ordered status\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-01 addendum (owner speed request); docs/harness/p4-speed-baseline.md."
   },
   {

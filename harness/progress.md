@@ -112,3 +112,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: p4-corpus passes — Synthetic capability corpus with a structural scorer; five bench cases kept unchanged (TL-P4-01)
 - 2026-10-07: claude-provider passes — Headless Claude Code provider under the original permission policy, structured operations only (TL-P4-01)
 - 2026-10-07: p4-corpus passes — Corpus bench cases start from the original's bench folder; binary inputs read as bytes (P4-1 review)
+- 2026-10-07: runner-overhead passes — Scripted run cut from 61.4 s to 43.4 s modelled: fewer token grants and Drive reads (TL-P4-01 addendum)

@@ -357,3 +357,4 @@ save-timeout-honest	555c8db39a8e2245	2026-10-07	red (fixed in 1bef02d)
 p4-corpus	9a42c669925581d5	2026-10-07	red (fixed in be43662)
 claude-provider	76d94e4fbd19a16a	2026-10-07	red (fixed in 7bff7c0)
 p4-corpus	d621cfe80647e09d	2026-10-07	known-green: Red proven by hand at 1e33a4a (tests only): 'the bench cases start from the original's bench folder' failed on an assertion (bench-5 start folder lacked the policy PDF). done.sh revert of 7c47836 ran no matching test (the fix commit carries the shared test helper).
+runner-overhead	1a55b810d33fdddf	2026-10-07	known-green: Red proven by hand at dcc7005 (tests only): budget test failed on an assertion (61370 not < 60000). The cut spans ba4593e+19da741, so reverting 19da741 alone stays under budget.
