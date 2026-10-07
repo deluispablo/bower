@@ -14,3 +14,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `41f6356` | upload-queue-real | none: a test for the line a pile item shows |
 | `0b05ec4` | upload-queue-real | none: a pile item whose bytes are lost reads "Didn't arrive. Choose the file again."; the words are the screen's, not a file's |
 | `2650a73` | compatibility-accepted-app | none: the fixtures themselves, and nothing else |
+| `3cc965f` | worker-reads-pile-notes | adds an optional `nothingReady: true` to the run report (`types.ts`, `run-checkpoint.ts`, `layout.ts`): files the accepted app wrote never carry it and still read the same; a P3 report with it reads in the accepted app as an empty report. The done line "Nothing in the inbox was ready yet, so it stays as it is." is screen words |
