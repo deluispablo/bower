@@ -1,6 +1,13 @@
 # Staging
 
-> **From P3-4 ([TL-P3-06](2026-10-06-tl-p3-06-worker-staging.md), [TL-P3-08](2026-10-07-tl-p3-08-production-guard.md)), staging is the app plus the Worker on one origin.** Deploy: on the new `main`, run `pnpm install --frozen-lockfile` and `env -u VITE_API_URL pnpm build`, then scan `dist/` as below. Then, from `api/`, run `npx wrangler deploy --var APP_ORIGIN:<staging origin> --var API_ORIGIN:<staging origin> --var APP_VERSION:<main short SHA>`. The output must name `bower-staging`, never `bower-api`. Check `/`, `/?source=fake`, a deep link, `/landing/`, `/health` (must name that SHA) and `/me`. Secrets and KV are set once, as TL-P3-06 says. The P2 static-preview steps below are history.
+> **From P3-4 ([TL-P3-06](2026-10-06-tl-p3-06-worker-staging.md), [TL-P3-08](2026-10-07-tl-p3-08-production-guard.md)), staging is the app plus the Worker on one origin.** Deploy: on the new `main`, run `pnpm install --frozen-lockfile` and `env -u VITE_API_URL pnpm build`, then scan `dist/` as below. Then, from `api/`, run `npx wrangler deploy --var APP_ORIGIN:<staging origin> --var API_ORIGIN:<staging origin> --var APP_VERSION:<main short SHA>`. The output must name `bower-staging`, never `bower-api`. Check `/`, `/?source=fake`, a deep link, `/landing/`, `/health` (must name that SHA) and `/me`. Secrets and KV are set once, as TL-P3-06 says.
+
+**Version skew (TL-P3-20).** For a short while after a deploy, a Worker on the new version can still reach a person object running the old one. Cloudflare says this lasts "seconds to minutes", and asks that Worker↔Durable Object changes stay compatible both ways ([gradual deployments with Durable Objects](https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/with-durable-objects/)). On 0b64dcb, a new method answered "The RPC receiver does not implement the method" for A for several minutes. So:
+- the first smoke after a deploy that adds person-object methods waits for one 200 before reading results;
+- a persisting failure is answered with a redeploy of the same version, which restarts the objects;
+- the Worker answers that error with 503 and `Retry-After`, never 500 (entry `do-version-skew`).
+
+Past logs need the dashboard. Wrangler's login cannot query the telemetry API, so the lead uses `wrangler tail bower-staging --format json` with no status filter: a handled 500 has the outcome "ok", which `--status error` misses. The P2 static-preview steps below are history.
 
 ## P2 static preview (history)
 

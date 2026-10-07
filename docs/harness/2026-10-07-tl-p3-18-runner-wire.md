@@ -24,3 +24,14 @@ The other spine entries follow `runner-drive-adapter` in P3-D order. When `worke
 ## `/process` smoke on staging
 
 Approved, as A in the pane: press Tidy up once. Expect a queued run, a raised revision and no dispatch. It uses 1 of the 100 daily runs and holds the active-run slot until it expires as failed `stale` after 17 minutes. The expiry is checked by one `/status` read after the deadline.
+
+## Addendum, P3-9 review: two Important findings
+
+- **I1 → `recovery-status-poll-race`, as packeted.** When a GitHub token is configured, only recovery may end a dispatched run, with a hard ceiling past the deadline. Without one, the expiry from TL-P3-15 stays.
+- **I2 → `runner-stale-attempt-signal`: the Worker keeps the contract, and the runner reads it.**
+  - **Worker.** Ticket rows are retired, not deleted (schema v1). A ticket replaced by a newer attempt answers 409 `stale-attempt`, as the contract says, and a ticket the Worker has never seen answers 401.
+  - **Runner.** It parses the nested error shape. It does not infer a takeover from a 401, because that would treat an expired or wrong ticket as a takeover.
+  - **The fakes** replay the Worker's real shapes.
+  - **Same lookup, same entry:** a resend of the final report (same attempt, same `seq`) with the ticket retired at `done` returns the current state, as the contract's repeat rule says, instead of 401.
+- **Minors go to polish,** including a `mintTicket` failure after admission: the admitted run stays recoverable, and a retry with the same `requestId` returns it.
+- After both fixes, one delta re-review of the fixes only, then `main` and the deploy SHA.
