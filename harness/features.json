@@ -4641,7 +4641,7 @@
       "A Claude run plans no scripted demo extras (hub lines, merges) beyond its intent."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the Claude provider passes the scripted provider contract fixtures|a Claude reply that targets a thing not admitted is refused and writes nothing|the runner computes ids and digests, never the model|claude runs with no checkout or home settings and the secret only reaches the claude step|a Claude run writes no hub line or demo extra it did not propose\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-01 P4-2; P4-1 review Important (notAdmitted) and two minors; lead 1089bd1. Live C04 smoke after it closes. Reopened: P4-2 review BLOCK (scripted.ts:415 demo hub line on a non-admitted note)."
   }
 ]
