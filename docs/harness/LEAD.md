@@ -4,12 +4,13 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 
 - **Role.** Claude session `Planificador`, technical lead and planner of the whole project ([GOVERNANCE](GOVERNANCE.md)). It talks to the coordinator `Orquestador` through cross-session messages, in 10 lines or fewer.
 - **Documentation checkout.** `/private/tmp/bower-tl-planning`, branch `claude/tl-planning`. Fast-forward it to `main` before each change. After `pnpm check`, or the docs test plus lint for documentation only, fast-forward local `main`. Then message the coordinator, who adopts the change and backs it up.
-- **Staging.** Redeploy after each main batch, following [STAGING.md](STAGING.md), with `bower-mechanical` from a clean detached worktree of that SHA. Last deployed: `main` `5a4ab04` (P3-18), version `f3e43b66`.
+- **Staging.** Redeploy after each main batch, following [STAGING.md](STAGING.md), with `bower-mechanical` from a clean detached worktree of that SHA. Last deployed: `main` `bd7e261` (P3 frozen, code `da34905`), version `81a73283`; `bower-home` `8703a4f`.
 - **Pane:** signed in as test account A. The addresses stay only in the lead's memory.
 - **Instance repository** `deluispablo/bower-home` ([TL-P3-13](2026-10-07-tl-p3-13-instance-repository.md)): Replaced with the new runner on 2026-10-07 (`ed952c4`), via `scripts/new-instance.sh`. The full replacement comes with the new runner. `gh` has the `workflow` scope.
 - **P3-B is complete (2026-10-07):** R2, R3, R4 and the Drive suite.
 - **Codex review on 2026-10-12** (TL-P3-16): check that `codex exec` answers, then one review of the P3 Worker and spine range, before P4.
 - **Waiting on the coordinator:** `spine-report-barrier-dispositions` (TL-P3-22), then `scripted-semantic-provider` with the `bower-home` replacement; the `session-lease-real` (C14) result.
+- **Backup blocked (2026-10-07):** every push to `backup` since `a22f288` gets "remote rejected (Internal Server Error)", even a one-line commit; this is repo-side. Retry later; if it persists, the owner opens a GitHub support ticket with the request id (F73B:3774A8:46EF8B1:43A416D:6AC67A68).
 - **Owner ask coming:** a fine-grained `GITHUB_TOKEN` for `bower-home`, set with `wrangler secret put` at the `bower-home` replacement (with `scripted-semantic-provider`). The Claude credential moves to P4 (TL-P3-22).
 - **Message budget.** The app pauses a session's messages to other sessions after 10 sends without an owner message. On the night of 2026-10-06 this left the coordinator waiting about 6.5 hours for an unblock it never received. Rules:
   - send one combined message per decision;
