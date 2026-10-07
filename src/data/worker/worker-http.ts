@@ -130,7 +130,7 @@ export class WorkerHttp implements WorkerApi {
       if (res.status === 409 && error?.code === 'stale-session') throw openElsewhere();
       const message = error?.message;
       if (code === 'unknown') console.error(`Worker answered ${res.status} for ${method} ${path}`);
-      throw new BowerError(code, typeof message === 'string' && message ? message : SENTENCE[code]);
+      throw new BowerError(code, typeof message === 'string' && message ? message : SENTENCE[code], undefined, { cause: { httpStatus: res.status } });
     }
     if (empty || !valid || !valid(parsed)) return invalid();
     return parsed;

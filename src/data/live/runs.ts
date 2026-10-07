@@ -12,12 +12,19 @@
 import type { RunSource, Unsubscribe } from '../sources';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
-import type { RunWire, WorkerApi } from '../worker/worker-api';
+import { httpStatusOf, type RunWire, type WorkerApi } from '../worker/worker-api';
 
 const FAST_MS = 4_000;
 const SLOW_MS = 60_000;
 const SEEN = 'bower:run-seen';
 const ACTIVE: readonly RunWire['phase'][] = ['queued', 'reading', 'writing', 'saving'];
+
+const clientError = (e: unknown): e is BowerError => {
+  if (!(e instanceof BowerError)) return false;
+  if (e.code === 'not-found' || e.code === 'conflict') return true;
+  const status = httpStatusOf(e);
+  return status !== null && status >= 400 && status < 500 && status !== 401 && status !== 429;
+};
 
 const finished = (r: RunWire | null): boolean => !!r && (r.phase === 'done' || r.phase === 'failed');
 
@@ -120,17 +127,18 @@ export class LiveRuns implements RunSource {
     if (this.disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
   }
 
-  async current(): Promise<RunState | null> {
+  async current(opts: { again?: boolean } = {}): Promise<RunState | null> {
     if (this.disposed) return this.last ? this.state(this.last) : null;
-    if (this.refused) throw this.refused;
+    if (this.refused && !opts.again) throw this.refused;
     const generation = this.generation;
     const ticket = ++this.issued;
     let wire: RunWire | null;
     try {
       wire = await this.worker.status();
     } catch (e) {
-      // 401 is the session's to handle; not-found and conflict are client errors that asking again cannot fix.
-      if (e instanceof BowerError && (e.code === 'not-found' || e.code === 'conflict') && !this.disposed && generation === this.generation) this.refused = e;
+      // 401 is the session's to handle and 429 can pass; any other 4xx is a client error that asking again cannot fix.
+      if (clientError(e) && !this.disposed && generation === this.generation) this.refused = e;
+      else if (opts.again) this.refused = null;
       throw e;
     }
     this.refused = null;

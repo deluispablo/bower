@@ -61,3 +61,10 @@ export interface WorkerApi {
    */
   session(place: string, action: SessionAction): Promise<LeaseReply>;
 }
+
+/** The HTTP status a Worker error came with, kept as its typed cause; never read from its words. */
+export const httpStatusOf = (e: unknown): number | null => {
+  const cause = e instanceof Error ? e.cause : null;
+  const status = cause && typeof cause === 'object' ? (cause as { httpStatus?: unknown }).httpStatus : null;
+  return typeof status === 'number' ? status : null;
+};

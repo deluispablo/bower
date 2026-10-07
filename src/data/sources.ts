@@ -99,8 +99,11 @@ export interface VaultSource {
 export interface RunSource {
   /** `allowWeb`: the person lets Bower look things up on the web in this tidy-up (Settings). */
   start(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunState>;
-  /** The run going now, or the last one. */
-  current(): Promise<RunState | null>;
+  /**
+   * The run going now, or the last one. `again`: the person asked (Try again),
+   * so a remembered client error is asked once more instead of answered.
+   */
+  current(opts?: { again?: boolean }): Promise<RunState | null>;
   markSeen(id: string): Promise<void>;
   subscribe(cb: () => void): Unsubscribe;
 }
