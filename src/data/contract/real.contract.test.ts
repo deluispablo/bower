@@ -148,7 +148,8 @@ describe('real adapters: failure cases in the app', () => {
       if (url.pathname.endsWith('/status') && JSON.parse(String(init.body)).phase === 'saving') cut = true;
       return res;
     });
-    expect(code).toBe(0);
+    // Left in saving with no terminal report, the job fails (TL-P3-28); the alarm still redispatches it.
+    expect(code).toBe(1);
     // The alarm set at admission (the queued deadline) finds the run moved on and waits for its `saving` deadline.
     expect(await w.api.fireAlarm()).toBe(true);
     expect(w.dispatched).toHaveLength(1);

@@ -242,8 +242,10 @@ export interface MainOptions {
  * `BOWER_API_URL`, and the dispatch from the event file at `GITHUB_EVENT_PATH`, which is where the ticket stays: it
  * is never put in the environment or printed, and on Actions it is masked in the log first
  * (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log).
- * Gives the exit code: 0 once the run ended (done, failed, or saving for a redispatch to finish), 1 when it could
- * not start or stopped on an error, said in the log.
+ * Gives the exit code: 0 once the Worker took a terminal report (`done` or `failed`, or it already held the run
+ * ended); 1 when it could not start, stopped on an error, or was left in `saving` for a redispatch to finish, said in
+ * the log. Nothing runs after `done` is taken (the report is saved and read back before it), so a run already done
+ * never ends non-zero by a later step.
  */
 export async function main(env: Readonly<Record<string, string | undefined>>, opts: MainOptions = {}): Promise<number> {
   let name: ProviderName;
@@ -283,7 +285,9 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
     });
     console.log(`Tidy-up ${runId} ended ${end.phase}.`);
     if (end.phase !== 'done') console.error(end.why);
-    return 0;
+    // Left in saving with no terminal report: the job fails, so it never shows success for an unfinished run; the
+    // Worker's alarm recovery still redispatches it (TL-P3-28).
+    return end.phase === 'saving' ? 1 : 0;
   } catch (e) {
     console.error(e);
     return 1;

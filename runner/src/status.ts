@@ -10,6 +10,7 @@
  *   again, a `done` or `failed` throws, so the job fails visibly; it is never swallowed.
  */
 import { BowerError, type RunPhase } from '../../src/data/types';
+import { retried } from './retry';
 import { staleAttempt } from './token';
 
 export interface RunnerStatusOptions {
@@ -57,6 +58,8 @@ export class RunnerStatus {
     const first = await this.send(phase, extra, ++this.seq);
     if (first.kind === 'taken') return;
     const current = first.current;
+    // This very report, taken by a send whose answer was lost: nothing more to tell.
+    if (current && current.seq === this.seq && current.phase === phase) return;
     if (current && ended(current.phase)) {
       console.error(`The Worker already holds this run ${current.phase}; ${phase} is not sent`);
       this.endedAs = current.phase;
@@ -86,11 +89,15 @@ export class RunnerStatus {
     const body = { attempt: this.opts.attempt, seq, phase, ...extra };
     let res: Response;
     try {
-      res = await this.fetchFn(this.url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` },
-        body: JSON.stringify(body),
-      });
+      // Idempotent by attempt and seq: the Worker answers a repeat of the last seq with the current state and changes
+      // nothing, even once the run ended (TL-P3-28; `retry.ts`).
+      res = await retried(() =>
+        this.fetchFn(this.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` },
+          body: JSON.stringify(body),
+        }),
+      );
     } catch (e) {
       console.error(e);
       throw new BowerError('offline', "Bower couldn't reach its server. It will try again.");

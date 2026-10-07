@@ -10,6 +10,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { RunnerDrive } from '../src/drive';
 import { main } from '../src/main';
+import { BASE_MS, backoff } from '../src/retry';
 import { RunnerStatus } from '../src/status';
 import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
@@ -105,6 +106,7 @@ function onFirstMove(wire: DriveV3, fault: (next: () => Promise<Response>) => Pr
 describe('runner network retry', () => {
   it('a network error on an idempotent runner call is retried with backoff', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    backoff.baseMs = BASE_MS;
     vi.useFakeTimers();
     // Full jitter takes a random share of each cap; half, here, so the waits are known.
     vi.spyOn(Math, 'random').mockReturnValue(0.5);

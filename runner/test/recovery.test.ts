@@ -224,11 +224,12 @@ describe('recovery without the browser', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { end: expected } = await uninterrupted();
 
-    // Landed: attempt 1's first folder is made, its answer is lost, and the runner stops. Attempt 2 reads it back as made.
+    // Landed: attempt 1's first folder is made, its answer is lost and Drive cannot be read back, so the runner stops
+    // (a lost answer alone is read back at once, TL-P3-28). Attempt 2 reads it back as made.
     const landed = await world();
     let lost = false;
     // It stops in saving: its chain holds an effect that may have been sent.
-    expect((await tidy(landed, 1, { loseReply: (call) => !lost && madeFolder(call) && (lost = true) })).phase).toBe('saving');
+    expect((await tidy(landed, 1, { loseReply: (call) => !lost && madeFolder(call) && (lost = true), failRead: () => lost })).phase).toBe('saving');
     const held = (await chainOf(landed.wire, landed.root)).at(-1);
     const inFlight = held?.outcomes.find((o) => o.state === 'possible-effect');
     expect(inFlight).toBeDefined();

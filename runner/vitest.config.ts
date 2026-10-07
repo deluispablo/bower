@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts'],
+    setupFiles: ['test/setup.ts'],
     reporters: ['default', 'json'],
     outputFile: { json: 'test-results/unit.json' },
   },

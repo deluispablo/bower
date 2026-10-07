@@ -5,6 +5,7 @@
  * reports is current (one read per write batch, TL-P3-19).
  */
 import { BowerError } from '../../src/data/types';
+import { retried } from './retry';
 import { isAdmissionManifest, type AdmissionManifest } from '../../src/data/spine/admission';
 
 /** What `GET /runner/runs/:id/token` answers. */
@@ -59,7 +60,8 @@ export class RunnerToken {
   async grant(): Promise<TokenGrant> {
     let res: Response;
     try {
-      res = await this.fetchFn(this.url, { headers: { authorization: `Bearer ${this.opts.ticket}` } });
+      // Idempotent: asking again changes nothing on the Worker (`retry.ts`).
+      res = await retried(() => this.fetchFn(this.url, { headers: { authorization: `Bearer ${this.opts.ticket}` } }));
     } catch (e) {
       console.error(e);
       throw new BowerError('offline', "Bower couldn't reach its server. It will try again.");
