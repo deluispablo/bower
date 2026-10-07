@@ -233,8 +233,9 @@ async function system(save: ReportSave, w: FencedDrive): Promise<string> {
 function parsed(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
-  } catch (e) {
-    console.error(e);
+  } catch {
+    // A parser's message quotes the text: say only that it is not JSON.
+    console.error('A runner file is not valid JSON');
     return undefined;
   }
 }

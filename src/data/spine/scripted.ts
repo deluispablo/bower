@@ -148,7 +148,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       return JSON.parse(text);
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
-      console.error(e);
+      // A parser's message quotes the text: say only that it is not JSON.
+      console.error('A runner file is not valid JSON');
       return null;
     }
   };
@@ -1081,7 +1082,7 @@ async function journalOf(drive: ScriptedRead, ix: VaultIndex): Promise<JournalLi
       rec = JSON.parse(text);
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
-      console.error(e);
+      console.error(`Journal file ${f.id} is not valid JSON`);
       left++;
       continue;
     }
