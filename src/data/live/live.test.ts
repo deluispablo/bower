@@ -597,6 +597,17 @@ describe('LiveRuns', () => {
     return { s, status, process, lastRun };
   }
 
+  it('each tidy-up press sends one requestId', async () => {
+    const { s, process } = await controlled();
+    await s.runs.start('all');
+    await s.runs.start('instructions', { allowWeb: true });
+    const sent = process.mock.calls.map(([, opts]) => opts?.requestId);
+    expect(sent).toHaveLength(2);
+    expect(sent.every((id) => typeof id === 'string' && /^[a-z0-9-]{1,64}$/.test(id))).toBe(true);
+    expect(sent[0]).not.toBe(sent[1]);
+    expect(process.mock.calls[1]?.[1]).toMatchObject({ allowWeb: true });
+  });
+
   it('older run responses cannot replace newer observed state (reversed terminal replies and subscribers)', async () => {
     const { s, status } = await controlled();
     const older = deferred<RunWire | null>();

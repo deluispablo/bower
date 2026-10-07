@@ -115,10 +115,20 @@ describe('WorkerHttp', () => {
 
   it('process sends whether Bower may look things up on the web (allow web)', async () => {
     const s = stub(() => json({ run: { id: 'r', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 } }));
-    await new WorkerHttp(BASE, s.fetch).process('all', { allowWeb: true });
-    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ scope: 'all', allowWeb: true });
+    await new WorkerHttp(BASE, s.fetch).process('all', { allowWeb: true, requestId: 'press-1' });
+    expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ scope: 'all', allowWeb: true, requestId: 'press-1' });
     await new WorkerHttp(BASE, s.fetch).process('instructions');
     expect(JSON.parse(String(s.calls[1]?.init.body))).toEqual({ scope: 'instructions', allowWeb: false });
+  });
+
+  it('process and status accept the revision the Worker answers with', async () => {
+    const run = { id: 'r', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 };
+    expect(await new WorkerHttp(BASE, stub(() => json({ run, revision: 3 })).fetch).process('all', { requestId: 'press-1' })).toEqual(run);
+    expect(await new WorkerHttp(BASE, stub(() => json({ run, revision: 3 })).fetch).status()).toEqual(run);
+    expect(await new WorkerHttp(BASE, stub(() => json({ run: null, revision: 0 })).fetch).status()).toBeNull();
+    // A revision that is not a whole number is an unreadable reply.
+    await expect(new WorkerHttp(BASE, stub(() => json({ run, revision: -1 })).fetch).status()).rejects.toThrow('unreadable');
+    await expect(new WorkerHttp(BASE, stub(() => json({ run, revision: '3' })).fetch).process('all')).rejects.toThrow('unreadable');
   });
   it('malformed successful Worker responses give a readable error', async () => {
     const run = { id: 'r1', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 2 };

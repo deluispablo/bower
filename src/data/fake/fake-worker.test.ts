@@ -77,6 +77,16 @@ describe('the fake Worker', () => {
     expect(last.run?.report?.filed.length).toBe(done?.total);
   });
 
+  it("a repeat of a press answers that press's run, even once it has ended", async () => {
+    const { worker } = await world('default');
+    const run = await worker.process('all', { requestId: 'press-1' });
+    expect(await worker.process('instructions', { requestId: 'press-1' })).toMatchObject({ id: run.id, scope: 'all' });
+    await until(worker, 'done');
+    // The inbox is empty now: a new press is refused, but the same press still answers its run.
+    await expect(worker.process('all', { requestId: 'press-2' })).rejects.toMatchObject({ code: 'conflict' });
+    await expect(worker.process('all', { requestId: 'press-1' })).resolves.toMatchObject({ id: run.id, phase: 'done' });
+  });
+
   it('refuses a tidy-up with nothing to do', async () => {
     const { worker } = await world('empty');
     await expect(worker.process('all')).rejects.toMatchObject({ code: 'conflict', message: 'Nothing is waiting in the inbox.' });

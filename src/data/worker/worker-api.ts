@@ -51,7 +51,11 @@ export interface WorkerApi {
   /** Makes the Bower folder from the template (or finds it); answers its id. */
   /** The Bower folder: made from the template, or `found` when the person's earlier one is still in their Drive. */
   createFolder(): Promise<{ id: string; found: boolean }>;
-  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunWire>;
+  /**
+   * Starts a tidy-up, or answers the one already going. `requestId`: made once per press of Tidy up and sent on
+   * every retry of it (TL-P3-15); a repeat answers that press's run, even once it has ended.
+   */
+  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean; requestId?: string }): Promise<RunWire>;
   /** The run going now, or the last one. */
   status(): Promise<RunWire | null>;
   /**

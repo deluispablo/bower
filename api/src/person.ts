@@ -2,6 +2,8 @@ import { DurableObject } from 'cloudflare:workers';
 
 import type { Env } from './env.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
+import { ACTIVE_PHASES, STALE_FAILURE, isStale, utcDay } from './process.js';
+import type { AdmitInput, AdmitResult, RunPhase, RunReply, RunScope, RunWire } from './process.js';
 import { LEASE_TTL_MS } from './session-lease.js';
 import type { LeaseReply, SessionAction } from './session-lease.js';
 
@@ -442,8 +444,131 @@ export class Person extends DurableObject<Env> {
     this.ctx.storage.transactionSync(() => migrate(this.ctx.storage.sql));
   }
 
-  /** The person's current run, or null before runs exist. */
-  currentRun(): null {
-    return null;
+  /**
+   * `POST /process` (process.ts; TL-P3-15). One synchronous transaction, no `await`, in this order:
+   * 1. expiry: a stale current run is marked failed once, and the revision rises;
+   * 2. idempotency: a known `requestId` answers its own run, ended or not, with nothing changed
+   *    (the first request's scope and allowWeb win);
+   * 3. one active run: a run going is answered, with nothing changed;
+   * 4. quota: today's UTC counter at or over `dailyLimit` refuses with nothing written, else counts;
+   * 5. admission: a `queued` run bound to the requestId, and the revision rises.
+   */
+  admit(input: AdmitInput): AdmitResult {
+    return this.ctx.storage.transactionSync((): AdmitResult => {
+      const sql = this.ctx.storage.sql;
+      this.expire(input.now);
+      const repeat = sql
+        .exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE request_id = ?`, input.requestId)
+        .toArray()[0];
+      if (repeat !== undefined) return { admitted: true, run: toWire(repeat), revision: this.revision() };
+      const current = this.currentRunRow();
+      if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) {
+        return { admitted: true, run: toWire(current), revision: this.revision() };
+      }
+      const day = utcDay(input.now);
+      const used = sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', day).toArray()[0]?.counter ?? 0;
+      if (used >= input.dailyLimit) return { admitted: false, refused: 'rate-limited' };
+      this.countQuota(day);
+      // Only today's counter matters; earlier days go.
+      sql.exec('DELETE FROM quota WHERE window < ?', day);
+      const seq = (current?.seq ?? 0) + 1;
+      const row = sql
+        .exec<RunRow>(
+          `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at)
+           VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+           RETURNING ${RUN_COLUMNS}`,
+          crypto.randomUUID(),
+          seq,
+          input.requestId,
+          input.scope,
+          input.allowWeb ? 1 : 0,
+          input.now,
+          input.now,
+        )
+        .one();
+      // The history is bounded: older runs go, and with them their requestIds (a repeat that late is new).
+      sql.exec('DELETE FROM runs WHERE seq <= ?', seq - RUNS_KEPT);
+      return { admitted: true, run: toWire(row), revision: this.raiseRevision() };
+    });
   }
+
+  /** `GET /status`: writes a stale run's expiry first (as `admit` does), then the current run and revision. */
+  runStatus(now: number): RunReply {
+    return this.ctx.storage.transactionSync((): RunReply => {
+      this.expire(now);
+      const current = this.currentRunRow();
+      return { run: current === undefined ? null : toWire(current), revision: this.revision() };
+    });
+  }
+
+  /** The newest run, or undefined before any. */
+  private currentRunRow(): RunRow | undefined {
+    return this.ctx.storage.sql
+      .exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs ORDER BY seq DESC LIMIT 1`)
+      .toArray()[0];
+  }
+
+  /** Marks the current run failed when it is stale at `now`, once: a run already ended is left alone. */
+  private expire(now: number): void {
+    const current = this.currentRunRow();
+    if (current === undefined || !isStale(toWire(current), now)) return;
+    this.ctx.storage.sql.exec(
+      "UPDATE runs SET phase = 'failed', phase_at = ?, finished_at = ?, failure = ? WHERE id = ?",
+      now,
+      now,
+      STALE_FAILURE,
+      current.id,
+    );
+    this.raiseRevision();
+  }
+
+  /** The control row's status revision, 0 before any run was written. */
+  private revision(): number {
+    return (
+      this.ctx.storage.sql
+        .exec<{ status_revision: number }>('SELECT status_revision FROM control WHERE id = 1')
+        .toArray()[0]?.status_revision ?? 0
+    );
+  }
+
+  /** Raises the status revision: call on every write to `runs`, and never otherwise. */
+  private raiseRevision(): number {
+    return this.ctx.storage.sql
+      .exec<{ status_revision: number }>(
+        `INSERT INTO control (id, status_revision) VALUES (1, 1)
+         ON CONFLICT (id) DO UPDATE SET status_revision = status_revision + 1
+         RETURNING status_revision`,
+      )
+      .one().status_revision;
+  }
+}
+
+/** How many runs a person keeps (the current one and the history before it). */
+const RUNS_KEPT = 20;
+
+const RUN_COLUMNS = 'id, seq, scope, phase, requested_at, phase_at, finished_at, total, failure';
+
+interface RunRow extends Record<string, SqlStorageValue> {
+  id: string;
+  seq: number;
+  scope: RunScope;
+  phase: RunPhase;
+  requested_at: number;
+  phase_at: number;
+  finished_at: number | null;
+  total: number | null;
+  failure: string | null;
+}
+
+function toWire(row: RunRow): RunWire {
+  return {
+    id: row.id,
+    scope: row.scope,
+    phase: row.phase,
+    requestedAt: row.requested_at,
+    phaseAt: row.phase_at,
+    ...(row.finished_at === null ? {} : { finishedAt: row.finished_at }),
+    ...(row.total === null ? {} : { total: row.total }),
+    ...(row.failure === null ? {} : { failure: row.failure }),
+  };
 }

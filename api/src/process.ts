@@ -1,4 +1,23 @@
-/** `POST /process` (stub first, METHOD step 6): the contract's types and constants; the route comes next. */
+/**
+ * `POST /process`: admitting a tidy-up (worker contract, `POST /process`; TL-P3-15).
+ *
+ * The route checks the caller (same origin, session, the lease's epoch) and the body, then hands
+ * everything else to the person object (`Person.admit`), which decides in one synchronous section:
+ * expiry, idempotency by `requestId` (the Idempotency-Key pattern,
+ * https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/), one active run,
+ * the daily quota, then admission. An admitted run stays `queued` until dispatch exists.
+ *
+ * Staleness reuses the original app's thresholds and rule (bower `api/src/process.ts`,
+ * `runStaleness`/`markStale`), measured on this contract's `requestedAt` and `phaseAt`.
+ */
+import { Hono } from 'hono';
+
+import { requireSession } from './auth.js';
+import type { AppEnv, Env } from './env.js';
+import { HttpError } from './errors.js';
+import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
+import { requireLease } from './session-lease.js';
+
 export type RunScope = 'all' | 'instructions';
 export type RunPhase = 'queued' | 'reading' | 'writing' | 'saving' | 'done' | 'failed';
 
@@ -41,3 +60,86 @@ export const STALE_FAILURE = 'This tidy-up took too long and stopped. Try again.
 
 export const ACTIVE_PHASES: readonly RunPhase[] = ['queued', 'reading', 'writing', 'saving'];
 
+/** Whether `run` is still going but past its window at `now`: queued from `requestedAt`, a started phase from `phaseAt`. */
+export function isStale(run: Pick<RunWire, 'phase' | 'requestedAt' | 'phaseAt'>, now: number): boolean {
+  if (!ACTIVE_PHASES.includes(run.phase)) return false;
+  return run.phase === 'queued' ? now - run.requestedAt >= QUEUED_STALE_MS : now - run.phaseAt >= RUNNING_STALE_MS;
+}
+
+/** The quota window for `now`: its UTC date. */
+export function utcDay(now: number): string {
+  return new Date(now).toISOString().slice(0, 10);
+}
+
+const REQUEST_ID = /^[a-z0-9-]{1,64}$/;
+
+interface ProcessBody {
+  scope: RunScope;
+  allowWeb: boolean;
+  /** Absent when the app sent none: the Worker makes one, so it counts as new. */
+  requestId: string | undefined;
+}
+
+/** A body that fails validation is refused as the JSON guard refuses one: 415, no other code. */
+function unreadable(): HttpError {
+  return new HttpError(415, 'unsupported-media-type');
+}
+
+function parseBody(value: unknown): ProcessBody {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
+  const { scope, allowWeb, requestId } = value as Record<string, unknown>;
+  if (scope !== 'all' && scope !== 'instructions') throw unreadable();
+  if (typeof allowWeb !== 'boolean') throw unreadable();
+  if (requestId !== undefined && !(typeof requestId === 'string' && REQUEST_ID.test(requestId))) throw unreadable();
+  return { scope, allowWeb, requestId };
+}
+
+export function personFor(env: Env, sub: string) {
+  return env.PERSON.get(env.PERSON.idFromName(sub));
+}
+
+/** Calls the person object; any failure on the way is `internal` with no cause, logged here only (TL-P3-04). */
+export async function reach<T>(what: string, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    console.error(`person object: ${what} failed`, err);
+    throw new HttpError(500, 'internal');
+  }
+}
+
+export function signedInSub(sub: string | undefined): string {
+  if (sub === undefined) throw new HttpError(500, 'internal');
+  return sub;
+}
+
+/** `POST /process`, mounted at `/` by `index.ts`. */
+export function createProcessRoutes(): Hono<AppEnv> {
+  const routes = new Hono<AppEnv>();
+
+  routes.post('/process', requireSameOrigin, requireSession, requireLease, limitBody, requireJsonBody, async (c) => {
+    const sub = signedInSub(c.get('userId'));
+    let value: unknown;
+    try {
+      value = await c.req.json();
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      throw unreadable();
+    }
+    const body = parseBody(value);
+    const env = c.get('env');
+    const input: AdmitInput = {
+      scope: body.scope,
+      allowWeb: body.allowWeb,
+      requestId: body.requestId ?? crypto.randomUUID(),
+      now: Date.now(),
+      dailyLimit: Number(env.DAILY_RUN_LIMIT),
+    };
+    const result = await reach('admit', async (): Promise<AdmitResult> => await personFor(env, sub).admit(input));
+    if (!result.admitted) throw new HttpError(429, 'rate-limited');
+    const reply: RunReply = { run: result.run, revision: result.revision };
+    return c.json(reply);
+  });
+
+  return routes;
+}

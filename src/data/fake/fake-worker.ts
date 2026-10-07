@@ -155,11 +155,14 @@ export class FakeWorker implements WorkerApi {
   /** What the last tidy-up was told about the web, for tests (the pretend runner never goes online). */
   lastAllowWeb = false;
 
-  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunWire> {
+  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string } = {}): Promise<RunWire> {
     this.online();
     this.fenced();
     await this.loaded;
     if (this.loadFailure) throw this.loadFailure.error;
+    // A repeat of a press answers that press's run, ended or not, and changes nothing (TL-P3-15).
+    const repeat = opts.requestId === undefined ? null : await this.pressed(opts.requestId);
+    if (repeat) return repeat;
     this.lastAllowWeb = !!opts.allowWeb;
     // A run on the B path that is not over is the run, whichever client asked for it: nothing new is admitted.
     const going = await this.goingOnB();
@@ -172,6 +175,18 @@ export class FakeWorker implements WorkerApi {
   }
 
   private starting: Promise<RunWire> | null = null;
+  /** Each press's run, by its requestId, as last seen (the real Worker keeps this in the person object). */
+  private readonly presses = new Map<string, RunWire>();
+
+  /** The run a press admitted, brought up to date while it is still the service's current one; null for a new press. */
+  private async pressed(requestId: string): Promise<RunWire | null> {
+    const known = this.presses.get(requestId);
+    if (!known) return null;
+    const now = this.rootId ? await this.runs.status(this.binding(this.rootId)) : null;
+    const run = now?.id === known.id ? now : known;
+    this.presses.set(requestId, run);
+    return { ...run };
+  }
 
   /** The service's run for this folder while it is not over, or null. */
   private async goingOnB(): Promise<RunWire | null> {
@@ -182,19 +197,22 @@ export class FakeWorker implements WorkerApi {
     return run;
   }
 
-  private async begin(scope: 'all' | 'instructions', opts: { allowWeb?: boolean }): Promise<RunWire> {
+  private async begin(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string }): Promise<RunWire> {
     const root = this.rootId;
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
     const vault = new DriveVault({ drive: this.drive, rootId: async () => root, runningPiles: () => new Set(), device: 'worker' });
     if (scope === 'all' && !(await vault.piles()).reduce((n, p) => n + thingsIn(p), 0)) throw new BowerError('conflict', 'Nothing is waiting in the inbox.');
     // Planned once, before any effect, and admitted whole on the B path, the only one (TL-P2-38): planning holds the
     // piles it cannot take and refuses, before admission, what Bower's own checks refuse.
-    const { runId, requestId } = this.runs.ids();
+    const minted = this.runs.ids();
+    const runId = minted.runId;
+    const requestId = opts.requestId ?? minted.requestId;
     const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(this.updates ? { updates: this.updates } : {}) });
     const failAt = this.failOnce;
     this.failOnce = false;
     const wire = await this.runs.admit(this.binding(root), plan.manifest, failAt ? { failAt: 'writing' } : {});
     this.onB = true;
+    if (opts.requestId !== undefined) this.presses.set(opts.requestId, { ...wire });
     return wire;
   }
 

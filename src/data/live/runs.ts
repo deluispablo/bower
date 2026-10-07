@@ -95,14 +95,16 @@ export class LiveRuns implements RunSource {
   }
 
   start(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunState> {
-    const work = () => this.startNow(scope, opts);
+    // One per press (TL-P3-15): a UUID is lowercase letters, digits and dashes, 36 characters.
+    const requestId = crypto.randomUUID().toLowerCase();
+    const work = () => this.startNow(scope, { ...opts, requestId });
     const next = this.starts.then(work);
     // expected: the caller receives next's failure; only the queue recovers so another admission can be tried.
     this.starts = next.catch(() => undefined);
     return next;
   }
 
-  private async startNow(scope: 'all' | 'instructions', opts: { allowWeb?: boolean }): Promise<RunState> {
+  private async startNow(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId: string }): Promise<RunState> {
     this.checkOpen();
     // What you did while Drive was out of reach goes first, so this tidy-up knows it.
     await this.vault.flushJournal();

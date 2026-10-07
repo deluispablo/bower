@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -20,6 +20,7 @@ export const PERSON_TABLES = [
   'control',
   'run_ticket',
   'account',
+  'runs',
 ] as const;
 
 export type PersonTable = (typeof PERSON_TABLES)[number];
@@ -109,6 +110,26 @@ const STEPS: readonly (readonly string[])[] = [
       place TEXT PRIMARY KEY,
       gen INTEGER NOT NULL CHECK (gen >= 0),
       left_at INTEGER NOT NULL
+    )`,
+  ],
+  [
+    // The person's runs (worker contract, POST /process and RunWire; TL-P3-15), keyed by run id. Each is
+    // bound to the requestId that admitted it, so a repeat of that request answers the same run. `seq`
+    // orders them (the newest is the current one). Only the last RUNS_KEPT are kept (person.ts): a run
+    // is a few numbers, its report lives in the person's folder. Every write here raises
+    // `control.status_revision`. The v1 `admission` table stays as it was, unused.
+    `CREATE TABLE runs (
+      id TEXT PRIMARY KEY,
+      seq INTEGER NOT NULL UNIQUE,
+      request_id TEXT NOT NULL UNIQUE,
+      scope TEXT NOT NULL CHECK (scope IN ('all', 'instructions')),
+      allow_web INTEGER NOT NULL CHECK (allow_web IN (0, 1)),
+      phase TEXT NOT NULL CHECK (phase IN ('queued', 'reading', 'writing', 'saving', 'done', 'failed')),
+      requested_at INTEGER NOT NULL,
+      phase_at INTEGER NOT NULL,
+      finished_at INTEGER,
+      total INTEGER CHECK (total >= 0),
+      failure TEXT
     )`,
   ],
 ];

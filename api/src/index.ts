@@ -6,6 +6,7 @@ import { createDriveRoutes } from './drive-token.js';
 import { assertEnv } from './env.js';
 import type { AppEnv } from './env.js';
 import { HttpError, createErrorHandler } from './errors.js';
+import { createProcessRoutes } from './process.js';
 import { appCors, requestId, securityHeaders } from './security.js';
 import { createSessionRoutes } from './session-lease.js';
 import { createMeRoutes } from './me.js';
@@ -38,6 +39,7 @@ export function createApp(deps: AuthDeps = {}): Hono<AppEnv> {
   app.route('/', createDriveRoutes(deps));
   app.route('/', createStatusRoutes());
   app.route('/', createSessionRoutes());
+  app.route('/', createProcessRoutes());
   app.route('/', createVaultRoutes(deps));
   app.route('/', createMeRoutes(deps));
 

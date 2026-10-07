@@ -6,6 +6,7 @@ import type { Env } from '../src/env.js';
 import { GOOGLE_REVOKE_URL } from '../src/google.js';
 import type { FetchLike } from '../src/google.js';
 import { createApp } from '../src/index.js';
+import { SCHEMA_VERSION } from '../src/person-schema.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
 
@@ -106,7 +107,7 @@ describe('DELETE /me', () => {
     const p = person(sub);
     const result = await p.signIn({ email: EMAIL, name: 'Alex', encRefreshToken: null });
     expect(result.hasRefreshToken).toBe(false);
-    expect(await p.schemaVersion()).toBe(6);
+    expect(await p.schemaVersion()).toBe(SCHEMA_VERSION);
     expect(await p.account()).not.toBeNull();
     expect(await p.folderId()).toBeNull();
     expect(g.urls.some((u) => u.includes('googleapis.com/drive'))).toBe(false);

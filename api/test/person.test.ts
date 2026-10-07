@@ -8,8 +8,14 @@ import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
 
-/** Takes back schema step 6 (the lease columns and the leave table), for the tests that rewind further. */
+/** Takes back schema step 7 (the runs table), for the tests that rewind further. */
+function undoV7(sql: SqlStorage): void {
+  sql.exec('DROP TABLE IF EXISTS runs');
+}
+
+/** Takes back schema steps 7 and 6 (the lease columns and the leave table), for the tests that rewind further. */
 function undoV6(sql: SqlStorage): void {
+  undoV7(sql);
   sql.exec('DROP TABLE session_leave');
   sql.exec('ALTER TABLE session_lease DROP COLUMN beat_at');
   sql.exec('ALTER TABLE session_lease DROP COLUMN left_place');
@@ -76,6 +82,7 @@ describe('person object', () => {
       control: 0,
       run_ticket: 0,
       account: 0,
+      runs: 0,
     });
     // Alex's rows are still all there, untouched by Sam.
     const alexCounts = await runInDurableObject(alex, (_instance, state) =>
@@ -90,6 +97,7 @@ describe('person object', () => {
       control: 1,
       run_ticket: 1,
       account: 1,
+      runs: 0,
     });
     expect(await alex.countQuota('2026-10-06')).toBe(3);
   });
@@ -201,6 +209,7 @@ describe('person storage migration', () => {
     // Put the database back as P3-6 shipped it: the v5 lease table (place, epoch) and a version row of 5.
     await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
+      undoV7(sql);
       sql.exec('DROP TABLE IF EXISTS session_leave');
       sql.exec('DROP TABLE session_lease');
       sql.exec(`CREATE TABLE session_lease (
@@ -214,7 +223,6 @@ describe('person storage migration', () => {
     await evictDurableObject(alex);
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBe(6);
     // Every value survives: the account, the folder, the claim, the token and the lease.
     expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0 });
     expect(await alex.encryptedRefreshToken()).toBe('enc-token');
@@ -230,5 +238,43 @@ describe('person storage migration', () => {
     expect(await alex.holdsLease('laptop', 7)).toBe(true);
     expect(await alex.session('laptop', 'check', 0, 5_000)).toEqual({ active: true, epoch: 7 });
     expect(await alex.session('phone', 'check', 0, 5_001)).toEqual({ active: false, epoch: 7 });
+  });
+
+  it('person storage migrates from v6 to v7 keeping every row', async () => {
+    const alex = personFor('sub-alex-v6');
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
+    expect(await alex.session('laptop', 'check', 0, 1_000)).toEqual({ active: true, epoch: 1 });
+    expect(await alex.session('phone', 'leave', 2, 1_000)).toEqual({ active: false, epoch: 1 });
+    expect(await alex.countQuota('2026-10-07')).toBe(1);
+    // Put the database back as P3-7 shipped it: no runs table, a version row of 6, and v6 rows in every table.
+    const before = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      undoV7(sql);
+      sql.exec('INSERT INTO admission (id, active_run_id, request_id) VALUES (1, ?, ?)', 'run-1', 'req-1');
+      sql.exec('INSERT INTO control (id, head, status_revision, claim, epoch) VALUES (1, ?, ?, ?, ?)', 'head-1', 4, 'claim-1', 2);
+      sql.exec('INSERT INTO run_ticket (hash, run_id, epoch, retired) VALUES (?, ?, ?, 0)', 'hash-1', 'run-1', 2);
+      sql.exec('UPDATE schema_version SET version = 6 WHERE id = 1');
+      return Object.fromEntries(
+        PERSON_TABLES.filter((t) => t !== 'runs').map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]),
+      );
+    });
+    await evictDurableObject(alex);
+
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    expect(SCHEMA_VERSION).toBe(7);
+    const after = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+    });
+    // Every v6 row is there as it was (the version row aside), and the runs table starts empty.
+    expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({ ...before, schema_version: undefined, runs: undefined });
+    expect(after.schema_version).toEqual([{ id: 1, version: 7 }]);
+    expect(after.runs).toEqual([]);
+    // The status revision carries on from the kept control row.
+    expect((await alex.runStatus(2_000)).revision).toBe(4);
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: 2_000, dailyLimit: 100 });
+    expect(admitted).toMatchObject({ admitted: true, revision: 5 });
+    expect(await alex.holdsLease('laptop', 1)).toBe(true);
   });
 });

@@ -1,24 +1,24 @@
 /**
- * `GET /status` and the run in progress.
+ * `GET /status`: the run going now or the last one, and the person's status revision (worker
+ * contract, `GET /status`; TL-P3-15). The person object writes a stale run's expiry first, as
+ * `POST /process` does, so both agree on when a run stops.
  */
 
 import { Hono } from 'hono';
 
 import { requireSession } from './auth.js';
 import type { AppEnv } from './env.js';
-import { HttpError } from './errors.js';
+import { personFor, reach, signedInSub } from './process.js';
+import type { RunReply } from './process.js';
 
 /** `GET /status`, mounted at `/` by `index.ts`. */
 export function createStatusRoutes(): Hono<AppEnv> {
   const status = new Hono<AppEnv>();
 
   status.get('/status', requireSession, async (c) => {
-    const env = c.get('env');
-    const sub = c.get('userId');
-    if (sub === undefined) throw new HttpError(500, 'internal');
-    const person = env.PERSON.get(env.PERSON.idFromName(sub));
-    const run = await person.currentRun();
-    return c.json({ run });
+    const sub = signedInSub(c.get('userId'));
+    const reply: RunReply = await reach('runStatus', () => personFor(c.get('env'), sub).runStatus(Date.now()));
+    return c.json({ run: reply.run, revision: reply.revision });
   });
 
   return status;
