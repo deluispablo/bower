@@ -127,3 +127,4 @@ token-key-rotation-reconsent,implementer,claude,opus,high,1,93663,,,,,,22,3.0,de
 tidy-pin-actions,implementer,claude,haiku,low,1,64036,,,,,,21,3.2,delivered,2026-10-07
 log-no-folder-content,implementer,claude,sonnet,medium,1,87481,,,,,,17,1.9,delivered,2026-10-07
 cookie-host-prefix,implementer,claude,sonnet,medium,1,74040,,,,,,15,2.3,delivered,2026-10-07
+instance-private-check,implementer,claude,haiku,low,1,72268,,,,,,30,3.4,delivered,2026-10-07
