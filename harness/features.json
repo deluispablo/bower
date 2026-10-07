@@ -4211,7 +4211,7 @@
       "vite.config.ts navigateFallbackDenylist adds health and drops runs and push, which are not Worker routes."
     ],
     "verify": "pnpm -C api exec vitest run -t \"every Worker route runs the Worker first|a route added to the app is checked too\"",
-    "passes": false,
+    "passes": true,
     "note": "P3-13 delta review Important 1 plus the vite denylist and /authx minors."
   },
   {
