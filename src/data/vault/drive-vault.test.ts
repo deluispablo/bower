@@ -2543,9 +2543,9 @@ describe('the inbox accounts for filed members like the tidy-up', () => {
     const folder = (await fake.listAll(at)).find((f) => f.folder && f.appProperties?.pile === pile.id);
     if (!folder) throw new Error('no pile folder');
     await fake.createText(folder.id, 'extra.txt', 'not one of its things');
-    const first = await worker.process('all');
+    const first = (await worker.process('all')).run;
     await runs.settled();
-    expect(await worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    expect((await worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
     expect((await fake.listAll(at)).filter((f) => f.name.startsWith('disposition-'))).toHaveLength(1);
 
     // Alex edits the filed lease: the lookup alone would call it changed, but the run's disposition records it as filed.

@@ -4,7 +4,7 @@
  * own sentence; anything else gets one plain sentence.
  */
 import { BowerError, type ErrorCode } from '../types';
-import { isRunWire, type Me, type RunWire, type WorkerApi } from './worker-api';
+import { isRunWire, type Me, type RunReply, type StatusReply, type WorkerApi } from './worker-api';
 import { isLeaseReply, openElsewhere, type LeaseReply, type SessionAction } from '../session';
 
 const SENTENCE: Record<ErrorCode, string> = {
@@ -24,10 +24,10 @@ interface TokenReply { accessToken: string; expiresAt: number }
 const isToken = (v: unknown): v is TokenReply => object(v) && text(v.accessToken) && typeof v.expiresAt === 'number' && Number.isFinite(v.expiresAt) && v.expiresAt >= 0;
 interface FolderReply { folderId: string; found: boolean }
 const isFolder = (v: unknown): v is FolderReply => object(v) && text(v.folderId) && typeof v.found === 'boolean';
-/** The status revision the Worker answers with (TL-P3-15); read by `worker-status-revision`, only checked here. */
-const revision = (v: Record<string, unknown>): boolean => v.revision === undefined || (typeof v.revision === 'number' && Number.isSafeInteger(v.revision) && v.revision >= 0);
-const isRunReply = (v: unknown): v is { run: RunWire } => object(v) && isRunWire(v.run) && revision(v);
-const isStatus = (v: unknown): v is { run: RunWire | null } => object(v) && (v.run === null || isRunWire(v.run)) && revision(v);
+/** The revision the Worker answers every run with (TL-P3-15): a whole number from 0. */
+const revision = (v: Record<string, unknown>): v is Record<string, unknown> & { revision: number } => typeof v.revision === 'number' && Number.isSafeInteger(v.revision) && v.revision >= 0;
+const isRunReply = (v: unknown): v is RunReply => object(v) && isRunWire(v.run) && revision(v);
+const isStatus = (v: unknown): v is StatusReply => object(v) && (v.run === null || isRunWire(v.run)) && revision(v);
 
 export class WorkerHttp implements WorkerApi {
   private token: { value: string; until: number } | null = null;
@@ -78,13 +78,15 @@ export class WorkerHttp implements WorkerApi {
     return { id: r.folderId, found: r.found };
   }
 
-  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string } = {}): Promise<RunWire> {
+  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string } = {}): Promise<RunReply> {
     const body = { scope, allowWeb: !!opts.allowWeb, ...(opts.requestId !== undefined ? { requestId: opts.requestId } : {}) };
-    return (await this.call<{ run: RunWire }>('POST', '/process', body, isRunReply, this.fence())).run;
+    const reply = await this.call<RunReply>('POST', '/process', body, isRunReply, this.fence());
+    return { run: reply.run, revision: reply.revision };
   }
 
-  async status(): Promise<RunWire | null> {
-    return (await this.call<{ run: RunWire | null }>('GET', '/status', undefined, isStatus)).run;
+  async status(): Promise<StatusReply> {
+    const reply = await this.call<StatusReply>('GET', '/status', undefined, isStatus);
+    return { run: reply.run, revision: reply.revision };
   }
 
   /** POST /session: the Worker binds the lease to the signed-in person; `place` is a random tab id, no secret. */

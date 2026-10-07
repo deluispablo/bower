@@ -15,7 +15,7 @@ import { DriveVault } from '../vault/drive-vault';
 import { BOWER_FOLDER, PROP, SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import { serializeNote } from '../vault/note-format';
 import { serializeRules } from '../vault/rules-format';
-import type { Me, RunWire, WorkerApi } from '../worker/worker-api';
+import type { Me, RunReply, RunWire, StatusReply, WorkerApi } from '../worker/worker-api';
 import { planRun, type HubUpdate } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
@@ -155,7 +155,24 @@ export class FakeWorker implements WorkerApi {
   /** What the last tidy-up was told about the web, for tests (the pretend runner never goes online). */
   lastAllowWeb = false;
 
-  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string } = {}): Promise<RunWire> {
+  /** The revision the real Worker keeps with the run: it rises each time the run it shows changes, and never falls. */
+  private revision = 0;
+  private shown = 'null';
+
+  private stamp<T extends RunWire | null>(run: T): { run: T; revision: number } {
+    const now = JSON.stringify(run);
+    if (now !== this.shown) {
+      this.shown = now;
+      this.revision++;
+    }
+    return { run, revision: this.revision };
+  }
+
+  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string } = {}): Promise<RunReply> {
+    return this.stamp(await this.admit(scope, opts));
+  }
+
+  private async admit(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string }): Promise<RunWire> {
     this.online();
     this.fenced();
     await this.loaded;
@@ -216,7 +233,11 @@ export class FakeWorker implements WorkerApi {
     return wire;
   }
 
-  async status(): Promise<RunWire | null> {
+  async status(): Promise<StatusReply> {
+    return this.stamp(await this.latest());
+  }
+
+  private async latest(): Promise<RunWire | null> {
     this.online();
     await this.loaded;
     if (this.loadFailure) throw this.loadFailure.error;

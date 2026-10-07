@@ -42,7 +42,7 @@ async function world(scenario: Scenario) {
 }
 
 const until = async (worker: FakeWorker, phase: string): Promise<void> => {
-  for (let i = 0; i < 200 && (await worker.status())?.phase !== phase; i++) await new Promise((r) => setTimeout(r, 1));
+  for (let i = 0; i < 200 && ((await worker.status()).run)?.phase !== phase; i++) await new Promise((r) => setTimeout(r, 1));
 };
 
 describe('the fake Worker', () => {
@@ -63,13 +63,35 @@ describe('the fake Worker', () => {
     expect((await worker.me())?.folderId).toBe(id);
   });
 
+  it('the fake answers rising revisions', async () => {
+    const { worker } = await world('default');
+    const idle = await worker.status();
+    const admitted = await worker.process('all');
+    expect(admitted).toHaveProperty('revision');
+    expect(admitted.run.id).toBeTruthy();
+    expect(admitted.revision).toBeGreaterThan(idle.revision);
+    let last = admitted.revision;
+    let changes = 0;
+    for (let i = 0; i < 200; i++) {
+      const now = await worker.status();
+      expect(now.revision).toBeGreaterThanOrEqual(last);
+      if (now.revision > last) changes++;
+      last = now.revision;
+      if (now.run?.phase === 'done') break;
+      await new Promise((r) => setTimeout(r, 1));
+    }
+    expect(changes).toBeGreaterThan(0);
+    // Asking again with nothing changed gives the same revision.
+    expect((await worker.status()).revision).toBe(last);
+  });
+
   it('runs a tidy-up to done and writes its report', async () => {
     const { drive, rootId, worker } = await world('default');
-    const run = await worker.process('all');
+    const run = (await worker.process('all')).run;
     expect(run.phase).toBe('queued');
-    expect((await worker.process('all')).id).toBe(run.id);
+    expect(((await worker.process('all')).run).id).toBe(run.id);
     await until(worker, 'done');
-    const done = await worker.status();
+    const done = (await worker.status()).run;
     expect(done).toMatchObject({ id: run.id, phase: 'done' });
     expect(done?.total).toBeGreaterThan(0);
     const last = JSON.parse(drive.dump(rootId ?? '').get(SYSTEM.lastRun) ?? '{}') as { run?: { id: string; report?: { filed: unknown[] } } };
@@ -79,12 +101,12 @@ describe('the fake Worker', () => {
 
   it("a repeat of a press answers that press's run, even once it has ended", async () => {
     const { worker } = await world('default');
-    const run = await worker.process('all', { requestId: 'press-1' });
-    expect(await worker.process('instructions', { requestId: 'press-1' })).toMatchObject({ id: run.id, scope: 'all' });
+    const run = (await worker.process('all', { requestId: 'press-1' })).run;
+    expect((await worker.process('instructions', { requestId: 'press-1' })).run).toMatchObject({ id: run.id, scope: 'all' });
     await until(worker, 'done');
     // The inbox is empty now: a new press is refused, but the same press still answers its run.
     await expect(worker.process('all', { requestId: 'press-2' })).rejects.toMatchObject({ code: 'conflict' });
-    await expect(worker.process('all', { requestId: 'press-1' })).resolves.toMatchObject({ id: run.id, phase: 'done' });
+    await expect(worker.process('all', { requestId: 'press-1' })).resolves.toMatchObject({ run: { id: run.id, phase: 'done' } });
   });
 
   it('refuses a tidy-up with nothing to do', async () => {
@@ -97,10 +119,10 @@ describe('the fake Worker', () => {
     const { worker } = await world('fail-run');
     await worker.process('all');
     await until(worker, 'failed');
-    expect((await worker.status())?.failure).toBe(B_FAILURE);
+    expect(((await worker.status()).run)?.failure).toBe(B_FAILURE);
     await worker.process('all');
     await until(worker, 'done');
-    expect((await worker.status())?.phase).toBe('done');
+    expect(((await worker.status()).run)?.phase).toBe('done');
   });
 
   it('knows the piles a running tidy-up took', async () => {
@@ -114,7 +136,7 @@ describe('the fake Worker', () => {
 
   it('comes back with the last run in the back scenario', async () => {
     const { worker } = await world('back');
-    expect((await worker.status())?.phase).toBe('done');
+    expect(((await worker.status()).run)?.phase).toBe('done');
   });
 
   it('a reload during filing does not say nothing was moved; before filing it does', async () => {
@@ -130,7 +152,7 @@ describe('the fake Worker', () => {
       const run = { id: 'run-1', scope: 'all', phase, requestedAt: Date.now() - 60_000, phaseAt: Date.now() - 1000 };
       await drive.createText(sys?.id ?? '', 'last-run.json', JSON.stringify({ v: 1, run }));
       const after = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario: 'default', rootId, fresh: false });
-      const out = await after.status();
+      const out = (await after.status()).run;
       expect(out?.phase, phase).toBe('failed');
       expect(out?.failure, phase).toMatch(says);
       if (phase === 'saving') expect(out?.failure).not.toMatch(/Nothing was moved/);
@@ -142,7 +164,7 @@ describe('the fake Worker', () => {
     const drive = new FakeDrive();
     const rootId = await seedFakeDrive(drive, 'running', Date.now());
     const reloaded = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), scenario: 'running', rootId, fresh: false });
-    expect((await reloaded.status())?.phase ?? 'none').not.toMatch(/queued|reading|writing|saving/);
+    expect(((await reloaded.status()).run)?.phase ?? 'none').not.toMatch(/queued|reading|writing|saving/);
   });
 });
 
@@ -202,7 +224,7 @@ describe('persisted v1 run fixtures agree across current recovery consumers', ()
     const expected = JSON.parse(text) as LastRunFile;
     expect(await vault.lastRun()).toEqual(expected);
     const { report: _report, ...wire } = expected.run;
-    expect(await reopen().status()).toEqual(wire);
+    expect((await reopen().status()).run).toEqual(wire);
     expect(await drive.snapshot()).toBe(before);
   });
 
@@ -229,7 +251,7 @@ describe('persisted v1 run fixtures agree across current recovery consumers', ()
     await drive.writeText(seen.id, validRuns[0][1], seen.modifiedTime);
     const repaired = await drive.snapshot();
     expect(await vault.lastRun()).toEqual(JSON.parse(validRuns[0][1]));
-    expect(await reopen().status()).toMatchObject({ id: 'RUN_A', phase: 'done' });
+    expect((await reopen().status()).run).toMatchObject({ id: 'RUN_A', phase: 'done' });
     expect(await drive.snapshot()).toBe(repaired);
   });
 
@@ -253,18 +275,18 @@ describe('persisted v1 run fixtures agree across current recovery consumers', ()
     const { drive, reopen } = await savedRun();
     const before = await drive.snapshot();
     const worker = reopen();
-    expect(await worker.status()).toBeNull();
+    expect((await worker.status()).run).toBeNull();
     expect(await drive.snapshot()).toBe(before);
-    expect((await worker.process('all')).phase).toBe('queued');
+    expect(((await worker.process('all')).run).phase).toBe('queued');
     await until(worker, 'done');
-    expect((await worker.status())?.phase).toBe('done');
+    expect(((await worker.status()).run)?.phase).toBe('done');
   });
 
   it.each(['queued', 'reading', 'writing', 'saving'] as const)('retains the existing legitimate %s reload policy', async (phase) => {
     const text = JSON.stringify({ v: 1, run: { id: 'RUN_A', scope: 'all', phase, requestedAt: 1, phaseAt: 2 } });
     const { vault, reopen } = await savedRun(text);
     expect((await vault.lastRun())?.run.phase).toBe(phase);
-    const run = await reopen().status();
+    const run = (await reopen().status()).run;
     expect(run).toMatchObject({ id: 'RUN_A', phase: 'failed' });
     if (phase === 'saving') {
       expect(run?.failure).toMatch(/Some things may be in their new places already/);
@@ -295,9 +317,9 @@ describe('persisted v1 run fixtures agree across current recovery consumers', ()
     const inputs = before.filter((f) => !f.folder && f.parents[0] === inbox);
     expect(inputs.length).toBeGreaterThan(0);
     const fresh = reopen();
-    expect((await fresh.process('all')).phase).toBe('queued');
+    expect(((await fresh.process('all')).run).phase).toBe('queued');
     await until(fresh, 'done');
-    expect((await fresh.status())?.phase).toBe('done');
+    expect(((await fresh.status()).run)?.phase).toBe('done');
     expect((await vault.lastRun())?.run.report?.filed.length).toBeGreaterThan(0);
     const after = await drive.listAll(rootId);
     expect(inputs.some((input) => !after.some((f) => f.id === input.id && f.parents[0] === inbox))).toBe(true);
@@ -319,7 +341,7 @@ describe('report save failure cannot publish done or repeat effects on the legac
     const before = rest();
     const runs = new FakeRunService({ drive, scale: 'instant' });
     const reloaded = new FakeWorker({ drive, runs, scenario: 'default', rootId, fresh: false });
-    const status = await reloaded.status();
+    const status = (await reloaded.status()).run;
     expect(status).toMatchObject({ id: 'run-legacy', phase: 'failed' });
     expect(status?.failure).toMatch(/Some things may be in their new places already/);
     expect(status?.failure).not.toMatch(/Nothing was moved/);
@@ -328,12 +350,12 @@ describe('report save failure cannot publish done or repeat effects on the legac
     expect(stored).toEqual(status);
 
     // Never done, never filed again by the runner that is gone: only the view changed, and a new tidy-up is a B run.
-    for (let i = 0; i < 3; i++) expect((await reloaded.status())?.phase).toBe('failed');
+    for (let i = 0; i < 3; i++) expect(((await reloaded.status()).run)?.phase).toBe('failed');
     expect(rest()).toBe(before);
-    const next = await reloaded.process('all');
+    const next = (await reloaded.process('all')).run;
     expect(next.id).not.toBe('run-legacy');
     await runs.settled();
-    expect(await reloaded.status()).toMatchObject({ id: next.id, phase: 'done' });
+    expect((await reloaded.status()).run).toMatchObject({ id: next.id, phase: 'done' });
     expect([...drive.dump(rootId).keys()].some((path) => path.startsWith(`.bower/runs/${next.id}/manifest-`))).toBe(true);
   });
 });
@@ -468,14 +490,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
   async function after(worker: FakeWorker, runs: FakeRunService): Promise<RunWire | null> {
     await worker.status();
     await runs.settled();
-    return worker.status();
+    return (await worker.status()).run;
   }
 
   /** A run whose terminal view is refused: it filed everything and stays saving. */
   async function refusedView(o: { declared?: boolean } = {}) {
     const w = await bWorld(o);
     w.rules.push((call) => (isView(w, call, 'done') ? 'refuse' : undefined));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
     return { ...w, admitted };
   }
@@ -535,9 +557,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     // The first run fails before any effect, in the fail-run situation.
     const runs = new FakeRunService({ drive, scale: 'instant' });
     const worker = new FakeWorker({ drive, scenario: 'fail-run', rootId, runs });
-    const failed = await worker.process('all');
+    const failed = (await worker.process('all')).run;
     await runs.settled();
-    expect(await worker.status()).toMatchObject({ id: failed.id, phase: 'failed' });
+    expect((await worker.status()).run).toMatchObject({ id: failed.id, phase: 'failed' });
 
     // Trying again, on the demo pace, asked for 2 s ago (planning took that long).
     let release = (): void => undefined;
@@ -596,9 +618,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     // The run holds that pile and files the other; the reason stays, run after run.
     const runs = new FakeRunService({ drive, scale: 'instant' });
     const worker = new FakeWorker({ drive, scenario: 'first', rootId, runs, fresh: false });
-    const admitted = await worker.process('all');
+    const admitted = (await worker.process('all')).run;
     await runs.settled();
-    expect(await worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
     const after = await listed();
     expect(after.map((p) => p.id)).toEqual([lease?.id]);
     expect(after[0]?.setAside).toBe('not-tidied');
@@ -607,7 +629,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
   it('fixes its classification before any effect', async () => {
     const w = await bWorld();
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     // Admission confirmed the manifest and the first checkpoint, and nothing in your folders changed yet.
     const manifests = await manifestsOf(w);
     expect(manifests).toHaveLength(1);
@@ -623,7 +645,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect(typed).toHaveLength(1);
     await w.uploader.settled();
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
 
     // Same plan, same classification: the late input is untouched and the report names only the four files.
     expect(await manifestsOf(w)).toEqual(manifests);
@@ -638,11 +660,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const w = await refusedView();
     const { admitted } = w;
     for (let i = 0; i < 3; i++) {
-      const status = await w.worker.status();
+      const status = (await w.worker.status()).run;
       expect(status).toMatchObject({ id: admitted.id, phase: 'saving' });
       expect(status?.finishedAt).toBeUndefined();
     }
-    const again = await w.worker.process('all');
+    const again = (await w.worker.process('all')).run;
     expect(again).toMatchObject({ id: admitted.id, phase: 'saving' });
     expect(again.finishedAt).toBeUndefined();
     expect(viewOf(w)).toBeNull();
@@ -668,9 +690,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     const second = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
     // Asking does not wait for the recovery: it starts it and answers with the run as it stands.
-    expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect((await second.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
     await w.runs.settled();
-    const status = await second.status();
+    const status = (await second.status()).run;
     const done = (await checkpointsOf(w, admitted.id)).find((c) => c.phase === 'done');
     expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
 
@@ -691,7 +713,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     } finally {
       runs.dispose();
     }
-    expect(await w.worker.status()).toEqual(status);
+    expect((await w.worker.status()).run).toEqual(status);
     await expectFiledOnce(w);
   });
 
@@ -734,9 +756,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       return named('checkpoint-')(call) && text !== null && (JSON.parse(text) as Checkpoint).report.state === 'pending';
     };
     w.rules.push(once(pending, 'refuse', refused));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
     expect(await reportsOf(w)).toEqual([]);
     expect((await checkpointsOf(w, admitted.id)).every((c) => c.report.state === 'not-ready')).toBe(true);
     expect(bowerErrors(w).length).toBeGreaterThan(0);
@@ -760,9 +782,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const w = await bWorld();
     const lost = w.sources[0] ?? '';
     w.rules.push(once(isMoveOf(lost), 'lose-reply'));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
     const [manifest] = await manifestsOf(w);
     const op = manifest?.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === lost && !('fileId' in o.effect.parent && o.effect.parent.fileId === o.effect.before.parents[0]));
     const head = (await checkpointsOf(w, admitted.id)).at(-1);
@@ -783,9 +805,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
   it('reconciles lost report and view replies by their exact bodies', async () => {
     const w = await bWorld();
     w.rules.push(once(named('report-'), 'lose-reply'), once((call) => isView(w, call, 'done'), 'lose-reply'));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    const status = await w.worker.status();
+    const status = (await w.worker.status()).run;
     const done = (await checkpointsOf(w, admitted.id)).find((c) => c.phase === 'done');
     expect(status).toMatchObject({ id: admitted.id, phase: 'done', finishedAt: done?.phaseAt });
     const reports = await reportsOf(w);
@@ -799,7 +821,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
   it('refuses a stale attempt at the mutation boundary', async () => {
     const pause = pauseFirstMove();
     const w = await bWorld({ hooks: pause.hooks });
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     const at = await reached(pause.paused, w.runs);
     expect(at, 'the first move was paused before its dispatch').not.toBeNull();
     if (!at) return;
@@ -810,7 +832,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     w.clock.later(CLAIM_MS + 1);
     const second = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
     await until(second, 'done');
-    expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await second.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
     expect((await checkpointsOf(w, admitted.id)).at(-1)?.epoch).toBeGreaterThan(at.epoch);
     const records = await recordsOf(w);
     const mutations = w.mutations();
@@ -821,14 +843,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     expect(w.calls.filter(isMoveOf(held))).toHaveLength(2);
     expect(await recordsOf(w)).toEqual(records);
     expect(w.mutations()).toBe(mutations);
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
     await expectFiledOnce(w);
   });
 
   it('refuses other scopes and a revoked session at the mutation boundary', async () => {
     const pause = pauseFirstMove();
     const w = await bWorld({ hooks: pause.hooks });
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     expect(await reached(pause.paused, w.runs), 'the first move was paused before its dispatch').not.toBeNull();
     const records = await recordsOf(w);
     const mutations = w.mutations();
@@ -889,9 +911,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
   it("publishes a declared pile's consumed disposition before done", async () => {
     const w = await bWorld({ declared: true });
     w.rules.push(once(named('disposition-'), 'refuse'));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
     expect((await checkpointsOf(w, admitted.id)).some((c) => c.phase === 'done')).toBe(false);
 
     w.clock.later();
@@ -929,9 +951,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
   it('clears the last run\'s new marks as B moves and leaves the report unchanged', async () => {
     const w = await bWorld();
-    const first = await w.worker.process('all');
+    const first = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
     const marked = (await w.drive.listAll(w.rootId)).filter((f) => f.appProperties?.bowerNew === '1');
     expect(marked.map((f) => f.id).sort()).toEqual([...w.sources].sort());
 
@@ -939,10 +961,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     await w.uploader.settled();
     const extra = await inboxPdfs(w.drive, w.rootId);
     expect(extra).toHaveLength(2);
-    const second = await w.worker.process('all');
+    const second = (await w.worker.process('all')).run;
     await w.runs.settled();
     expect(second.id).not.toBe(first.id);
-    expect(await w.worker.status()).toMatchObject({ id: second.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: second.id, phase: 'done' });
 
     const manifest = (await manifestsOf(w)).find((m) => m.runId === second.id);
     const clears = manifest?.operations.flatMap((o) => (o.effect.kind === 'move' && JSON.stringify(o.effect.properties) === '{"bowerNew":null}' ? [o.effect] : [])) ?? [];
@@ -965,13 +987,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const w = await bWorld({ scenario: 'fail-run' });
     const rest = await domain(w.drive, w.rootId);
     w.rules.push((call) => (isView(w, call, 'failed') ? 'refuse' : undefined));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    const held = await w.worker.status();
+    const held = (await w.worker.status()).run;
     expect(held).toMatchObject({ id: admitted.id, phase: 'writing' });
     expect(held?.failure).toBeUndefined();
     expect(held?.finishedAt).toBeUndefined();
-    expect(await w.worker.process('all')).toMatchObject({ id: admitted.id, phase: 'writing' });
+    expect((await w.worker.process('all')).run).toMatchObject({ id: admitted.id, phase: 'writing' });
     const head = (await checkpointsOf(w, admitted.id)).at(-1);
     expect(head?.phase).toBe('failed');
     expect(head?.outcomes.every((o) => o.state === 'not-dispatched')).toBe(true);
@@ -1011,7 +1033,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const w = await bWorld();
     const lost = w.sources[0] ?? '';
     w.rules.push(once(isMoveOf(lost), 'lose-reply'));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
     // The move landed, then the file went back where it was: the effect no longer shows.
     const inbox = (await w.drive.listAll(w.rootId)).filter((f) => f.folder && w.drive.pathOf(f.id, w.rootId).startsWith('Inbox/'));
@@ -1040,7 +1062,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     };
     let refusals = 2;
     w.rules.push((call) => (refusals > 0 && pending(call) ? (refusals--, 'refuse') : undefined));
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
     // A recovery under epoch 2 is refused too, and leaves no checkpoint behind.
     w.clock.later();
@@ -1071,7 +1093,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const sources = await inboxPdfs(first.drive, rootId);
     const view = { drive: first.drive, rootId };
     first.drive.fault = { before: (call) => (isView(view, call, 'done') ? 'refuse' : 'pass') };
-    const admitted = await worker.process('all');
+    const admitted = (await worker.process('all')).run;
     await runs.settled();
 
     // The page reloads right now, before any delayed save: what the tab kept is all there is.
@@ -1090,9 +1112,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
   it('stays done after a restore from a consistent snapshot, its view unchanged, and admits the next run', async () => {
     const w = await bWorld();
-    const first = await w.worker.process('all');
+    const first = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
     const text = w.drive.dump(w.rootId).get(SYSTEM.lastRun);
 
     const { snapshot, alongside } = await w.drive.snapshotWith(() => w.runs.toJSON());
@@ -1105,10 +1127,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const uploader = new DriveVault({ drive, rootId: async () => w.rootId, runningPiles: () => new Set(), device: 'DEVICE_B' });
     await uploader.addPile({ text: '', items: [pdf('extra one.pdf'), pdf('extra two.pdf')] });
     await uploader.settled();
-    const next = await worker.process('all');
+    const next = (await worker.process('all')).run;
     expect(next.id).not.toBe(first.id);
     await runs.settled();
-    expect(await worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+    expect((await worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
   });
 
   it('recovers from a consistent snapshot taken at any moment of the run, each file filed once', async () => {
@@ -1122,9 +1144,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       appliedAt.push(w.applied.length);
       return before?.(call) ?? 'pass';
     } };
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
     expect(moments.length).toBeGreaterThan(20);
     const taken = await Promise.all(moments);
     for (let i = 0; i < taken.length; i++) {
@@ -1156,7 +1178,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const w = await bWorld();
     const other = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
     const asks = await Promise.all([w.worker.process('all'), w.worker.process('all'), other.process('all')]);
-    expect(new Set(asks.map((a) => a.id)).size).toBe(1);
+    expect(new Set(asks.map((a) => a.run.id)).size).toBe(1);
     await w.runs.settled();
     expect(await manifestsOf(w)).toHaveLength(1);
     await expectFiledOnce(w);
@@ -1181,9 +1203,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // Any other cause: the folder the recipes go to cannot be made, as its parent went to the Bin meanwhile.
       if (at.effect.kind === 'create-folder' && at.effect.name === 'Cooking' && 'fileId' in at.effect.parent) await w.drive.trash(at.effect.parent.fileId);
     };
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
     const setAside = viewOf(w)?.run.report?.setAside ?? [];
     expect(setAside).toContainEqual({ name: 'lease.pdf', why: MOVED });
     expect(setAside).toContainEqual({ name: 'soup.pdf', why: AGAIN });
@@ -1203,9 +1225,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     };
     const w = await bWorld({ hooks });
     drive = w.drive;
-    const admitted = await w.worker.process('all');
+    const admitted = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
     const held = renamed ?? '';
     const ev = await w.drive.evidence(held);
     expect(ev?.file.name).toBe('renamed by Alex.pdf');
@@ -1245,9 +1267,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       }
       return out;
     };
-    const first = await w.worker.process('all');
+    const first = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
     const [manifest] = await manifestsOf(w);
     const head = (await checkpointsOf(w, first.id)).at(-1);
     const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json');
@@ -1261,9 +1283,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     for (const pile of left) await alex.removePile(pile.id);
     await alex.addPile({ text: '', items: [pdf('extra one.pdf'), pdf('extra two.pdf')] });
     await alex.settled();
-    const second = await w.worker.process('all');
+    const second = (await w.worker.process('all')).run;
     await w.runs.settled();
-    expect(await w.worker.status()).toMatchObject({ id: second.id, phase: 'done' });
+    expect((await w.worker.status()).run).toMatchObject({ id: second.id, phase: 'done' });
     expect((await manifestsOf(w)).some((m) => m.runId === second.id)).toBe(true);
     expect(hashesOf()).toEqual(await stored());
     expect(Object.values(hashesOf())).toContain(w.drive.pathOf(moved ?? '', w.rootId));
@@ -1287,7 +1309,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     // The admission is saved: the Drive and the runs of one instant.
     const view = { drive: first.drive, rootId };
     first.drive.fault = { before: (call) => (isView(view, call, 'done') ? 'refuse' : 'pass') };
-    const admitted = await worker.process('all');
+    const admitted = (await worker.process('all')).run;
     const saved = { drive: sessionStorage.getItem(DRIVE_KEY), runs: sessionStorage.getItem(RUNS_KEY) };
     expect(saved.drive).not.toBeNull();
     expect(saved.runs).not.toBeNull();
@@ -1445,9 +1467,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await plan(moved, 'instructions')).path).toBe('b');
 
       // The rule's run takes the B path whole: its manifest is recorded and it ends done.
-      const admitted = await rule.worker.process('all');
+      const admitted = (await rule.worker.process('all')).run;
       await rule.runs.settled();
-      expect(await rule.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await rule.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect((await manifestsOf(rule)).some((m) => m.runId === admitted.id)).toBe(true);
     });
 
@@ -1458,9 +1480,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(more).toEqual([]);
       if (!line) return;
       const digest = await w.drive.storedDigest(line.file.id);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
 
       // Fixed in the manifest before any effect: the captured line, the write, the archive move after it, the row.
       const [manifest, ...others] = await manifestsOf(w);
@@ -1505,9 +1527,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // The same line written twice (its first answer was lost) is one change.
       const copy = await w.drive.createText(made.file.parents[0] ?? '', made.file.name, await w.drive.readText(made.file.id));
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       expect(manifest?.capture.journal.map((j) => ({ recordId: j.recordId, fileIds: [...j.fileIds].sort() }))).toEqual([
         { recordId: answered.rec.id, fileIds: [answered.file.id] },
@@ -1534,9 +1556,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld();
       await w.uploader.addRequest('Keep garden notes together');
       expect((await plan(w, 'instructions')).path).toBe('b');
-      const admitted = await w.worker.process('instructions');
+      const admitted = (await w.worker.process('instructions')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       expect(manifest).toMatchObject({ runId: admitted.id, runScope: 'instructions', capture: { piles: [], members: [] } });
       expect(manifest?.operations.some((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.hashes)).toBe(false);
@@ -1555,14 +1577,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const asked = lines.find((l) => l.rec.kind === 'request');
       if (!made || !asked) throw new Error('missing journal lines');
       w.rules.push(once(isWriteOf(w, SYSTEM.requests), 'lose-reply'), once(isMoveOf(made.file.id), 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
-      for (let i = 0; i < 5 && (await w.worker.status())?.phase !== 'done'; i++) {
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
+      for (let i = 0; i < 5 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.calls.filter(isWriteOf(w, SYSTEM.requests))).toHaveLength(1);
       for (const l of lines) {
         expect(w.calls.filter(isMoveOf(l.file.id)), `archive calls of ${l.rec.kind}`).toHaveLength(1);
@@ -1592,9 +1614,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.addRequest('Put the lease papers together');
       const [line] = await linesOf(w);
       if (!line) throw new Error('missing journal line');
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const [archive] = archiveMoves(manifest, line.file.id);
       const outcomes = (await checkpointsOf(w, admitted.id)).at(-1)?.outcomes ?? [];
@@ -1624,9 +1646,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // Only the run's own planning counts below.
       w.errors.mockClear();
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       expect(manifest?.capture.journal.map((j) => j.recordId)).toEqual([asked.rec.id]);
       for (const f of kept) expect(manifest?.operations.some((o) => 'before' in o.effect && o.effect.before.fileId === f.id), `an operation on ${f.name}`).toBe(false);
@@ -1653,9 +1675,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // Only the run's own planning counts below.
       w.errors.mockClear();
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const write = manifest?.operations.find((o) => o.effect.kind === 'write-runner-json' && o.effect.path === SYSTEM.questions);
       expect(write?.effect.kind === 'write-runner-json' ? write.effect.beforeContent.sha256 : null).toBe(unreadable?.sha256);
@@ -1675,9 +1697,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const lines = await linesOf(w);
       expect(lines.map((l) => l.rec.text)).toEqual(texts);
       expect(await plan(w)).toMatchObject({ path: 'b' });
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       expect(manifest?.capture.journal.map((j) => j.recordId)).toEqual(lines.slice(0, 20).map((l) => l.rec.id));
       expect(viewOf(w)?.run.report?.requests).toEqual(texts.slice(0, 20));
@@ -1685,9 +1707,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(done.map((r) => r.text)).toEqual(texts.slice(0, 20).reverse());
       expect((await linesOf(w)).map((l) => l.rec.text)).toEqual([texts[20]]);
 
-      const next = await w.worker.process('instructions');
+      const next = (await w.worker.process('instructions')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(viewOf(w)?.run.report?.requests).toEqual([texts[20]]);
       expect(await linesOf(w)).toEqual([]);
     });
@@ -1733,9 +1755,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const earlier = { id: line.rec.id, text: 'Put the lease papers together', at: line.rec.at, done: DONE };
       const older = { id: 'REQUEST_OLDER', text: 'An older request', at: 0, done: DONE };
       await w.drive.writeText(requests.id, `${JSON.stringify({ v: 1, done: [earlier, older] }, null, 2)}\n`, requests.modifiedTime);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const done = (JSON.parse(w.drive.dump(w.rootId).get(SYSTEM.requests) ?? '') as RequestsFile).done;
       expect(done).toEqual([earlier, older]);
       expect(viewOf(w)?.run.report?.requests).toEqual(['Put the lease papers together']);
@@ -1749,13 +1771,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (!line) throw new Error('missing journal line');
       const isArchiveFolder = (call: FencedCall): boolean => call.op === 'create-folder' && call.name === 'archive';
       w.rules.push(once(isArchiveFolder, 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      for (let i = 0; i < 5 && (await w.worker.status())?.phase !== 'done'; i++) {
+      for (let i = 0; i < 5 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.calls.filter(isArchiveFolder)).toHaveLength(1);
       const folders = (await w.drive.listAll(w.rootId)).filter((f) => f.folder && w.drive.pathOf(f.id, w.rootId) === SYSTEM.archive);
       expect(folders).toHaveLength(1);
@@ -1782,9 +1804,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const [line] = await linesOf(w);
       if (!line) throw new Error('missing journal line');
       target = line.file.id;
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const ev = await w.drive.evidence(line.file.id);
       expect(ev).toMatchObject({ trashed: true, file: { parents: line.file.parents, name: line.file.name } });
       expect(movesOf(w, line.file.id)).toBe(0);
@@ -1856,9 +1878,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(await plan(w)).toMatchObject({ path: 'b' });
       // Only the run's own planning counts below.
       w.errors.mockClear();
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest, ...others] = await manifestsOf(w);
       expect(others).toEqual([]);
       // Each write records the hash of the bytes it could not parse; Drive keeps that revision.
@@ -1880,9 +1902,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // A malformed file never blocks a later run: the next one is on the B path too.
       await w.uploader.addPile({ text: 'Papers about the car', items: [pdf('insurance.pdf'), pdf('service.pdf')] });
       await w.uploader.settled();
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect((await manifestsOf(w)).some((m) => m.runId === next.id)).toBe(true);
     });
 
@@ -1900,9 +1922,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (planned.path !== 'b') return;
       expect(planned.manifest.capture.journal).toEqual([]);
       expect(folders(planned.manifest)).toEqual([]);
-      const admitted = await gone.worker.process('all');
+      const admitted = (await gone.worker.process('all')).run;
       await gone.runs.settled();
-      expect(await gone.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await gone.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(gone.calls.filter((c) => isFolderMade('changes')(c) || isFolderMade('archive')(c))).toEqual([]);
       expect(viewOf(gone)?.run.report?.yourChanges).toBeUndefined();
       await expectFiledOnce(gone);
@@ -1980,9 +2002,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.addRequest(LEASE);
       for (const path of [SYSTEM.requests, SYSTEM.hashes]) await w.drive.trash((await fileAt(w, path)).id);
       expect(await plan(w)).toMatchObject({ path: 'b' });
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const made = (manifest?.operations ?? []).flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect] : []));
       expect(made.map((e) => [e.name, e.purpose]).sort()).toEqual([['hashes.json', 'runner-json'], ['requests.json', 'runner-json']]);
@@ -2025,11 +2047,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     /** Runs until the run is over, letting a lost reply be reconciled by a later attempt. */
     async function settle(w: World): Promise<RunWire | null> {
       await w.runs.settled();
-      for (let i = 0; i < 5 && !['done', 'failed'].includes((await w.worker.status())?.phase ?? ''); i++) {
+      for (let i = 0; i < 5 && !['done', 'failed'].includes(((await w.worker.status()).run)?.phase ?? ''); i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      return w.worker.status();
+      return (await w.worker.status()).run;
     }
 
     it('a rule is worded once through a recoverable operation', async () => {
@@ -2044,7 +2066,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // The Rules.md write's answer is lost: the run reconciles it from what is stored and never words it twice.
       w.rules.push(once(isRulesWrite(w), 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const edit = operationsOf(manifest).find((o) => o.effect.kind === 'edit-text');
@@ -2067,7 +2089,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // A later run never words it again.
       const wordedText = w.drive.dump(w.rootId).get(RULES);
       await vaultOf(w).addRequest('Put the lease papers together');
-      const later = await w.worker.process('instructions');
+      const later = (await w.worker.process('instructions')).run;
       expect(await settle(w)).toMatchObject({ id: later.id, phase: 'done' });
       expect(w.drive.dump(w.rootId).get(RULES)).toBe(wordedText);
       expect(w.calls.filter(isRulesWrite(w))).toHaveLength(1);
@@ -2076,7 +2098,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const [rule] = (await vaultOf(w).rules()).filter((r) => !r.pending);
       if (!rule) throw new Error('the worded rule is missing');
       await vaultOf(w).removeRule(rule.id);
-      const removal = await w.worker.process('instructions');
+      const removal = (await w.worker.process('instructions')).run;
       expect(await settle(w)).toMatchObject({ id: removal.id, phase: 'done' });
       expect(worded()).toEqual([]);
       expect(w.drive.dump(w.rootId).get(RULES)).not.toContain('You wrote');
@@ -2093,7 +2115,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const lines = await linesOf(m);
       expect(lines).toHaveLength(2);
       m.rules.push(once(isRulesMade(m), 'lose-reply'));
-      const made = await m.worker.process('all');
+      const made = (await m.worker.process('all')).run;
       expect(await settle(m)).toMatchObject({ id: made.id, phase: 'done' });
       const [created] = await manifestsOf(m);
       const create = operationsOf(created).find((o) => o.effect.kind === 'create-text' && o.effect.name === RULES);
@@ -2125,7 +2147,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (out.path !== 'b') return;
       const edits = operationsOf(out.manifest).flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === RULES ? [o.effect] : []));
       expect(edits.map((e) => e.changes.map((c) => c.kind))).toEqual([['link-rewrite', 'rules-wording']]);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       const text = w.drive.dump(w.rootId).get(RULES) ?? '';
       expect(parseRules(text).map((r) => r.text)).toEqual([wordRule(LEASE_RULE), 'Keep [[Garden plans]] receipts together.']);
@@ -2137,7 +2159,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('counts a rule taken out and a rule already there as none of your changes', async () => {
       const w = await bWorld();
       await w.uploader.addRule(LEASE_RULE);
-      const first = await w.worker.process('all');
+      const first = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: first.id, phase: 'done' });
       /** The report contribution that claims a captured line: the one requiring that line's archive move. */
       const rowOf = async (runId: string, recordId: string): Promise<ReportContribution['value'] | undefined> => {
@@ -2154,7 +2176,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await new Promise((r) => setTimeout(r, 2));
       await vaultOf(w).addRule(RECEIPTS_RULE);
       const added = (await linesOf(w)).find((l) => l.rec.id !== again.id);
-      const second = await w.worker.process('instructions');
+      const second = (await w.worker.process('instructions')).run;
       expect(await settle(w)).toMatchObject({ id: second.id, phase: 'done' });
       expect(parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => r.yourWords)).toEqual([RECEIPTS_RULE, LEASE_RULE]);
       expect(await rowOf(second.id, again.id)).toMatchObject({ yourChanges: 0 });
@@ -2168,7 +2190,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (!rule) throw new Error('the worded rule is missing');
       await vaultOf(w).removeRule(rule.id);
       const [removal] = await linesOf(w);
-      const third = await w.worker.process('instructions');
+      const third = (await w.worker.process('instructions')).run;
       expect(await settle(w)).toMatchObject({ id: third.id, phase: 'done' });
       expect(parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => r.yourWords)).toEqual([RECEIPTS_RULE]);
       expect(await rowOf(third.id, removal?.rec.id ?? '')).toMatchObject({ yourChanges: 0 });
@@ -2186,7 +2208,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await vaultOf(w).rename('Projects/Garden.md', 'Garden plans');
       await vaultOf(w).addRule('Keep [[Garden plans]] receipts together');
       const line = (await linesOf(w)).find((l) => l.rec.kind === 'rule');
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const files = manifest?.capture.journal.find((j) => j.recordId === line?.rec.id)?.fileIds ?? [];
@@ -2213,7 +2235,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await vaultOf(w).removeRule(rule.id);
       const removal = (await linesOf(w)).find((l) => l.rec.kind === 'rule');
       await vaultOf(w).rename('Projects/Garden.md', 'Garden plans');
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       const text = w.drive.dump(w.rootId).get(RULES) ?? '';
       expect(parseRules(text).map((r) => r.text)).toEqual([wordRule(RECEIPTS_RULE)]);
@@ -2273,7 +2295,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(operationsOf(out.manifest).filter((o) => o.effect.kind === 'edit-text').map((o) => (o.effect.kind === 'edit-text' ? o.effect.path : ''))).toEqual(hubs.map((h) => h.path));
       expect(out.manifest.capture.journal).toEqual([]);
       w.errors.mockClear();
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(bowerErrors(w).filter((e) => e.message === PENDING)).toHaveLength(1);
       expect(w.drive.dump(w.rootId).get(RULES)).toBe(rulesBefore);
@@ -2281,7 +2303,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.rulesWorded).toBeUndefined();
 
       // The hub lines are there now: the next run has room, and words the rule.
-      const next = await w.worker.process('instructions');
+      const next = (await w.worker.process('instructions')).run;
       expect(await settle(w)).toMatchObject({ id: next.id, phase: 'done' });
       expect(parseRules(w.drive.dump(w.rootId).get(RULES) ?? '').map((r) => r.yourWords)).toEqual([LEASE_RULE]);
       expect(viewOf(w)?.run.report?.rulesWorded).toBe(1);
@@ -2294,7 +2316,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.addRule(LEASE_RULE);
       await w.uploader.addRule(RECEIPTS_RULE);
       w.errors.mockClear();
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(bowerErrors(w).filter((e) => e.message === 'Bower could not word some of your rules; they wait for the next tidy-up.')).toHaveLength(1);
       expect(await linesOf(w)).toHaveLength(2);
@@ -2310,7 +2332,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(out.path).toBe('b');
       if (out.path !== 'b') return;
       expect(out.manifest.capture.journal).toEqual([]);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.drive.dump(w.rootId).get(RULES)).toBe('# My rules\n\n## Rules\n\n- Mine.\n');
       expect((await linesOf(w)).map((l) => l.rec.id)).toEqual([line?.rec.id]);
@@ -2329,11 +2351,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const askedIn = (text: string | undefined): QuestionsFile['questions'] => (text === undefined ? [] : (JSON.parse(text) as QuestionsFile).questions);
     async function settle(w: World): Promise<RunWire | null> {
       await w.runs.settled();
-      for (let i = 0; i < 5 && !['done', 'failed'].includes((await w.worker.status())?.phase ?? ''); i++) {
+      for (let i = 0; i < 5 && !['done', 'failed'].includes(((await w.worker.status()).run)?.phase ?? ''); i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      return w.worker.status();
+      return (await w.worker.status()).run;
     }
     async function saltmere(w: World, names = ['taxi.pdf', 'hotel.pdf']): Promise<void> {
       await w.uploader.addPile({ text: SALTMERE, items: names.map(pdf) });
@@ -2360,7 +2382,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // The write's answer is lost: the run reconciles it from what is stored and never asks twice.
       w.rules.push(once(isQuestionsWrite(w), 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const ran = saltmereQuestion(manifest?.requestedAt ?? -1);
@@ -2372,7 +2394,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // A later run with another such pile does not ask it again while it is open.
       await saltmere(w, ['parking.pdf']);
-      const later = await w.worker.process('all');
+      const later = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: later.id, phase: 'done' });
       expect(askedIn(w.drive.dump(w.rootId).get(SYSTEM.questions))).toEqual([ran]);
       expect(viewOf(w)?.run.report?.questions).toEqual([]);
@@ -2391,7 +2413,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(made?.effect).toMatchObject({ kind: 'create-text', purpose: 'runner-json' });
       expect(planned.manifest.reportPlan.filter((c) => c.value.questions.length).map((c) => c.requires)).toEqual([[made?.operationId]]);
       expect(grounded(planned.manifest)).toBe(true);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       expect(await settle(w)).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       expect(askedIn(w.drive.dump(w.rootId).get(SYSTEM.questions))).toEqual([saltmereQuestion(manifest?.requestedAt ?? -1)]);
@@ -2472,7 +2494,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // The declared one's move loses its reply: recovery reconciles it and never moves it twice.
       w.rules.push(once(isMoveOf(declared.id), 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       w.clock.later();
       expect(await after(w.worker, w.runs)).toMatchObject({ id: admitted.id, phase: 'done' });
@@ -2591,9 +2613,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(pile?.childFileIds).not.toContain(stray.id);
       expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(stray.id);
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const captured = manifest?.capture.piles.find((p) => p.anchor?.fileId === folder);
       expect((await checkpointsOf(w, admitted.id)).at(-1)?.retainedPileIds).toEqual([captured?.pileId]);
@@ -2628,9 +2650,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // Without its context the pile is filed by its things' names alone, never by the later note's words.
       expect(leaseTo(planned.manifest)).toEqual(['Projects/Flat hunt', 'Resources/Ideas']);
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect((await checkpointsOf(w, admitted.id)).at(-1)?.retainedPileIds).toEqual([pile?.pileId]);
       expect((await w.drive.evidence(folder))?.trashed).toBe(false);
       expect(await childNames(w, folder)).toEqual(['Pile note.md']);
@@ -2661,9 +2683,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld();
       const held = await addHeld(w);
       const before = await stateOf(w, held.ids);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
 
       const [manifest, ...more] = await manifestsOf(w);
       expect(manifest).toBeDefined();
@@ -2700,9 +2722,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const before = await stateOf(w, held.ids);
       const lease = await parentOfFile(w, 'lease.pdf');
       into = lease;
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(late).not.toBeNull();
 
       const [manifest] = await manifestsOf(w);
@@ -2746,9 +2768,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(captured?.childFileIds).not.toContain(extra.id);
       expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(extra.id);
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       const pile = manifest?.capture.piles.find((p) => p.anchor?.fileId === lease);
       expect((await checkpointsOf(w, admitted.id)).at(-1)?.retainedPileIds).toEqual([pile?.pileId]);
@@ -2777,10 +2799,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // One note Drive cannot give back never refuses the whole tidy-up.
       const admitting = w.worker.process('all');
-      await expect(admitting).resolves.toMatchObject({ id: expect.any(String) });
-      const admitted = await admitting;
+      await expect(admitting).resolves.toMatchObject({ run: { id: expect.any(String) } });
+      const admitted = (await admitting).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest, ...more] = await manifestsOf(w);
       expect(more).toEqual([]);
       const text = JSON.stringify(manifest);
@@ -2872,9 +2894,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const planned = await planning;
       if (planned.path !== 'b') return;
       expect(planned.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(folder);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
       expect(await stateOf(w, ids)).toBe(before);
       expect(await w.drive.readText(context.id)).toBe(body);
@@ -2929,9 +2951,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     it('admits nothing when only held piles are waiting', async () => {
       const w = await bWorld();
-      const first = await w.worker.process('all');
+      const first = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
       const held = await addHeld(w);
       const before = await stateOf(w, held.ids);
       const records = await recordsOf(w);
@@ -2946,7 +2968,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)).toEqual(view);
       expect(await domain(w.drive, w.rootId)).toBe(rest);
       expect(await stateOf(w, held.ids)).toBe(before);
-      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
     });
 
     it('recovers a run beside a held pile without ever touching it', async () => {
@@ -2954,7 +2976,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld({ hooks: pause.hooks });
       const held = await addHeld(w);
       const before = await stateOf(w, held.ids);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       const at = await reached(pause.paused, w.runs);
       expect(at, 'the first move was paused before its dispatch').not.toBeNull();
       if (!at) return;
@@ -2963,7 +2985,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       w.clock.later(CLAIM_MS + 1);
       const second = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
       await until(second, 'done');
-      expect(await second.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await second.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect((await checkpointsOf(w, admitted.id)).at(-1)?.epoch).toBeGreaterThan(at.epoch);
       pause.release();
       await w.runs.settled();
@@ -3009,9 +3031,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const lease = await leasePile(w);
       const stray = await w.drive.createText(lease.folder, 'stray.txt', 'not one of its things');
       const leaseId = (await w.drive.listAll(w.rootId)).find((f) => f.name === 'lease.pdf')?.id ?? '';
-      const first = await w.worker.process('all');
+      const first = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
       expect(await childNames(w, lease.folder)).toEqual(['Pile note.md', 'stray.txt']);
       await expectFiledOnce(w);
       const disposed = await dispositions(w);
@@ -3046,9 +3068,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       drive = w.drive;
       const { folder, keyed } = await leasePile(w);
       into = folder;
-      const first = await w.worker.process('all');
+      const first = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
       expect(late).not.toBeNull();
       const lateId = late ?? '';
       expect(await childNames(w, folder)).toEqual(['Pile note.md', 'later.txt']);
@@ -3056,9 +3078,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(disposed).toHaveLength(2);
 
       await plannedLeftover(w, folder, [lateId], keyed.id);
-      const second = await w.worker.process('all');
+      const second = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: second.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: second.id, phase: 'done' });
       expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'later.txt' }], setAside: [] });
       expect(movesOf(w, lateId)).toBe(1);
       expect(inInbox(w, lateId)).toBe(false);
@@ -3076,9 +3098,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld({ declared: true });
       const { folder, keyed } = await leasePile(w);
       const second = await w.drive.createText(folder, 'Pile note.md', 'A second note about the lease');
-      const first = await w.worker.process('all');
+      const first = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: first.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: first.id, phase: 'done' });
       expect(await childNames(w, folder)).toEqual(['Pile note.md', 'Pile note.md']);
       const disposed = await dispositions(w);
       expect(disposed).toHaveLength(2);
@@ -3088,9 +3110,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       const planned = await plannedLeftover(w, folder, [later.id], keyed.id);
       expect(planned?.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(second.id);
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'later.txt' }], setAside: [] });
       expect(inInbox(w, later.id)).toBe(false);
       // The unbound note is an uncaptured child again (TL-P2-21): it stays, and so does the folder.
@@ -3113,9 +3135,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const note = await w.drive.createText(w.folder, 'Pile note.md', 'Papers about the flat');
 
       await plannedLeftover(w, w.folder, [w.stray], note.id);
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'stray.txt' }], setAside: [] });
       expect((await w.drive.evidence(w.folder))?.trashed).toBe(true);
       expect(await dispositions(w)).toEqual(w.disposed);
@@ -3149,9 +3171,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       for (const id of w.sources) expect(inInbox(w, id), `${id} still in the Inbox`).toBe(false);
 
       await plannedLeftover(w, folder, [lateId], keyed.id);
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'later.txt' }], setAside: [] });
       expect(inInbox(w, lateId)).toBe(false);
       expect((await w.drive.evidence(folder))?.trashed).toBe(true);
@@ -3167,9 +3189,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.drive.writeText(lease, '%PDF lease, signed', file.modifiedTime);
 
       await plannedLeftover(w, w.folder, [w.stray], w.keyed.id);
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(viewOf(w)?.run.report).toMatchObject({ filed: [{ name: 'stray.txt' }], setAside: [] });
       expect(movesOf(w, lease)).toBe(1);
       expect(await dispositions(w)).toEqual(w.disposed);
@@ -3195,9 +3217,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (planned.path !== 'b') return;
       expect(planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder)).toBeUndefined();
       const from = w.calls.length;
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
       expect(w.calls.slice(from).filter(touches(ids))).toEqual([]);
       expect(await childNames(w, folder)).toEqual(['Pile note.md', 'later.txt']);
@@ -3228,9 +3250,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(pile?.childFileIds).toEqual([inventory, keyed.id].sort());
       expect(planned.manifest.capture.members.map((m) => m.file.fileId)).not.toContain(lease);
 
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).toContain('inventory.pdf');
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).not.toContain('lease.pdf');
       expect(movesOf(w, inventory)).toBe(1);
@@ -3265,9 +3287,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (planned.path !== 'b') return;
       expect(planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder)).toBeUndefined();
       const from = w.calls.length;
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['idea one.pdf', 'idea two.pdf']);
       expect(w.calls.slice(from).filter(touches(ids))).toEqual([]);
       expect(await childNames(w, folder)).toEqual(['Pile note.md', 'inventory.pdf']);
@@ -3281,9 +3303,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.drive.update(w.leaseId, { addParent: w.folder, removeParent: lease.parents[0] ?? '' });
 
       await plannedLeftover(w, w.folder, [w.leaseId, w.stray].sort(), w.keyed.id);
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['lease.pdf', 'stray.txt']);
       expect(movesOf(w, w.leaseId)).toBe(2);
       expect(inInbox(w, w.leaseId)).toBe(false);
@@ -3308,7 +3330,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       };
       const w = await filedButKept({ hooks });
       armed = true;
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       const at = await reached(paused, w.runs);
       expect(at, 'the first move was paused before its dispatch').not.toBeNull();
       if (!at) return;
@@ -3317,7 +3339,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       w.clock.later(CLAIM_MS + 1);
       const other = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
       await until(other, 'done');
-      expect(await other.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await other.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       release();
       await w.runs.settled();
       expect(movesOf(w, w.stray)).toBe(1);
@@ -3383,13 +3405,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       // A lost reply on each folder and on one move: recovery reconciles them by evidence, sending none again.
       const [first] = w.deposits;
       w.rules.push(once(isFolderCall('Projects'), 'lose-reply'), once(isFolderCall('Flat hunt'), 'lose-reply'), once(isMoveOf(first ?? ''), 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      for (let i = 0; i < 8 && (await w.worker.status())?.phase !== 'done'; i++) {
+      for (let i = 0; i < 8 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.calls.filter(isFolderCall('Projects'))).toHaveLength(1);
       expect(w.calls.filter(isFolderCall('Flat hunt'))).toHaveLength(1);
       const [projects, ...moreProjects] = await foldersIn(w, w.rootId, 'Projects');
@@ -3454,13 +3476,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // Both replies are lost: recovery finds each note by its key and never writes it again.
       w.rules.push(once(isCreateOf(`${WORDS} (2).md`), 'lose-reply'), once(isCreateOf('Industrial Designer, Ferrowick.md'), 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      for (let i = 0; i < 8 && (await w.worker.status())?.phase !== 'done'; i++) {
+      for (let i = 0; i < 8 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsOf(w);
       for (const op of createsOf(manifest?.operations ?? [])) {
         expect(w.calls.filter(isCreateOf(op.effect.name)), op.effect.name).toHaveLength(1);
@@ -3493,9 +3515,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await generating({ hooks });
       drive = w.drive;
       ideas = w.ideas.id;
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.drive.dump(w.rootId).get(`Resources/Ideas/${WORDS} (2).md`)).toBe('Alex got there first.');
       expect(w.applied.filter(isCreateOf(`${WORDS} (2).md`))).toEqual([]);
       const report = viewOf(w)?.run.report;
@@ -3519,9 +3541,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await generating({ hooks });
       drive = w.drive;
       rootId = w.rootId;
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.drive.dump(w.rootId).get(COMPANION)).toBe('Alex got there first.');
       const report = viewOf(w)?.run.report;
       expect(report?.filed.find((f) => f.name === OFFER)).toMatchObject({ to: 'Projects/Job hunt/Applications' });
@@ -3553,9 +3575,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (out.path !== 'b') return;
       expect(out.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(folder.id);
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       // Nothing written into the pile, nothing of it moved or put in the Bin, and no report row for it.
       expect(w.applied.filter((c) => (c.op === 'create-text' || c.op === 'create-folder') && c.parentId === folder.id)).toEqual([]);
       expect(await children()).toBe(before);
@@ -3597,9 +3619,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const creates = out.manifest.operations.filter((o) => o.effect.kind === 'create-text');
       expect(creates.map((o) => (o.effect.kind === 'create-text' ? [o.effect.name, o.effect.purpose] : []))).toEqual([['Bins go out on Tuesday nights.md', 'generated']]);
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(await generatedNotes(w)).toEqual(['Resources/Ideas/Bins go out on Tuesday nights.md']);
       expect(viewOf(w)?.run.report?.filed).toContainEqual({ name: 'Your note', title: 'Bins go out on Tuesday nights', kind: 'note', to: 'Resources/Ideas', note: 'Resources/Ideas/Bins go out on Tuesday nights.md' });
       // The folder stays with the other note (late-child rule); the words it filed are not in it any more.
@@ -3609,9 +3631,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       // The next run files the other note's words once, and never the first ones again.
       w.clock.later();
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       expect(await generatedNotes(w)).toEqual(['Resources/Ideas/Bins go out on Tuesday nights.md', 'Resources/Ideas/Recycling on Fridays.md']);
       expect((await w.drive.evidence(folder.id))?.trashed).toBe(true);
     });
@@ -3642,9 +3664,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(names).toEqual([`${'a'.repeat(47)}😀.md`]);
       expect(out.manifest.capture.piles.map((p) => p.anchor?.fileId)).not.toContain(broken.id);
 
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort()).toEqual(['Your note', 'idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
       expect((await w.drive.evidence(broken.id))?.trashed).toBe(false);
       expect(bowerErrors(w).length).toBeGreaterThan(0);
@@ -3673,9 +3695,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const before = await stateOf(w, broken.id);
         // TL-P2-36 (9): a note no record can carry is a damaged note (it was not-checked before).
         expect((await inboxOf(w)).find((p) => p.path === `Inbox/${broken.name}`)?.setAside, where).toBe('note-damaged');
-        const admitted = await w.worker.process('all');
+        const admitted = (await w.worker.process('all')).run;
         await w.runs.settled();
-        expect(await w.worker.status(), where).toMatchObject({ id: admitted.id, phase: 'done' });
+        expect((await w.worker.status()).run, where).toMatchObject({ id: admitted.id, phase: 'done' });
         expect(viewOf(w)?.run.report?.filed.map((f) => f.name).sort(), where).toEqual(['idea one.pdf', 'idea two.pdf', 'inventory.pdf', 'lease.pdf']);
         expect(await stateOf(w, broken.id), where).toBe(before);
         expect((await inboxOf(w)).find((p) => p.path === `Inbox/${broken.name}`)?.setAside, where).toBe('note-damaged');
@@ -3803,18 +3825,18 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.uploader.settled();
       const isWords = (call: FencedCall): boolean => call.op === 'create-text' && call.name === `${words}.md`;
       w.rules.push(once(isWords, 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
       const made = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === `${words}.md`);
       expect(made).toHaveLength(1);
       // The mark goes before recovery (opened elsewhere): the key, place and bytes still prove the note is this one.
       await w.drive.update(made[0]?.id ?? '', { appProperties: { bowerNew: null } });
-      for (let i = 0; i < 5 && (await w.worker.status())?.phase !== 'done'; i++) {
+      for (let i = 0; i < 5 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.calls.filter(isWords)).toHaveLength(1);
       expect((await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === `${words}.md`)).toHaveLength(1);
       expect(viewOf(w)?.run.report?.filed.map((f) => f.name)).toContain('Your note');
@@ -3876,9 +3898,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const w = await bWorld();
       const flat = await hub(w, FLAT, FLAT_BEFORE);
       const job = await hub(w, JOB, JOB_BEFORE);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
 
       // A v2 manifest: one edit-text per hub note, its Timeline line dated from requestedAt (UTC).
       const [manifest, ...others] = await manifestsV2(w);
@@ -3927,10 +3949,10 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const jobAfter = textAt(w, JOB);
       await w.uploader.addPile({ text: '', items: [pdf('third.pdf'), pdf('fourth.pdf')] });
       await w.uploader.settled();
-      const next = await w.worker.process('all');
+      const next = (await w.worker.process('all')).run;
       expect(next.id).not.toBe(admitted.id);
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: next.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: next.id, phase: 'done' });
       const second = (await manifestsV2(w)).find((m) => m.runId === next.id);
       expect(second?.v).toBe(1);
       expect(editsOf(second)).toEqual([]);
@@ -3949,9 +3971,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       if (out.path !== 'b') return;
       expect(out.manifest.v).toBe(1);
       expect(touching(out.manifest, flat.id)).toEqual([]);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(textAt(w, FLAT)).toBe(there);
       expect(w.calls.filter((c) => 'id' in c && c.id === flat.id)).toEqual([]);
       expect(viewOf(w)?.run.report?.updated).toEqual([]);
@@ -3967,9 +3989,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(out.path).toBe('b');
       if (out.path !== 'b') return;
       expect(out.manifest.v).toBe(1);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(textAt(w, FLAT)).toBe(plain);
       expect(textAt(w, JOB)).toBe(mine);
       expect(w.calls.filter((c) => 'id' in c && (c.id === flat.id || c.id === job.id))).toEqual([]);
@@ -3988,9 +4010,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         act.at = null;
         await w.drive.writeText(flat.id, theirs, (await w.drive.get(flat.id)).modifiedTime);
       };
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsV2(w);
       const [edit, mark] = touching(manifest, flat.id);
       expect(await outcomeOf(w, admitted.id, edit)).toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
@@ -4015,9 +4037,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         ahead.act.at = null;
         touched = (await w.drive.writeText(flat.id, FLAT_BEFORE, (await w.drive.get(flat.id)).modifiedTime)).modifiedTime;
       };
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const [manifest] = await manifestsV2(w);
       const [edit] = editsOf(manifest);
       expect(touched).not.toBe('');
@@ -4034,9 +4056,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         after.act.at = null;
         await v.drive.writeText(late.id, FLAT_BEFORE, (await v.drive.get(late.id)).modifiedTime);
       };
-      const second = await v.worker.process('all');
+      const second = (await v.worker.process('all')).run;
       await v.runs.settled();
-      expect(await v.worker.status()).toMatchObject({ id: second.id, phase: 'done' });
+      expect((await v.worker.status()).run).toMatchObject({ id: second.id, phase: 'done' });
       const [plan] = await manifestsV2(v);
       expect(await outcomeOf(v, second.id, editsOf(plan)[0])).toMatchObject({ state: 'rejected', failure: { code: 'conflict' } });
       expect(writesTo(v.applied, late.id)).toEqual([]);
@@ -4056,7 +4078,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         return { drive, rootId: w.rootId, runs, worker, applied };
       }
       async function expectOneLine(r: Awaited<ReturnType<typeof restored>>, id: string, runId: string): Promise<void> {
-        expect(await r.worker.status()).toMatchObject({ id: runId, phase: 'done' });
+        expect((await r.worker.status()).run).toMatchObject({ id: runId, phase: 'done' });
         const [manifest] = await manifestsV2(r);
         const [edit] = editsOf(manifest);
         expect(textAt(r, FLAT)).toBe(edit?.effect.text);
@@ -4068,9 +4090,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
       const w = await bWorld();
       const flat = await hub(w, FLAT, FLAT_BEFORE);
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(writesTo(w.applied, flat.id)).toHaveLength(1);
       const done = await restored(w);
       expect(await after(done.worker, done.runs)).toMatchObject({ id: admitted.id, phase: 'done' });
@@ -4079,13 +4101,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const v = await bWorld();
       const late = await hub(v, FLAT, FLAT_BEFORE);
       v.rules.push(once((call) => call.op === 'write-text' && call.id === late.id, 'lose-reply'));
-      const cut = await v.worker.process('all');
+      const cut = (await v.worker.process('all')).run;
       await v.runs.settled();
-      expect(await v.worker.status()).toMatchObject({ id: cut.id, phase: 'saving' });
+      expect((await v.worker.status()).run).toMatchObject({ id: cut.id, phase: 'saving' });
       expect(writesTo(v.applied, late.id)).toHaveLength(1);
       const back = await restored(v);
-      expect(await back.worker.status()).toMatchObject({ id: cut.id, phase: 'saving' });
-      for (let i = 0; i < 4 && (await back.worker.status())?.phase !== 'done'; i++) {
+      expect((await back.worker.status()).run).toMatchObject({ id: cut.id, phase: 'saving' });
+      for (let i = 0; i < 4 && ((await back.worker.status()).run)?.phase !== 'done'; i++) {
         v.clock.later();
         await after(back.worker, back.runs);
       }
@@ -4099,11 +4121,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         const w = await bWorld();
         const flat = await hub(w, FLAT, FLAT_BEFORE);
         w.rules.push(once(isWrite(flat.id), 'lose-reply'));
-        const admitted = await w.worker.process('all');
+        const admitted = (await w.worker.process('all')).run;
         await w.runs.settled();
-        expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
+        expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
         await meanwhile?.(w, flat.id);
-        for (let i = 0; i < 4 && (await w.worker.status())?.phase !== 'done'; i++) {
+        for (let i = 0; i < 4 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
           w.clock.later();
           await after(w.worker, w.runs);
         }
@@ -4113,7 +4135,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const reads = (w: World, state: string): boolean => w.errors.mock.calls.some((c) => String(c[0]).includes(`reads back as ${state}`));
 
       const applied = await lost();
-      expect(await applied.w.worker.status()).toMatchObject({ id: applied.admitted.id, phase: 'done' });
+      expect((await applied.w.worker.status()).run).toMatchObject({ id: applied.admitted.id, phase: 'done' });
       expect(writesTo(applied.w.calls, applied.flat.id)).toHaveLength(1);
       expect(textAt(applied.w, FLAT)).toBe(applied.edit?.effect.text);
       expect(textAt(applied.w, FLAT)?.split(FLAT_WHAT)).toHaveLength(2);
@@ -4127,7 +4149,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const other = FLAT_BEFORE.replace('Three flats so far.', 'Four flats, says Alex.');
       const elsewhere = await lost((w, id) => back(w, id, other));
       for (const [run, text, state] of [[before, FLAT_BEFORE, 'possible-effect'], [elsewhere, other, 'unresolved']] as const) {
-        expect(await run.w.worker.status()).toMatchObject({ id: run.admitted.id, phase: 'saving' });
+        expect((await run.w.worker.status()).run).toMatchObject({ id: run.admitted.id, phase: 'saving' });
         expect(writesTo(run.w.calls, run.flat.id)).toHaveLength(1);
         expect(textAt(run.w, FLAT)).toBe(text);
         expect(await outcomeOf(run.w, run.admitted.id, run.edit)).toMatchObject({ state: 'possible-effect' });
@@ -4155,9 +4177,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
           await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
           await w.uploader.settled();
         }
-        const admitted = await w.worker.process('all');
+        const admitted = (await w.worker.process('all')).run;
         await w.runs.settled();
-        expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+        expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
         const manifest = (await manifestsV2(w)).find((m) => m.runId === admitted.id);
         expect(manifest, 'the run took the B path').toBeDefined();
         return { manifest, paths: editsOf(manifest).map((o) => o.effect.path) };
@@ -4223,7 +4245,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       /** A saving run reloaded on a Drive whose manifest now says v: 3, renamed to its digest when `matching`. */
       async function later(matching: boolean) {
         const w = await refusedView();
-        expect(await w.worker.status()).toMatchObject({ id: w.admitted.id, phase: 'saving' });
+        expect((await w.worker.status()).run).toMatchObject({ id: w.admitted.id, phase: 'saving' });
         const drive = FakeDrive.restore(await w.drive.snapshot());
         const [record] = (await drive.listAll(w.rootId)).filter((f) => !f.folder && f.name.startsWith('manifest-'));
         if (!record) throw new Error('no manifest record');
@@ -4294,11 +4316,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     }
     const isLinkMove = (id: string) => (at: DispatchAt): boolean => at.effect.kind === 'move' && at.effect.before.fileId === id;
     async function tidy(w: World): Promise<{ id: string; manifest: AnyManifest | undefined }> {
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       const manifest = (await manifestsAll(w)).find((m) => m.runId === admitted.id);
       expect(manifest, 'the run took the B path').toBeDefined();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       return { id: admitted.id, manifest };
     }
     const opOf = (m: AnyManifest | undefined, match: (o: OperationV2) => boolean): OperationV2 | undefined => (m?.operations as OperationV2[] | undefined)?.find(match);
@@ -4359,14 +4381,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('reconciles a lost create reply by its key, ending with one note', async () => {
       const { w, link } = await linkWorld();
       w.rules.push(once((c) => c.op === 'create-text' && c.name === NOTE_NAME, 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
-      for (let i = 0; i < 4 && (await w.worker.status())?.phase !== 'done'; i++) {
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
+      for (let i = 0; i < 4 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.calls.filter((c) => c.op === 'create-text' && c.name === NOTE_NAME)).toHaveLength(1);
       expect(await notesOf(w)).toHaveLength(1);
       expect(movesOf(w, link.id)).toBe(1);
@@ -4562,11 +4584,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
         await w.uploader.settled();
       }
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       const manifest = (await manifestsAll(w)).find((m) => m.runId === admitted.id);
       expect(manifest, 'the run took the B path').toBeDefined();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       return { id: admitted.id, manifest };
     }
     const archivesOf = (m: ManifestV2 | undefined, line: JournalRecord): OperationV2[] => {
@@ -4608,14 +4630,14 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('reconciles a lost rewrite reply by reading it back, writing it once', async () => {
       const { w, files } = await renamed();
       w.rules.push(once((c) => c.op === 'write-text' && c.id === files.weekend.id, 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'saving' });
-      for (let i = 0; i < 4 && (await w.worker.status())?.phase !== 'done'; i++) {
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'saving' });
+      for (let i = 0; i < 4 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(writesTo(w.calls, files.weekend.id)).toHaveLength(1);
       expect(textAt(w, WEEKEND)).toBe(REWRITTEN);
       expect(await pending(w)).toEqual([]);
@@ -4737,11 +4759,11 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         await w.uploader.addPile({ text: '', items: [pdf(`third ${n}.pdf`), pdf(`fourth ${n}.pdf`)] });
         await w.uploader.settled();
       }
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
       const manifest = (await manifestsAll(w)).find((m) => m.runId === admitted.id);
       expect(manifest, 'the run took the B path').toBeDefined();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       return { id: admitted.id, manifest };
     }
     const moveOf = (m: ManifestV2 | undefined, id: string): OperationV2 | undefined =>
@@ -4795,13 +4817,13 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('reconciles lost replies of the line and the move without merging twice', async () => {
       const { w, into, link } = await merging();
       w.rules.push(once((c) => c.op === 'write-text' && c.id === into.id, 'lose-reply'), once(isMoveOf(link.id), 'lose-reply'));
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      for (let i = 0; i < 6 && (await w.worker.status())?.phase !== 'done'; i++) {
+      for (let i = 0; i < 6 && ((await w.worker.status()).run)?.phase !== 'done'; i++) {
         w.clock.later();
         await after(w.worker, w.runs);
       }
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect(w.calls.filter((c) => c.op === 'write-text' && c.id === into.id)).toHaveLength(1);
       expect(w.calls.filter(isMoveOf(link.id))).toHaveLength(1);
       expect(textAt(w, INTO)?.split(LINE)).toHaveLength(2);
@@ -5112,9 +5134,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const held = async (w: { drive: FakeDrive; rootId: string }, id: string): Promise<Pile | undefined> => (await vaultOf(w).piles()).find((p) => p.id === id);
     /** Runs the next tidy-up to its end on the B path, and checks it was recorded there. */
     async function tidy(w: World): Promise<Manifest> {
-      const admitted = await w.worker.process('all');
+      const admitted = (await w.worker.process('all')).run;
       await w.runs.settled();
-      expect(await w.worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await w.worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       const manifest = (await manifestsOf(w)).find((m) => m.runId === admitted.id);
       if (!manifest) throw new Error('the run has no manifest: it did not take the B path');
       return manifest;
@@ -5129,7 +5151,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       await w.drive.createText(sys.id, 'last-run.json', JSON.stringify({ v: 1, run: { id: 'run-legacy', scope: 'all', phase: 'saving', requestedAt: Date.now() - 60_000, phaseAt: Date.now() - 1000 } }));
       const before = await domain(w.drive, w.rootId);
       const reopened = new FakeWorker({ drive: w.drive, scenario: 'first', rootId: w.rootId, runs: w.runs, fresh: false });
-      const seen = await reopened.status();
+      const seen = (await reopened.status()).run;
       expect(seen).toMatchObject({ id: 'run-legacy', phase: 'failed' });
       expect(seen?.failure).toMatch(/Some things may be in their new places already/);
       expect(viewOf(w)?.run).toMatchObject({ id: 'run-legacy', phase: 'failed' });
@@ -5279,7 +5301,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(w.calls).toEqual([]);
       expect(w.mutations()).toBe(0);
       expect(await domain(w.drive, w.rootId)).toBe(before);
-      expect(await w.worker.status()).toBeNull();
+      expect((await w.worker.status()).run).toBeNull();
       expect(bowerErrors(w).map((e) => e.message)).toContain(B_FAILURE);
     });
 
@@ -5299,7 +5321,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(at).not.toBeNull();
       const admitted = await runs.status({ account: ALEX.email, rootId });
       expect(admitted).toMatchObject({ id: at?.runId, phase: 'saving' });
-      expect(await worker.status()).toEqual(admitted);
+      expect((await worker.status()).run).toEqual(admitted);
       // As on the demo: a run asked for 70 s ago.
       expect(admitted?.requestedAt).toBeGreaterThanOrEqual(before - 70_000);
       expect(admitted?.requestedAt).toBeLessThanOrEqual(Date.now() - 70_000);
@@ -5307,7 +5329,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await manifestsOf({ drive, rootId })).map((m) => m.runId)).toEqual([at?.runId]);
       // No legacy run: the folder's view is still the one the situation started with, and asking joins the run.
       expect(drive.dump(rootId).get(SYSTEM.lastRun)).toBe(seeded);
-      expect((await worker.process('all')).id).toBe(at?.runId);
+      expect(((await worker.process('all')).run).id).toBe(at?.runId);
 
       // A reload: the page that ran it is gone; the service comes back and recovers it like any other run.
       const drive2 = FakeDrive.restore(await drive.snapshot());
@@ -5398,9 +5420,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect((await plan('instructions')).path).toBe('b');
 
       // The run is admitted on B and ends done; only the held pile stays in the inbox.
-      const admitted = await worker.process('all');
+      const admitted = (await worker.process('all')).run;
       await runs.settled();
-      expect(await worker.status()).toMatchObject({ id: admitted.id, phase: 'done' });
+      expect((await worker.status()).run).toMatchObject({ id: admitted.id, phase: 'done' });
       expect([...drive.dump(rootId).keys()].some((path) => path.startsWith(`.bower/runs/${admitted.id}/manifest-`))).toBe(true);
       expect((await new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'DEVICE_C' }).piles()).map((p) => p.id)).toEqual([odd.id]);
 
