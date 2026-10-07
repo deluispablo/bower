@@ -18,3 +18,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `8f74a46` | rules-template-bower | none: `RULES_TEMPLATE` (the empty Rules.md text and its `by: bower` mark) is added to the contracts and the fake Worker makes the file from it with the same bytes as before; no check or file shape changed |
 | `747e8bb` | home-sheet-and-focus | none: tests only (Home, palette), no file of the folder is read or written |
 | `c8c7908` | home-sheet-and-focus | none: the tidy-up sheet shows a finished run's end only for a run it watched, and focus returns to what opened the palette, a Home question or the Undo toast; screen behaviour only, no file shape or check changed |
+| `f5ba996` | home-sheet-and-focus | none: the same screen change as `c8c7908`, the watched run kept while rendering instead of in an effect (lint); no file shape or check changed |
