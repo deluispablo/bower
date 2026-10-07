@@ -7,7 +7,7 @@
   "assets": {
     "directory": "../dist",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/auth/*", "/me", "/drive/*", "/vault", "/process", "/status", "/session", "/health"]
+    "run_worker_first": ["/auth/*", "/me", "/drive/*", "/vault", "/process", "/status", "/session", "/health", "/runner/*"]
   },
   "kv_namespaces": [{ "binding": "BOWER_KV", "id": "6969d46bffdb4b1e90d068f84235fbec" }],
   // Logs for sign-in failures, free tier.
