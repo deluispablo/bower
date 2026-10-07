@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DriveHttp } from '../drive/drive-http';
 import type { DriveFile } from '../drive/drive-api';
 import { FakeDrive } from '../drive/fake-drive';
@@ -198,5 +198,24 @@ describe('the shared plan', () => {
     expect(capFake.get(ready.id)?.blocked).toBeNull();
     expect(capFake.get(edited.id)).toEqual({ blocked: SET_ASIDE.changed });
     expect(capFake.get(doubled.id)).toEqual({ blocked: SET_ASIDE.declaration });
+  });
+});
+
+describe('what the plan logs', () => {
+  it('an unreadable journal file logs no text', async () => {
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const sys = await drive.createFolder(root, '.bower');
+    const journal = await drive.createFolder(sys.id, 'changes');
+    await drive.upload(journal.id, 'one.json', new Blob(['{"rule": my secret plan for Alex']));
+    const lines: string[] = [];
+    const log = (...args: unknown[]): void => void lines.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' '));
+    const spy = vi.spyOn(console, 'error').mockImplementation(log);
+    await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+    spy.mockRestore();
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.join('\n')).not.toContain('secret');
+    expect(lines.join('\n')).not.toContain('rule');
   });
 });
