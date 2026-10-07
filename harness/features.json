@@ -4170,7 +4170,7 @@
       "The Worker alarm, the redispatch and the runner alone complete the run; no app call is needed."
     ],
     "verify": "pnpm exec vitest run src/data -t \"a run killed after any checkpoint ends like an uninterrupted run on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"attempt 2 reconciles an in-flight operation by read-back and never redoes it|the old attempt changes nothing after a takeover|a run killed after any checkpoint ends like an uninterrupted run\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-23 (recovery without the browser). The live cancel-and-recover is a later evaluator journey (behavior-suites-real-adapters, C16)."
   },
   {
