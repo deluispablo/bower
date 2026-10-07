@@ -13,7 +13,7 @@ import { Hono } from 'hono';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { JWTVerifyGetKey } from 'jose';
 
-import { encrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
+import { CryptoError, decrypt, encrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import {
@@ -66,6 +66,17 @@ function signedOut(cause: string, error?: unknown): HttpError {
 }
 
 /** The person object for `sub` (TL-P2-05: one per person, keyed by OIDC sub). */
+/** Whether `envelope` decrypts with `key`; a `CryptoError` means it does not, anything else is thrown. */
+async function readable(envelope: string, key: CryptoKey): Promise<boolean> {
+  try {
+    await decrypt(envelope, key);
+    return true;
+  } catch (err) {
+    if (err instanceof CryptoError) return false;
+    throw err;
+  }
+}
+
 function personFor(env: Env, sub: string) {
   return env.PERSON.get(env.PERSON.idFromName(sub));
 }
@@ -245,11 +256,17 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       throw new HttpError(403, 'forbidden');
     }
 
-    const encRefreshToken =
-      tokens.refreshToken === null
-        ? null
-        : await encrypt(tokens.refreshToken, await importEncryptionKey(env.TOKEN_ENC_KEY));
+    const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+    const encRefreshToken = tokens.refreshToken === null ? null : await encrypt(tokens.refreshToken, key);
     const person = personFor(env, identity.sub);
+    if (encRefreshToken === null) {
+      // Google sent no new token: a kept one this Worker cannot read (TOKEN_ENC_KEY rotated) is forgotten,
+      // as Google's `invalid_grant` would be, so the sign-in below finds none and asks for consent.
+      const kept = await reachPerson('encryptedRefreshToken', () => person.encryptedRefreshToken());
+      if (kept !== null && !(await readable(kept, key))) {
+        await reachPerson('forgetGoogleAccess', () => person.forgetGoogleAccess(kept));
+      }
+    }
     const signedIn = await reachPerson('signIn', () =>
       person.signIn({ email: identity.email, name: identity.name, encRefreshToken }),
     );
