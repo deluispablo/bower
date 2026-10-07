@@ -110,3 +110,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: runner-network-retry passes — Runner retries idempotent calls with backoff, reconciles writes by read-back, exits non-zero when unfinished (TL-P3-28 point 2)
 - 2026-10-07: save-timeout-honest passes — App writes get a bounded wait into the lost-reply path (TL-P3-28 point 4)
 - 2026-10-07: p4-corpus passes — Synthetic capability corpus with a structural scorer; five bench cases kept unchanged (TL-P4-01)
+- 2026-10-07: claude-provider passes — Headless Claude Code provider under the original permission policy, structured operations only (TL-P4-01)

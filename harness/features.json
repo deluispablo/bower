@@ -4608,7 +4608,7 @@
       "Recorded-reply tests with the scripted provider contract fixtures; no live call; the token never appears in logs."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a recorded Claude reply becomes operations the spine validates|a malformed or out-of-schema Claude reply fails truthfully and writes nothing|the Claude provider runs under the original permission policy and never logs the token\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-01 batch P4-1; live use waits for the owner secret."
   },
   {
