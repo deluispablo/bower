@@ -92,6 +92,9 @@ export function createErrorHandler<
 
     if (err instanceof HttpError) {
       console.error(`[${requestId}] ${err.code}: ${err.message}`, err.cause ?? '');
+      if (err.status === 503) {
+        c.header('Retry-After', '5');
+      }
       return c.json(
         { error: { code: err.code, message: err.message } },
         err.status,

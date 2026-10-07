@@ -103,6 +103,12 @@ export async function reach<T>(what: string, call: () => Promise<T>): Promise<T>
   try {
     return await call();
   } catch (err) {
+    // Version skew: a newer version reached an old person object (Cloudflare Durable Objects gradual deployment)
+    // The RPC call fails with a TypeError about an unimplemented method.
+    if (err instanceof TypeError && /^The RPC receiver does not implement the method/.test(err.message)) {
+      console.error(`person object: ${what} failed (version skew)`, err);
+      throw new HttpError(503, 'internal');
+    }
     console.error(`person object: ${what} failed`, err);
     throw new HttpError(500, 'internal');
   }
