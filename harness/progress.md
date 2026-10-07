@@ -103,3 +103,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: instance-private-check passes — chore(harness): instance-private-check passes
 - 2026-10-07: app-security-headers passes — chore(harness): app-security-headers passes
 - 2026-10-07: deletion-allowlist-doc passes — chore(harness): deletion-allowlist-doc passes
+- 2026-10-07: deploy-staging-upload-line passes — chore(harness): deploy-staging-upload-line passes

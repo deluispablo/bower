@@ -4396,7 +4396,7 @@
       "A test feeds a real wrangler deploy output (with asset lines, the URL holding bower-api, and the Worker line) and asserts bower-staging passes and bower-api fails."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"deploy-staging ignores asset upload lines\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-27; the lead's deploy of bd7e261 stopped on \"Uploaded 6 of 10 assets\"."
   },
   {
