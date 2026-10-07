@@ -4522,5 +4522,63 @@
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the runbook says the invitation stays after deletion\"",
     "passes": true,
     "note": "P3 security review F8 (Minor)."
+  },
+  {
+    "id": "rules-repair-existing-folder",
+    "task": "p3-e",
+    "category": "fix",
+    "what": "An existing folder whose Rules.md is byte-for-byte the old plain template is repaired by the runner at plan time (fenced, still as seen), so a rule typed in the app is worded on real Drive; any other Rules.md is never touched.",
+    "steps": [
+      "The runner, before planning, rewrites Rules.md to the RULES_TEMPLATE bytes and by=bower only when its bytes equal the old template exactly, fenced and still as seen.",
+      "The old-template constant is shared, not copied, between api and runner.",
+      "A Rules.md the person edited, or the original plain file, is left alone.",
+      "A test runs over an existing folder (no POST /vault) and the typed rule is worded."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"an existing folder with the old template Rules.md is repaired at plan time and the rule is worded|a Rules.md that is not the old template is never touched by the runner\"",
+    "passes": false,
+    "note": "TL-P3-28 (1); C16 found POST /vault runs only when /me has no folder (src/data/live/session.ts:111)."
+  },
+  {
+    "id": "runner-network-retry",
+    "task": "p3-e",
+    "category": "fix",
+    "what": "The runner retries idempotent calls (token, status report, Drive reads) at most 3 times with exponential backoff and jitter; a network error on a Drive write goes through the read-back reconcile, never a blind retry; an attempt that ends without a terminal report exits non-zero.",
+    "steps": [
+      "Idempotent calls retry 3 times with exponential backoff and jitter on network errors and 5xx/429.",
+      "Drive writes are never retried blindly: a network error reconciles by read-back.",
+      "main exits non-zero when the attempt ends without a terminal report (done or failed)."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a network error on an idempotent runner call is retried with backoff|a network error on a Drive write is reconciled by read-back, never retried blindly|an attempt that ends without a terminal report exits non-zero\"",
+    "passes": false,
+    "note": "TL-P3-28 (2); C16 run 37664576426 ended success on ECONNRESET in RunnerToken.grant while saving; the person waited 33 min."
+  },
+  {
+    "id": "home-sheet-and-focus",
+    "task": "p3-e",
+    "category": "fix",
+    "what": "Home never reopens a finished run result sheet on load, so the first press does what its label says; focus returns to the opener when the palette, a Home question or the Undo toast closes, never to body.",
+    "steps": [
+      "Home does not auto-open a finished run sheet on load.",
+      "Palette close (Escape or choice) returns focus to its opener.",
+      "Answering a Home question moves focus to a sensible next element, never body.",
+      "The Undo toast closing returns focus to where it was."
+    ],
+    "verify": "pnpm exec vitest run src -t \"Home does not reopen a finished run sheet on load|focus returns to the opener when the palette closes|focus never drops to body after a question is answered|focus never drops to body when the Undo toast closes\"",
+    "passes": false,
+    "note": "TL-P3-28 (3); closes the TL-P3-27 label item. WAI-ARIA APG dialog pattern."
+  },
+  {
+    "id": "save-timeout-honest",
+    "task": "p3-e",
+    "category": "fix",
+    "what": "Every app write gets a bounded wait; a write that gets no answer ends in the existing lost-reply path (not sure it saved, or offline) instead of sitting on Saving… forever.",
+    "steps": [
+      "A bounded wait on every Drive and Worker write the app makes, including adding a pile.",
+      "Timeout goes into the lost-reply reconcile path with its approved sentences.",
+      "No silent hang: the person always sees an outcome."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"a write that gets no answer ends in the lost-reply path after the bounded wait|adding a pile never sits on saving without an outcome\"",
+    "passes": false,
+    "note": "TL-P3-28 (4); C16 notes #7: Add sat on Saving… 100+ s, no request, no error."
   }
 ]
