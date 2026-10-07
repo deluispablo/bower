@@ -3842,11 +3842,11 @@
     "category": "fix",
     "what": "When a rename, move or task toggle fails with a network error after the request may have reached Drive, the app re-reads the item before telling the person: \"Saved.\" if it shows the change, the offline sentence if it shows the old state, and \"Bower isn't sure that saved. Check again when you're back online.\" if it cannot be read.",
     "steps": [
-      "A rename whose reply is lost but which landed says \"Saved.\" and shows the new name without a reload.",
+      "A rename whose reply is lost but which landed counts as saved: no error, the new name shows without a reload, and the journal records it once.",
       "A move whose reply is lost and which did not land gives the offline sentence and keeps the note where it was.",
       "A task toggle whose reply is lost and whose read-back fails says \"Bower isn't sure that saved. Check again when you're back online.\""
     ],
-    "verify": "pnpm exec vitest run src/data -t \"a lost reply to a rename that landed says Saved|a lost reply to a move that did not land says offline|a lost reply to a task toggle that cannot be read back says not sure\"",
+    "verify": "pnpm exec vitest run src/data -t \"a lost reply to a rename that landed counts as saved|a lost reply to a move that did not land says offline|a lost reply to a task toggle that cannot be read back says not sure\"",
     "passes": false,
     "note": "TL-P3-11 F2, from drive-real-behavior-suite check 7: Drive held the change once, but the app said \"You're offline\" (Google Cloud retry strategy, idempotency: read back, never assume)."
   }

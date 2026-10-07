@@ -68,3 +68,10 @@ From the worker-skeleton review (CLEAN): Hono cors sends Allow-Credentials/Expos
 From the P3-5 delta review (minor): a 409 counts as made even when that template item is now in the Bin; `vaultState` parses stored ids without a shape check; the folder listing has no paging past 1000 children.
 
 From R2 attempt 2 (minor): `/health` reports only the package version (`0.1.0`), so a staging check cannot confirm which deploy is live; the deploy can pass the SHA as `APP_VERSION` with `--var` (lead, 2026-10-07).
+
+From drive-real-behavior-suite (TL-P3-11, minor):
+- F4: the Undo toast after Bin is gone in under ~5.5 s; recheck at the P3 close against WCAG 2.2.1 Timing Adjustable.
+- F5: the rename sheet closes itself after a name-clash message, so the message flashes.
+- F6: an unknown `/search` route shows "Nothing here".
+- F7: the move sheet's current-place label "Now in …" reads like a success.
+- F8: "It may have been moved, renamed or put in the Bin." leaves the person at a dead end.
