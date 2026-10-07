@@ -323,3 +323,4 @@ spine-report-barrier-dispositions	fd2a7fde46e8bc00	2026-10-07	red (fixed in 76f0
 scripted-semantic-provider	e2016067ce69c874	2026-10-07	red (fixed in db9bd5f)
 report-barrier-truth-fix	004c78ed3bde14c9	2026-10-07	red (fixed in 13e3d84)
 runner-restart-truth-fix	bc7ab57ba0c7003d	2026-10-07	red (fixed in 6cf8463)
+spine-ordered-status	0b4597d64603b0cd	2026-10-07	red (fixed in 186ddc3)

@@ -4184,7 +4184,7 @@
       "The fake applies the same rule; one contract test runs the same report sequences on the Worker and the fake and gets the same visible runs and revisions."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a later attempt never moves the phase backward|the revision rises only when the visible run changes\" && pnpm exec vitest run src/data -t \"the fake and the Worker order reports the same way\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-23 (ordered status); takes the P3-12 re-review polish item (attempt 2 posts writing after saving)."
   }
 ]

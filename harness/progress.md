@@ -78,3 +78,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: scripted-semantic-provider passes — chore(harness): scripted-semantic-provider passes
 - 2026-10-07: report-barrier-truth-fix passes — chore(harness): report-barrier-truth-fix passes
 - 2026-10-07: runner-restart-truth-fix passes — chore(harness): runner-restart-truth-fix passes
+- 2026-10-07: spine-ordered-status passes — chore(harness): spine-ordered-status passes
