@@ -103,3 +103,4 @@ spine-recovery-without-browser,implementer,claude,opus,high,1,229384,,,,,,70,15.
 first-real-run attempt 2,evaluator,claude,sonnet,medium,1,90431,,,,,,7,0.8,BLOCK (token route serves SPA),2026-10-07
 staging-runner-routes,implementer,claude,haiku,low,1,84957,,,,,,52,3.9,delivered,2026-10-07
 p3-13-delta-review,reviewer,claude,opus,medium,1,141958,,,,,,34,3.7,BLOCK (2 important),2026-10-07
+recovery-redispatch-after-dead-job,implementer,claude,opus,high,1,84417,,,,,,12,2.1,delivered,2026-10-07
