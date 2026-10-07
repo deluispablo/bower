@@ -114,3 +114,4 @@ dispositions-match-report,implementer,claude,opus,high,1,161619,,,,,,50,13.1,del
 upload-queue-real,implementer,claude,opus,high,1,152178,,,,,,38,17.1,delivered,2026-10-07
 deploy-and-migrations,implementer,claude,opus,high,1,110043,,,,,,23,6.0,delivered,2026-10-07
 declare-piles-real,implementer,claude,opus,high,1,113900,,,,,,33,13.6,delivered,2026-10-07
+runbook-p3,implementer,claude,sonnet,medium,1,88864,,,,,,13,1.9,delivered,2026-10-07
