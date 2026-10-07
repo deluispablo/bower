@@ -1,9 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
 
 import type { Env } from './env.js';
+import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
 import { ACTIVE_PHASES, STALE_FAILURE, isStale, utcDay } from './process.js';
 import type { AdmitInput, AdmitResult, RunPhase, RunReply, RunScope, RunWire } from './process.js';
+import { PHASE_RANK, TICKET_TTL_MS, hashTicket, newTicket } from './run-ticket.js';
+import type { RunnerAccess, RunnerReport, RunnerReportResult } from './run-ticket.js';
 import { LEASE_TTL_MS } from './session-lease.js';
 import type { LeaseReply, SessionAction } from './session-lease.js';
 
@@ -500,9 +503,103 @@ export class Person extends DurableObject<Env> {
     });
   }
 
-  /** Mints the ticket of `attempt` of run `runId` (stub). */
-  async mintTicket(runId: string, attempt: number, now: number): Promise<string> {
-    return await Promise.resolve(`${runId}${attempt}${now}`.slice(0, 0));
+  /**
+   * Mints the ticket of `attempt` of the going run `runId` (worker contract, "Runner wire"; TL-P3-18), for
+   * `worker-dispatch` to send in the payload. Only its SHA-256 is kept, with the attempt and an expiry at
+   * `now` + 60 min; it replaces the run's earlier ticket, so an older attempt's ticket stops working. Null,
+   * with nothing written, for an attempt not newer than the kept one or a run unknown or ended. The ticket
+   * is never logged.
+   */
+  async mintTicket(runId: string, attempt: number, now: number): Promise<string | null> {
+    if (!Number.isSafeInteger(attempt) || attempt < 1) return null;
+    const ticket = newTicket();
+    // Hashed before the transaction: nothing is read before this await, so no call can slip in between.
+    const hash = await hashTicket(ticket);
+    return this.ctx.storage.transactionSync((): string | null => {
+      const sql = this.ctx.storage.sql;
+      const run = sql.exec<{ phase: RunPhase }>('SELECT phase FROM runs WHERE id = ?', runId).toArray()[0];
+      if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) return null;
+      const held = sql.exec<{ epoch: number }>('SELECT epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0];
+      if (held !== undefined && attempt <= held.epoch) return null;
+      // The run's earlier ticket goes, and so do the tickets of runs no longer kept.
+      sql.exec('DELETE FROM run_ticket WHERE run_id = ? OR run_id NOT IN (SELECT id FROM runs)', runId);
+      sql.exec(
+        'INSERT INTO run_ticket (hash, run_id, epoch, retired, expires_at) VALUES (?, ?, ?, 0, ?)',
+        hash,
+        runId,
+        attempt,
+        now + TICKET_TTL_MS,
+      );
+      return ticket;
+    });
+  }
+
+  /**
+   * `GET /runner/runs/:id/token`: the attempt and folder that the ticket hashed to `hash` opens for run
+   * `runId`, or null when it is missing, wrong, retired or expired at `now`. A stale run is ended first,
+   * as `runStatus` does, so its ticket no longer works.
+   */
+  runnerAccess(runId: string, hash: string, now: number): RunnerAccess | null {
+    return this.ctx.storage.transactionSync((): RunnerAccess | null => {
+      this.expire(now);
+      const ticket = this.liveTicket(runId, hash, now);
+      return ticket === undefined ? null : { attempt: ticket.epoch, folderId: this.folderId() };
+    });
+  }
+
+  /**
+   * `POST /runner/runs/:id/status` (worker contract, "Runner wire"). One synchronous transaction, in order:
+   * 1. the ticket: live and matching, else `signed-out`;
+   * 2. the attempt: the ticket's own, else `stale-attempt`;
+   * 3. a repeat of the last `seq` answers the current state and changes nothing;
+   * 4. a lower `seq`, a phase going back, or a run already ended is `stale-report`;
+   * 5. the run's phase (`phaseAt` when it changes), `total`, `failure` and `finishedAt` as given, the
+   *    report's `seq` kept, and the revision raised;
+   * 6. `done` or `failed` retires the ticket.
+   */
+  runnerReport(runId: string, hash: string, report: RunnerReport, now: number): RunnerReportResult {
+    return this.ctx.storage.transactionSync((): RunnerReportResult => {
+      const sql = this.ctx.storage.sql;
+      this.expire(now);
+      const ticket = this.liveTicket(runId, hash, now);
+      if (ticket === undefined) return { accepted: false, refused: 'signed-out' };
+      if (report.attempt !== ticket.epoch) return { accepted: false, refused: 'stale-attempt' };
+      const run = sql.exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`, runId).toArray()[0];
+      if (run === undefined) return { accepted: false, refused: 'signed-out' };
+      if (report.seq === ticket.report_seq) {
+        return { accepted: true, reply: { run: toWire(run), revision: this.revision() } };
+      }
+      const late = ticket.report_seq !== null && report.seq < ticket.report_seq;
+      if (late || !ACTIVE_PHASES.includes(run.phase) || PHASE_RANK[report.phase] < PHASE_RANK[run.phase]) {
+        return { accepted: false, refused: 'stale-report' };
+      }
+      const ended = !ACTIVE_PHASES.includes(report.phase);
+      const row = sql
+        .exec<RunRow>(
+          `UPDATE runs SET phase = ?1, phase_at = CASE WHEN phase = ?1 THEN phase_at ELSE ?2 END,
+             total = COALESCE(?3, total), failure = ?4, finished_at = ?5
+           WHERE id = ?6
+           RETURNING ${RUN_COLUMNS}`,
+          report.phase,
+          now,
+          report.total ?? null,
+          report.failure ?? null,
+          ended ? now : null,
+          runId,
+        )
+        .one();
+      sql.exec('UPDATE run_ticket SET report_seq = ?, retired = ? WHERE run_id = ?', report.seq, ended ? 1 : 0, runId);
+      return { accepted: true, reply: { run: toWire(row), revision: this.raiseRevision() } };
+    });
+  }
+
+  /** The run's ticket when it is live at `now` and its hash equals `hash` (compared in constant time). */
+  private liveTicket(runId: string, hash: string, now: number): TicketRow | undefined {
+    const row = this.ctx.storage.sql
+      .exec<TicketRow>('SELECT hash, epoch, expires_at, retired, report_seq FROM run_ticket WHERE run_id = ?', runId)
+      .toArray()[0];
+    if (row === undefined || row.retired === 1 || row.expires_at <= now) return undefined;
+    return timingSafeEqual(row.hash, hash) ? row : undefined;
   }
 
   /** `GET /status`: writes a stale run's expiry first (as `admit` does), then the current run and revision. */
@@ -532,6 +629,8 @@ export class Person extends DurableObject<Env> {
       STALE_FAILURE,
       current.id,
     );
+    // An ended run's ticket stops working, as a runner's own `done` or `failed` retires it.
+    this.ctx.storage.sql.exec('UPDATE run_ticket SET retired = 1 WHERE run_id = ?', current.id);
     this.raiseRevision();
   }
 
@@ -571,6 +670,15 @@ interface RunRow extends Record<string, SqlStorageValue> {
   finished_at: number | null;
   total: number | null;
   failure: string | null;
+}
+
+interface TicketRow extends Record<string, SqlStorageValue> {
+  hash: string;
+  /** The attempt the ticket was minted for. */
+  epoch: number;
+  expires_at: number;
+  retired: number;
+  report_seq: number | null;
 }
 
 function toWire(row: RunRow): RunWire {
