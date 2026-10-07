@@ -1,36 +1,41 @@
-# Current handoff: Claude coordinator, P2 fast close
+# Current handoff: Claude coordinator, P3 closed, paused
 
-Coordinator: Claude Code session `claude-orchestrator-2026-10-06-e759b272`; integration `/Users/deluisp/Projects/bower-app`, branch `codex/close-phase-2`. Lead: the Claude Planificador session ([DECISIONS.md](DECISIONS.md)). Owner rules: [TL-P2-38](2026-10-06-tl-p2-38-fast-close.md) fast close, [TL-P2-39](2026-10-06-tl-p2-39-main-and-staging.md) green batches to `main` + staging, [TL-P2-41](2026-10-06-tl-p2-41-token-budget.md) token budget. Earlier handoff text: [archive](archive/2026-10-06-handoff-before-tl-p2-41.md). Minors: [P2_POLISH.md](P2_POLISH.md).
+Coordinator: the Claude Code session named "Orquestador". It integrates in `/Users/deluisp/Projects/bower-app` on branch `claude/p3`. Lead: the Planificador session ([DECISIONS.md](DECISIONS.md)). Output rule: [TL-P3-29](2026-10-07-tl-p3-29-output-rule-survives-compaction.md), now in AGENTS.md. Minors: [P2_POLISH.md](P2_POLISH.md). P2 handoff: git history of this file.
 
-## Where things stand
+## Where things stand (2026-10-07)
 
-- **P2 is closed** under the owner's conditional acceptance, now at `00ec9a5` after the TL-P2-47 walk and fix round (dossier addendum); first closure at `3e6e7da`: [2026-10-06-p2-dossier.md](2026-10-06-p2-dossier.md). Four full suites green there (check 3486, e2e 216, e2e:fake 240, e2e:pwa 4); review CLEAN (TL-P2-46 Opus fallback); evaluation's F1/F2 focus findings fixed in `focus-after-replay-and-route`; 281/281 entries pass. Minors in [P2_POLISH.md](P2_POLISH.md).
-- Coordinator runs from `/Users/deluisp/Projects/bower-app`: project agents load and the quiet-gates hook is active; dispatch only through `.claude/agents/`, never with `model`.
+- **P3 is closed. On hold.**
+  - Dossier: [2026-10-07-p3-dossier.md](2026-10-07-p3-dossier.md). The lead reviewed it: accurate.
+  - P3 acceptance is the owner's decision, and P4 is not authorized. **Start nothing until the lead messages.**
+- **Frozen code: `426a9fd`.** Staging runs `aeb99a4` (bundle `index-nkzmUjZs.js`).
+  - The four suites are green, all 350 entries pass, and the freeze reviews passed.
+  - C16 re-walk PASS.
+  - C01's live revocation is pending, deferred by the owner. It will be done later with a different test account.
+- **Codex reviews the P3 range on 2026-10-12, before P4** ([TL-P3-16](2026-10-07-tl-p3-16-codex-review-after-p3.md)).
+- **Backup:** `backup/main` = `680e95e` (the dossier), checked against the remote. The lead later added `22299b5` to main.
+  - Push per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then check the remote SHA.
+  - Bash runs outside the sandbox (keychain).
+- **Cleanup done:** coordinator worktrees removed; nothing was left on port 5198.
+  - **Kept:** `/private/tmp/bower-p2-o5-snapshot` holds **uncommitted P2 work** (fake-drive WTF-8 bytes, fake-runner, pile-readiness, drive-vault; base `b3c2eb7`). The lead decides whether it is wanted or dropped.
+  - **Kept:** `/private/tmp/bower-tl-planning` (the lead's), `/private/tmp/p3-c16/` (walk inputs and notes, cited by the dossier), and the P2 `*-evidence` folders.
 
-- **Backup:** `backup/main` = local `main` at the P3-9 close, `b83dc98` (pushed and verified 2026-10-07; range scan clean). Git reaches `gh` through the keychain; Bash needs to run outside the sandbox. The coordinator pushes after each green integration per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then verify the remote SHA.
+## How to run a round (unchanged)
 
-## The plan, in order
+- At most two workers at a time, through `.claude/agents/` only.
+- Packets are one page. Card lines stay under 120 characters (TL-P3-29).
+- `bash harness/done.sh <id> "<msg>" --fixed-in <sha>`. When the fix revert can't load (a new file), or later commits touched the same lines:
+  - prove the red at the tests-only commit by hand;
+  - close with `--known-green "<evidence>"`.
+  - On the "no assertion failed" exit, `done.sh` leaves the reverted files behind. Restore them with `git checkout`.
+- Suites per batch on an idle machine, with logs to `/tmp/<name>-*.log`. Merge each worker branch with `--no-ff` into `claude/p3`. Main moves with `git fetch -q . claude/p3:main`.
 
-1. P3 started (TL-P3-01, integration branch `claude/p3`); batch P3-1 entries: C11 "no policy change from documents" and an app console-error e2e check.
-2. Coordinator resumes from HANDOFF/ACTIVE and runs P3 batches under the same method. Codex is back as reviewer from 2026-10-12 (no re-review of 4d7ab08, TL-P2-46).
+## Staging traps (P3)
 
-## How to run a round
-
-- At most two workers at a time, through `.claude/agents/` only (TL-P2-44). Packets one page with the rules copied in; workers read only `WORKER.md` + packet.
-- Ordinary entry: self-review + coordinator spot check. Independent review only for contracts, data or shared persistence, plus one batch review at the freeze; a delta only after a Critical.
-- Per entry: `pnpm check` + the touched screens' e2e; full `e2e` + `e2e:fake` once per batch, under `caffeinate -dims`, display awake.
-- Workers never use port 5191 (Playwright reuses it): a private config on 5195–5198.
-- `harness/done.sh <id> "<msg>" --fixed-in <sha>`; when later commits touched the same lines, `--known-green` citing the review's red.
-
-## Traps on this machine
-
-- A browser evaluation on a reused preview port can run an old build from the PWA service worker's cache: use a fresh port or clear service workers and caches, and check the loaded `index-*.js` against `dist/assets`.
-- Stopping a background suite run: kill the parent shell and the orphaned `pnpm e2e` by PID (`ps -eo pid,ppid,command`), then check that port 5191 is free; a `pkill -f` pattern on the quoted command line does not match, and a surviving run overlaps the next one on port 5191.
-- Playwright stalls when the display sleeps (`system_profiler SPDisplaysDataType | grep Asleep`); never edit `src/` while e2e or `done.sh` runs.
-- macOS has no `timeout`; chain gates with `&&`, not `;`.
-- A jsdom teardown race can fail `pnpm check` once under load; rerun before blaming code.
-- Verify `-g` patterns must name full test titles (the harness refuses short ones).
-
-## Decisions taken in phase 2
-
-All rulings are indexed in [DECISIONS.md](DECISIONS.md). P3 notes: a session `leave` after `DELETE /me` must be answered harmlessly; the real runner drops the last edit without re-reading on a size refusal; native Workspace members need their own capture rule; the Inbox byte checks must use Drive checksums on the real source, and the real listing must request `sha256Checksum`/`size` and mark a file with neither as `unchecked` (O5 I1).
+- **Presses:** the permission system refuses an evaluator's press. The coordinator presses, by keyboard: focus the button by page script, then Enter.
+  - The owner allows "Tidy up", run, answer, add-pile, "Use here" and Bin/Undo (probe folder only) presses during walks.
+  - Never: delete-account, sign-in or sign-out, production.
+- **Service worker:** a new one waits until every tab closes, and a reload keeps the old bundle. Close the tab and open a new one, then check `index-*.js`.
+  - The new tab then needs "Use here".
+- **The Worker's CSP is `default-src 'none'`**, so page-script `fetch` from `/health` or `/me` documents fails. Run scripts from an app page.
+- **A stuck "saving" run:** read the job with `gh run view <id> -R deluispablo/bower-home --log` (read only). The Worker redispatches attempt 1 at phaseAt + 30 min.
+- **Test account addresses never go in the repo or in messages.** The staging origin and the probe folder id go only in worker prompts.
