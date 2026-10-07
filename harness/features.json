@@ -4424,7 +4424,7 @@
       "A test reads tidy.yml and requires @<40 hex> on every uses:."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"every action in tidy.yml is pinned to a commit SHA\"",
-    "passes": false,
+    "passes": true,
     "note": "P3 security review F2 (Important); GitHub Actions hardening."
   },
   {
