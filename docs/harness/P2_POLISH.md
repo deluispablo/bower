@@ -159,3 +159,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - `admission holds a pile whose note is not ready` passes with notes:false too; nothing tests the notes:true branch alone (e.g. a declared pile whose bound note differs from the first).
 - log-no-folder-content (left out, check at the freeze review): `console.error(e)` of caught Drive/fetch errors (runner/src/drive.ts:222; src/data/spine/records.ts:183, :215, :370) were not traced for what the error carries.
 - runner/test/deploy-staging.test.ts 'refuses production and dirty checkouts' timed out at 5000ms under load 26 once (passed on retry): give the script tests a longer timeout.
+- P3 freeze review (minor, PASS):
+  - deploy-staging.sh: `Uploaded bower-api` fails with the generic "no upload line" message, not a production alarm; check_config greps flattened text and its `//` strip also cuts `//` in https strings.
+  - auth.ts: logout and the callback do not expire the old `bower_session`/`bower_oauth` (never read, harmless).
+  - The landing's `'unsafe-eval'` is on the app's origin (a landing injection could call /drive/token with the cookie); narrower: precompile its x-dc script in fix-landing.mjs (P4).
+  - runner/src/drive.ts:225: `res.json()` on Drive metadata is outside the try; a malformed listing would log a SyntaxError that might quote a file name. api/src/security.ts:7 points at a missing docs/security.md (P4 note).
+  - (tidy.yml checkout SHA fbc6f39 verified by the coordinator with `git ls-remote`: v5 = v5.1.0.)
