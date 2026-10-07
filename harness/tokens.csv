@@ -125,3 +125,4 @@ deploy-staging-production-check,implementer,claude,haiku,low,1,68917,,,,,,25,3.7
 security-review,reviewer,claude,opus,high,1,223612,,,,,,51,6.5,FINDINGS (3 important 5 minor),2026-10-07
 token-key-rotation-reconsent,implementer,claude,opus,high,1,93663,,,,,,22,3.0,delivered,2026-10-07
 tidy-pin-actions,implementer,claude,haiku,low,1,64036,,,,,,21,3.2,delivered,2026-10-07
+log-no-folder-content,implementer,claude,sonnet,medium,1,87481,,,,,,17,1.9,delivered,2026-10-07
