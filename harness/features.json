@@ -4141,7 +4141,7 @@
       "The barrier writes .bower/runs/<run_id>/dispositions.json, one line per manifest item including journal lines, before last-run.json; pile-disposition.ts is unchanged."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a run that changed nothing never says changes were made|a restarted runner's done reaches the Worker|every admitted item's disposition is readable after the run, journal lines included\" && pnpm -C api exec vitest run -t \"a stale report answers the current seq and phase\"",
-    "passes": false,
+    "passes": true,
     "note": "P3-11 delta review I1–I3; TL-P3-22 addendum (drafts 1–4 adopted, plus: a 409 whose phase is done or failed ends the runner's reporting)."
   }
 ]

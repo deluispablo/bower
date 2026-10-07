@@ -76,3 +76,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: spine-operations-checkpoints passes — chore(harness): spine-operations-checkpoints passes
 - 2026-10-07: spine-report-barrier-dispositions passes — chore(harness): spine-report-barrier-dispositions passes
 - 2026-10-07: scripted-semantic-provider passes — chore(harness): scripted-semantic-provider passes
+- 2026-10-07: report-barrier-truth-fix passes — chore(harness): report-barrier-truth-fix passes
