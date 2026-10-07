@@ -91,3 +91,10 @@ From the P3-7 delta review (minor):
 - `requireLease` checks once per call, as the contract says.
 - `runs.ts` still clears `refused` on a stale good answer that is not accepted. It corrects itself on the next beat.
 - `forget()`: an `await` sits between `deleteAll()` and `kv.put(generationFloor)`. A crash in that gap would lose the floor and the 204 (P3-7 re-review, minor).
+
+From the P3-8 delta review (PASS, minor):
+- `forget()` also wipes `quota` and `control`. Delete followed by a new sign-in resets the day's quota and the revision to 0; the client recovers, because sign-out sets `revision = -1`.
+- Only the last 20 runs are kept, so a repeated old `requestId` counts as new. This is documented, and the active run is never dropped.
+- `vault.ts:322`: `signedOutNow()` runs after the final write. A sign-out right after `markFolderComplete` answers 401 though the folder is complete; nothing is lost.
+- `runs.ts:119`: `start()` raises `generation` and `accepted` even when it drops an older admission answer, so `/status` replies already in flight are dropped. The next poll recovers.
+- There is no direct test for a run that expires while its `requestId` is repeated.
