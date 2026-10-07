@@ -121,8 +121,9 @@ export class Person extends DurableObject<Env> {
   /**
    * Records a sign-in: the address and name from the ID token, and the
    * encrypted refresh token when Google sent one (a sign-in without one
-   * keeps the token already kept). The generation is left as it is, so a
-   * sign-in never revives a retired cookie.
+   * keeps the token already kept; the callback first forgets a kept one it
+   * cannot decrypt, so an unreadable token is never kept past a sign-in).
+   * The generation is left as it is, so a sign-in never revives a retired cookie.
    */
   signIn(input: { email: string; name: string; encRefreshToken: string | null }): SignInResult {
     const row = this.ctx.storage.sql

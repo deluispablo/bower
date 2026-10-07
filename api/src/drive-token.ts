@@ -14,7 +14,7 @@ import { Hono } from 'hono';
 
 import { requireSession } from './auth.js';
 import type { AuthDeps } from './auth.js';
-import { decrypt, importEncryptionKey } from './crypto.js';
+import { CryptoError, decrypt, importEncryptionKey } from './crypto.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import { refreshAccessToken } from './google.js';
@@ -39,7 +39,8 @@ export interface DriveTokenOptions {
 /**
  * A Drive access token for the person `sub`: the cached one while it has
  * more than a minute left, otherwise one minted from the refresh token.
- * When Google refuses the refresh token (`invalid_grant`), the person's
+ * When Google refuses the refresh token (`invalid_grant`), or the kept
+ * token cannot be decrypted (the encryption key was rotated), the person's
  * stored access is forgotten and their sessions retired, and this throws
  * 401 `signed-out`. Does not need a folder: the pointer check is the
  * route's, since making the folder itself needs a token.
@@ -61,7 +62,17 @@ export async function accessTokenOf(
   }
   const encrypted = await person.encryptedRefreshToken();
   if (encrypted === null) throw new HttpError(401, 'signed-out', undefined, { cause: new Error('no refresh token kept') });
-  const refreshToken = await decrypt(encrypted, await importEncryptionKey(env.TOKEN_ENC_KEY));
+  const key = await importEncryptionKey(env.TOKEN_ENC_KEY);
+  let refreshToken: string;
+  try {
+    refreshToken = await decrypt(encrypted, key);
+  } catch (err) {
+    if (!(err instanceof CryptoError)) throw err;
+    // Kept under a key the Worker no longer has (TOKEN_ENC_KEY rotated): as Google's `invalid_grant`,
+    // the token is forgotten and the sessions retired, so the next sign-in asks for consent.
+    await person.forgetGoogleAccess(encrypted);
+    throw new HttpError(401, 'signed-out', undefined, { cause: new Error(`refresh token unreadable: ${err.code}`) });
+  }
   // The lifetime counts from before Google was asked, so the token is never kept past its real end.
   const asked = Date.now();
   let minted;
