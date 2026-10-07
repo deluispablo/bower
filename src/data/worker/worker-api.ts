@@ -19,6 +19,13 @@ export interface RunWire {
 }
 
 /** A run received from the Worker or read from the runner's report. */
+/**
+ * A run with the Worker's revision of it (TL-P3-15): the revision only rises, so of two answers the higher is the
+ * newer, whatever order they arrive in.
+ */
+export interface RunReply { run: RunWire; revision: number }
+export interface StatusReply { run: RunWire | null; revision: number }
+
 export function isRunWire(value: unknown): value is RunWire {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const r = value as Record<string, unknown>;
@@ -55,9 +62,9 @@ export interface WorkerApi {
    * Starts a tidy-up, or answers the one already going. `requestId`: made once per press of Tidy up and sent on
    * every retry of it (TL-P3-15); a repeat answers that press's run, even once it has ended.
    */
-  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean; requestId?: string }): Promise<RunWire>;
+  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean; requestId?: string }): Promise<RunReply>;
   /** The run going now, or the last one. */
-  status(): Promise<RunWire | null>;
+  status(): Promise<StatusReply>;
   /**
    * The person's one active place (TL-P2-14): `check` keeps this place's lease (or takes a free or expired
    * one), `take` moves it here with a higher epoch, `leave` lets it go. Every client has it (TL-P2-24):

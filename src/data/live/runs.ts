@@ -12,7 +12,7 @@
 import type { RunSource, Unsubscribe } from '../sources';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
-import { httpStatusOf, type RunWire, type WorkerApi } from '../worker/worker-api';
+import { httpStatusOf, type RunWire, type StatusReply, type WorkerApi } from '../worker/worker-api';
 
 const FAST_MS = 4_000;
 const SLOW_MS = 60_000;
@@ -45,8 +45,11 @@ export class LiveRuns implements RunSource {
   private loading = new Map<string, Promise<void>>();
   private retired = new Set<string>();
   private generation = 0;
+  /** Request tickets: only to tell a refusal that is still current (the 4xx logic); the order of answers is the revision's. */
   private issued = 0;
   private accepted = 0;
+  /** The highest revision of the run this took; an answer below it is older news and is dropped (TL-P3-15). */
+  private revision = -1;
   private starts: Promise<unknown> = Promise.resolve();
   private foreground: Promise<void> | null = null;
   private refreshing: Promise<void> | null = null;
@@ -80,6 +83,7 @@ export class LiveRuns implements RunSource {
     this.listeners.clear();
     if (reset) {
       this.last = null;
+      this.revision = -1;
       this.took.clear();
       this.reports.clear();
       this.retired.clear();
@@ -111,13 +115,17 @@ export class LiveRuns implements RunSource {
     this.checkOpen();
     const piles = scope === 'all' ? (await this.vault.piles()).map((p) => p.id) : [];
     this.checkOpen();
-    const wire = await this.worker.process(scope, opts);
+    const reply = await this.worker.process(scope, opts);
     this.checkOpen();
     // Successful admission supersedes even status requests issued while process waited.
     this.generation++;
     this.refused = null;
     this.accepted = ++this.issued;
-    this.take(wire, piles);
+    // The admission answer counts like any other: one older than what this took is dropped.
+    if (reply.revision >= this.revision) {
+      this.revision = reply.revision;
+      this.take(reply.run, piles);
+    }
     await this.hydrate();
     this.checkOpen();
     if (!this.last) throw new BowerError('conflict', 'The tidy-up status changed; try again.');
@@ -134,9 +142,9 @@ export class LiveRuns implements RunSource {
     if (this.refused && !opts.again) throw this.refused;
     const generation = this.generation;
     const ticket = ++this.issued;
-    let wire: RunWire | null;
+    let reply: StatusReply;
     try {
-      wire = await this.worker.status();
+      reply = await this.worker.status();
     } catch (e) {
       // 401 is the session's to handle and 429 can pass; any other 4xx is a client error that asking again cannot fix.
       if (clientError(e) && !this.disposed && generation === this.generation && ticket > this.accepted) this.refused = e;
@@ -145,9 +153,10 @@ export class LiveRuns implements RunSource {
     }
     const wasRefused = this.refused;
     this.refused = null;
-    if (!this.disposed && generation === this.generation && ticket > this.accepted) {
-      this.accepted = ticket;
-      this.take(wire);
+    if (!this.disposed && generation === this.generation && reply.revision >= this.revision) {
+      this.accepted = Math.max(this.accepted, ticket);
+      this.revision = reply.revision;
+      this.take(reply.run);
       if (wasRefused) this.schedule();
     }
     await this.hydrate();

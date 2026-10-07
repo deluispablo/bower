@@ -7,11 +7,16 @@ import { B_FAILURE, FakeRunService } from '../fake/fake-run-service';
 import { seedFakeDrive } from '../fake/seed';
 import type { Scenario } from '../demo/scenario';
 import { BowerError, type RunReport, type RunState } from '../types';
-import type { Me, RunWire } from '../worker/worker-api';
+import type { Me, RunReply, RunWire, StatusReply } from '../worker/worker-api';
 import { WorkerHttp } from '../worker/worker-http';
 import { makeLiveSources, type LiveSources } from './index';
 
 let live: LiveSources | null = null;
+/** The Worker's answers in the order it gave them: each helper call is a newer revision, unless one is named. */
+let seq = 0;
+const st = (run: RunWire | null, revision = ++seq): StatusReply => ({ run, revision });
+const pr = (run: RunWire, revision = ++seq): RunReply => ({ run, revision });
+
 afterEach(() => {
   live?.dispose();
   live = null;
@@ -394,8 +399,8 @@ describe('session and folder isolation', () => {
     const entered = deferred<undefined>();
     const release = deferred<undefined>();
     const wire: RunWire = { id: 'B', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 };
-    const process = vi.spyOn(worker, 'process').mockResolvedValue(wire);
-    if (boundary === 'process') process.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { ...wire, id: 'A' }; });
+    const process = vi.spyOn(worker, 'process').mockResolvedValue(pr(wire));
+    if (boundary === 'process') process.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return pr({ ...wire, id: 'A' }); });
     else {
       const flush = s.vault.flushJournal.bind(s.vault);
       vi.spyOn(s.vault, 'flushJournal').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return flush(); });
@@ -420,12 +425,12 @@ describe('session and folder isolation', () => {
     const entered = deferred<undefined>();
     const release = deferred<undefined>();
     const wire: RunWire = { id: 'A', scope: 'all', phase: 'done', requestedAt: 1, phaseAt: 1 };
-    const status = vi.spyOn(worker, 'status').mockResolvedValue(wire);
+    const status = vi.spyOn(worker, 'status').mockResolvedValue(st(wire));
     vi.spyOn(s.vault, 'lastRun').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } }; });
     const old = outcome(s.runs.current());
     await entered.promise;
     await switchToB();
-    status.mockResolvedValue(null);
+    status.mockResolvedValue(st(null));
     expect(await s.runs.current()).toBeNull();
     const changed = vi.fn();
     s.runs.subscribe(changed);
@@ -498,7 +503,7 @@ describe('session and folder isolation', () => {
 
   it.each(['locks', 'seen'] as const)('reused sources isolate account and folder changes (signed-out run %s does not retain A)', async (boundary) => {
     const { s, worker } = await pair(false);
-    vi.spyOn(worker, 'status').mockResolvedValue({ id: 'A', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 1 });
+    vi.spyOn(worker, 'status').mockResolvedValue(st({ id: 'A', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 1 }));
     await s.runs.current();
     expect([...s.runs.runningPiles()]).toEqual(['*']);
     await s.session.signOut();
@@ -591,8 +596,8 @@ describe('LiveRuns', () => {
 
   async function controlled() {
     const s = await open();
-    const status = vi.spyOn(s.worker, 'status').mockResolvedValue(wire('OLD', 'reading'));
-    const process = vi.spyOn(s.worker, 'process').mockResolvedValue(wire('NEW', 'queued'));
+    const status = vi.spyOn(s.worker, 'status').mockResolvedValue(st(wire('OLD', 'reading')));
+    const process = vi.spyOn(s.worker, 'process').mockImplementation(async () => pr(wire('NEW', 'queued')));
     const lastRun = vi.spyOn(s.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire('OLD', 'done'), report } });
     return { s, status, process, lastRun };
   }
@@ -608,18 +613,40 @@ describe('LiveRuns', () => {
     expect(process.mock.calls[1]?.[1]).toMatchObject({ allowWeb: true });
   });
 
+  it('an older status revision arriving last is dropped', async () => {
+    const { s } = await controlled();
+    // The real client over a fake fetch: the Worker served the first ask after the second, so the first reply carries the newer revision.
+    const replies: Array<ReturnType<typeof deferred<Response>>> = [];
+    const http = new WorkerHttp('https://worker.example', () => { const d = deferred<Response>(); replies.push(d); return d.promise; });
+    vi.spyOn(s.worker, 'status').mockImplementation(() => http.status() as never);
+    const body = (run: RunWire | null, revision: number) => new Response(JSON.stringify({ run, revision }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const first = s.runs.current();
+    const second = s.runs.current();
+    await vi.waitFor(() => expect(replies).toHaveLength(2));
+    replies[0]?.resolve(body(wire('OLD', 'reading'), 5));
+    expect(await first).toMatchObject({ id: 'OLD', phase: 'reading' });
+    // The later ask, answered from before: idle at revision 4 must not wipe the running tidy-up.
+    replies[1]?.resolve(body(null, 4));
+    expect(await second).toMatchObject({ id: 'OLD', phase: 'reading' });
+    // Another run's older answer is dropped too.
+    const third = s.runs.current();
+    await vi.waitFor(() => expect(replies).toHaveLength(3));
+    replies[2]?.resolve(body(wire('PREV', 'done'), 3));
+    expect(await third).toMatchObject({ id: 'OLD', phase: 'reading' });
+  });
+
   it('older run responses cannot replace newer observed state (reversed terminal replies and subscribers)', async () => {
     const { s, status } = await controlled();
-    const older = deferred<RunWire | null>();
-    const newer = deferred<RunWire | null>();
+    const older = deferred<StatusReply>();
+    const newer = deferred<StatusReply>();
     status.mockImplementationOnce(() => older.promise).mockImplementationOnce(() => newer.promise);
     const first = s.runs.current();
     const second = s.runs.current();
     const observations: Array<Promise<RunState | null>> = [];
     s.runs.subscribe(() => observations.push(s.runs.current()));
-    newer.resolve(wire('OLD', 'done'));
+    newer.resolve(st(wire('OLD', 'done'), 2));
     expect(await second).toMatchObject({ phase: 'done', report });
-    older.resolve(wire('OLD', 'reading'));
+    older.resolve(st(wire('OLD', 'reading'), 1));
     expect(await first).toMatchObject({ phase: 'done', report });
     expect(observations).toHaveLength(1);
     expect((await Promise.all(observations)).every((r) => r?.phase === 'done')).toBe(true);
@@ -630,21 +657,21 @@ describe('LiveRuns', () => {
   it.each(['old-id', 'null'] as const)('older run responses cannot replace newer observed state (admission supersedes %s)', async (reply) => {
     const { s, status, process } = await controlled();
     await s.runs.current();
-    const admission = deferred<RunWire>();
+    const admission = deferred<RunReply>();
     const admitted = deferred<undefined>();
     process.mockImplementationOnce(() => { admitted.resolve(undefined); return admission.promise; });
     const start = s.runs.start('all');
     await admitted.promise;
-    const pending = deferred<RunWire | null>();
+    const pending = deferred<StatusReply>();
     status.mockImplementationOnce(() => pending.promise);
     const current = s.runs.current();
     const piles = (await s.vault.piles()).map((p) => p.id);
-    admission.resolve(wire('NEW', 'queued'));
+    admission.resolve(pr(wire('NEW', 'queued')));
     expect(await start).toMatchObject({ id: 'NEW', phase: 'queued' });
-    pending.resolve(reply === 'null' ? null : wire('OLD', 'done'));
+    pending.resolve(st(reply === 'null' ? null : wire('OLD', 'done')));
     expect(await current).toMatchObject({ id: 'NEW', phase: 'queued' });
     expect([...s.runs.runningPiles()]).toEqual(piles);
-    status.mockResolvedValue(reply === 'null' ? null : wire('OLD', 'reading'));
+    status.mockResolvedValue(st(reply === 'null' ? null : wire('OLD', 'reading')));
     if (reply === 'null') {
       // A fresh eligible idle reply has its baseline meaning; only the delayed reply above loses admission authority.
       expect(await s.runs.current()).toBeNull();
@@ -666,7 +693,7 @@ describe('LiveRuns', () => {
     vi.spyOn(s.worker, 'signOut').mockImplementation(async () => { context = null; });
     vi.spyOn(s.worker, 'signIn').mockImplementation(async () => {
       context = { user: { name: 'Sam', email: 'sam@example.com' }, folderId: nextFolder.id };
-      status.mockResolvedValue(null);
+      status.mockResolvedValue(st(null));
     });
     expect((await s.session.current())?.name).toBe('Alex');
     const failedSend = vi.spyOn(s.drive, 'createText').mockRejectedValueOnce(new TypeError('Failed to fetch'));
@@ -675,7 +702,7 @@ describe('LiveRuns', () => {
     const outboxKey = `bower:outbox:${initial.folderId}`;
     const waiting = localStorage.getItem(outboxKey);
     expect(waiting).not.toBeNull();
-    status.mockResolvedValue(wire('OLD', phase));
+    status.mockResolvedValue(st(wire('OLD', phase)));
     expect(await s.runs.current()).toMatchObject({ id: 'OLD', phase, ...(phase === 'done' ? { report } : {}) });
     if (phase === 'reading') expect([...s.runs.runningPiles()]).toEqual(['*']);
     await s.runs.markSeen('OLD');
@@ -705,12 +732,12 @@ describe('LiveRuns', () => {
       const refresh = s.vault.refresh.bind(s.vault);
       vi.spyOn(s.vault, 'refresh').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; await refresh(); });
     } else lastRun.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { v: 1, run: { ...wire('OLD', 'done'), report } }; });
-    status.mockResolvedValue(wire('OLD', 'done'));
+    status.mockResolvedValue(st(wire('OLD', 'done')));
     const old = s.runs.current();
     await entered.promise;
     const observations: Array<Promise<RunState | null>> = [];
     s.runs.subscribe(() => observations.push(s.runs.current()));
-    status.mockResolvedValue(null);
+    status.mockResolvedValue(st(null));
     const idle = s.runs.current();
     release.resolve(undefined);
     expect(await idle).toBeNull();
@@ -730,13 +757,13 @@ describe('LiveRuns', () => {
       const refresh = s.vault.refresh.bind(s.vault);
       vi.spyOn(s.vault, 'refresh').mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; await refresh(); });
     } else lastRun.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { v: 1, run: { ...wire('OLD', 'done'), report } }; });
-    status.mockResolvedValue(wire('OLD', 'done'));
+    status.mockResolvedValue(st(wire('OLD', 'done')));
     const old = s.runs.current();
     await entered.promise;
     const piles = (await s.vault.piles()).map((p) => p.id);
     const observations: Array<Promise<RunState | null>> = [];
     s.runs.subscribe(() => observations.push(s.runs.current()));
-    status.mockResolvedValue(wire('NEW', 'queued'));
+    status.mockResolvedValue(st(wire('NEW', 'queued')));
     await s.runs.start('all');
     expect(await s.runs.current()).toMatchObject({ id: 'NEW', phase: 'queued' });
     expect([...s.runs.runningPiles()]).toEqual(piles);
@@ -754,16 +781,16 @@ describe('LiveRuns', () => {
     const entered = deferred<undefined>();
     const oldReport = deferred<Awaited<ReturnType<typeof s.vault.lastRun>>>();
     lastRun.mockImplementationOnce(() => { entered.resolve(undefined); return oldReport.promise; });
-    status.mockResolvedValue(wire('OLD', 'done'));
+    status.mockResolvedValue(st(wire('OLD', 'done')));
     const old = s.runs.current();
     await entered.promise;
     const observations: Array<Promise<RunState | null>> = [];
     s.runs.subscribe(() => observations.push(s.runs.current()));
-    status.mockResolvedValue(wire('NEW', 'queued'));
+    status.mockResolvedValue(st(wire('NEW', 'queued')));
     await s.runs.start('all');
     const newReport: RunReport = { ...report, created: [{ path: 'Areas/Home/Plan.md', what: 'A new plan' }] };
     lastRun.mockResolvedValue({ v: 1, run: { ...wire('NEW', 'done'), report: newReport } });
-    status.mockResolvedValue(wire('NEW', 'done'));
+    status.mockResolvedValue(st(wire('NEW', 'done')));
     expect(await s.runs.current()).toMatchObject({ id: 'NEW', phase: 'done', report: newReport });
     await s.runs.markSeen('NEW');
     const notifications = observations.length;
@@ -777,15 +804,15 @@ describe('LiveRuns', () => {
 
   it('older run responses cannot replace newer observed state (sequential phases and initial null)', async () => {
     const { s, status } = await controlled();
-    status.mockResolvedValue(null);
+    status.mockResolvedValue(st(null));
     expect(await s.runs.current()).toBeNull();
     for (const phase of ['queued', 'reading', 'writing', 'saving', 'done'] as const) {
-      status.mockResolvedValue(wire('OLD', phase));
+      status.mockResolvedValue(st(wire('OLD', phase)));
       expect((await s.runs.current())?.phase).toBe(phase);
-      status.mockResolvedValue(wire('OLD', 'queued'));
+      status.mockResolvedValue(st(wire('OLD', 'queued')));
       expect((await s.runs.current())?.phase).toBe(phase);
     }
-    status.mockResolvedValue(wire('OLD', 'failed'));
+    status.mockResolvedValue(st(wire('OLD', 'failed')));
     const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect((await s.runs.current())?.phase).toBe('done');
     expect(diagnostic).toHaveBeenCalled();
@@ -794,14 +821,14 @@ describe('LiveRuns', () => {
 
   it('older run responses cannot replace newer observed state (request and report failures retry)', async () => {
     const { s, status, lastRun } = await controlled();
-    const older = deferred<RunWire | null>();
+    const older = deferred<StatusReply>();
     status.mockImplementationOnce(() => older.promise).mockRejectedValueOnce(new Error('status unavailable'));
     const pending = s.runs.current();
     await expect(s.runs.current()).rejects.toThrow('status unavailable');
-    older.resolve(wire('OLD', 'saving'));
+    older.resolve(st(wire('OLD', 'saving')));
     expect((await pending)?.phase).toBe('saving');
     lastRun.mockRejectedValueOnce(new Error('report unavailable'));
-    status.mockResolvedValue(wire('OLD', 'done'));
+    status.mockResolvedValue(st(wire('OLD', 'done')));
     await expect(s.runs.current()).rejects.toThrow('report unavailable');
     expect(await s.runs.current()).toMatchObject({ phase: 'done', report });
     await s.runs.markSeen('OLD');
@@ -812,7 +839,7 @@ describe('LiveRuns', () => {
     const { s, status, lastRun } = await controlled();
     const entered = deferred<undefined>();
     const release = deferred<undefined>();
-    status.mockResolvedValue(wire('OLD', 'done'));
+    status.mockResolvedValue(st(wire('OLD', 'done')));
     lastRun.mockImplementation(async () => { entered.resolve(undefined); await release.promise; return { v: 1, run: { ...wire('OLD', 'done'), report } }; });
     const first = s.runs.current();
     await entered.promise;
@@ -835,7 +862,7 @@ describe('LiveRuns', () => {
     const { s, status, process } = await controlled();
     await s.runs.current();
     const entered = deferred<undefined>();
-    const admission = deferred<RunWire>();
+    const admission = deferred<RunReply>();
     process.mockImplementationOnce(() => { entered.resolve(undefined); return admission.promise; });
     const first = s.runs.start('all');
     const second = s.runs.start('all');
@@ -846,20 +873,20 @@ describe('LiveRuns', () => {
     await failure;
     expect(await second).toMatchObject({ id: 'NEW', phase: 'queued' });
     expect(process).toHaveBeenCalledTimes(2);
-    status.mockResolvedValue(wire('OLD', 'done'));
+    status.mockResolvedValue(st(wire('OLD', 'done')));
     expect(await s.runs.current()).toMatchObject({ id: 'NEW', phase: 'queued' });
   });
 
   it('older run responses cannot replace newer observed state (pending reply after disposal has no effects)', async () => {
     const { s, status, lastRun } = await controlled();
     await s.runs.current();
-    const reply = deferred<RunWire | null>();
+    const reply = deferred<StatusReply>();
     status.mockImplementationOnce(() => reply.promise);
     const pending = s.runs.current();
     const changed = vi.fn();
     s.runs.subscribe(changed);
     s.runs.dispose();
-    reply.resolve(wire('OLD', 'done'));
+    reply.resolve(st(wire('OLD', 'done')));
     expect(await pending).toMatchObject({ id: 'OLD', phase: 'reading' });
     expect(changed).not.toHaveBeenCalled();
     expect(lastRun).not.toHaveBeenCalled();
@@ -893,20 +920,20 @@ describe('LiveRuns', () => {
     const { s, status, process, lastRun } = await controlled();
     const entered = deferred<undefined>();
     const release = deferred<undefined>();
-    process.mockResolvedValueOnce(wire('OLD', 'done')).mockResolvedValueOnce(wire('NEXT', 'queued'));
+    process.mockResolvedValueOnce(pr(wire('OLD', 'done'))).mockImplementationOnce(async () => pr(wire('NEXT', 'queued')));
     lastRun.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { v: 1, run: { ...wire('OLD', 'done'), report } }; });
     const start = s.runs.start('all');
     await entered.promise;
     const observations: Array<Promise<RunState | null>> = [];
     s.runs.subscribe(() => observations.push(s.runs.current()));
-    status.mockResolvedValue(null);
+    status.mockResolvedValue(st(null));
     expect(await s.runs.current()).toBeNull();
     expect(await Promise.all(observations)).toEqual([null]);
     expect([...s.runs.runningPiles()]).toEqual([]);
     const retry = s.runs.start('all');
     expect(process).toHaveBeenCalledOnce();
     const superseded = expect(start).rejects.toMatchObject({ code: 'conflict', message: expect.stringMatching(/status.*try again/i) });
-    status.mockResolvedValue(wire('NEXT', 'queued'));
+    status.mockResolvedValue(st(wire('NEXT', 'queued')));
     release.resolve(undefined);
     await superseded;
     expect(await retry).toMatchObject({ id: 'NEXT', phase: 'queued' });
@@ -920,7 +947,7 @@ describe('LiveRuns', () => {
     const { s, process, lastRun } = await controlled();
     const entered = deferred<undefined>();
     const release = deferred<undefined>();
-    process.mockResolvedValueOnce(wire('OLD', 'done'));
+    process.mockResolvedValueOnce(pr(wire('OLD', 'done')));
     lastRun.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise; return { v: 1, run: { ...wire('OLD', 'done'), report } }; });
     const start = s.runs.start('all');
     await entered.promise;
@@ -1027,7 +1054,7 @@ describe('LiveRuns', () => {
         expect(status.mock.calls.length, `after a ${code}`).toBeLessThanOrEqual(2);
         // Coming back into view asks again.
         const asked = status.mock.calls.length;
-        status.mockResolvedValue(null);
+        status.mockResolvedValue(st(null));
         vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
         document.dispatchEvent(new Event('visibilitychange'));
         await vi.advanceTimersByTimeAsync(0);
@@ -1058,7 +1085,7 @@ describe('LiveRuns', () => {
       const asked = status.mock.calls.length;
       await expect(s.runs.current()).rejects.toMatchObject({ code: 'not-found' });
       expect(status.mock.calls.length).toBe(asked);
-      status.mockResolvedValue(null);
+      status.mockResolvedValue(st(null));
       await expect(s.runs.current({ again: true })).resolves.toBeNull();
       expect(status.mock.calls.length).toBe(asked + 1);
       // The good answer clears it: mounts ask again as before.
@@ -1071,7 +1098,7 @@ describe('LiveRuns', () => {
       const status = vi.spyOn(s.worker, 'status')
         .mockRejectedValueOnce(new BowerError('offline', 'Offline.'))
         .mockRejectedValueOnce(new BowerError('unknown', 'Server error.'))
-        .mockResolvedValue(null);
+        .mockResolvedValue(st(null));
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       vi.useFakeTimers();
       s.runs.subscribe(() => undefined);
@@ -1087,7 +1114,7 @@ describe('LiveRuns', () => {
       vi.useFakeTimers();
       await readers(s, 3);
       const asked = status.mock.calls.length;
-      status.mockResolvedValue(null);
+      status.mockResolvedValue(st(null));
       await expect(s.runs.current({ again: true })).resolves.toBeNull();
       expect(status.mock.calls.length).toBe(asked + 1);
       await vi.advanceTimersByTimeAsync(10 * 60_000);
@@ -1096,13 +1123,13 @@ describe('LiveRuns', () => {
 
     it('a late 4xx from an older ask does not stop the beat', async () => {
       const s = await open();
-      const older = deferred<RunWire | null>();
+      const older = deferred<StatusReply>();
       const status = vi.spyOn(s.worker, 'status');
       let callCount = 0;
       status.mockImplementation(() => {
         callCount++;
         if (callCount === 1) return older.promise;
-        return Promise.resolve(null);
+        return Promise.resolve(st(null));
       });
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       vi.useFakeTimers();
@@ -1435,25 +1462,25 @@ describe('foreground discovery', () => {
 
   it('returning to an idle folder refreshes external changes (new admission during status wait keeps its locks and skips discovery)', async () => {
     const { a, status, process, listing } = await pair();
-    const reply = deferred<RunWire | null>();
+    const reply = deferred<StatusReply>();
     status.mockImplementationOnce(() => reply.promise);
     back();
     await vi.advanceTimersByTimeAsync(0);
-    process.mockResolvedValue({ id: 'NEW', phase: 'queued', scope: 'all', requestedAt: 1, phaseAt: 1 });
+    process.mockResolvedValue(pr({ id: 'NEW', phase: 'queued', scope: 'all', requestedAt: 1, phaseAt: 1 }));
     const piles = (await a.vault.piles()).map((p) => p.id);
     await a.runs.start('all');
-    reply.resolve(null);
+    reply.resolve(st(null));
     await vi.advanceTimersByTimeAsync(0);
     expect(listing).not.toHaveBeenCalled();
     expect([...a.runs.runningPiles()]).toEqual(piles);
-    status.mockResolvedValue({ id: 'NEW', phase: 'queued', scope: 'all', requestedAt: 1, phaseAt: 1 });
+    status.mockResolvedValue(st({ id: 'NEW', phase: 'queued', scope: 'all', requestedAt: 1, phaseAt: 1 }));
     expect(await a.runs.current()).toMatchObject({ id: 'NEW', phase: 'queued' });
   });
 
   it.each(['status', 'listing'] as const)('returning to an idle folder refreshes external changes (dispose during %s stops continuation)', async (boundary) => {
     const { a, status, list, listing } = await pair();
     const release = deferred<undefined>();
-    if (boundary === 'status') status.mockImplementationOnce(async () => { await release.promise; return null; });
+    if (boundary === 'status') status.mockImplementationOnce(async () => { await release.promise; return st(null); });
     else {
       listing.mockImplementationOnce(async (root) => { await release.promise; return list(root); });
     }
@@ -1477,7 +1504,7 @@ describe('foreground discovery', () => {
     const { a, status, listing } = await pair();
     const wire: RunWire = { id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 };
     const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [] };
-    status.mockResolvedValue(wire);
+    status.mockResolvedValue(st(wire));
     vi.spyOn(a.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire, report } });
     back();
     await vi.advanceTimersByTimeAsync(0);
@@ -1498,7 +1525,7 @@ describe('foreground discovery', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(listing).toHaveBeenCalledOnce();
     const wire: RunWire = { id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 };
-    status.mockResolvedValue(wire);
+    status.mockResolvedValue(st(wire));
     vi.spyOn(a.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } });
     const terminal = a.runs.current();
     await vi.advanceTimersByTimeAsync(0);
@@ -1535,14 +1562,14 @@ describe('foreground discovery', () => {
       return snapshot;
     });
     const wire: RunWire = { id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 };
-    status.mockResolvedValue(wire);
+    status.mockResolvedValue(st(wire));
     vi.spyOn(a.vault, 'lastRun').mockResolvedValue({ v: 1, run: { ...wire, report: { filed: [], created: [], updated: [], setAside: [], questions: [] } } });
     const old = a.runs.current();
     await captured.promise;
     const version = await b.drive.get(file.id);
     await b.drive.writeText(file.id, freshText, version.modifiedTime);
     await b.drive.createText(root, 'Remote.md', 'A new remote note.');
-    if (outcome === 'idle') status.mockResolvedValue(null);
+    if (outcome === 'idle') status.mockResolvedValue(st(null));
     back();
     await vi.advanceTimersByTimeAsync(0);
     expect(listing).toHaveBeenCalledOnce();
@@ -1564,18 +1591,18 @@ describe('foreground discovery', () => {
       await release.promise;
       return snapshot;
     });
-    status.mockResolvedValue({ id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 });
+    status.mockResolvedValue(st({ id: 'DONE', phase: 'done', scope: 'all', requestedAt: 1, phaseAt: 1 }));
     const old = a.runs.current();
     await captured.promise;
-    status.mockResolvedValue(null);
+    status.mockResolvedValue(st(null));
     back();
     await vi.advanceTimersByTimeAsync(0);
     if (change === 'disposed') a.dispose();
     else {
       const wire: RunWire = { id: 'NEW', phase: 'queued', scope: 'instructions', requestedAt: 1, phaseAt: 1 };
-      process.mockResolvedValue(wire);
+      process.mockResolvedValue(pr(wire));
       await a.runs.start('instructions');
-      status.mockResolvedValue(wire);
+      status.mockResolvedValue(st(wire));
       expect([...a.runs.runningPiles()]).toEqual(['*']);
     }
     release.resolve(undefined);

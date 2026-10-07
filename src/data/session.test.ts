@@ -1111,8 +1111,8 @@ describe('review findings and TL-P2-25: blocked is not closed, nothing stale lan
     await leaseOn(w.storage, w.clock).session('phone', 'take');
     await w.clock.advance(HEARTBEAT_MS);
     expect(a.place.state()).toBe('elsewhere');
-    for (let i = 0; i < 200 && (await a.worker.status())?.phase !== 'done'; i++) await new Promise((r) => setTimeout(r, 1));
-    expect(await a.worker.status()).toMatchObject({ id: run.id, phase: 'done' });
+    for (let i = 0; i < 200 && ((await a.worker.status()).run)?.phase !== 'done'; i++) await new Promise((r) => setTimeout(r, 1));
+    expect((await a.worker.status()).run).toMatchObject({ id: run.id, phase: 'done' });
   });
 });
 

@@ -28,7 +28,7 @@ describe('WorkerHttp', () => {
   });
 
   it('session posts the place, action and leave generation, and process, createFolder and deleteAccount carry the epoch', async () => {
-    const s = stub((url) => (url.pathname === '/session' ? json({ active: true, epoch: 7 }) : url.pathname === '/process' ? json({ run: { id: 'run-1', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 } }) : url.pathname === '/vault' ? json({ folderId: 'FOLDER_ID', found: false }) : new Response(null, { status: 204 })));
+    const s = stub((url) => (url.pathname === '/session' ? json({ active: true, epoch: 7 }) : url.pathname === '/process' ? json({ run: { id: 'run-1', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 }, revision: 1 }) : url.pathname === '/vault' ? json({ folderId: 'FOLDER_ID', found: false }) : new Response(null, { status: 204 })));
     const w = new WorkerHttp(BASE, s.fetch);
     expect(await w.session('place-1', 'check', 2)).toEqual({ active: true, epoch: 7 });
     expect(s.calls[0]?.init.method).toBe('POST');
@@ -109,24 +109,25 @@ describe('WorkerHttp', () => {
 
   it('status gives the run or null', async () => {
     const run = { id: 'r1', scope: 'all', phase: 'reading', requestedAt: 1, phaseAt: 2, total: 3 };
-    expect(await new WorkerHttp(BASE, stub(() => json({ run })).fetch).status()).toEqual(run);
-    expect(await new WorkerHttp(BASE, stub(() => json({ run: null })).fetch).status()).toBeNull();
+    expect(await new WorkerHttp(BASE, stub(() => json({ run, revision: 2 })).fetch).status()).toEqual({ run, revision: 2 });
+    expect(await new WorkerHttp(BASE, stub(() => json({ run: null, revision: 0 })).fetch).status()).toEqual({ run: null, revision: 0 });
   });
 
   it('process sends whether Bower may look things up on the web (allow web)', async () => {
-    const s = stub(() => json({ run: { id: 'r', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 } }));
+    const s = stub(() => json({ run: { id: 'r', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 }, revision: 1 }));
     await new WorkerHttp(BASE, s.fetch).process('all', { allowWeb: true, requestId: 'press-1' });
     expect(JSON.parse(String(s.calls[0]?.init.body))).toEqual({ scope: 'all', allowWeb: true, requestId: 'press-1' });
     await new WorkerHttp(BASE, s.fetch).process('instructions');
     expect(JSON.parse(String(s.calls[1]?.init.body))).toEqual({ scope: 'instructions', allowWeb: false });
   });
 
-  it('process and status accept the revision the Worker answers with', async () => {
+  it('process and status give the revision the Worker answers with', async () => {
     const run = { id: 'r', scope: 'all', phase: 'queued', requestedAt: 1, phaseAt: 1 };
-    expect(await new WorkerHttp(BASE, stub(() => json({ run, revision: 3 })).fetch).process('all', { requestId: 'press-1' })).toEqual(run);
-    expect(await new WorkerHttp(BASE, stub(() => json({ run, revision: 3 })).fetch).status()).toEqual(run);
-    expect(await new WorkerHttp(BASE, stub(() => json({ run: null, revision: 0 })).fetch).status()).toBeNull();
-    // A revision that is not a whole number is an unreadable reply.
+    expect(await new WorkerHttp(BASE, stub(() => json({ run, revision: 3 })).fetch).process('all', { requestId: 'press-1' })).toEqual({ run, revision: 3 });
+    expect(await new WorkerHttp(BASE, stub(() => json({ run, revision: 3 })).fetch).status()).toEqual({ run, revision: 3 });
+    expect(await new WorkerHttp(BASE, stub(() => json({ run: null, revision: 0 })).fetch).status()).toEqual({ run: null, revision: 0 });
+    // A reply without a revision, or with one that is not a whole number, is unreadable.
+    await expect(new WorkerHttp(BASE, stub(() => json({ run })).fetch).status()).rejects.toThrow('unreadable');
     await expect(new WorkerHttp(BASE, stub(() => json({ run, revision: -1 })).fetch).status()).rejects.toThrow('unreadable');
     await expect(new WorkerHttp(BASE, stub(() => json({ run, revision: '3' })).fetch).process('all')).rejects.toThrow('unreadable');
   });
