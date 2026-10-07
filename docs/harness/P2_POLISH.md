@@ -108,3 +108,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - Superseded and ended tickets skip the expiry check; this is read-only.
   - `timingSafeEqual` after the SQL hash match does nothing now.
   - `runner.ts:12` comment wording.
+- P3-10 delta review (minor, PASS):
+  - process.ts: no route test for the retry where a run going ends in between and `needs-manifest` reads the inbox once (`a press whose run ended in between reads the inbox once and is admitted`).
+  - process.ts: no test that a Drive failure while building the manifest answers 401 `signed-out` or 500 `internal` with no cause.
+  - The contract's `/process` row does not list 409 `no-folder` (asked of the lead).
+  - runner `takeAdmitted` does not check `manifest.rootId` against the grant's `folderId`.
+  - runner `records.ts`: with no run id (retention), the walk also lists root-level folders named `.bower`, `runs` or `piles` (names and dates only; filtered out after).
