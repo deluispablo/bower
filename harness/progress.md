@@ -74,3 +74,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: shared-domain-package passes — chore(harness): shared-domain-package passes under its renamed api rule
 - 2026-10-07: spine-admission-manifest passes — chore(harness): spine-admission-manifest passes
 - 2026-10-07: spine-operations-checkpoints passes — chore(harness): spine-operations-checkpoints passes
+- 2026-10-07: spine-report-barrier-dispositions passes — chore(harness): spine-report-barrier-dispositions passes
