@@ -4054,14 +4054,15 @@
     "id": "runner-stale-attempt-signal",
     "task": "p3-9",
     "category": "fix",
-    "what": "The runner adapter reports a takeover as its stale-attempt error against the real Worker's replies: the nested { error: { code } } shape, with 409 stale-attempt, and 401 signed-out from the token route after an earlier grant in the same run, both stop writes with stale-attempt; the test fakes replay the Worker's real shapes.",
+    "what": "The Worker keeps the runner contract on ticket lookups: a ticket superseded by a newer attempt answers 409 stale-attempt (its row retired, not deleted), only an unknown or expired ticket answers 401, and a resend of the final report (same attempt and seq) with the ticket retired at done answers the current state. The runner parses the nested { error: { code } } shape, maps 409 stale-attempt to its stale-attempt error and never infers a takeover from a 401; its fakes replay the Worker's real shapes.",
     "steps": [
-      "After a successful grant, a 401 { error: { code: \"signed-out\" } } from the token route makes batch() refuse with the stale-attempt error.",
-      "A 409 { error: { code: \"stale-attempt\" } } does the same.",
-      "A 401 on the very first grant stays an auth error."
+      "An older attempt's ticket on the token route and the status route answers 409 stale-attempt.",
+      "An unknown or expired ticket answers 401 signed-out.",
+      "The final done or failed report resent with the same attempt and seq answers { run, revision } unchanged.",
+      "The runner's batch() refuses with stale-attempt on the Worker's real 409, and with auth on a 401."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"the adapter refuses with stale-attempt when the Worker signs out an older attempt.s ticket|a first grant refused stays an auth error\"",
+    "verify": "pnpm -C api exec vitest run -t \"a superseded attempt.s ticket answers stale-attempt|an unknown ticket is signed out|a resent final report answers the current state\" && pnpm -C runner exec vitest run -t \"the adapter refuses with stale-attempt on the Worker.s real reply|a refused ticket stays an auth error\"",
     "passes": false,
-    "note": "P3-9 Opus delta review, BLOCK Important 2: runner/src/token.ts:64 matched a flat { error: \"stale-attempt\" } the Worker never sends."
+    "note": "P3-9 Opus delta review, BLOCK Important 2, and TL-P3-18 addendum (the Worker keeps the contract; the runner never infers takeover from 401; the resent-final-report minor folded in)."
   }
 ]
