@@ -349,3 +349,4 @@ instance-private-check	cc23bf0c1f0016c4	2026-10-07	red (fixed in 3e313a8)
 app-security-headers	0ed48ba0c9e4d05d	2026-10-07	red (fixed in ac960c2)
 deletion-allowlist-doc	b7fab1684b029d0f	2026-10-07	known-green: docs entry: at 7d6a771 (test only) 'the runbook says the invitation stays after deletion' failed on its runbook patterns; 78ae68c adds the runbook lines
 deploy-staging-upload-line	14a1bc2e893a27b3	2026-10-07	red (fixed in 92c13d6)
+rules-template-bower	a4861cc0035e1f89	2026-10-07	known-green: a revert of 8f74a46 removes RULES_TEMPLATE, a load failure; the red is the tests-only commit 5c203da, where both api tests failed on assertions (old plain Rules.md bytes; old-text file left unrepaired)

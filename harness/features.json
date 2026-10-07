@@ -4411,7 +4411,7 @@
       "A rule typed in the app is worded into Rules.md by the scripted run on the real adapter."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the real template writes Rules.md as the fake does|the old template Rules.md is repaired once and nothing else is touched\" && pnpm -C runner exec vitest run -t \"a typed rule is worded into Rules.md on the real adapter\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-27 addendum; found preparing the C16 walk (note-edit.ts:206 refused not-bower)."
   },
   {
