@@ -151,7 +151,13 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const newKey = opts.mintKey ?? mintKey;
   const read = await journalOf(drive, ix);
   const lines = opts.taken ? tookLines(read, opts.taken) : read;
-  let journal = lines;
+  /**
+   * The demo's stand-ins for a model (hub lines, merges, a thing's own note, questions, request answers) are the
+   * script's alone: a plan from a model's intent (`filing`) writes none of them (P4-2 review I1). Your requests and
+   * answers then wait for a run that can act on them, never archived unanswered.
+   */
+  const demo = !opts.filing;
+  let journal = demo ? lines : lines.filter((l) => l.rec.kind !== 'request' && l.rec.kind !== 'answer');
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal);
@@ -188,7 +194,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     return now;
   };
   const mergeOf = (item: PileItem): Merge | null => {
-    const m = MERGES.find((x) => x.item === item.name && yes.has(x.question));
+    const m = !demo ? undefined : MERGES.find((x) => x.item === item.name && yes.has(x.question));
     return m ? { into: follow(m.into), title: m.title, line: m.line, answer: yes.get(m.question) ?? '' } : null;
   };
   /** Answers whose merge waits with its pile: they stay unarchived and keep their question (R4-1). */
@@ -203,12 +209,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (!opts.filing) return null;
     return opts.filing.thing(fileId) ?? refused('a thing the model did not place');
   };
-  /** Whether the demo's own extras (a hub line citing it, its own note) still fit: the model filed it as the plan does. */
-  const asPlanned = (fileId: string, name: string): boolean => {
-    const plan = PLAN_BY_NAME.get(name);
-    const place = opts.filing?.thing(fileId);
-    return !!plan && (!opts.filing || (place?.to === plan.to && place.name === plan.title));
-  };
+  /** Whether the demo's own extras (a hub line citing it, its own note) apply: on the script's own plan only. */
+  const asPlanned = (name: string): boolean => demo && PLAN_BY_NAME.has(name);
 
   // An instructions run takes no pile: it reads only your changes.
   const inbox = all ? await drive.piles(rootId) : [];
@@ -363,7 +365,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     });
     if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
     // The question a run asks about this pile (the stand-in for Claude asking), asked once it is filed.
-    if (/saltmere/i.test(pile.text)) asking.add(pile.id);
+    if (demo && /saltmere/i.test(pile.text)) asking.add(pile.id);
   }
 
   // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal. A run already
@@ -409,10 +411,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // The line waits for that thing's move, so it never cites what is not there.
   const citeOf = (name: string | undefined): { source: string; fileId: string } | null => {
     const thing = name === undefined ? undefined : things.find((t) => t.item.name === name && !t.merge);
-    const plan = thing && asPlanned(thing.file.id, thing.item.name) ? PLAN_BY_NAME.get(thing.item.name) : undefined;
+    const plan = thing && asPlanned(thing.item.name) ? PLAN_BY_NAME.get(thing.item.name) : undefined;
     return thing && plan ? { source: citedName(plan), fileId: thing.file.id } : null;
   };
-  for (const u of all && date ? (opts.updates ?? UPDATES) : []) {
+  for (const u of all && date && demo ? (opts.updates ?? UPDATES) : []) {
     const f = ix.file(u.path);
     if (!f || f.folder) continue;
     const cite = citeOf(u.cites);
@@ -696,7 +698,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const noteDate = timelineDate(opts.requestedAt) ?? 'Today';
   const generated: Array<{ to: string; name: string; text: string; what: string; after: string | null; pileId: string | null; aside: string; context: DriveFile | null }> = [];
   for (const { thing, name } of filing) {
-    const own = asPlanned(thing.file.id, thing.item.name) ? PLAN_BY_NAME.get(thing.item.name)?.note : undefined;
+    const own = asPlanned(thing.item.name) ? PLAN_BY_NAME.get(thing.item.name)?.note : undefined;
     if (!own || !generatedPlace(parentOf(own))) continue;
     if (freeName(planned, parentOf(own), nameOf(own)) !== nameOf(own)) continue;
     destination(parentOf(own));
@@ -719,7 +721,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const disagreeing: Array<{ pileId: string; question: Question }> = [];
   for (const note of generated) {
     const words = note.pileId === null ? '' : (fromWords.find((w) => w.pileId === note.pileId)?.words ?? '');
-    for (const rule of note.pileId === null ? [] : DISAGREEMENTS.filter((r) => r.words.test(words))) {
+    for (const rule of note.pileId === null || !demo ? [] : DISAGREEMENTS.filter((r) => r.words.test(words))) {
       const f = ix.file(rule.note);
       if (!f || f.folder) continue;
       let stored: ParsedNote;

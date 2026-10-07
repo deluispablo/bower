@@ -164,7 +164,8 @@ export class RunnerDrive {
       listAll: async (rootId) => [...(await once(`all:${rootId}`, () => reads.listAll(rootId)))],
       readBytes: async (id) => (await once(`bytes:${id}`, () => reads.readBytes(id))).slice(),
       readText: (id) => once(`text:${id}`, () => reads.readText(id)),
-      digest: (file) => once(`digest:${file.id}`, () => reads.digest(file)),
+      // By version: a file changed since (a newer modifiedTime in the listing) is never paired with an older digest.
+      digest: (file) => once(`digest:${file.id}:${file.modifiedTime}`, () => reads.digest(file)),
     };
   }
 
