@@ -4080,5 +4080,21 @@
     "verify": "pnpm exec vitest run src/data -t \"the shared plan gives the same manifest on the fake and on Drive\" && pnpm -C api exec vitest run -t \"an empty manifest answers nothing before the quota|the run row keeps its manifest and the token route returns it\" && pnpm -C runner exec vitest run -t \"an item changed since admission waits for the next run\"",
     "passes": false,
     "note": "TL-P3-21 (manifest built at admission and stored whole; extract, not port; ARCHITECTURE \"Reusable deterministic core\")."
+  },
+  {
+    "id": "spine-operations-checkpoints",
+    "task": "p3-d",
+    "category": "feature",
+    "what": "The run's operations and checkpoints run through shared code (extracted from the fake's run records and run service over FencedDrive, a clock and an id source): the runner writes its manifest record and a checkpoint chain in .bower/runs/<run_id>/ with run-checkpoint.ts, resumes from its own run's verified chain without repeating an applied operation, and keeps the folders of the last 20 finished runs, moving older ones to the Bin.",
+    "steps": [
+      "The checkpoint writing, chain reading and verification move into src/data/spine/; the fake's run records and run service call them and keep their behaviour.",
+      "runner/src/spine writes the manifest record and the first checkpoint before any operation, then one checkpoint per applied operation, through the adapter.",
+      "A runner restarted mid-run reads only its run's chain, verifies it, and continues after the last applied operation; an operation recorded as applied is never applied again.",
+      "After a run finishes, run folders beyond the newest 20 finished go to the Drive Bin, never deleted.",
+      "A contract test runs the same operations on the fake drive and on the adapter over a fake fetch and gets the same chain."
+    ],
+    "verify": "pnpm exec vitest run src/data -t \"the shared operations give the same chain on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"a restarted runner resumes after its last checkpoint|an applied operation is never applied twice|only the last 20 finished run folders are kept\"",
+    "passes": false,
+    "note": "TL-P3-21 points 2 and 3 (extract, not port; checkpoints in .bower/runs/<run_id>/, retention 20 to the Bin)."
   }
 ]
