@@ -1,7 +1,8 @@
 /**
  * A run's records in the Bower folder, as contract B lays them out (TL-P3-21 point 3):
  * `.bower/runs/<runId>/manifest-<hash>.json`, `checkpoint-<revision>-<hash>.json` and `report-<hash>.json`, and
- * consumed dispositions in `.bower/piles/`. Shared by the fake run service and the runner (TL-P3-21 point 2:
+ * consumed dispositions in `.bower/piles/`, with the report record read back and a disposition checked before it is
+ * written. Shared by the fake run service and the runner (TL-P3-21 point 2:
  * extracted, not ported): the reads come through a small interface, the writes through a `FencedDrive`, and time and
  * ids are handed in. Every folder is found by its real name and parents, duplicates included; a record is written
  * once, read back and compared byte for byte, and a reply lost after it landed is reconciled by its exact body,
@@ -10,7 +11,8 @@
 import type { DriveFile } from '../drive/drive-api';
 import type { FencedDrive } from '../drive/fake-drive';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
-import { parseRunCheckpoint, verifyCheckpointChain, type Checkpoint, type Outcome } from '../contracts/run-checkpoint';
+import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
+import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
 import { parseRunManifestV2, type Manifest, type OperationV2 } from '../contracts/run-manifest';
 import { BowerError } from '../types';
 import { sha256 } from '../vault/hashes';
@@ -327,6 +329,28 @@ export class RunRecords {
       if (head && (head.phase === 'done' || head.phase === 'failed')) out.push({ folder, at: head.phaseAt });
     }
     return out;
+  }
+
+  /** The published report record, read back and bound to this run. */
+  async report(manifest: RunManifest, manifestHash: string, hash: string): Promise<ReportRecord> {
+    const bytes = await this.read({ runId: manifest.runId }, reportName(hash));
+    const parsed = bytes ? await parseRunReport(bytes, { rootId: this.rootId, runId: manifest.runId, captureId: manifest.captureId, manifestHash }) : null;
+    if (!parsed?.ok || parsed.sha256 !== hash) {
+      console.error(`The report of run ${manifest.runId} is ${parsed ? (parsed.ok ? 'another report' : parsed.reason) : 'missing'}`);
+      throw new BowerError('unknown', READ_FAILED);
+    }
+    return parsed.value;
+  }
+
+  /** Writes a consumed disposition after checking it against its pile's full key set. */
+  async putDisposition(w: FencedDrive, value: Disposition): Promise<void> {
+    const c = await canonical(value);
+    const parsed = await parsePileDisposition(c.bytes, this.rootId, value.memberKeys);
+    if (!parsed.ok || parsed.sha256 !== c.hash) {
+      console.error(`A disposition of pile ${value.pileId} was refused (${parsed.ok ? 'hash' : parsed.reason})`);
+      throw new BowerError('unknown', SAVE_FAILED);
+    }
+    await this.put(w, 'piles', dispositionName(c.hash), c.text);
   }
 
   /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed. */

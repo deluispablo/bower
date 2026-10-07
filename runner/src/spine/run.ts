@@ -12,8 +12,7 @@
  *   only on evidence that it landed; with none, the run stops there, since real Drive gives no proof that a sent
  *   write did not land (TL-P2-16), and sending it again could apply it twice.
  *
- * The report barrier and dispositions come with `spine-report-barrier-dispositions`: a run here ends with every
- * operation settled, in `saving`.
+ * A run here ends with every operation settled, in `saving`; the report barrier (`barrier.ts`) ends it.
  */
 import { BowerError } from '../../../src/data/types';
 import type { FencedDrive } from '../../../src/data/drive/fake-drive';
@@ -49,7 +48,8 @@ export interface SpineRun {
   newId(): string;
 }
 
-export type RunEnd = { state: 'settled'; chain: Checkpoint[] } | { state: 'failed'; why: string };
+/** Settled: every operation applied or rejected (or the run already ended), with its verified manifest. */
+export type RunEnd = { state: 'settled'; chain: Checkpoint[]; manifest: RunManifest; manifestHash: string } | { state: 'failed'; why: string };
 
 /** One sentence for a run that stopped on an operation it cannot tell was applied. */
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
@@ -93,7 +93,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     chain = [head];
     headHash = c.hash;
   }
-  if (ended(head)) return { state: 'settled', chain };
+  if (ended(head)) return { state: 'settled', chain, manifest, manifestHash };
 
   let at: Checkpoint = head;
   let atHash: string = headHash;
@@ -135,7 +135,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
       ? { operationId, state: 'applied', evidence: settled.evidence }
       : { operationId, state: 'rejected', failure: settled.failure });
   }
-  return { state: 'settled', chain };
+  return { state: 'settled', chain, manifest, manifestHash };
 }
 
 /**

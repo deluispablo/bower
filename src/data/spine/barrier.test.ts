@@ -1,3 +1,5 @@
+// @vitest-environment node
+// Node, as the runner: its fetch and Blob are one implementation, so the pretend Drive v3 reads the bodies sent.
 import { describe, expect, it, vi } from 'vitest';
 import { DriveHttp } from '../drive/drive-http';
 import { FakeDrive } from '../drive/fake-drive';
@@ -46,7 +48,7 @@ async function onDrive(): Promise<{ io: Io; drive: FakeDrive }> {
   return { io, drive };
 }
 
-const bower = (drive: FakeDrive): Array<[string, string]> => [...drive.dump()].filter(([path]) => path.startsWith(`${SYSTEM.dir}/`)).sort();
+const bower = ({ drive, io }: { drive: FakeDrive; io: Io }): Array<[string, string]> => [...drive.dump(io.rootId)].filter(([path]) => path.startsWith(`${SYSTEM.dir}/`)).sort();
 
 describe('the report barrier', () => {
   it('the shared barrier writes the same report on the fake and on Drive', async () => {
@@ -61,8 +63,8 @@ describe('the report barrier', () => {
     expect(written[0]).toEqual([SYSTEM.questions, SYSTEM.suggestions, SYSTEM.requests, SYSTEM.lastRun]);
     expect(written[1]).toEqual(written[0]);
     // Byte for byte the same files on both.
-    expect(bower(real.drive)).toEqual(bower(fake.drive));
-    const files = new Map(bower(fake.drive));
+    expect(bower(real)).toEqual(bower(fake));
+    const files = new Map(bower(fake));
     expect(JSON.parse(files.get(SYSTEM.questions) ?? '')).toEqual({ v: 1, questions: [asked('q1', 1000), asked('q2', 2000)] });
     expect(files.get(SYSTEM.lastRun)).toBe(view);
     expect(JSON.parse(files.get(SYSTEM.suggestions) ?? '')).toEqual({ v: 1, suggestions: [] });
@@ -76,7 +78,7 @@ describe('the report barrier', () => {
     for (const io of [fake.io, real.io]) {
       await expect(saveReport({ ...io, report: null, view: older, mayReplace: async (stored) => olderView(stored, { id: 'run-0', requestedAt: 500 }) })).rejects.toMatchObject({ code: 'conflict' });
     }
-    expect(bower(real.drive)).toEqual(bower(fake.drive));
-    expect(new Map(bower(real.drive)).get(SYSTEM.lastRun)).toBe(view);
+    expect(bower(real)).toEqual(bower(fake));
+    expect(new Map(bower(real)).get(SYSTEM.lastRun)).toBe(view);
   });
 });

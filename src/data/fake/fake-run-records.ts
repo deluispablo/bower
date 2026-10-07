@@ -5,21 +5,21 @@
  * folder is found by its real name and parents, duplicates included; a record
  * is written once, read back and compared byte for byte, and a reply lost
  * after it landed is reconciled by its exact body, never written again.
- * Also the pure parts: report grounding and materialization, effect evidence
- * and consumed dispositions. The pure record guards live in `contracts/`.
+ * Also the pure parts: report grounding and effect evidence. The report, its
+ * record and the consumed dispositions are shared with the runner
+ * (`spine/report.ts`, `spine/records.ts`). The pure record guards live in `contracts/`.
  */
 import type { DriveFile } from '../drive/drive-api';
-import type { FencedDrive, StoredEvidence } from '../drive/fake-drive';
-import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
-import { parseRunReport, type EffectEvidence, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';
+import type { StoredEvidence } from '../drive/fake-drive';
+import type { EffectEvidence } from '../contracts/run-checkpoint';
 import type { Effect, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
 import { displayName, join, nameOf, parentOf, thingName } from '../tree';
-import { BowerError, PARA_ROOTS, type Question, type RunReport } from '../types';
+import { PARA_ROOTS, type Question } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
 import { parseRules } from '../vault/rules-format';
-import { RunRecords as SpineRecords, canonical, dispositionName, reportName, type RunManifest } from '../spine/records';
+import type { RunManifest } from '../spine/records';
 
 // The record names, writing and chain reading are shared with the runner (TL-P3-21 point 2).
 export { RUNS_NAME, canonical, checkpointName, dispositionName, manifestName, reportName, type RunManifest, type Where } from '../spine/records';
@@ -28,9 +28,6 @@ export { RUNS_NAME, canonical, checkpointName, dispositionName, manifestName, re
 const RUNNER_MADE: readonly string[] = [SYSTEM.requests, SYSTEM.hashes, SYSTEM.questions];
 /** The one note rules are worded in, at the root of the Bower folder. */
 const RULES = 'Rules.md';
-
-const SAVE_FAILED = 'Bower could not save what it did. Try again later.';
-const READ_FAILED = 'Bower could not read what it did. Try again later.';
 
 /** SHA-256 of a text's exact UTF-8 bytes. */
 export async function textHash(text: string): Promise<string> {
@@ -72,49 +69,6 @@ export function shows(effect: Effect, ev: StoredEvidence, parentId: string | nul
         && f.name === effect.name && ev.content?.size === effect.content.size && ev.content.sha256 === effect.content.sha256
         && f.appProperties?.bowerItem === effect.createKey;
   }
-}
-
-/** Why a captured thing whose move was rejected stays (TL-P2-34): the precondition found it moved, renamed or removed. */
-export const MOVED_AWAY = 'It was moved, renamed or removed before Bower could file it.';
-/** Why it stays for any other rejection, a failed dependency included: a sentence that promises nothing. */
-export const NOT_FILED = "It couldn't be filed this time.";
-/** The failure a move's own precondition gives when its source is not as captured; the service is its only author. */
-export const SOURCE_NOT_AS_SEEN = 'It was moved, renamed or removed before Bower could get to it.';
-
-/**
- * The report from the fixed plan and the resolved outcomes: each contribution
- * exactly when all it requires reached its state. Null while any required
- * operation is unresolved: no row is invented for it. A thing set aside for a
- * rejected move says why by the move's cause (TL-P2-34), for every consumer:
- * the specific sentence when the move's own precondition found it moved,
- * renamed or removed, the general one for anything else.
- */
-export function materialize(manifest: RunManifest, manifestHash: string, outcomes: readonly Outcome[]): ReportRecord | null {
-  const state = new Map(outcomes.map((o) => [o.operationId, o.state]));
-  const byId = new Map(outcomes.map((o) => [o.operationId, o]));
-  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
-  const report: RunReport = { filed: [], created: [], updated: [], setAside: [], questions: [] };
-  for (const c of manifest.reportPlan) {
-    const states = c.requires.map((id) => state.get(id));
-    if (states.some((s) => s !== 'applied' && s !== 'rejected')) return null;
-    if (!states.every((s) => s === c.when)) continue;
-    report.filed.push(...c.value.filed);
-    report.created.push(...c.value.created);
-    report.updated.push(...c.value.updated);
-    const moves = c.when === 'rejected' && c.requires.every((id) => ops.get(id)?.effect.kind === 'move');
-    const moved = c.requires.every((id) => {
-      const o = byId.get(id);
-      return o?.state === 'rejected' && o.failure.code === 'conflict' && o.failure.message === SOURCE_NOT_AS_SEEN;
-    });
-    report.setAside.push(...(moves ? c.value.setAside.map((row) => ({ ...row, why: moved ? MOVED_AWAY : NOT_FILED })) : c.value.setAside));
-    report.questions.push(...c.value.questions);
-    if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
-    if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
-    if (c.value.rulesWorded !== undefined) report.rulesWorded = (report.rulesWorded ?? 0) + c.value.rulesWorded;
-  }
-  // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
-  if (report.yourChanges === 0) delete report.yourChanges;
-  return { v: 1, kind: 'run-report', scope: { rootId: manifest.scope.rootId }, runId: manifest.runId, captureId: manifest.captureId, manifestHash, report };
 }
 
 /**
@@ -597,65 +551,6 @@ function sameQuestion(a: Question, b: Question): boolean {
   return a.id === b.id && a.text === b.text && a.yes === b.yes && a.no === b.no && a.about === b.about && a.askedAt === b.askedAt;
 }
 
-/** A filing move: a captured member going to another place (a cleared "new" mark stays where it is). */
-export function filingMove(manifest: RunManifest, op: OperationV2): boolean {
-  const e = op.effect;
-  return e.kind === 'move' && manifest.capture.members.some((m) => m.file.fileId === e.before.fileId);
-}
-
-/**
- * Consumed dispositions (guard 13) for declared piles whose every member was
- * filed by this run: the published report, the member keys and the applied
- * moves (and the folder's Bin, when it went). A pile with a member not filed
- * keeps its declaration and gets none.
- */
-export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcome[], reportHash: string): Disposition[] {
-  const byOp = new Map(outcomes.map((o) => [o.operationId, o]));
-  const out: Disposition[] = [];
-  for (const pile of manifest.capture.piles) {
-    if (pile.source.kind !== 'declared') continue;
-    const files = new Set(manifest.capture.members.filter((m) => m.pileId === pile.pileId).map((m) => m.file.fileId));
-    const moves = manifest.operations.filter((o) => filingMove(manifest, o) && o.effect.kind === 'move' && files.has(o.effect.before.fileId));
-    const bin = manifest.operations.find((o) => o.effect.kind === 'bin' && o.effect.before.fileId === pile.anchor?.fileId);
-    const applied = (o: OperationV2): EffectEvidence | null => {
-      const outcome = byOp.get(o.operationId);
-      return outcome?.state === 'applied' ? outcome.evidence : null;
-    };
-    if (!moves.length || moves.length !== files.size || !moves.every((o) => applied(o))) continue;
-    const operations = [...moves, ...(bin && applied(bin) ? [bin] : [])].flatMap((o) => {
-      const evidence = applied(o);
-      return evidence ? [{ operationId: o.operationId, evidence }] : [];
-    });
-    out.push({
-      v: 1, kind: 'pile-disposition', scope: { rootId: manifest.scope.rootId }, pileId: pile.pileId,
-      declaration: pile.source.ref, memberKeys: pile.memberKeys.filter((k): k is string => k !== null),
-      action: 'consumed', authority: { kind: 'run', runId: manifest.runId, reportHash }, operations,
-    });
-  }
-  return out;
-}
-
-/** One verified run's records over the fake Drive, scoped to one root: the shared records, and the report and dispositions. */
-export class RunRecords extends SpineRecords {
-  /** The published report record, read back and bound to this run. */
-  async report(manifest: RunManifest, manifestHash: string, hash: string): Promise<ReportRecord> {
-    const bytes = await this.read({ runId: manifest.runId }, reportName(hash));
-    const parsed = bytes ? await parseRunReport(bytes, { rootId: this.rootId, runId: manifest.runId, captureId: manifest.captureId, manifestHash }) : null;
-    if (!parsed?.ok || parsed.sha256 !== hash) {
-      console.error(`The report of run ${manifest.runId} is ${parsed ? (parsed.ok ? 'another report' : parsed.reason) : 'missing'}`);
-      throw new BowerError('unknown', READ_FAILED);
-    }
-    return parsed.value;
-  }
-
-  /** Writes a consumed disposition after checking it against its pile's full key set. */
-  async putDisposition(w: FencedDrive, value: Disposition): Promise<void> {
-    const c = await canonical(value);
-    const parsed = await parsePileDisposition(c.bytes, this.rootId, value.memberKeys);
-    if (!parsed.ok || parsed.sha256 !== c.hash) {
-      console.error(`A disposition of pile ${value.pileId} was refused (${parsed.ok ? 'hash' : parsed.reason})`);
-      throw new BowerError('unknown', SAVE_FAILED);
-    }
-    await this.put(w, 'piles', dispositionName(c.hash), c.text);
-  }
-}
+// The report, its record and the consumed dispositions are shared with the runner (TL-P3-22).
+export { RunRecords } from '../spine/records';
+export { MOVED_AWAY, NOT_FILED, SOURCE_NOT_AS_SEEN, dispositionsFor, filingMove, materialize } from '../spine/report';
