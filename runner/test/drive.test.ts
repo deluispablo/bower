@@ -150,6 +150,17 @@ describe('runner drive adapter', () => {
     expect(await token.token(true)).not.toBe(second);
     expect(wire.tokenCalls).toBe(3);
   });
+
+  it('a plan read of a file changed since gives its new digest, never one kept for its older version', async () => {
+    const { wire, note } = await seeded();
+    const reads = adapterOn(wire).planReads();
+    const first = await reads.digest(note);
+    // The note changes within the few seconds a plan read is kept; the listing now shows its new modifiedTime.
+    const changed = await wire.drive.writeText(note.id, 'Other words, longer than before.', note.modifiedTime);
+    const now = await reads.digest(changed);
+    expect(first?.sha256).toBe(createHash('sha256').update('First words.').digest('hex'));
+    expect(now?.sha256).toBe(createHash('sha256').update('Other words, longer than before.').digest('hex'));
+  });
 });
 
 interface Side {

@@ -36,6 +36,7 @@ import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { planScripted, runKeys, type Filing, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
@@ -188,11 +189,19 @@ const thingsOf = (p: Admitted['taken']['piles'][number]): Admitted['taken']['pil
 /** A file name's extension, lower case, with its dot; '' when it has none. */
 const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
 
-/** A folder path a model may file into: recordable parts under a main folder, none hidden. */
+/**
+ * Bidi controls and invisible characters (Unicode UAX #9 explicit formatting; Trojan Source, CVE-2021-42574): a name
+ * that shows other than it is.
+ */
+const HIDDEN_CHARS = /[\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/;
+/** One part of a name as the app allows it: recordable, at most MAX_NAME, not hidden, no edge spaces or hidden marks. */
+const partOk = (part: string): boolean =>
+  recordableName(part) && part.length <= MAX_NAME && !part.startsWith('.') && part.trim() === part && !HIDDEN_CHARS.test(part);
+/** A folder path a model may file into: such parts under a main folder, none named like a note. */
 const placeOk = (to: unknown): to is string =>
-  typeof to === 'string' && to.length <= 512 && MAIN_FOLDERS.includes(to.split('/')[0] ?? '') && to.split('/').every((part) => recordableName(part) && !part.startsWith('.'));
-/** A new name a model may give: one recordable part, not hidden, not too long. */
-const nameOk = (name: unknown): name is string => typeof name === 'string' && name.length <= 200 && recordableName(name) && !name.startsWith('.') && name.trim() === name;
+  typeof to === 'string' && MAIN_FOLDERS.includes(to.split('/')[0] ?? '') && to.split('/').length <= 8 && to.split('/').every((part) => partOk(part) && !/\.md$/i.test(part));
+/** A new name a model may give: one such part, its extension not counted (as the app counts it, `contracts/tree.ts`). */
+const nameOk = (name: unknown): name is string => typeof name === 'string' && partOk(name.replace(/\.[A-Za-z0-9]{1,5}$/, '')) && partOk(name);
 
 const exactly = (value: unknown, keys: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value)
@@ -375,7 +384,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     if (!intent.ok) return refuse(intent.why);
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     const t = took.taken;
-    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), filing: intent.filing }, undefined, intent.held);
+    const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), filing: intent.filing, updates: [] }, undefined, intent.held);
     const manifest: RunManifest = plan.manifest;
     const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId);
     if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
