@@ -3964,5 +3964,20 @@
     "verify": "pnpm -C api exec vitest run -t \"a runner ticket gets the folder and a Drive token|a wrong or expired ticket is signed out|a new attempt fences the old one|reports move forward by seq and phase|a repeated report changes nothing|an ended run retires its ticket\"",
     "passes": false,
     "note": "TL-P3-18; Worker contract \"Runner wire\"; reuses the original app's run-ticket.ts and runner.ts."
+  },
+  {
+    "id": "runner-drive-adapter",
+    "task": "p3-d",
+    "category": "feature",
+    "what": "A runner/ workspace package gives the runner a FencedDrive on real Drive, built on the app's drive-http.ts with Node fetch and the ticket's token route: every write is preceded by a still-as-seen read and an attempt check (a precheck, documented as not CAS), faults come through a fetch hook, and evidence reads (get, list, readText, md5) are available.",
+    "steps": [
+      "runner/ is a pnpm workspace package (current Node LTS), built to one file; it imports src/data/contracts and src/data/drive/drive-http.ts directly.",
+      "Each FencedDrive write first re-reads the file (modifiedTime, name, parents) and the attempt from GET /runner/runs/:id/token once per write batch, and refuses when either moved.",
+      "The same scenario passes against the fake's FencedDrive and the adapter on a fake fetch that replays Drive v3 shapes, including a refused write and a lost reply.",
+      "drive-http.ts keeps its app behaviour; any browser-only line moves behind an injected dependency."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the adapter refuses a write when the file moved since it was read|the adapter refuses a write after a newer attempt took over|the adapter and the fake agree on the fenced scenario\"",
+    "passes": false,
+    "note": "TL-P3-18, TL-P3-19 (runner/ beside api/, built on drive-http.ts; precheck not CAS, ARCHITECTURE line 57)."
   }
 ]
