@@ -4594,7 +4594,7 @@
       "The five bench cases start from the original agent/bench/vault folder unchanged."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"every corpus capability has at least two cases|the corpus scorer passes on the scripted provider outputs|the corpus scorer fails when an expected file is missing|the bench cases start from the original.s bench folder\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-01 batch P4-1. Reopened: P4-1 review BLOCK (bench cases lack the original start folder; bench-5 asks about an absent PDF)."
   },
   {
