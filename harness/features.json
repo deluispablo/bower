@@ -3805,7 +3805,7 @@
       "GET /auth/login?consent=1 redirects with prompt=\"select_account consent\"."
     ],
     "verify": "pnpm -C api exec vitest run -t \"sign-in always shows Google's account chooser|the consent re-prompt also shows the account chooser\"",
-    "passes": false,
+    "passes": true,
     "note": "Lead ruling after R2 attempt 1: the pane's silent Google sign-in picked a non-allowlisted account (Google OAuth 2.0 docs: prompt=select_account)."
   }
 ]
