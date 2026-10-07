@@ -13,7 +13,7 @@ Starting model: `bower-evaluator` (Sonnet). Reason: the first tidy-up that runs 
   1. **One synthetic pile.** In the app, add one short made-up thing to the inbox. Use a plain sentence about Alex's houseplants and no real names. Confirm it shows in the inbox.
   2. **Press "Tidy up"**, with web lookups off. Record the `/process` answer: run id, phase `queued`, revision. One press only.
   3. **Status.** Watch the app until the run ends, up to 30 minutes. Record each phase it shows (`queued` → `reading` → `writing` → `saving` → `done`) with its time and the `/status` revision. The revision must never fall, and the phase must never move back.
-  4. **Actions.** Read only, with `gh run list -R deluispablo/bower-home --workflow tidy.yml` and `gh run view <id>` (no cancel, re-run or any other write). Record the run name (`tidy <run_id> 1`), its conclusion and its duration. Confirm the log shows no ticket (it is masked).
+  4. **Actions.** Read only, with `gh run list -R deluispablo/bower-home --workflow tidy.yml` and `gh run view <id>` (no cancel, re-run or any other write). Record the run name (`tidy <run_id> 1`), its URL, its conclusion, its duration, and the time from the press to its creation (the dispatch) and from there to `done` in the app. Confirm the log shows no ticket (it is masked).
   5. **Result in the app.** The thing left the inbox and shows where it was filed, and the run's summary shows. Reload once and confirm both stay.
   6. **Result in Drive.** Use page script with `GET /drive/token`, read only, inside the folder. Check that:
      - `.bower/last-run.json` exists, with this run id and `done`;
