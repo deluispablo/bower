@@ -1,5 +1,5 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
@@ -361,6 +361,62 @@ describe('the admission manifest', () => {
     expect(root).not.toBe('');
   });
 
+  /** A pile folder in the inbox with its note's text and, when given, one thing. */
+  async function pileWithNote(folder: DriveFolder, name: string, pileId: string, note: string, thing?: string) {
+    const made = await folder.drive.createFolder(folder.inbox, name, { pile: pileId });
+    const noteFile = await folder.drive.createText(made.id, 'Pile note.md', note);
+    const thingFile = thing ? await folder.drive.createText(made.id, thing, `%PDF ${thing}`) : null;
+    return { folder: made, note: noteFile, thing: thingFile };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('admission holds a pile whose note is not ready', async () => {
+    const who = await withFolder();
+    // A note in a newer format, a damaged one, and one of whitespace only with nothing else: the runner holds each.
+    await pileWithNote(who.folder, 'Trip', 'p-newer', '---\nbower_format: ownership/3\n---\nTrain times\n', 'ticket.pdf');
+    await pileWithNote(who.folder, 'Flat', 'p-damaged', '---\nbower_format:  ownership/2\n---\nRent\n', 'lease.pdf');
+    await pileWithNote(who.folder, 'Blank', 'p-blank', '  \n\t\n');
+    const held = await press(who, { scope: 'all', allowWeb: false, requestId: 'press-1' });
+    expect(held.status).toBe(409);
+    expect(await held.json()).toEqual({ error: { code: 'nothing', message: 'Nothing in the inbox is ready yet.' } });
+    expect(await stored(who.sub)).toEqual({ runs: [], quota: [] });
+    // With a ready pile beside them, only it is admitted.
+    const ready = await pileWithNote(who.folder, 'Receipts', 'p-ready', 'For the tax return', 'receipt.pdf');
+    const r = await press(who, { scope: 'all', allowWeb: false, requestId: 'press-2' });
+    expect(r.status).toBe(200);
+    const row = (await stored(who.sub)).runs[0] as Record<string, unknown> | undefined;
+    const manifest = JSON.parse(String(row?.manifest)) as AdmissionManifest;
+    expect(manifest.piles.map((p) => p.pileId)).toEqual(['p-ready']);
+    expect(manifest.piles[0]?.items.map((i) => i.fileId).sort()).toEqual([ready.note.id, ready.thing?.id ?? ''].sort());
+  });
+
+  it('admission stores no note text', async () => {
+    const who = await withFolder();
+    const errors = vi.spyOn(console, 'error');
+    const logs = [vi.spyOn(console, 'log'), vi.spyOn(console, 'warn'), vi.spyOn(console, 'info'), vi.spyOn(console, 'debug'), errors];
+    // Words only the notes hold: a ready pile's, and a damaged note's that is logged when it is held.
+    const ready = await pileWithNote(who.folder, 'Trip', 'p-trip', 'Words only Alex wrote: quiet-heron-41', 'ticket.pdf');
+    await pileWithNote(who.folder, 'Flat', 'p-damaged', '---\nbower_format:  ownership/2\n---\nWords only Alex wrote: still-otter-73\n', 'lease.pdf');
+    const r = await press(who, { scope: 'all', allowWeb: false, requestId: 'press-1' });
+    expect(r.status).toBe(200);
+    const { runs } = await stored(who.sub);
+    const row = runs[0] as Record<string, unknown> | undefined;
+    const manifest = JSON.parse(String(row?.manifest)) as AdmissionManifest;
+    // The note is kept by id and version only, and the damaged one's pile is held.
+    expect(manifest.piles.map((p) => p.pileId)).toEqual(['p-trip']);
+    expect(manifest.piles[0]?.items).toContainEqual({ fileId: ready.note.id, name: 'Pile note.md', parents: [ready.folder.id], modifiedTime: ready.note.modifiedTime });
+    const words = ['quiet-heron', 'still-otter', 'Words only Alex wrote'];
+    const rowText = JSON.stringify(runs);
+    for (const w of words) expect(rowText).not.toContain(w);
+    // The held note was read and its refusal logged, with none of its words.
+    expect(errors).toHaveBeenCalled();
+    const logged = logs.flatMap((spy) => spy.mock.calls.map((args) => args.map(deepText).join(' ')));
+    for (const line of logged) for (const w of words) expect(line).not.toContain(w);
+  });
+
   it('the run row keeps its manifest and the token route returns it', async () => {
     const who = await withFolder();
     const { drive, inbox } = who.folder;
@@ -390,3 +446,12 @@ describe('the admission manifest', () => {
     expect(((await token.json()) as { manifest?: unknown }).manifest).toEqual(manifest);
   });
 });
+
+/** Everything a logged value can show: an error's message, stack and cause, an object's fields. */
+function deepText(value: unknown, seen = new Set<unknown>()): string {
+  if (value === null || typeof value !== 'object') return String(value);
+  if (seen.has(value)) return '';
+  seen.add(value);
+  if (value instanceof Error) return [value.message, value.stack ?? '', deepText(value.cause, seen), deepText({ ...value }, seen)].join(' ');
+  return Object.entries(value as Record<string, unknown>).map(([k, v]) => `${k}: ${deepText(v, seen)}`).join(' ');
+}
