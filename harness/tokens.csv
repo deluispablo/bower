@@ -133,3 +133,4 @@ deletion-allowlist-doc,implementer,claude,haiku,low,1,70229,,,,,,24,4.5,delivere
 p3-freeze-review,reviewer,claude,opus,high,1,155312,,,,,,65,5.9,PASS (5 minor),2026-10-07
 deploy-staging-upload-line,implementer,claude,haiku,low,1,77157,,,,,,24,3.2,delivered,2026-10-07
 c16-inputs-prep,implementer,claude,sonnet,medium,1,187958,,,,,,55,6.0,inputs ready (C11 rules finding),2026-10-07
+rules-template-bower,implementer,claude,sonnet,medium,1,134342,,,,,,42,10.4,delivered,2026-10-07
