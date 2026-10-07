@@ -47,6 +47,8 @@ export interface CorpusCase {
   source: string;
   /** One of the original app's five bench cases, kept unchanged for the speed comparison (docs/harness/p4-speed-baseline.md). */
   speedBaseline?: boolean;
+  /** A shared starting folder under the corpus root (the original's bench folder), used instead of the case's `folder/`. */
+  folderFrom?: string;
   scope: 'all' | 'instructions' | 'undo';
   allowWeb: boolean;
   inbox: CorpusPile[];
@@ -103,14 +105,20 @@ export interface LoadedCase extends CorpusCase {
   dir: string;
   /** The starting folder, path to text. */
   folder: Record<string, string>;
+  /** Files of the starting folder that are not text (a PDF, a picture), path to bytes. */
+  folderBinary: Record<string, Uint8Array>;
   /** The files of the inbox, name to text. */
   inboxFiles: Record<string, string>;
+  inboxBinary: Record<string, Uint8Array>;
   expected: Expected;
   rubric: string;
 }
 
-async function walk(dir: string): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
+/** Every file under `dir`: text decoded as UTF-8, anything else (a PDF, a picture) kept as its bytes. */
+async function walk(dir: string): Promise<{ text: Record<string, string>; binary: Record<string, Uint8Array> }> {
+  const text: Record<string, string> = {};
+  const binary: Record<string, Uint8Array> = {};
+  const strict = new TextDecoder('utf-8', { fatal: true });
   const visit = async (d: string): Promise<void> => {
     let entries;
     try {
@@ -122,24 +130,34 @@ async function walk(dir: string): Promise<Record<string, string>> {
     for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
       const full = join(d, entry.name);
       if (entry.isDirectory()) await visit(full);
-      else if (entry.name !== '.gitkeep') out[relative(dir, full).split('\\').join('/')] = await readFile(full, 'utf8');
+      else if (entry.name !== '.gitkeep' && entry.name !== '.DS_Store') {
+        const path = relative(dir, full).split('\\').join('/');
+        const bytes = await readFile(full);
+        try {
+          text[path] = strict.decode(bytes);
+        } catch {
+          binary[path] = new Uint8Array(bytes);
+        }
+      }
     }
   };
   await visit(dir);
-  return out;
+  return { text, binary };
 }
 
 export async function loadCase(dir: string): Promise<LoadedCase> {
   const meta = JSON.parse(await readFile(join(dir, 'case.json'), 'utf8')) as CorpusCase;
   const expected = JSON.parse(await readFile(join(dir, 'expected.json'), 'utf8')) as Expected;
   const rubric = await readFile(join(dir, 'rubric.md'), 'utf8');
-  return { ...meta, dir, folder: await walk(join(dir, 'folder')), inboxFiles: await walk(join(dir, 'inbox')), expected, rubric };
+  const start = await walk(meta.folderFrom ? join(dir, '..', meta.folderFrom) : join(dir, 'folder'));
+  const inbox = await walk(join(dir, 'inbox'));
+  return { ...meta, dir, folder: start.text, folderBinary: start.binary, inboxFiles: inbox.text, inboxBinary: inbox.binary, expected, rubric };
 }
 
 /** Every case under the corpus root, in id order. */
 export async function loadCorpus(root: string): Promise<LoadedCase[]> {
   const found = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const names = found.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  const names = found.filter((e) => e.isDirectory() && !e.name.startsWith('_')).map((e) => e.name).sort();
   return Promise.all(names.map((n) => loadCase(join(root, n))));
 }
 

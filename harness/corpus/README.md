@@ -7,7 +7,7 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 - `expected.json`: structural outcomes, scored by `runner/src/corpus.ts` (`*` in a path matches any run of characters);
 - `rubric.md`: what a good semantic result looks like, for the quality reviewer.
 
-`covers: scripted` means the scripted provider produces the expected outcome today (the runner test runs and scores each); `model` cases wait for the P4 slices and their expectations are by hand. The five `bench-*` cases are the original app's `agent/bench/cases`, copied unchanged, and are the speed-baseline cases (`docs/harness/p4-speed-baseline.md`). Cases marked `bench:` in their source are adapted from them (made-up names and dates).
+`covers: scripted` means the scripted provider produces the expected outcome today (the runner test runs and scores each); `model` cases wait for the P4 slices and their expectations are by hand. The five `bench-*` cases are the original app's `agent/bench/cases`, copied unchanged, and are the speed-baseline cases (`docs/harness/p4-speed-baseline.md`). The bench cases start from `_bench-vault/`, the original's `agent/bench/vault` copied unchanged (original layout, `0-Inbox` and so on). Cases marked `bench:` in their source are adapted from them (made-up names and dates).
 
 | Case | Capability | Covers | Source |
 | --- | --- | --- | --- |
