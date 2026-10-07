@@ -147,3 +147,4 @@ P3-9 is closed.
 - P4-1 closed entries: `p4-corpus` (ac3411f; 29 cases, bench 1–5 unchanged) and `claude-provider` (c98c378; Claude Code 2.1.293 pinned, confirmed on npm). 352/353.
 - Running: `runner-overhead` (bower-p4-overhead, at c98c378); the P4-1 Opus delta (packet p4-1-review); check plus e2e:fake at 62a9a3e.
 - Live Claude smoke after the review: the lead deploys, sets BOWER_PROVIDER=claude in bower-home, and I press one C04 case.
+- provider-contract entry and packet ready (lead 1089bd1); dispatch when a slot frees. Live C04 smoke after it closes. 351/354.
