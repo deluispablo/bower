@@ -75,7 +75,15 @@ export async function saveReport(save: ReportSave): Promise<string[]> {
     }
   }
   const view = await stored(save, SYSTEM.lastRun);
-  if (view && sameView(view.text, save.view)) return written;
+  if (view && sameView(view.text, save.view)) {
+    // Already there (a restarted run): read back by its checksum all the same before anyone says done.
+    const [now, read] = await Promise.all([save.checksum.stored(view.file.id), save.checksum.of(encode(view.text))]);
+    if (now !== read) {
+      console.error(`${SYSTEM.lastRun} could not be read back as it is stored`);
+      throw new BowerError('unknown', SAVE_FAILED);
+    }
+    return written;
+  }
   if (!(await save.mayReplace(view ? view.text : null))) {
     console.error(`${SYSTEM.lastRun} shows another run; it is not saved over`);
     throw new BowerError('conflict', SAVE_FAILED);

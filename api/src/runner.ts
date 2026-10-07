@@ -142,6 +142,13 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       'runner report',
       async (): Promise<RunnerReportResult> => await person.runnerReport(runId, hash, report, Date.now()),
     );
+    if (!result.accepted && result.refused === 'stale-report') {
+      // The contract's error shape, with where the Worker is, so a restarted runner goes on from `seq + 1`.
+      const late = refusal('stale-report');
+      console.error(`[${c.get('requestId')}] ${late.code}: ${late.message}`);
+      c.header('x-request-id', c.get('requestId'));
+      return c.json({ error: { code: late.code, message: late.message }, current: result.current }, 409);
+    }
     if (!result.accepted) throw refusal(result.refused);
     const reply: RunReply = result.reply;
     return c.json(reply);

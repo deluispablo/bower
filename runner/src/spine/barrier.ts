@@ -5,7 +5,8 @@
  *    done, report pending". From here a run that stops stays in `saving`, and a redispatch resumes here: every
  *    operation is settled, so no effect is applied again.
  * 2. The report record goes in the run's folder, read back, and each declared pile filed whole gets its consumed
- *    disposition in `.bower/piles`.
+ *    disposition in `.bower/piles`. Then `dispositions.json` in the run's folder: one line for every admitted item,
+ *    journal lines included, filed, set aside or waiting (`itemDispositions`); one already there is left as it is.
  * 3. The report files, then `.bower/last-run.json` last, through the shared barrier (`src/data/spine/barrier.ts`),
  *    each read back by its checksum.
  * 4. Only then is the report published and the run done in the chain; the caller reports `done` after this.
@@ -16,7 +17,7 @@
 import { BowerError } from '../../../src/data/types';
 import type { FencedDrive } from '../../../src/data/drive/fake-drive';
 import type { Checkpoint } from '../../../src/data/contracts/run-checkpoint';
-import { fixedReport, lastRunText, olderView, saveReport, type Checksum } from '../../../src/data/spine/barrier';
+import { fixedReport, jsonText, lastRunText, olderView, saveReport, type Checksum } from '../../../src/data/spine/barrier';
 import type { AdmissionManifest } from '../../../src/data/spine/admission';
 import { canonical, checkpointName, nextCheckpoint, reportName, type AttemptMark, type CheckpointPatch, type RecordReads, type RunManifest, type RunRecords } from '../../../src/data/spine/records';
 import { dispositionsFor, itemDispositions, materialize, type ItemDisposition } from '../../../src/data/spine/report';
@@ -35,6 +36,18 @@ export interface BarrierRun {
   admission: AdmissionManifest | null;
   clock(): number;
   newId(): string;
+  /** Called once "effects done, report pending" is in the chain, with it (the runner reports `saving` then). */
+  onPending?(chain: Checkpoint[]): Promise<void>;
+}
+
+/** Where every admitted item ended, in the run's folder. */
+export const DISPOSITIONS = 'dispositions.json';
+
+/** `dispositions.json`: one line per admitted item. */
+export interface DispositionsFile {
+  v: 1;
+  runId: string;
+  items: ItemDisposition[];
 }
 
 export interface Finished {
@@ -80,6 +93,7 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   }
   const pending = chain.find((c) => c.report.state === 'pending');
   if (pending?.report.state !== 'pending') throw new BowerError('unknown', SAVE_FAILED);
+  await run.onPending?.(chain);
   const body = pending.report.body;
   const r = await canonical(body);
   if (r.hash !== pending.report.reportHash) throw new BowerError('unknown', SAVE_FAILED);
@@ -88,6 +102,11 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
   await run.records.put(await run.batch(), where, reportName(r.hash), r.text);
   await run.records.report(manifest, manifestHash, r.hash);
   for (const d of dispositionsFor(manifest, at.outcomes, r.hash)) await run.records.putDisposition(await run.batch(), d);
+  if ((await run.records.read(where, DISPOSITIONS)) === null) {
+    const file: DispositionsFile = { v: 1, runId: run.runId, items: dispositions(at.outcomes) };
+    // A fenced create, read back byte for byte; a reply lost after it landed is not a second file.
+    await run.records.put(await run.batch(), where, DISPOSITIONS, jsonText(file));
+  }
 
   // 3. The report files, then last-run.json last, each read back. The view's times are those of the pending report.
   const finishedAt = pending.phaseAt;

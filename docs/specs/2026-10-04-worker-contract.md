@@ -108,7 +108,7 @@ This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runn
 - **Runner errors** use the same JSON shape:
   - 401 `signed-out` for a missing, wrong or expired ticket;
   - 409 `stale-attempt` "This tidy-up was taken over." for an attempt that is no longer current;
-  - 409 `stale-report` "That update arrived late." for a lower `seq` or a backward phase.
+  - 409 `stale-report` "That update arrived late." for a lower `seq`, a backward phase or a run already ended. Its body also carries `current: { seq, phase }`: the last `seq` the Worker took from this attempt (0 before any) and the run's phase. The runner resends once from `seq + 1`; when that phase is `done` or `failed` the run is finished and it sends nothing more, and a `done` refused again is a failed job, never swallowed.
 - **Recovery without the browser.** At dispatch, the person object sets a [Durable Object alarm](https://developers.cloudflare.com/durable-objects/api/alarms/) for the stale deadline. When the alarm finds no progress, it looks up the run by `run-name` in GitHub Actions and reads the job's `started_at` and `completed_at`.
   - It redispatches once, as attempt + 1 with a new ticket, if no live job holds the run.
   - Otherwise, or after a second stale deadline, it marks the run failed `stale`.
