@@ -344,3 +344,4 @@ security-review	3b6edd4b45607423	2026-10-07	known-green: review entry: at 5688b1
 token-key-rotation-reconsent	c7bb5dedcf520374	2026-10-07	red (fixed in bf51a52)
 tidy-pin-actions	d9792be531682d69	2026-10-07	red (fixed in 29c82ac)
 log-no-folder-content	c192318131c8b5a2	2026-10-07	red (fixed in 88f4424)
+cookie-host-prefix	0dddf5e7feb81845	2026-10-07	red (fixed in 28ca281)

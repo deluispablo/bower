@@ -4452,7 +4452,7 @@
       "Tests assert the Set-Cookie attributes."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the session and sign-in cookies carry the __Host- prefix\"",
-    "passes": false,
+    "passes": true,
     "note": "P3 security review F4 (Minor); ASVS V3.3.1, V3.3.3."
   },
   {
