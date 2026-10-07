@@ -138,3 +138,7 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - No test feeds `decide()` a completed job plus a queued one at attempt 1 (must wait, not redispatch).
   - "No job listed means queued" is judged over all matched runs together; a second `tidy <id> 1` with no jobs beside a completed one redispatches (safe: the retired ticket fences it).
   - routing.test skips middleware by path (`*`, `/*`), not kind; a real `app.get('*')` would go unchecked. The red test copies the parser and matcher; no test asserts `/authx` directly.
+- dispositions-match-report (left out):
+  - `FakeDrive` (src/data/drive/fake-drive.ts:429,532) records text size in UTF-16 units, not bytes; non-ASCII notes get the wrong size (real Drive reports bytes).
+  - A pile note whose things were filed but whose folder's Bin was rejected is still marked filed.
+  - e2e:fake `[phone] qa10.spec.ts:165` flaked once under load (passed 3/3 alone).
