@@ -2,7 +2,7 @@
 
 Starting model: `bower-escalated` (Opus). Reason: resuming a run on the person's Drive without repeating an effect, and fencing an old attempt out, are data safety and concurrency work ([TL-P3-23](2026-10-07-tl-p3-23-recovery-and-ordered-status.md); ARCHITECTURE invariants 2, 3 and 6; C12). It runs alongside `spine-ordered-status`, which owns the Worker's status ordering. Stay out of its files.
 
-- **Entry:** `spine-recovery-without-browser`. Checkout `/private/tmp/bower-p3-recovery`, branch `claude/p3-recovery`, from the commit named in your prompt. Never push or deploy, and never run `gh` or `wrangler`.
+- **Entry:** `spine-recovery-without-browser`. Checkout `/private/tmp/bower-p3-resume`, branch `claude/p3-resume`, from the commit named in your prompt. Never push or deploy, and never run `gh` or `wrangler`.
 - **Read:**
   - Docs: `docs/harness/WORKER.md`, this packet, TL-P3-23, and the "Runner wire" section of `docs/specs/2026-10-04-worker-contract.md`.
   - Contracts: `src/data/contracts/run-checkpoint.ts`, which has the outcomes `before-effect-refused`, `possible-effect` and `applied`, plus the run-checkpoint phases.
