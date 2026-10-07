@@ -3977,7 +3977,7 @@
       "drive-http.ts keeps its app behaviour; any browser-only line moves behind an injected dependency."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the adapter refuses a write when the file moved since it was read|the adapter refuses a write after a newer attempt took over|the adapter and the fake agree on the fenced scenario\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-18, TL-P3-19 (runner/ beside api/, built on drive-http.ts; precheck not CAS, ARCHITECTURE line 57)."
   },
   {
