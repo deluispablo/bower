@@ -9,7 +9,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Instance repository** `deluispablo/bower-home` ([TL-P3-13](2026-10-07-tl-p3-13-instance-repository.md)): Replaced with the new runner on 2026-10-07 (`ed952c4`), via `scripts/new-instance.sh`. The full replacement comes with the new runner. `gh` has the `workflow` scope.
 - **P3-B is complete (2026-10-07):** R2, R3, R4 and the Drive suite.
 - **Codex review on 2026-10-12** (TL-P3-16): check that `codex exec` answers, then one review of the P3 Worker and spine range, before P4.
-- **Waiting on the coordinator:** `spine-report-barrier-dispositions` (TL-P3-22), then `scripted-semantic-provider` with the `bower-home` replacement; the `session-lease-real` (C14) result.
+- **P3 closed on evidence (2026-10-07):** the dossier [2026-10-07-p3-dossier.md](2026-10-07-p3-dossier.md) is at `680e95e`, for code `426a9fd`, deployed as `aeb99a4`. Waiting on: the owner's P3 acceptance (P4 stays unauthorized); the Codex review of the P3 range on 2026-10-12; the owner-deferred live revocation.
 - **Backup:** a GitHub-side 500 blocked pushes for a few hours on 2026-10-07; it cleared, and the backup reached `3389bed`.
 - **Pending, owner-deferred:** a live Google revocation check with a different test account (TL-P3-28). It runs before P4 relies on it.
 - **Owner ask coming:** a fine-grained `GITHUB_TOKEN` for `bower-home`, set with `wrangler secret put` at the `bower-home` replacement (with `scripted-semantic-provider`). The Claude credential moves to P4 (TL-P3-22).
