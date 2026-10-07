@@ -99,3 +99,5 @@ runner-restart-truth-fix,implementer,claude,opus,high,1,126593,,,,,,33,9.8,deliv
 p3-12-rereview,reviewer,claude,opus,medium,1,82152,,,,,,11,1.4,PASS (3 minor),2026-10-07
 spine-ordered-status,implementer,claude,sonnet,medium,1,116480,,,,,,31,9.5,delivered,2026-10-07
 first-real-run attempt 1,evaluator,claude,sonnet,medium,1,79480,,,,,,51,2.3,BLOCKED at press (permission),2026-10-07
+spine-recovery-without-browser,implementer,claude,opus,high,1,229384,,,,,,70,15.9,delivered,2026-10-07
+first-real-run attempt 2,evaluator,claude,sonnet,medium,1,90431,,,,,,7,0.8,BLOCK (token route serves SPA),2026-10-07
