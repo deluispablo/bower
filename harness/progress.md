@@ -89,3 +89,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: upload-queue-real passes — chore(harness): upload-queue-real passes
 - 2026-10-07: deploy-and-migrations passes — chore(harness): deploy-and-migrations passes
 - 2026-10-07: declare-piles-real passes — chore(harness): declare-piles-real passes
+- 2026-10-07: runbook-p3 passes — chore(harness): runbook-p3 passes

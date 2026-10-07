@@ -4312,7 +4312,7 @@
       "A docs test fails when a Worker secret or variable is missing from the runbook or a secret pattern or real address appears in it."
     ],
     "verify": "pnpm exec vitest run src/docs.test.ts -t \"the runbook names every Worker secret and variable|the runbook holds no real values\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-24 point 2 (P3-F); P3_ACCEPTANCE owner setup step 4 and the runbook line."
   }
 ]
