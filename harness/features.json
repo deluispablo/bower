@@ -4225,7 +4225,7 @@
       "The existing test that asserts failed stale after a finished job at attempt 1 changes to the redispatch, and a test runs the alarm, the redispatch and a resumed runner to done."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the alarm redispatches a run whose first job finished without a report|a second attempt with no live job ends stale\"",
-    "passes": false,
+    "passes": true,
     "note": "P3-13 delta review Important 2: the contract says \"redispatches once, as attempt + 1 with a new ticket, if no live job holds the run\"; recovery.ts failed it instead, so the TL-P3-23 cancel journey would end stale."
   }
 ]

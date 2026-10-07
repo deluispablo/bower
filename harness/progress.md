@@ -82,3 +82,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-07: spine-recovery-without-browser passes — chore(harness): spine-recovery-without-browser passes
 - 2026-10-07: staging-runner-routes passes — chore(harness): staging-runner-routes passes
 - 2026-10-07: worker-stale-run-recovery passes — chore(harness): worker-stale-run-recovery passes under the contract's redispatch
+- 2026-10-07: recovery-redispatch-after-dead-job passes — chore(harness): recovery-redispatch-after-dead-job passes
