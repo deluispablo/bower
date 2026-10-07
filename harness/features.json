@@ -4626,5 +4626,21 @@
     "verify": "pnpm -C runner exec vitest run -t \"a scripted run with modelled Drive latency finishes under the runner budget|the runner overhead cuts keep recovery and ordered status\"",
     "passes": false,
     "note": "TL-P4-01 addendum (owner speed request); docs/harness/p4-speed-baseline.md."
+  },
+  {
+    "id": "provider-contract",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "The Claude provider meets the same contract as the scripted one on the same fixtures: the runner computes ids and digests (the model never supplies them), every operation targets only admitted things (a reply that targets anything else, such as Resources, is refused with no write), claude runs with --setting-sources so no checkout or HOME settings load, and tidy.yml passes the Claude secret only when the provider is claude.",
+    "steps": [
+      "Runner-computed ids and digests; model-supplied ones ignored or refused.",
+      "Admitted-only targets; a reply binning or moving a non-admitted folder (Resources) is refused, nothing written.",
+      "claude -p gets --setting-sources limited so checkout/HOME settings and CLAUDE.md never load.",
+      "tidy.yml passes CLAUDE_CODE_OAUTH_TOKEN only when BOWER_PROVIDER is claude.",
+      "The scripted provider contract fixtures pass through the Claude provider on recorded replies."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the Claude provider passes the scripted provider contract fixtures|a Claude reply that targets a thing not admitted is refused and writes nothing|the runner computes ids and digests, never the model|claude runs with no checkout or home settings and the secret only reaches the claude step\"",
+    "passes": false,
+    "note": "TL-P4-01 P4-2; P4-1 review Important (notAdmitted) and two minors; lead 1089bd1. Live C04 smoke after it closes."
   }
 ]
