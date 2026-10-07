@@ -3935,7 +3935,7 @@
       "The floor holds no personal data (one integer) and survives only what DELETE /me does; a fresh sign-in's new cookie works."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a cookie from before delete me stays refused after signing in again\"",
-    "passes": false,
+    "passes": true,
     "note": "P3-7 Opus delta review, BLOCKING Important: forget() reset session_generation to 0, so a never-signed-out cookie at generation 0 revived after re-sign-in."
   },
   {
