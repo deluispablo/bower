@@ -14,9 +14,12 @@ import { Hono } from 'hono';
 
 import { requireSession } from './auth.js';
 import type { AppEnv, Env } from './env.js';
+import type { FetchLike } from './google.js';
 import { HttpError } from './errors.js';
 import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
+import type { AuthDeps } from './auth.js';
+import { dispatchTidy } from './github.js';
 
 export type RunScope = 'all' | 'instructions';
 export type RunPhase = 'queued' | 'reading' | 'writing' | 'saving' | 'done' | 'failed';
@@ -40,7 +43,7 @@ export interface RunReply {
 }
 
 /** What admission decided: the run (admitted, repeated or already going), or the day's limit reached. */
-export type AdmitResult = { admitted: true; run: RunWire; revision: number } | { admitted: false; refused: 'rate-limited' };
+export type AdmitResult = { admitted: true; run: RunWire; revision: number; created?: true } | { admitted: false; refused: 'rate-limited' };
 
 export interface AdmitInput {
   scope: RunScope;
@@ -119,8 +122,26 @@ export function signedInSub(sub: string | undefined): string {
   return sub;
 }
 
+/**
+ * Sends a new run to GitHub with attempt 1's ticket. A failure never changes the answer: the run stays
+ * `queued` and the alarm recovers it. Nothing here logs the ticket.
+ */
+async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolean, now: number, fetchImpl: FetchLike): Promise<void> {
+  if (env.GITHUB_TOKEN === undefined) {
+    console.error('tidy dispatch is not configured: no GitHub token');
+    return;
+  }
+  const ticket = await reach('mint ticket', async () => await personFor(env, sub).mintTicket(run.id, 1, now));
+  if (ticket === null) return;
+  await dispatchTidy(
+    { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, runId: run.id, attempt: 1, ticket, scope: run.scope, allowWeb },
+    fetchImpl,
+  );
+}
+
 /** `POST /process`, mounted at `/` by `index.ts`. */
-export function createProcessRoutes(): Hono<AppEnv> {
+export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
+  const fetchImpl: FetchLike = deps.fetchImpl ?? ((input, init) => fetch(input, init));
   const routes = new Hono<AppEnv>();
 
   routes.post('/process', requireSameOrigin, requireSession, requireLease, limitBody, requireJsonBody, async (c) => {
@@ -143,6 +164,9 @@ export function createProcessRoutes(): Hono<AppEnv> {
     };
     const result = await reach('admit', async (): Promise<AdmitResult> => await personFor(env, sub).admit(input));
     if (!result.admitted) throw new HttpError(429, 'rate-limited');
+    if (result.created === true) {
+      await dispatchNew(env, sub, result.run, body.allowWeb, input.now, fetchImpl);
+    }
     const reply: RunReply = { run: result.run, revision: result.revision };
     return c.json(reply);
   });

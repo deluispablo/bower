@@ -293,7 +293,7 @@ describe('person storage migration', () => {
   it('person storage migrates from v7 to v8 keeping every row', async () => {
     const alex = personFor('sub-alex-v7');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: 2_000, dailyLimit: 100 });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100 });
     expect(admitted).toMatchObject({ admitted: true });
     // Put the database back as P3-8 shipped it: no ticket columns, a version row of 7, a v1 ticket row.
     const before = await runInDurableObject(alex, (_instance, state) => {

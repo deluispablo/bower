@@ -21,7 +21,44 @@ export interface TidyDispatch {
   allowWeb: boolean;
 }
 
+const API_URL = 'https://api.github.com';
+
 /** Sends the dispatch; resolves whether GitHub accepted it. Never throws, never logs a secret. */
-export async function dispatchTidy(_input: TidyDispatch, _fetchImpl: FetchLike): Promise<boolean> {
-  return false;
+export async function dispatchTidy(input: TidyDispatch, fetchImpl: FetchLike): Promise<boolean> {
+  if (input.token === undefined) {
+    console.error('tidy dispatch is not configured: no GitHub token');
+    return false;
+  }
+  let response: Response;
+  try {
+    response = await fetchImpl(`${API_URL}/repos/${input.repo}/dispatches`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'bower-api',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event_type: 'bower-tidy',
+        client_payload: {
+          run_id: input.runId,
+          attempt: input.attempt,
+          ticket: input.ticket,
+          scope: input.scope,
+          allow_web: input.allowWeb,
+        },
+      }),
+    });
+  } catch {
+    // The error's message could carry anything; log that the network failed, nothing more.
+    console.error('tidy dispatch failed: network error');
+    return false;
+  }
+  if (response.status !== 204) {
+    console.error(`tidy dispatch failed: status ${response.status}`);
+    return false;
+  }
+  return true;
 }
