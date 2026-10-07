@@ -10,7 +10,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **P3-B is complete (2026-10-07):** R2, R3, R4 and the Drive suite.
 - **Codex review on 2026-10-12** (TL-P3-16): check that `codex exec` answers, then one review of the P3 Worker and spine range, before P4.
 - **Waiting on the coordinator:** `spine-report-barrier-dispositions` (TL-P3-22), then `scripted-semantic-provider` with the `bower-home` replacement; the `session-lease-real` (C14) result.
-- **Backup blocked (2026-10-07):** every push to `backup` since `a22f288` gets "remote rejected (Internal Server Error)", even a one-line commit; this is repo-side. Retry later; if it persists, the owner opens a GitHub support ticket with the request id (F73B:3774A8:46EF8B1:43A416D:6AC67A68).
+- **Backup:** a GitHub-side 500 blocked pushes for a few hours on 2026-10-07; it cleared, and the backup reached `3389bed`.
 - **Owner ask coming:** a fine-grained `GITHUB_TOKEN` for `bower-home`, set with `wrangler secret put` at the `bower-home` replacement (with `scripted-semantic-provider`). The Claude credential moves to P4 (TL-P3-22).
 - **Message budget.** The app pauses a session's messages to other sessions after 10 sends without an owner message. On the night of 2026-10-06 this left the coordinator waiting about 6.5 hours for an unblock it never received. Rules:
   - send one combined message per decision;
