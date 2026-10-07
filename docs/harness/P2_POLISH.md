@@ -181,3 +181,8 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - src/data/vault/drive-vault.ts:895: addPile create has no read-back; landed late plus retry gives a 2nd pile.
   - src/features/bower/BowerPanel.tsx:33: the "Done. N filed" card press now opens the start ask, not the result.
   - Unbounded response-body reads.
+- (C16 re-walk on aeb99a4, PASS) Minors:
+  - /status total and "Reading N things" count only file piles: run 37687040283 filed 2 (one words-only) with total 1.
+  - The Home inbox sat on "Looking…" for about 2.5 min with 5 piles (3 orphans).
+  - A new service worker waits until every tab closes (registerType autoUpdate with injectRegister script-defer, no skipWaiting):
+    a reload keeps the old bundle.
