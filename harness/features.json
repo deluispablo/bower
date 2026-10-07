@@ -3663,7 +3663,7 @@
       "Nothing under api/ imports from src/ except src/data/contracts."
     ],
     "verify": "pnpm exec vitest run src/architecture.test.ts -t \"contracts import only themselves and allowlisted pure libraries|api imports from src only contracts, the spine and the Drive adapter\"",
-    "passes": true,
+    "passes": false,
     "note": "TL-P3-02 (main 54620a9). ARCHITECTURE line 22: no published package; old import paths keep working."
   },
   {
