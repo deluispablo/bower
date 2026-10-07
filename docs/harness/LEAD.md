@@ -4,7 +4,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 
 - **Role.** Claude session `Planificador`, technical lead and planner of the whole project ([GOVERNANCE](GOVERNANCE.md)). It talks to the coordinator `Orquestador` through cross-session messages, in 10 lines or fewer.
 - **Documentation checkout.** `/private/tmp/bower-tl-planning`, branch `claude/tl-planning`. Fast-forward it to `main` before each change. After `pnpm check`, or the docs test plus lint for documentation only, fast-forward local `main`. Then message the coordinator, who adopts the change and backs it up.
-- **Staging.** Redeploy after each main batch, following [STAGING.md](STAGING.md), with `bower-mechanical` from a clean detached worktree of that SHA. Last deployed: `main` `7bd77ce` (P3-6), version `b3ad5f8f`.
+- **Staging.** Redeploy after each main batch, following [STAGING.md](STAGING.md), with `bower-mechanical` from a clean detached worktree of that SHA. Last deployed: `main` `50108ab` (P3-7), version `af168bbd`.
 - **Pane:** signed in as test account A. The addresses stay only in the lead's memory.
 - **Instance repository** `deluispablo/bower-home` ([TL-P3-13](2026-10-07-tl-p3-13-instance-repository.md)): R3's `probe.yml` was added (`cca496b`) and deleted (`be9da88`); only the production workflows remain. The full replacement comes with the new runner. `gh` has the `workflow` scope.
 - **P3-B is complete (2026-10-07):** R2, R3, R4 and the Drive suite.
