@@ -56,22 +56,24 @@ describe('runner drive adapter', () => {
     expect(seenNote.name).toBe('Note.md');
   });
 
-  it('the adapter refuses a write after a newer attempt took over', async () => {
+  it('the adapter refuses a write after a newer attempt took over, even in a batch it began before', async () => {
     const { wire, note } = await seeded();
     const adapter = adapterOn(wire, 1);
     await adapter.get(note.id);
     const before = wire.tokenCalls;
     const writes = await adapter.batch();
-    // One token-route read per batch, and the token it gave serves the batch.
+    // One token-route read per batch, and one more right before each write (TL-P3-23).
     expect(wire.tokenCalls).toBe(before + 1);
     const renamed = await writes.update(note.id, { name: 'Kept.md' });
     expect(renamed.name).toBe('Kept.md');
-    expect(wire.tokenCalls).toBe(before + 1);
+    expect(wire.tokenCalls).toBe(before + 2);
 
-    // The Worker started attempt 2: this runner's next batch is refused before any write.
+    // The Worker started attempt 2: this runner's next batch is refused before any write, and so is a write of a
+    // batch it began before the takeover.
     wire.attempt = 2;
     const sent = writesSent(wire).length;
     await expect(adapter.batch()).rejects.toMatchObject(STALE);
+    await expect(writes.update(note.id, { name: 'Late.md' })).rejects.toMatchObject(STALE);
     // The token route itself refuses an older ticket the same way.
     wire.attempt = 1;
     wire.tokenRefusal = { status: 409, error: 'stale-attempt' };

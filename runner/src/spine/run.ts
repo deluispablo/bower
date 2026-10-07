@@ -9,9 +9,10 @@
  * - A restarted runner, or a new attempt, reads only its run's folder, verifies the chain and goes on after the
  *   last checkpoint; it never plans again. A broken or unverifiable chain stops the run as failed with nothing
  *   written.
- * - An operation recorded as applied or rejected is never sent again. One recorded as possibly sent is applied
- *   only on evidence that it landed; with none, the run stops there, since real Drive gives no proof that a sent
- *   write did not land (TL-P2-16), and sending it again could apply it twice.
+ * - An operation recorded as applied or rejected is never sent again. One recorded as possibly sent is read back
+ *   first (TL-P3-23, as the adapter's lost-reply read-back does): landed, it is applied on that evidence and never
+ *   sent again; not landed (the folder still shows what the plan saw), it is sent once, under this attempt's fence;
+ *   unreadable, the run stops there without a send, since sending it again could apply it twice.
  *
  * A run here ends with every operation settled, in `saving`; the report barrier (`barrier.ts`) ends it.
  */
@@ -26,6 +27,13 @@ import type { RunnerToken } from '../token';
 /** How one operation ended once sent: `rejected` only when its precondition refused it before anything was sent. */
 export type Settled = { state: 'applied'; evidence: EffectEvidence } | { state: 'rejected'; failure: Failure };
 
+/**
+ * What reading an operation back says of a send whose answer was never kept (as the adapter's lost-reply read-back
+ * does): it landed (with its stored evidence), it did not (the folder still shows what the plan saw), or neither can
+ * be told (a read failed, or the folder shows something else).
+ */
+export type ReadBack = { state: 'landed'; evidence: EffectEvidence } | { state: 'not-landed' } | { state: 'unreadable'; why: string };
+
 /** The effects of operations on the folder: the adapter's sends and evidence reads. */
 export interface Effects {
   /**
@@ -36,6 +44,8 @@ export interface Effects {
   apply(op: OperationV2, head: Checkpoint, w: FencedDrive, manifest: RunManifest, sending: () => Promise<void>): Promise<Settled>;
   /** Stored evidence that the operation's effect landed; null when none is found. */
   observe(op: OperationV2, head: Checkpoint): Promise<EffectEvidence | null>;
+  /** An operation possibly sent by an earlier runner, read back: landed, not landed, or unreadable. */
+  readBack(op: OperationV2, head: Checkpoint): Promise<ReadBack>;
 }
 
 export interface SpineRun {
@@ -128,13 +138,27 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     const outcome = at.outcomes.find((o) => o.operationId === operationId);
     if (!outcome || outcome.state === 'applied' || outcome.state === 'rejected') continue;
     if (outcome.state === 'possible-effect') {
-      // Possibly sent by an earlier runner: applied only on evidence, never sent again.
-      const evidence = await run.effects.observe(op, at);
-      if (!evidence) {
-        console.error(`Operation ${op.ordinal} of run ${run.runId} may have been sent and shows no effect; it is not sent again`);
+      // Possibly sent by an earlier runner: read back before anything else, never sent again blindly.
+      const back = await run.effects.readBack(op, at);
+      if (back.state === 'landed') {
+        await resolve(op, { operationId, state: 'applied', evidence: back.evidence });
+        continue;
+      }
+      if (back.state === 'unreadable') {
+        console.error(`Operation ${op.ordinal} of run ${run.runId} may have been sent and cannot be read back (${back.why}); it is not sent again`);
         throw new BowerError('unknown', UNRESOLVED);
       }
-      await resolve(op, { operationId, state: 'applied', evidence });
+      // Not landed: sent once more, under this attempt's fence (its attempt checked again right before the send).
+      let checked = false;
+      const again = await run.effects.apply(op, at, await run.batch(), manifest, async () => {
+        await run.batch();
+        checked = true;
+      });
+      if (again.state === 'applied' && !checked) {
+        console.error(`Operation ${op.ordinal} of run ${run.runId} shows applied with no send attempted`);
+        throw new BowerError('unknown', UNRESOLVED);
+      }
+      await resolve(op, again.state === 'applied' ? { operationId, state: 'applied', evidence: again.evidence } : { operationId, state: 'rejected', failure: again.failure });
       continue;
     }
     // What it depends on must have happened; otherwise it is refused before anything is sent.

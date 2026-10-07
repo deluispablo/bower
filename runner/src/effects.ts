@@ -25,7 +25,7 @@ import { SOURCE_NOT_AS_SEEN, reusedNoteOf, shows } from '../../src/data/fake/fak
 import type { RunManifest } from '../../src/data/spine/records';
 import type { RunnerDrive } from './drive';
 import { notAsSeen } from './still-as-seen';
-import type { Effects, Settled } from './spine/run';
+import type { Effects, ReadBack, Settled } from './spine/run';
 
 /** The fake run service's sentences for a refused operation, the same here. */
 const NOT_AS_SEEN = SOURCE_NOT_AS_SEEN;
@@ -180,8 +180,44 @@ export function driveEffects(drive: RunnerDrive): Effects {
     }
   };
 
+  /**
+   * Whether the folder still shows what the plan saw for this operation, so a send whose answer was never kept did not
+   * land: nothing made with its create key, the thing it moves or puts in the Bin where it was, the file it writes with
+   * the bytes it was planned on.
+   */
+  const untouched = async (op: OperationV2, head: Checkpoint): Promise<boolean> => {
+    const e = op.effect;
+    if (e.kind === 'create-folder' || e.kind === 'create-text') {
+      const parentId = parentOf(head, e);
+      if (!parentId) return false;
+      return !(await drive.list(parentId)).some((f) => f.appProperties?.bowerItem === e.createKey);
+    }
+    const ev = await drive.evidence(e.before.fileId);
+    if (!ev || ev.trashed || !samePlace(ev.file, e.before)) return false;
+    if (e.kind === 'move' || e.kind === 'bin') return true;
+    return ev.content?.size === e.beforeContent.size && ev.content.sha256 === e.beforeContent.sha256;
+  };
+
+  /**
+   * An operation possibly sent by an earlier runner, read back as the adapter's lost-reply read-back does: landed on
+   * stored evidence of this very effect, not landed when the folder still shows what the plan saw, and unreadable
+   * when a read fails or the folder shows anything else.
+   */
+  const reconcile = async (op: OperationV2, head: Checkpoint): Promise<ReadBack> => {
+    try {
+      const seen = await observe(op, head);
+      if (seen) return { state: 'landed', evidence: seen };
+      if (await untouched(op, head)) return { state: 'not-landed' };
+      return { state: 'unreadable', why: `Operation ${op.ordinal} shows neither its effect nor what the plan saw` };
+    } catch (e) {
+      console.error(e);
+      return { state: 'unreadable', why: `Operation ${op.ordinal} could not be read back` };
+    }
+  };
+
   return {
     observe,
+    readBack: reconcile,
     async apply(op, head, w, manifest, sending) {
       const ok = await check(op, head, manifest);
       if ('refused' in ok) return ok.refused;
