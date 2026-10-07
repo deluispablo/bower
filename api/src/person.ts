@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 
 import type { Env } from './env.js';
+import type { GitHubAccess } from './github.js';
 import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
 import { ACTIVE_PHASES, QUEUED_STALE_MS, STALE_FAILURE, isStale, utcDay } from './process.js';
@@ -509,8 +510,15 @@ export class Person extends DurableObject<Env> {
    * The stale deadline of a queued run (https://developers.cloudflare.com/durable-objects/api/alarms/):
    * writes the stale expiry. `worker-stale-run-recovery` adds the lookup and the redispatch here.
    */
-  alarm(): void {
-    this.ctx.storage.transactionSync(() => this.expire(Date.now()));
+  async alarm(): Promise<void> {
+    await this.recover(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, fetchImpl: (i, init) => fetch(i, init) });
+  }
+
+  /** The alarm's work at `now`, reaching GitHub through `github`. */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async recover(now: number, github: GitHubAccess): Promise<void> {
+    void github;
+    this.ctx.storage.transactionSync(() => this.expire(now));
   }
 
   /**

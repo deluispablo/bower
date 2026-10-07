@@ -21,6 +21,13 @@ export interface TidyDispatch {
   allowWeb: boolean;
 }
 
+/** How the person object reaches GitHub: the instance repository, the token (absent: not configured), and fetch. */
+export interface GitHubAccess {
+  repo: string;
+  token: string | undefined;
+  fetchImpl: FetchLike;
+}
+
 const API_URL = 'https://api.github.com';
 
 /** Sends the dispatch; resolves whether GitHub accepted it. Never throws, never logs a secret. */
