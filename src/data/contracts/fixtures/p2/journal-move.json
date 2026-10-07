@@ -1,0 +1,19 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/changes/2026-10-07T15-09-56.415Z-9yeynt.json",
+      "content": {
+        "v": 1,
+        "id": "2026-10-07T15-09-56.415Z-9yeynt",
+        "at": 1791385796415,
+        "kind": "move",
+        "what": "Moved Weekend projects to Areas",
+        "device": "device-ivjoyog5",
+        "path": "Areas/Weekend projects.md",
+        "from": "Resources/Ideas/Weekend projects.md",
+        "fileId": "f77"
+      }
+    }
+  ]
+}

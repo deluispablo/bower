@@ -1,0 +1,28 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/questions.json",
+      "content": {
+        "v": 1,
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Flat 3, 12 Larkspur Lane and the new Wrenfield Road listing look like the same building. Keep one note for both?",
+            "yes": "Yes, merge",
+            "no": "No, keep both",
+            "about": "Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md",
+            "askedAt": 1791212996356
+          },
+          {
+            "id": "q2",
+            "text": "Two receipts from Kittiwake Lettings look like the same holding deposit, paid twice. Keep both?",
+            "yes": "Keep both",
+            "no": "Keep one",
+            "askedAt": 1791212996356
+          }
+        ]
+      }
+    }
+  ]
+}

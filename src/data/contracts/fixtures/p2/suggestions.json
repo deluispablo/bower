@@ -1,0 +1,18 @@
+{
+  "source": "00ec9a5",
+  "files": [
+    {
+      "path": ".bower/suggestions.json",
+      "content": {
+        "v": 1,
+        "suggestions": [
+          {
+            "id": "s1",
+            "title": "Recipes go to Resources / Cooking",
+            "why": "The last three recipes went there: Weeknight curry, Sourdough and a clipping."
+          }
+        ]
+      }
+    }
+  ]
+}
