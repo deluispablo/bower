@@ -101,9 +101,10 @@ export type ItemDisposition = { fileId: string; pileId: string | null; dispositi
  * One disposition for every item in the admitted manifest, none left out and none twice. An item the run did not
  * capture changed since admission and waits for the next run (`takeAdmitted` leaves its whole pile out). A captured
  * thing is filed when its filing move was applied, and set aside otherwise: it stays in the inbox, untouched. What
- * else is in a captured pile (its pile note) goes with its pile: filed when every thing in it was filed. A journal
- * line the run read is filed when its archive move was applied, and set aside (left in `.bower/changes`) otherwise;
- * one it did not read waits.
+ * else is in a captured pile (its pile note) goes with its pile: filed when every thing in it was filed and the note
+ * written from its words (a pile of words only) was made, so a pile written into a new note is filed as its report
+ * says. A journal line the run read is filed when its archive move was applied, and set aside (left in
+ * `.bower/changes`) otherwise; one it did not read waits.
  */
 export function itemDispositions(admission: AdmissionManifest, manifest: RunManifest, outcomes: readonly Outcome[]): ItemDisposition[] {
   const applied = new Set(outcomes.filter((o) => o.state === 'applied').map((o) => o.operationId));
@@ -112,7 +113,8 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
   const captured = new Set(manifest.capture.piles.map((p) => p.pileId));
   const whole = (pileId: string): boolean => {
     const things = manifest.capture.members.filter((m) => m.pileId === pileId);
-    return things.length > 0 && things.every((m) => filed.has(m.file.fileId));
+    const notes = wordsNotes(manifest, pileId);
+    return things.length + notes.length > 0 && things.every((m) => filed.has(m.file.fileId)) && notes.every((id) => applied.has(id));
   };
   const out: ItemDisposition[] = [];
   const done = new Set<string>();
@@ -135,4 +137,79 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
     out.push({ fileId: line.fileId, pileId: null, disposition });
   }
   return out;
+}
+
+/**
+ * The notes a pile's words are written into (a pile of words only): the made notes its folder, or its pile note, go
+ * to the Bin after. None for a pile of things.
+ */
+function wordsNotes(manifest: RunManifest, pileId: string): string[] {
+  const pile = manifest.capture.piles.find((p) => p.pileId === pileId);
+  if (!pile) return [];
+  const binned = new Set([pile.anchor?.fileId, pile.context.kind === 'text' ? pile.context.file.fileId : undefined].filter((id): id is string => id !== undefined));
+  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
+  const notes = manifest.operations.flatMap((o) => (o.effect.kind === 'bin' && binned.has(o.effect.before.fileId) ? o.dependsOn : []));
+  return [...new Set(notes)].filter((id) => ops.get(id)?.effect.kind === 'create-text');
+}
+
+/**
+ * Where the report and the dispositions disagree (TL-P3-24 point 1); empty when they agree. Each filed and set-aside
+ * row is traced, through the plan step that gave it, to the admitted items it is about: a filed thing's move, the
+ * pile whose words a made note holds, the thing a note of its own follows. Every row must name at least one item.
+ * Every item a filed row names is filed; every item a set-aside row names is filed (filed on its own, or its note
+ * not written) or set aside, never waiting. And the other way: a set-aside item is one a set-aside row names, or in
+ * a pile such a row names; a filed thing is one a filed row names (a pile note, its pile); a waiting item is named
+ * by no row. Journal lines have no rows: the report only counts them.
+ */
+export function reportContradictions(admission: AdmissionManifest, manifest: RunManifest, outcomes: readonly Outcome[], report: RunReport, items: readonly ItemDisposition[]): string[] {
+  const state = new Map(outcomes.map((o) => [o.operationId, o.state]));
+  const ops = new Map(manifest.operations.map((o) => [o.operationId, o]));
+  const members = new Set(manifest.capture.members.map((m) => m.file.fileId));
+  const pileItems = new Map(admission.piles.map((p) => [p.pileId, p.items.map((i) => i.fileId)]));
+  const notesOf = new Map(manifest.capture.piles.map((p) => [p.pileId, wordsNotes(manifest, p.pileId)]));
+  const by = new Map(items.map((i) => [i.fileId, i]));
+  const thingOf = (id: string): string[] => {
+    const op = ops.get(id);
+    return op?.effect.kind === 'move' && filingMove(manifest, op) ? [op.effect.before.fileId] : [];
+  };
+  const subjects = (c: RunManifest['reportPlan'][number]): Set<string> => new Set(c.requires.flatMap((id) => {
+    const op = ops.get(id);
+    if (op?.effect.kind !== 'create-text') return thingOf(id);
+    const piles = [...notesOf].filter(([, notes]) => notes.includes(id)).map(([pileId]) => pileId);
+    return [...piles.flatMap((p) => (pileItems.get(p) ?? []).filter((f) => !members.has(f))), ...op.dependsOn.flatMap(thingOf)];
+  }));
+  const given = manifest.reportPlan.filter((c) => {
+    const states = c.requires.map((id) => state.get(id));
+    return states.every((s) => s === c.when);
+  });
+  const wrong: string[] = [];
+  const named = { filed: new Set<string>(), setAside: new Set<string>() };
+  const trace = (row: string, from: RunManifest['reportPlan'], allowed: ReadonlyArray<ItemDisposition['disposition']>, into: Set<string>): void => {
+    const about = new Set(from.flatMap((c) => [...subjects(c)]));
+    if (!about.size) wrong.push(`The report row ${row} names no item the run took`);
+    for (const fileId of about) {
+      into.add(fileId);
+      const d = by.get(fileId)?.disposition;
+      if (!d || !allowed.includes(d)) wrong.push(`The report row ${row} names ${fileId}, whose disposition is ${d ?? 'missing'}`);
+    }
+  };
+  for (const row of report.filed) {
+    const from = given.filter((c) => c.value.filed.some((f) => f.name === row.name && f.to === row.to && f.title === row.title && f.kind === row.kind && f.note === row.note));
+    trace(`filed ${row.name}`, from, ['filed'], named.filed);
+  }
+  for (const row of report.setAside) {
+    const from = given.filter((c) => c.value.setAside.some((a) => a.name === row.name));
+    trace(`set aside ${row.name}`, from, ['filed', 'set-aside'], named.setAside);
+  }
+  const pileNamed = (set: ReadonlySet<string>, pileId: string | null): boolean => pileId !== null && (pileItems.get(pileId) ?? []).some((f) => set.has(f));
+  for (const item of items) {
+    if (item.pileId === null) continue;
+    const ok = item.disposition === 'waiting'
+      ? !named.filed.has(item.fileId) && !named.setAside.has(item.fileId)
+      : item.disposition === 'set-aside'
+        ? named.setAside.has(item.fileId) || pileNamed(named.setAside, item.pileId)
+        : members.has(item.fileId) ? named.filed.has(item.fileId) : pileNamed(named.filed, item.pileId);
+    if (!ok) wrong.push(`${item.fileId} is ${item.disposition}, which the report does not say`);
+  }
+  return wrong;
 }
