@@ -3962,7 +3962,7 @@
       "done or failed retires the ticket; the ticket is never logged."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a runner ticket gets the folder and a Drive token|a wrong or expired ticket is signed out|a new attempt fences the old one|reports move forward by seq and phase|a repeated report changes nothing|an ended run retires its ticket\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-18; Worker contract \"Runner wire\"; reuses the original app's run-ticket.ts and runner.ts."
   },
   {
