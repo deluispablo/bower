@@ -4590,9 +4590,10 @@
       "harness/corpus/ cases, made-up data only, at least two per capability C04–C11, C13, C15.",
       "A structural scorer over a run result (files, links, sections, report fields).",
       "Semantic rubrics per case for the reviewer.",
-      "The scorer passes on the scripted provider outputs for the cases it covers and fails on an assertion when an expected file is removed."
+      "The scorer passes on the scripted provider outputs for the cases it covers and fails on an assertion when an expected file is removed.",
+      "The five bench cases start from the original agent/bench/vault folder unchanged."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"every corpus capability has at least two cases|the corpus scorer passes on the scripted provider outputs|the corpus scorer fails when an expected file is missing\"",
+    "verify": "pnpm -C runner exec vitest run -t \"every corpus capability has at least two cases|the corpus scorer passes on the scripted provider outputs|the corpus scorer fails when an expected file is missing|the bench cases start from the original.s bench folder\"",
     "passes": false,
     "note": "TL-P4-01 batch P4-1. Reopened: P4-1 review BLOCK (bench cases lack the original start folder; bench-5 asks about an absent PDF)."
   },
