@@ -4400,6 +4400,21 @@
     "note": "TL-P3-27; the lead's deploy of bd7e261 stopped on \"Uploaded 6 of 10 assets\"."
   },
   {
+    "id": "rules-template-bower",
+    "task": "p3-e",
+    "category": "fix",
+    "what": "The real vault template creates Rules.md exactly as the fake does: content from serializeRules([]) and the by-bower app property (fake-worker.ts:143), so rules typed in the app apply on real Drive; a contract test shows the fake and the real template produce identical bytes and properties; a one-time repair marks and rewrites a Rules.md only when it is byte-for-byte the old template text.",
+    "steps": [
+      "api/src/vault.ts (and the generated template) creates Rules.md with serializeRules([]) and appProperties by=bower.",
+      "A contract test compares the fake's and the real template's Rules.md bytes and properties.",
+      "A one-time repair, fenced and still-as-seen, only for a Rules.md whose bytes equal the old template exactly; anything else is left alone.",
+      "A rule typed in the app is worded into Rules.md by the scripted run on the real adapter."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the real template writes Rules.md as the fake does|the old template Rules.md is repaired once and nothing else is touched\" && pnpm -C runner exec vitest run -t \"a typed rule is worded into Rules.md on the real adapter\"",
+    "passes": false,
+    "note": "TL-P3-27 addendum; found preparing the C16 walk (note-edit.ts:206 refused not-bower)."
+  },
+  {
     "id": "security-review",
     "task": "p3-f",
     "category": "review",
