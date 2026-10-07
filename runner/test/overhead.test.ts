@@ -60,7 +60,6 @@ describe('the runner overhead', () => {
       const lastToken = calls.slice(0, i).map((y) => y.kind).lastIndexOf('token');
       fences.push({ at: i, fenceBeforeWrite: lastToken >= 0, targetRead: calls.slice(lastToken + 1, i).some((y) => y.kind === 'read') });
     });
-    if (process.env.DBG) console.log(calls.slice(140, 156).map((x, i) => `${140 + i} ${x.kind} ${x.method} ${x.path}`).join('\n'));
     expect(fences.length).toBeGreaterThan(0);
     for (const f of fences) expect(f).toEqual({ at: f.at, fenceBeforeWrite: true, targetRead: true });
     // Ordered status: reading, writing, saving, then done, and nothing after done.
