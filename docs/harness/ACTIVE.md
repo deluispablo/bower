@@ -51,7 +51,13 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - **Cancel-and-recover:**
   - The coordinator added a second note and confirmed at 13:39:16Z.
   - At 13:40:00Z it cancelled run 37630230892 (attempt 1) while the run was `writing`. The app tab was moved off staging.
-  - The deadline is about 14:09:33Z. The evaluator is observing (packet `2026-10-07-p3-13-cancel-recover-packet.md`).
+  - Before the cancel took effect at 13:41:01Z, the job reached `saving`.
+  - The alarm redispatched exactly once, at 14:10:34Z, 4 s after the deadline. Run 37634507122 (`tidy … 2`, 24 s) brought the run to `done` at 14:10:55Z, with no app open.
+  - Drive, checked by the coordinator: one filed note, one chain (checkpoints 0–11), and `last-run.json` showing done with filed 1. **PASS.**
+- Questions to the lead:
+  - fix entries `dispositions-match-report` and `runner-reports-reading-total`;
+  - "Try again" keeps the old scope (recheck at C16);
+  - what comes next.
   - The app stayed `queued` until the stale deadline.
   - One press sent two POST /process calls, with the same run id.
 - After the fix: P3-13 closes, the lead deploys, and the first-run journey runs again with one press.
