@@ -4564,7 +4564,7 @@
       "The Undo toast closing returns focus to where it was."
     ],
     "verify": "pnpm exec vitest run src -t \"Home does not reopen a finished run sheet on load|focus returns to the opener when the palette closes|focus never drops to body after a question is answered|focus never drops to body when the Undo toast closes\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P3-28 (3); closes the TL-P3-27 label item. WAI-ARIA APG dialog pattern."
   },
   {
