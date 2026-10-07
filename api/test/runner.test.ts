@@ -6,6 +6,7 @@ import { createApp } from '../src/index.js';
 import type { RunPhase, RunReply } from '../src/process.js';
 import { makeRunId } from '../src/run-ticket.js';
 import { MANIFEST } from './drive-v3.js';
+import { SEQUENCES } from '../../src/data/fake/ordered-reports.fixture';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -303,4 +304,36 @@ describe('runner wire', () => {
     expect((await stale.runner.token()).status).toBe(401);
     expect((await person(stale.sub).runStatus(Date.now())).run?.phase).toBe('failed');
   });
+
+  /** Feeds each shared sequence to the Worker: the same one the fake takes (`src/data/fake/ledger-contract.test.ts`). */
+  async function playSequences(): Promise<void> {
+    for (const sequence of SEQUENCES) {
+      const { sub, runner } = await aRun();
+      const tickets = new Map<number, string>([[1, runner.ticket]]);
+      let revision = (await person(sub).runStatus(Date.now())).revision;
+      for (const [i, step] of sequence.steps.entries()) {
+        const where = `${sequence.name}, step ${i + 1}`;
+        if ('takeover' in step) {
+          const minted = await person(sub).mintTicket(runner.runId, step.takeover, Date.now());
+          if (minted === null) throw new Error(`no ticket for ${where}`);
+          tickets.set(step.takeover, minted);
+          continue;
+        }
+        const res = await runner.report(step.send, tickets.get(step.send.attempt));
+        const want = step.expect;
+        expect(res.status, where).toBe(want.status);
+        if (want.status === 409) expect(await code(res), where).toBe(want.code);
+        revision += want.bump;
+        const now = await person(sub).runStatus(Date.now());
+        expect(now.revision, where).toBe(revision);
+        expect(now.run?.phase, where).toBe(want.phase);
+        expect(now.run?.total, where).toBe(want.total);
+        expect(now.run?.failure, where).toBe(want.failure);
+        if (want.status === 200) expect(await res.json(), where).toEqual(now);
+      }
+    }
+  }
+
+  it('a later attempt never moves the phase backward', playSequences);
+  it('the revision rises only when the visible run changes', playSequences);
 });

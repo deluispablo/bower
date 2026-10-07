@@ -20,6 +20,7 @@ import { planRun, type HubUpdate } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
 import { openElsewhere, type LeaseReply, type SessionAction } from '../session';
+import type { ReportBody } from './ordered-reports.fixture';
 
 export interface FakeWorkerOptions {
   drive: FakeDrive;
@@ -348,5 +349,45 @@ function forget(yes: boolean): void {
     else sessionStorage.removeItem(FORGOT);
   } catch (e) {
     console.error(e);
+  }
+}
+
+const RANK: Record<RunWire['phase'], number> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
+
+/** What a report answers: the run and revision when taken, or the refusal the Worker would give. */
+export type LedgerAnswer = { status: 200; reply: RunReply } | { status: 409; code: 'stale-report' | 'stale-attempt'; reply: RunReply };
+
+/**
+ * The Worker's report ordering (worker contract, "Runner wire"), kept for a run's reports in the fake: what a runner's
+ * reports do to the run a person sees and to its revision.
+ */
+export class ReportLedger {
+  private run: RunWire;
+  private revision = 1;
+  private attempt = 1;
+  private lastSeq: number | null = null;
+
+  constructor(run: RunWire) {
+    this.run = { ...run };
+  }
+
+  /** A new attempt: from now on the older one is refused, and the new one counts its own reports from the start. */
+  takeover(attempt: number): void {
+    this.attempt = attempt;
+    this.lastSeq = null;
+  }
+
+  report(r: ReportBody): LedgerAnswer {
+    const now = (): RunReply => ({ run: { ...this.run }, revision: this.revision });
+    if (r.attempt !== this.attempt) return { status: 409, code: 'stale-attempt', reply: now() };
+    if (r.seq === this.lastSeq) return { status: 200, reply: now() };
+    const late = this.lastSeq !== null && r.seq < this.lastSeq;
+    if (late || ['done', 'failed'].includes(this.run.phase) || RANK[r.phase] < RANK[this.run.phase]) return { status: 409, code: 'stale-report', reply: now() };
+    const ended = r.phase === 'done' || r.phase === 'failed';
+    const { failure: _gone, ...rest } = this.run;
+    this.run = { ...rest, phase: r.phase, ...(this.run.phase === r.phase ? {} : { phaseAt: this.run.phaseAt + 1 }), ...(r.total === undefined ? {} : { total: r.total }), ...(r.failure === undefined ? {} : { failure: r.failure }), ...(ended ? { finishedAt: this.run.phaseAt + 1 } : {}) };
+    this.lastSeq = r.seq;
+    this.revision++;
+    return { status: 200, reply: now() };
   }
 }
