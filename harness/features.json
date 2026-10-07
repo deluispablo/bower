@@ -3780,5 +3780,18 @@
     "verify": "pnpm -C api exec vitest run -t \"vault makes a new Bower folder from the template|vault finds the existing Bower folder and says found|vault never deletes or overwrites anything in Drive|a failure mid-fill is completed on the next call|two first calls at once make one Bower folder|GET /me answers the folder pointer after POST /vault\"",
     "passes": true,
     "note": "TL-P3-09 (main b600592). Runs after worker-drive-token (it uses that entry's token function and folder column). P3-5 review: two Important findings (mid-fill, concurrent first calls) and the /me folderId gap go into the fix round."
+  },
+  {
+    "id": "vault-template-ids",
+    "task": "p3-5",
+    "category": "fix",
+    "what": "The whole folder fill is idempotent: the template files' ids are reserved in the same files.generateIds call as the folder's and stored with it, so a retry or a second call after the 60 s claim expires never makes a duplicate file.",
+    "steps": [
+      "One generateIds call reserves the folder id and one id per template item; all are stored before any create.",
+      "A fill that stalls past the claim and is resumed by a second call makes no duplicate file: Drive refuses the second create of each reserved id, and the call treats that as already made."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the template files' ids are reserved with the folder's|a fill resumed after the claim expires makes no duplicate file\"",
+    "passes": false,
+    "note": "Lead ruling on the P3-5 vault fix round (60 s claim accepted, no renewal)."
   }
 ]
