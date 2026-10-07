@@ -153,6 +153,9 @@ describe('runner network retry', () => {
     expect(signedOut.calls()).toBe(1);
     expect('error' in (await signedOutEnd)).toBe(true);
 
+    // DriveHttp bounds each request at 30 s (src/data/wait.ts), so a read is given the retries' own waits (7 s at most),
+    // never `runAllTimersAsync`, which would also run that bound out before the first failure is even retried.
+    const RETRY_WAITS_MS = 10_000;
     // Drive reads: a listing, a file's metadata and its bytes, each failing twice on the network first.
     const drive = fixedDrive();
     const folder = await drive.createFolder('root', 'Bower');
@@ -166,13 +169,13 @@ describe('runner network retry', () => {
     }) as typeof fetch;
     const adapter = new RunnerDrive({ token: new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch }), attempt: 1, fetch: flaky });
     const listed = settle(adapter.list(folder.id));
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(RETRY_WAITS_MS);
     expect(await listed).toEqual({ ok: [expect.objectContaining({ id: note.id })] });
     const got = settle(adapter.get(note.id));
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(RETRY_WAITS_MS);
     expect(await got).toEqual({ ok: expect.objectContaining({ id: note.id }) });
     const text = settle(adapter.readText(note.id));
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(RETRY_WAITS_MS);
     expect(await text).toEqual({ ok: 'First words.' });
     expect(failures).toBe(9);
   });
