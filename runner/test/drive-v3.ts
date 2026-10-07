@@ -13,7 +13,8 @@ export const RUN_ID = 'abc123-run1';
 export const TICKET = 'test-ticket';
 const FOLDER = 'application/vnd.google-apps.folder';
 /** Drive pages a listing; this one pages by two so paging is exercised. */
-const PAGE = 2;
+/** Raised to Drive's own 1000 by the overhead test, whose call counts are the real ones. */
+export const paging = { size: 2 };
 
 export interface WireRequest {
   method: string;
@@ -176,7 +177,7 @@ async function list(drive: FakeDrive, url: URL): Promise<Response> {
   if (!parents.length || !/trashed = false/.test(q)) return json(400, driveFailure(400, 'invalidQuery'));
   const all: DriveFile[] = [];
   for (const parent of parents) all.push(...(await drive.listAll(parent)).filter((f) => f.parents[0] === parent));
-  const size = Math.min(PAGE, Number(url.searchParams.get('pageSize') ?? PAGE));
+  const size = Math.min(paging.size, Number(url.searchParams.get('pageSize') ?? paging.size));
   const at = Number(url.searchParams.get('pageToken') || 0);
   const page = all.slice(at, at + size);
   const next = at + size < all.length ? { nextPageToken: String(at + size) } : {};

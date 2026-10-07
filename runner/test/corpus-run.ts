@@ -43,7 +43,7 @@ export interface CaseRun {
   code: number;
 }
 
-export async function runScripted(c: LoadedCase): Promise<CaseRun> {
+export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false): Promise<CaseRun> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const folders = new Map<string, string>();
@@ -76,12 +76,14 @@ export async function runScripted(c: LoadedCase): Promise<CaseRun> {
   const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope, clock: () => AT, newId: () => 'admission-1' });
   const wire = driveV3(drive);
   wire.folderId = root;
+  // The token route's expiry on the real clock, as the Worker's is, so the runner keeps a token as it does on Actions.
+  if (realTokens) wire.now = Date.now();
   if (admitted.kind !== 'manifest') return { after: await snapshot(drive, root), lastRun: null, code: -1 };
   wire.manifest = admitted.manifest;
   const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: RUN_ID, attempt: 1, ticket: TICKET, scope: c.scope, allow_web: c.allowWeb } }));
-  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file }, { fetch: wire.fetch });
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file }, { fetch: around ? around(wire.fetch) : wire.fetch });
   const after = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
   return { after, lastRun, code };
