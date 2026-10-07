@@ -56,6 +56,38 @@ describe('the capability corpus', () => {
     expect(edited.unmet.some((l) => l.includes('Flat hunt.md'))).toBe(true);
   });
 
+  it('the corpus scorer names every kind of unmet expectation', () => {
+    const before = { 'A.md': 'one\n', 'B.md': 'two\n' };
+    const after = { 'A.md': 'changed\n', 'N.md': '[[Nowhere]]\n\n## Timeline\n- 2026-10-07 · One line.\n', 'Inbox/x.pdf': 'x' };
+    const lastRun = { v: 1, run: { report: { filed: [{}], created: [{ path: 'N.md' }], updated: [], setAside: [], questions: [{ id: 'q1' }, { id: 'q2' }], requests: ['a'], rulesWorded: 0, yourChanges: 0 } } };
+    const unmet = (expected: Parameters<typeof score>[0]['expected'], run: unknown = lastRun): string[] => score({ expected, before, after, lastRun: run }).unmet;
+    expect(unmet({ files: { present: ['Z.md'] } })).toEqual(['missing file: Z.md']);
+    expect(unmet({ files: { present: ['Inbox/*.pdf'], absent: ['Inbox/*'] } })).toEqual(['file should not exist: Inbox/x.pdf']);
+    expect(unmet({ unchanged: ['A.md', 'B.md'] })).toEqual(['file changed: A.md', 'missing file: B.md (expected unchanged)']);
+    expect(unmet({ notes: [{ path: 'Q.md' }] })).toEqual(['missing note: Q.md']);
+    expect(unmet({ notes: [{ path: 'N.md', contains: ['Absent'], excludes: ['Nowhere'], timeline: ['Other line'], timelineCount: 2, timelineMin: 3 }] })).toEqual([
+      'N.md: lacks "Absent"',
+      'N.md: has "Nowhere"',
+      'N.md: no Timeline line with "Other line"',
+      'N.md: 1 Timeline lines, expected 2',
+      'N.md: 1 Timeline lines, expected at least 3',
+    ]);
+    expect(unmet({ linksResolve: true })).toEqual(['N.md: link [[Nowhere]] does not resolve']);
+    expect(unmet({ report: { filed: 2, setAside: 1, created: ['M.md'], updated: ['A.md'], questions: ['q1'], requests: ['b'], rulesWorded: 1, yourChanges: 1 } })).toEqual([
+      'report.filed: 1, expected 2',
+      'report.setAside: 0, expected 1',
+      'report.created: [N.md], expected [M.md]',
+      'report.updated: [], expected [A.md]',
+      'report.questions: [q1, q2], expected [q1]',
+      'report.requests: ["a"], expected ["b"]',
+      'report.rulesWorded: 0, expected 1',
+      'report.yourChanges: 0, expected 1',
+    ]);
+    expect(unmet({ report: { createdAtLeast: 2, updatedAtLeast: 1, questionsAtMost: 1 } })).toEqual(['report.created: 1, expected at least 2', 'report.updated: 0, expected at least 1', 'report.questions: 2, expected at most 1']);
+    expect(unmet({ report: { filed: 1 } }, null)).toEqual(['report: no last-run.json report']);
+    expect(unmet({ files: { present: ['N.md'] }, report: { filed: 1 } })).toEqual([]);
+  });
+
   it('the bench cases start from the original\'s bench folder', async () => {
     const bench = (await loadCorpus(ROOT)).filter((c) => c.speedBaseline);
     expect(bench.map((c) => c.id)).toHaveLength(5);
@@ -81,6 +113,6 @@ describe('the capability corpus', () => {
     }
     // The question about a filed PDF starts with that PDF filed.
     const five = bench.find((c) => c.id === 'bench-5-question-about-filed-pdf');
-    expect(Object.keys(five?.folderBinary ?? {})).toContain('2-Areas/Home/Home insurance policy 2026.pdf');
+    expect([...Object.keys(five?.folder ?? {}), ...Object.keys(five?.folderBinary ?? {})]).toContain('2-Areas/Home/Home insurance policy 2026.pdf');
   });
 });

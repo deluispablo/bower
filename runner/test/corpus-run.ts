@@ -58,6 +58,11 @@ export async function runScripted(c: LoadedCase): Promise<CaseRun> {
     const parent = await ensureFolder(drive, root, folders, parts.join('/'));
     await drive.createText(parent, name, text, c.bowerOwned.includes(path) || /^by: bower$/m.test(text) ? { by: 'bower' } : undefined);
   }
+  for (const [path, bytes] of Object.entries(c.folderBinary)) {
+    const parts = path.split('/');
+    const name = parts.pop() ?? path;
+    await drive.upload(await ensureFolder(drive, root, folders, parts.join('/')), name, new Blob([bytes.slice()]));
+  }
   for (const [i, line] of c.journal.entries()) {
     const rec = { v: 1, id: `change-${i + 1}`, device: 'device-1', at: AT - 60_000 + i, kind: line.kind, what: line.kind === 'answer' ? 'Answered a question' : line.kind === 'rule' ? 'A rule' : `Asked Bower: "${line.text}"`, text: line.text, ...(line.questionId ? { questionId: line.questionId } : {}) };
     await drive.createText(changes, `change-${i + 1}.json`, `${JSON.stringify(rec)}\n`);

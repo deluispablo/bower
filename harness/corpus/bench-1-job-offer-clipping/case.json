@@ -18,5 +18,6 @@
   "journal": [],
   "questions": [],
   "bowerOwned": [],
-  "speedBaseline": true
+  "speedBaseline": true,
+  "folderFrom": "_bench-vault"
 }
