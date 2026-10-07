@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { create } from 'zustand';
+import { returnFocusTo } from './focus';
 import s from './ui.module.css';
 
 interface Toast {
@@ -63,6 +65,24 @@ export const toast = (text: string, action?: Toast['action']): void =>
 
 export function Toasts() {
   const { list, dismiss, hold } = useToasts();
+  // Where the keyboard was before a toast took it, so that closing the toast gives it back
+  // (WAI-ARIA APG: on close, focus returns to what it came from). A toast that never had it changes nothing.
+  const from = useRef(new Map<number, HTMLElement | null>());
+  const had = useRef(new Set<number>());
+  const shown = useRef<number[]>([]);
+  useEffect(() => {
+    const now = list.map((t) => t.id);
+    for (const id of shown.current) {
+      if (now.includes(id)) continue;
+      const wasIn = had.current.has(id);
+      const opener = from.current.get(id) ?? null;
+      had.current.delete(id);
+      from.current.delete(id);
+      // Only when the keyboard fell to nothing: a press that moved it somewhere keeps that.
+      if (wasIn && (!document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected)) returnFocusTo(opener);
+    }
+    shown.current = now;
+  }, [list]);
   return (
     <div className={s.toasts} role="status" aria-live="polite">
       {list.map((t) => (
@@ -71,7 +91,14 @@ export function Toasts() {
           className={s.toast}
           onMouseEnter={() => hold(t.id, true, 'pointer')}
           onMouseLeave={() => hold(t.id, false, 'pointer')}
-          onFocus={() => hold(t.id, true, 'keyboard')}
+          onFocus={(e) => {
+            if (!had.current.has(t.id)) {
+              had.current.add(t.id);
+              const was = e.relatedTarget;
+              from.current.set(t.id, was instanceof HTMLElement && !e.currentTarget.contains(was) ? was : null);
+            }
+            hold(t.id, true, 'keyboard');
+          }}
           onBlur={() => hold(t.id, false, 'keyboard')}
         >
           <span>{t.text}</span>

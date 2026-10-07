@@ -1,7 +1,7 @@
 import { LoadError } from '@/ui/LoadError';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { report } from '@/ui/report';
-import { focusMain } from '@/ui/focus';
+import { focusHeading, focusMain } from '@/ui/focus';
 import { answered } from './answer-words';
 import { startRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
@@ -247,6 +247,20 @@ function Questions() {
   const { data: tree } = useTree();
   // By today's names only: the journal is read once on Home, by Since the last tidy-up.
   const resolve = useMemo(() => resolverFor(tree ?? [], []), [tree]);
+  // After an answer, the answered question goes; the keyboard moves on to the next question (the one now
+  // at its place), or to the Home heading when none is left, never to the body.
+  const list = useRef<HTMLUListElement>(null);
+  const after = useRef<number | null>(null);
+  const settle = (): void => {
+    const at = document.activeElement;
+    if (after.current === null || (at && at !== document.body && at.isConnected)) return;
+    const rows = list.current?.querySelectorAll<HTMLElement>('li') ?? [];
+    const next = rows[Math.min(after.current, rows.length - 1)]?.querySelector('button');
+    after.current = null;
+    if (next) next.focus();
+    else focusHeading();
+  };
+  useEffect(settle, [qs]);
   if (questionsState.error) return <LoadError state={questionsState} />;
   if (!qs?.length) return null;
   // A [[note]] the question names opens it, as in a note; one not found reads as plain words.
@@ -261,10 +275,13 @@ function Questions() {
     );
   };
   const answer = (id: string, yes: boolean, label: string): void => {
+    const index = (qs ?? []).findIndex((q) => q.id === id);
     vault.answer(id, yes).then(
       () => {
         toast(answered(label));
-        focusMain();
+        after.current = Math.max(index, 0);
+        // The list may already have changed, or change a moment later (then the effect lands it).
+        setTimeout(settle, 0);
       },
       (e: unknown) => report(e, 'That answer did not save. Try again.'),
     );
@@ -274,7 +291,7 @@ function Questions() {
       <h2 id="qs" className={s.h2}>
         {plural(qs.length, 'question')} for you
       </h2>
-      <ul className={s.questions}>
+      <ul ref={list} className={s.questions}>
         {qs.map((q) => (
           <li key={q.id} className={s.question}>
             <p>
