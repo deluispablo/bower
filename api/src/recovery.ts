@@ -12,8 +12,14 @@
  * The thresholds are the original app's (`process.ts`). Everything here is pure: the person object decides
  * with it inside one synchronous section.
  */
-import { QUEUED_STALE_MS, RUNNING_STALE_MS } from './process.js';
+import { QUEUED_STALE_MS, RUNNING_STALE_MS, STALE_FAILURE } from './process.js';
 import type { RunWire } from './process.js';
+
+/** The sentence a run ended for staleness is given, by the phase it was in. Stub: behaviour comes next. */
+export function staleFailure(phase: RunWire['phase']): string {
+  void phase;
+  return STALE_FAILURE;
+}
 
 /**
  * How long past a run's stale deadline the read and write paths wait for the alarm's recovery when dispatch

@@ -5,7 +5,7 @@ import type { MockInstance } from 'vitest';
 import type { Env } from '../src/env.js';
 import type { GitHubAccess } from '../src/github.js';
 import { createApp } from '../src/index.js';
-import { QUEUED_STALE_MS, RUNNING_STALE_MS, STALE_FAILURE } from '../src/process.js';
+import { QUEUED_STALE_MS, RUNNING_STALE_MS, SAVING_FAILURE, STALE_FAILURE } from '../src/process.js';
 import { unrecoveredCeiling } from '../src/recovery.js';
 import type { RunReply } from '../src/process.js';
 import { hashTicket } from '../src/run-ticket.js';
@@ -332,6 +332,24 @@ describe('stale run recovery', () => {
     expect(ended.run).toMatchObject({ id: runId, phase: 'failed', failure: STALE_FAILURE });
     expect(ended.revision).toBe(before.revision + 1);
     expect(await tokenStatus(runId, ticket)).toBe(401);
+  });
+
+  it('a run past the ceiling in saving fails saying changes were made', async () => {
+    const saving = await aRun();
+    const writing = await aRun();
+    const at = (t0: number) => t0 + MINUTE;
+    for (const [run, phase] of [[saving, 'saving'], [writing, 'writing']] as const) {
+      const sent = await person(run.sub).runnerReport(run.runId, await hashTicket(run.ticket), { attempt: 1, seq: 1, phase }, at(run.t0));
+      if (!sent.accepted) throw new Error('report refused');
+    }
+    const ceiling = (t0: number) => at(t0) + RUNNING_STALE_MS + unrecoveredCeiling({ phase: 'saving' });
+    expect((await status(saving.sub, ceiling(saving.t0) - 1)).run?.phase).toBe('saving');
+    // Its effects were done and only the summary was not saved: the sentence says so, never that nothing happened.
+    const ended = await status(saving.sub, ceiling(saving.t0));
+    expect(ended.run).toMatchObject({ id: saving.runId, phase: 'failed', failure: SAVING_FAILURE });
+    expect(SAVING_FAILURE).toBe("Bower made changes but couldn't save the summary of this tidy-up.");
+    // Other phases keep the stale sentence.
+    expect((await status(writing.sub, ceiling(writing.t0))).run).toMatchObject({ id: writing.runId, phase: 'failed', failure: STALE_FAILURE });
   });
 
   it('without a GitHub token a status poll still expires the run', async () => {

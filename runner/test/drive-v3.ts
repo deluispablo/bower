@@ -6,6 +6,7 @@
 import { BowerError } from '../../src/data/types';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
+import type { AdmissionManifest } from '../../src/data/spine/admission';
 
 export const API = 'https://api.test';
 export const RUN_ID = 'abc123-run1';
@@ -29,7 +30,26 @@ export interface DriveV3 {
   tokenRefusal: { status: number; error: string } | null;
   tokenCalls: number;
   now: number;
+  /** The folder and the admission manifest the token route gives. */
+  folderId: string;
+  manifest: AdmissionManifest | null;
+  /** Each status report accepted, with how many Drive requests came before it. */
+  statuses: StatusPost[];
+  /** When set, a `done` report is answered with this status and not taken (a lost report). */
+  dropDone: number | null;
 }
+
+export interface StatusPost {
+  attempt: number;
+  seq: number;
+  phase: string;
+  total?: number;
+  failure?: string;
+  /** Drive requests before this report. */
+  after: number;
+}
+
+const RANK: Record<string, number> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
 
 /** A Drive with fixed times, so two of them made the same way stay identical. */
 export const fixedDrive = (): FakeDrive => new FakeDrive({ clock: () => 0 });
@@ -44,18 +64,26 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     tokenRefusal: null,
     tokenCalls: 0,
     now: 1_000_000,
+    folderId: 'FOLDER_ID',
+    manifest: null,
+    statuses: [],
+    dropDone: null,
     fetch: async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
       const method = (init.method ?? 'GET').toUpperCase();
       const auth = new Headers(init.headers).get('authorization') ?? '';
       if (url.origin === API) {
+        if (url.pathname === `/runner/runs/${RUN_ID}/status` && method === 'POST') {
+          if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
+          return status(wire, JSON.parse(String(init.body)) as Omit<StatusPost, 'after'>);
+        }
         wire.tokenCalls++;
         if (url.pathname !== `/runner/runs/${RUN_ID}/token` || method !== 'GET') return json(404, { error: { code: 'not-found', message: 'Not found.' } });
         if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
         if (wire.tokenRefusal) return json(wire.tokenRefusal.status, { error: { code: wire.tokenRefusal.error, message: 'This tidy-up was taken over.' } });
         const accessToken = `drive-token-${++minted}`;
         live.add(accessToken);
-        return json(200, { accessToken, expiresAt: wire.now + 3_600_000, folderId: 'FOLDER_ID', attempt: wire.attempt });
+        return json(200, { accessToken, expiresAt: wire.now + 3_600_000, folderId: wire.folderId, attempt: wire.attempt, ...(wire.manifest ? { manifest: wire.manifest } : {}) });
       }
       wire.requests.push({ method, url });
       if (url.origin !== 'https://www.googleapis.com') return json(404, driveFailure(404, 'notFound'));
@@ -71,13 +99,27 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
   return wire;
 }
 
+/** The Worker's status route, as the contract's "Runner wire" has it: attempt, then seq, then a forward phase. */
+function status(wire: DriveV3, body: Omit<StatusPost, 'after'>): Response {
+  if (body.phase === 'done' && wire.dropDone !== null) return json(wire.dropDone, { error: { code: 'unknown', message: 'Try again.' } });
+  if (body.attempt !== wire.attempt) return json(409, { error: { code: 'stale-attempt', message: 'This tidy-up was taken over.' } });
+  const last = wire.statuses.at(-1);
+  const same = last?.attempt === body.attempt;
+  const backward = last !== undefined && (RANK[body.phase] ?? -1) < (RANK[last.phase] ?? -1);
+  if ((same && body.seq <= last.seq) || backward || last?.phase === 'done' || last?.phase === 'failed') {
+    return json(409, { error: { code: 'stale-report', message: 'That update arrived late.' } });
+  }
+  wire.statuses.push({ ...body, after: wire.requests.length });
+  return json(200, { run: { id: RUN_ID, phase: body.phase }, revision: wire.statuses.length });
+}
+
 async function answer(drive: FakeDrive, method: string, url: URL, body: RequestInit["body"]): Promise<Response> {
   const path = url.pathname;
   const one = /^\/(upload\/)?drive\/v3\/files\/([^/]+)$/.exec(path);
   if (method === 'GET' && path === '/drive/v3/files') return list(drive, url);
   if (method === 'GET' && one) {
     const id = decodeURIComponent(one[2] ?? '');
-    if (url.searchParams.get('alt') === 'media') return new Response(await drive.readBytes(id));
+    if (url.searchParams.get('alt') === 'media') return new Response((await drive.readBytes(id)).slice());
     const stored = await drive.evidence(id);
     return stored ? json(200, wireFile(stored.file, stored.trashed)) : json(404, driveFailure(404, 'notFound'));
   }
