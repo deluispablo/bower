@@ -81,3 +81,4 @@ runner-drive-adapter,implementer,claude,opus,high,1,135848,,,,,,35,7.6,delivered
 do-version-skew,mechanical,claude,haiku,low,1,72534,,,,,,43,3.1,delivered,2026-10-07
 done-sh-runner-paths,implementer,claude,sonnet,medium,1,65103,,,,,,7,1.3,delivered,2026-10-07
 worker-dispatch,implementer,claude,sonnet,medium,1,91895,,,,,,14,2.6,delivered,2026-10-07
+worker-stale-run-recovery,implementer,claude,opus,high,1,127803,,,,,,23,6.6,delivered,2026-10-07
