@@ -4155,7 +4155,7 @@
       "new-instance.sh refuses an OWNER/NAME starting with \"-\", from the prompt as from the command line; its test cleans its bower-instance-* folders."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a restarted runner that cannot read its folder never says nothing changed|a check that cannot read never counts as a change|new-instance refuses a repository that looks like a flag\"",
-    "passes": false,
+    "passes": true,
     "note": "P3-12 delta review: Important I1-restart plus two minors (possible-effect before the check read; new-instance flag-like name). Within the TL-P3-22 addendum rule."
   }
 ]
