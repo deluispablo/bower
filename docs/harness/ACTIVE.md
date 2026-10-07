@@ -34,7 +34,7 @@ P2 closed at `00ec9a5` ([dossier](2026-10-06-p2-dossier.md)). **P3 started** ([T
 - `nothingReady` is approved and in the contract. `parseRunReport` already accepts it (from worker-reads-pile-notes), so no fix is needed.
 - Running:
   - `security-review` passes as recorded (3f05ebf). It found 3 Important and 5 Minor (`2026-10-07-p3-security-review.md`) and corrected two runbook claims; `pnpm audit` is clean.
-  - P3-20 has seven fix entries, packet `2026-10-07-p3-20-security-fixes-packet.md`. The lead says all 8 findings are fixed before the freeze. `token-key-rotation-reconsent` passes (3e8091c) and so does `tidy-pin-actions` (a23da1f; checkout fbc6f39, setup-node a0853c2); 339/344. Running now: `app-security-headers` (`/private/tmp/bower-p3-headers`, port 5196) and `log-no-folder-content` (`/private/tmp/bower-p3-nologs`). Order:
+  - P3-20 has seven fix entries, packet `2026-10-07-p3-20-security-fixes-packet.md`. The lead says all 8 findings are fixed before the freeze. `token-key-rotation-reconsent` passes (3e8091c) and so does `tidy-pin-actions` (a23da1f; checkout fbc6f39, setup-node a0853c2); 339/344. `log-no-folder-content` passes (42880d1). 340/344. Running now: `app-security-headers` (`/private/tmp/bower-p3-headers`, port 5196) and `cookie-host-prefix` (`/private/tmp/bower-p3-hostcookie`, port 5197). Order:
     1. `token-key-rotation-reconsent` and `tidy-pin-actions`;
     2. `app-security-headers` and `log-no-folder-content`;
     3. `cookie-host-prefix` and `instance-private-check`;
