@@ -1,6 +1,6 @@
 # AGENTS.md
 
-The Bower app rebuild. Owner authorization and roles: `docs/harness/GOVERNANCE.md` (P2 → P3 continuation authorized; P4 not). Phases: `docs/PHASES.md`.
+The Bower app rebuild. Owner authorization and roles: `docs/harness/GOVERNANCE.md` (P2 and P3 accepted; P4 not authorized). Phases: `docs/PHASES.md`.
 
 ## Start here: read only what your role needs (token budget, TL-P2-41)
 
