@@ -17,19 +17,30 @@ export function readProofs(text) {
   return out;
 }
 
-/** The api's unit tests, from the JSON report its vitest run writes (api/test-results/unit.json, see api/vitest.config.ts). */
-export function apiTests(root, cwd = process.cwd()) {
-  const file = join(root, 'api/test-results/unit.json');
+/** A package's unit tests, from the JSON report its vitest run writes (<dir>/test-results/unit.json, see <dir>/vitest.config.ts). */
+function packageTests(dir, root, cwd) {
+  const file = join(root, `${dir}/test-results/unit.json`);
   if (!existsSync(file)) return [];
   return JSON.parse(readFileSync(file, 'utf8')).testResults.flatMap((r) =>
-    r.assertionResults.map((a) => ({ name: a.fullName, file: relative(cwd, r.name).replaceAll('\\', '/'), config: 'api/vitest.config.ts', project: r.projectName ?? '' })));
+    r.assertionResults.map((a) => ({ name: a.fullName, file: relative(cwd, r.name).replaceAll('\\', '/'), config: `${dir}/vitest.config.ts`, project: r.projectName ?? '' })));
 }
 
-/** The test patterns a verify names: vitest -t "…" and playwright -g "…"; `pnpm -C api …` runs the api's own tests. */
+/** The api's unit tests (api/test-results/unit.json). */
+export function apiTests(root, cwd = process.cwd()) {
+  return packageTests('api', root, cwd);
+}
+
+/** The runner's unit tests (runner/test-results/unit.json). */
+export function runnerTests(root, cwd = process.cwd()) {
+  return packageTests('runner', root, cwd);
+}
+
+/** The test patterns a verify names: vitest -t "…" and playwright -g "…"; `pnpm -C api …` and `pnpm -C runner …` run those packages' own tests. */
 function patterns(part) {
   const m = / -(t|g) "([^"]*)"/.exec(part);
   if (!m) return null;
-  const kind = m[1] === 'g' ? 'e2e' : /\bpnpm\s+(-C|--dir)\s+api\b/.test(part) ? 'api' : 'unit';
+  const pkg = /\bpnpm\s+(-C|--dir)\s+(api|runner)\b/.exec(part)?.[2];
+  const kind = m[1] === 'g' ? 'e2e' : (pkg ?? 'unit');
   return { kind, pattern: m[2] };
 }
 

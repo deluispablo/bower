@@ -29,9 +29,9 @@ export function undoCommit(sha, paths, cwd = process.cwd()) {
 }
 
 /** Where code lives for done.sh's red step (everything else is a record or a test). */
-export const CODE_PATHS = ['api', 'src', 'public', 'index.html', 'vite.config.ts', 'scripts', 'package.json', 'AGENTS.md', 'docs'];
+export const CODE_PATHS = ['api', 'runner', 'src', 'public', 'index.html', 'vite.config.ts', 'scripts', 'package.json', 'AGENTS.md', 'docs'];
 /** Tests stay in place while the code is set aside. */
-export const TEST_PATTERN = /\.test\.tsx?$|^api\/test\/|^e2e\/|^src\/data\/contract\/|^src\/testing\//;
+export const TEST_PATTERN = /\.test\.tsx?$|^api\/test\/|^runner\/test\/|^e2e\/|^src\/data\/contract\/|^src\/testing\//;
 
 /** The files of `files` that are code: under CODE_PATHS and not a test. */
 export function selectCode(files) {
