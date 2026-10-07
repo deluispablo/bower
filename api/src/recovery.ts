@@ -15,6 +15,19 @@
 import { QUEUED_STALE_MS, RUNNING_STALE_MS } from './process.js';
 import type { RunWire } from './process.js';
 
+/**
+ * How long past a run's stale deadline the read and write paths wait for the alarm's recovery when dispatch
+ * is configured: two of the run's own stale windows (34 minutes queued, an hour once started). The alarm
+ * decides within seconds of the deadline, and a live job's wait moves the deadline itself; the ceiling only
+ * ends a run whose alarm never fired, so it cannot hang forever.
+ */
+export const UNRECOVERED_WINDOWS = 2;
+
+/** The time past the stale deadline after which a run with no recovery decision is ended anyway. */
+export function unrecoveredCeiling(run: Pick<RunWire, 'phase'>): number {
+  return UNRECOVERED_WINDOWS * (run.phase === 'queued' ? QUEUED_STALE_MS : RUNNING_STALE_MS);
+}
+
 /** A job of the GitHub run found for an attempt. */
 export interface TidyJob {
   status: string;

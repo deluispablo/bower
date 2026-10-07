@@ -3,7 +3,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './env.js';
 import { dispatchTidy, findTidyRun } from './github.js';
 import type { GitHubAccess } from './github.js';
-import { applyingWatch, decide, staleDeadline } from './recovery.js';
+import { applyingWatch, decide, staleDeadline, unrecoveredCeiling } from './recovery.js';
 import type { Recovery, RecoveryWatch } from './recovery.js';
 import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
@@ -749,13 +749,19 @@ export class Person extends DurableObject<Env> {
 
   /**
    * Marks the current run failed when it is stale at `now`, once: a run already ended is left alone. A wait
-   * the alarm gave the run (a redispatch, or a live job) holds off the expiry until it ends.
+   * the alarm gave the run (a redispatch, or a live job) holds off the expiry until it ends. With dispatch
+   * configured, only the alarm's recovery decides a stale run (it may find a live job on GitHub, or be
+   * awaiting the lookup right now); this path ends it only past `unrecoveredCeiling`, in case no alarm
+   * ever fires. Without a token there is nothing to look up, and the run expires at its deadline.
    */
   private expire(now: number): void {
     const current = this.currentRunRow();
     if (current === undefined || !ACTIVE_PHASES.includes(current.phase)) return;
     const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
-    if (staleDeadline(toWire(current), this.attemptOf(current.id), watch) > now) return;
+    const wire = toWire(current);
+    const deadline = staleDeadline(wire, this.attemptOf(current.id), watch);
+    const waitForRecovery = this.env.GITHUB_TOKEN !== undefined ? unrecoveredCeiling(wire) : 0;
+    if (deadline + waitForRecovery > now) return;
     this.failStale(current, now);
   }
 

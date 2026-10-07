@@ -6,6 +6,7 @@ import type { Env } from '../src/env.js';
 import type { GitHubAccess } from '../src/github.js';
 import { createApp } from '../src/index.js';
 import { QUEUED_STALE_MS, RUNNING_STALE_MS, STALE_FAILURE } from '../src/process.js';
+import { unrecoveredCeiling } from '../src/recovery.js';
 import type { RunReply } from '../src/process.js';
 import { hashTicket } from '../src/run-ticket.js';
 
@@ -84,6 +85,14 @@ async function aRun(): Promise<{ sub: string; runId: string; ticket: string; t0:
 async function recover(sub: string, now: number, access: GitHubAccess): Promise<void> {
   await runInDurableObject(person(sub), async (instance) => {
     await instance.recover(now, access);
+  });
+}
+
+/** Takes the GitHub token out of this person object's own env, as on an instance with dispatch not configured. */
+async function withoutToken(sub: string): Promise<void> {
+  await runInDurableObject(person(sub), (instance) => {
+    const own = instance as unknown as { env: Env };
+    own.env = { ...own.env, GITHUB_TOKEN: undefined };
   });
 }
 
@@ -279,5 +288,64 @@ describe('stale run recovery', () => {
     const lines = log.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
     expect(lines).toContain('500');
     expect(lines).toContain('network');
+  });
+
+  it('a status poll during the lookup leaves a live job\'s run alone', async () => {
+    const { sub, runId, ticket, t0 } = await aRun();
+    const before = await status(sub, t0);
+    const now = t0 + QUEUED_STALE_MS + 1;
+    const gh = github({
+      runs: [{ id: 71, display_title: `tidy ${runId} 1` }],
+      jobs: { 71: [{ id: 5, status: 'queued', started_at: null, completed_at: null }] },
+    });
+    // The app polls `/status` while the alarm waits for GitHub.
+    let polled: RunReply | null = null;
+    const access: GitHubAccess = {
+      ...gh.access,
+      fetchImpl: async (url, init) => {
+        if (polled === null) polled = await status(sub, now + 1);
+        return await gh.access.fetchImpl(url, init);
+      },
+    };
+    await recover(sub, now, access);
+    expect(polled).toEqual(before);
+    expect(dispatches(gh.sent)).toEqual([]);
+    expect(await status(sub, now + 1)).toEqual(before);
+    expect(await alarmOf(sub)).toBe(now + QUEUED_STALE_MS);
+    expect(await tokenStatus(runId, ticket)).toBe(200);
+  });
+
+  it('a status poll past the deadline waits for recovery when dispatch is configured', async () => {
+    const { sub, runId, ticket, t0 } = await aRun();
+    const before = await status(sub, t0);
+    const deadline = t0 + QUEUED_STALE_MS;
+    const ceiling = deadline + unrecoveredCeiling({ phase: 'queued' });
+    expect(ceiling).toBe(deadline + 2 * QUEUED_STALE_MS);
+    // No alarm has run yet: the poll leaves the run to recovery.
+    expect(await status(sub, deadline + 1)).toEqual(before);
+    expect(await person(sub).runnerAccess(runId, await hashTicket(ticket), deadline + 1)).not.toBeNull();
+    expect(await alarmOf(sub)).toBe(deadline);
+    // If no alarm ever decides, the hard ceiling past the deadline still ends the run, once.
+    expect(await status(sub, ceiling - 1)).toEqual(before);
+    const ended = await status(sub, ceiling);
+    expect(ended.run).toMatchObject({ id: runId, phase: 'failed', failure: STALE_FAILURE });
+    expect(ended.revision).toBe(before.revision + 1);
+    expect(await tokenStatus(runId, ticket)).toBe(401);
+  });
+
+  it('without a GitHub token a status poll still expires the run', async () => {
+    const configured = await aRun();
+    const plain = await aRun();
+    await withoutToken(plain.sub);
+    const before = await status(plain.sub, plain.t0);
+    const late = (t0: number) => t0 + QUEUED_STALE_MS;
+    // With a token the same poll waits for recovery; without one it expires the run at the deadline, as before.
+    expect((await status(configured.sub, late(configured.t0))).run?.phase).toBe('queued');
+    expect(await status(plain.sub, late(plain.t0) - 1)).toEqual(before);
+    const expired = await status(plain.sub, late(plain.t0));
+    expect(expired.run).toMatchObject({ id: plain.runId, phase: 'failed', failure: STALE_FAILURE, finishedAt: late(plain.t0) });
+    expect(expired.revision).toBe(before.revision + 1);
+    expect(await tokenStatus(plain.runId, plain.ticket)).toBe(401);
+    expect(await alarmOf(plain.sub)).toBeNull();
   });
 });
