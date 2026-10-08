@@ -5242,13 +5242,13 @@
     "id": "home-cache-stable",
     "task": "p4-b",
     "category": "fix",
-    "what": "Home is complete within 2 s on the latency fake: loadReport's refreshFolder() no longer clears the read cache mid-piles(); the Tidy up count shows only once readiness is known; a Home golden pins the calls.",
+    "what": "Home stays stable on the latency fake: a report refresh keeps reads whose listed version is unchanged (no restart); the Tidy up count shows only once readiness is known; complete within 35% of the Drive-call minimum, with a 46-call golden (TL-P4-13 addendum 2: about 4 s accepted; the Inbox shows in 0.6 s).",
     "steps": [
       "Stop the refresh from restarting reads within a load.",
       "Show the count only after readiness.",
       "Golden for one Home load on the latency fake."
     ],
-    "verify": "pnpm vitest run -t \"Home is complete within 2 s on the latency fake|a report refresh does not restart the inbox reads\"",
+    "verify": "pnpm vitest run -t \"Home is complete within 35% of the call minimum on the latency fake|a report refresh does not restart the inbox reads|Home reads each file of the live-shaped folder once in one load\"",
     "note": "TL-P4-13 (main aea42fe). home-inbox-first left it: full read about 6 s, refresh drops reads."
   },
   {
@@ -5303,5 +5303,19 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a yes to Write it writes the update in a scoped run\"",
     "note": "TL-P4-13 (main aea42fe). Escalated."
+  },
+  {
+    "id": "home-reads-bounded",
+    "task": "p4-b",
+    "category": "fix",
+    "passes": false,
+    "what": "The runner stamps dispositions and changes with their pile id in appProperties, and Home queries only those of the piles in the inbox, so Home's Drive calls do not grow with earlier runs.",
+    "steps": [
+      "Runner stamps the pile id on dispositions and change files.",
+      "Home lists only the stamped files of piles in the inbox; unstamped older files keep working.",
+      "Test: the same call count with 10 and with 500 earlier runs."
+    ],
+    "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs\"",
+    "note": "TL-P4-13 addendum 2 (main e317fc7): option (a); no device cache."
   }
 ]
