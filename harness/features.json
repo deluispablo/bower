@@ -4729,7 +4729,7 @@
       "Tests with a stubbed GitHub."
     ],
     "verify": "pnpm -C api exec vitest run -t \"a dispatch network error is retried twice with backoff|a dispatch that keeps failing arms the alarm at 60 seconds\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-04 batch P4-4 (run 3 dispatch failed: network error after 40 ms)."
   }
 ]
