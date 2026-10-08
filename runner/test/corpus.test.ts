@@ -88,6 +88,27 @@ describe('the capability corpus', () => {
     expect(unmet({ files: { present: ['N.md'] }, report: { filed: 1 } })).toEqual([]);
   });
 
+  it('the C04 scorer accepts its rubric placements and refuses others', async () => {
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    expect(c).toBeDefined();
+    if (!c) return;
+    const note = (link: string): string => `---\nby: bower\n---\n${link}\n18 October, 8 November, 7 December, 31 January\n`;
+    const lastRun = { v: 1, run: { report: { filed: [{}], created: [{ path: 'x.md' }], updated: [], setAside: [], questions: [], requests: [], rulesWorded: 0, yourChanges: 0 } } };
+    const at = (folder: string, link = ''): { pass: boolean; unmet: string[] } => {
+      const after = { ...c.folder, [`${folder}/Community garden newsletter, autumn.pdf`]: 'pdf', [`${folder}/Community garden newsletter, autumn.md`]: note(link) };
+      return score({ expected: c.expected, before: c.folder, after, lastRun });
+    };
+    expect(at('Resources')).toEqual({ pass: true, unmet: [] });
+    expect(at('Resources/Gardening')).toEqual({ pass: true, unmet: [] });
+    expect(at('Areas/Home', 'See [[Garden plot]].')).toEqual({ pass: true, unmet: [] });
+    // Areas/Home without the plot note linked, a new Area, and a Project are each refused.
+    expect(at('Areas/Home').pass).toBe(false);
+    const area = at('Areas/Community garden');
+    expect(area.pass).toBe(false);
+    expect(area.unmet.some((l) => l.includes('Areas/Community garden/'))).toBe(true);
+    expect(at('Projects/Garden', 'See [[Garden plot]].').pass).toBe(false);
+  });
+
   it('the bench cases start from the original\'s bench folder', async () => {
     const bench = (await loadCorpus(ROOT)).filter((c) => c.speedBaseline);
     expect(bench.map((c) => c.id)).toHaveLength(5);

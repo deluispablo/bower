@@ -123,6 +123,15 @@ async function rehashed(edit: (text: string) => string): Promise<string> {
 const claudeEnv = (extra: Record<string, string> = {}): Record<string, string> => ({ BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: TOKEN, ...extra });
 
 describe('the Claude provider', () => {
+  it('the prompt says a thing with no fitting folder goes to Resources', async () => {
+    const { wire } = await wired();
+    const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
+    await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
+    const prompt = claude.calls[0]?.input ?? '';
+    expect(prompt).toMatch(/fits no folder below[^.]*goes to Resources/);
+    expect(prompt).toMatch(/new Area or Project only when[^.]*rules or[^.]*notes show an ongoing responsibility/);
+  });
+
   it('a recorded Claude reply becomes operations the spine validates', async () => {
     const { wire, admission } = await wired();
     const claude = recordedClaude({ stdout: recorded('reply-ok.json') });

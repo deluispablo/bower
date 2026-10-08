@@ -93,6 +93,11 @@ export interface NoteExpectation {
 export interface Expected {
   /** Paths here may use `*` for any run of characters (a model picks names; the rules fix only the place). */
   files?: { present?: string[]; absent?: string[] };
+  /**
+   * Where the matched files may be filed (a rubric that allows more than one place). Each file must sit under one
+   * `allowed` folder; an entry with `linking` also needs a note among the files that links that note (`[[linking]]`).
+   */
+  placement?: { files: string[]; allowed: Array<{ under: string; linking?: string }> };
   /** Paths of the starting folder that must be byte-identical after the run. */
   unchanged?: string[];
   notes?: NoteExpectation[];
@@ -223,6 +228,19 @@ export function score(input: ScoreInput): Score {
   const unmet: string[] = [];
   for (const p of expected.files?.present ?? []) if (matching(after, p).length === 0) unmet.push(`missing file: ${p}`);
   for (const p of expected.files?.absent ?? []) for (const found of matching(after, p)) unmet.push(`file should not exist: ${found}`);
+  if (expected.placement) {
+    const { files, allowed } = expected.placement;
+    const placed = files.flatMap((p) => matching(after, p)).filter((p) => !p.startsWith('Inbox/'));
+    for (const path of placed) {
+      const rule = allowed.find((a) => path.startsWith(`${a.under}/`));
+      if (!rule) unmet.push(`placed outside the rubric: ${path}`);
+      else if (rule.linking !== undefined) {
+        const link = `[[${rule.linking}`;
+        const linked = placed.some((q) => q.endsWith('.md') && q.startsWith(`${rule.under}/`) && (after[q] ?? '').includes(link));
+        if (!linked) unmet.push(`placed under ${rule.under} without a link to [[${rule.linking}]]: ${path}`);
+      }
+    }
+  }
   for (const p of expected.unchanged ?? []) {
     if (!(p in after)) unmet.push(`missing file: ${p} (expected unchanged)`);
     else if (after[p] !== before[p]) unmet.push(`file changed: ${p}`);
