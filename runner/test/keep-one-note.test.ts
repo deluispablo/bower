@@ -12,6 +12,7 @@ import { undoEdit } from '../../src/data/contracts/note-edit';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude, type CaseRun } from './corpus-run';
+import type { FakeDrive } from '../../src/data/drive/fake-drive';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 afterEach(() => vi.restoreAllMocks());
@@ -97,5 +98,46 @@ describe('keep one note', () => {
       return [path, f ? await run.drive.readText(f.id) : null] as const;
     })));
     expect(texts).toEqual(c.folder);
+  });
+  it('the other note changed after the read is not binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await keepCase();
+    const CAT = '- 2026-10-07 · Alex: the landlord accepts a cat.';
+    // The person adds a line to the other note on their phone while the run writes the kept one.
+    const before = async (drive: FakeDrive, root: string): Promise<void> => {
+      const all = await drive.listAll(root);
+      const otherId = all.find((f) => f.name === 'Flat 3 (second).md')?.id ?? '';
+      const keptId = all.find((f) => f.name === 'Flat 3, 12 Larkspur Lane.md')?.id ?? '';
+      const write = drive.writeText.bind(drive);
+      let done = false;
+      drive.writeText = async (id, text, ifModified, props) => {
+        const out = await write(id, text, ifModified, props);
+        if (id === keptId && !done) {
+          done = true;
+          const meta = (await drive.listAll(root)).find((f) => f.id === otherId);
+          if (meta) await write(otherId, `${await drive.readText(otherId)}${CAT}\n`, meta.modifiedTime);
+        }
+        return out;
+      };
+    };
+    const run = await runWithClaude(c, keepOne, undefined, before);
+    // Nothing is binned: the other note stays with the person's new line, the question stays open, and the run says why.
+    expect(OTHER in run.after).toBe(true);
+    expect(run.after[OTHER]).toContain(CAT);
+    expect(JSON.parse(run.after['.bower/questions.json'] ?? '{}')).toMatchObject({ questions: [expect.objectContaining({ id: 'q-merge-flat-3' })] });
+    const report = (run.lastRun as { run: { report: { setAside: Array<{ name: string; why: string }> } } }).run.report;
+    expect(report.setAside).toContainEqual({ name: 'Flat 3 (second)', why: 'It changed while Bower worked, so both notes stay; the next tidy-up keeps one.' });
+  });
+
+  it('a line that only starts like a kept line is carried', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await keepCase();
+    const folder = { ...c.folder };
+    folder[OTHER] = (folder[OTHER] ?? '').replace('- The listing says the lease is twelve months.', '- Bills included');
+    folder[KEPT] = (folder[KEPT] ?? '').replace('- Two bedrooms, second floor.', '- Two bedrooms, second floor.\n- Bills included: no, about 120 a month.');
+    const run = await runWithClaude({ ...c, folder }, keepOne);
+    expect(run.code).toBe(0);
+    expect(OTHER in run.after).toBe(false);
+    expect(sections(run.after[KEPT] ?? '').timeline).toContain('- 2026-10-07 · Bills included');
   });
 });
