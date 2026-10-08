@@ -443,16 +443,17 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     made.lines.push({ entry: { date: date ?? '', text: u.what, source: cite?.source ?? null }, record: null, what: u.what, after: cite?.fileId ?? null });
   }
   // A model's Timeline lines (P4-3): each cites the note its thing gets, or the thing as filed, and waits for its move.
-  const modelCite = (fileId: string): string | null => {
-    const name = opts.filing?.note?.(fileId)?.name ?? opts.filing?.thing(fileId)?.name;
-    return name === undefined ? null : name.replace(/\.md$/i, '');
-  };
+  // The cite is the name asked for until the filing below fixes the name each one gets; then it is that name.
+  const citeName = (name: string): string => name.replace(/\.md$/i, '');
+  const modelLines: Array<{ line: WantedLine; cites: string }> = [];
   for (const l of all && date ? (opts.filing?.lines ?? []) : []) {
     const f = ix.file(l.path);
     if (!f || f.folder) continue;
     const thing = l.cites === null ? undefined : things.find((t) => t.file.id === l.cites && !t.merge);
-    const source = thing ? modelCite(thing.file.id) : null;
-    want(f, l.path).lines.push({ entry: { date: date ?? '', text: l.text, source }, record: null, what: l.text, after: source === null ? null : (thing?.file.id ?? null) });
+    const asked = thing ? (opts.filing?.note?.(thing.file.id)?.name ?? opts.filing?.thing(thing.file.id)?.name) : undefined;
+    const line: WantedLine = { entry: { date: date ?? '', text: l.text, source: asked === undefined ? null : citeName(asked) }, record: null, what: l.text, after: asked === undefined ? null : (thing?.file.id ?? null) };
+    want(f, l.path).lines.push(line);
+    if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
   }
   // A merge's line, by its answer (R3-4): only into a note in a main folder, never the inbox or Bower's own files.
   for (const thing of things) {
@@ -612,13 +613,13 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     return [];
   });
   const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; changes: Change[]; text: string; after: string[] }> = [];
+  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[] }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
     const what = c.lines.find((l) => l.what !== null)?.what ?? null;
     const after = [...new Set(c.lines.flatMap((l) => (l.after === null ? [] : [l.after])))];
-    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, changes: changesOf(c, renameIds), text, after });
+    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after });
     places.set(c.file.id, c.file);
   }
   for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'refused');
@@ -739,11 +740,14 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
   }
+  /** The name each filed thing is cited by, as the run makes it: its note's, else its own. */
+  const madeAs = new Map(filing.map(({ thing, name, note }) => [thing.file.id, note?.name ?? name]));
   // A note a model wrote for a thing (P4-3): beside it, its words as the body, Bower's summary and Timeline around them.
   for (const { thing, to, name, note, merge } of filing) {
     const authored = note || merge ? null : (opts.filing?.note?.(thing.file.id) ?? null);
     if (!authored) continue;
     const noteName = freeName(planned, to, authored.name);
+    madeAs.set(thing.file.id, noteName);
     plannedFile(join(to, noteName));
     const text = serializeNote({ summary: authored.summary, properties: [], tags: [], currentState: [], body: authored.body, timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
@@ -939,6 +943,27 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (note.context) await add({ kind: 'bin', before: seen(note.context), capturedChildIds: [] }, [op]);
     reportPlan.push({ requires: [op, ...chainOf(note.to)], when: 'applied', value: { ...empty(), filed, created: [{ path, what: note.what }] } });
     reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: note.aside, why: note.pileId === null ? NOTE_NOT_WRITTEN : WORDS_NOT_WRITTEN }] } });
+  }
+  // A model's line cites the name its thing or note was given (a free name when the one asked for was taken): its
+  // note's text is authored again with it, by `applyChanges` as before; one that cannot be cites nothing.
+  const recited = new Set<WantedLine>();
+  for (const { line, cites } of modelLines) {
+    const made = madeAs.get(cites);
+    if (made === undefined || citeName(made) === line.entry.source) continue;
+    line.entry.source = citeName(made);
+    recited.add(line);
+  }
+  for (const edit of recited.size ? edits : []) {
+    const mine = [...recited].filter((l) => edit.changes.some((c) => c.kind === 'timeline-append' && c.entries.includes(l.entry)));
+    if (!mine.length) continue;
+    let result = applyChanges(edit.bytes, edit.changes);
+    if (!result.ok) {
+      console.error(`A note's Timeline line could not cite the name its thing was given (${result.reason}); it cites nothing`);
+      for (const l of mine) l.entry.source = null;
+      result = applyChanges(edit.bytes, edit.changes);
+    }
+    if (!result.ok) throw new BowerError('unknown', B_FAILURE);
+    edit.text = result.text;
   }
   // After the filing moves, each note edit (TL-P2-20), then the merges whose moves depend on their line. A Timeline
   // line's note is marked new in place after its edit, and gets its updated row once it applied.

@@ -12,16 +12,18 @@
  *   in Node) and `pdf-parse` (pins an old PDF.js).
  * - Pictures, scanned PDFs (no text layer) and other kinds get no text: OCR is a later slice. The reason is said.
  *
- * Reads are bounded like the original's (`MAX_READ_BYTES`, `MAX_PDF_PAGES`): a file past them is not read.
+ * Reads are bounded like the original's (`MAX_READ_BYTES`, by the listed size before any download, and
+ * `MAX_PDF_PAGES`), and a PDF's pages are read only as far as its share of the run's text budget.
  */
-import { extractText, getDocumentProxy } from 'unpdf';
+import { getDocumentProxy } from 'unpdf';
 
 /** The original's MAX_PDF_PAGES. */
 export const MAX_PDF_PAGES = 300;
 /** Bytes read for one thing's text at most (the original read up to 50 MB; the model sees far less anyway). */
 export const MAX_READ_BYTES = 20 * 1024 * 1024;
 
-export type Extracted = { text: string } | { text: null; why: string };
+/** A thing's text, or why there is none; `pagesNotRead`, a PDF's pages past `limit` that were never read. */
+export type Extracted = { text: string; pagesNotRead?: number } | { text: null; why: string };
 
 const TEXT = new Set(['.md', '.markdown', '.txt', '.text', '.csv', '.url']);
 const PICTURE = new Set(['.jpg', '.jpeg', '.png', '.gif', '.heic', '.heif', '.webp', '.tif', '.tiff', '.bmp']);
@@ -29,19 +31,26 @@ const PICTURE = new Set(['.jpg', '.jpeg', '.png', '.gif', '.heic', '.heif', '.we
 /** A file name's extension, lower case, with its dot; '' when it has none. */
 const extensionOf = (name: string): string => /(\.[^./]+)$/.exec(name)?.[1]?.toLowerCase() ?? '';
 
-/** Whether the runner reads this kind of thing's text at all, so a read is only made when it does. */
-export function readable(name: string): Extracted | null {
+/**
+ * Whether the runner reads this thing's text at all, by its name and its listed size (`size`, when Drive gives one),
+ * so nothing is downloaded that will not be read.
+ */
+export function readable(name: string, size?: number): Extracted | null {
   const ext = extensionOf(name);
-  if (TEXT.has(ext) || ext === '.pdf') return null;
   if (PICTURE.has(ext)) return { text: null, why: 'a picture: its text is not read yet (OCR comes later)' };
-  return { text: null, why: 'a kind of file whose text is not read yet' };
+  if (!TEXT.has(ext) && ext !== '.pdf') return { text: null, why: 'a kind of file whose text is not read yet' };
+  if (size !== undefined && size > MAX_READ_BYTES) return { text: null, why: 'too big to read' };
+  return null;
 }
 
-/** The text of a thing the runner reads (see `readable`), from its bytes. */
-export async function extract(name: string, bytes: Uint8Array): Promise<Extracted> {
-  const skip = readable(name);
+/**
+ * The text of a thing the runner reads (see `readable`), from its bytes. A PDF is read page by page and stops once
+ * its text passes `limit` characters (its share of the run's budget), saying how many pages it did not read; its
+ * text joins each page's items as unpdf's `extractText` does.
+ */
+export async function extract(name: string, bytes: Uint8Array, limit = Number.POSITIVE_INFINITY): Promise<Extracted> {
+  const skip = readable(name, bytes.byteLength);
   if (skip) return skip;
-  if (bytes.byteLength > MAX_READ_BYTES) return { text: null, why: 'too big to read' };
   if (extensionOf(name) !== '.pdf') {
     try {
       return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
@@ -54,9 +63,17 @@ export async function extract(name: string, bytes: Uint8Array): Promise<Extracte
     const pdf = await getDocumentProxy(bytes.slice(), { verbosity: 0 });
     try {
       if (pdf.numPages > MAX_PDF_PAGES) return { text: null, why: `a PDF of more than ${MAX_PDF_PAGES} pages: not read` };
-      const { text } = await extractText(pdf, { mergePages: true });
-      if (!text.trim()) return { text: null, why: 'a scanned PDF with no text layer: not read yet (OCR comes later)' };
-      return { text };
+      const pages: string[] = [];
+      let length = 0;
+      while (pages.length < pdf.numPages && length <= limit) {
+        const content = await (await pdf.getPage(pages.length + 1)).getTextContent();
+        const text = content.items.map((item) => ('str' in item ? item.str + (item.hasEOL ? '\n' : '') : '')).join('');
+        pages.push(text);
+        length += text.length + 1;
+      }
+      const text = pages.join('\n');
+      if (!text.trim() && pages.length === pdf.numPages) return { text: null, why: 'a scanned PDF with no text layer: not read yet (OCR comes later)' };
+      return pages.length < pdf.numPages ? { text, pagesNotRead: pdf.numPages - pages.length } : { text };
     } finally {
       await pdf.loadingTask.destroy();
     }
