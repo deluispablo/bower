@@ -4,7 +4,7 @@
  * reading a file's content.
  */
 import type { BinLookup, DriveApi, DriveFile, ResumableDrive } from '../drive/drive-api';
-import { declarationCopies, type StoredDigests } from '../pile-readiness';
+import { declarationCopies, pileRecords, type StoredDigests } from '../pile-readiness';
 import { PILE_NOTE } from '../piles';
 import type { Pile } from '../types';
 import { PROP, SYSTEM } from '../vault/layout';
@@ -94,19 +94,19 @@ function readsOf(rootId: string, listing: readonly DriveFile[], scope: Admission
   const bytes: string[] = [];
   if (scope !== 'all') return { texts, notes, bytes };
   const declared = new Set<string>();
+  const pileIds = new Set<string>();
   for (const f of ix.filesIn('Inbox')) {
     const declarationId = f.appProperties?.[PROP.declaration];
     if (declarationId) declared.add(declarationId);
+    pileIds.add(f.appProperties?.[PROP.pile] ?? f.id);
     const path = f.folder ? ix.pathOf(f.id) : undefined;
     if (!path) continue;
     const note = ix.filesIn(path).find((k) => !k.folder && k.name === PILE_NOTE);
     if (note) notes.push(note.id);
   }
   for (const id of declared) bytes.push(...declarationCopies(listing, rootId, id).map((f) => f.id));
-  if (declared.size) {
-    const piles = ix.file(SYSTEM.piles);
-    bytes.push(...listing.filter((f) => !f.folder && piles !== undefined && f.parents.includes(piles.id) && f.name.startsWith('disposition-')).map((f) => f.id));
-  }
+  // The dispositions the plan reads are those of the inbox's piles (`pileRecords`), not the whole history.
+  if (declared.size) bytes.push(...pileRecords(listing, rootId, 'disposition', pileIds).map((f) => f.id));
   return { texts, notes, bytes };
 }
 

@@ -82,6 +82,11 @@ export const PROP = {
   recordAnchor: 'bowerRecordAnchor',
 } as const;
 
+/** The stamps a new record carries: its pile, and for a declaration the layout it was declared with. */
+export function recordStamp(pileId: string, anchor?: 'loose' | 'folder'): Record<string, string> {
+  return { [PROP.recordPile]: pileId, ...(anchor ? { [PROP.recordAnchor]: anchor } : {}) };
+}
+
 /** Runtime checks for the runner's data: a version alone does not prove its shape. */
 type JsonObject = Record<string, unknown>;
 const object = (v: unknown): v is JsonObject => !!v && typeof v === 'object' && !Array.isArray(v);

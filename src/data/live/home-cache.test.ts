@@ -95,10 +95,10 @@ describe('Home on the latency fake', () => {
       (drive as unknown as Record<string, unknown>)[k] = (...a: unknown[]) => { calls[k] = (calls[k] ?? 0) + 1; return real(...a); };
     }
     const out = await homeLoad(s, drive);
-    // 1 listing, 3 pile notes + questions + last tidy-up + 12 changes as text, 1 declaration + 20 dispositions as bytes,
+    // 1 listing, 3 pile notes + questions + last tidy-up + 12 changes as text, 1 declaration as bytes (the 20 earlier runs' records are about other piles: not read),
     // 7 digests (4 papers, their note, 2 other notes).
-    expect(calls).toEqual({ listAll: 1, readText: 17, readBytes: 21, storedDigest: 7 });
-    expect(out.calls).toBe(46);
+    expect(calls).toEqual({ listAll: 1, readText: 17, readBytes: 1, storedDigest: 7 });
+    expect(out.calls).toBe(26);
   }, 60_000);
 
   it('a report refresh does not restart the inbox reads', async () => {
@@ -166,8 +166,8 @@ describe('one read cache serves app and runner', () => {
     const twice = Object.entries(calls).filter(([k, n]) => n > 1 && !k.startsWith('listAll')).map(([k, n]) => `${k} x${n}`);
     expect(twice.join(', '), `read twice at one version, ${after} calls`).toBe('');
     expect(calls['listAll Bower']).toBe(3);
-    // Before: 49 calls (questions.json x2).
-    expect(after).toBe(48);
+    // Before: 49 calls (questions.json x2); 48 until the pile records were read for the inbox's piles alone.
+    expect(after).toBe(28);
   }, 60_000);
 
   it('a pile note changed elsewhere after Home read it is never written over from the kept read', async () => {
@@ -198,6 +198,13 @@ describe('Home reads only the records of the piles in the inbox (TL-P4-16 b)', (
     }
     expect(made[1], `Drive calls after 10 and after 500 earlier runs: ${made.join(' and ')}`).toBe(made[0]);
   }, 120_000);
+
+  it('the questions do not wait for the full read of the piles', async () => {
+    const { drive, s } = await slowReport({ cold: true });
+    const out = await homeLoad(s, drive);
+    expect(out.questions.length).toBeGreaterThan(0);
+    expect(out.done.questions ?? 0, `questions after ${out.done.questions} ms, piles after ${out.done.piles} ms`).toBeLessThan(out.done.piles ?? 0);
+  }, 60_000);
 
   it('an empty inbox reads no old pile records', async () => {
     const { drive, s } = await slowReport({ cold: true, earlier: 30, empty: true, latency: 0 });

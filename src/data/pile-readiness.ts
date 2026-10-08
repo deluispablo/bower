@@ -75,6 +75,24 @@ const HASH = /^[0-9a-f]{64}$/;
 const BOWER_DIR = SYSTEM.dir;
 const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
 
+/**
+ * The one pile-records query (TL-P4-16 b): the declarations or dispositions in `.bower/piles` (by real parents) that can be
+ * about these piles, from the listing alone; none is read. Records are stamped with their pile id when written
+ * (`PROP.recordPile`; Drive `files.list` returns `appProperties` with each file, so no second call is needed), so a
+ * stamped record is picked by its stamp, never by its name; a record written before the stamp has none and is always
+ * included, to be read and matched by the pile id in its own bytes. With no `pileIds`, every record.
+ */
+export function pileRecords(files: readonly DriveFile[], rootId: string, kind: 'declaration' | 'disposition', pileIds?: ReadonlySet<string>): DriveFile[] {
+  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
+  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
+  return files.filter((f) => {
+    if (f.folder || !f.name.startsWith(`${kind}-`) || !f.parents.some((p) => piles.has(p))) return false;
+    if (kind === 'declaration' && !f.name.endsWith('.json')) return false;
+    const stamp = f.appProperties?.[PROP.recordPile];
+    return !pileIds || stamp === undefined || pileIds.has(stamp);
+  });
+}
+
 /** The file name of a declaration: its logical id and the hash of its canonical body. */
 export function declarationName(declarationId: string, hash: string): string {
   return `declaration-${declarationId}-${hash}.json`;
@@ -182,14 +200,19 @@ export type LooseDeclaration = { declaration: Declaration; sha256: string; copie
  * Folder declarations are skipped, and `skip` names declarations not to read at all (those a live folder or
  * file carries, read through their own pile). Parsed copies are kept in `cache`, since a declaration never changes.
  */
-export async function findLooseDeclarations(files: readonly DriveFile[], rootId: string, inboxId: string, read: ReadBytes, cache?: Map<string, DeclarationResult>, skip: ReadonlySet<string> = new Set()): Promise<LooseDeclaration[]> {
-  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
-  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
-  const byId = new Map<string, LooseDeclaration | 'conflict'>();
-  for (const copy of files) {
-    if (copy.folder || !copy.name.startsWith('declaration-') || !copy.name.endsWith('.json') || !copy.parents.some((p) => piles.has(p))) continue;
+export async function findLooseDeclarations(files: readonly DriveFile[], rootId: string, inboxId: string, read: ReadBytes, cache?: Map<string, DeclarationResult>, skip: ReadonlySet<string> = new Set(), onlyPile?: string): Promise<LooseDeclaration[]> {
+  // Piles whose declaration a consumed disposition retired, known from the listing's stamps alone (a loose thing has the
+  // one member the disposition files). With `onlyPile` (a Remove of that pile) nothing is retired: its copies are wanted.
+  const retired = new Set(onlyPile === undefined ? pileRecords(files, rootId, 'disposition').flatMap((d) => d.appProperties?.[PROP.recordPile] ?? []) : []);
+  const wanted = pileRecords(files, rootId, 'declaration', onlyPile === undefined ? undefined : new Set([onlyPile])).filter((copy) => {
     // A declaration a live folder or file carries is read through that pile, never here.
-    if (skip.has(copy.name.slice('declaration-'.length, -'-.json'.length - 64))) continue;
+    if (skip.has(copy.name.slice('declaration-'.length, -'-.json'.length - 64))) return false;
+    const stamp = copy.appProperties?.[PROP.recordPile];
+    if (stamp === undefined) return true;
+    return copy.appProperties?.[PROP.recordAnchor] !== 'folder' && !retired.has(stamp);
+  });
+  // The copies are read together (a score of them is one wait on a slow Drive, not a score); the merge keeps their order.
+  const parsedCopies = await Promise.all(wanted.map(async (copy) => {
     const key = `${copy.id}@${copy.modifiedTime}`;
     let parsed = cache?.get(key);
     if (!parsed) {
@@ -201,17 +224,24 @@ export async function findLooseDeclarations(files: readonly DriveFile[], rootId:
         // again next listing. Signed out stops the listing.
         if ((e instanceof BowerError && e.code === 'auth') || e instanceof NotReadHere) throw e;
         console.error(e);
-        continue;
+        return null;
       }
       parsed = await parsePileDeclaration(bytes, rootId);
       cache?.set(key, parsed);
     }
+    return parsed;
+  }));
+  const byId = new Map<string, LooseDeclaration | 'conflict'>();
+  for (const [i, copy] of wanted.entries()) {
+    const parsed = parsedCopies[i];
+    if (!parsed) continue;
     if (!parsed.ok || copy.name !== declarationName(parsed.value.declarationId, parsed.sha256)) {
       console.error(`A pile declaration copy was refused (${parsed.ok ? 'name' : parsed.reason}).`);
       continue;
     }
     const { declarationId, anchor } = parsed.value;
     if (anchor.kind !== 'loose' || anchor.inboxId !== inboxId) continue;
+    if (onlyPile !== undefined && parsed.value.pileId !== onlyPile) continue;
     const had = byId.get(declarationId);
     if (had === undefined) byId.set(declarationId, { declaration: parsed.value, sha256: parsed.sha256, copies: [copy] });
     else if (had !== 'conflict' && had.sha256 === parsed.sha256) had.copies.push(copy);
@@ -294,13 +324,11 @@ export interface Accounting extends Readiness {
 }
 
 /**
- * Reads (and keeps, by file id and modified time) every disposition under `.bower/piles`, all at once: a score of
- * leftovers is a score of waits on a slow Drive.
+ * Reads (and keeps, by file id and modified time) the dispositions that can be about this pile (`pileRecords`), all at
+ * once: those stamped with its id and those written before the stamp. The rest of the history is never read.
  */
-async function readDispositions(rootId: string, files: readonly DriveFile[], read: ReadBytes, cache?: Map<string, DispositionResult>): Promise<{ f: DriveFile; parsed: DispositionResult }[]> {
-  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
-  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
-  const candidates = files.filter((f) => !f.folder && f.name.startsWith('disposition-') && f.parents.some((p) => piles.has(p)));
+async function readDispositions(rootId: string, pileId: string, files: readonly DriveFile[], read: ReadBytes, cache?: Map<string, DispositionResult>): Promise<{ f: DriveFile; parsed: DispositionResult }[]> {
+  const candidates = pileRecords(files, rootId, 'disposition', new Set([pileId]));
   return Promise.all(candidates.map(async (f) => {
     const key = `${f.id}@${f.modifiedTime}`;
     let parsed = cache?.get(key);
@@ -323,7 +351,7 @@ async function readDispositions(rootId: string, files: readonly DriveFile[], rea
  */
 async function disposedKeys(declaration: Declaration, declarationSha256: string, files: readonly DriveFile[], read: ReadBytes, cache?: Map<string, DispositionResult>): Promise<Set<string>> {
   const out = new Set<string>();
-  const results = await readDispositions(declaration.scope.rootId, files, read, cache);
+  const results = await readDispositions(declaration.scope.rootId, declaration.pileId, files, read, cache);
   for (const { f, parsed } of results) {
     if (!parsed.ok || f.name !== `disposition-${parsed.sha256}.json`) {
       console.error(`A pile disposition was refused (${parsed.ok ? 'name' : parsed.reason}).`);
