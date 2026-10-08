@@ -180,6 +180,27 @@ function bounded(text: string, room: number): { text: string | null; cut: number
 }
 
 /**
+ * Calculate SHA256 hashes of each input section (TL-P4-08 addendum 3).
+ * Takes the sections as prepared() assembles them and returns their normalized hashes (first 6 hex).
+ */
+function calculateSectionHashes(
+  shown: Shown,
+): { prompt: string; tree: string; things: string; notes: string; rules?: string } {
+  const hash = (text: string): string => {
+    const normalized = normalizeModelInput(text);
+    return createHash('sha256').update(normalized).digest('hex').slice(0, 6);
+  };
+
+  return {
+    prompt: hash(promptInstructions()),
+    tree: hash(JSON.stringify(shown.folders)),
+    things: hash(JSON.stringify(shown.piles)),
+    notes: hash(JSON.stringify(shown.notes)),
+    ...(shown.rules ? { rules: hash(shown.rules) } : {}),
+  };
+}
+
+/**
  * The prompt and the prepared context. The model proposes intent only (TL-P4-01 P4-2): where each admitted thing goes
  * and its new name, and where a pile of words becomes a note; since P4-3 also a thing's own note and Timeline lines;
  * and (TL-P4-08) a question about a pile it cannot place without guessing, which then stays in the inbox. The runner
@@ -191,7 +212,8 @@ function bounded(text: string, room: number): { text: string | null; cut: number
  * come from the original's rulebook (bower: vault-template/CLAUDE.md:34-37 what each PARA folder holds, :232 "an
  * existing folder, or a new direct subfolder of" one, :255-328 its eight kinds of document).
  */
-function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
+/** The fixed prompt instructions for the model (TL-P4-08 addendum 3). */
+function promptInstructions(): string {
   return [
     'You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.',
     'Reply with one JSON object and nothing else, of exactly this shape:',
@@ -253,6 +275,12 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'Name only the things, piles and notes below. Never add ids, hashes or other keys: Bower computes them, checks your',
     'reply, and refuses the whole reply if it names anything else; then nothing changes.',
     '',
+  ].join('\n');
+}
+
+function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
+  return [
+    promptInstructions(),
     JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: shown.piles, notes: shown.notes, folders: shown.folders, ...(shown.rules ? { rules: shown.rules } : {}) }),
   ].join('\n');
 }
@@ -679,6 +707,9 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const normalized = normalizeModelInput(input);
       const fingerprint = createHash('sha256').update(normalized).digest('hex').slice(0, 12);
       setup.timing.setInputFingerprint(fingerprint);
+      // Also calculate and set section hashes (TL-P4-08 addendum 3)
+      const sectionHashes = calculateSectionHashes(shown);
+      setup.timing.setSectionHashes(sectionHashes);
     }
     // Its own empty folder, with an empty home in it: no checkout's or person's settings or CLAUDE.md to find.
     const work = await mkdtemp(join(tmpdir(), 'bower-claude-'));

@@ -249,13 +249,36 @@ describe('model input fingerprint', () => {
 
     expect(run1.input).not.toBe(run2.input);
 
-    // Write normalized inputs to files for debugging
-    const fs = await import('node:fs/promises');
-    const path = await import('node:path');
-    const logDir = '/private/tmp/bower-p4-fpnorm2-logs';
-    await fs.mkdir(logDir, { recursive: true });
-    await fs.writeFile(path.join(logDir, 'input-run1-normalized.json'), run1.normalized);
-    await fs.writeFile(path.join(logDir, 'input-run2-normalized.json'), run2.normalized);
+    // After normalization, they should be identical
+    expect(run1.normalized).toBe(run2.normalized);
+
+    // Fingerprints should also be identical
+    const fingerprint1 = createHash('sha256').update(run1.normalized).digest('hex').slice(0, 12);
+    const fingerprint2 = createHash('sha256').update(run2.normalized).digest('hex').slice(0, 12);
+    expect(fingerprint1).toBe(fingerprint2);
+  });
+
+  it('two fresh fake folders on the same case give the same input fingerprint through main', async () => {
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    if (!c) throw new Error('the C04 garden newsletter case is missing');
+
+    // Run the case twice through main() to get different Drive IDs
+    const captureInputViaMain = async (): Promise<{ input: string; normalized: string }> => {
+      const calls: ClaudeCall[] = [];
+      const fakeSpawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('{"kind":"tidy-intent","v":1,"things":[],"notes":[],"lines":[],"asks":[]}') } satisfies ClaudeExit);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await runWithClaude(c, fakeSpawn);
+
+      const input = calls[0]?.input ?? '';
+      const normalized = normalizeModelInput(input);
+      return { input, normalized };
+    };
+
+    const run1 = await captureInputViaMain();
+    const run2 = await captureInputViaMain();
+
+    expect(run1.input).not.toBe(run2.input);
 
     // After normalization, they should be identical
     expect(run1.normalized).toBe(run2.normalized);
@@ -264,5 +287,37 @@ describe('model input fingerprint', () => {
     const fingerprint1 = createHash('sha256').update(run1.normalized).digest('hex').slice(0, 12);
     const fingerprint2 = createHash('sha256').update(run2.normalized).digest('hex').slice(0, 12);
     expect(fingerprint1).toBe(fingerprint2);
+  });
+
+  it('a change in one input section moves only that section hash', async () => {
+    const g = await gardenFolder();
+    const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+    if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
+
+    const calls: ClaudeCall[] = [];
+    const timing = new RunTiming();
+    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+
+    const line = timing.line('done');
+
+    // Check that sections= is present in the timing line
+    expect(line).toMatch(/sections=prompt:[0-9a-f]{6},tree:[0-9a-f]{6},things:[0-9a-f]{6},notes:[0-9a-f]{6}(?:,rules:[0-9a-f]{6})?/);
+
+    // Extract section hashes from the timing line
+    const extractSections = (timingLine: string): Record<string, string> => {
+      const sections: Record<string, string> = {};
+      const match = timingLine.match(/sections=([^ ]+)/);
+      if (!match) return sections;
+      for (const part of match[1].split(',')) {
+        const [key, value] = part.split(':');
+        if (key && value) sections[key] = value;
+      }
+      return sections;
+    };
+
+    const sections1 = extractSections(line);
+    expect(Object.keys(sections1).length).toBeGreaterThanOrEqual(4); // At least prompt, tree, things, notes
   });
 });
