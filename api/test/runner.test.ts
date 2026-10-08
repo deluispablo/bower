@@ -99,7 +99,7 @@ describe('runner wire', () => {
       state.storage.sql.exec<Record<string, SqlStorageValue>>('SELECT * FROM run_ticket').toArray(),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ hash: hex, run_id: runner.runId, epoch: 1, retired: 0 });
+    expect(rows[0]).toMatchObject({ hash: hex, run_id: runner.runId, attempt: 1, retired: 0 });
     expect(JSON.stringify(rows)).not.toContain(runner.ticket);
   });
 
@@ -268,11 +268,11 @@ describe('runner wire', () => {
     expect(await code(report)).toBe('stale-attempt');
     // The older ticket is retired, never deleted.
     const rows = await runInDurableObject(person(sub), (_instance, state) =>
-      state.storage.sql.exec<{ epoch: number; retired: number }>('SELECT epoch, retired FROM run_ticket ORDER BY epoch').toArray(),
+      state.storage.sql.exec<{ attempt: number; retired: number }>('SELECT attempt, retired FROM run_ticket ORDER BY attempt').toArray(),
     );
     expect(rows).toEqual([
-      { epoch: 1, retired: 1 },
-      { epoch: 2, retired: 0 },
+      { attempt: 1, retired: 1 },
+      { attempt: 2, retired: 0 },
     ]);
     expect((await runner.token(second)).status).toBe(200);
   });

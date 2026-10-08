@@ -9,8 +9,25 @@ import { MANIFEST } from './drive-v3.js';
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
 
-/** Takes back schema step 10 (the phase of an attempt's last report), for the tests that rewind further. */
+/**
+ * Takes back schema step 11 (the dead schema it dropped, and the ticket's attempt named epoch again), for the tests
+ * that rewind further. The v1 `control` columns come back at the end of the row, with their v1 types and checks.
+ */
+function undoV11(sql: SqlStorage): void {
+  sql.exec('ALTER TABLE run_ticket RENAME COLUMN attempt TO epoch');
+  sql.exec('ALTER TABLE control ADD COLUMN head TEXT');
+  sql.exec('ALTER TABLE control ADD COLUMN claim TEXT');
+  sql.exec('ALTER TABLE control ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0 CHECK (epoch >= 0)');
+  sql.exec(`CREATE TABLE admission (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    active_run_id TEXT,
+    request_id TEXT
+  )`);
+}
+
+/** Takes back schema steps 11 and 10 (the phase of an attempt's last report), for the tests that rewind further. */
 function undoV10(sql: SqlStorage): void {
+  undoV11(sql);
   sql.exec('ALTER TABLE run_ticket DROP COLUMN report_phase');
 }
 
@@ -39,6 +56,11 @@ function undoV6(sql: SqlStorage): void {
   sql.exec('DROP TABLE session_leave');
   sql.exec('ALTER TABLE session_lease DROP COLUMN beat_at');
   sql.exec('ALTER TABLE session_lease DROP COLUMN left_place');
+}
+
+/** What step 11 keeps of a control row read before it: the status revision (the other v1 columns were never used). */
+function keptControl(rows: Record<string, SqlStorageValue>[] | undefined): Record<string, SqlStorageValue>[] {
+  return (rows ?? []).map((c) => ({ id: c.id ?? null, status_revision: c.status_revision ?? null }));
 }
 
 function rowCount(sql: SqlStorage, table: string): number {
@@ -71,16 +93,9 @@ describe('person object', () => {
     await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
       sql.exec('INSERT INTO session_lease (id, place, epoch) VALUES (1, ?, ?)', 'place-a', 3);
-      sql.exec('INSERT INTO admission (id, active_run_id, request_id) VALUES (1, ?, ?)', 'run-1', 'req-1');
+      sql.exec('INSERT INTO control (id, status_revision) VALUES (1, ?)', 4);
       sql.exec(
-        'INSERT INTO control (id, head, status_revision, claim, epoch) VALUES (1, ?, ?, ?, ?)',
-        'head-1',
-        4,
-        'claim-1',
-        2,
-      );
-      sql.exec(
-        'INSERT INTO run_ticket (hash, run_id, epoch, retired) VALUES (?, ?, ?, 0)',
+        'INSERT INTO run_ticket (hash, run_id, attempt, retired) VALUES (?, ?, ?, 0)',
         'hash-1',
         'run-1',
         2,
@@ -97,7 +112,6 @@ describe('person object', () => {
       schema_version: 1,
       session_lease: 0,
       session_leave: 0,
-      admission: 0,
       quota: 1,
       control: 0,
       run_ticket: 0,
@@ -112,7 +126,6 @@ describe('person object', () => {
       schema_version: 1,
       session_lease: 1,
       session_leave: 0,
-      admission: 1,
       quota: 1,
       control: 1,
       run_ticket: 1,
@@ -314,13 +327,20 @@ describe('person storage migration', () => {
       return Object.fromEntries(
         PERSON_TABLES.map((t) => [
           t,
-          // v8's ticket columns aside: the v7 → v8 test covers them.
-          sql.exec(t === 'run_ticket' ? 'SELECT hash, run_id, epoch, retired FROM run_ticket' : `SELECT * FROM ${t}`).toArray(),
+          // v8's ticket columns aside: the v7 → v8 test covers them. v11 names the ticket's epoch attempt.
+          sql.exec(t === 'run_ticket' ? 'SELECT hash, run_id, attempt AS epoch, retired FROM run_ticket' : `SELECT * FROM ${t}`).toArray(),
         ]),
       );
     });
-    // Every v6 row is there as it was (the version row aside), and the runs table starts empty.
-    expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({ ...before, schema_version: undefined, runs: undefined });
+    // Every v6 row is there as it was (the version row aside), and the runs table starts empty. v11 dropped the
+    // control columns nothing used, and the admission table, which are not in PERSON_TABLES.
+    expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({
+      ...before,
+      control: keptControl(before.control),
+      schema_version: undefined,
+      runs: undefined,
+    });
+    expect(before.control).toEqual([{ id: 1, head: 'head-1', status_revision: 4, claim: 'claim-1', epoch: 2 }]);
     expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
     expect(after.runs).toEqual([]);
     // The status revision carries on from the kept control row.
@@ -353,13 +373,14 @@ describe('person storage migration', () => {
     // Every v7 row is there as it was; a ticket kept from before has no expiry, so it never works.
     expect({ ...after, schema_version: undefined, run_ticket: undefined, runs: undefined }).toEqual({
       ...before,
+      control: keptControl(before.control),
       schema_version: undefined,
       run_ticket: undefined,
       runs: undefined,
     });
     expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
     expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
-    expect(after.run_ticket).toEqual([{ hash: 'hash-1', run_id: 'run-1', epoch: 2, retired: 0, expires_at: 0, report_seq: null, report_phase: null }]);
+    expect(after.run_ticket).toEqual([{ hash: 'hash-1', run_id: 'run-1', attempt: 2, retired: 0, expires_at: 0, report_seq: null, report_phase: null }]);
     expect((await alex.runStatus(2_000)).revision).toBe(1);
   });
 
@@ -383,19 +404,23 @@ describe('person storage migration', () => {
       return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
     });
     // Every v8 row is there as it was; a run admitted before has no manifest.
-    expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({ ...before, schema_version: undefined, runs: undefined });
+    expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({
+      ...before,
+      control: keptControl(before.control),
+      schema_version: undefined,
+      runs: undefined,
+    });
     expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
     expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
   });
 
   it('person storage migrates from v9 to v10 keeping every ticket', async () => {
-    expect(SCHEMA_VERSION).toBe(10);
     const alex = personFor('sub-alex-v9');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
     // Put the database back as P3-12 shipped it: tickets with no report phase, a version row of 9.
     const before = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
-      sql.exec('INSERT INTO run_ticket (hash, run_id, epoch, retired, expires_at, report_seq) VALUES (?, ?, ?, 0, 5, 3)', 'hash-1', 'run-1', 2);
+      sql.exec('INSERT INTO run_ticket (hash, run_id, attempt, retired, expires_at, report_seq) VALUES (?, ?, ?, 0, 5, 3)', 'hash-1', 'run-1', 2);
       undoV10(sql);
       sql.exec('UPDATE schema_version SET version = 9 WHERE id = 1');
       return sql.exec('SELECT hash, run_id, epoch, retired, expires_at, report_seq FROM run_ticket').toArray();
@@ -404,6 +429,52 @@ describe('person storage migration', () => {
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
     const after = await runInDurableObject(alex, (_instance, state) => state.storage.sql.exec('SELECT * FROM run_ticket').toArray());
-    expect(after).toEqual(before.map((t) => ({ ...t, report_phase: null })));
+    expect(after).toEqual(before.map(({ epoch, ...t }) => ({ ...t, attempt: epoch, report_phase: null })));
+  });
+
+  it('person storage migrates from v10 to v11 keeping every row', async () => {
+    expect(SCHEMA_VERSION).toBe(11);
+    const alex = personFor('sub-alex-v10');
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
+    expect(await alex.session('laptop', 'check', 0, 1_000)).toEqual({ active: true, epoch: 1 });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
+    if (!('run' in admitted)) throw new Error('not admitted');
+    const runId = admitted.run.id;
+    expect(await alex.mintTicket(runId, 2, Date.now())).not.toBeNull();
+    // Put the database back as P3-12 left it (a version row of 10, the ticket's attempt named epoch, the v1
+    // admission table and control columns), with values in the dead schema too.
+    const before = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      undoV11(sql);
+      sql.exec('UPDATE run_ticket SET report_seq = 3, report_phase = ?', 'reading');
+      sql.exec('INSERT INTO admission (id, active_run_id, request_id) VALUES (1, ?, ?)', 'run-old', 'req-old');
+      sql.exec('UPDATE control SET head = ?, claim = ?, epoch = 5 WHERE id = 1', 'head-1', 'claim-1');
+      sql.exec('UPDATE schema_version SET version = 10 WHERE id = 1');
+      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+    });
+    await evictDurableObject(alex);
+
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    const after = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      return {
+        rows: Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()])),
+        admission: sql.exec("SELECT name FROM sqlite_master WHERE name = 'admission'").toArray(),
+      };
+    });
+    // Every v10 row is there with its values: control keeps its status revision, and each ticket's epoch is its attempt.
+    expect(after.admission).toEqual([]);
+    expect(after.rows).toEqual({
+      ...before,
+      schema_version: [{ id: 1, version: SCHEMA_VERSION }],
+      control: keptControl(before.control),
+      run_ticket: (before.run_ticket ?? []).map(({ epoch, ...t }) => ({ ...t, attempt: epoch })),
+    });
+    expect(after.rows.run_ticket).toMatchObject([{ run_id: runId, attempt: 2, retired: 0, report_seq: 3, report_phase: 'reading' }]);
+    // The kept ticket still fences the run: attempt 2 is held, so a mint for it or an earlier one is refused.
+    expect(await alex.mintTicket(runId, 2, Date.now())).toBeNull();
+    expect(await alex.mintTicket(runId, 3, Date.now())).not.toBeNull();
+    expect((await alex.runStatus(Date.now())).revision).toBe(before.control?.[0]?.status_revision);
   });
 });
