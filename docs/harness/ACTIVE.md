@@ -164,3 +164,4 @@ P3-9 is closed.
 - c04-incorporation closed (3453ce9; unpdf 1.8.1). runner-checkpoint-cost re-closed after the verify-name fix (59fc380). 356/356. P4-3 close: Opus delta and the four suites.
 - P4-3 review BLOCK (claude.ts cache_read_input_tokens renamed; the timing undercounts). c04-incorporation reopened (509f1f9); fix round with the same worker plus 5 minors (cite freeName, size before read, link checks plus data-not-instructions, checksum-mismatch test, actions/cache v6.1.0). 355/356.
 - P4-3 fix-round check PASS (3 minors to polish). Waiting for the suites at 8808970, then main, deploy, and the live C04 runs (3 or more per case).
+- P4-3 suites at fe61665: check 3608/176/87, e2e 226, e2e:fake 250, e2e:pwa 4. P4-3 ready to deploy.
