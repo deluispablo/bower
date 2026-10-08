@@ -4,10 +4,23 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
 import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
+import { QUEUED_STALE_MS } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
+import { farAhead, inWindow } from './time.js';
 
 const people = (env as Pick<Env, 'PERSON'>).PERSON;
 const personFor = (sub: string) => people.get(people.idFromName(sub));
+
+/**
+ * The going run's deadline after a migration from before v12. The migration arms it at the wall clock and the object's
+ * real alarm may already have moved it to the run's own stale deadline: both are correct, so a test asserts the window
+ * [read before the migration, `admittedAt` + the stale time], never one instant (docs/harness/defects/2026-10-08-deadlines-test-flake.md).
+ */
+async function expectRunDeadlineInWindow(alex: ReturnType<typeof personFor>, before: number, admittedAt: number): Promise<void> {
+  const rows = await runInDurableObject(alex, (_i, state) => state.storage.sql.exec<{ at: number }>("SELECT at FROM deadlines WHERE kind = 'run'").toArray());
+  expect(rows).toHaveLength(1);
+  inWindow(rows[0]?.at, before, admittedAt + QUEUED_STALE_MS);
+}
 
 /**
  * Takes back schema step 11 (the dead schema it dropped, and the ticket's attempt named epoch again), for the tests
@@ -357,15 +370,17 @@ describe('person storage migration', () => {
     expect(after.runs).toEqual([]);
     // The status revision carries on from the kept control row.
     expect((await alex.runStatus(2_000)).revision).toBe(4);
-    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: 2_000, dailyLimit: 100, manifest: MANIFEST });
+    // Admitted far ahead: its stale deadline is not due, so the real alarm never looks the run up on GitHub.
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: farAhead(), dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true, revision: 5 });
     expect(await alex.holdsLease('laptop', 1)).toBe(true);
   });
 
   it('person storage migrates from v7 to v8 keeping every row', async () => {
     const alex = personFor('sub-alex-v7');
+    const t0 = farAhead();
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true });
     // Put the database back as P3-8 shipped it: no ticket columns, a version row of 7, a v1 ticket row.
     const before = await runInDurableObject(alex, (_instance, state) => {
@@ -377,7 +392,9 @@ describe('person storage migration', () => {
     });
     await evictDurableObject(alex);
 
+    const readAt = Date.now();
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    await expectRunDeadlineInWindow(alex, readAt, t0);
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
       return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
@@ -398,8 +415,9 @@ describe('person storage migration', () => {
 
   it('person storage migrates from v8 to v9 keeping every run', async () => {
     const alex = personFor('sub-alex-v8');
+    const t0 = farAhead();
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true });
     // Put the database back as P3-9 shipped it: runs with no manifest column, a version row of 8.
     const before = await runInDurableObject(alex, (_instance, state) => {
@@ -410,7 +428,9 @@ describe('person storage migration', () => {
     });
     await evictDurableObject(alex);
 
+    const readAt = Date.now();
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    await expectRunDeadlineInWindow(alex, readAt, t0);
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
       return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
@@ -447,10 +467,11 @@ describe('person storage migration', () => {
   it('person storage migrates from v10 to v11 keeping every row', async () => {
     expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(11);
     const alex = personFor('sub-alex-v10');
+    const t0 = farAhead();
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
     expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
     expect(await alex.session('laptop', 'check', 0, 1_000)).toEqual({ active: true, epoch: 1 });
-    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     if (!('run' in admitted)) throw new Error('not admitted');
     const runId = admitted.run.id;
     expect(await alex.mintTicket(runId, 2, Date.now())).not.toBeNull();
@@ -467,7 +488,9 @@ describe('person storage migration', () => {
     });
     await evictDurableObject(alex);
 
+    const readAt = Date.now();
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
+    await expectRunDeadlineInWindow(alex, readAt, t0);
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
       return {
