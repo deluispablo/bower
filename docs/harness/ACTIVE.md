@@ -291,3 +291,4 @@ P3-9 is closed.
 - TL-P4-10 addendum 2 (59c86ab): fallback-no-duplicate, duplicate-by-hash, home-inbox-first, c05-incorporation registered. duplicate-by-hash (escalated) and home-inbox-first (implementer) running. 387/394.
 - duplicate-by-hash closed (a6ee70d; escalated; red by hand at 6488613): content-hash duplicate goes to the Bin, 'already saved as'; app + runner deploy together. 388/394. fallback-no-duplicate (implementer) dispatched; P4-17 review of duplicate-by-hash after a slot frees.
 - fallback-no-duplicate closed (926e725). 389/394. P4-17 Opus check (duplicate-by-hash + fallback) running; home-inbox-first back to reproduce the live delay.
+- P4-17 check BLOCK (duplicate-by-hash): twin binned mid-run, changed inbox copy binned without check, pile words binned unreported. Reopened; fix round with the same escalated worker. fallback-no-duplicate passes. 388/394.

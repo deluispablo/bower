@@ -5167,7 +5167,7 @@
   {
     "task": "p4-c",
     "category": "fix",
-    "passes": true,
+    "passes": false,
     "id": "duplicate-by-hash",
     "what": "A thing with the same content hash as a file already filed goes to the Drive Bin and is reported \"already saved as <name>\", with no line and no note (local second-brain method).",
     "steps": [
@@ -5176,7 +5176,7 @@
       "Undo restores it from the Bin."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a thing whose content is already filed goes to the Bin as already saved|undo brings an already-saved thing back to the inbox\"",
-    "note": "TL-P4-10 addendum 2. Live 1_dTAZ on 924e6d6: the third offer upload added a confirmation line instead."
+    "note": "TL-P4-10 addendum 2. Live 1_dTAZ on 924e6d6: the third offer upload added a confirmation line instead. Reopened by P4-17 (BLOCK): a twin binned during the model call still bins the copy; an inbox copy changed during the run is binned with no time/md5 check; pile words with only a saved copy go to the Bin unreported."
   },
   {
     "task": "p4-b",
