@@ -43,6 +43,28 @@ function github(status: number | null = 204) {
   return { sent, fetchImpl };
 }
 
+/**
+ * Runs `work` with the backoff waits on fake timers: they are moved on at once, while the real clock keeps
+ * the rest of the request (Drive, the person object) going.
+ */
+async function withFastBackoff<T>(work: () => Promise<T>): Promise<T> {
+  const realSetTimeout = globalThis.setTimeout;
+  vi.useFakeTimers({ toFake: ['setTimeout'] });
+  try {
+    let settled = false;
+    const running = work().finally(() => {
+      settled = true;
+    });
+    for (let i = 0; i < 2000 && !settled; i += 1) {
+      await vi.advanceTimersByTimeAsync(500);
+      await new Promise((done) => realSetTimeout(done, 2));
+    }
+    return await running;
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 async function holder(): Promise<{ sub: string; cookie: string; fence: Record<string, string>; folder: DriveFolder }> {
   const sub = `dispatch-sub-${crypto.randomUUID()}`;
   await kv.put(allowKey('you@example.com'), '1');
@@ -149,7 +171,7 @@ describe('dispatch on admission', () => {
       for (const status of [500, null]) {
         const who = await holder();
         const gh = github(status);
-        const reply = await process(who, gh.fetchImpl, 'press-1');
+        const reply = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
         expect(gh.sent).toHaveLength(3);
         expect(reply.run?.phase).toBe('queued');
         expect(reply.revision).toBe(1);
@@ -256,7 +278,7 @@ describe('dispatch retries', () => {
       const who = await holder();
       const gh = github(null);
       const before = Date.now();
-      const { run } = await process(who, gh.fetchImpl, 'press-1');
+      const { run } = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
       const after = Date.now();
       expect(gh.sent).toHaveLength(3);
       const alarm = await runInDurableObject(person(who.sub), (_i, state) => state.storage.getAlarm());
@@ -282,7 +304,7 @@ describe('dispatch retries', () => {
     try {
       const who = await holder();
       const gh = github(null);
-      const { run } = await process(who, gh.fetchImpl, 'press-1');
+      const { run } = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
       const ticket = gh.sent[0]?.body.client_payload.ticket ?? '';
       const p = person(who.sub);
       const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
@@ -294,7 +316,7 @@ describe('dispatch retries', () => {
         await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
       });
       expect((await p.runStatus(alarm + 1)).run?.phase).toBe('reading');
-      expect(down.mock.calls.filter(([url]) => String(url).includes('/dispatches'))).toHaveLength(0);
+      expect(down).not.toHaveBeenCalled();
     } finally {
       log.mockRestore();
     }
@@ -304,7 +326,7 @@ describe('dispatch retries', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const who = await holder();
-      const { run } = await process(who, github(null).fetchImpl, 'press-1');
+      const { run } = await withFastBackoff(() => process(who, github(null).fetchImpl, 'press-1'));
       const p = person(who.sub);
       const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
       const down = (): Promise<Response> => Promise.resolve(new Response(null, { status: 502 }));
