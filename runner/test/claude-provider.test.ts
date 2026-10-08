@@ -133,6 +133,43 @@ describe('the Claude provider', () => {
     expect(prompt).not.toMatch(/the rules/);
   });
 
+  it('a new Area with no cited rule or note is refused and retried once', async () => {
+    const { wire } = await wired();
+    const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Areas/Community garden'; });
+    const replies = [newArea, recorded('reply-ok.json')];
+    const calls: ClaudeCall[] = [];
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: replies[calls.length - 1] ?? replies[1] ?? '' });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
+
+    // Asked once more, told why; the second reply passes and the run completes.
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.input).toContain('Areas/Community garden');
+    expect(calls[1]?.input).toMatch(/refused/);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
+    const folders = (await wire.drive.listAll(wire.folderId)).filter((f) => f.name === 'Community garden');
+    expect(folders).toEqual([]);
+  });
+
+  it('a second refusal ends the run honestly', async () => {
+    const { wire } = await wired();
+    const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Projects/Community garden'; });
+    const calls: ClaudeCall[] = [];
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: newArea });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const before = await wire.drive.listAll(wire.folderId);
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
+
+    // Two asks, never a third; the run ends failed saying nothing changed, with no fallback to Resources.
+    expect(calls).toHaveLength(2);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'failed']);
+    expect(wire.statuses.at(-1)?.failure).toBe(B_FAILURE);
+    expect(wire.requests.filter((r) => r.method !== 'GET')).toEqual([]);
+    expect(await wire.drive.listAll(wire.folderId)).toEqual(before);
+  });
+
   it('a recorded Claude reply becomes operations the spine validates', async () => {
     const { wire, admission } = await wired();
     const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
