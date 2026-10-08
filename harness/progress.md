@@ -154,3 +154,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: things-normalised passes — P4-11 fix round: made-up naming examples (no corpus answers), raw-name false positives fixed, money globs tightened, things sorted in prepared()
 - 2026-10-08: state-rewrite-change passes — a Bower-owned Current state is rewritten through stillAsSeen and the read modifiedTime, the manifest keeps the old text for undo; a person-edited section gets a Timeline line and a question
 - 2026-10-08: drive-calls-cut passes — C04 Drive calls 134 -> 72 (-46%); offer-and-flat modelled apply 13.4 -> 3.8 s; whole modelled run 19.6 -> 9.2 s; pool of 4 for reads, writes one at a time
+- 2026-10-08: state-rewrite-change passes — TL-P4-10: bowerMd5 on every Bower note write; an unmarked section adopted when md5Checksum matches, else a line and one question per folder; a yes rule adopts; undo keeps an empty section empty
