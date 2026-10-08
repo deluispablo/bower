@@ -102,3 +102,18 @@ Stages run in order: stage 0, then 1, 2, 3 and 4.
    - retries back off exponentially, up to 6 attempts, as [Cloudflare's own alarm retries](https://developers.cloudflare.com/durable-objects/api/alarms/) do;
    - after that, the deadline is marked failed and logged with `console.error`, and the run or ticket it belonged to ends honestly (`failed`, with its sentence);
    - test: a handler that always throws stops after 6 attempts, and its run ends failed.
+
+**Addendum 3, 2026-10-08: `safety-polish` dissolves into the entries that own each mechanism.** Every proposed item sits in a mechanism that a later stage rebuilds. Fixing them now would patch code that is about to be replaced, the pattern TL-P4-15 ends. Each item becomes a named acceptance test in its owner's packet, so nothing is lost:
+
+| Item | Goes to |
+| --- | --- |
+| words-only-pile-copy | `c4-run-view` (the pile and run words) |
+| A refused Bin closes the hash-keyed question (P4-17) | `c3-subject` |
+| KEEP_CHANGED says "both notes stay" after a move or Bin (P4-19b) | `c3-pair-ask` |
+| A failed start at run end is silent, and a retry still says "waits" (P4-20c) | `c2-worker-dispatch` |
+| TidyButton, StatusBar and Palette ignore `usePiles().error` | `c4-resource`, fixed by construction |
+| An answer line stays pending after its thing left (P4-15b) | `c3-subject` |
+| A landed move the person then purged is reported as set aside (P4-6) | `c2-one-engine` (read-back) |
+| The demo's start-fails scenario is ignored (P4-14) | `c4-resource` |
+
+`safety-polish` is closed as superseded, with this table as its note. Stage 1 ends with `c1-api-test-harness` and `verify-names-precheck`.

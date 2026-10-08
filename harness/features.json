@@ -5252,19 +5252,6 @@
     "note": "TL-P4-13 (main aea42fe). home-inbox-first left it: full read about 6 s, refresh drops reads."
   },
   {
-    "passes": false,
-    "id": "safety-polish",
-    "task": "p4-c",
-    "category": "fix",
-    "what": "The data-safety and honesty minors from P2_POLISH (P4 items only): a refused Bin keeps its hash question; KEEP_CHANGED wording when the other note moved or was binned; disagreeing answers by time; a held subject pile and the quota; other items the lead marks. Includes words-only-pile-copy (TL-P4-16): a pile left with only its words never says its things have not arrived.",
-    "steps": [
-      "List the P4 polish items that touch data or honesty, with the lead's selection.",
-      "Fix each with a test."
-    ],
-    "verify": "pnpm -C runner exec vitest run -t \"safety polish\"",
-    "note": "TL-P4-13 (main aea42fe)."
-  },
-  {
     "passes": true,
     "id": "corpus-grounded-scorer",
     "task": "p4-c",
@@ -5278,7 +5265,7 @@
     "note": "TL-P4-13 (main aea42fe)."
   },
   {
-    "passes": false,
+    "passes": true,
     "id": "verify-names-precheck",
     "task": "p4-a",
     "category": "fix",

@@ -1,5 +1,6 @@
 /// <reference types="node" />
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -195,5 +196,29 @@ describe('the harness', () => {
     expect(check('pnpm --dir runner exec vitest run test/fence.test.ts -t "fence refuses a stale write"')).toEqual([]);
     expect(check('pnpm -C runner exec vitest run -t "a title that is gone"')).toContainEqual(expect.stringMatching(/a title that is gone.*matches no test/));
     expect(check('pnpm vitest run src -t "fence refuses a stale write"')).toContainEqual(expect.stringMatching(/matches no test/));
+  });
+  it('a verify naming no test is refused before merge', () => {
+    // scripts/precheck-verify.mjs, fed the test names that exist (as the report of a vitest run lists them).
+    const dir = mkdtempSync(join(tmpdir(), 'harness-precheck-'));
+    const t = (name: string, file: string, config: string) => ({ name, file, config, project: '' });
+    const tests = { unit: [t('a src test that exists', 'src/a.test.ts', 'vite.config.ts')], api: [], runner: [t('a runner test that exists', 'runner/test/a.test.ts', 'runner/vitest.config.ts')], e2e: [] };
+    const entry = (id: string, verify: string): Entry => ({ id, task: 'p4-a', steps: S, verify, passes: false });
+    const features = [
+      entry('good-entry', 'pnpm vitest run -t "a src test that exists" && pnpm -C runner exec vitest run -t "a runner test that exists"'),
+      entry('missing-entry', 'pnpm vitest run -t "a test nobody wrote"'),
+      entry('wrong-package-entry', 'pnpm -C runner exec vitest run -t "a src test that exists"'),
+    ];
+    writeFileSync(join(dir, 'features.json'), JSON.stringify(features));
+    writeFileSync(join(dir, 'tests.json'), JSON.stringify(tests));
+    const run = (...ids: string[]) => spawnSync('node', ['scripts/precheck-verify.mjs', '--features', join(dir, 'features.json'), '--tests', join(dir, 'tests.json'), ...ids], { encoding: 'utf8' });
+    const all = run();
+    expect(all.status).toBe(1);
+    expect(all.stderr).toContain('missing-entry');
+    expect(all.stderr).toContain('a test nobody wrote');
+    expect(all.stderr).toContain('wrong-package-entry');
+    expect(all.stderr).toContain('a src test that exists');
+    expect(all.stderr).not.toContain('good-entry');
+    expect(run('good-entry').status).toBe(0);
+    expect(run('missing-entry').status).toBe(1);
   });
 });

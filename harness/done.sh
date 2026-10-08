@@ -5,6 +5,7 @@
 #     entry's verify must FAIL; when the fix is committed already, --fixed-in
 #     <sha> puts that commit's code back as it was and expects the same red;
 #     --known-green "<why>" (only for an entry with a note) skips the red;
+#  2b. before the red, scripts/precheck-verify.mjs: every test the verify names exists where its command looks;
 #  3. `pnpm check` passes, and the verify passes and runs at least one test;
 #  4. then `passes` flips (only staged changes and harness/ are committed), a proof line is written (harness/proof.log, checked
 #     by scripts/check-harness.mjs), progress.md gets a line, and it commits.
@@ -44,7 +45,8 @@ others=$(node --input-type=module -e '
   console.log(othersFlipped(before, now, process.argv[1]).join(" "));' "$id")
 [ -n "$others" ] && { echo "Other entries changed passes in this change: $others. One entry per commit."; exit 1; }
 
-# 2. Red before green.
+# 2. Red before green. First, every test the verify names must exist where its command looks (right package, file, name).
+node scripts/precheck-verify.mjs "$id" || { echo "$id stays open: fix the verify's test names first"; exit 1; }
 # Changed or new code (tests and the harness's own records stay): the change being proved.
 # The selection (paths and test exclusions) lives in scripts/harness-git.mjs, where it is tested.
 cp scripts/harness-git.mjs "$(dirname "$HARNESS_RULES")/harness-git.mjs"
