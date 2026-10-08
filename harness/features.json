@@ -4962,13 +4962,15 @@
     "id": "ask-answer-loop",
     "task": "p4-c",
     "category": "feature",
-    "what": "An answer to an asks question reaches the next run, which files the thing as answered (C11).",
+    "what": "An answer applies at once (owner choice A): stored with its question idempotently; admission takes a run scoped to its subject (thing, pile or notes) with the question and answer in the manifest for the model; it counts in the daily quota; during an active run it waits for the next run; a no or a no-change choice closes the question with no run.",
     "steps": [
-      "The answer is part of the model input for that thing.",
-      "The thing is filed per the answer and the question closes."
+      "Store the answer with its question, idempotently.",
+      "Admission: a run scoped to the subject, question and answer in the manifest for the model.",
+      "Counts in the daily quota; waits for the next run while one is active.",
+      "A no or no-change choice closes the question with no run."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"an answered question files its thing on the next run\"",
-    "note": "TL-P4-08 addendum (main c85da86) point 4: C11 slice."
+    "verify": "pnpm -C runner exec vitest run -t \"a yes to keep one note starts a scoped run that merges|answering twice starts one run|an answer during a run is applied by the next|a no closes the question with no run\"",
+    "note": "TL-P4-08 addendum (main c85da86) point 4: C11 slice. TL-P4-08 addendum 8 (main 5de7297): moved into C05; owner chose immediate application."
   },
   {
     "id": "document-note-required",
