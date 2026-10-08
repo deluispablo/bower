@@ -53,7 +53,7 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
    - Was: the listing note "keeps the address". Now: only when the link's prepared text has one (the link has none today;
      C15 checks it again). `expected.json` never pinned the address.
    - Was: the payslip at `Areas/Money/Payslips/Payslip August (2).pdf`. Now: any Area named for money, pay or finance.
-     `expected.json`: placement `Areas/*oney*`, `Areas/Pay*`, `Areas/*inance*`, `Areas/*ax*`, `Areas/*alary*`, `Areas/*ncome*`;
+     `expected.json`: placement `Areas/*oney*`, `Areas/Pay*`, `Areas/*inance*` only (the tax, salary and income globs were dropped in the P4-11 fix round: they went beyond "money, pay or finance");
      the offer stays under `Projects/Job hunt`, the photo under `Projects/Flat hunt`.
    - Also: exact file names, exact Timeline texts and the exact `created`/`updated` lists were the scripted run's choices, not
      the rubric's; they became patterns and minimums (`timelineMin` 2 on both hubs, `createdAtLeast` 2, `updatedAtLeast` 2).
