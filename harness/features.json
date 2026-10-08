@@ -4788,7 +4788,7 @@
       "Report barrier order unchanged; fewer calls."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"plan reads finish under the budget with modelled Drive latency|the report keeps its barrier order in fewer calls\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-05, after checkpoint-per-batch."
   },
   {
