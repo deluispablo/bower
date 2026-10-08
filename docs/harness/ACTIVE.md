@@ -259,3 +259,4 @@ P3-9 is closed.
   - running: `drive-calls-cut` fix round (bower-implementer, worktree /private/tmp/bower-p4-dcut2, branch claude/p4-dcut2, verify gained "a person change between the check and the send is refused");
   - main holds the first round, so don't deploy it until the fix closes. 380/383 counts drive-calls-cut as open (379 passing).
   - Next: a check of the fix, the four suites, main, the SHA, then live offer-and-flat ×3 + garden ×1 + a C05 case.
+- drive-calls-cut re-closed (ee1f639): fresh fence read before every send; 134 -> 80 calls (-40.3%); modelled apply 13.4 -> 4.7 s. 380/383. Fix-round check and suites running.
