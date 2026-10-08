@@ -336,3 +336,4 @@ P3-9 is closed.
 - TL-P4-14 addendum 2 (dbf3b49): 429-before-409 accepted; c1-worker-deadlines reopened for backoff (6 attempts, then failed honestly); fix round queued after c1-worker-routes (both in api/src). 403/415.
 - c1-still-as-seen closed (12c7b0c4; removed 63; rows added by me). P4-23 review (escalated) running; c1-worker-routes running; deadlines fix round queued. 404/415.
 - P4-23 PASS (c1-still-as-seen; minors to polish). c1-duplication-gate (mechanical) dispatched; c1-worker-routes running.
+- c1-worker-routes closed (047d6ad0; removed 137). 405/415. c1-worker-deadlines fix round (escalated, fresh) dispatched; c1-duplication-gate running.
