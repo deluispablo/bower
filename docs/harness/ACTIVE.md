@@ -207,3 +207,4 @@ P3-9 is closed.
 - Main and backup at cd3af43. Deploy SHA sent to the lead; 5 C04 runs to follow when Claude is on.
 - C04 x5 on cd3af43: 4/5 PASS (run 2 Areas). press→done 0:50–0:59 (1:46 with a runner wait). checkpoints now 4 per run. input= differs per run (raw input carries fresh file ids); asked the lead about hashing the normalised input.
 - TL-P4-07 addendum 2 (c924560): 4/5 isn't the bar. Entries placement-check (implementer), fingerprint-normalised (after it), drive-calls-golden (mechanical). 368/372.
+- placement-check closed (e0d8f56). Lead asked to confirm two worker choices: Rules.md shown to the model; c04-offer-and-flat fixture gained a payslip rule. fingerprint-normalised running (mechanical). 369/372.
