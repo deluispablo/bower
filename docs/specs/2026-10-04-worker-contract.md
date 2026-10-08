@@ -109,6 +109,10 @@ This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runn
   - The status revision rises only when the run a person sees changes: its phase, `total` or `failure` (and so its `finishedAt`). A report that shows nothing new, or is only recorded, answers the same revision.
   - `total` is the number of things (pile members) the run takes, on every report, in `last-run.json` and for a resumed attempt; your changes are not counted in it ([TL-P3-25](../harness/2026-10-07-tl-p3-25-pile-notes-and-the-last-p3-e-entries.md) point 3).
   - A run whose admitted piles are all held when the runner reads them (a pile changed after admission) ends `done` with nothing filed; its report says nothing was ready yet (`nothingReady`) and every admitted item's disposition is `waiting`. It is never `failed` (TL-P3-25 point 2).
+- **Attempt ended** ([TL-P4-16 addendum 4](../harness/DECISIONS.md)): the same route takes `{ attempt, ended: true }` (no `seq`, no phase; `src/data/contracts/attempt-ended.ts`) → `{ run, revision }`, nothing a person sees changed.
+  - The runner sends it last when its attempt stops with no `done` or `failed` taken: left in `saving`, its chain unread, a report not taken, or any error nobody caught. Not after `stale-attempt`, a refused ticket, or a run the Worker already holds ended.
+  - The Worker looks at the run 60 s later (the run's deadline, through the same early look as a lost dispatch) instead of at its stale deadline; recovery then decides as below. A run already ended answers its state and arms nothing; an older attempt is 409 `stale-attempt`.
+  - Additive: a Worker from before it answers 415, and the run waits for its stale deadline as before. A job that Actions kills sends nothing and is caught only by that deadline.
 - **Runner errors** use the same JSON shape:
   - 401 `signed-out` for a missing, wrong or expired ticket;
   - 409 `stale-attempt` "This tidy-up was taken over." for an attempt that is no longer current;

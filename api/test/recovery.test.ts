@@ -10,6 +10,7 @@ import { unrecoveredCeiling } from '../src/recovery.js';
 import type { RunReply } from '../src/process.js';
 import { hashTicket } from '../src/run-ticket.js';
 import { MANIFEST } from './drive-v3.js';
+import { inWindow } from './time.js';
 
 const env = testEnv as unknown as Env;
 const API = 'https://api.example.com';
@@ -256,6 +257,63 @@ describe('stale run recovery', () => {
     await recover(sub, now + 2 * QUEUED_STALE_MS, gh.access);
     expect(lookups(gh.sent)).toHaveLength(1);
     expect(await status(sub, now + 2 * QUEUED_STALE_MS)).toEqual(after);
+    expect(await alarmOf(sub)).toBeNull();
+    expectNoSecretLogged(ticket, second);
+  });
+
+  it('an attempt ended report arms the run deadline at +60 s and the alarm redispatches', async () => {
+    // Actions 37843268864: attempt 1 stopped before any report (queued, status=0); it says it ended.
+    const { sub, runId, ticket, t0 } = await aRun();
+    const before = await status(sub, t0);
+    const sentAt = Date.now();
+    const ended = await report(runId, ticket, { attempt: 1, ended: true });
+    const tookAt = Date.now();
+    expect(ended.status).toBe(200);
+    expect(((await ended.json()) as RunReply).run).toMatchObject({ id: runId, phase: 'queued' });
+    // Nothing a person sees changes; the alarm looks in a minute, not at the queued deadline (17 min).
+    expect(await status(sub, tookAt)).toEqual(before);
+    const alarm = (await alarmOf(sub)) ?? undefined;
+    inWindow(alarm, sentAt + MINUTE, tookAt + MINUTE);
+    const at = alarm ?? 0;
+    expect(at - t0).toBeLessThan(2 * MINUTE);
+    const gh = github({
+      runs: [
+        { id: 61, display_title: `tidy ${runId} 1` },
+        { id: 62, display_title: `tidy ${runId} 2` },
+      ],
+      jobs: {
+        61: [{ id: 6, status: 'completed', started_at: iso(t0), completed_at: iso(t0 + 30_000) }],
+        62: [{ id: 7, status: 'completed', started_at: iso(at + MINUTE), completed_at: iso(at + 3 * MINUTE) }],
+      },
+    });
+    await recover(sub, at, gh.access);
+    // The job finished with no report: redispatched as attempt 2, which owns the run from now.
+    const sent = dispatches(gh.sent);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.payload).toMatchObject({ run_id: runId, attempt: 2 });
+    const second = sent[0]?.payload?.ticket ?? '';
+    expect(await alarmOf(sub)).toBe(at + QUEUED_STALE_MS);
+    const late = await report(runId, ticket, { attempt: 1, ended: true });
+    expect(late.status).toBe(409);
+    expect(((await late.json()) as { error: { code: string } }).error.code).toBe('stale-attempt');
+    expect(await alarmOf(sub)).toBe(at + QUEUED_STALE_MS);
+
+    // Attempt 2 is left in saving and says it ended: no attempt 3, the run ends saying the changes were made.
+    const saving = await report(runId, second, { attempt: 2, seq: 1, phase: 'saving' });
+    expect(saving.status).toBe(200);
+    const again = await report(runId, second, { attempt: 2, ended: true });
+    expect(again.status).toBe(200);
+    const next = (await alarmOf(sub)) ?? 0;
+    inWindow(next, tookAt + MINUTE, Date.now() + MINUTE);
+    await recover(sub, next, gh.access);
+    expect(dispatches(gh.sent)).toHaveLength(1);
+    const after = await status(sub, next);
+    expect(after.run).toMatchObject({ id: runId, phase: 'failed', failure: SAVING_FAILURE });
+    expect(await alarmOf(sub)).toBeNull();
+    // Once ended, the report answers the run as it is and arms nothing.
+    const done = await report(runId, second, { attempt: 2, ended: true });
+    expect(done.status).toBe(200);
+    expect(((await done.json()) as RunReply).run).toMatchObject({ id: runId, phase: 'failed' });
     expect(await alarmOf(sub)).toBeNull();
     expectNoSecretLogged(ticket, second);
   });
