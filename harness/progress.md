@@ -129,3 +129,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: runner-stops-when-gone passes — The token route also answers gone on revoked or unreadable access; a wrong ticket after Delete me still gets 401 (P4-5 review)
 - 2026-10-08: runner-reads-and-report passes — plan reads 4150→1750 ms (25→17 reads), report 62→24 calls in barrier order; plan byte-equal on 29 corpus cases
 - 2026-10-08: checkpoint-per-batch passes — one opening and one closing checkpoint per batch, bowerOp stamp (32 hex of sha256) reconciled; modelled C04 37.9 → 19.6 s with reads-and-report
+- 2026-10-08: gone-ticket-rows-expire passes — after Delete me a gone row holds only hash, expiry and attempt; an alarm at the earliest expiry prunes them; valid ticket 410, wrong 401
