@@ -17,12 +17,17 @@ export function readProofs(text) {
   return out;
 }
 
+/** The tests a vitest JSON report lists (a run's test-results/unit.json, or a dry run's), with the config they ran under. */
+export function reportTests(report, config, cwd = process.cwd()) {
+  return report.testResults.flatMap((r) =>
+    r.assertionResults.map((a) => ({ name: a.fullName, file: relative(cwd, r.name).replaceAll('\\', '/'), config, project: r.projectName ?? '' })));
+}
+
 /** A package's unit tests, from the JSON report its vitest run writes (<dir>/test-results/unit.json, see <dir>/vitest.config.ts). */
 function packageTests(dir, root, cwd) {
   const file = join(root, `${dir}/test-results/unit.json`);
   if (!existsSync(file)) return [];
-  return JSON.parse(readFileSync(file, 'utf8')).testResults.flatMap((r) =>
-    r.assertionResults.map((a) => ({ name: a.fullName, file: relative(cwd, r.name).replaceAll('\\', '/'), config: `${dir}/vitest.config.ts`, project: r.projectName ?? '' })));
+  return reportTests(JSON.parse(readFileSync(file, 'utf8')), `${dir}/vitest.config.ts`, cwd);
 }
 
 /** The api's unit tests (api/test-results/unit.json). */
@@ -35,12 +40,15 @@ export function runnerTests(root, cwd = process.cwd()) {
   return packageTests('runner', root, cwd);
 }
 
+/** A command that runs the browser tests: playwright, e2e-both.sh, or the pnpm e2e scripts. */
+const isE2e = (part) => /playwright test|e2e-both|\bpnpm\s+e2e(:\w+)?(\s|$)/.test(part);
+
 /** The test patterns a verify names: vitest -t "…" and playwright -g "…"; `pnpm -C api …` and `pnpm -C runner …` run those packages' own tests. */
 function patterns(part) {
-  const m = / -(t|g) "([^"]*)"/.exec(part);
+  const m = /(?: -| --)(t|g|grep|testNamePattern)(?: |=)"([^"]*)"/.exec(part);
   if (!m) return null;
   const pkg = /\bpnpm\s+(-C|--dir)\s+(api|runner)\b/.exec(part)?.[2];
-  const kind = m[1] === 'g' ? 'e2e' : (pkg ?? 'unit');
+  const kind = m[1] === 'g' || m[1] === 'grep' || isE2e(part) ? 'e2e' : (pkg ?? 'unit');
   return { kind, pattern: m[2] };
 }
 
@@ -66,7 +74,7 @@ function topLevelParts(pattern) {
 /** The files/config/projects a named verify actually selects, before its name filter. */
 function selectedTests(command, kind, tests) {
   const words = [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
-  const start = kind !== 'e2e' ? words.indexOf('run') : words.findIndex((w) => w.endsWith('e2e-both.sh'));
+  const start = kind !== 'e2e' ? words.indexOf('run') : words.findIndex((w) => w.endsWith('e2e-both.sh') || w === 'e2e' || w.startsWith('e2e:'));
   const at = start >= 0 ? start : words.indexOf('test');
   const filters = [];
   const projects = [];
@@ -106,7 +114,7 @@ function selectedTests(command, kind, tests) {
 /** The hash of harness/proof-legacy.txt: the entries proved before the proof rule. Frozen; growing it means changing this line. */
 export const LEGACY_HASH = '837283d24771c394';
 
-export function problems(features, proofs, tests, legacy = new Set()) {
+export function problems(features, proofs, tests, legacy = new Set(), checkOpen = false) {
   const bad = [];
   for (const f of features) {
     const proof = proofs.get(f.id);
@@ -115,7 +123,7 @@ export function problems(features, proofs, tests, legacy = new Set()) {
     if (typeof f.task !== 'string') continue;
     if (!Array.isArray(f.steps) || !f.steps.some((x) => typeof x === 'string' && x.trim())) bad.push(`${f.id}: no steps (how a person sees it, for an evaluator to replay)`);
     for (const p of f.verify.split('&&').map((x) => x.trim())) {
-      const named = /vitest run|playwright test|e2e-both/.test(p);
+      const named = /vitest run|playwright test|e2e-both/.test(p) || (isE2e(p) && patterns(p) !== null);
       if (!named) continue;
       const pat = patterns(p);
       if (!pat) {
@@ -126,7 +134,7 @@ export function problems(features, proofs, tests, legacy = new Set()) {
         bad.push(`${f.id}: pattern "${pat.pattern}" is too short to name a test`);
         continue;
       }
-      if (tests && f.passes) {
+      if (tests && (f.passes || checkOpen)) {
         const selected = selectedTests(p, pat.kind, tests[pat.kind] ?? []);
         // Each name the pattern lists (a|b|c at the top level) must match a test of its own.
         for (const part of topLevelParts(pat.pattern)) {
