@@ -4790,5 +4790,19 @@
     "verify": "pnpm -C runner exec vitest run -t \"plan reads finish under the budget with modelled Drive latency|the report keeps its barrier order in fewer calls\"",
     "passes": false,
     "note": "TL-P4-05, after checkpoint-per-batch."
+  },
+  {
+    "id": "gone-ticket-rows-expire",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "After Delete me the person object keeps, per live runner ticket, only its SHA-256 hash, expiry and attempt number (no run id, token, folder or name), and prunes them by an alarm at expiry, so an hour after Delete me no row is left; a valid ticket gets gone, a wrong one 401.",
+    "steps": [
+      "Kept rows hold hash, expiry and attempt only.",
+      "An alarm (or the next access) prunes expired rows; after the last expiry nothing is kept.",
+      "Tests: valid ticket gone, wrong 401, after expiry no rows."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"after delete me a valid ticket gets gone and a wrong one 401|after the last ticket expires no gone row is kept|a gone row holds only the hash, expiry and attempt\"",
+    "passes": false,
+    "note": "TL-P4-04 addendum 2 (a5aba50); e51d469 keeps {runId, hash, expiresAt} in KV and prunes only on the next write."
   }
 ]

@@ -182,3 +182,4 @@ P3-9 is closed.
 - TL-P4-05 addendum (9a12727): checkpoint-per-batch takes option (b), a bowerOp stamp on every effect; the test changes are allowed with reasons. Resumes when a slot frees.
 - runner-stops-when-gone re-closed (e51d469). Delete me now keeps live ticket hashes up to 1 h, so a wrong ticket still gets 401 (the lead to confirm). checkpoint-per-batch resumed with option (b). 362/364.
 - TL-P4-06 merged (the after-compact hook). HANDOFF updated for a compaction. Merged P4 worktrees removed; open: bower-p4-ckbatch, bower-p4-readsreport.
+- TL-P4-04 addendum 2 (a5aba50): e51d469 keeps {runId, hash, expiresAt} and prunes only on the next write. New entry gone-ticket-rows-expire (implementer) queued for the next free slot. 362/365.
