@@ -317,3 +317,4 @@ P3-9 is closed.
 - TL-P4-14 (2b7a6bb): consolidation before C06; stage 0: suites and SHA for the C05 live baseline. Nothing else starts. Also closed before the stop: home-cache-stable, corpus-grounded-scorer. 397/402.
 - TL-P4-15 (19907d0) merged (b74f56a): defect workflow (DEFECTS.md); coordinator logs and dispatches bower-diagnoser, never designs fixes; packets cite the mechanism map. Stage 0 suites running.
 - Stage 0 suites at e97c6ff (+ docs-only TL-P4-15 merge): check 192 runner, harness 397/402; e2e 226; e2e:fake 256; pwa 4. Main moves.
+- 45e9742 C05 baseline: duplicate PASS (9Mss5enq, 75 s); hub PASS (lU3LqBFF, 89 s); Write it FAIL (YLqjlTI2 re-asked, write-it-again, diagnosed); keep-one FAIL (u_-aHtHz no merge question, diagnosing); Home empty Inbox 48 s / 126 calls FAIL (home-empty-48s, diagnosed). Undo outside the probe folder and hand-written questions.json wait for the owner's own yes in this chat.
