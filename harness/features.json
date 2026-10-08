@@ -5514,7 +5514,7 @@
       "Named tests for the six sites in the smoke-runner-offline note (drive-http.ts:374,292; runner drive.ts:451,508; token.ts:105; status.ts:94).",
       "Remove the dependency-rules exceptions it owns."
     ],
-    "verify": "pnpm vitest run -t \"one Drive transport retries a stalled read inside its budget|a runner Drive error is never called offline\"",
+    "verify": "pnpm vitest run -t \"one Drive transport retries a stalled read inside its budget|a runner Drive error is never called offline|a 4 MiB upload on a slow link is not cut at 60 s\" && pnpm -C api exec vitest run -t \"a repair PATCH that landed and answered 503 is not sent again\"",
     "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-offline (TL-P4-16 addendum 4). Reopened by P4-25 (BLOCK): the 60 s total budget cuts slow uploads (a 4 MiB upload answered at 90 s gives offline); the Worker Rules repair PATCH is resent on 5xx without a modifiedTime check and can overwrite a newer edit."
   },
   {
