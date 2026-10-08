@@ -5507,7 +5507,7 @@
     "id": "c2-drive-transport",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One Drive transport for app, runner and Worker: token refresh, one retry policy (a timeout per attempt, idempotent GETs retried with backoff inside a total budget, errors mapped by context; outside a browser never offline), error mapping, one wire type and field list. DriveHttp builds on it; RunnerDrive keeps only the fence and the attempt check; the Worker's vault.ts client goes. FencedDrive and StoredEvidence move into drive-api.ts.",
     "steps": [
       "One transport; retry policy per TL-P4-16 addendum 4.",
