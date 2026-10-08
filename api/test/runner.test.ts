@@ -209,6 +209,39 @@ describe('runner wire', () => {
     expect(await code(report)).toBe('signed-out');
   });
 
+  it('the attempt route answers from the person object alone', async () => {
+    const { sub, runner } = await aRun();
+    // The kept Drive token has expired, so the token route would ask Google; the attempt route must not.
+    await person(sub).cacheDriveToken({ accessToken: 'access-old', expiresAt: Date.now() - HOUR });
+    let google = 0;
+    const fetchImpl: typeof fetch = async () => {
+      google++;
+      return new Response('{}', { status: 500 });
+    };
+    const attempt = async (ticket: string | null): Promise<Response> => {
+      const headers: Record<string, string> = ticket === null ? {} : { authorization: `Bearer ${ticket}` };
+      return await createApp({ fetchImpl }).request(`${API}/runner/runs/${runner.runId}/attempt`, { headers }, env);
+    };
+    const first = runner.ticket;
+    const ok = await attempt(first);
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ attempt: 1 });
+    // A missing or wrong ticket is signed out, as on the token route.
+    for (const ticket of [null, 'not-the-ticket', 'A'.repeat(43)]) {
+      const refused = await attempt(ticket);
+      expect(refused.status).toBe(401);
+      expect(await code(refused)).toBe('signed-out');
+    }
+    // A newer attempt: the older ticket answers 409 stale-attempt, the new one names its attempt.
+    const second = await person(sub).mintTicket(runner.runId, 2, Date.now());
+    if (second === null) throw new Error('no ticket');
+    const stale = await attempt(first);
+    expect(stale.status).toBe(409);
+    expect(await code(stale)).toBe('stale-attempt');
+    expect(await (await attempt(second)).json()).toEqual({ attempt: 2 });
+    expect(google).toBe(0);
+  });
+
   it('a resent final report answers the current state', async () => {
     const { runner } = await aRun();
     await reply(await runner.report({ attempt: 1, seq: 1, phase: 'reading', total: 1 }));

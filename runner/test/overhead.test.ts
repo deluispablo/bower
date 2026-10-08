@@ -13,7 +13,7 @@ const WORKER_MS = 80;
 const BUDGET_MS = 60_000;
 
 interface Call {
-  kind: 'token' | 'status' | 'read' | 'write';
+  kind: 'token' | 'attempt' | 'status' | 'read' | 'write';
   method: string;
   path: string;
   /** The run's modelled clock when the call was made, in ms. */
@@ -38,7 +38,7 @@ async function modelled(): Promise<{ calls: Call[]; ms: number; code: number }> 
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const method = (init?.method ?? 'GET').toUpperCase();
     const worker = url.origin === API;
-    const kind = worker ? (url.pathname.endsWith('/token') ? 'token' : 'status') : method === 'GET' ? 'read' : 'write';
+    const kind = worker ? (url.pathname.endsWith('/token') ? 'token' : url.pathname.endsWith('/attempt') ? 'attempt' : 'status') : method === 'GET' ? 'read' : 'write';
     calls.push({ kind, method, path: `${url.pathname}${url.search}`, at: clock });
     await new Promise<void>((wake) => due.push({ at: clock + (worker ? WORKER_MS : DRIVE_MS), wake }));
     return inner(input, init);
@@ -72,7 +72,7 @@ describe('the runner overhead', () => {
   it('a scripted run with modelled Drive latency finishes under the runner budget', async () => {
     const { calls, ms, code } = await modelled();
     const count = (k: Call['kind']): number => calls.filter((x) => x.kind === k).length;
-    console.log(`overhead: modelled=${ms}ms token=${count('token')} status=${count('status')} reads=${count('read')} writes=${count('write')}`);
+    console.log(`overhead: modelled=${ms}ms token=${count('token')} attempt=${count('attempt')} status=${count('status')} reads=${count('read')} writes=${count('write')}`);
     expect(code).toBe(0);
     expect(ms).toBeLessThan(BUDGET_MS);
   });
@@ -80,12 +80,12 @@ describe('the runner overhead', () => {
   it('the runner overhead cuts keep recovery and ordered status', async () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
-    // The attempt fence: each write (one fenced write may be a few requests in a row) is preceded by the token route,
+    // The attempt fence: each write (one fenced write may be a few requests in a row) is preceded by the attempt route,
     // and by a read of its target after that.
     const fences: Array<{ at: number; fenceBeforeWrite: boolean; targetRead: boolean }> = [];
     calls.forEach((x, i) => {
       if (x.kind !== 'write' || calls[i - 1]?.kind === 'write') return;
-      const lastToken = calls.slice(0, i).map((y) => y.kind).lastIndexOf('token');
+      const lastToken = calls.slice(0, i).map((y) => y.kind).lastIndexOf('attempt');
       fences.push({ at: i, fenceBeforeWrite: lastToken >= 0, targetRead: calls.slice(lastToken + 1, i).some((y) => y.kind === 'read') });
     });
     expect(fences.length).toBeGreaterThan(0);

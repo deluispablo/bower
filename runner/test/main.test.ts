@@ -128,7 +128,7 @@ describe('the runner process', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const refused = await wired();
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), BOWER_PROVIDER: 'model' }, { fetch: refused.wire.fetch })).toBe(1);
-    expect(refused.wire.tokenCalls + refused.wire.requests.length).toBe(0);
+    expect(refused.wire.tokenCalls + refused.wire.attemptCalls + refused.wire.requests.length).toBe(0);
     expect(errors.mock.calls.flat().map(String).join('\n')).toMatch(/model.*scripted|scripted.*model/);
     errors.mockRestore();
 
