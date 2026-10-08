@@ -245,7 +245,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
    * 20 keys (an `appProperties has` for each), with Drive's own checksums. A file Drive keeps no checksum of is listed
    * with a null size and hash.
    */
-  async binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]> {
+  async binnedByItem(rootId: string, keys: readonly string[], beforeGet?: () => void): Promise<BinnedItem[]> {
     if (!keys.length) return [];
     const inside = new Set(this.known.get(rootId) ?? (await this.listAll(rootId)).map((f) => f.id)).add(rootId);
     const hits = new Map<string, BinnedItem>();
@@ -258,6 +258,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
       let known = placed.get(id);
       if (!known) {
         known = (async () => {
+          beforeGet?.();
           let res: Response;
           try {
             res = await this.call(`${API}/files/${id}?fields=id,parents`);
