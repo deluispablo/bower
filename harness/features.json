@@ -4669,10 +4669,11 @@
       "Prepared text from the C15 contract when present; runner extraction otherwise (text, PDF text layer), bounded per thing and per run.",
       "Note text of the notes the model may update goes into the context, bounded.",
       "The intent carries note text for new and updated notes; the runner builds the operations.",
-      "Scripted proposals pass the C04 corpus cases; recorded Claude replies on the C04 cases score green."
+      "Scripted proposals pass the C04 corpus cases; recorded Claude replies on the C04 cases score green.",
+      "The timing line counts cache-read input tokens; model cites link the free name actually used."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"the model context carries bounded extracted text for each admitted thing|the C04 corpus cases score green with scripted proposals|a recorded Claude reply on a C04 case writes a note with its content\"",
-    "passes": true,
-    "note": "TL-P4-03 batch P4-3 (first P4-C slice)."
+    "verify": "pnpm -C runner exec vitest run -t \"the model context carries bounded extracted text for each admitted thing|the C04 corpus cases score green with scripted proposals|a recorded Claude reply on a C04 case writes a note with its content|the timing line counts cache-read input tokens|a model cite links the note the run actually made\"",
+    "passes": false,
+    "note": "TL-P4-03 batch P4-3 (first P4-C slice). Reopened: P4-3 review BLOCK (cache_read_input_tokens renamed, in= undercounts)."
   }
 ]
