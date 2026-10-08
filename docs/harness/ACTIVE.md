@@ -169,3 +169,4 @@ P3-9 is closed.
 - TL-P4-04 (5a2f003): P4-4 running: admission-reads-cost and attempt-check-light (escalated, at b883a94); dispatch-retry (implementer) next. 357/360. Then 3 more C04 runs.
 - attempt-check-light closed (ec56348): per run, token calls 71 → 2 and attempt calls 0 → 69 (from the person object, no Google call). 358/360.
 - C04 Claude run 3 done after the alarm redispatch (attempt 2): PASS. Live C04 so far: 2 PASS, 1 not fresh. Model 2–3.5 s, 1 turn.
+- admission-reads-cost closed (a6a9c4a): 30 → 15 calls, modelled reads 4.7 → 0.8 s, pile notes read 8 at a time; touches src/data/drive. 359/360. dispatch-retry running (implementer, at a6a9c4a).
