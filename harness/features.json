@@ -5066,7 +5066,7 @@
       "Read-ahead bounded to the budget; the runner reads what was not read ahead.",
       "Test: 300 files and 25 piles admitted within budget, same outcome as unbudgeted."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"admission of 300 files and 25 piles stays within the subrequest budget with the same outcome\"",
+    "verify": "pnpm -C api exec vitest run -t \"admission of 300 files and 25 piles stays within the subrequest budget with the same outcome|admission with 60 old dispositions and one declared pile stays within the subrequest budget|admission with 50 of your changes stays within the subrequest budget|a pile note admission could not read is left to the runner\"",
     "note": "TL-P4-11 (main 70f5897). Live ba74598: Too many subrequests by single Worker invocation, then /process 500. Reopened by P4-14 (BLOCK): always-read changes and dispositions are unbounded (60 dispositions -> 65 fetches); a skipped pile note skips the format and blank checks, so held piles get admitted."
   },
   {
