@@ -5501,5 +5501,19 @@
     ],
     "verify": "pnpm vitest run -t \"hashes.ts has no hand-written hash\"",
     "note": "TL-P4-14 addendum (main 11f9a52). bower-mechanical."
+  },
+  {
+    "id": "c1-api-test-harness",
+    "task": "p4-consolidation",
+    "category": "fix",
+    "passes": false,
+    "what": "One api test time/alarm helper; a setupFiles guard that fails on any unstubbed global fetch; the four time races fixed with range assertions. No fake clock in Person.",
+    "steps": [
+      "One helper for times and alarms in api tests.",
+      "setupFiles guard: an unstubbed global fetch fails the test.",
+      "Fix deadlines.test.ts:106-107 and person.test.ts:360, :378, :411, :468 with range assertions; :360 makes no real call."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"an api test that calls the network fails|storage from before the deadline table keeps its deadlines\"",
+    "note": "Defect deadlines-test-flake, ruled (b) inside stage 1 (main 8acdfed). bower-implementer."
   }
 ]

@@ -40,3 +40,7 @@ Not affected (verified in code): `recovery.test.ts`, `dispatch.test.ts`, `runner
 ## Regression test (class)
 
 The `setupFiles` guard from (b): an `afterEach` that fails when any test reached the network through the global `fetch`. It catches every real alarm that escapes into recovery (class item 1 today). For the transient-read class: a test that arms a deadline at the wall clock waits about 200 ms, as the probe did, then asserts the state after the alarm. `deadlines.test.ts` v11 under that wait must stay green.
+
+## Ruling: TL-P4-14 stage 1 (DECISIONS, main 8acdfed)
+
+Option (b), inside stage 1: `c1-api-test-harness` (implementer): one api test time/alarm helper, and a setupFiles guard that fails on any unstubbed global fetch (a unit test calling real GitHub is not acceptable); then the 4 races fixed with range assertions. No fake clock in Person.
