@@ -5291,7 +5291,7 @@
     "note": "TL-P4-13 (main aea42fe)."
   },
   {
-    "passes": false,
+    "passes": true,
     "id": "state-yes-writes",
     "task": "p4-c",
     "category": "feature",
