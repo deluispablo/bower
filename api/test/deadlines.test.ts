@@ -1,4 +1,4 @@
-import { env as testEnv, runInDurableObject } from 'cloudflare:test';
+import { env as testEnv, evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
 import type { Env } from '../src/env.js';
@@ -32,7 +32,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     const p = person(sub);
     const t0 = Date.now();
     // A ticket minted 50 minutes ago lives 10 minutes more: after Delete me its gone row is kept until then.
-    const runId = await admitted(sub, 'press-1', t0 - 50 * MINUTE);
+    const runId = await admitted(sub, 'press-1', t0);
     const minted = t0 - 50 * MINUTE;
     if ((await p.mintTicket(runId, 1, minted)) === null) throw new Error('no ticket');
     await p.forget();
@@ -64,5 +64,35 @@ describe('worker deadlines (TL-P4-14)', () => {
     expect(asked).toEqual([]);
     expect(await runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
     expect(await alarmOf(sub)).toBeNull();
+  });
+
+  it('storage from before the deadline table keeps its deadlines', async () => {
+    const sub = `deadlines-v11-${crypto.randomUUID()}`;
+    const p = person(sub);
+    const t0 = Date.now() + HOUR;
+    const runId = await admitted(sub, 'press-1', t0);
+    // A person object as v11 left it: a run going, a gone row kept, and the alarm somewhere.
+    const gone = { hash: 'a'.repeat(64), expiresAt: t0 + 30 * MINUTE, attempt: 1 };
+    await runInDurableObject(p, (_i, state) => {
+      state.storage.sql.exec('DROP TABLE deadlines');
+      state.storage.sql.exec('UPDATE schema_version SET version = 11 WHERE id = 1');
+      state.storage.kv.put('goneTickets', [gone]);
+    });
+    await evictDurableObject(p);
+    const before = Date.now();
+    expect(await p.schemaVersion()).toBe(12);
+    const rows = await runInDurableObject(p, (_i, state) =>
+      state.storage.sql.exec<{ kind: string; key: string; at: number }>('SELECT kind, key, at FROM deadlines ORDER BY kind').toArray(),
+    );
+    // The gone row keeps its expiry; the run is looked at once, and its recovery sets its own deadline again.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ kind: 'gone', key: gone.hash, at: gone.expiresAt });
+    expect(rows[1]).toMatchObject({ kind: 'run', key: runId });
+    expect(rows[1]?.at).toBeGreaterThanOrEqual(before);
+    expect(rows[1]?.at).toBeLessThanOrEqual(Date.now());
+    await runInDurableObject(p, async (instance: Person) => {
+      await instance.wake(Date.now(), { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
+    });
+    expect(await alarmOf(sub)).toBe(t0 + QUEUED_STALE_MS);
   });
 });

@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -20,6 +20,7 @@ export const PERSON_TABLES = [
   'run_ticket',
   'account',
   'runs',
+  'deadlines',
 ] as const;
 
 /** Step n brings the schema from version n - 1 to n. One statement per string. */
@@ -159,6 +160,18 @@ const STEPS: readonly (readonly string[])[] = [
     // A ticket's `epoch` was always the attempt it was minted for (v8), and is named so; its values are kept.
     'ALTER TABLE run_ticket RENAME COLUMN epoch TO attempt',
   ],
+  [
+    // Every deadline the person object waits for (TL-P4-14), on its one alarm: `run` (the current run's stale or
+    // recheck deadline, keyed by its id), `answers` (the waiting answers' wake) and `gone` (a ticket kept after
+    // Delete me, keyed by its SHA-256, until it expires). The alarm is set to the earliest (`Person.rearm`). The
+    // deadlines a person object kept before this step are moved in when it starts (`Person.moveDeadlines`).
+    `CREATE TABLE deadlines (
+      kind TEXT NOT NULL CHECK (kind IN ('run', 'answers', 'gone')),
+      key TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (kind, key)
+    )`,
+  ],
 ];
 
 /** The version recorded in this database, 0 when it is new. */
@@ -170,9 +183,10 @@ export function readSchemaVersion(sql: SqlStorage): number {
 }
 
 /**
- * Brings the database up to `SCHEMA_VERSION`. Call inside
- * `storage.transactionSync`, so a failed step leaves the previous version
- * whole. A database from a newer build is refused, never downgraded.
+ * Brings the database up to `SCHEMA_VERSION`, and returns the version it was
+ * at (0 when new). Call inside `storage.transactionSync`, so a failed step
+ * leaves the previous version whole. A database from a newer build is
+ * refused, never downgraded.
  */
 export function migrate(sql: SqlStorage): number {
   sql.exec(
@@ -197,5 +211,5 @@ export function migrate(sql: SqlStorage): number {
       SCHEMA_VERSION,
     );
   }
-  return SCHEMA_VERSION;
+  return current;
 }

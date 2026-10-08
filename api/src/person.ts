@@ -67,8 +67,8 @@ const GENERATION_FLOOR = 'generationFloor';
 /**
  * Durable Object key-value entry that outlives `forget()` for at most a ticket's hour: the run tickets that were live at
  * Delete me (their SHA-256, expiry and attempt; random values, nothing personal: no run id), so a runner still holding
- * one is told the person is gone, while any other bearer stays signed out. An alarm at the earliest expiry (and any
- * later access) prunes expired rows, so after the last expiry nothing is kept.
+ * one is told the person is gone, while any other bearer stays signed out. Each row's expiry is a `gone` deadline, so
+ * the alarm (and any later access) prunes expired rows, and after the last expiry nothing is kept.
  */
 const GONE_TICKETS = 'goneTickets';
 
@@ -117,6 +117,23 @@ interface AnswersWaiting {
   tries: number;
 }
 
+/**
+ * What a deadline is for (`deadlines` table, schema v12; TL-P4-14). A Durable Object has one alarm, and `setAlarm`
+ * replaces the one set (https://developers.cloudflare.com/durable-objects/api/alarms/), so every deadline is a row
+ * and the alarm is set to the earliest (`rearm`), as the Agents SDK keeps its schedules
+ * (https://developers.cloudflare.com/agents/api-reference/schedule-tasks/):
+ * - `run`: the current run's stale deadline, or an earlier recheck (a lost dispatch, a run that moved); one row;
+ * - `answers`: the waiting answers' wake once the run they waited for ended; one row;
+ * - `gone`: a ticket kept after Delete me, keyed by its SHA-256, at its expiry; one row each.
+ */
+type DeadlineKind = 'run' | 'answers' | 'gone';
+
+interface DeadlineRow extends Record<string, SqlStorageValue> {
+  kind: DeadlineKind;
+  key: string;
+  at: number;
+}
+
 /** A stale run the alarm looks up on GitHub: what it saw, so the second section can tell whether anything moved. */
 interface RecoveryLookup {
   run: RunWire;
@@ -145,7 +162,11 @@ export class Person extends DurableObject<Env> {
     // Cloudflare's documented pattern: set up the schema before any call is delivered.
     void ctx.blockConcurrencyWhile(async () => {
       try {
-        ctx.storage.transactionSync(() => migrate(ctx.storage.sql));
+        ctx.storage.transactionSync(() => {
+          const from = migrate(ctx.storage.sql);
+          // Storage from before v12 moves its deadlines into the table; a new one (0) has none.
+          if (from > 0 && from < 12) this.moveDeadlines(Date.now());
+        });
       } catch (error) {
         console.error('person storage migration failed', error);
         throw error;
@@ -532,15 +553,56 @@ export class Person extends DurableObject<Env> {
       .toArray()
       .map((t): GoneTicket => ({ hash: t.hash, expiresAt: t.expires_at, attempt: t.attempt }));
     const kept = [...(kv.get<GoneTicket[]>(GONE_TICKETS) ?? []).filter((t) => t.expiresAt > at), ...live];
+    // Every deadline goes with the rest (the run's and the answers'); only the gone tickets' expiries are set again.
     await this.ctx.storage.deleteAll();
     kv.put(GENERATION_FLOOR, floor);
-    if (kept.length > 0) {
-      kv.put(GONE_TICKETS, kept);
-      // deleteAll cleared any alarm; one alarm per object (https://developers.cloudflare.com/durable-objects/api/alarms/),
-      // so the earliest expiry takes it. The next run admission sets its own, and `alarm` re-arms this one.
-      await this.ctx.storage.setAlarm(Math.min(...kept.map((t) => t.expiresAt)));
-    }
-    this.ctx.storage.transactionSync(() => migrate(this.ctx.storage.sql));
+    this.ctx.storage.transactionSync(() => {
+      migrate(this.ctx.storage.sql);
+      if (kept.length > 0) kv.put(GONE_TICKETS, kept);
+      for (const t of kept) this.arm('gone', t.hash, t.expiresAt);
+      this.rearm();
+    });
+  }
+
+  /**
+   * Schema v12 (TL-P4-14): the deadlines kept before the `deadlines` table move into it as the object starts, so
+   * the deploy loses none. The gone tickets keep their expiries. The alarm set for a run or the waiting answers
+   * cannot be read here (`getAlarm` is not synchronous), so their deadline is now: the alarm looks at once, as the
+   * old alarm would have, and recovery arms the run's own deadline again.
+   */
+  private moveDeadlines(now: number): void {
+    const kv = this.ctx.storage.kv;
+    for (const t of kv.get<GoneTicket[]>(GONE_TICKETS) ?? []) this.arm('gone', t.hash, t.expiresAt);
+    const current = this.currentRunRow();
+    if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) this.arm('run', current.id, now);
+    else if (kv.get<AnswersWaiting>(ANSWERS_WAITING) !== undefined) this.arm('answers', 'waiting', now);
+  }
+
+  /** Keeps a deadline of `kind` for `key` at `at` (one row for `run` and `answers`), and sets the alarm. */
+  private arm(kind: DeadlineKind, key: string, at: number): void {
+    const sql = this.ctx.storage.sql;
+    if (kind !== 'gone') sql.exec('DELETE FROM deadlines WHERE kind = ? AND key <> ?', kind, key);
+    sql.exec(
+      'INSERT INTO deadlines (kind, key, at) VALUES (?, ?, ?) ON CONFLICT (kind, key) DO UPDATE SET at = excluded.at',
+      kind,
+      key,
+      at,
+    );
+    this.rearm();
+  }
+
+  /** Drops the deadlines of `kind` (only those due by `dueBy`, when given), and sets the alarm. */
+  private disarm(kind: DeadlineKind, dueBy = Number.POSITIVE_INFINITY): void {
+    if (this.ctx.storage.sql.exec('DELETE FROM deadlines WHERE kind = ? AND at <= ?', kind, dueBy).rowsWritten > 0) this.rearm();
+  }
+
+  /**
+   * The one alarm, at the earliest deadline kept, or none (https://developers.cloudflare.com/durable-objects/api/alarms/:
+   * one alarm per object, and `setAlarm` replaces it).
+   */
+  private rearm(): void {
+    const next = this.ctx.storage.sql.exec<{ at: number | null }>('SELECT MIN(at) AS at FROM deadlines').one().at;
+    void (next === null ? this.ctx.storage.deleteAlarm() : this.ctx.storage.setAlarm(next));
   }
 
   /**
@@ -636,7 +698,7 @@ export class Person extends DurableObject<Env> {
     const whole = input.scope === 'all' && input.subject === undefined;
     if (waiting !== undefined && (takesWaiting || (whole && input.answer !== true))) this.takeWaiting(waiting, row.id);
     // Recovery: if nobody has started the run by its stale deadline, the alarm writes the expiry.
-    void this.ctx.storage.setAlarm(input.now + QUEUED_STALE_MS);
+    this.arm('run', row.id, input.now + QUEUED_STALE_MS);
     return { admitted: true, run: toWire(row), revision: this.raiseRevision(), created: true };
   }
 
@@ -651,40 +713,53 @@ export class Person extends DurableObject<Env> {
 
   /** A run ended at `now`: when answers wait for it, the alarm wakes at once to start their run (`wake`). */
   private wakeForWaiting(now: number): void {
-    if (this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING) !== undefined) void this.ctx.storage.setAlarm(now);
+    if (this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING) !== undefined) this.arm('answers', 'waiting', now);
   }
 
   /**
-   * The current run's stale deadline (https://developers.cloudflare.com/durable-objects/api/alarms/): recovery
-   * without the browser, with this object's own env and the Workers fetch (as `worker-dispatch` reaches GitHub).
+   * The earliest deadline (https://developers.cloudflare.com/durable-objects/api/alarms/): whatever is due, with this
+   * object's own env and the Workers fetch (as `worker-dispatch` reaches GitHub).
    */
   async alarm(): Promise<void> {
     await this.wake(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, fetchImpl: (i, init) => fetch(i, init) });
   }
 
   /**
-   * What the alarm does at `now`, through `github.fetchImpl` for every request. The alarm is shared: expired gone rows
-   * go first, recovery runs as before (it may clear the alarm), then the run the waiting answers asked for starts
-   * (`startWaiting`), and the alarm is set again for the earliest gone row still kept, unless an earlier one is set.
+   * What the alarm does at `now`, through `github.fetchImpl` for every request: each kind of deadline due by `now` is
+   * handled, in this order: expired gone rows go, recovery looks at the run (`recover`), and the run the waiting
+   * answers asked for starts (`startWaiting`). A handled deadline goes unless its handler set it again; then the
+   * alarm is set to the earliest one kept. If a handler throws, what was due and not handled is looked at again
+   * `RECHECK_MS` later (an alarm is at-least-once, so its handlers already are), and the error goes on to the runtime.
    * Every request of one alarm counts against one invocation's subrequests (TL-P4-11).
    */
   async wake(now: number, github: GitHubAccess): Promise<void> {
-    this.pruneGone(now);
+    const sql = this.ctx.storage.sql;
+    const due = sql.exec<DeadlineRow>('SELECT kind, key, at FROM deadlines WHERE at <= ?', now).toArray();
+    const handled = (kind: DeadlineKind): void => {
+      for (const d of due) if (d.kind === kind) sql.exec('DELETE FROM deadlines WHERE kind = ? AND key = ? AND at = ?', d.kind, d.key, d.at);
+    };
+    const isDue = (kind: DeadlineKind): boolean => due.some((d) => d.kind === kind);
     let fetches = 0;
     const counted: FetchLike = (input, init) => {
       fetches += 1;
       return github.fetchImpl(input, init);
     };
-    await this.recover(now, { ...github, fetchImpl: counted });
     try {
-      await this.startWaiting(now, counted, () => fetches);
-    } finally {
-      const kept = this.ctx.storage.kv.get<GoneTicket[]>(GONE_TICKETS);
-      if (kept !== undefined) {
-        const earliest = Math.min(...kept.map((t) => t.expiresAt));
-        const set = await this.ctx.storage.getAlarm();
-        if (set === null || set > earliest) await this.ctx.storage.setAlarm(earliest);
+      if (isDue('gone')) this.pruneGone(now);
+      if (isDue('run')) {
+        await this.recover(now, { ...github, fetchImpl: counted });
+        handled('run');
       }
+      if (isDue('answers')) {
+        await this.startWaiting(now, counted, () => fetches);
+        handled('answers');
+      }
+    } catch (err) {
+      // Never looped at once: what is still due as it was waits a minute.
+      for (const d of due) sql.exec('UPDATE deadlines SET at = ? WHERE kind = ? AND key = ? AND at = ?', now + RECHECK_MS, d.kind, d.key, d.at);
+      throw err;
+    } finally {
+      this.rearm();
     }
   }
 
@@ -739,12 +814,16 @@ export class Person extends DurableObject<Env> {
     if (final || tries >= WAITING_TRIES) return;
     const current = this.currentRunRow();
     if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) return;
-    void this.ctx.storage.setAlarm(now + RECHECK_MS);
+    this.arm('answers', 'waiting', now + RECHECK_MS);
   }
 
-  /** Drops the gone rows (`GONE_TICKETS`) expired at `now`; the entry goes with the last one. Returns the rows still live. */
+  /**
+   * Drops the gone rows (`GONE_TICKETS`) expired at `now`, with their deadlines; the entry goes with the last one.
+   * Returns the rows still live.
+   */
   private pruneGone(now: number): GoneTicket[] {
     const kv = this.ctx.storage.kv;
+    this.disarm('gone', now);
     const kept = kv.get<GoneTicket[]>(GONE_TICKETS);
     if (kept === undefined) return [];
     const live = kept.filter((t) => t.expiresAt > now);
@@ -796,14 +875,14 @@ export class Person extends DurableObject<Env> {
     const run = this.currentRunRow();
     if (run === undefined || run.id !== runId || !ACTIVE_PHASES.includes(run.phase)) return;
     this.ctx.storage.kv.put(DISPATCH_LOST, { runId, at, attempt: this.attemptOf(runId), phaseAt: run.phase_at } satisfies DispatchLost);
-    void this.ctx.storage.setAlarm(at);
+    this.arm('run', runId, at);
   }
 
-  /** Section 1 of `recover`: the run to look up, or null when the alarm is set or the run ended here. */
+  /** Section 1 of `recover`: the run to look up, or null when its deadline is set or the run ended here. */
   private planRecovery(now: number, configured: boolean): RecoveryLookup | null {
     const run = this.currentRunRow();
     if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) {
-      void this.ctx.storage.deleteAlarm();
+      this.disarm('run');
       return null;
     }
     const wire = toWire(run);
@@ -818,7 +897,7 @@ export class Person extends DurableObject<Env> {
     const early = lostHere !== undefined && lostHere.at <= now && deadline > now;
     if (lostHere !== undefined && lostHere.at <= now) this.ctx.storage.kv.delete(DISPATCH_LOST);
     else if (deadline > now) {
-      void this.ctx.storage.setAlarm(lostHere === undefined ? deadline : Math.min(deadline, lostHere.at));
+      this.arm('run', run.id, lostHere === undefined ? deadline : Math.min(deadline, lostHere.at));
       return null;
     }
     if (!configured) {
@@ -846,8 +925,8 @@ export class Person extends DurableObject<Env> {
       this.attemptOf(run.id) !== seen.attempt ||
       JSON.stringify(watch ?? null) !== seen.watch;
     if (moved) {
-      if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) void this.ctx.storage.deleteAlarm();
-      else void this.ctx.storage.setAlarm(Math.max(staleDeadline(toWire(run), this.attemptOf(run.id), watch), now + RECHECK_MS));
+      if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) this.disarm('run');
+      else this.arm('run', run.id, Math.max(staleDeadline(toWire(run), this.attemptOf(run.id), watch), now + RECHECK_MS));
       return null;
     }
     if (outcome.kind === 'fail') {
@@ -868,10 +947,10 @@ export class Person extends DurableObject<Env> {
     return { attempt, allowWeb };
   }
 
-  /** Keeps the extra time the alarm gave a run's attempt, and sets the alarm for its end. */
+  /** Keeps the extra time the alarm gave a run's attempt, and sets the run's deadline for its end. */
   private watch(watch: RecoveryWatch): void {
     this.ctx.storage.kv.put(RECOVERY_WATCH, watch);
-    void this.ctx.storage.setAlarm(watch.until);
+    this.arm('run', watch.runId, watch.until);
   }
 
   /** The run's current attempt: its ticket's, or 1 before any ticket was minted. */
@@ -1071,7 +1150,7 @@ export class Person extends DurableObject<Env> {
     this.failStale(current, now);
   }
 
-  /** Ends `run` as failed `stale`: the revision rises once, its ticket is retired, and the alarm is done. */
+  /** Ends `run` as failed `stale`: the revision rises once, its ticket is retired, and its deadline goes. */
   private failStale(run: RunRow, now: number): void {
     this.ctx.storage.sql.exec(
       "UPDATE runs SET phase = 'failed', phase_at = ?, finished_at = ?, failure = ? WHERE id = ?",
@@ -1083,7 +1162,7 @@ export class Person extends DurableObject<Env> {
     // An ended run's ticket stops working, as a runner's own `done` or `failed` retires it.
     this.ctx.storage.sql.exec('UPDATE run_ticket SET retired = 1 WHERE run_id = ?', run.id);
     this.ctx.storage.kv.delete(RECOVERY_WATCH);
-    void this.ctx.storage.deleteAlarm();
+    this.disarm('run');
     this.wakeForWaiting(now);
     this.raiseRevision();
   }

@@ -215,6 +215,8 @@ describe('dispatch on admission', () => {
     try {
       const failed = await runInDurableObject(p, async (instance, state) => {
         state.storage.sql.exec('UPDATE runs SET requested_at = requested_at - ?', QUEUED_STALE_MS + 1000);
+        // The run's deadline (TL-P4-14) moves back with it, so the alarm finds it due.
+        state.storage.sql.exec(`UPDATE deadlines SET at = at - ? WHERE kind = 'run'`, QUEUED_STALE_MS + 1000);
         await instance.alarm();
         return state.storage.sql.exec<{ phase: string; failure: string }>('SELECT phase, failure FROM runs').one();
       });
