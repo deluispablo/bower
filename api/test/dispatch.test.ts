@@ -167,7 +167,19 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
     for (const line of lines) for (const secret of [run?.id ?? '', who.folder.root, ticket]) expect(line).not.toContain(secret);
   });
 
-  it('a failed dispatch leaves the run queued and the alarm looks again at 60 seconds', async () => {
+  it('a repeat or an active run dispatches nothing', async () => {
+    const who = await holder();
+    const first = await process(who, pressSide().fetchImpl, 'press-1');
+    await dispatchOf(gh, first.run?.id ?? '');
+    expect(await process(who, pressSide().fetchImpl, 'press-1')).toEqual(first);
+    expect((await process(who, pressSide().fetchImpl, 'press-2')).run?.id).toBe(first.run?.id);
+    await runInDurableObject(person(who.sub), async (instance: Person) => {
+      await instance.wake(Date.now(), gh.access);
+    });
+    expect(triesOf(gh, first.run?.id)).toBe(1);
+  });
+
+  it('a failed dispatch leaves the run queued', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       for (const status of [500, null]) {
@@ -175,22 +187,15 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
         const who = await holder();
         const before = Date.now();
         const reply = await process(who, pressSide().fetchImpl, 'press-1');
-        const alarm = await lostArmed(who.sub, before);
-        expect(alarm).toBeLessThanOrEqual(Date.now() + 60_000);
+        await lostArmed(who.sub, before);
         expect(triesOf(gh, reply.run?.id)).toBe(3);
         expect(reply.run?.phase).toBe('queued');
         expect(reply.revision).toBe(1);
+        expect((await person(who.sub).runStatus(Date.now())).run?.phase).toBe('queued');
         const lines = log.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
         expect(lines).not.toContain((await dispatchOf(gh, reply.run?.id ?? '')).ticket);
         expect(lines).not.toContain('test-github-token');
         expect(lines).toContain(status === null ? 'network' : String(status));
-        // At that alarm the run is looked up, and attempt 1 with no job is redispatched once, as attempt 2.
-        gh.script = {};
-        await runInDurableObject(person(who.sub), async (instance: Person) => {
-          await instance.recover(alarm + 1, gh.access);
-        });
-        expect((await dispatchOf(gh, reply.run?.id ?? '', 2)).attempt).toBe(2);
-        expect(triesOf(gh, reply.run?.id)).toBe(4);
       }
     } finally {
       log.mockRestore();
@@ -284,6 +289,29 @@ describe('dispatch retries', () => {
       const refused = scripted([404]);
       expect(await dispatchTidy(input, refused.fetchImpl, sleep)).toBe(false);
       expect(refused.calls).toHaveLength(1);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a dispatch that keeps failing arms the alarm at 60 seconds', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      gh.script = { dispatch: null };
+      const who = await holder();
+      const before = Date.now();
+      const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+      const alarm = await lostArmed(who.sub, before);
+      expect(alarm).toBeLessThanOrEqual(Date.now() + 60_000);
+      expect(triesOf(gh, run?.id)).toBe(3);
+      // At that alarm the run is looked up, and attempt 1 with no job is redispatched once, as attempt 2.
+      gh.script = {};
+      await runInDurableObject(person(who.sub), async (instance: Person) => {
+        await instance.recover(alarm + 1, gh.access);
+      });
+      expect((await dispatchOf(gh, run?.id ?? '', 2)).attempt).toBe(2);
+      expect(triesOf(gh, run?.id)).toBe(4);
+      expect((await person(who.sub).runStatus(alarm + 1)).run?.id).toBe(run?.id);
     } finally {
       log.mockRestore();
     }
