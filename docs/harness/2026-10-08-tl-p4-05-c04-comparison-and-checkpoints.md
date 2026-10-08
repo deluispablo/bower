@@ -39,3 +39,9 @@ This closes the window instead of narrowing it, adds no Drive calls, and also se
 - **The bar stays** that every kill ends equal to an uninterrupted run. Where the person changed something in between, the run keeps their change and reports it.
 - **The listed tests may change** where their doubles answered "unreadable" for operations that were never sent, since real Drive answers "not landed": `checkpoints.test.ts:81` and `:144`, `barrier.test.ts:45`, `dispositions.test.ts:89`, and `recovery.test.ts:350`'s list of kinds. Each change says why.
 - **New tests:** the person renames inside a batch, then a kill (set aside, honest); the person undoes a landed effect, then a kill (kept, not re-applied); and the stamp is overwritten, never accumulated.
+
+**Addendum 2, 2026-10-08: two deviations in checkpoint-per-batch, both accepted.**
+1. **The stamp is a hash.** `bowerOp` = the first 32 hex characters of SHA-256(`run_id:op id`). Drive allows 124 bytes for an app property's key and value together ([Drive API, properties](https://developers.google.com/workspace/drive/api/guides/properties)), and the plain literal needs about 152. The hash still identifies the effect exactly: reconcile recomputes it from the manifest, and 128 bits makes a collision negligible.
+2. **Four checkpoints per run, not one per batch:** first; opening, just before the first send; closing, with the report pending; done. These keep the report barrier (TL-P3-22) and its test. With more batches, the count may grow by one per batch, never per operation.
+
+**Left out: the report line for a change the person made during the run.** Register it as `report-kept-your-change` in the C12 slice (honest partial results), not in the P4-6 close. Until then the effect is still kept and skipped correctly; only the explanation in the report is missing.
