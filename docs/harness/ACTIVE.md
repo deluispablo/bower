@@ -377,3 +377,4 @@ P3-9 is closed.
 - c2-pile-records (implementer, home-empty-48s) dispatched in the free slot; c2-transport-options waits for c2-fake-parity (both touch the transport/fake).
 - c2-fake-parity merged (red 47235356, fix 1c476094; removed 66; check green on merged tree; e2e:fake 255 + 1 flake qa10:149 passes alone). Real Drive change: binnedByItem now queries the Bin for a missing pile member (before: none); lead asked. P4-31 review queued. c2-transport-options dispatched.
 - c2-fake-parity real changes accepted (main 7c9c8e8); close after P4-31. Binned-in-binned-folder test added to c2-pile-records (running worker told).
+- c2-pile-records merged (red ac3d91ef/7a0cd376, fix 2ad42e53/f47a828f/40b748b9; Home golden 46→26; removed 34; check green on merged tree; e2e:fake 256). Open: unstamped old records still read once per load (no backfill) — lead asked. P4-31 (parity) + P4-32 (records) review dispatched.
