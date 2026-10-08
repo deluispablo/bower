@@ -4858,7 +4858,7 @@
       "Tests on the prompt text and the scorer; live proof is 5 C04 runs, 5/5 (coordinator)."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the prompt says a thing with no fitting folder goes to Resources|the C04 scorer accepts its rubric placements and refuses others\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 addendum (main 50a99a1): Areas placement on a566241 is model variance on an under-specified case. The 0:43 counts once C04 passes 5/5."
   }
 ]

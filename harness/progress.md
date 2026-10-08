@@ -132,3 +132,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: gone-ticket-rows-expire passes — after Delete me a gone row holds only hash, expiry and attempt; an alarm at the earliest expiry prunes them; valid ticket 410, wrong 401
 - 2026-10-08: checkpoint-per-batch passes — fix round: the stamp is found anywhere (a moved made thing is not made twice), 32 hex of sha256, a purged never-sent thing is set aside
 - 2026-10-08: checkpoint-count passes — the 8 was the timing counter: it timed every run record (manifest, report, dispositions) as a checkpoint; now only checkpoint- records count, 4 on C04
+- 2026-10-08: placement-guidance passes — prompt adopts the original's PARA placement wording (no fitting folder → Resources; new Area/Project only for an ongoing responsibility); C04 rubric allows Resources or Areas/Home linking the plot note
