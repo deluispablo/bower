@@ -243,7 +243,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const tookSubjects = new Set((opts.taken?.piles ?? []).flatMap((p) => [p.pileId, ...(p.anchor ? [p.anchor.fileId] : []), ...p.items.map((i) => i.fileId)]));
   const settles = (l: JournalLine): boolean => {
     const q = l.rec.questionId ?? '';
-    return keepAnswers.has(l.rec.id) || l.rec.text === 'no' || q === ADOPT_STATES_ID || (q.startsWith('q-ask-') && tookSubjects.has(q.slice('q-ask-'.length)));
+    // A Current state you edited is never written over (yet): either answer closes its question (P4-20 I2).
+    return keepAnswers.has(l.rec.id) || l.rec.text === 'no' || q === ADOPT_STATES_ID || q.startsWith('q-state-') || (q.startsWith('q-ask-') && tookSubjects.has(q.slice('q-ask-'.length)));
   };
   const settled = new Set(lines.filter((l) => l.rec.kind === 'answer' && settles(l)).map((l) => l.rec.questionId ?? ''));
   let journal = demo ? lines : lines.filter((l) => (l.rec.kind !== 'request' && l.rec.kind !== 'answer') || (l.rec.kind === 'answer' && settled.has(l.rec.questionId ?? '')));

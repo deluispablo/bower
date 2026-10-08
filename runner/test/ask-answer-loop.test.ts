@@ -39,8 +39,10 @@ interface AppVault {
   answer(id: string, yes: boolean): Promise<void>;
 }
 interface StartOptions { allowWeb?: boolean; subject?: string; requestId?: string }
-interface AppRuns { start(scope: 'all' | 'instructions', opts?: StartOptions): Promise<{ id: string }> }
-type AnswerQuestion = (vault: AppVault, runs: AppRuns, id: string, yes: boolean, opts: { allowWeb: boolean }) => Promise<{ run: Promise<{ id: string }> | null } | null>;
+interface AppRun { id: string; phase: string }
+interface AppRuns { start(scope: 'all' | 'instructions', opts?: StartOptions): Promise<AppRun>; current(): Promise<AppRun | null> }
+type Outcome = { kind: 'now'; run: AppRun } | { kind: 'waits' | 'next' | 'not-yet' } | { kind: 'failed'; error: unknown };
+type AnswerQuestion = (vault: AppVault, runs: AppRuns, id: string, yes: boolean, opts: { allowWeb: boolean }) => Promise<{ outcome: Outcome } | null>;
 type VaultClass = new (opts: { drive: FakeDrive; rootId: () => Promise<string>; runningPiles: () => ReadonlySet<string>; device: string }) => AppVault;
 
 async function app(): Promise<{ answerQuestion: AnswerQuestion; DriveVault: VaultClass }> {
@@ -85,9 +87,10 @@ function runsOf(w: RealWorld): AppRuns {
       const body = { scope, allowWeb: !!opts.allowWeb, requestId: opts.requestId ?? crypto.randomUUID(), ...(opts.subject !== undefined ? { subject: opts.subject } : {}) };
       const res = await w.api.browser(`${ORIGIN}/process`, { method: 'POST', headers: { ...json, 'x-bower-place': 'tab-1', 'x-bower-epoch': String(lease.epoch) }, body: JSON.stringify(body) });
       expect(res.status).toBe(200);
-      const reply = (await res.json()) as { run: { id: string } };
+      const reply = (await res.json()) as { run: AppRun };
       return reply.run;
     },
+    current: async () => ((await (await w.api.browser(`${ORIGIN}/status`)).json()) as { run: AppRun | null }).run,
   };
 }
 
@@ -141,8 +144,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     const w = await keepWorld();
     const { vault, answerQuestion } = await vaultOf(w);
     const done = await answerQuestion(vault, runsOf(w), KEEP_Q, true, { allowWeb: false });
-    expect(done?.run).not.toBeNull();
-    await done?.run;
+    expect(done?.outcome.kind).toBe('now');
     // A small tidy-up, scoped to your changes and notes: it takes no pile of the inbox.
     expect(w.dispatched).toHaveLength(1);
     expect(w.dispatched[0]?.scope).toBe('instructions');
@@ -160,10 +162,11 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     const runs = runsOf(w);
     // Twice at once (a double tap), then once more.
     const both = await Promise.all([answerQuestion(vault, runs, KEEP_Q, true, { allowWeb: false }), answerQuestion(vault, runs, KEEP_Q, true, { allowWeb: false })]);
-    const ids = await Promise.all(both.map((b) => b?.run));
+    const ids = both.map((b) => (b?.outcome.kind === 'now' ? b.outcome.run.id : null));
     const again = await answerQuestion(vault, runs, KEEP_Q, true, { allowWeb: false });
-    await again?.run;
-    expect(new Set(ids.map((r) => r?.id)).size).toBe(1);
+    expect(again).toBeNull();
+    expect(ids[0]).not.toBeNull();
+    expect(new Set(ids).size).toBe(1);
     expect(w.dispatched).toHaveLength(1);
     // One answer, stored once with its question.
     expect(await answersWaiting(w, KEEP_Q)).toEqual([expect.objectContaining({ text: 'yes' })]);
@@ -177,7 +180,8 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     // A tidy-up is going (pressed before the answer): the answer does not join it and starts no other.
     const going = await runs.start('instructions', { allowWeb: false });
     const done = await answerQuestion(vault, runs, KEEP_Q, true, { allowWeb: false });
-    expect((await done?.run)?.id).toBe(going.id);
+    expect(done?.outcome).toEqual({ kind: 'waits' });
+    expect(going.id).not.toBe('');
     expect(w.dispatched).toHaveLength(1);
     expect(await w.runJob(0)).toBe(0);
     expect(await w.paths()).toContain(OTHER);
@@ -197,7 +201,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     const { vault, answerQuestion } = await vaultOf(w);
     const runs = runsOf(w);
     const done = await answerQuestion(vault, runs, KEEP_Q, false, { allowWeb: false });
-    expect(done?.run).toBeNull();
+    expect(done?.outcome).toEqual({ kind: 'next' });
     expect(w.dispatched).toEqual([]);
     expect((await vault.questions()).map((q) => q.id)).not.toContain(KEEP_Q);
     expect(await answersWaiting(w, KEEP_Q)).toEqual([expect.objectContaining({ text: 'no' })]);
@@ -237,7 +241,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     const w = await realWorld({ seed, claude: model });
     const { vault, answerQuestion } = await vaultOf(w);
     const done = await answerQuestion(vault, runsOf(w), `q-ask-${photo}`, true, { allowWeb: false });
-    await done?.run;
+    expect(done?.outcome.kind).toBe('now');
     expect(w.dispatched).toHaveLength(1);
     expect(w.dispatched[0]?.scope).toBe('all');
     expect(await w.runJob(0)).toBe(0);
@@ -249,5 +253,35 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(paths.some((p) => p.startsWith('Inbox/') && p.endsWith('listing-88213.example.url'))).toBe(true);
     expect(await openQuestions(w)).toEqual([]);
     expect(await answersWaiting(w, `q-ask-${photo}`)).toEqual([]);
+  });
+
+  it('a yes to Write it closes its question in the next tidy-up', async () => {
+    const c = await corpusCase('c05-keep-one-note');
+    const STATE_Q = 'q-state-note-1';
+    const writeIt = { id: STATE_Q, text: 'You changed the current state of Flat 3, 12 Larkspur Lane. Should Bower write its update there?', yes: 'Write it', no: 'Keep mine', about: KEPT, askedAt: 1 };
+    const w = await realWorld({ seed: (drive) => seedCase(drive, { ...c, journal: [], questions: [...c.questions, writeIt] as never }), claude: keepWhenAnswered });
+    const { vault, answerQuestion } = await vaultOf(w);
+    const runs = runsOf(w);
+    const before = await textAt(w, KEPT);
+    const done = await answerQuestion(vault, runs, STATE_Q, true, { allowWeb: false });
+    // Bower cannot write over a summary you edited yet: it says so and starts nothing.
+    expect(done?.outcome).toEqual({ kind: 'not-yet' });
+    expect(w.dispatched).toEqual([]);
+    // The next tidy-up closes the question for good and leaves your summary as you wrote it.
+    await runs.start('instructions', { allowWeb: false });
+    expect(await w.runJob(0)).toBe(0);
+    expect(await openQuestions(w)).toEqual([KEEP_Q]);
+    expect(await answersWaiting(w, STATE_Q)).toEqual([]);
+    expect(await textAt(w, KEPT)).toBe(before);
+  });
+
+  it('of two answers to one question, the later one counts', async () => {
+    // A yes on one device, then a no on another: the no is the person's answer, so both notes stay.
+    const w = await keepWorld([{ kind: 'answer', text: 'yes', questionId: KEEP_Q }, { kind: 'answer', text: 'no', questionId: KEEP_Q }]);
+    await runsOf(w).start('instructions', { allowWeb: false });
+    expect(await w.runJob(0)).toBe(0);
+    expect(await w.paths()).toContain(OTHER);
+    expect(await openQuestions(w)).toEqual([]);
+    expect(await answersWaiting(w, KEEP_Q)).toEqual([]);
   });
 });

@@ -2,14 +2,14 @@ import { LoadError } from '@/ui/LoadError';
 import { useEffect, useMemo, useRef } from 'react';
 import { report } from '@/ui/report';
 import { focusHeading, focusMain } from '@/ui/focus';
-import { answered, answeredNow, answerWaits } from './answer-words';
+import { answered, answerToast } from './answer-words';
 import { answerQuestion } from '@/data/answer-loop';
 import { usePrefs } from '@/app/prefs';
 import { startRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
 import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
-import { BowerError, type Pile, type RunState, type TreeNode } from '@/data/types';
+import type { Pile, RunState, TreeNode } from '@/data/types';
 import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
 import { ago, greeting, plural } from '@/app/words';
@@ -286,14 +286,10 @@ function Questions() {
     // Stored once; a yes a tidy-up can act on starts a small one at once (TL-P4-08 addendum 8).
     answerQuestion(vault, runs, id, yes, { allowWeb: usePrefs.getState().lookUpWeb }).then(
       (done) => {
-        toast(done?.run ? answeredNow(label) : answered(label));
+        toast(done ? answerToast(done.outcome, label) : answered(label));
         after.current = Math.max(index, 0);
         // The list may already have changed, or change a moment later (then the effect lands it).
         setTimeout(settle, 0);
-        done?.run?.catch((e: unknown) => {
-          console.error(e);
-          toast(answerWaits(e instanceof BowerError ? e.message : null));
-        });
       },
       (e: unknown) => report(e, 'That answer did not save. Try again.'),
     );
