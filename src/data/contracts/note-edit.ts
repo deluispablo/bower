@@ -268,6 +268,11 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
 // state-rewrite (TL-P4-08 addendum 1 point 1)
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * The rule that lets Bower keep up to date the Current states it did not write (TL-P4-10 point 3): the person's yes
+ * to `ADOPT_STATES_QUESTION`, as a rule line (C11 words it).
+ */
+export const ADOPT_STATES_RULE = 'Keep the summaries Bower did not write up to date.';
 /** The front-matter key that marks what Bower last wrote in a note's Current state. */
 export const STATE_KEY = 'bower_state';
 
