@@ -325,3 +325,4 @@ P3-9 is closed.
 - TL-P4-16 addendum 2 (7661ef8): write-it-silent is a design flaw; c3-subject stores the shown text, a yes applies it with no model call (in the note; goes in c3-subject's packet). Stage 1 dispatch: c1-digest (implementer) and c1-drive-ops-table (mechanical).
 - c1-digest closed (8b7eb3f3; removed 38). c1-drive-ops-table reworked (1e64a9f0 red, 6a9573dc) but not merged: it drops the live after-check for openResumable/putChunk; P4-21 review of both decides.
 - P4-21: c1-digest PASS; c1-drive-ops-table BLOCK (generateIds no longer fenced, an unlisted behaviour change; on a lost lease the upload queue keeps a reserved id before openResumable refuses). Lead asked to rule read vs write for generateIds.
+- TL-P4-14 addendum (11f9a52): generateIds is a write (fix round for c1-drive-ops-table queued); c1-digest-library registered (mechanical, queued). Running: c1-small-fixes, c1-worker-schema-v11.
