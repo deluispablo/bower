@@ -254,3 +254,4 @@ P3-9 is closed.
 - drive-calls-cut closed (ce633bd): 134 -> 72 Drive calls; modelled apply 13.4 -> 3.8 s; run 19.6 -> 9.2 s; fence read reused up to 3 s. 379/383. P4-13 Opus delta running; state-rewrite fix round running.
 - state-rewrite-change re-closed per TL-P4-10 (red by hand at aea3176; merged with drive-calls-cut). 380/383. Waiting for the P4-13 review, then a short check of this round.
 - P4-13 review BLOCK (drive-calls-cut): the 3-s fence reuse lets a person rename between check and send be overwritten. Reopened; fix round with the same worker (fresh read right before each send, schedule clash file:F vs dir:F, barrier under the pool, bin evidence from Drive, overhead check restored). 379/383.
+- state-rewrite fix-round check PASS (minors to polish). Waiting for the drive-calls-cut fix round.

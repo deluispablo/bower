@@ -237,3 +237,8 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - claude.ts:261: the prompt shows c04's raw input "Offer_letter_final".
   - runner/src/corpus.ts:225: area globs are case-sensitive.
   - claude.ts:291: things with the same name and kind keep the Drive listing order.
+- P4-12 fix-round minors (state-rewrite):
+  - A by: bower note with text above its Current state gets a second section (nothing is lost).
+  - "Leave them" is not remembered until ask-answer-loop.
+  - bowerMd5 is set on every edit-text, including Rules.md and pile notes (harmless).
+  - fakeRead reads the bytes of every file that carries a bowerMd5 (fake only).
