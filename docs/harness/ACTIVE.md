@@ -329,3 +329,4 @@ P3-9 is closed.
 - c1-small-fixes closed (43f2a77e). c1-worker-schema-v11 delivery not mergeable (one commit, 7 migration tests fail); fresh escalated rework. c1-drive-ops-table fix round (generateIds a write) dispatched. 399/415.
 - c1-drive-ops-table closed (d172de32; generateIds a fenced write; red by hand at 1e64a9f0). 400/415. c1-digest-library (mechanical) dispatched; schema v11 rework running.
 - c1-worker-schema-v11 closed (06b11309; escalated rework). 401/415. c1-worker-deadlines (escalated) dispatched; c1-digest-library running.
+- c1-digest-library closed (983b360c; one commit, red by hand; row added by me). 402/415. c1-still-as-seen (escalated) dispatched; c1-worker-deadlines running.
