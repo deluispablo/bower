@@ -371,7 +371,11 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     }
     // What stays where it is: what is asked about, and a copy of a thing this run does not file.
     const stays = (fileId: string): boolean => !!thingAsk(fileId) || staying.has(fileId);
-    const partial = pile.items.some((item) => stays(item.id));
+    // A pile whose only things are already saved keeps its folder and its words where they are (review P4-17 I3): the
+    // copies go to the Bin, and the next tidy-up reads the words on their own, as any pile of words.
+    const onlySaved = !loose && !!pile.text.trim() && pile.items.some((i) => dups.has(i.id) && !staying.has(i.id))
+      && pile.items.every((i) => i.name === PILE_NOTE || stays(i.id) || dups.has(i.id));
+    const partial = pile.items.some((item) => stays(item.id)) || onlySaved;
     const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
     const notes = loose ? [] : children.filter((f) => !f.folder && f.name === PILE_NOTE);
     const declared = cap.declared;
@@ -496,7 +500,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const binning = new Set(saved.map((s) => s.file.id));
   const inInbox = new Set(inbox.flatMap((p) => {
     const left = p.items.filter((i) => !binning.has(i.id)).map((i) => i.id);
-    return p.items.length && !left.length ? [] : [p.id, ...left];
+    return p.items.length && !left.length && !partly.has(p.id) ? [] : [p.id, ...left];
   }));
   const hashesIn = new Set(listing.filter((f) => inInbox.has(f.id) && f.md5Checksum).map((f) => f.md5Checksum));
   const subjectOf = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
@@ -1226,7 +1230,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const op = await add({ kind: 'bin', before: seen(s.file), capturedChildIds: [] }, after ? [after] : []);
     movesOf.set(s.pile.id, [...(movesOf.get(s.pile.id) ?? []), op]);
     reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), alreadySaved: [{ name: s.file.name, as }] } });
-    reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: s.file.name, why: NOT_FILED }] } });
+    reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: s.file.name, why: SAVED_STAYS }] } });
   }
   for (const pile of capturedPiles) {
     const note = notesOf.get(pile.pileId);
@@ -1620,6 +1624,8 @@ export const REQUEST_DONE = 'Done. See what changed in your folders.';
 const NOT_WRITABLE = 'Bower could not write down one of your piles; it stays in your inbox.';
 
 /** Why a filed thing has no note of its own (TL-P2-34): its note was not written; nothing writes it later. */
+/** Why a thing already saved stays (review P4-17): it or its copy changed before its Bin, so the next run looks again. */
+export const SAVED_STAYS = 'It stays in your inbox: it changed, or its saved copy did, before Bower got to it.';
 export const NOTE_NOT_WRITTEN = "Bower couldn't write its note.";
 /** Why a pile of words stays in the inbox (its generated note was not written). */
 export const WORDS_NOT_WRITTEN = 'Bower could not write a note from it, so it stays in your inbox.';

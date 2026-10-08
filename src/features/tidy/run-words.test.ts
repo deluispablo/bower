@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunState } from '@/data/types';
-import { landedSummary, runClock, runDetail, runLinkRows, runTitle, stepState } from './run-words';
+import { landedSummary, runClock, runDetail, runLinkRows, runShort, runTitle, stepState } from './run-words';
 
 const base: RunState = { id: 'r', scope: 'all', phase: 'writing', requestedAt: Date.UTC(2026, 9, 4, 15, 0), phaseAt: 0, seen: false, total: 6 };
 
@@ -73,6 +73,13 @@ describe('how long a run takes', () => {
     expect(runDetail({ ...base, phase: 'done', report: { ...empty, alreadySaved: [{ name: 'Offer copy.pdf', as: 'Offer letter.pdf' }] } })).toBe('1 thing already saved as Offer letter.');
     const two = [{ name: 'a.pdf', as: 'A.pdf' }, { name: 'b.pdf', as: 'B.pdf' }];
     expect(runDetail({ ...base, phase: 'done', report: { ...empty, alreadySaved: two } })).toBe('2 things already saved.');
+  });
+  it('a run that only found things already saved never says 0 things filed', () => {
+    const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+    const done = { ...base, phase: 'done' as const, report: { ...empty, alreadySaved: [{ name: 'Offer copy.pdf', as: 'Offer letter.pdf' }] } };
+    expect(runTitle(done)).toBe('Done. 1 thing already saved');
+    expect(runShort(done)).toBe('1 thing already saved');
+    expect(runTitle({ ...done, report: empty })).toBe('Done. 0 things filed');
   });
 });
 

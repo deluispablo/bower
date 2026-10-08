@@ -33,6 +33,7 @@ import type { EditText, OperationV2, SeenFile } from '../../src/data/contracts/r
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FencedDrive, StoredEvidence } from '../../src/data/drive/fake-drive';
 import { SOURCE_NOT_AS_SEEN, reusedNoteOf, shows } from '../../src/data/fake/fake-run-records';
+import { savedTwins } from '../../src/data/spine/duplicates';
 import type { RunManifest } from '../../src/data/spine/records';
 import type { RunnerDrive } from './drive';
 import { notAsSeen } from './still-as-seen';
@@ -46,6 +47,8 @@ const NOTE_CHANGED = 'The note changed before Bower could add to it.';
 const NOTE_THERE = 'A note with that name was already there, so Bower did not write it.';
 const NAME_TAKEN = 'Something else has that name there, so Bower left it as it was.';
 const ARRIVED = 'Something new arrived in it, so it stays in your inbox.';
+/** A thing already saved whose copy left, or which changed, since the plan: it stays, and the next tidy-up looks again. */
+const NOT_SAVED = 'It changed, or the copy Bower found was moved, so it stays in your inbox for now.';
 const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 const NOT_REACHED = "Bower couldn't reach Google Drive, so it stayed as it was.";
@@ -193,6 +196,20 @@ export function driveEffects(drive: RunnerDrive): Effects {
       const ev = await drive.evidence(e.before.fileId);
       if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { refused: refused('conflict', LIST_CHANGED) };
       return samePlace(ev.file, e.before) ? { parentId, modifiedTime: ev.file.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
+    }
+    // A thing already saved (review P4-17 I1, I2): decided by its content, so its Bin is sent only while it is still the
+    // bytes the plan read, and the copy it stands on is still there, in its place, with those same bytes. The fence then
+    // reads it again right before the send, with its modifiedTime too.
+    const member = e.kind === 'bin' ? manifest.capture.members.find((m) => m.file.fileId === e.before.fileId) : undefined;
+    if (e.kind === 'bin' && member) {
+      const same = (ev: StoredEvidence | null, seen: SeenFile): boolean => !!ev && !ev.trashed && samePlace(ev.file, seen) && ev.content?.sha256 === member.content.sha256;
+      const twins = savedTwins(manifest, op, head);
+      const copyStands = same(await drive.evidence(e.before.fileId), e.before);
+      let twinStands = false;
+      for (const twin of twins) if (copyStands && !twinStands) twinStands = same(await drive.evidence(twin.fileId), twin);
+      if (!copyStands || !twinStands) return { refused: refused('conflict', NOT_SAVED) };
+      drive.expectSeen(e.before, true);
+      return (await drive.list(e.before.fileId)).length ? { refused: refused('conflict', ARRIVED) } : { parentId, modifiedTime: null };
     }
     // A move or a Bin: the source by the name and place the plan saw. The fence reads it right before the send and
     // refuses it if either differs (`expectSeen`): that one read is the check, with no earlier one to go stale.

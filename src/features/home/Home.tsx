@@ -16,7 +16,7 @@ import { PoseBower } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon, BowerHead } from '@/ui/Icon';
 import { toast } from '@/ui/toast';
-import { hasReplay, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
+import { filedWords, hasReplay, replayWaiting, isRunning, landedSummary, PHASE_POSE, runDetail, runTitle, stoppedUnseen } from '@/features/tidy/run-words';
 import { RunLinks } from '@/features/tidy/RunLinks';
 import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
@@ -82,7 +82,7 @@ function AwayCard({ run, bird }: { run: RunState; bird: boolean }) {
       )}
       <p className="muted">Tidy-up finished {ago(end).toLowerCase()}</p>
       <h2 id="away" className={s.cardTitle}>
-        {plural(run.report?.filed.length ?? 0, 'thing')} filed{run.report?.updated.length ? `, ${plural(run.report.updated.length, 'note')} brought up to date` : ''}.
+        {filedWords(run.report)}{run.report?.updated.length ? `, ${plural(run.report.updated.length, 'note')} brought up to date` : ''}.
       </h2>
       <p className="muted">{landedSummary(run)}</p>
       {run.report && <RunLinks report={run.report} />}

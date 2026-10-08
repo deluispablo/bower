@@ -12,12 +12,16 @@
  *
  * Never a duplicate: a file with no `md5Checksum` (a Google Doc, Sheet or Slides file has none), an empty file (every
  * empty file has the same MD5), a saved link (its note is made and reused by its own key), a pile's note, and anything
- * in the Bin (the listing leaves it out). Only a file filed outside the inbox and Bower's own files counts as saved.
+ * in the Bin (the listing leaves it out). Only a file filed in a folder outside the inbox and Bower's own files counts as saved (not Rules.md
+ * or another file at the top of the folder).
  */
+import type { Checkpoint } from '../contracts/run-checkpoint';
+import type { OperationV2, SeenFile } from '../contracts/run-manifest';
 import type { DriveFile } from '../drive/drive-api';
 import { PILE_NOTE } from '../piles';
 import { SYSTEM } from '../vault/layout';
 import type { VaultIndex } from '../vault/vault-index';
+import type { RunManifest } from './records';
 
 /** The MD5 of no bytes at all: every empty file has it, so it never says two files are the same. */
 export const EMPTY_MD5 = 'd41d8cd98f00b204e9800998ecf8427e';
@@ -44,7 +48,7 @@ export function duplicatesOf(listing: readonly DriveFile[], ix: VaultIndex, thin
   const saved = listing
     .filter((f) => comparable(f) && !taken.has(f.id))
     .map((f) => ({ f, path: ix.pathOf(f.id) }))
-    .filter((x): x is { f: DriveFile & { md5Checksum: string }; path: string } => x.path !== undefined && !x.path.startsWith('Inbox/') && !x.path.startsWith(`${SYSTEM.dir}/`))
+    .filter((x): x is { f: DriveFile & { md5Checksum: string }; path: string } => x.path !== undefined && x.path.includes('/') && !x.path.startsWith('Inbox/') && !x.path.startsWith(`${SYSTEM.dir}/`))
     .sort((a, b) => byCode(a.path, b.path));
   for (const { f } of saved) if (!filed.has(f.md5Checksum)) filed.set(f.md5Checksum, f);
   const run = listing
@@ -63,4 +67,24 @@ export function duplicatesOf(listing: readonly DriveFile[], ix: VaultIndex, thin
     else out.set(f.id, { of: 'run', keptId: first });
   }
   return out;
+}
+
+/**
+ * The file a planned Bin of a thing already saved stands on (review P4-17 I1), as it must be found right before the
+ * send: a captured file of the folder by the name its row says it is saved as (its id, name and place as the plan saw
+ * them), or the thing of this run it copies, where that thing's applied move put it. Empty for any other operation.
+ * The Bin is sent only while one of them is still there, in that place, with the copy's very content.
+ */
+export function savedTwins(manifest: RunManifest, op: OperationV2, head: Checkpoint): SeenFile[] {
+  const e = op.effect;
+  if (e.kind !== 'bin') return [];
+  const members = new Set(manifest.capture.members.map((m) => m.file.fileId));
+  if (!members.has(e.before.fileId)) return [];
+  const [after] = op.dependsOn;
+  if (after !== undefined) {
+    const done = head.outcomes.find((o) => o.operationId === after);
+    return done?.state === 'applied' ? [done.evidence.file] : [];
+  }
+  const as = manifest.reportPlan.find((c) => c.when === 'applied' && c.requires.includes(op.operationId))?.value.alreadySaved?.[0]?.as;
+  return manifest.capture.places.flatMap((p) => (!p.file.folder && p.file.name === as && !members.has(p.file.fileId) ? [p.file] : []));
 }

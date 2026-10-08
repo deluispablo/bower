@@ -58,6 +58,12 @@ function modelFiling(shown: string[]): ClaudeSpawn {
   };
 }
 
+/** The model's filing, after something the person does in the folder while the model works. */
+const during = (act: () => Promise<void>): ClaudeSpawn => async (call) => {
+  await act();
+  return modelFiling([])(call);
+};
+
 async function offerCase(): Promise<LoadedCase> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-offer-and-flat');
   if (!c) throw new Error('no corpus case c04-offer-and-flat');
@@ -73,7 +79,7 @@ async function offerFiled(): Promise<LoadedCase> {
   return { ...c, folderBinary: { ...c.folderBinary, [FILED]: offerBytes(c) } };
 }
 
-interface Report { filed: Array<{ name: string; to: string }>; created: unknown[]; updated: unknown[]; alreadySaved?: Array<{ name: string; as: string }> }
+interface Report { filed: Array<{ name: string; to: string }>; created: unknown[]; updated: unknown[]; setAside: Array<{ name: string; why: string }>; alreadySaved?: Array<{ name: string; as: string }> }
 const reportOf = (run: CaseRun): Report => (run.lastRun as { run: { report: Report } }).run.report;
 const inFolder = (run: CaseRun, under: string): string[] => Object.keys(run.after).filter((p) => p.startsWith(`${under}/`)).sort();
 
@@ -228,5 +234,52 @@ describe('a thing already saved (duplicate-by-hash)', () => {
     // inbox file was not taken.
     expect([...dups.keys()]).toEqual([]);
     expect([...duplicatesOf(listing, ix, ['inbox-other', 'own-new'])]).toEqual([['own-new', { of: 'run', keptId: 'inbox-other' }]]);
+    // A file at the top of the folder (Rules.md) is not a filed copy either.
+    const rules = [...listing, file('rules', 'Rules.md', 'root', { md5Checksum: 'bb'.repeat(16) }), file('rules-copy', 'Rules copy.md', 'inbox', { md5Checksum: 'bb'.repeat(16) })];
+    expect([...duplicatesOf(rules, VaultIndex.build('root', rules), ['rules-copy']).keys()]).toEqual([]);
+  });
+
+  it('a copy whose twin left during the run is not binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await offerFiled();
+    let at: { drive: FakeDrive; root: string } | null = null;
+    // While the model works, the person puts the filed offer in the Bin.
+    const twinLeaves = async (): Promise<void> => {
+      const f = at ? (await byPath(at.drive, at.root)).get(FILED) : undefined;
+      if (!at || !f) throw new Error('no filed offer');
+      await at.drive.trash(f.id);
+    };
+    const run = await runWithClaude({ ...c, inbox: [{ line: '', files: [OFFER] }, { line: '', files: ['Payslip_Aug.pdf'] }] }, during(twinLeaves), undefined, async (drive, root) => { at = { drive, root }; });
+    expect(run.code).toBe(0);
+    expect(reportOf(run).alreadySaved ?? []).toEqual([]);
+    expect(inFolder(run, 'Inbox')).toEqual([`Inbox/${OFFER}`]);
+    expect(reportOf(run).setAside.map((a) => a.name)).toEqual([OFFER]);
+  });
+
+  it('a copy changed during the run is not binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await offerFiled();
+    let at: { drive: FakeDrive; root: string } | null = null;
+    // While the model works, the person saves other words over the inbox copy, under the same name.
+    const copyChanges = async (): Promise<void> => {
+      const f = at ? (await byPath(at.drive, at.root)).get(`Inbox/${OFFER}`) : undefined;
+      if (!at || !f) throw new Error('no inbox offer');
+      await at.drive.writeText(f.id, 'A different signed offer.', f.modifiedTime);
+    };
+    const run = await runWithClaude({ ...c, inbox: [{ line: '', files: [OFFER] }, { line: '', files: ['Payslip_Aug.pdf'] }] }, during(copyChanges), undefined, async (drive, root) => { at = { drive, root }; });
+    expect(run.code).toBe(0);
+    expect(reportOf(run).alreadySaved ?? []).toEqual([]);
+    expect(run.after[`Inbox/${OFFER}`]).toBe('A different signed offer.');
+  });
+
+  it('pile words with only a saved copy are kept', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await offerFiled();
+    const run = await runWithClaude({ ...c, inbox: [{ line: 'Signed on Friday, start 2 November.', files: [OFFER] }] }, modelFiling([]));
+    expect(run.code).toBe(0);
+    expect(reportOf(run).alreadySaved).toEqual([{ name: OFFER, as: 'Offer letter.pdf' }]);
+    // The words stay, live, for the next tidy-up to read.
+    expect(Object.entries(run.after).filter(([p, text]) => !p.startsWith('.bower/') && text.includes('start 2 November')).map(([p]) => p)).not.toEqual([]);
   });
 });
+
