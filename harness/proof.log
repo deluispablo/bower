@@ -421,3 +421,4 @@ home-inbox-first	d9e8128bd49cbbfd	2026-10-08	red (fixed in 0514571)
 keep-one-note-merge	ae6218675c5d1fc2	2026-10-08	red (fixed in a3a1e8a)
 c05-incorporation	1a441fc8c3ee7ee1	2026-10-08	known-green: red at tests-only 4729002 (hub-lines and keep-one-note pass:false on assertions, /tmp/c05inc-red.log); green after 437229a (grounded hub line) and a3a1e8a (keep-one-note merge), verify 3/3 at 6f84b95
 keep-one-note-merge	ba8924645bf5bbde	2026-10-08	red (fixed in 320e08b)
+ask-answer-loop	12f4c5b3c25cc200	2026-10-08	known-green: red by hand at tests-only adc533f: all 4 verify tests fail on assertions; green at 517dc9b plus merge 33db41a

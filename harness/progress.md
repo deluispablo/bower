@@ -176,3 +176,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: keep-one-note-merge passes — Keep one note: facts and Timeline carry over with sources, the other note goes to the Bin, links rewritten, undoable (TL-P4-08 addendum 7)
 - 2026-10-08: c05-incorporation passes — The four C05 corpus cases score green with scripted proposals (hub line grounded per TL-P4-08 addendum 7; keep-one-note merge)
 - 2026-10-08: keep-one-note-merge passes — The other note is binned only as read; whole lines compared, so no fact is dropped (P4-19 fix)
+- 2026-10-08: ask-answer-loop passes — An answer applies at once: stored idempotently, a run scoped to its subject, waits during a run, a no closes with no run (TL-P4-08 addendum 8)
