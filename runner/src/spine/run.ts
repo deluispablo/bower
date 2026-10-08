@@ -24,6 +24,7 @@ import { parseRunManifestV2, type OperationV2 } from '../../../src/data/contract
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from '../../../src/data/spine/records';
 import { materialize } from '../../../src/data/spine/report';
 import { takeAdmitted, type Admitted, type AdmittedReader } from './admitted';
+import { conflicts, needsOf } from './schedule';
 import type { RunnerToken } from '../token';
 
 /**
@@ -67,6 +68,8 @@ export interface SpineRun {
    */
   fenced?(): FencedDrive;
   effects: Effects;
+  /** How many independent operations may be in flight together (`schedule.ts`); one when not given. */
+  concurrency?: number;
   /** The run's manifest; asked only when its folder holds none (see `admittedPlan`). */
   plan(): Promise<RunManifest>;
   clock(): number;
@@ -171,21 +174,21 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     outcomes = outcomes.map((o) => (unnamed(o) ? (named.find((n) => n.operationId === o.operationId) ?? o) : o));
   };
 
-  for (const op of manifest.operations) {
+  // The opening is written once, by whichever operation sends first; the others wait for it.
+  let opened: Promise<void> | null = null;
+  const openOnce = (): Promise<void> => (opened ??= opening());
+
+  /** One operation, once what it depends on has applied. */
+  const runOne = async (op: OperationV2): Promise<void> => {
     const operationId = op.operationId;
     const outcome = outcomes.find((o) => o.operationId === operationId);
-    if (!outcome || outcome.state === 'applied' || outcome.state === 'rejected') continue;
-    // What it depends on must have happened; otherwise it was never sent, and is refused.
-    if (op.dependsOn.some((id) => outcomes.find((o) => o.operationId === id)?.state !== 'applied')) {
-      settle({ operationId, state: 'rejected', failure: STAYED });
-      continue;
-    }
+    if (!outcome) return;
     if (outcome.state === 'possible-effect' && !fresh.has(operationId)) {
       // Named by an earlier runner's batch: read back by its stamp before anything else, never sent again blindly.
       const back = await run.effects.readBack(op, working(), manifest);
       if (back.state === 'landed') {
         settle({ operationId, state: 'applied', evidence: back.evidence });
-        continue;
+        return;
       }
       if (back.state === 'unreadable') {
         console.error(`Operation ${op.ordinal} of run ${run.runId} may have been sent and cannot be read back (${back.why}); it is not sent again`);
@@ -197,7 +200,7 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
     let sent = false;
     const settled = await run.effects.apply(op, working(), run.fenced?.() ?? (await run.batch()), manifest, async () => {
       if (sent) return;
-      if (unnamed(inChain(operationId))) await opening();
+      if (unnamed(inChain(operationId))) await openOnce();
       sent = true;
     });
     if (settled.state === 'applied' && !sent) {
@@ -205,7 +208,56 @@ export async function runOperations(run: SpineRun): Promise<RunEnd> {
       throw new BowerError('unknown', UNRESOLVED);
     }
     settle(settled.state === 'applied' ? { operationId, state: 'applied', evidence: settled.evidence } : { operationId, state: 'rejected', failure: settled.failure });
+  };
+
+  // Operations that do not depend on each other run together, up to `POOL`, in plan order otherwise (`schedule.ts`).
+  // The first failure stops anything new; those in flight finish, and the run stops there as it did one at a time.
+  const stateOf = (id: string): Outcome['state'] | undefined => outcomes.find((o) => o.operationId === id)?.state;
+  const done = (id: string): boolean => stateOf(id) === 'applied' || stateOf(id) === 'rejected';
+  const flying = new Map<string, Promise<void>>();
+  let stopped: { error: unknown } | null = null;
+  const start = (op: OperationV2): void => {
+    const p = runOne(op)
+      .catch((error: unknown) => {
+        stopped ??= { error };
+      })
+      .finally(() => flying.delete(op.operationId));
+    flying.set(op.operationId, p);
+  };
+  for (;;) {
+    const left = manifest.operations.filter((o) => !done(o.operationId) && stateOf(o.operationId) !== undefined);
+    if (!left.length) break;
+    let moved = false;
+    if (!stopped) {
+      // One named by an earlier runner's batch is read back before anything is sent, alone and in plan order, so a
+      // run that cannot read one back stops there with nothing sent after it.
+      const solo = (o: OperationV2): boolean => stateOf(o.operationId) === 'possible-effect' && !fresh.has(o.operationId);
+      const before: OperationV2[] = [];
+      for (const op of left) {
+        const ahead = before.filter((b) => solo(op) || solo(b) || conflicts(b, op));
+        before.push(op);
+        if (flying.has(op.operationId) || ahead.length) continue;
+        // What it depends on must have happened; otherwise it was never sent, and is refused.
+        const needs = needsOf(op);
+        if (needs.some((id) => !done(id) && manifest.operations.some((o) => o.operationId === id))) continue;
+        if (needs.some((id) => stateOf(id) !== 'applied')) {
+          settle({ operationId: op.operationId, state: 'rejected', failure: STAYED });
+          moved = true;
+          continue;
+        }
+        if (flying.size >= (run.concurrency ?? 1)) break;
+        start(op);
+        moved = true;
+      }
+    }
+    if (flying.size) await Promise.race(flying.values());
+    else if (!moved) {
+      // Nothing can start: what is left waits on something that never happens (or the run has stopped), so it is refused.
+      if (stopped) break;
+      for (const op of left) settle({ operationId: op.operationId, state: 'rejected', failure: STAYED });
+    }
   }
+  if (stopped) throw (stopped as { error: unknown }).error;
 
   // Refusals of operations the chain never named (nothing at all was sent): written as such first.
   if (outcomes.some((o) => writable(o) !== o)) await commit({ phase: 'saving', phaseAt: run.clock(), outcomes: outcomes.map(writable) });

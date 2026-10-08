@@ -179,13 +179,13 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
     const id = decodeURIComponent(one[2] ?? '');
     const { meta, content } = await multipart(body);
     const stored = await drive.get(id);
-    return json(200, wireFile(await drive.writeText(id, content, stored.modifiedTime, meta.appProperties), false));
+    return json(200, await withSums(wire, url, await drive.writeText(id, content, stored.modifiedTime, meta.appProperties), false));
   }
   if (method === 'PATCH' && one?.[1] && url.searchParams.get('uploadType') === 'media') {
     const id = decodeURIComponent(one[2] ?? '');
     // Drive v3 takes no precondition on a content update: it writes over whatever is there.
     const stored = await drive.get(id);
-    return json(200, wireFile(await drive.writeText(id, await new Response(body).text(), stored.modifiedTime), false));
+    return json(200, await withSums(wire, url, await drive.writeText(id, await new Response(body).text(), stored.modifiedTime), false));
   }
   if (method === 'PATCH' && one && !one[1]) {
     const id = decodeURIComponent(one[2] ?? '');
@@ -193,7 +193,7 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
     if (patch.trashed === true) {
       await drive.trash(id, patch.appProperties);
       const stored = await drive.evidence(id);
-      return stored ? json(200, wireFile(stored.file, true)) : json(404, driveFailure(404, 'notFound'));
+      return stored ? json(200, await withSums(wire, url, stored.file, true)) : json(404, driveFailure(404, 'notFound'));
     }
     const addParent = url.searchParams.get('addParents');
     const removeParent = url.searchParams.get('removeParents');
@@ -203,9 +203,24 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
       ...(addParent ? { addParent } : {}),
       ...(removeParent ? { removeParent } : {}),
     });
-    return json(200, wireFile(file, false));
+    return json(200, await withSums(wire, url, file, false));
   }
   return json(400, driveFailure(400, 'badRequest'));
+}
+
+/** An update's answer, carrying the stored content's checksums when `fields` names them, as Drive's does (`files.update`). */
+async function withSums(wire: DriveV3, url: URL, file: DriveFile, trashed: boolean): Promise<Record<string, unknown>> {
+  const fields = url.searchParams.get('fields') ?? '';
+  if (!wire.checksums || file.folder || !(fields.includes('md5Checksum') || fields.includes('sha256Checksum'))) return wireFile(file, trashed);
+  // A file in the Bin is no longer read as live bytes here; its answer then carries no checksums.
+  const bytes = await wire.drive.readBytes(file.id).catch(() => null);
+  if (!bytes) return wireFile(file, trashed);
+  return {
+    ...wireFile(file, trashed),
+    size: String(bytes.byteLength),
+    ...(fields.includes('md5Checksum') ? { md5Checksum: createHash('md5').update(bytes).digest('hex') } : {}),
+    ...(fields.includes('sha256Checksum') ? { sha256Checksum: createHash('sha256').update(bytes).digest('hex') } : {}),
+  };
 }
 
 async function list(drive: FakeDrive, url: URL): Promise<Response> {

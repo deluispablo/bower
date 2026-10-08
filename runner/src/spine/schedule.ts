@@ -1,0 +1,61 @@
+/**
+ * Which operations of a batch may be in flight together (TL-P4-08 addendum 6, drive-calls-cut).
+ *
+ * An operation waits for what it depends on (`dependsOn`: a folder before what goes into it, a note before a line
+ * that cites it) and for any earlier operation of the plan it shares a thing with: the same file, or the same folder
+ * when one of them makes something there (so a name taken there is seen). Two moves into one folder share nothing.
+ * An operation kind this file does not know claims everything, so it runs alone and in plan order.
+ *
+ * How many at once: `POOL`. Drive's usage limits are per user, 12,000 requests a minute
+ * (https://developers.google.com/workspace/drive/api/guides/limits), and a burst past them answers 403/429 `rateLimitExceeded`,
+ * which the adapter already retries with exponential backoff
+ * (https://developers.google.com/workspace/drive/api/guides/handle-errors). Four reads at once is well inside that
+ * and under the six connections a browser opens per host, the usual size of a small pool; the writes themselves still
+ * go through the adapter's queue one at a time, which also keeps sustained writes near the rate Google advises.
+ */
+import type { OperationV2 } from '../../../src/data/contracts/run-manifest';
+
+export const POOL = 4;
+
+export interface Claim {
+  key: string;
+  /** Two shared claims of one key do not wait on each other. */
+  shared: boolean;
+}
+
+const dirOf = (parent: { fileId: string } | { createdBy: string }): string => `dir:${'fileId' in parent ? parent.fileId : parent.createdBy}`;
+
+const ALL: Claim[] = [{ key: '*', shared: false }];
+
+/** What an operation touches, for ordering against the operations before it. */
+export function claimsOf(op: OperationV2): Claim[] {
+  const e = op.effect;
+  switch (e.kind) {
+    case 'create-folder':
+    case 'create-text':
+      return [{ key: dirOf(e.parent), shared: false }];
+    case 'move':
+      return [
+        { key: `file:${e.before.fileId}`, shared: false },
+        { key: dirOf(e.parent), shared: true },
+      ];
+    case 'bin':
+    case 'edit-text':
+    case 'write-runner-json':
+      return [{ key: `file:${e.before.fileId}`, shared: false }];
+    default:
+      return ALL;
+  }
+}
+
+const clash = (a: Claim[], b: Claim[]): boolean => a.some((x) => b.some((y) => (x.key === y.key || x.key === '*' || y.key === '*') && !(x.shared && y.shared)));
+
+/** Whether two operations cannot be in flight together. */
+export const conflicts = (a: OperationV2, b: OperationV2): boolean => clash(claimsOf(a), claimsOf(b));
+
+/** What an operation waits for: its `dependsOn`, and the operation that made the folder it goes into. */
+export function needsOf(op: OperationV2): string[] {
+  const e = op.effect;
+  const made = (e.kind === 'create-folder' || e.kind === 'create-text' || e.kind === 'move') && 'createdBy' in e.parent ? [e.parent.createdBy] : [];
+  return [...op.dependsOn, ...made.filter((id) => !op.dependsOn.includes(id))];
+}

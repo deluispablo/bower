@@ -222,7 +222,8 @@ describe('runner checkpoints', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     /**
      * One run with effects that touch no Drive, so every Drive request after checkpoint 0 lands is a checkpoint's:
-     * the fence's read of its folder, its create and, when the create's answer cannot confirm its bytes, a read-back.
+     * its create and, when the create's answer cannot confirm its bytes, a read-back. The folder the run made for its
+     * records is not read before each create (the run holds it, `drive-calls-cut`).
      */
     const cost = async (checksums: boolean): Promise<{ requests: number; checkpoints: number; ops: number; readBacks: number }> => {
       const { wire, root, manifest } = await seeded();
@@ -254,15 +255,15 @@ describe('runner checkpoints', () => {
       const readBacks = wire.requests.filter((r) => r.url.searchParams.get('alt') === 'media' && written.has(decodeURIComponent(r.url.pathname.split('/').at(-1) ?? ''))).length;
       return { requests: wire.requests.length - from, checkpoints: chain.length - 1, ops: manifest.operations.length, readBacks };
     };
-    // A create whose answer carries no checksum is read back, as before: three Drive requests per checkpoint.
+    // A create whose answer carries no checksum is read back, as before: two Drive requests per checkpoint.
     const before = await cost(false);
     expect(before.readBacks).toBe(before.checkpoints + 1);
-    expect(before.requests).toBe(3 * before.checkpoints + 1);
-    // Drive's answer carries the stored bytes' checksum: the fence's read and the create, nothing more.
+    expect(before.requests).toBe(2 * before.checkpoints + 1);
+    // Drive's answer carries the stored bytes' checksum: the create, nothing more.
     const after = await cost(true);
     expect(after.checkpoints).toBe(before.checkpoints);
     expect(after.readBacks).toBe(0);
-    expect(after.requests).toBe(2 * after.checkpoints);
+    expect(after.requests).toBe(after.checkpoints);
     console.log(`checkpoint cost: before=${(before.requests / before.ops).toFixed(2)} after=${(after.requests / after.ops).toFixed(2)} Drive requests per operation`);
     expect(after.requests / after.ops).toBeLessThan(before.requests / before.ops);
   });

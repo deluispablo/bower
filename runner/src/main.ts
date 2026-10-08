@@ -45,6 +45,7 @@ import { RunnerDrive } from './drive';
 import { RunnerStatus } from './status';
 import { NO_LONGER_ALLOWED, RunnerToken, isGone, isStaleAttempt } from './token';
 import { admittedPlan, runOperations, type Effects } from './spine/run';
+import { POOL } from './spine/schedule';
 import { driveEffects } from './effects';
 import type { ClaudeSpawn } from './claude';
 import { providerFor, providerNamed, type ProviderName } from './provider';
@@ -65,6 +66,8 @@ export interface TidyOptions {
   /** This runner's attempt, from its dispatch. */
   attempt: number;
   fetch?: typeof fetch;
+  /** How many independent operations are in flight together; `POOL` when not given (`spine/schedule.ts`). */
+  concurrency?: number;
   /** What plans a new run from what it took, read through this runner's adapter in the folder (`rootId`). */
   provider(drive: RunnerDrive, rootId: string): RunProvider;
   /** How operations reach Drive through this runner's adapter. */
@@ -223,6 +226,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     batch: () => drive.batch(),
     fenced: () => drive.fencedWrites(),
     effects: opts.effects(drive),
+    concurrency: opts.concurrency ?? POOL,
     // The old template's Rules.md is repaired first, so the planner sees a file Bower may word (`rules-repair.ts`).
     plan: () =>
       timing.time('reads', () => plan(() => repairRules(drive, rootId, () => reads.listAll(rootId)))),

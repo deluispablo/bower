@@ -133,6 +133,8 @@ function tidy(wire: DriveV3, root: string, attempt: number, effects: Effects, wr
     fetch: wire.fetch,
     provider: () => provider(wire, root),
     effects: () => effects,
+    // One at a time: the stub's `breakAfter` counts sends in plan order.
+    concurrency: 1,
     clock: () => AT + attempt * 1000,
     newId: () => `attempt${attempt}-${++ids}`,
     onDrive: (d) => {

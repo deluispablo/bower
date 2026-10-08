@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modelled, type Call } from './modelled';
+import { DRIVE_MS, modelled, type Call } from './modelled';
 
 interface PhaseCount {
   name: string;
@@ -86,23 +86,45 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
 
-    // Total Drive calls (reads + writes): 106 reads + 28 writes = 134 calls
+    // Total Drive calls (reads + writes), after drive-calls-cut (TL-P4-08 addendum 6): 72, was 134 at fd99ca3
+    // (106 reads + 28 writes). Updated on purpose; the cut is pinned at 40 percent in the next describe.
     const totalDriveCalls = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
-    expect(totalDriveCalls).toBe(134);
+    expect(totalDriveCalls).toBe(72);
 
     const count = analyzeCalls(calls);
 
-    // Golden values from C04 runs on both a566241 and 35edc8b (current HEAD):
-    // Both have identical call counts: 134 total Drive calls, with no difference.
-    // Modelled total: ~461ms (a566241) to ~481ms (HEAD).
-    // Live rise from 35s to 49s is NOT explained by extra calls or timing attribution alone:
-    // modelled shows no difference, so the live rise is real Drive latency variance.
+    // Per step before the cut: token 2, reads 17, model 2, apply 19, checkpoints 4, report 45, status 4.
     expect(count.token).toBe(2);
     expect(count.reads).toBe(17);
     expect(count.model).toBe(2);
     expect(count.apply).toBe(19);
     expect(count.checkpoints).toBe(4);
-    expect(count.report).toBe(45);
+    expect(count.report).toBe(39);
     expect(count.status).toBe(4);
+  });
+});
+
+/** The C04 run's Drive calls before the cut (TL-P4-08 addendum 6, at fd99ca3): 106 reads and 28 writes. */
+const DRIVE_CALLS_BEFORE = 134;
+/** Its modelled apply before the cut, from the opening checkpoint's answer to the closing checkpoint's send, at 150 ms a call. */
+const APPLY_MS_BEFORE = 13350;
+
+describe('drive-calls-cut', () => {
+  it('the C04 run makes at least 40 percent fewer Drive calls', async () => {
+    const { calls, code } = await modelled();
+    expect(code).toBe(0);
+    const drive = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
+    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6));
+  });
+
+  it('offer-and-flat apply takes at most half its modelled time', async () => {
+    const { calls, code } = await modelled();
+    expect(code).toBe(0);
+    const opening = calls.find((c) => c.kind === 'write' && c.name?.startsWith('checkpoint-1-'));
+    const closing = calls.find((c) => c.kind === 'write' && c.name?.startsWith('checkpoint-2-'));
+    if (!opening || !closing) throw new Error('the opening or the closing checkpoint is missing');
+    const apply = closing.at - (opening.at + DRIVE_MS);
+    console.log(`apply: modelled ${apply} ms (was ${APPLY_MS_BEFORE})`);
+    expect(apply).toBeLessThanOrEqual(APPLY_MS_BEFORE / 2);
   });
 });
