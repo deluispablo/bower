@@ -307,7 +307,6 @@ describe('admission in the person object', () => {
   it('a new run is admitted only with its manifest', async () => {
     const { sub } = await someone();
     // A press that would admit reads the inbox first; with no manifest, nothing is written or counted.
-    expect(await person(sub).wouldAdmit('press-1', T0)).toBe(true);
     expect(await person(sub).admit(ask('press-1', T0, { manifest: null }))).toEqual({ admitted: false, refused: 'needs-manifest' });
     const empty = await runInDurableObject(person(sub), (_instance, state) => ({
       runs: state.storage.sql.exec('SELECT id FROM runs').toArray(),
@@ -316,12 +315,10 @@ describe('admission in the person object', () => {
     expect(empty).toEqual({ runs: [], quota: [] });
     const first = await admitted(sub, ask('press-1', T0));
     // A repeat, or a press while it is going, needs no manifest and reads nothing.
-    expect(await person(sub).wouldAdmit('press-1', T0 + 1)).toBe(false);
-    expect(await person(sub).wouldAdmit('press-2', T0 + 1)).toBe(false);
     expect(await admitted(sub, ask('press-1', T0 + 2, { manifest: null }))).toEqual(first);
     expect(await admitted(sub, ask('press-2', T0 + 3, { manifest: null }))).toEqual(first);
     await finish(sub, first.run.id);
-    expect(await person(sub).wouldAdmit('press-2', T0 + 4)).toBe(true);
+    expect(await person(sub).admit(ask('press-2', T0 + 4, { manifest: null }))).toEqual({ admitted: false, refused: 'needs-manifest' });
   });
 
   it('the run history is bounded and keeps the newest runs', async () => {
@@ -385,6 +382,20 @@ describe('the admission manifest', () => {
     expect(await stored(who.sub)).toEqual({ runs: [], quota: [] });
     expect(who.folder.sent.every((s) => s.startsWith('GET '))).toBe(true);
     expect(root).not.toBe('');
+  });
+
+  it('a press over the daily limit reads nothing from Drive', async () => {
+    const who = await withFolder();
+    await who.folder.drive.createText(who.folder.inbox, 'receipt.pdf', '%PDF receipt', { pile: 'p-receipt' });
+    const day = new Date().toISOString().slice(0, 10);
+    await runInDurableObject(person(who.sub), (_instance, state) => {
+      state.storage.sql.exec('INSERT INTO quota (window, counter) VALUES (?, ?)', day, Number(env.DAILY_RUN_LIMIT));
+    });
+    who.folder.sent.length = 0;
+    const r = await press(who, { scope: 'all', allowWeb: false, requestId: 'press-over' });
+    expect(r.status).toBe(429);
+    expect(who.folder.sent).toEqual([]);
+    expect(await stored(who.sub)).toMatchObject({ runs: [] });
   });
 
   /** A pile folder in the inbox with its note's text and, when given, one thing. */

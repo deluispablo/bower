@@ -2,8 +2,8 @@
  * `POST /process`: admitting a tidy-up (worker contract, `POST /process`; TL-P3-15).
  *
  * The route checks the caller (same origin, session, the lease's epoch) and the body, then asks the
- * person object cheaply whether this press would admit a new run (`Person.wouldAdmit`: not a repeat, no
- * run going). Only then, outside the object's synchronous section, it reads the inbox with the person's
+ * person object to admit with no manifest (`Person.admit(null)`): a repeat, a run going or the day's limit answer
+ * with no Drive read. Only a press that would admit a new run (`needs-manifest`) goes on: outside the object's synchronous section it reads the inbox with the person's
  * Drive token and builds the admission manifest with the shared plan (`src/data/spine/plan.ts`, TL-P3-21):
  * metadata, Bower's own files and each pile's note, read by the runner's own readiness rules so a pile it would
  * hold is not admitted (TL-P3-25 point 2), through the Worker's reader (`admissionRead` in `src/data/spine/read.ts`: a listing with checksums,
@@ -310,10 +310,8 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     };
     const requestId = body.requestId ?? crypto.randomUUID();
     const person = personFor(env, sub);
-    // Drive is read only for a press that would admit a new run; a repeat or a run going answers from the object.
-    const fresh = await timing.time('check', () => reach('would admit', async (): Promise<boolean> => await person.wouldAdmit(requestId, now)));
     const ask: AdmissionAsk = { scope: body.scope, subjects: body.subject !== undefined ? [body.subject] : [], now };
-    let manifest = fresh ? await timing.time('reads', () => admission(env, person, ask, counted, () => fetches)) : null;
+    let manifest: AdmissionManifest | null = null;
     const input = (): AdmitInput => ({
       scope: body.scope,
       allowWeb: body.allowWeb,
@@ -324,12 +322,13 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       ...(body.answer ? { answer: true } : {}),
       ...(body.subject !== undefined ? { subject: body.subject } : {}),
     });
-    const admit = (): Promise<AdmitResult> => timing.time('admit', () => reach('admit', async (): Promise<AdmitResult> => await person.admit(input())));
-    let result = await admit();
-    // The run it looked like ended in between: this press is new after all, so it reads the inbox once.
-    if (!result.admitted && result.refused === 'needs-manifest' && manifest === null) {
+    const admit = (label: 'check' | 'admit'): Promise<AdmitResult> => timing.time(label, () => reach('admit', async (): Promise<AdmitResult> => await person.admit(input())));
+    // The object decides first, with no manifest: a repeat, a run going, an answer that waits or the day's limit answer
+    // with no Drive read. Only a press that would admit a new run (`needs-manifest`) reads the inbox, once.
+    let result = await admit('check');
+    if (!result.admitted && result.refused === 'needs-manifest') {
       manifest = await timing.time('reads', () => admission(env, person, ask, counted, () => fetches));
-      result = await admit();
+      result = await admit('admit');
     }
     if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
     if (!result.admitted) throw new HttpError(429, 'rate-limited');

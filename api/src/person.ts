@@ -606,28 +606,14 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
-   * `POST /process`, before Drive is read (TL-P3-21): whether a press with `requestId` would admit a new run at
-   * `now`, that is neither a repeat of a known request nor while a run is going. Writes only a stale run's expiry,
-   * as `admit` does. `admit` checks both again in its own section.
-   */
-  wouldAdmit(requestId: string, now: number): boolean {
-    return this.ctx.storage.transactionSync((): boolean => {
-      this.expire(now);
-      const repeat = this.ctx.storage.sql.exec<{ id: string }>('SELECT id FROM runs WHERE request_id = ?', requestId).toArray()[0];
-      if (repeat !== undefined) return false;
-      const current = this.currentRunRow();
-      return current === undefined || !ACTIVE_PHASES.includes(current.phase);
-    });
-  }
-
-  /**
    * `POST /process` (process.ts; TL-P3-15). One synchronous transaction, no `await`, in this order:
    * 1. expiry: a stale current run is marked failed once, and the revision rises;
    * 2. idempotency: a known `requestId` answers its own run, ended or not, with nothing changed
    *    (the first request's scope and allowWeb win);
    * 3. one active run: a run going is answered, with nothing changed;
-   * 4. the manifest: a new run with none built is refused as `needs-manifest`, with nothing written;
-   * 5. quota: today's UTC counter at or over `dailyLimit` refuses with nothing written, else counts;
+   * 4. quota: today's UTC counter at or over `dailyLimit` refuses with nothing written (so a press is refused
+   *    before any Drive read, which the route asks with no manifest first);
+   * 5. the manifest: a new run with none built is refused as `needs-manifest`, with nothing written, else counts;
    * 6. admission: a `queued` run bound to the requestId, keeping its manifest, and the revision rises.
    */
   admit(input: AdmitInput): AdmitResult {
@@ -671,8 +657,8 @@ export class Person extends DurableObject<Env> {
       } satisfies AnswersWaiting);
       return { admitted: true, run: toWire(current), revision: this.revision(), waits: true };
     }
-    if (input.manifest === null) return { admitted: false, refused: 'needs-manifest' };
     if (used >= input.dailyLimit) return { admitted: false, refused: 'rate-limited' };
+    if (input.manifest === null) return { admitted: false, refused: 'needs-manifest' };
     this.countQuota(day);
     // Only today's counter matters; earlier days go.
     sql.exec('DELETE FROM quota WHERE window < ?', day);
