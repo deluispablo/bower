@@ -4818,5 +4818,33 @@
     "verify": "pnpm -C runner exec vitest run -t \"a change the person made after a landed op is reported as kept|a run with no later change reports no kept line\"",
     "passes": false,
     "note": "TL-P4-05 addendum 2 (ce36da1): left out of checkpoint-per-batch; scheduled with the C12 slice, not the P4-6 close."
+  },
+  {
+    "id": "model-context-regression",
+    "task": "p4-c",
+    "category": "fix",
+    "what": "On a566241 the Claude provider filed C04 under Areas in 3 of 3 live runs (Resources on c76fd2f). The model input on the C04 fixture is the same as on c76fd2f, read savings kept, pinned by a golden test.",
+    "steps": [
+      "Capture the provider input on c76fd2f and a566241 from the C04 fixture with the scripted fake, no model, and diff them.",
+      "Restore what the model sees (suspects: aimed reads in provider.ts and drive.planReads; repairRules inside plan()), keeping the read savings.",
+      "Golden test of the model input on the C04 fixture."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the model input on the C04 fixture equals its golden copy\"",
+    "passes": false,
+    "note": "TL-P4-07 (main 9f9eb22): speed counts only with 3/3 passes. Live runs 37751420040, 37751677244, 37751871102."
+  },
+  {
+    "id": "checkpoint-count",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "The live C04 timing line on a566241 counted 8 checkpoints, not the 4 checkpoint-per-batch promised. The count is explained, and a C04 run writes exactly 4.",
+    "steps": [
+      "Explain the 8 (the timing counter or real writes).",
+      "Fix it so the C04 run writes, and counts, exactly 4.",
+      "Test on the modelled C04 run."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the C04 run writes and counts exactly 4 checkpoints\"",
+    "passes": false,
+    "note": "TL-P4-07 (main 9f9eb22). Timing: checkpoints=16011/8, 11500/8, 11604/8."
   }
 ]
