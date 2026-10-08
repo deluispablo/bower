@@ -72,7 +72,8 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     const inbox = Object.keys(run.after).filter((p) => p.startsWith('Inbox/')).sort();
     expect(inbox).toEqual([expect.stringMatching(/^Inbox\/[^/]+\/IMG_2301\.jpg$/), expect.stringMatching(/^Inbox\/[^/]+\/Pile note\.md$/)]);
     const photo = inbox[0] ?? '';
-    expect(run.after[photo]).toBe(new TextDecoder().decode(c.inboxBinary['IMG_2301.jpg']));
+    const bytes = c.inboxBinary['IMG_2301.jpg'];
+    expect(run.after[photo]).toBe(bytes ? new TextDecoder().decode(bytes) : c.inboxFiles['IMG_2301.jpg']);
     expect(run.after[inbox[1] ?? '']).toBe('Job offer and a flat near it. Compare the commute.\n');
     for (const p of ['Projects/Job hunt/Offer, Industrial Designer, Ferrowick.pdf', 'Projects/Job hunt/Industrial Designer, Ferrowick.md', 'Projects/Flat hunt/Flat 9, Wrenfield Road.md', 'Resources/Pay/Payslip August.pdf']) {
       expect({ p, there: p in run.after }).toEqual({ p, there: true });
@@ -83,7 +84,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     const asked = { id: `q-ask-${photoId}`, ...question, about: photo };
     const open = (JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: unknown[] }).questions;
     expect(open).toEqual([expect.objectContaining(asked)]);
-    const report = (run.lastRun as { report?: { questions?: unknown[]; filed?: unknown[] } }).report;
+    const report = (run.lastRun as { run?: { report?: { questions?: unknown[]; filed?: unknown[] } } }).run?.report;
     expect(report?.questions).toEqual([expect.objectContaining(asked)]);
     expect(report?.filed).toHaveLength(3);
 
@@ -138,7 +139,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       askAlsoFiles: edit((i, id) => ({ ...i, asks: [ask(id('IMG_2301.jpg'))] })),
       askText: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { text: 'one\ntwo' })] })),
     };
-    expect(Object.keys(bad).sort()).toEqual(Object.keys((REFUSALS as typeof REFUSALS | undefined) ?? {}).sort());
+    expect(Object.keys(bad).sort()).toEqual(Object.keys(REFUSALS).sort());
     const good = intentReply((_ctx, id) => filed(id));
     for (const kind of Object.keys(bad) as RefusalKind[]) {
       const calls: ClaudeCall[] = [];

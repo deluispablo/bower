@@ -121,6 +121,11 @@ export interface Filing {
   areas?: ReadonlyMap<string, string>;
   /** Piles it could not place without guessing, by pile id, each with its question: they stay in the inbox (TL-P4-08). */
   asks?: ReadonlyMap<string, Ask>;
+  /**
+   * Things it could not place without guessing, by file id, each with its question (TL-P4-08 addendum 4): each stays in
+   * the inbox untouched, its pile's words with it, and the rest of its pile is filed.
+   */
+  thingAsks?: ReadonlyMap<string, Ask>;
 }
 
 /**
@@ -133,8 +138,11 @@ export interface Ask {
   no: string;
 }
 
-/** The id of the question asked about a pile: one per pile, so a pile asked about again is not asked twice. */
-export const askId = (pileId: string): string => `q-ask-${pileId}`;
+/**
+ * The id of the question asked about a pile, or about one thing by its file id: one each, so a pile or a thing asked
+ * about again is not asked twice.
+ */
+export const askId = (pileOrFileId: string): string => `q-ask-${pileOrFileId}`;
 
 export type { HubUpdate };
 
@@ -279,6 +287,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   /** Questions about piles that stay in the inbox untouched, since their place is unclear (TL-P4-08 point 1). */
   const askedPiles: Question[] = [];
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
+  /** Piles with things asked about (TL-P4-08 addendum 4): the rest is filed, the folder and its words stay. */
+  const partly = new Set<string>();
   for (const pile of piles) {
     const marks = { members: members.length, things: things.length };
     /**
@@ -321,6 +331,13 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, askedAt: opts.requestedAt });
       continue;
     }
+    // Things the model asks about: each stays where it is, named by its question; the rest of the pile goes on.
+    const thingAsk = (fileId: string): Ask | undefined => (loose ? undefined : opts.filing?.thingAsks?.get(fileId));
+    for (const item of pile.items) {
+      const q = thingAsk(item.id);
+      if (q) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), askedAt: opts.requestedAt });
+    }
+    const partial = pile.items.some((item) => thingAsk(item.id));
     const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
     const notes = loose ? [] : children.filter((f) => !f.folder && f.name === PILE_NOTE);
     const declared = cap.declared;
@@ -331,6 +348,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const bound = contextKey === null ? undefined : children.find((f) => !f.folder && f.appProperties?.[PROP.item] === contextKey);
     // A declared pile whose context was removed (TL-P2-08 b) has none: any pile note in it is unbound.
     const note = declared ? bound : (bound ?? notes[0]);
+    // A pile partly asked about keeps its note where it is, with what is asked about: it is read for its words only.
+    const kept = partial ? undefined : note;
     // The bound note is read once, before anything of the pile is captured: one Drive cannot give back now holds
     // only this pile (TL-P2-08 (a)), never the run; a sign-out still stops it.
     let noteText = '';
@@ -347,9 +366,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), noteText).body.trim();
     const keys: Array<string | null> = [];
     const taken: string[] = [];
+    let askedKeys = 0;
     let lost: string | null = null;
     for (const item of pile.items) {
       const file = children.find((f) => f.id === item.id);
+      if (thingAsk(item.id)) {
+        const key = declared ? file?.appProperties?.[PROP.item] : undefined;
+        if (key !== undefined && declared?.memberKeys.has(key)) askedKeys += 1;
+        continue;
+      }
       if (file && !file.folder && file.name === PILE_NOTE && file.id !== note?.id) continue;
       if (!file || file.folder) {
         lost = 'one of its things changed while the run read it';
@@ -368,30 +393,36 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
       things.push({ pile, folder, item, file, content, words, merge: mergeOf(item) });
     }
+    // Every thing of it asked about: nothing of it is taken, as for a pile asked about whole.
+    if (partial && !taken.length && !lost) {
+      members.length = marks.members;
+      things.length = marks.things;
+      continue;
+    }
     // A pile of words only, or of pile notes only (TL-P2-32), becomes a generated note from its context (TL-P2-17),
     // under a main folder; its other pile notes stay as uncaptured children. A pile with no words either has nothing
     // to write, so it is left as it is, untouched, like a held pile.
-    const wordsOnly = !pile.items.length || (!taken.length && !declared);
+    const wordsOnly = !partial && (!pile.items.length || (!taken.length && !declared));
     if (wordsOnly && (!words.trim() || !generatedPlace(wordsPlace(pile.id, words).to))) continue;
     // Every member still in the folder is taken; those accounted for were filed already and are not captured again.
-    if (!lost && ((!taken.length && !wordsOnly) || (declared && keys.length !== declared.memberKeys.size))) lost = 'one of its members is not among its things';
+    if (!lost && ((!taken.length && !wordsOnly) || (declared && keys.length + askedKeys !== declared.memberKeys.size))) lost = 'one of its members is not among its things';
     // Its names must be ones a run record can carry, as the Inbox checks them (`recordablePile`).
-    if (!lost && !recordablePile(pile.id, [folder.name, ...members.slice(marks.members).map((m) => m.file.name), ...(note ? [note.name] : [])])) lost = 'a name cannot be recorded';
+    if (!lost && !recordablePile(pile.id, [folder.name, ...members.slice(marks.members).map((m) => m.file.name), ...(kept ? [kept.name] : [])])) lost = 'a name cannot be recorded';
     if (lost) {
       hold(lost);
       continue;
     }
     let context: CapturedPile['context'] = { kind: 'absent' };
-    if (note) {
+    if (kept) {
       const text = noteText;
-      const stored = await verified(note, 'utf8');
+      const stored = await verified(kept, 'utf8');
       // The note is recorded as it was read: its text must be the very bytes stored (`sameText`, as in the Inbox).
       if (!stored || !(await sameText(text, stored))) {
         hold('its note is not the text the run read');
         continue;
       }
       // An observed pile invents no keys (guard 6): its context carries none.
-      context = { kind: 'text', memberKey: declared ? contextKey : null, file: seen(note), text, content: stored };
+      context = { kind: 'text', memberKey: declared ? contextKey : null, file: seen(kept), text, content: stored };
     }
     // Everything this pile puts in the plan must be text a record can carry; a pile whose words or names cannot
     // (half of a character) is held alone, untouched, and the rest of the run goes on (review b-dest-review-1).
@@ -407,9 +438,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       source: declared ? { kind: 'declared', ref: declared.ref } : { kind: 'observed' },
       anchor: loose ? null : seen(folder),
       memberKeys: keys,
-      childFileIds: [...taken, ...(note ? [note.id] : [])].sort(),
+      childFileIds: [...taken, ...(kept ? [kept.id] : [])].sort(),
       context,
     });
+    if (partial) partly.add(pile.id);
     if (wordsOnly) fromWords.push({ pileId: pile.id, folder, words, context: !declared && note ? note : null });
     // The question a run asks about this pile (the stand-in for Claude asking), asked once it is filed.
     if (demo && /saltmere/i.test(pile.text)) asking.add(pile.id);
@@ -1034,7 +1066,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   for (const f of filing.filter((x) => x.merge)) await fileOne(f);
   for (const pile of capturedPiles) {
     const note = notesOf.get(pile.pileId);
-    if (pile.anchor) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : [])]);
+    // A pile partly asked about keeps its folder, with what is asked about and its words.
+    if (pile.anchor && !partly.has(pile.pileId)) await add({ kind: 'bin', before: pile.anchor, capturedChildIds: pile.childFileIds }, [...(movesOf.get(pile.pileId) ?? []), ...(note ? [note] : [])]);
   }
   // Your changes: requests completed in requests.json, answered questions dropped, then each line archived.
   // A line's archive move depends on every write derived from it, so a rejected write keeps it unarchived.
