@@ -258,3 +258,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4 (recurring): e2e/qa10.spec.ts:165 phone flake on e2e:fake (sheet list read before it fills); passes alone 3/3.
 - P4-16 (home-reads-once, minor): the golden's dispositions are '{}', so the consumed-disposition path is not pinned (drive-vault.test.ts:395); no test that refresh() or emit() drops the per-load share (drive-vault.ts:107); journal.ts:27 doc comment misplaced.
 - P4-16b (state, minor): the compatibility row for a058374 could say a resumed older manifest that adopted without `adopted` is refused (lossless, retried); exact-text dedupe in the fallback misses a model paraphrase of the person's line.
+- P4-16c (state, minor): an old Bower line the person deleted, proposed again with the same text, is neither named nor asked (note-edit.ts withoutSaid); lines after the first in the fallback still lose a capital ("alex called").

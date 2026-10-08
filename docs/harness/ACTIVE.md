@@ -283,3 +283,4 @@ P3-9 is closed.
 - state-no-adoption re-closed (156b382; red by hand at 0c3f1fc): fallback names only what is new; applyChanges refuses an unmarked section without adopted; app and runner deploy together. 385/389. P4-16 fix-round check and corpus-offer-real-pdf (fixing 9 runner tests its PDFs broke) running.
 - P4-16b check BLOCK (state-no-adoption): a person-edited marked section's fallback repeats Bower's last-written line. Reopened; third round with the same worker (stateMark subset, release only on a marked section, keep capitals). 384/389.
 - state-no-adoption re-closed (4333308; red by hand at 50f026d). 385/389. corpus-offer-real-pdf: mechanical stalled (9 scripted tests fail once PDFs have text); escalated to a fresh Opus worker.
+- P4-16c fix-round check PASS (state-no-adoption; minors to polish; compatibility table row split fixed). corpus PDFs (escalated) running.
