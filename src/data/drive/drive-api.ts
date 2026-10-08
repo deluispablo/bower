@@ -6,6 +6,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import type { StoredDigests } from '../pile-readiness';
+import { UNCONFIRMED_WRITE } from './transport';
 
 export interface DriveFile {
   id: string;
@@ -133,6 +134,10 @@ export const DRIVE_MESSAGES: Record<ErrorCode, string> = {
 };
 
 export const driveError = (code: ErrorCode): BowerError => new BowerError(code, DRIVE_MESSAGES[code]);
+
+/** A write answered 5xx: it may have landed, so the sentence never invites a second one. Tell it by `isUnconfirmedWrite`. */
+export const UNCONFIRMED_WRITE_MESSAGE = "Bower couldn't confirm that change. Refresh to check.";
+export const unconfirmedWriteError = (): BowerError => new BowerError('unknown', UNCONFIRMED_WRITE_MESSAGE, undefined, { cause: UNCONFIRMED_WRITE });
 
 /**
  * Every Drive method, read or write, in one place. The lease guard fences the writes (fail closed: a method
