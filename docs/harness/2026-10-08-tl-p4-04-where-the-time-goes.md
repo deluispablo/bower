@@ -22,3 +22,8 @@ The model step itself took 2–3 s, 1 turn and about 6k tokens.
    - **A duplicate dispatch is harmless,** because the concurrency group and the ticket fence handle it (R3, TL-P3-18).
 
 **Next:** after P4-4, three more C04 runs to compare with the original's numbers ([p4-speed-baseline.md](p4-speed-baseline.md)). The C04 quality check is noted: run 1 wrote the note with all four dates.
+
+**Addendum, 2026-10-08: ticket hashes after Delete me.** Accepted. To keep "a wrong ticket gets 401" after Delete me, `forget()` keeps the live ticket rows for at most their 60-minute life. This is the same shape as the generation floor ([TL-P3-14](2026-10-07-tl-p3-14-lease-and-limits.md)): non-personal values kept only so revocation stays correct. Conditions:
+- a kept row holds only the SHA-256 hash, its expiry and the attempt number: no Drive token, folder, name or address;
+- expired rows are pruned, so an hour after Delete me no ticket row is left;
+- a test proves both: after Delete me a valid ticket gets gone, a wrong ticket gets 401, and after expiry the rows are gone.

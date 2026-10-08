@@ -11,6 +11,7 @@
 import { BowerError } from '../../../src/data/types';
 import type { DriveFile } from '../../../src/data/drive/drive-api';
 import type { AdmissionManifest, AdmittedFile, AdmittedPile } from '../../../src/data/spine/admission';
+import { READ_AHEAD, limiter } from '../../../src/data/spine/read';
 import type { Admitted, Deferred } from '../../../src/data/spine/provider';
 import type { RunManifest } from '../../../src/data/spine/records';
 import { SYSTEM } from '../../../src/data/vault/layout';
@@ -41,17 +42,32 @@ async function standing(drive: AdmittedReader, seen: AdmittedFile, version: bool
   return version && now.modifiedTime !== seen.modifiedTime ? 'changed' : null;
 }
 
+/**
+ * Every admitted item is read again together, at most `READ_AHEAD` (8) at a time (Drive v3 allows concurrent reads, within
+ * its per-user rate: https://developers.google.com/workspace/drive/api/guides/limits), then judged in the order of the
+ * manifest, so the result is the one a read at a time gives.
+ */
 export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedReader): Promise<Admitted> {
+  const limit = limiter(READ_AHEAD);
+  // One list in the order a read at a time goes through them: each pile's anchor and items, then the journal lines.
+  const asked: Array<{ seen: AdmittedFile; version: boolean }> = [];
+  for (const pile of manifest.piles) {
+    if (pile.anchor) asked.push({ seen: pile.anchor, version: false });
+    for (const item of pile.items) asked.push({ seen: item, version: true });
+  }
+  for (const line of manifest.journal) asked.push({ seen: line, version: true });
+  const answers = await Promise.all(asked.map((a) => limit(() => standing(drive, a.seen, a.version))));
+  let next = 0;
   const deferred: Deferred[] = [];
   const piles: AdmittedPile[] = [];
   for (const pile of manifest.piles) {
     const moved: Deferred[] = [];
     if (pile.anchor) {
-      const why = await standing(drive, pile.anchor, false);
+      const why = answers[next++];
       if (why) moved.push({ fileId: pile.anchor.fileId, pileId: pile.pileId, why });
     }
     for (const item of pile.items) {
-      const why = await standing(drive, item, true);
+      const why = answers[next++];
       if (why) moved.push({ fileId: item.fileId, pileId: pile.pileId, why });
     }
     if (!moved.length) {
@@ -64,7 +80,7 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
   }
   const journal: AdmittedFile[] = [];
   for (const line of manifest.journal) {
-    const why = await standing(drive, line, true);
+    const why = answers[next++];
     if (why) deferred.push({ fileId: line.fileId, pileId: null, why });
     else journal.push(line);
   }

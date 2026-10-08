@@ -225,7 +225,14 @@ async function list(drive: FakeDrive, url: URL): Promise<Response> {
   const at = Number(url.searchParams.get('pageToken') || 0);
   const page = all.slice(at, at + size);
   const next = at + size < all.length ? { nextPageToken: String(at + size) } : {};
-  return json(200, { kind: 'drive#fileList', files: page.map((f) => wireFile(f, false)), ...next });
+  // Drive gives a listed file's SHA-256 when `fields` names it (`files.list` with `files(sha256Checksum)`).
+  const withSha = (url.searchParams.get('fields') ?? '').includes('sha256Checksum');
+  const files = await Promise.all(page.map(async (f) => {
+    const content = withSha && !f.folder ? (await drive.evidence(f.id))?.content : null;
+    // `size` is in bytes, as a file's own answer gives it, and the checksum is of those bytes.
+    return { ...wireFile(f, false), ...(content ? { size: String(content.size), sha256Checksum: content.sha256 } : {}) };
+  }));
+  return json(200, { kind: 'drive#fileList', files, ...next });
 }
 
 async function multipart(body: RequestInit["body"]): Promise<{ meta: { name: string; parents: string[]; appProperties?: Record<string, string> }; content: string }> {

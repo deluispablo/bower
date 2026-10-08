@@ -12,13 +12,26 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
 - **P4 is authorized:** [P4_PLAN](../P4_PLAN.md), [TL-P4-01](2026-10-07-tl-p4-01-p4-start.md). The production cutover still needs the owner's approval of the moment and the rollback.
 - **Backup:** `backup/main` is pushed after each green integration. Per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then check the remote SHA. Bash runs outside the sandbox (keychain).
 - **Local-only branch** `archive/p2-o5-snapshot`: uncommitted P2 work, kept as a P4 candidate. Never push it.
+- **P4 progress (2026-10-08), rulings TL-P4-01 to TL-P4-06:**
+  - **Closed:**
+    - P4-1: corpus and Claude provider;
+    - P4-2: provider-contract and runner-overhead;
+    - P4-3: checkpoint cost and c04-incorporation;
+    - P4-4: admission reads, attempt check and dispatch retry;
+    - P4-5: deploy scan token and runner-stops-when-gone.
+  - **Staging** runs `c76fd2f`. The C04 comparison passed 3 of 3 with Claude Sonnet: press to done 1:17–1:35, model 3–4 s, 1 turn. Every live run is in [p4-speed-baseline.md](p4-speed-baseline.md).
+  - **Open:**
+    - `checkpoint-per-batch` (escalated, `/private/tmp/bower-p4-ckbatch`): TL-P4-05 addendum, option (b), the `bowerOp` stamp;
+    - `runner-reads-and-report` (implementer, `/private/tmp/bower-p4-readsreport`).
+  - **After those:** the P4-6 close (an Opus delta review, the four suites, main, backup, the deploy SHA to the lead), then 1 scripted run to measure, then the C05 slice (updates and the merge question).
+  - **Live model runs:** the lead switches `BOWER_PROVIDER` on and off in bower-home. I press. Each run starts from a fresh folder: Bin the previous output by page script, synthetic data only.
+- **Owner's standing permission (in my session):** made-up piles and Tidy up presses on staging with test accounts A and B. Never delete-account, sign-in or production.
 
 ## The plan, in order
 
-1. **P4-1 (now):** `p4-corpus` (bower-implementer) and `claude-provider` (bower-escalated), per TL-P4-01.
-2. **P4-2:** `original-baseline` and `provider-contract`, then the first semantic slice, C04, against the corpus.
-3. Then packages P4-B to P4-F, as P4_PLAN orders them.
-   - **Owner steps:** the Claude credential when `claude-provider` closes (the lead asks), and the OAuth publishing status.
+1. **Speed (P4-B):** finish `checkpoint-per-batch` and `runner-reads-and-report`, then measure on staging.
+2. **Semantic slices (P4-C):** C05, then C06–C11 and C13–C15 against the corpus. Each slice goes scripted first, then the model; the corpus scorer is the bar.
+3. Then P4-D quality and the comparison with the original, and P4-E production readiness, as P4_PLAN orders them.
    - **Cutover last,** with the owner's approval.
 - **Reuse first:** the original app is at `/Users/deluisp/Projects/bower` (`agent/claude-settings.json`, `agent/run.sh`, `agent/prompts/`, `agent/bench/`).
 

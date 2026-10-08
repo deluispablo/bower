@@ -33,6 +33,11 @@ export interface BarrierRun {
   checksum: Checksum;
   /** The fenced writes of the next batch (the adapter's `batch()`, which checks the attempt first). */
   batch(): Promise<FencedDrive>;
+  /**
+   * The same fenced writes with no attempt read of their own, for a write right after a `batch()`: each fenced write
+   * reads the attempt again right before it is sent. Without it, every write asks `batch()`.
+   */
+  fenced?(): FencedDrive;
   /** What the run was admitted to take; null when the Worker kept none. */
   admission: AdmissionManifest | null;
   clock(): number;
@@ -105,14 +110,22 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
     throw new BowerError('unknown', SAVE_FAILED);
   }
 
+  // The attempt is asked once for the report's writes; every fenced write asks it again right before it is sent.
+  let asked = false;
+  const writes = async (): Promise<FencedDrive> => {
+    if (asked && run.fenced) return run.fenced();
+    asked = true;
+    return run.batch();
+  };
+
   // 2. The report record, read back, and the consumed dispositions.
-  await run.records.put(await run.batch(), where, reportName(r.hash), r.text);
+  await run.records.put(await writes(), where, reportName(r.hash), r.text);
   await run.records.report(manifest, manifestHash, r.hash);
-  for (const d of dispositionsFor(manifest, at.outcomes, r.hash)) await run.records.putDisposition(await run.batch(), d);
+  for (const d of dispositionsFor(manifest, at.outcomes, r.hash)) await run.records.putDisposition(await writes(), d);
   if ((await run.records.read(where, DISPOSITIONS)) === null) {
     const file: DispositionsFile = { v: 1, runId: run.runId, items: dispositions(at.outcomes) };
     // A fenced create, read back byte for byte; a reply lost after it landed is not a second file.
-    await run.records.put(await run.batch(), where, DISPOSITIONS, jsonText(file));
+    await run.records.put(await writes(), where, DISPOSITIONS, jsonText(file));
   }
 
   // 3. The report files, then last-run.json last, each read back. The view's times are those of the pending report.
@@ -126,7 +139,7 @@ export async function finishRun(run: BarrierRun, manifest: RunManifest, manifest
     rootId: run.rootId,
     reads: run.reads,
     checksum: run.checksum,
-    batch: () => run.batch(),
+    batch: writes,
     report,
     view,
     mayReplace: async (stored) => olderView(stored, { id: manifest.runId, requestedAt: manifest.requestedAt }),

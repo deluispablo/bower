@@ -180,3 +180,8 @@ P3-9 is closed.
 - P4-5 review BLOCK (runner-stops-when-gone: the token route answers 401, not 410, on revoked access). Reopened (98e6ae7); fix round running. 361/364.
 - checkpoint-per-batch BLOCKED (no code): a mid-batch kill after a person's rename cannot reconcile (TL-P3-23), and 5 tests must change; ruling asked (options a/b/c). runner-reads-and-report running (implementer, at 4d8191a).
 - TL-P4-05 addendum (9a12727): checkpoint-per-batch takes option (b), a bowerOp stamp on every effect; the test changes are allowed with reasons. Resumes when a slot frees.
+- runner-stops-when-gone re-closed (e51d469). Delete me now keeps live ticket hashes up to 1 h, so a wrong ticket still gets 401 (the lead to confirm). checkpoint-per-batch resumed with option (b). 362/364.
+- TL-P4-06 merged (the after-compact hook). HANDOFF updated for a compaction. Merged P4 worktrees removed; open: bower-p4-ckbatch, bower-p4-readsreport.
+- TL-P4-04 addendum 2 (a5aba50): e51d469 keeps {runId, hash, expiresAt} and prunes only on the next write. New entry gone-ticket-rows-expire (implementer) queued for the next free slot. 362/365.
+- P4-5 suites at a2dafd9: check 3608/186/92, e2e:fake 250, e2e:pwa 4; e2e 225/226 (qa10:149 desktop, a status toast timing; no src change since P4-4's green; 5 repeats green). P4-5 suites green.
+- runner-reads-and-report closed (03c0e21): modelled plan reads 4150 → 1750 ms (25 → 17 reads), report 62 → 24 calls in barrier order, plan byte-equal on all 29 corpus cases. 363/365. gone-ticket-rows-expire running (implementer, bower-p4-goneexpire at 03c0e21).

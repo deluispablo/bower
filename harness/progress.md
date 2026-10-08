@@ -127,3 +127,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: deploy-scan-extracted-token passes — The deploy scan allows the token its own regex extracts from the real unpdf line; real addresses still refuse
 - 2026-10-08: runner-stops-when-gone passes — After Delete me or revoked access the attempt route answers gone and the runner drops its token before the next write; sign-out leaves runs alone
 - 2026-10-08: runner-stops-when-gone passes — The token route also answers gone on revoked or unreadable access; a wrong ticket after Delete me still gets 401 (P4-5 review)
+- 2026-10-08: runner-reads-and-report passes — plan reads 4150→1750 ms (25→17 reads), report 62→24 calls in barrier order; plan byte-equal on 29 corpus cases
