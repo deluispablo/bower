@@ -411,3 +411,4 @@ state-rewrite-change	84bd0570b45b5165	2026-10-08	known-green: the four tests are
 state-no-adoption	118aec58befb12dd	2026-10-08	known-green: red by hand at tests-only b485b75: all 3 verify tests fail on assertions (old fallback wording; a second Current state line after a Bower append; md5 adoption); green at 208ea5c
 home-reads-once	f7dcdd7391ee4eb3	2026-10-08	red (fixed in 624f8be)
 state-no-adoption	e8f159e96eb9e95d	2026-10-08	known-green: red by hand at tests-only 0c3f1fc: 5 of 6 verify tests fail on assertions (fallback repeats the person's line; unmarked rewrite not refused; undo keeps bower_state); green at a058374
+state-no-adoption	da4e8e910b40245b	2026-10-08	known-green: red by hand at tests-only 50f026d: the 3 new tests fail on assertions; the 6 earlier ones were proved at 0c3f1fc and b485b75; green at af231e1
