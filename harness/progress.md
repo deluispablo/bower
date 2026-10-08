@@ -207,3 +207,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c2-read-cache passes — One Drive read cache by id + modifiedTime; refresh lists again only; digest bytes not kept (P4-26, P4-28a PASS)
 - 2026-10-09: c2-transport-outcome-kind passes — A write with no definite answer is unconfirmed and says so; reads keep their wording (P4-28b PASS)
 - 2026-10-09: c2-worker-dispatch passes — Only the alarm dispatches; a press during recovery is dispatched at once; Delete me during admission admits nothing (P4-27, P4-29 PASS)
+- 2026-10-09: c2-worker-dispatch passes — Admission compares the account epoch (kept generation floor), never the session; sign-out keeps waiting answers (P4-30 PASS)

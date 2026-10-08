@@ -452,3 +452,4 @@ c2-worker-dispatch	351c0ad00ab2f5dc	2026-10-09	red (fixed in d155dcab)
 c2-read-cache	1bca21f71ecd5027	2026-10-09	red (fixed in 20d1e0fa)
 c2-transport-outcome-kind	eb8715c570931e5d	2026-10-09	known-green: Red proved by hand at tests-only 932794ac (round 2): 3 assertion failures (timeout, network error browser/headless show offline/no-answer), /tmp/c2o2-handred.log; round 1 red b3f3eb3b by worker (5 writes on 503 showed the read sentence). 53b6e99f no longer reverts cleanly (e0aed43d/cdcf57cb touch drive-http.ts).
 c2-worker-dispatch	a7554576fb370b5e	2026-10-09	red (fixed in 7f5c22ee)
+c2-worker-dispatch	5467d88c1d89b9fd	2026-10-09	red (fixed in 06871745)

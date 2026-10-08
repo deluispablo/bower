@@ -5625,7 +5625,7 @@
     "id": "c2-worker-dispatch",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Admission schedules a dispatch-now deadline; only the alarm mints tickets and dispatches; a run row holds deadline_at and version, compare-and-set; Delete me deletes personal tables explicitly and keeps ticket rows and the generation floor, with a test that classes every table.",
     "steps": [
       "Dispatch only from the alarm.",
