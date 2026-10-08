@@ -245,3 +245,4 @@ P3-9 is closed.
 - P4-11 check BLOCK: the prompt's naming example was the corpus answer. c04-prompt-fixes and things-normalised reopened; one fix round (implementer): a made-up example plus a no-corpus-names test, rawName false positives, money globs, things sorted in prepared(). Number minors to polish. 376/382.
 - P4-11 fix round merged (ed6d2c6); c04-prompt-fixes and things-normalised re-closed. 378/382. Fix-round check running.
 - P4-11 fix-round check PASS (minors to polish). Runner and corpus only since b54392c; check green. Main moves.
+- Main and backup at 327b987; SHA sent to the lead for offer-and-flat x3 + garden x1 (C04 close).
