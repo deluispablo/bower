@@ -19,3 +19,16 @@ On the free plan a Worker invocation may make 50 subrequests ([Cloudflare Worker
    - Test: a 500 from `/process` shows the sentence within the e2e.
 3. **Live staging setup.** Before the next live runs, the coordinator bins the 3 old pile notes left in the inbox, so offer-and-flat runs on its own corpus start.
 4. **Then** the same live check as planned: offer-and-flat ×3, garden ×1 and c05-hub-lines ×2.
+
+**Addendum, 2026-10-08: the photo question piles up (seen by the owner).** The app shows the same question about the photo (`IMG_2301.jpg`, the flat hunt) several times, each worded a little differently. The model words its ask differently every run. `ask-not-repeated` apparently compares the question, not what it is about. The coordinator's resets may also leave earlier questions open, or bring the photo back as a new file. Either way, the person must see at most one open question per thing.
+
+**`ask-one-per-thing`** (`bower-implementer`), in this batch:
+1. An open question is keyed by its subject: the thing's `fileId` for a per-thing ask, or the `pileId` for a pile. It is never keyed by its text.
+   - A later ask about a subject that already has an open question adds nothing.
+   - The same content uploaded again (an equal `md5Checksum`/`sha256`) counts as the same subject while its question is open.
+2. When a thing leaves the inbox (filed, binned or moved by the person), its open question closes on its own.
+3. **The questions already piled up in staging:** find out first why they piled up (the reset, or the key), and record it in the entry's notes. Then the stale ones are closed through the app's own flow, never by hand in storage.
+4. **Tests:**
+   - two runs whose asks are worded differently about the same thing leave one open question;
+   - binning the thing closes its question;
+   - a re-upload of the same photo does not add a second question.
