@@ -250,3 +250,5 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-14 (process-error-honest, minor): the `start-fails` fake scenario shows in the demo panel but the demo ignores it (src/data/demo/scenario.ts:14).
 - P4-14 (admission, minor): the needs-manifest re-admission in api/src/process.ts:289 builds fresh caches and reads texts and bytes twice.
 - P4-15 (ask-one-per-thing, minor): scripted.ts:476 `mayHold` size > 40 threshold is uncommented.
+- P4-14b (admission, minor): a 5xx/429 retry burst during the read-ahead could pass the 15-fetch slack; reads granted at listing can't be withdrawn.
+- P4-14b (admission, minor): no damaged-note test for an unread pile left to the runner.
