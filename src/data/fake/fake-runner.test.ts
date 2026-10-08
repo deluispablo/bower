@@ -218,7 +218,7 @@ describe('the fake runner', () => {
     const dump = drive.dump(root);
     expect(dump.get('Projects/Flat hunt/Flat hunt.md')).toMatch(/ · A fourth flat added; the shortlist compared by commute\. · \[\[Flat 9, Wrenfield Road\]\]\n/);
     const job = dump.get('Projects/Job hunt/Job hunt.md') ?? '';
-    expect(job).toMatch(/ · New offer from Ferrowick, scored 7 out of 10 against your CV\. · \[\[Industrial Designer, Ferrowick\]\]\n/);
+    expect(job).toMatch(/ · New offer from Ferrowick: fully remote, 42,000 a year, start 2 November\. · \[\[Industrial Designer, Ferrowick\]\]\n/);
     expect(job).toMatch(/ · A flat from the same pile went to the flat hunt\. · \[\[Flat 9, Wrenfield Road\]\]\n/);
     // The cited note links back: it is among the notes linking to the flat.
     expect((await fresh().note('Projects/Flat hunt/Flat 9, Wrenfield Road.md')).backlinks).toEqual(expect.arrayContaining(['Projects/Flat hunt/Flat hunt.md', 'Projects/Job hunt/Job hunt.md']));

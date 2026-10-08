@@ -34,7 +34,7 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
     things: [offerThing(id), { fileId: id(LISTING), to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' }],
     lines: [
       { note: FLAT, text: 'A fourth flat added; the shortlist compared by commute.', cites: id(LISTING) },
-      { note: JOB, text: 'New offer from Ferrowick, fully remote.', cites: id(OFFER) },
+      { note: JOB, text: 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.', cites: id(OFFER) },
       { note: JOB, text: 'A flat from the same pile went to the flat hunt.', cites: id(LISTING) },
     ],
   })),
@@ -50,7 +50,7 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
     things: [offerThing(id)],
     lines: [
       { note: FLAT, text: 'A fourth flat added; the shortlist compared by commute.' },
-      { note: JOB, text: 'New offer from Ferrowick, scored 7 out of 10 against your CV.', cites: id(OFFER) },
+      { note: JOB, text: 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.', cites: id(OFFER) },
     ],
   })),
   // The person said yes to keeping one note; nothing is in the inbox, so the model's only work is the merge.
