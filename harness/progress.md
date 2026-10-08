@@ -116,3 +116,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: provider-contract passes — Claude provider proposes intent only; runner builds ids and digests, refuses non-admitted targets; no checkout settings; secret only on the claude step
 - 2026-10-08: provider-contract passes — Claude runs plan no demo extras; digest cache keyed by modifiedTime; name limits (P4-2 review)
 - 2026-10-08: runner-checkpoint-cost passes — Checkpoints use the write's own checksum instead of a read-back; admission timed in parts; Claude Code install cached (TL-P4-03)
+- 2026-10-08: runner-checkpoint-cost passes — Checkpoints use the write's own checksum instead of a read-back; admission timed in parts; Claude Code install cached (TL-P4-03)

@@ -4657,7 +4657,7 @@
       "tidy.yml caches the Claude Code install with actions/cache (SHA-pinned, keyed on the version)."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"checkpoints cost fewer Drive round trips per operation|a kill after every step still recovers with merged checkpoints|the Install Claude Code step restores from the cache key and still installs on a miss\" && pnpm -C api exec vitest run -t \"admission timing is logged in parts\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-01 P4-3 (lead approval after the staging runs 37734385418, 37734625824, 37734833636). TL-P4-03 adds the Claude Code cache."
   },
   {
