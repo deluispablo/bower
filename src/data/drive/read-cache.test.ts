@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BowerError } from '../types';
 import type { DriveFile } from './drive-api';
 import { ReadCache } from './read-cache';
+import { FakeDrive } from './fake-drive';
+import { DriveVault } from '../vault/drive-vault';
 import { RunnerDrive } from '../../../runner/src/drive';
 import { RunnerToken } from '../../../runner/src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from '../../../runner/test/drive-v3';
@@ -90,5 +92,34 @@ describe('one read cache serves app and runner', () => {
     const v2 = { id: 'OTHER', modifiedTime: '2026-10-08T10:00:00.000Z' };
     await expect(cache.text(v2, failing)).rejects.toMatchObject({ code: 'offline' });
     expect(await cache.text(v2, read)).toBe('read 4');
+  });
+});
+
+describe('digest bytes', () => {
+  it('bytes read for a digest are not kept once the digest is', async () => {
+    // Real Drive has no storedDigest: a pile item's digest is its bytes read once. A photo or a PDF must not stay in
+    // memory for the session behind a digest that is itself kept.
+    const fake = new FakeDrive();
+    const root = await fake.createFolder('root', 'Bower');
+    const photo = await fake.upload(root.id, 'photo.jpg', new Blob([new Uint8Array(2048).fill(7)]));
+    const real = Object.create(fake) as FakeDrive;
+    (real as unknown as { storedDigest?: unknown }).storedDigest = undefined;
+    let reads = 0;
+    const readBytes = fake.readBytes.bind(fake);
+    real.readBytes = (id) => (reads++, readBytes(id));
+    const vault = new DriveVault({ drive: real, rootId: async () => root.id, runningPiles: () => new Set() });
+    await vault.tree();
+    const listed = (await fake.listAll(root.id)).find((f) => f.id === photo.id);
+    if (!listed) throw new Error('the seeded photo');
+    const probe = vault as unknown as { digestOf(f: DriveFile): Promise<{ size: number } | null>; readBytesOnce(id: string): Promise<Uint8Array> };
+    const [a, b] = await Promise.all([probe.digestOf(listed), probe.digestOf(listed)]);
+    expect(a?.size).toBe(2048);
+    expect(b).toEqual(a);
+    expect(reads, 'one read for two asks at once').toBe(1);
+    expect((await probe.digestOf(listed))?.size).toBe(2048);
+    expect(reads, 'the digest is kept').toBe(1);
+    // The bytes are not: asking for them reads Drive again.
+    await probe.readBytesOnce(photo.id);
+    expect(reads, 'the bytes behind the digest are not kept').toBe(2);
   });
 });
