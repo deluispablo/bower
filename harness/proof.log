@@ -389,3 +389,4 @@ ask-not-repeated	8e4c186140cdd1a3	2026-10-08	known-green: already held before th
 placement-check	953cc3c73a37f00c	2026-10-08	red (fixed in 533e7b5)
 fingerprint-normalised	1deb525d45bf6765	2026-10-08	red (fixed in 533e7b5)
 document-note-required	3c7989a14f2ed5c0	2026-10-08	red (fixed in 90d5d64)
+fingerprint-normalised	b484878418658bc4	2026-10-08	known-green: test only (8e8f884), green on first run: on the fake, the normalised inputs of two fresh folders with different ids, piles, run id and clock are identical; live runs still differ (cause outside the fake)

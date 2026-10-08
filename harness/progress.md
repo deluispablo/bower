@@ -144,3 +144,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: placement-check passes — P4-8 fix round: the retry keeps its work folder; the rule basis is a whole rules line; New area only for a new top-level Area
 - 2026-10-08: fingerprint-normalised passes — P4-8 fix round: fileId and admission id normalised, so fresh folders match; ids written inside a note still change the hash
 - 2026-10-08: document-note-required passes — a thing with text gets its note unless a Timeline line on an existing note cites it; refused once with the reason and retried, then the run ends as C12 does; photos, links and notes need none
+- 2026-10-08: fingerprint-normalised passes — round 3: two fresh fake folders through main() give the same input=; no further per-run value found on the fake
