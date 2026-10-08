@@ -94,3 +94,10 @@ Stages run in order: stage 0, then 1, 2, 3 and 4.
 **Addendum, 2026-10-08: two stage 1 rulings.**
 1. **`generateIds` is a write** for the session fence. It creates nothing in Drive, but it reserves ids that a later upload will use, and the lease exists so that a tab which is no longer current starts nothing toward a write. Rule 1 also says behaviour stays the same, and today it is fenced. The ops table classes it as a write, and a test covers it: on a lost lease no id is reserved.
 2. **No hand-written cryptography.** `c1-digest` added a hand-written synchronous SHA-256 on the `bowerOp` stamp path, and `hashes.ts` already had a hand-written MD5. The owner's rule is to reuse existing libraries, and hand-rolled hashes are a known source of subtle bugs. `c1-digest-library` (`bower-mechanical`) replaces both with [`@noble/hashes`](https://github.com/paulmillr/noble-hashes): audited, dependency-free and synchronous, with SHA-256 from `sha2` and MD5 from `legacy`. The existing fuzz tests against `node:crypto` stay as the check. It is not deferred to polish, because it sits on the data-safety path.
+
+**Addendum 2, 2026-10-08.**
+1. **An over-limit press on an empty inbox gets 429, not 409. Accepted,** as it follows from "quota before any Drive read": knowing the inbox is empty needs a read. The app already disables Tidy up when nothing waits, so the person rarely sees the difference, and 429 is still true.
+2. **A deadline handler that throws must not retry every minute forever,** even though the review rated it Minor: it hides a failure and spends requests without end. It goes into a `c1-worker-deadlines` fix round:
+   - retries back off exponentially, up to 6 attempts, as [Cloudflare's own alarm retries](https://developers.cloudflare.com/durable-objects/api/alarms/) do;
+   - after that, the deadline is marked failed and logged with `console.error`, and the run or ticket it belonged to ends honestly (`failed`, with its sentence);
+   - test: a handler that always throws stops after 6 attempts, and its run ends failed.
