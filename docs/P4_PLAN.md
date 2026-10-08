@@ -63,7 +63,7 @@ No session enters credentials.
 
 **Order:**
 1. P4-A and the P4-B provider in parallel.
-2. Then P4-C in the listed order, one slice at a time, each with its corpus cases.
+2. Then P4-C in the listed order, one slice at a time, each with its corpus cases. After C05, a consolidation of the base in four stages runs before C06 ([TL-P4-14](harness/2026-10-08-tl-p4-14-consolidation.md)).
 3. P4-D runs on each slice as it lands, and in full at the freeze.
 4. P4-E runs alongside once a slot frees, with the cutover last.
 5. Then P4-F.
