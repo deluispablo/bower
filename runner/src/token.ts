@@ -3,7 +3,8 @@
  * with the run's ticket (TL-P3-18). The token is kept until shortly before
  * `expiresAt`; `grant()` always asks the Worker again. The attempt check
  * before each fenced write is `attempt()`, `GET /runner/runs/:id/attempt`:
- * answered by the person object alone, with no Google call (TL-P4-04).
+ * answered by the person object alone, with no Google call (TL-P4-04). A 410 `gone` from either route (Delete me,
+ * or Google access revoked or unreadable) drops the kept token.
  */
 import { BowerError } from '../../src/data/types';
 import { retried } from './retry';
@@ -38,6 +39,19 @@ export const STALE_ATTEMPT = 'stale-attempt';
 export const staleAttempt = (): BowerError => new BowerError('conflict', 'This tidy-up was taken over.', undefined, { cause: STALE_ATTEMPT });
 
 export const isStaleAttempt = (e: unknown): boolean => e instanceof BowerError && e.cause === STALE_ATTEMPT;
+
+/** The marker on a gone refusal (`BowerError` cause). */
+export const GONE = 'gone';
+/** The signed-out sentence: the run's ticket is refused, or the person is gone. */
+export const NO_LONGER_ALLOWED = 'This tidy-up is no longer allowed to change your folder.';
+
+/**
+ * The person is gone (Delete me, or Google access revoked or unreadable): the Worker answers 410 `gone` (RFC 9110,
+ * 15.5.11). The kept Drive token is dropped, and this runner writes nothing more.
+ */
+export const gone = (): BowerError => new BowerError('auth', NO_LONGER_ALLOWED, undefined, { cause: GONE });
+
+export const isGone = (e: unknown): boolean => e instanceof BowerError && e.cause === GONE;
 
 export class RunnerToken {
   private readonly url: string;
@@ -100,9 +114,13 @@ export class RunnerToken {
     const error = typeof body === 'object' && body !== null ? (body as { error?: unknown }).error : undefined;
     const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
     if (res.status === 409 && code === STALE_ATTEMPT) throw staleAttempt();
-    if (res.status === 401) {
-      console.error(`The ${route} route refused the run ticket`);
-      throw new BowerError('auth', 'This tidy-up is no longer allowed to change your folder.');
+    if (res.status === 410 || res.status === 401) {
+      // A bearer token works for whoever holds it until it expires (RFC 6750, sections 1.2 and 5.3). Google ends it
+      // early only when the grant is revoked (developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke),
+      // and an unreadable refresh token never is: the kept one is dropped here, and nothing more is written with it.
+      this.kept = null;
+      console.error(`The ${route} route answered ${res.status}: the run ticket is refused or the person is gone`);
+      throw res.status === 410 ? gone() : new BowerError('auth', NO_LONGER_ALLOWED);
     }
     if (!res.ok) {
       console.error(`The ${route} route answered ${res.status}`);

@@ -17,12 +17,14 @@ import { driveEffects } from '../src/effects';
 import { runTidy, type TidyEnd } from '../src/main';
 import { providerFor } from '../src/provider';
 import type { Effects } from '../src/spine/run';
-import { isStaleAttempt } from '../src/token';
+import { RunnerToken, isStaleAttempt } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 /** The thing someone renames before Bower moves it: its move is refused, and what waits on it stays. */
 const RENAMED = 'Dentist reminder.pdf';
+/** The existing signed-out sentence, as the runner says it when the person is gone. */
+const GONE_SENTENCE = 'This tidy-up is no longer allowed to change your folder.';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -308,6 +310,35 @@ describe('recovery without the browser', () => {
     expect(isStaleAttempt(await first)).toBe(true);
     expect(await endOf(w)).toEqual(finished);
     expect(w.wire.statuses).toEqual(statuses);
+  });
+
+  it('the runner drops its token and stops before the next write when the person is gone', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    const writes = (): number => w.wire.requests.filter((r) => r.url.origin !== API && r.method !== 'GET').length;
+    // Delete me, or Google access revoked, right after the run made its first folder: the Worker answers 410 gone.
+    let at = -1;
+    const end = await tidy(w, 1, {
+      applied: (call) => {
+        if (at >= 0 || !madeFolder(call)) return;
+        w.wire.tokenRefusal = { status: 410, error: 'gone' };
+        at = writes();
+      },
+    });
+    expect(at).toBeGreaterThan(0);
+    // Nothing more is written, and the run ends failed with the signed-out sentence.
+    expect(writes()).toBe(at);
+    expect(end).toEqual({ phase: 'failed', why: GONE_SENTENCE });
+    expect(w.wire.statuses.at(-1)).toMatchObject({ phase: 'failed', failure: GONE_SENTENCE });
+
+    // The kept Drive token is dropped: once gone, it is never handed out again without asking the Worker.
+    const wire = driveV3();
+    const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+    await token.token(false);
+    wire.tokenRefusal = { status: 410, error: 'gone' };
+    await expect(token.attempt()).rejects.toMatchObject({ code: 'auth', message: GONE_SENTENCE });
+    await expect(token.token(false)).rejects.toMatchObject({ code: 'auth', message: GONE_SENTENCE });
+    expect(wire.tokenCalls).toBe(2);
   });
 
   it('a run killed after any checkpoint ends like an uninterrupted run', async () => {

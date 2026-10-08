@@ -733,13 +733,20 @@ export class Person extends DurableObject<Env> {
    * `GET /runner/runs/:id/token`: the attempt, folder and admission manifest that the ticket hashed to `hash` opens for run
    * `runId`; `stale-attempt` for a ticket a newer attempt superseded, null for one that is unknown, wrong,
    * retired or expired at `now`. A stale run is ended first, as `runStatus` does, so its ticket no longer works.
+   *
+   * `gone` when the person can no longer be acted for, so the runner drops the Drive token it keeps:
+   * after Delete me (no account, and the generation floor `forget` leaves), or once Google access was forgotten
+   * (`forgetGoogleAccess`: revoked, or the refresh token unreadable) for a live ticket. A plain sign-out keeps the
+   * refresh token, so its runs go on: a run never depends on a browser.
    */
-  runnerAccess(runId: string, hash: string, now: number): RunnerGrant | 'stale-attempt' | null {
-    return this.ctx.storage.transactionSync((): RunnerGrant | 'stale-attempt' | null => {
+  runnerAccess(runId: string, hash: string, now: number): RunnerGrant | 'stale-attempt' | 'gone' | null {
+    return this.ctx.storage.transactionSync((): RunnerGrant | 'stale-attempt' | 'gone' | null => {
+      if (this.account() === null) return this.ctx.storage.kv.get<number>(GENERATION_FLOOR) === undefined ? null : 'gone';
       this.expire(now);
       const found = this.findTicket(runId, hash, now);
       if (found.kind === 'superseded') return 'stale-attempt';
       if (found.kind !== 'live') return null;
+      if (this.encryptedRefreshToken() === null) return 'gone';
       const kept = this.ctx.storage.sql.exec<{ manifest: string | null }>('SELECT manifest FROM runs WHERE id = ?', runId).toArray()[0]?.manifest ?? null;
       const manifest: unknown = kept === null ? null : JSON.parse(kept);
       return { attempt: found.row.epoch, folderId: this.folderId(), manifest: isAdmissionManifest(manifest) ? manifest : null };

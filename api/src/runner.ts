@@ -13,7 +13,8 @@
  * `:id` is the run id, `<person object id hex>-<random>` (run-ticket.ts): the route reaches the person
  * object with `idFromString` and no lookup. The ticket in `Authorization: Bearer` (RFC 6750) is the only
  * credential: no cookie, no same-origin check. A missing, wrong or expired ticket (a superseded one answers 409 `stale-attempt`), or a malformed run id,
- * answers 401 `signed-out`. The ticket is hashed here, and the person object decides in one synchronous
+ * answers 401 `signed-out`; once the person is gone (Delete me, or Google access revoked or unreadable) the token and
+ * attempt routes answer 410 `gone`, while a plain sign-out leaves them answering. The ticket is hashed here, and the person object decides in one synchronous
  * section (`Person.runnerAccess`, `Person.runnerReport`).
  *
  * Nothing here logs a ticket, its hash or a token.
@@ -53,6 +54,14 @@ export const MAX_FAILURE_LENGTH = 500;
 
 function signedOut(): HttpError {
   return new HttpError(401, 'signed-out');
+}
+
+/**
+ * The person is gone (Delete me, or Google access revoked or unreadable): 410, since the ticket will never
+ * open anything again (RFC 9110, 15.5.11). The runner drops the Drive token it keeps and writes nothing more.
+ */
+function gone(): HttpError {
+  return new HttpError(410, 'gone', 'This tidy-up is no longer allowed to change your folder.');
 }
 
 function refusal(refused: RunnerRefusal): HttpError {
@@ -121,9 +130,10 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const hash = await hashTicket(ticket);
     const access = await reach(
       'runner access',
-      async (): Promise<RunnerGrant | 'stale-attempt' | null> => await person.runnerAccess(runId, hash, Date.now()),
+      async (): Promise<RunnerGrant | 'stale-attempt' | 'gone' | null> => await person.runnerAccess(runId, hash, Date.now()),
     );
     if (access === 'stale-attempt') throw refusal('stale-attempt');
+    if (access === 'gone') throw gone();
     if (access?.folderId == null) throw signedOut();
     return { person, access: { ...access, folderId: access.folderId } };
   }
