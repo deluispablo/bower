@@ -36,7 +36,7 @@ import { SOURCE_NOT_AS_SEEN, reusedNoteOf, shows } from '../../src/data/fake/fak
 import { savedTwins } from '../../src/data/spine/duplicates';
 import type { RunManifest } from '../../src/data/spine/records';
 import type { RunnerDrive } from './drive';
-import { notAsSeen } from './still-as-seen';
+import { notAsSeen, notAsSeenReason } from '../../src/data/contracts/still-as-seen';
 import type { Effects, ReadBack, Settled } from './spine/run';
 
 /** The fake run service's sentences for a refused operation, the same here. */
@@ -67,7 +67,8 @@ type Effect = OperationV2['effect'];
 
 const refused = (code: Failure['code'], message: string): Settled => ({ state: 'rejected', failure: { code, message } });
 
-const samePlace = (f: DriveFile, seen: SeenFile): boolean => f.name === seen.name && f.parents.length === seen.parents.length && f.parents.every((p, i) => p === seen.parents[i]);
+/** Still by the name and place the plan saw (`notAsSeen`, the one check; the caller has it out of the Bin). */
+const inPlace = (f: DriveFile, seen: SeenFile): boolean => notAsSeen({ id: seen.fileId, name: seen.name, parents: seen.parents }, { ...f, trashed: false }) === null;
 
 /** Stored evidence in the record shape: read through this runner's adapter. */
 function toEvidence(ev: StoredEvidence, encoding: 'utf8' | 'blob' = 'blob'): EffectEvidence {
@@ -173,7 +174,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
       const reused = reusedNoteOf(manifest, op);
       if (reused) {
         const note = await now(drive, reused.file.fileId);
-        if (!note || !samePlace(note, reused.file) || note.appProperties?.bowerItem !== (await savedLinkKey(e.before.fileId))) return { refused: refused('conflict', NOTE_NOT_AS_SEEN) };
+        if (!note || !inPlace(note, reused.file) || note.appProperties?.bowerItem !== (await savedLinkKey(e.before.fileId))) return { refused: refused('conflict', NOTE_NOT_AS_SEEN) };
       }
     }
     if (e.kind === 'edit-text') {
@@ -195,14 +196,14 @@ export function driveEffects(drive: RunnerDrive): Effects {
     if (e.kind === 'write-runner-json') {
       const ev = await drive.evidence(e.before.fileId);
       if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { refused: refused('conflict', LIST_CHANGED) };
-      return samePlace(ev.file, e.before) ? { parentId, modifiedTime: ev.file.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
+      return inPlace(ev.file, e.before) ? { parentId, modifiedTime: ev.file.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
     }
     // A thing already saved (review P4-17 I1, I2): decided by its content, so its Bin is sent only while it is still the
     // bytes the plan read, and the copy it stands on is still there, in its place, with those same bytes. The fence then
     // reads it again right before the send, with its modifiedTime too.
     const member = e.kind === 'bin' ? manifest.capture.members.find((m) => m.file.fileId === e.before.fileId) : undefined;
     if (e.kind === 'bin' && member) {
-      const same = (ev: StoredEvidence | null, seen: SeenFile): boolean => !!ev && !ev.trashed && samePlace(ev.file, seen) && ev.content?.sha256 === member.content.sha256;
+      const same = (ev: StoredEvidence | null, seen: SeenFile): boolean => !!ev && !ev.trashed && inPlace(ev.file, seen) && ev.content?.sha256 === member.content.sha256;
       const twins = savedTwins(manifest, op, head);
       const copyStands = same(await drive.evidence(e.before.fileId), e.before);
       let twinStands = false;
@@ -340,7 +341,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
         answer = await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
       } catch (e) {
         // Refused by the fence's own read before anything was sent: an honest rejection.
-        if (e instanceof BowerError && e.code === 'conflict' && (e.message === notAsSeen().message || op.effect.kind === 'write-runner-json' || op.effect.kind === 'edit-text')) {
+        if (e instanceof BowerError && e.code === 'conflict' && (notAsSeenReason(e) !== null || op.effect.kind === 'write-runner-json' || op.effect.kind === 'edit-text')) {
           console.error(e);
           return refused('conflict', op.effect.kind === 'edit-text' ? NOTE_CHANGED : op.effect.kind === 'write-runner-json' ? LIST_CHANGED : NOT_AS_SEEN);
         }

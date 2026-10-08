@@ -9,6 +9,7 @@
  * (as `still-as-seen.ts` treats a create's folder).
  */
 import { BowerError } from '../../../src/data/types';
+import { notAsSeen, sameParents } from '../../../src/data/contracts/still-as-seen';
 import type { DriveFile } from '../../../src/data/drive/drive-api';
 import type { AdmissionManifest, AdmittedFile, AdmittedPile } from '../../../src/data/spine/admission';
 import { READ_AHEAD, limiter } from '../../../src/data/spine/read';
@@ -26,8 +27,6 @@ export interface AdmittedReader {
 /** Your rules' note: edited only by `rules-wording` (and a link rewrite), as the manifest contract's `rules-path` rule. */
 const RULES_PATH = 'Rules.md';
 
-const sameParents = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((p) => b.includes(p));
-
 /** How a file stands against what admission read: null while it is still so. */
 async function standing(drive: AdmittedReader, seen: AdmittedFile, version: boolean): Promise<'gone' | 'changed' | null> {
   let now: DriveFile;
@@ -38,8 +37,9 @@ async function standing(drive: AdmittedReader, seen: AdmittedFile, version: bool
     if (e instanceof BowerError && e.code === 'not-found') return 'gone';
     throw e;
   }
-  if (now.id !== seen.fileId || now.name !== seen.name || !sameParents(now.parents, seen.parents)) return 'changed';
-  return version && now.modifiedTime !== seen.modifiedTime ? 'changed' : null;
+  // The one still-as-seen check (`notAsSeen`): its name and place, and with `version` its modifiedTime too.
+  const expected = { id: seen.fileId, name: seen.name, parents: seen.parents, ...(version ? { modifiedTime: seen.modifiedTime } : {}) };
+  return notAsSeen(expected, { ...now, trashed: false }) === null ? null : 'changed';
 }
 
 /**

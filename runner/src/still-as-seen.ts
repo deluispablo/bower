@@ -11,7 +11,7 @@
  * Shared by the runner's Drive adapter and by the fake's `fenced()` check in
  * tests, so both refuse the same writes.
  */
-import { BowerError } from '../../src/data/types';
+import { notAsSeen, notAsSeenError } from '../../src/data/contracts/still-as-seen';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FencedCall, FencedDrive } from '../../src/data/drive/fake-drive';
 
@@ -29,9 +29,8 @@ export interface FenceTarget {
 
 export const targetOf = (call: FencedCall): FenceTarget => ('id' in call ? { id: call.id, part: 'target' } : { id: call.parentId, part: 'parent' });
 
-export const notAsSeen = (): BowerError => new BowerError('conflict', 'This changed somewhere else while Bower was tidying.');
-
-const sameParents = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((p) => b.includes(p));
+/** The runner's sentence for a write its fence refused; code tells the refusal by its reason (`notAsSeenReason`). */
+const NOT_AS_SEEN = 'This changed somewhere else while Bower was tidying.';
 
 export class SeenFiles {
   private seen = new Map<string, DriveFile>();
@@ -54,20 +53,17 @@ export class SeenFiles {
     this.seen.delete(id);
   }
 
-  /** Throws a `conflict` unless the stored file is still as the run saw it. */
+  /** Throws a `conflict` unless the stored file is still as the run saw it (`notAsSeen`, the one check). */
   assert(target: FenceTarget, now: StoredNow | null): void {
     const seen = this.seen.get(target.id);
-    const moved: string[] = [];
-    if (!seen) moved.push('never read');
-    else if (!now || now.trashed) moved.push('gone');
-    else {
-      if (now.file.name !== seen.name) moved.push('name');
-      if (!sameParents(now.file.parents, seen.parents)) moved.push('parents');
-      if (target.part === 'target' && seen.modifiedTime !== '' && now.file.modifiedTime !== seen.modifiedTime) moved.push('modifiedTime');
-    }
-    if (!moved.length) return;
-    console.error(`Refused a write to ${target.part} ${target.id}: ${moved.join(', ')}`);
-    throw notAsSeen();
+    // A folder's own modifiedTime is no version of what is in it; a move or a Bin keeps it '' (`expectPlace`).
+    const withTime = target.part === 'target' && seen?.modifiedTime !== '';
+    const reason = seen
+      ? notAsSeen({ id: seen.id, name: seen.name, parents: seen.parents, ...(withTime ? { modifiedTime: seen.modifiedTime } : {}) }, now && { ...now.file, trashed: now.trashed })
+      : 'never-read';
+    if (reason === null) return;
+    console.error(`Refused a write to ${target.part} ${target.id}: ${reason}`);
+    throw notAsSeenError(reason, NOT_AS_SEEN);
   }
 
   /** The same writes, keeping what each answer says, and forgetting a file put in the Bin. */
