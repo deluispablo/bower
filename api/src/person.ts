@@ -128,10 +128,22 @@ interface AnswersWaiting {
  */
 type DeadlineKind = 'run' | 'answers' | 'gone';
 
+/** The order the alarm handles the kinds due (`wake`). */
+const DEADLINE_KINDS: readonly DeadlineKind[] = ['gone', 'run', 'answers'];
+
+/**
+ * A throwing handler's backoff, as Cloudflare retries a throwing alarm (2 seconds, doubling, up to 6 attempts:
+ * https://developers.cloudflare.com/durable-objects/api/alarms/#alarm). Schema v13 keeps the attempt count.
+ */
+const DEADLINE_BACKOFF_MS = 2000;
+const DEADLINE_ATTEMPTS = 6;
+
 interface DeadlineRow extends Record<string, SqlStorageValue> {
   kind: DeadlineKind;
   key: string;
   at: number;
+  /** Times in a row its handler threw. */
+  attempts: number;
 }
 
 /** A stale run the alarm looks up on GitHub: what it saw, so the second section can tell whether anything moved. */
@@ -583,7 +595,7 @@ export class Person extends DurableObject<Env> {
     const sql = this.ctx.storage.sql;
     if (kind !== 'gone') sql.exec('DELETE FROM deadlines WHERE kind = ? AND key <> ?', kind, key);
     sql.exec(
-      'INSERT INTO deadlines (kind, key, at) VALUES (?, ?, ?) ON CONFLICT (kind, key) DO UPDATE SET at = excluded.at',
+      'INSERT INTO deadlines (kind, key, at) VALUES (?, ?, ?) ON CONFLICT (kind, key) DO UPDATE SET at = excluded.at, attempts = 0',
       kind,
       key,
       at,
@@ -713,39 +725,80 @@ export class Person extends DurableObject<Env> {
   /**
    * What the alarm does at `now`, through `github.fetchImpl` for every request: each kind of deadline due by `now` is
    * handled, in this order: expired gone rows go, recovery looks at the run (`recover`), and the run the waiting
-   * answers asked for starts (`startWaiting`). A handled deadline goes unless its handler set it again; then the
-   * alarm is set to the earliest one kept. If a handler throws, what was due and not handled is looked at again
-   * `RECHECK_MS` later (an alarm is at-least-once, so its handlers already are), and the error goes on to the runtime.
-   * Every request of one alarm counts against one invocation's subrequests (TL-P4-11).
+   * answers asked for starts (`startWaiting`). A handled deadline goes unless its handler set it again (compare and
+   * delete); then the alarm is set to the earliest one kept. A handler that throws is logged and its deadlines, as
+   * they were read, are tried again with Cloudflare's alarm backoff (2 seconds, doubling, 6 attempts:
+   * https://developers.cloudflare.com/durable-objects/api/alarms/#alarm); after the last the deadline fails
+   * (`deadlineFailed`). The other kinds still run, and the error is not thrown on, so the runtime's own retries do
+   * not run it twice. Every request of one alarm counts against one invocation's subrequests (TL-P4-11).
    */
   async wake(now: number, github: GitHubAccess): Promise<void> {
     const sql = this.ctx.storage.sql;
-    const due = sql.exec<DeadlineRow>('SELECT kind, key, at FROM deadlines WHERE at <= ?', now).toArray();
-    const handled = (kind: DeadlineKind): void => {
-      for (const d of due) if (d.kind === kind) sql.exec('DELETE FROM deadlines WHERE kind = ? AND key = ? AND at = ?', d.kind, d.key, d.at);
-    };
-    const isDue = (kind: DeadlineKind): boolean => due.some((d) => d.kind === kind);
+    const due = sql.exec<DeadlineRow>('SELECT kind, key, at, attempts FROM deadlines WHERE at <= ?', now).toArray();
     let fetches = 0;
     const counted: FetchLike = (input, init) => {
       fetches += 1;
       return github.fetchImpl(input, init);
     };
+    const handlers: Record<DeadlineKind, () => Promise<void>> = {
+      gone: () => {
+        this.pruneGone(now);
+        return Promise.resolve();
+      },
+      run: () => this.recover(now, { ...github, fetchImpl: counted }),
+      answers: () => this.startWaiting(now, counted, () => fetches),
+    };
     try {
-      if (isDue('gone')) this.pruneGone(now);
-      if (isDue('run')) {
-        await this.recover(now, { ...github, fetchImpl: counted });
-        handled('run');
+      for (const kind of DEADLINE_KINDS) {
+        const rows = due.filter((d) => d.kind === kind);
+        if (rows.length === 0) continue;
+        try {
+          await handlers[kind]();
+          for (const d of rows) sql.exec('DELETE FROM deadlines WHERE kind = ? AND key = ? AND at = ?', d.kind, d.key, d.at);
+        } catch (err) {
+          this.ctx.storage.transactionSync(() => {
+            for (const d of rows) this.handlerThrew(d, now, err);
+          });
+        }
       }
-      if (isDue('answers')) {
-        await this.startWaiting(now, counted, () => fetches);
-        handled('answers');
-      }
-    } catch (err) {
-      // Never looped at once: what is still due as it was waits a minute.
-      for (const d of due) sql.exec('UPDATE deadlines SET at = ? WHERE kind = ? AND key = ? AND at = ?', now + RECHECK_MS, d.kind, d.key, d.at);
-      throw err;
     } finally {
       this.rearm();
+    }
+  }
+
+  /**
+   * The handler of deadline `d` (as read) threw at `now`: it is tried again after the backoff, or, at the last
+   * attempt, it fails and what it was for ends: the run fails with its sentence (`failStale`), the waiting answers
+   * stop being started (they stay in your changes for the next tidy-up), a gone ticket is forgotten. A deadline set
+   * again in between is left alone.
+   */
+  private handlerThrew(d: DeadlineRow, now: number, err: unknown): void {
+    const sql = this.ctx.storage.sql;
+    const attempts = d.attempts + 1;
+    if (attempts < DEADLINE_ATTEMPTS) {
+      console.error(`the ${d.kind} deadline failed (attempt ${attempts} of ${DEADLINE_ATTEMPTS}); trying again`, err);
+      const at = now + DEADLINE_BACKOFF_MS * 2 ** (attempts - 1);
+      sql.exec('UPDATE deadlines SET at = ?, attempts = ? WHERE kind = ? AND key = ? AND at = ?', at, attempts, d.kind, d.key, d.at);
+      return;
+    }
+    if (sql.exec('DELETE FROM deadlines WHERE kind = ? AND key = ? AND at = ?', d.kind, d.key, d.at).rowsWritten === 0) return;
+    console.error(`the ${d.kind} deadline for ${d.key} gave up after ${attempts} attempts`, err);
+    this.deadlineFailed(d, now);
+  }
+
+  /** What a deadline that failed was for ends honestly (`handlerThrew`). */
+  private deadlineFailed(d: DeadlineRow, now: number): void {
+    if (d.kind === 'run') {
+      const current = this.currentRunRow();
+      if (current !== undefined && current.id === d.key && ACTIVE_PHASES.includes(current.phase)) this.failStale(current, now);
+    } else if (d.kind === 'answers') {
+      const waiting = this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING);
+      if (waiting !== undefined) this.ctx.storage.kv.put(ANSWERS_WAITING, { ...waiting, tries: WAITING_TRIES } satisfies AnswersWaiting);
+    } else {
+      const kv = this.ctx.storage.kv;
+      const live = (kv.get<GoneTicket[]>(GONE_TICKETS) ?? []).filter((t) => t.hash !== d.key);
+      if (live.length === 0) kv.delete(GONE_TICKETS);
+      else kv.put(GONE_TICKETS, live);
     }
   }
 

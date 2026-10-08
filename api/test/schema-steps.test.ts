@@ -20,6 +20,7 @@ const SHIPPED: readonly string[] = [
   '57176deac8fffcf05cbb607fb1a5787436538f67190f29fefa5e2900a756f989', // 10: ticket report phase
   '9fbb521c0a6358d0ebe4aaae29c9adf8132bfe17bda36d2b4a2868a76c74d112', // 11: dead schema dropped, ticket epoch named attempt
   'f165fd3557d2ff5f29d095b926c6abe9b93232fe9649593ea580eed034388885', // 12: deadlines
+  '968095f857dd5d1e72f4233c1e27c7b27cad9f555a8542401e83bd5d03964721', // 13: deadline attempts
 ];
 
 /** The statements `migrate` runs on a database recorded at `current`, without its own schema_version bookkeeping. */

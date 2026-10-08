@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
 import type { Person } from '../src/person.js';
+import { SCHEMA_VERSION } from '../src/person-schema.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
 
@@ -94,7 +95,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     });
     await evictDurableObject(p);
     const before = Date.now();
-    expect(await p.schemaVersion()).toBe(12);
+    expect(await p.schemaVersion()).toBe(SCHEMA_VERSION);
     const rows = await runInDurableObject(p, (_i, state) =>
       state.storage.sql.exec<{ kind: string; key: string; at: number }>('SELECT kind, key, at FROM deadlines ORDER BY kind').toArray(),
     );
@@ -176,5 +177,23 @@ describe('worker deadlines (TL-P4-14)', () => {
     });
     expect(await rowsOf(sub)).toEqual([]);
     expect(await alarmOf(sub)).toBeNull();
+  });
+
+  it('deadlines kept at schema v12 keep their times and start with no attempts', async () => {
+    const sub = `deadlines-v12-${crypto.randomUUID()}`;
+    const p = person(sub);
+    const runId = await admitted(sub, 'press-1', Date.now() + HOUR);
+    const before = await rowsOf(sub);
+    await runInDurableObject(p, (_i, state) => {
+      state.storage.sql.exec('ALTER TABLE deadlines DROP COLUMN attempts');
+      state.storage.sql.exec('UPDATE schema_version SET version = 12 WHERE id = 1');
+    });
+    await evictDurableObject(p);
+    expect(await p.schemaVersion()).toBe(SCHEMA_VERSION);
+    const after = await runInDurableObject(p, (_i, state) =>
+      state.storage.sql.exec<{ kind: string; key: string; at: number; attempts: number }>('SELECT kind, key, at, attempts FROM deadlines').toArray(),
+    );
+    expect(after).toEqual(before.map((r) => ({ ...r, attempts: 0 })));
+    expect(after[0]?.key).toBe(runId);
   });
 });
