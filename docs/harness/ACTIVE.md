@@ -199,3 +199,4 @@ P3-9 is closed.
 - TL-P4-07 addendum (50a99a1): Areas is model variance. model-context-regression becomes model-input-fingerprint (after placement-guidance); placement-guidance (implementer) running. 365/369.
 - checkpoint-count closed: the 8 was the timing counter (every run record timed as a checkpoint); real writes were 4. Non-checkpoint record writes are no longer labelled on the timing line. 366/369.
 - placement-guidance closed (f41f86b): the original's PARA wording in the prompt; C04 rubric allows Resources or Areas/Home linking the plot note. 367/369. model-input-fingerprint running (mechanical, at f41f86b).
+- model-input-fingerprint merged (1289d2e) but not closed: the timing test passes at the red commit and the golden test writes its own file when missing. Back to the worker. 367/369.
