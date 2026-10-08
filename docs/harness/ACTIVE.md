@@ -241,3 +241,4 @@ P3-9 is closed.
 - b54392c live: garden 2/2 PASS (input= equal); offer-and-flat 0/3 strict (photo asked, payslip to a new area Pay and tax records; run 1 offer not renamed; run 3 invented a 30-minute limit); things section still varies on multi-thing piles. Sent to the lead.
 - TL-P4-08 addendum 5 (1c9148d): c04-prompt-fixes (implementer) and things-normalised round 2 (mechanical). Then offer-and-flat x3 + garden x1 closes C04; next drive-calls-cut beside C05. 376/382.
 - c04-prompt-fixes closed (2f60dfd): numbers grounded (digits only), rawName refusal, kinds describe areas, offer-and-flat rubric change 3 logged. 377/382. things-normalised round 2 running.
+- things-normalised round 2 closed (1b135a8): things sorted within a pile in the section hash (Drive listing order varied). 378/382. P4-11 delta check running.
