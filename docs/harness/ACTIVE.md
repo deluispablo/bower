@@ -266,3 +266,4 @@ P3-9 is closed.
 - ba74598 live: POST /process 500 on every press (no Actions run); sheet stuck on Starting. Asked the lead for the Worker stack. Presses stopped.
 - TL-P4-11 (70f5897): /process 500 was Too many subrequests (free plan 50). admission-subrequest-budget (implementer) and process-error-honest (implementer) running. 380/385.
 - Binned the 3 old garden pile notes from the test inbox (synthetic walk piles, TL-P4-11 point 3). The offer-and-flat pile stays for run 1. admission-subrequest-budget and process-error-honest running.
+- TL-P4-11 addendum (1f91b43): ask-one-per-thing queued (both slots busy). Cause of the repeated IMG_2301 question: my resets binned and re-uploaded the pile before each run (new fileIds, so new q-ask ids), and a binned thing never closed its question. Staging leftovers to be closed through the app after the deploy. 380/386.
