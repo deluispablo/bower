@@ -285,3 +285,4 @@ P3-9 is closed.
 - state-no-adoption re-closed (4333308; red by hand at 50f026d). 385/389. corpus-offer-real-pdf: mechanical stalled (9 scripted tests fail once PDFs have text); escalated to a fresh Opus worker.
 - P4-16c fix-round check PASS (state-no-adoption; minors to polish; compatibility table row split fixed). corpus PDFs (escalated) running.
 - corpus-offer-real-pdf closed (57243c4; escalated; red by hand at 2a63292): 12 corpus PDFs real, payslip note in 4 scripted fixtures. 386/389. Suites next.
+- Suites at 07ff1e4: check 3629+/194/165 harness 386/389, e2e 226, e2e:fake 251 + qa10:165 phone (2nd suite in a row; file alone 3/3 pass), pwa 4. Main moves.
