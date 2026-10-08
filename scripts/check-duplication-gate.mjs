@@ -80,7 +80,7 @@ if (cloneCount === baseline.clones) {
 }
 
 if (cloneCount < baseline.clones) {
-  console.log(`\nPASSED: Clone count reduced from ${baseline.clones} to ${cloneCount}`);
-  console.log(`\nTo update baseline, run: node scripts/update-duplication-baseline.mjs`);
-  process.exit(0);
+  console.error(`\nFAILED: Clone count lower than baseline!`);
+  console.error(`lower the baseline to ${cloneCount}`);
+  process.exit(1);
 }
