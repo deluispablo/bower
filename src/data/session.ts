@@ -14,6 +14,7 @@
 import { BowerError } from './types';
 import type { Session, Sources, Unsubscribe } from './sources';
 import type { WorkerApi } from './worker/worker-api';
+import { isDriveWrite } from './drive/drive-api';
 
 /** Approved copy (TL-P2-13): the block screen's heading and the refusal of a fenced write. */
 export const OPEN_ELSEWHERE_TEXT = 'Bower is open in another window.';
@@ -678,12 +679,8 @@ export function leavingLetsGo<T extends Pick<Session, 'signOut' | 'deleteAccount
   });
 }
 
-/** Drive methods that only read; every other one is a write and is fenced (fail closed). */
-const DRIVE_READS: ReadonlySet<PropertyKey> = new Set(['listAll', 'get', 'readText', 'readBytes', 'fullText', 'binnedByItem', 'sessionStatus', 'getUploaded']);
-
-export function needsFence(key: PropertyKey): boolean {
-  return !DRIVE_READS.has(key);
-}
+/** Every Drive write is fenced; a method the table does not know is too (fail closed). */
+export const needsFence = isDriveWrite;
 
 /** The guard's check before one Drive call, and what the call answered (to learn upload sessions). */
 export interface DrivePolicy {

@@ -5,6 +5,7 @@
  * Every call rejects with a `BowerError`.
  */
 import { BowerError, type ErrorCode } from '../types';
+import type { StoredDigests } from '../pile-readiness';
 
 export interface DriveFile {
   id: string;
@@ -132,3 +133,31 @@ export const DRIVE_MESSAGES: Record<ErrorCode, string> = {
 };
 
 export const driveError = (code: ErrorCode): BowerError => new BowerError(code, DRIVE_MESSAGES[code]);
+
+/**
+ * Every Drive method, read or write, in one place. The lease guard fences the writes (fail closed: a method
+ * missing here is a type error) and the live wrapper skips its after-check for them.
+ */
+export const DRIVE_OPS = {
+  listAll: 'read',
+  get: 'read',
+  readText: 'read',
+  readBytes: 'read',
+  fullText: 'read',
+  binnedByItem: 'read',
+  storedDigest: 'read',
+  generateIds: 'read',
+  sessionStatus: 'read',
+  getUploaded: 'read',
+  createFolder: 'write',
+  createText: 'write',
+  upload: 'write',
+  writeText: 'write',
+  update: 'write',
+  trash: 'write',
+  untrash: 'write',
+  openResumable: 'write',
+  putChunk: 'write',
+} as const satisfies Record<keyof (DriveApi & ResumableDrive & BinLookup & StoredDigests), 'read' | 'write'>;
+
+export const isDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Record<PropertyKey, string>)[key] !== 'read';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BinLookup, DriveApi, ResumableDrive } from './drive-api';
+import { DRIVE_OPS, type BinLookup, type DriveApi, type ResumableDrive } from './drive-api';
 import type { StoredDigests } from '../pile-readiness';
 import { drivePolicy, type PlaceGuard } from '../session';
 
@@ -29,6 +29,10 @@ const EXPECTED = {
 } as const satisfies Record<Method, 'read' | 'write'>;
 
 describe('every Drive method is classed read or write', () => {
+  it('the table classes each method as expected', () => {
+    expect(DRIVE_OPS).toEqual(EXPECTED);
+  });
+
   it('the lease guard lets every read through and guards every write', async () => {
     let asked = 0;
     const guard = {
