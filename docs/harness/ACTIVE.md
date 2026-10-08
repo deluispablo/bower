@@ -167,3 +167,4 @@ P3-9 is closed.
 - P4-3 suites at fe61665: check 3608/176/87, e2e 226, e2e:fake 250, e2e:pwa 4. P4-3 ready to deploy.
 - deploy-scan-unpdf-literal closed (874e8f2). 357/357. Claude C04 runs: run 1 PASS, run 2 not fresh, run 3 stuck queued since 06:51:48Z (no Actions run; watching the 17-min alarm).
 - TL-P4-04 (5a2f003): P4-4 running: admission-reads-cost and attempt-check-light (escalated, at b883a94); dispatch-retry (implementer) next. 357/360. Then 3 more C04 runs.
+- attempt-check-light closed (ec56348): per run, token calls 71 → 2 and attempt calls 0 → 69 (from the person object, no Google call). 358/360.
