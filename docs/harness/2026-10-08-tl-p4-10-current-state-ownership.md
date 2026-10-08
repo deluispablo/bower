@@ -36,3 +36,13 @@ So adoption by checksum protects nothing and opens this hole.
   - Keep `bowerMd5` only if something else uses it; otherwise remove it from writes, reads and the listing fields.
   - Test: after Bower appends to a note with an unmarked section, the next run still only adds a line.
 - **In the same entry, the fallback line is reworded.** "Bower's current state would now read: X.; Y.; …" becomes one plain sentence, under the authored-line limits.
+
+**Addendum 2, 2026-10-08: c05-hub-lines ×3 on `924e6d6` holds the ownership rule.**
+- **Run 1** rewrote the marked state.
+- **Run 2** kept the person's edit and asked once.
+- **Run 3** kept the edit again, with no adoption and no new question.
+
+Three findings become entries in the C05 slice:
+1. **`fallback-no-duplicate`** (`bower-implementer`). When the same run already adds a line to that note citing the same thing, the fallback line is not written. Test: Job hunt gets one offer line, not two.
+2. **`duplicate-by-hash`** (`bower-implementer`). This follows the local method: a duplicate found by hash is binned and reported. A thing whose content hash equals a file already filed is moved to the Drive Bin, never hard-deleted, and reported as "already saved as <name>". It adds no line and no note. Run 3's extra "confirms" line was this case.
+3. **`home-inbox-first`** (`bower-implementer`). On that folder the Inbox appeared only after about 45 s, behind the last run's report. The Inbox renders from the listing first, and the report and questions fill in after. Target: the Inbox within 3 s on the live folder, measured in the e2e on the fake with a slow report read. Home's Drive calls fell from 221 to about 108.
