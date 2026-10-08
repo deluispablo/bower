@@ -8,6 +8,7 @@ import { BowerError } from '../types';
 import type { DriveFile } from './drive-api';
 import { ReadCache } from './read-cache';
 import { FakeDrive } from './fake-drive';
+import { DriveHttp } from './drive-http';
 import { DriveVault } from '../vault/drive-vault';
 import { RunnerDrive } from '../../../runner/src/drive';
 import { RunnerToken } from '../../../runner/src/token';
@@ -97,13 +98,14 @@ describe('one read cache serves app and runner', () => {
 
 describe('digest bytes', () => {
   it('bytes read for a digest are not kept once the digest is', async () => {
-    // Real Drive has no storedDigest: a pile item's digest is its bytes read once. A photo or a PDF must not stay in
+    // Real Drive hashes what it reads: a pile item's digest is its bytes read once. A photo or a PDF must not stay in
     // memory for the session behind a digest that is itself kept.
     const fake = new FakeDrive();
     const root = await fake.createFolder('root', 'Bower');
     const photo = await fake.upload(root.id, 'photo.jpg', new Blob([new Uint8Array(2048).fill(7)]));
     const real = Object.create(fake) as FakeDrive;
-    (real as unknown as { storedDigest?: unknown }).storedDigest = undefined;
+    // A Drive that must read the file to hash it, as `DriveHttp` does.
+    real.storedDigest = (id, known) => DriveHttp.prototype.storedDigest.call(real, id, known);
     let reads = 0;
     const readBytes = fake.readBytes.bind(fake);
     real.readBytes = (id) => (reads++, readBytes(id));

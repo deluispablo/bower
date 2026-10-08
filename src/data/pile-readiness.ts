@@ -26,15 +26,6 @@ export type DigestOf = (file: DriveFile) => Promise<Digest | null>;
 /** Bin entries with any of these member keys, with their stored size and hash: one call per evaluation. */
 export type BinnedOf = (keys: readonly string[]) => Promise<ReadonlyArray<{ file: DriveFile; size: number | null; sha256: string | null }>>;
 
-/** A Drive that can say what it stored without handing back the bytes (the pretend Drive). */
-export interface StoredDigests {
-  storedDigest(id: string): Promise<Digest | null>;
-}
-
-export function hasStoredDigests(drive: object): drive is StoredDigests {
-  return typeof (drive as { storedDigest?: unknown }).storedDigest === 'function';
-}
-
 export type DeclarationLookup =
   | { state: 'found'; declaration: Declaration; sha256: string }
   /** The folder carries no declaration mark: an ordinary pile. */

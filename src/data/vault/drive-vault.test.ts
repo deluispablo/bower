@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
+import { DriveHttp } from '../drive/drive-http';
 import { seedFakeDrive } from '../fake/seed';
 import { findNode } from '../tree';
 import { BowerError } from '../types';
@@ -2624,7 +2625,7 @@ describe('one Home load on a folder like the live one (TL-P4-11 addendum)', () =
     if (q) await drive.writeText(q.id, JSON.stringify({ v: 1, questions: asks }), q.modifiedTime);
     else await drive.createText(bower, 'questions.json', JSON.stringify({ v: 1, questions: asks }));
     const fresh = declaring();
-    (drive as { storedDigest?: unknown }).storedDigest = undefined;
+    drive.storedDigest = (id, known) => DriveHttp.prototype.storedDigest.call(drive, id, known);
     const names = new Map((await drive.listAll(root)).map((f) => [f.id, drive.pathOf(f.id, root)]));
     const reads: string[] = [];
     for (const m of ['readText', 'readBytes'] as const) {

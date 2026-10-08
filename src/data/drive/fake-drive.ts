@@ -5,7 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
-import { driveError, RESUMABLE_UNIT, unconfirmedWriteError, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
+import { driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
 /** The fence's types live with the Drive ports; kept here for the tests that import them from the fake. */
 export type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from './drive-api';
 
@@ -46,7 +46,10 @@ interface FakeSession {
   file: DriveFile | null;
 }
 
-export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
+/** The words of a text: runs of letters and digits, lower case. */
+const words = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+export class FakeDrive implements DriveApi, ResumableDrive {
   private files = new Map<string, Stored>();
   private seq = 0;
   private last = 0;
@@ -188,7 +191,7 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
    * bytes, or, for a big file after a reload, from what the snapshot kept.
    * Null when they could not be checked.
    */
-  async storedDigest(id: string): Promise<{ size: number; sha256: string } | null> {
+  async storedDigest(id: string, _known?: Uint8Array): Promise<{ size: number; sha256: string } | null> {
     await this.gate();
     const f = this.find(id);
     if (f.bytesUnavailable) return f.sha256 !== undefined && f.meta.size !== undefined ? { size: f.meta.size, sha256: f.sha256 } : null;
@@ -266,16 +269,26 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     return this.changed(this.copy(f.meta));
   }
 
+  /**
+   * As `DriveHttp.fullText` is answered: every word of the query, whole and in any order (Drive's `fullText contains`),
+   * in the name or the text; for each batch of 40 folders, the first two pages of a thousand.
+   */
   async fullText(rootId: string, query: string): Promise<DriveFile[]> {
     await this.gate();
-    const q = query.toLowerCase();
-    const out: DriveFile[] = [];
-    for (const f of this.live(rootId)) {
-      if (f.meta.folder) continue;
-      const text = typeof f.content === 'string' ? f.content : '';
-      if (f.meta.name.toLowerCase().includes(q) || text.toLowerCase().includes(q)) out.push(this.copy(f.meta));
+    const asked = words(query);
+    const live = this.live(rootId);
+    const parents = [rootId, ...live.filter((f) => f.meta.folder).map((f) => f.meta.id)];
+    const out = new Map<string, DriveFile>();
+    for (let i = 0; i < parents.length; i += SEARCH_FOLDERS) {
+      const batch = new Set(parents.slice(i, i + SEARCH_FOLDERS));
+      const hits = live.filter((f) => {
+        if (f.meta.folder || !f.meta.parents.some((p) => batch.has(p))) return false;
+        const have = new Set(words(`${f.meta.name} ${typeof f.content === 'string' ? f.content : ''}`));
+        return asked.every((w) => have.has(w));
+      });
+      for (const f of hits.slice(0, SEARCH_MAX_PAGES * SEARCH_PAGE_SIZE)) out.set(f.meta.id, this.copy(f.meta));
     }
-    return out;
+    return [...out.values()];
   }
 
   /** Every resumable call, in order. */

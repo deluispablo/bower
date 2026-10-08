@@ -6,9 +6,11 @@
  * else becomes one of `DRIVE_MESSAGES`, worded for where it ran (`context`: never "offline" outside a browser).
  */
 import { BowerError } from '../types';
+import type { Digest } from '../pile-readiness';
+import { sha256 } from '../vault/hashes';
 import { noAnswer, send, type Context, type Fetch } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
-import { DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, unconfirmedWriteError, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
+import { DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -20,7 +22,9 @@ const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
 /** The only session addresses that get the person's token. */
 const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';
 export const FOLDER = 'application/vnd.google-apps.folder';
-const BATCH = 40;
+const BATCH = SEARCH_FOLDERS;
+/** Keys looked up in one Bin query. */
+const BIN_KEYS = 20;
 const SMALL = 5 * 1024 * 1024;
 const CHUNK = 8 * 1024 * 1024;
 
@@ -109,7 +113,8 @@ export class DriveHttp implements DriveApi, ResumableDrive {
         const ids = level.slice(i, i + BATCH);
         const q = `(${ids.map((id) => `${quote(id)} in parents`).join(' or ')}) and trashed = false`;
         for (const f of await this.query(q, Infinity, fields)) {
-          out.push(f);
+          // No checksum and no size: a Docs Editors file or a shortcut, whose content Drive keeps no checksum of.
+          out.push(opts.checksums && !f.folder && f.sha256 === undefined && f.size === undefined ? { ...f, unchecked: true } : f);
           if (f.folder) next.push(f.id);
         }
       }
@@ -216,8 +221,33 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     const hits = new Map<string, DriveFile>();
     for (let i = 0; i < parents.length; i += BATCH) {
       const scope = parents.slice(i, i + BATCH).map((id) => `${quote(id)} in parents`).join(' or ');
-      const files = await this.query(`fullText contains ${quote(query)} and (${scope}) and trashed = false`, 2);
+      const files = await this.query(`fullText contains ${quote(query)} and (${scope}) and trashed = false`, SEARCH_MAX_PAGES);
       for (const f of files) if (inside.has(f.id)) hits.set(f.id, f);
+    }
+    return [...hits.values()];
+  }
+
+  /** The bytes are read to be hashed and not kept; the caller that holds them already passes them as `known`. */
+  async storedDigest(id: string, known?: Uint8Array): Promise<Digest | null> {
+    const bytes = known ?? (await this.readBytes(id));
+    return { size: bytes.byteLength, sha256: await sha256(new Blob([new Uint8Array(bytes).buffer])) };
+  }
+
+  /**
+   * The Bin's files carrying one of `keys` as `bowerItem`, from inside `rootId`: one `trashed = true` listing for each
+   * 20 keys (an `appProperties has` for each), with Drive's own checksums. A file Drive keeps no checksum of is listed
+   * with a null size and hash.
+   */
+  async binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]> {
+    if (!keys.length) return [];
+    const inside = new Set(this.known.get(rootId) ?? (await this.listAll(rootId)).map((f) => f.id)).add(rootId);
+    const hits = new Map<string, BinnedItem>();
+    for (let i = 0; i < keys.length; i += BIN_KEYS) {
+      const has = keys.slice(i, i + BIN_KEYS).map((k) => `appProperties has { key='bowerItem' and value=${quote(k)} }`).join(' or ');
+      for (const file of await this.query(`trashed = true and (${has})`, SEARCH_MAX_PAGES, LISTED_FIELDS)) {
+        if (file.folder || !file.parents.some((p) => inside.has(p))) continue;
+        hits.set(file.id, { file, size: file.sha256 !== undefined ? (file.size ?? null) : null, sha256: file.sha256 ?? null });
+      }
     }
     return [...hits.values()];
   }
@@ -329,7 +359,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     let pages = 0;
     do {
       if (++pages > maxPages) break;
-      const params = new URLSearchParams({ q, fields: `nextPageToken,files(${fields})`, pageSize: '1000' });
+      const params = new URLSearchParams({ q, fields: `nextPageToken,files(${fields})`, pageSize: String(SEARCH_PAGE_SIZE) });
       if (pageToken) params.set('pageToken', pageToken);
       const body = (await (await this.call(`${API}/files?${params}`)).json()) as { files?: WireFile[]; nextPageToken?: string };
       out.push(...(body.files ?? []).map(toFile));
