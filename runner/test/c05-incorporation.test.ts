@@ -34,7 +34,7 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
     things: [offerThing(id), { fileId: id(LISTING), to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' }],
     lines: [
       { note: FLAT, text: 'A fourth flat added; the shortlist compared by commute.', cites: id(LISTING) },
-      { note: JOB, text: 'New offer from Ferrowick, scored 7 out of 10 against your CV.', cites: id(OFFER) },
+      { note: JOB, text: 'New offer from Ferrowick, fully remote.', cites: id(OFFER) },
       { note: JOB, text: 'A flat from the same pile went to the flat hunt.', cites: id(LISTING) },
     ],
   })),
@@ -61,10 +61,11 @@ describe('the C05 slice through the Claude provider', () => {
   it('the C05 corpus cases score green with scripted proposals', async () => {
     const cases: LoadedCase[] = (await loadCorpus(ROOT)).filter((c) => c.capability === 'C05');
     expect(cases.map((c) => c.id).sort()).toEqual(Object.keys(SCRIPTS).sort());
+    const results: Record<string, unknown> = {};
     for (const c of cases) {
       const run = await runWithClaude(c, SCRIPTS[c.id] as ClaudeSpawn);
-      expect({ id: c.id, code: run.code }).toEqual({ id: c.id, code: 0 });
-      expect({ id: c.id, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun }) }).toEqual({ id: c.id, pass: true, unmet: [] });
+      results[c.id] = { code: run.code, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun }) };
     }
+    expect(results).toEqual(Object.fromEntries(cases.map((c) => [c.id, { code: 0, pass: true, unmet: [] }])));
   });
 });
