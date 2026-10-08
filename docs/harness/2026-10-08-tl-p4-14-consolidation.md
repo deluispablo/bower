@@ -47,6 +47,7 @@
 | Entry | What |
 | --- | --- |
 | `c2-drive-transport` (escalated) | One transport for the app, runner and Worker: token refresh, retry and backoff, error mapping, one wire type and field list. `DriveHttp` builds on it; `RunnerDrive` keeps only the fence and the attempt check; the Worker's `vault.ts` client goes. `FencedDrive` and `StoredEvidence` move into `drive-api.ts`, so no production code imports from `fake/`. |
+| `c2-runner-exit` (escalated) | One runner exit function for every path, and an additive "attempt ended" report; the Worker arms the run deadline at +60 s ([TL-P4-16](2026-10-08-tl-p4-16-baseline-defects.md) addendum 4) |
 | `c2-read-cache` | One read cache keyed by file id plus modifiedTime, used by DriveVault, Journal and the runner. Only the listing is ever invalidated, so a refresh can never clear a read in flight. The runner's eight caches and its time-based holds go. |
 | `c2-fake-parity` | Digests, `unchecked` and `binnedByItem` join `DriveApi` and are built on both the fake and real Drive; the runtime "does this Drive have it" checks go. Fake search behaves like Drive's (tokens, page cap). |
 | `c2-one-engine` (escalated) | One engine in `src/data/spine` checks, sends with a fence, observes and reads back, behind a Drive port. The runner and the fake run service both use it, so the fake becomes only a Drive adapter. Checkpoints per batch and recovery by the `bowerOp` stamp apply everywhere, so the demo and e2e use the live protocol. |

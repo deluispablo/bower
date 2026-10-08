@@ -56,3 +56,16 @@ The rule joins `c3-subject`'s ruling:
 - if the section changed since, the person is asked again with the reason.
 
 The same goes for any question whose yes means "do what you proposed".
+
+## Addendum 4: the stage 1 smoke defects (both option b, in stage 2)
+
+- **smoke-runner-offline.** One Drive read stalled, and the runner's retry sat inside DriveHttp's single 30 s bound, so the stall used up the whole bound and was reported as "You're offline". It is not a stage 1 regression.
+  - `c2-drive-transport` gets one retry policy for every client: a timeout per attempt, idempotent GETs retried with backoff inside an overall budget, and errors mapped by context.
+  - Away from a browser (the runner and the Worker), a network failure is "Google Drive didn't answer", never "offline".
+  - The six sites the note lists become named acceptance tests of that entry.
+- **smoke-runner-silent-stop.** A stopped attempt cannot report, so the Worker shows "queued" until the 17-minute recovery.
+  - A new entry, `c2-runner-exit` (`bower-escalated`), first builds one runner exit function, so all four exit paths go through it.
+  - Then comes an additive "attempt ended" report on the runner wire. The Worker arms the run's deadline 60 s after it, so recovery redispatches or ends the run honestly within about a minute.
+  - An `if: failure()` workflow step is rejected, since it would be a second reporting path.
+  - Test: every exit path, including an uncaught error, reaches the Worker, or the deadline recovers the run within 60 s.
+- **Order.** Stage 2 opens with `c2-drive-transport` and `c2-runner-exit` in parallel; they touch different files.
