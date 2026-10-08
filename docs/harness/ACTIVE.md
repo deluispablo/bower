@@ -178,3 +178,4 @@ P3-9 is closed.
 - C04 comparison on c76fd2f: 3/3 PASS, from fresh folders. Press to done 1:35, 1:17, 1:28; model 3–4 s, 1 turn. P4-5 closed: deploy-scan-extracted-token (22e2e2c), runner-stops-when-gone (5632d95). 362/362. P4-5 Opus delta and suites running.
 - TL-P4-05 (c588797): checkpoints in the DO declined; checkpoint-per-batch running (escalated, bower-p4-ckbatch at 5c55e7d); runner-reads-and-report next; then C05. 362/364.
 - P4-5 review BLOCK (runner-stops-when-gone: the token route answers 401, not 410, on revoked access). Reopened (98e6ae7); fix round running. 361/364.
+- checkpoint-per-batch BLOCKED (no code): a mid-batch kill after a person's rename cannot reconcile (TL-P3-23), and 5 tests must change; ruling asked (options a/b/c). runner-reads-and-report running (implementer, at 4d8191a).
