@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -237,7 +237,16 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   if (!keepDay && opts.filing?.keep?.length) console.error('A run with no date cannot keep one note; the answer waits for the next tidy-up');
   const keeps = (keepDay ? (opts.filing?.keep ?? []) : []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && l.rec.text === 'yes'));
   const keepAnswers = new Set(keeps.map((k) => k.answer));
-  let journal = demo ? lines : lines.filter((l) => (l.rec.kind !== 'request' && l.rec.kind !== 'answer') || keepAnswers.has(l.rec.id));
+  // Answers a model's run settles (TL-P4-08 addendum 8): a no (it closes its question), a yes to keeping summaries up
+  // to date (your rule line carries it), and an answer about a thing or pile this run took (the model is shown it). A
+  // second answer to one question goes with the first: one answer. Any other waits for a run that can act on it.
+  const tookSubjects = new Set((opts.taken?.piles ?? []).flatMap((p) => [p.pileId, ...(p.anchor ? [p.anchor.fileId] : []), ...p.items.map((i) => i.fileId)]));
+  const settles = (l: JournalLine): boolean => {
+    const q = l.rec.questionId ?? '';
+    return keepAnswers.has(l.rec.id) || l.rec.text === 'no' || q === ADOPT_STATES_ID || (q.startsWith('q-ask-') && tookSubjects.has(q.slice('q-ask-'.length)));
+  };
+  const settled = new Set(lines.filter((l) => l.rec.kind === 'answer' && settles(l)).map((l) => l.rec.questionId ?? ''));
+  let journal = demo ? lines : lines.filter((l) => (l.rec.kind !== 'request' && l.rec.kind !== 'answer') || (l.rec.kind === 'answer' && settled.has(l.rec.questionId ?? '')));
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal);
@@ -1748,7 +1757,7 @@ type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Ren
 type WantedState = { lines: string[]; source: string | null; thing: string | null };
 type StateRewrite = Extract<Change, { kind: 'state-rewrite' }>;
 /** The id of the folder's one question about summaries Bower did not write (TL-P4-10 point 3). */
-export const ADOPT_STATES_ID = 'q-adopt-states';
+export { ADOPT_STATES_ID };
 /** A thing joining a note you said yes to keeping (MERGES), with the answer that says so. */
 type Merge = { into: string; title: string; line: string; answer: string };
 /** Where a wanted Timeline line ended up at plan time. */

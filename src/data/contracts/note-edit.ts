@@ -282,6 +282,8 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
 export const ADOPT_STATES_RULE = 'Keep the summaries Bower did not write up to date.';
 /** The one question a run asks a folder about Current states Bower did not write (TL-P4-10 point 3), word for word. */
 export const ADOPT_STATES_QUESTION = 'Bower found summaries it did not write. May it keep them up to date?';
+/** The id of that one question; a yes to it is recorded as `ADOPT_STATES_RULE` (TL-P4-08 addendum 8). */
+export const ADOPT_STATES_ID = 'q-adopt-states';
 /** The front-matter key that marks what Bower last wrote in a note's Current state. */
 export const STATE_KEY = 'bower_state';
 /** An authored Timeline line's limit (the Claude intent's), which a line Bower makes from a Current state keeps too. */

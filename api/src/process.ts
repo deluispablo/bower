@@ -19,6 +19,9 @@
  * clock moves only across I/O (https://developers.cloudflare.com/workers/reference/security-model/#step-1-disallow-timers-and-multi-threading),
  * which is all these parts are. What follows the dispatch, until the job starts, is GitHub's queue.
  *
+ * An answer's run (TL-P4-08 addendum 8) is a press like any other, with the answer's own requestId and, for a thing or
+ * pile asked about, its `subject`: admission then reads and takes only the pile that holds it, with your changes.
+ *
  * Staleness reuses the original app's thresholds and rule (bower `api/src/process.ts`,
  * `runStaleness`/`markStale`), measured on this contract's `requestedAt` and `phaseAt`.
  */
@@ -104,12 +107,16 @@ export function utcDay(now: number): string {
 }
 
 const REQUEST_ID = /^[a-z0-9-]{1,64}$/;
+/** A thing's Drive file id or a pile's id, as an answer's run names its subject (TL-P4-08 addendum 8). */
+const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 
 interface ProcessBody {
   scope: RunScope;
   allowWeb: boolean;
   /** Absent when the app sent none: the Worker makes one, so it counts as new. */
   requestId: string | undefined;
+  /** An answer's run: the one thing or pile of the inbox it takes (scope `all` only); absent for a press of Tidy up. */
+  subject: string | undefined;
 }
 
 /** A body that fails validation is refused as the JSON guard refuses one: 415, no other code. */
@@ -119,11 +126,12 @@ function unreadable(): HttpError {
 
 function parseBody(value: unknown): ProcessBody {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
-  const { scope, allowWeb, requestId } = value as Record<string, unknown>;
+  const { scope, allowWeb, requestId, subject } = value as Record<string, unknown>;
   if (scope !== 'all' && scope !== 'instructions') throw unreadable();
   if (typeof allowWeb !== 'boolean') throw unreadable();
   if (requestId !== undefined && !(typeof requestId === 'string' && REQUEST_ID.test(requestId))) throw unreadable();
-  return { scope, allowWeb, requestId };
+  if (subject !== undefined && !(scope === 'all' && typeof subject === 'string' && SUBJECT.test(subject))) throw unreadable();
+  return { scope, allowWeb, requestId, subject };
 }
 
 export function personFor(env: Env, sub: string) {
@@ -178,7 +186,7 @@ async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolea
  * The admission manifest for the person's folder, read now with their Drive token. Drive trouble answers as the
  * contract's codes with no cause: a refused token is `signed-out`, anything else `internal` (logged only).
  */
-async function admission(env: Env, sub: string, scope: RunScope, now: number, fetchImpl: FetchLike, spent: () => number): Promise<AdmissionManifest> {
+async function admission(env: Env, sub: string, scope: RunScope, subject: string | undefined, now: number, fetchImpl: FetchLike, spent: () => number): Promise<AdmissionManifest> {
   const folderId = await reach('folder', async () => await personFor(env, sub).folderId());
   if (folderId === null) throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
   // The token is asked of the person object once per press, not once per Drive call; a 401 asks for a fresh one.
@@ -198,7 +206,7 @@ async function admission(env: Env, sub: string, scope: RunScope, now: number, fe
   });
   let planned;
   try {
-    planned = await planAdmission(admissionRead(drive, scope, { limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS, used: spent }), folderId, { scope, clock: () => now, newId: () => crypto.randomUUID() });
+    planned = await planAdmission(admissionRead(drive, scope, { limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS, used: spent }), folderId, { scope, ...(subject !== undefined ? { subject } : {}), clock: () => now, newId: () => crypto.randomUUID() });
   } catch (err) {
     if (err instanceof HttpError) throw err;
     if (err instanceof BowerError && err.code === 'auth') throw new HttpError(401, 'signed-out', undefined, { cause: err });
@@ -273,7 +281,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const person = personFor(env, sub);
     // Drive is read only for a press that would admit a new run; a repeat or a run going answers from the object.
     const fresh = await timing.time('check', () => reach('would admit', async (): Promise<boolean> => await person.wouldAdmit(requestId, now)));
-    let manifest = fresh ? await timing.time('reads', () => admission(env, sub, body.scope, now, counted, () => fetches)) : null;
+    let manifest = fresh ? await timing.time('reads', () => admission(env, sub, body.scope, body.subject, now, counted, () => fetches)) : null;
     const input = (): AdmitInput => ({
       scope: body.scope,
       allowWeb: body.allowWeb,
@@ -286,7 +294,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     let result = await admit();
     // The run it looked like ended in between: this press is new after all, so it reads the inbox once.
     if (!result.admitted && result.refused === 'needs-manifest' && manifest === null) {
-      manifest = await timing.time('reads', () => admission(env, sub, body.scope, now, counted, () => fetches));
+      manifest = await timing.time('reads', () => admission(env, sub, body.scope, body.subject, now, counted, () => fetches));
       result = await admit();
     }
     if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
