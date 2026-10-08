@@ -188,3 +188,4 @@ P3-9 is closed.
 - checkpoint-per-batch delivered (daa67fe): modelled C04 checkpoints 36 → 4, 37.9 → 28.3 s; deviations sent to the lead (sha256 bowerOp for Drive's 124-byte limit; 4 checkpoints). Merge conflict with reads-and-report in overhead.test.ts: the worker merges claude/p3. gone-ticket-rows-expire merged (dce7b81); done.sh green phase flaked on a 300 ms ticket margin, so the worker is widening it before the close.
 - TL-P4-05 addendum 2 (ce36da1): ckbatch deviations accepted. Entry report-kept-your-change added for the C12 slice. 363/366.
 - checkpoint-per-batch closed (a38306a): 4 checkpoints per run, bowerOp = 32 hex of sha256(run_id:op id); modelled C04 37.9 → 19.6 s with reads-and-report. 364/366. Waiting on the gone-ticket flake fix, then the P4-6 close.
+- gone-ticket-rows-expire closed (57f8fdb). 365/366 (open: report-kept-your-change, C12). P4-6 close: Opus delta 4d8191a..57f8fdb and the four suites.
