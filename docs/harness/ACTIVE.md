@@ -279,3 +279,4 @@ P3-9 is closed.
 - TL-P4-10/11 addenda (657c081): state-no-adoption, home-reads-once (implementers, running) and corpus-offer-real-pdf (mechanical, queued) registered. 383/389.
 - state-no-adoption closed (04f2d58; red by hand at b485b75): bowerMd5 removed, unmarked = the person's unless a rule, fallback 'New: …'. state-rewrite-change verify narrowed (d95ad13). 384/389. corpus-offer-real-pdf (mechanical) dispatched; home-reads-once back for the live shape.
 - home-reads-once closed (6280604): 73 -> 40 reads on a live-shaped fake folder, each file once. 385/389. P4-16 Opus check (state-no-adoption + home-reads-once) running; corpus-offer-real-pdf running.
+- P4-16 check BLOCK (state-no-adoption): the fallback line repeats the person's own line as news. Reopened; fix round with the same worker (+ rewriteState guard, undo of an adopted rewrite, bowerMd5 comment). home-reads-once passes (minors to polish). 384/389.
