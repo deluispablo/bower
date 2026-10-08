@@ -197,3 +197,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c1-worker-deadlines passes — One deadlines table; a throwing handler backs off up to 6 attempts, then its deadline fails and its run ends failed (TL-P4-14 addendum 2; schema v13)
 - 2026-10-08: c1-dependency-rules passes — dependency-cruiser in pnpm check: production code imports no fake or demo module; screens through sources only; named exceptions owned by stage 2-3 entries (TL-P4-15)
 - 2026-10-08: c1-shared-contracts passes — The Worker imports RunWire, phases, lease types and the folder template from src/data/contracts; one decideLease() for the object and the fake (TL-P4-14 stage 1; removed 341 lines)
+- 2026-10-08: c1-duplication-gate passes — jscpd duplication gate as a two-way ratchet: a new clone fails, a lower count asks to lower the baseline (TL-P4-15)

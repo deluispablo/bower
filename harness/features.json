@@ -5449,7 +5449,7 @@
     "id": "c1-duplication-gate",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "jscpd in pnpm check with a committed baseline from today's count that may only fall; a new clone fails the check (TL-P4-15).",
     "steps": [
       "Red from today's drift: new copy-paste goes unnoticed",
