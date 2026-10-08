@@ -13,6 +13,7 @@ export function normalizeModelInput(input: string): string {
   return input
     .replace(/"runId":"[^"]+"/g, '"runId":"RUN_ID"')
     .replace(/"admission":"[^"]+"/g, '"admission":"ADMISSION_ID"')
+    .replace(/"pileId":"[^"]+"/g, '"pileId":"PILE_ID"')
     .replace(/"fileId":"[^"]+"/g, '"fileId":"FILE_ID"')
     .replace(/"id":"[^"]+"/g, '"id":"ID"')
     .replace(/"at":\d+/g, '"at":0');
