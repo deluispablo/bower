@@ -146,6 +146,33 @@ describe('person object', () => {
     expect(versionRows).toBe(1);
   });
 
+  it('schema v11 has no unused tables', async () => {
+    const alex = personFor('sub-alex-schema-v11');
+    const shape = await runInDurableObject(alex, (_instance, state) => {
+      const sql = state.storage.sql;
+      const columns = (table: string): string[] =>
+        sql.exec<{ name: string }>('SELECT name FROM pragma_table_info(?) ORDER BY cid', table).toArray().map((c) => c.name);
+      return {
+        tables: sql
+          .exec<{ name: string }>(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite%' ORDER BY name",
+          )
+          .toArray()
+          .map((r) => r.name),
+        control: columns('control'),
+        runTicket: columns('run_ticket'),
+      };
+    });
+    // The v1 admission table was never read or written (runs replaced it in v7), nor were control's head,
+    // claim and epoch; a ticket's epoch is the attempt it was minted for, and is named so.
+    expect(shape).toEqual({
+      tables: ['account', 'control', 'quota', 'run_ticket', 'runs', 'schema_version', 'session_lease', 'session_leave'],
+      control: ['id', 'status_revision'],
+      runTicket: ['hash', 'run_id', 'attempt', 'retired', 'expires_at', 'report_seq', 'report_phase'],
+    });
+    expect(await alex.schemaVersion()).toBe(11);
+  });
+
   it('a person object refuses storage from a newer build', async () => {
     const alex = personFor('sub-alex-newer');
     expect(await alex.countQuota('2026-10-06')).toBe(1);
