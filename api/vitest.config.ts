@@ -23,6 +23,8 @@ export default defineConfig({
   ],
   // The harness check reads this report to match a verify's titles (scripts/harness-rules.mjs apiTests).
   test: {
+    // No api test reaches the network (test/no-network.ts; https://vitest.dev/config/#setupfiles).
+    setupFiles: ['./test/no-network.ts'],
     // A person object that refuses newer storage resets itself on purpose; workerd reports that
     // reset as an unhandled rejection (test/person.test.ts). Only that one is let through.
     onUnhandledError: (error) => !/newer than this build/.test(String((error as Error).message ?? error)),

@@ -6,10 +6,9 @@ import type { Person } from '../src/person.js';
 import { SCHEMA_VERSION } from '../src/person-schema.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
+import { HOUR, MINUTE, farAhead, inWindow } from './time.js';
 
 const env = testEnv as unknown as Env;
-const HOUR = 3600_000;
-const MINUTE = 60_000;
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
 
@@ -84,7 +83,7 @@ describe('worker deadlines (TL-P4-14)', () => {
   it('storage from before the deadline table keeps its deadlines', async () => {
     const sub = `deadlines-v11-${crypto.randomUUID()}`;
     const p = person(sub);
-    const t0 = Date.now() + HOUR;
+    const t0 = farAhead();
     const runId = await admitted(sub, 'press-1', t0);
     // A person object as v11 left it: a run going, a gone row kept, and the alarm somewhere.
     const gone = { hash: 'a'.repeat(64), expiresAt: t0 + 30 * MINUTE, attempt: 1 };
@@ -103,8 +102,8 @@ describe('worker deadlines (TL-P4-14)', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toEqual({ kind: 'gone', key: gone.hash, at: gone.expiresAt });
     expect(rows[1]).toMatchObject({ kind: 'run', key: runId });
-    expect(rows[1]?.at).toBeGreaterThanOrEqual(before);
-    expect(rows[1]?.at).toBeLessThanOrEqual(Date.now());
+    // The migration arms it at once and the object's real alarm may already have set its own deadline: both are correct.
+    inWindow(rows[1]?.at, before, t0 + QUEUED_STALE_MS);
     await runInDurableObject(p, async (instance: Person) => {
       await instance.wake(Date.now(), { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
     });
@@ -114,7 +113,7 @@ describe('worker deadlines (TL-P4-14)', () => {
   it('a handler that always throws stops after 6 attempts and its run ends failed', async () => {
     const sub = `deadlines-throws-${crypto.randomUUID()}`;
     const p = person(sub);
-    const t0 = Date.now() + HOUR;
+    const t0 = farAhead();
     const runId = await admitted(sub, 'press-1', t0);
     const [row] = await rowsOf(sub);
     if (row === undefined) throw new Error('no deadline');
@@ -156,7 +155,7 @@ describe('worker deadlines (TL-P4-14)', () => {
   it('a deadline its handler set again is kept, and only what was due as read goes', async () => {
     const sub = `deadlines-rearmed-${crypto.randomUUID()}`;
     const p = person(sub);
-    const t0 = Date.now() + HOUR;
+    const t0 = farAhead();
     const runId = await admitted(sub, 'press-1', t0);
     const [row] = await rowsOf(sub);
     if (row === undefined) throw new Error('no deadline');
@@ -182,7 +181,7 @@ describe('worker deadlines (TL-P4-14)', () => {
   it('deadlines kept at schema v12 keep their times and start with no attempts', async () => {
     const sub = `deadlines-v12-${crypto.randomUUID()}`;
     const p = person(sub);
-    const runId = await admitted(sub, 'press-1', Date.now() + HOUR);
+    const runId = await admitted(sub, 'press-1', farAhead());
     const before = await rowsOf(sub);
     await runInDurableObject(p, (_i, state) => {
       state.storage.sql.exec('ALTER TABLE deadlines DROP COLUMN attempts');
