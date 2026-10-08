@@ -17,7 +17,7 @@ import type { RunWire } from '../worker/worker-api';
 import { B_FAILURE, CLAIM_MS, FakeRunService, RETRY_MS, type DispatchAt, type FakeRunServiceOptions } from './fake-run-service';
 import type { FaultAction, FencedCall } from '../drive/fake-drive';
 import { MANIFEST_V2_LIMIT, type EditText, type Manifest, type ManifestV2, type OperationV2, type ReportContribution } from '../contracts/run-manifest';
-import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
+import { EDIT_FILE_LIMIT, bowerWrite, savedLinkKey } from '../contracts/note-edit';
 import { canonical, grounded, groundedKeys } from './fake-run-records';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
@@ -2134,8 +2134,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const files = (await m.drive.listAll(m.rootId)).filter((f) => m.drive.pathOf(f.id, m.rootId) === RULES);
       expect(files).toHaveLength(1);
       const createKey = create?.effect.kind === 'create-text' ? create.effect.createKey : '';
-      expect(files[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: createKey });
       const text = m.drive.dump(m.rootId).get(RULES) ?? '';
+      // With the MD5 of the very text it sent (TL-P4-10).
+      expect(files[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: createKey, ...bowerWrite(text) });
       expect(text).toContain('by: bower');
       // Newest first, and the count is what the made file holds.
       expect(parseRules(text).map((r) => r.yourWords)).toEqual([RECEIPTS_RULE, LEASE_RULE]);
@@ -3497,7 +3498,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(w.calls.filter(isCreateOf(op.effect.name)), op.effect.name).toHaveLength(1);
         const made = (await w.drive.listAll(w.rootId)).filter((f) => !f.folder && f.name === op.effect.name);
         expect(made, op.effect.name).toHaveLength(1);
-        expect(made[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: op.effect.createKey });
+        expect(made[0]?.appProperties).toEqual({ by: 'bower', bowerNew: '1', bowerItem: op.effect.createKey, ...bowerWrite(op.effect.text) });
         expect(w.drive.dump(w.rootId).get(w.drive.pathOf(made[0]?.id ?? '', w.rootId))).toBe(op.effect.text);
       }
       expect(w.drive.dump(w.rootId).get(`Resources/Ideas/${WORDS}.md`)).toBe('Alex wrote this one.');

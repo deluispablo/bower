@@ -38,6 +38,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeModelInput } from './model-input';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
+import { AUTHORED_LINE_MAX } from '../../src/data/contracts/note-edit';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
@@ -151,7 +152,7 @@ export function claudeArgs(model: string, maxTurns: number): string[] {
  */
 export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notes: 12, notesPerRun: 24_000 } as const;
 /** What the model may write: a note's summary and body, a Timeline line, and how many lines one reply may add. */
-const AUTHORED = { summary: 200, body: 8_000, line: 200, lines: 20, stateLines: 8 } as const;
+const AUTHORED = { summary: 200, body: 8_000, line: AUTHORED_LINE_MAX, lines: 20, stateLines: 8 } as const;
 /** A question's bounds: its text and each answer, one short line with no link (TL-P4-08 point 1). */
 const ASK = { text: 200, answer: 40 } as const;
 const CUT = (left: number): string => `\n[cut here: ${left} more characters not shown]`;

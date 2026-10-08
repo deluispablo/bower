@@ -227,10 +227,13 @@ async function list(drive: FakeDrive, url: URL): Promise<Response> {
   const next = at + size < all.length ? { nextPageToken: String(at + size) } : {};
   // Drive gives a listed file's SHA-256 when `fields` names it (`files.list` with `files(sha256Checksum)`).
   const withSha = (url.searchParams.get('fields') ?? '').includes('sha256Checksum');
+  // And its MD5 when `fields` names `md5Checksum` (TL-P4-10), of the bytes it stores.
+  const withMd5 = (url.searchParams.get('fields') ?? '').includes('md5Checksum');
   const files = await Promise.all(page.map(async (f) => {
     const content = withSha && !f.folder ? (await drive.evidence(f.id))?.content : null;
+    const md5 = withMd5 && !f.folder ? await drive.readBytes(f.id).then((b) => createHash('md5').update(b).digest('hex'), () => null) : null;
     // `size` is in bytes, as a file's own answer gives it, and the checksum is of those bytes.
-    return { ...wireFile(f, false), ...(content ? { size: String(content.size), sha256Checksum: content.sha256 } : {}) };
+    return { ...wireFile(f, false), ...(content ? { size: String(content.size), sha256Checksum: content.sha256 } : {}), ...(md5 ? { md5Checksum: md5 } : {}) };
   }));
   return json(200, { kind: 'drive#fileList', files, ...next });
 }

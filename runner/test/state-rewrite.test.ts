@@ -138,7 +138,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     expect(hubEdit(manifestOf(run.after)).find((x) => x.kind === 'state-rewrite')).toEqual({ kind: 'state-rewrite', recordIds: [], previous: ['One application open.'], lines: NEW_STATE });
     expect(questionsOf(run.after)).toEqual([]);
     // Every Bower note write sets bowerMd5 to the MD5 of the very bytes it sent: the edit and the made note alike.
-    for (const path of [HUB, FLAT, MADE]) expect(run.props[path]?.bowerMd5, path).toBe(md5(run.after[path] ?? ''));
+    for (const path of [HUB, MADE]) expect(run.props[path]?.bowerMd5, path).toBe(md5(run.after[path] ?? ''));
   });
 
   it('an unmarked section with no bowerMd5 gets a line and at most one question per folder', async () => {

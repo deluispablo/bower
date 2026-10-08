@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { STATE_KEY, applyChanges, currentStateOf, readBackEdit, recheckEdit, stateMark, undoChanges } from './note-edit';
+import { AUTHORED_LINE_MAX, BOWER_MD5, STATE_KEY, applyChanges, bowerWrite, currentStateOf, readBackEdit, recheckEdit, stateMark, stateNewsLine, undoChanges } from './note-edit';
+import { md5Hex } from './hashes';
 import type { Change, EditText } from './run-manifest';
 
 // Expected texts are written out by hand; the mark's vectors are FNV-1a 64's published ones
@@ -54,7 +55,10 @@ describe('the state-rewrite change (C05)', () => {
     expect(applyChanges(enc(HUB), [rewrite(['Something else.'], ['New.'])])).toEqual({ ok: false, reason: 'state-changed' });
     expect(applyChanges(enc(HUB), [rewrite(['One application open.'], ['One application open.'])])).toEqual({ ok: false, reason: 'unchanged' });
     expect(applyChanges(enc(HUB), [rewrite(['One application open.'], ['two\nlines'])])).toEqual({ ok: false, reason: 'field' });
-    expect(currentStateOf(enc('---\nby: bower\n---\nNo state here.\n'))).toBeNull();
+    expect(currentStateOf(enc('---\nby: bower\n---\nNo state here.\n'))).toEqual({ owner: 'missing', lines: [] });
+    expect(currentStateOf(enc('---\nsummary: x\n---\nNo state here.\n'))).toBeNull();
+    // TL-P4-10: no mark is not Bower's by default; the planner adopts it only by bowerMd5 or a rule.
+    expect(currentStateOf(enc(HUB))).toEqual({ owner: 'unmarked', lines: ['One application open.'] });
   });
 
   it('is undone from what the manifest kept, to the very bytes Bower last wrote', () => {
@@ -80,5 +84,52 @@ describe('the state-rewrite change (C05)', () => {
     const seen = { fileId: 'f-hub', name: 'Job hunt.md', parents: ['f-job'], trashed: false };
     expect(await readBackEdit(effect, { ...seen, bytes: enc(after) })).toBe('applied');
     expect(await readBackEdit(effect, { ...seen, bytes: enc(HUB) })).toBe('possible-effect');
+  });
+});
+
+describe('TL-P4-10: bowerMd5, a missing section, an empty one, the news line', () => {
+  it('computes MD5 as RFC 1321 and Drive do', () => {
+    // RFC 1321 appendix A.5 test suite.
+    expect(md5Hex(enc(''))).toBe('d41d8cd98f00b204e9800998ecf8427e');
+    expect(md5Hex(enc('abc'))).toBe('900150983cd24fb0d6963f7d28e17f72');
+    expect(md5Hex(enc('message digest'))).toBe('f96b697d7cb7938d525a2f31aaf161d0');
+    expect(md5Hex(enc('12345678901234567890123456789012345678901234567890123456789012345678901234567890'))).toBe('57edf4a22be3c955ac49da2e2107b67a');
+    for (const t of ['x'.repeat(55), 'x'.repeat(56), 'x'.repeat(64), 'é · ✓'.repeat(300), HUB]) {
+      expect(md5Hex(enc(t))).toBe(createHash('md5').update(Buffer.from(t, 'utf8')).digest('hex'));
+    }
+    expect(bowerWrite(HUB)).toEqual({ [BOWER_MD5]: createHash('md5').update(Buffer.from(HUB, 'utf8')).digest('hex') });
+  });
+
+  it('adds a missing section, with its mark, only in a Bower note', () => {
+    const none = '---\nsummary: Applications and offers.\nby: bower\n---\n\nYour own words.\n\n## Timeline\n- 2026-09-28 · Started the job hunt.\n';
+    const result = applyChanges(enc(none), [rewrite([], ['Two applications open.'])]);
+    expect(text(result)).toBe(`---\nsummary: Applications and offers.\nby: bower\n${STATE_KEY}: ${stateMark(['Two applications open.'])}\n---\n\n## Current state\n- Two applications open.\n\nYour own words.\n\n## Timeline\n- 2026-09-28 · Started the job hunt.\n`);
+    expect(text(applyChanges(enc('---\nby: bower\n---'), [rewrite([], ['New.'])]))).toBe(`---\nby: bower\n${STATE_KEY}: ${stateMark(['New.'])}\n---\n## Current state\n- New.\n`);
+    expect(applyChanges(enc(none.replace('by: bower\n', '')), [rewrite([], ['New.'])])).toEqual({ ok: false, reason: 'not-bower' });
+    // Taken back, the section stays, empty.
+    const back = applyChanges(result.ok ? result.bytes : enc(''), undoChanges([rewrite([], ['Two applications open.'])]));
+    expect(currentStateOf(back.ok ? back.bytes : enc(''))).toEqual({ owner: 'bower', lines: [] });
+  });
+
+  it('takes back a rewrite of an empty section to the very bytes, legacy and ownership/2', () => {
+    const empty = HUB.replace('by: bower\n', `by: bower\n${STATE_KEY}: ${stateMark([])}\n`).replace('- One application open.\n', '');
+    const changes = [rewrite([], ['Two applications open.'])];
+    const after = applyChanges(enc(empty), changes);
+    expect(text(applyChanges(after.ok ? after.bytes : enc(''), undoChanges(changes)))).toBe(empty);
+    const v2 = ['---', 'bower_format: ownership/2', 'by: bower', '---', '<!-- bower:ownership/2 begin current -->', '<!-- bower:ownership/2 end current -->',
+      '<!-- bower:ownership/2 begin personal -->', '<!-- bower:ownership/2 end personal -->', '<!-- bower:ownership/2 begin timeline -->',
+      '<!-- bower:ownership/2 end timeline -->', '<!-- bower:ownership/2 begin bower-note -->', '<!-- bower:ownership/2 end bower-note -->', ''].join('\n');
+    const v2After = applyChanges(enc(v2), changes);
+    const v2Back = applyChanges(v2After.ok ? v2After.bytes : enc(''), undoChanges(changes));
+    expect(text(v2Back)).toBe(v2.replace('by: bower\n', `by: bower\n${STATE_KEY}: ${stateMark([])}\n`));
+  });
+
+  it('says what Bower would write in one line within an authored line\'s limits', () => {
+    expect(stateNewsLine(['One open.', 'An offer · to [[answer]].'])).toBe("Bower's current state would now read: One open.; An offer, to answer.");
+    const long = Array.from({ length: 8 }, () => 'A long line about the flats on the shortlist and the walk to the station every morning.');
+    expect(stateNewsLine(long).length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
+    const one = stateNewsLine(['word '.repeat(80).trim()]);
+    expect(one.length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
+    expect(one.endsWith('word…')).toBe(true);
   });
 });

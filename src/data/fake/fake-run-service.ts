@@ -21,7 +21,7 @@
  */
 import type { FakeDrive, FencedDrive, Peek } from '../drive/fake-drive';
 import type { Checkpoint, EffectEvidence, Outcome } from '../contracts/run-checkpoint';
-import { readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit';
+import { bowerWrite, readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit';
 import type { EditText, OperationV2, SeenFile } from '../contracts/run-manifest';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { BowerError, type RunReport } from '../types';
@@ -687,12 +687,13 @@ export class FakeRunService {
       case 'edit-text':
         // Only after precheckEdit, with the modifiedTime of the read it checked.
         if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
-        await w.writeText(e.before.fileId, e.text, modifiedTime);
+        // With the MD5 of the very text it sends, in the same request (TL-P4-10: `bowerMd5`), as the runner does.
+        await w.writeText(e.before.fileId, e.text, modifiedTime, bowerWrite(e.text));
         return;
       case 'create-text':
         // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17); a runner file
         // made again (TL-P2-33 §2a) only with its create key. Either way a lost reply is found again by that key.
-        await w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey } : { bowerItem: e.createKey });
+        await w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...bowerWrite(e.text) } : { bowerItem: e.createKey });
         return;
     }
   }
