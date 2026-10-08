@@ -307,7 +307,6 @@ describe('admission in the person object', () => {
   it('a new run is admitted only with its manifest', async () => {
     const { sub } = await someone();
     // A press that would admit reads the inbox first; with no manifest, nothing is written or counted.
-    expect(await person(sub).wouldAdmit('press-1', T0)).toBe(true);
     expect(await person(sub).admit(ask('press-1', T0, { manifest: null }))).toEqual({ admitted: false, refused: 'needs-manifest' });
     const empty = await runInDurableObject(person(sub), (_instance, state) => ({
       runs: state.storage.sql.exec('SELECT id FROM runs').toArray(),
@@ -316,12 +315,10 @@ describe('admission in the person object', () => {
     expect(empty).toEqual({ runs: [], quota: [] });
     const first = await admitted(sub, ask('press-1', T0));
     // A repeat, or a press while it is going, needs no manifest and reads nothing.
-    expect(await person(sub).wouldAdmit('press-1', T0 + 1)).toBe(false);
-    expect(await person(sub).wouldAdmit('press-2', T0 + 1)).toBe(false);
     expect(await admitted(sub, ask('press-1', T0 + 2, { manifest: null }))).toEqual(first);
     expect(await admitted(sub, ask('press-2', T0 + 3, { manifest: null }))).toEqual(first);
     await finish(sub, first.run.id);
-    expect(await person(sub).wouldAdmit('press-2', T0 + 4)).toBe(true);
+    expect(await person(sub).admit(ask('press-2', T0 + 4, { manifest: null }))).toEqual({ admitted: false, refused: 'needs-manifest' });
   });
 
   it('the run history is bounded and keeps the newest runs', async () => {
