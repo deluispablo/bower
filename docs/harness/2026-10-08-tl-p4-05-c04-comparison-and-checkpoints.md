@@ -24,3 +24,18 @@ The coordinator proposed moving checkpoints into the person object. **Declined.*
 On a crash mid-batch, recovery reconciles every operation the batch names. **`checkpoint-per-batch`** (`bower-escalated`). The bar is the recovery tests: a kill after every step, including mid-batch, must end equal to an uninterrupted run. That takes about 15 checkpoints down to 2–4 per run, which is about 20 s.
 
 **Next targets:** the reads (15–17 s) and the report (9–10 s), profiled the same way, by `runner-reads-and-report` (`bower-implementer`) after `checkpoint-per-batch`.
+
+## Addendum: how a batch is reconciled — the run's own stamp on every effect
+
+**The blocker.** With one checkpoint per batch, a crash mid-batch leaves operations that may or may not have been sent. Comparing states cannot tell "the person renamed it and Bower never sent its move" from "Bower moved it, then the person renamed it".
+
+**Ruling: option (b), a stamp.** Every effect the runner sends carries the run's stamp in the same request: one `appProperties` key, `bowerOp`, set to `<run_id>:<operation id>`, overwritten rather than accumulated. Only Bower's OAuth client sees it, and a person's edits in Drive never touch it ([Drive, custom file properties](https://developers.google.com/workspace/drive/api/guides/properties)). Reconciliation then reads the stamp first, so it is exact:
+- **the stamp is present:** the operation landed. If the file has changed since, the person changed it afterwards, and that change is kept and reported, never undone;
+- **the stamp is absent:** the operation never landed. It is sent only if the file is still as the plan saw it. If the person changed it, the operation is set aside and reported;
+- **the file is unreadable:** the run stops honestly in `saving`, as before.
+
+This closes the window instead of narrowing it, adds no Drive calls, and also settles item 3, because a person's undo is seen and kept. It strengthens TL-P3-23's reconcile rule; it does not loosen it.
+
+- **The bar stays** that every kill ends equal to an uninterrupted run. Where the person changed something in between, the run keeps their change and reports it.
+- **The listed tests may change** where their doubles answered "unreadable" for operations that were never sent, since real Drive answers "not landed": `checkpoints.test.ts:81` and `:144`, `barrier.test.ts:45`, `dispositions.test.ts:89`, and `recovery.test.ts:350`'s list of kinds. Each change says why.
+- **New tests:** the person renames inside a batch, then a kill (set aside, honest); the person undoes a landed effect, then a kill (kept, not re-applied); and the stamp is overwritten, never accumulated.
