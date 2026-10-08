@@ -42,6 +42,7 @@ import { AUTHORED_LINE_MAX } from '../../src/data/contracts/note-edit';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
+import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
 import { planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
@@ -401,6 +402,23 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
     notes.push({ path, text: shown.text, cut: shown.cut });
   }
   return notes;
+}
+
+/**
+ * What the model is shown of what the run took: everything but the things already saved (`duplicates.ts`), which the
+ * plan bins on its own, and a pile of nothing else with them. Decided from the listing the run reads anyway.
+ */
+async function forModel(read: ScriptedRead, run: ScriptedRun, took: Admitted): Promise<Admitted> {
+  const listing = await read.listAll(run.rootId);
+  const saved = duplicatesOf(listing, VaultIndex.build(run.rootId, listing), took.taken.piles.flatMap((p) => p.items.map((i) => i.fileId)));
+  if (!saved.size) return took;
+  const piles = took.taken.piles.flatMap((p) => {
+    const things = thingsOf(p);
+    const left = things.filter((i) => !saved.has(i.fileId));
+    if (things.length && !left.length) return [];
+    return [{ ...p, items: p.items.filter((i) => !saved.has(i.fileId)) }];
+  });
+  return { ...took, taken: { ...took.taken, piles } };
 }
 
 /** A pile's things: its admitted files, but a pile folder's notes (its words). */
@@ -858,8 +876,10 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     if (took.taken.rootId !== run.rootId) return refuse('the admitted set is for another folder');
     if (!token) return refuse('no Claude credential (CLAUDE_CODE_OAUTH_TOKEN is not set)');
     const { model, maxTurns } = claudeLimits(setup.env);
-    const shown = await shownOf(read, run, took);
-    const input = prepared(run, took, shown);
+    // The model never sees a thing already saved: the plan bins it (`duplicates.ts`).
+    const shownTook = await forModel(read, run, took);
+    const shown = await shownOf(read, run, shownTook);
+    const input = prepared(run, shownTook, shown);
     // Calculate and set the input fingerprint for the timing line, using normalized input
     // so that the same case run twice with different IDs produces the same fingerprint
     if (setup.timing) {
@@ -915,7 +935,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       if (setup.timing && stats) setup.timing.model = stats;
       const reply = replyOf(done, maxTurns);
       if (!reply.ok) return reply.kind === null ? refuse(reply.why, done.stderr) : reply;
-      const got = intentOf(reply.value, took, seen);
+      const got = intentOf(reply.value, shownTook, seen);
       return got.ok ? { ok: true, intent: got } : got;
     };
     let checked: ReturnType<typeof check>;

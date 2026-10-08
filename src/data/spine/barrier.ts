@@ -144,6 +144,7 @@ export function fixedReport(r: RunReport): RunReport {
   if (r.requests !== undefined) out.requests = [...r.requests];
   if (r.rulesWorded !== undefined) out.rulesWorded = r.rulesWorded;
   if (r.nothingReady) out.nothingReady = true;
+  if (r.alreadySaved?.length) out.alreadySaved = r.alreadySaved.map((a) => ({ name: a.name, as: a.as }));
   return out;
 }
 

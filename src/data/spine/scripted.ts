@@ -30,6 +30,7 @@ import { parseRules, serializeRules } from '../vault/rules-format';
 import { VaultIndex } from '../vault/vault-index';
 import { NOT_FILED, canonical, grounded, groundedKeys, seen } from '../fake/fake-run-records';
 import { SET_ASIDE, capturePiles, listedPiles, pileShape } from './plan';
+import { duplicatesOf, type Duplicate } from './duplicates';
 import type { AdmissionManifest } from './admission';
 import type { RunProvider } from './provider';
 import type { ScriptedRead } from './read';
@@ -291,6 +292,22 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     return v;
   };
 
+  /**
+   * Things already saved (`duplicates.ts`, TL-P4-10 addendum 2): each is captured with its pile and goes to the Bin, never
+   * filed and never shown to a model. A copy of another thing of this run waits on that one's move; when that one is
+   * not filed by this run (asked about, or its pile not taken), the copy stays where it is too.
+   */
+  const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
+  const pileOfThing = new Map(piles.flatMap((p) => p.items.map((i) => [i.id, p] as const)));
+  const filedHere = (id: string): boolean => {
+    const p = pileOfThing.get(id);
+    if (!p || capture.get(p.id)?.blocked !== null || held.has(p.id)) return false;
+    if (opts.filing ? opts.filing.asks?.has(p.id) : demo && askAbout(p.text)) return false;
+    return !opts.filing?.thingAsks?.has(id);
+  };
+  const staying = new Set([...dups].flatMap(([id, d]) => (d.of === 'run' && !filedHere(d.keptId) ? [id] : [])));
+  const saved: Array<{ pile: Pile; file: DriveFile; dup: Duplicate }> = [];
+
   // The ready piles and their things, exactly as captured.
   const capturedPiles: CapturedPile[] = [];
   const members: CapturedMember[] = [];
@@ -303,7 +320,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   /** Piles with things asked about (TL-P4-08 addendum 4): the rest is filed, the folder and its words stay. */
   const partly = new Set<string>();
   for (const pile of piles) {
-    const marks = { members: members.length, things: things.length };
+    const marks = { members: members.length, things: things.length, saved: saved.length };
     /**
      * A pile this plan cannot take as it read it is held (TL-P2-38): nothing of it is captured or written, and the
      * rest of the run goes on. A race clears on the next run; what the Inbox can see, it shows (`untidied`).
@@ -311,6 +328,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const hold = (why: string): void => {
       members.length = marks.members;
       things.length = marks.things;
+      saved.length = marks.saved;
       console.error(new BowerError('unknown', SET_ASIDE.notTidied), `A pile waits for the next tidy-up: ${why}`);
     };
     const folder = pile.path ? ix.file(pile.path) : undefined;
@@ -351,7 +369,9 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       const hash = listing.find((f) => f.id === item.id)?.md5Checksum;
       if (q) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
     }
-    const partial = pile.items.some((item) => thingAsk(item.id));
+    // What stays where it is: what is asked about, and a copy of a thing this run does not file.
+    const stays = (fileId: string): boolean => !!thingAsk(fileId) || staying.has(fileId);
+    const partial = pile.items.some((item) => stays(item.id));
     const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
     const notes = loose ? [] : children.filter((f) => !f.folder && f.name === PILE_NOTE);
     const declared = cap.declared;
@@ -384,7 +404,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     let lost: string | null = null;
     for (const item of pile.items) {
       const file = children.find((f) => f.id === item.id);
-      if (thingAsk(item.id)) {
+      if (stays(item.id)) {
         const key = declared ? file?.appProperties?.[PROP.item] : undefined;
         if (key !== undefined && declared?.memberKeys.has(key)) askedKeys += 1;
         continue;
@@ -405,12 +425,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       keys.push(key);
       taken.push(file.id);
       members.push({ pileId: pile.id, memberKey: key, file: seen(file), content });
-      things.push({ pile, folder, item, file, content, words, merge: mergeOf(item) });
+      const dup = dups.get(file.id);
+      if (dup) saved.push({ pile, file, dup });
+      else things.push({ pile, folder, item, file, content, words, merge: mergeOf(item) });
     }
     // Every thing of it asked about: nothing of it is taken, as for a pile asked about whole.
     if (partial && !taken.length && !lost) {
       members.length = marks.members;
       things.length = marks.things;
+      saved.length = marks.saved;
       continue;
     }
     // A pile of words only, or of pile notes only (TL-P2-32), becomes a generated note from its context (TL-P2-17),
@@ -444,6 +467,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (!canonicalRecordJson(written).ok) {
       members.length = marks.members;
       things.length = marks.things;
+      saved.length = marks.saved;
       console.error(new BowerError('unknown', NOT_WRITABLE), 'A pile has text no run record can carry; it waits for the next tidy-up');
       continue;
     }
@@ -461,9 +485,19 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (demo && /saltmere/i.test(pile.text)) asking.add(pile.id);
   }
 
+  // A copy waits on the move of the thing it copies: one whose pile was held after all waits whole with it.
+  const filedIds = new Set(things.map((t) => t.file.id));
+  const orphans = saved.filter((s) => s.dup.of === 'run' && !filedIds.has(s.dup.keptId));
+  if (orphans.length) return planScripted(drive, rootId, opts, editCap, new Set([...held, ...orphans.map((s) => s.pile.id)]));
+
   // An open question belongs to its subject, never to its words (TL-P4-11 addendum): a later ask about the same thing
   // (its fileId or pileId, or the same content uploaded again) adds nothing, and a thing that left the inbox closes it.
-  const inInbox = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
+  // A thing already saved leaves it for the Bin now, and a pile of nothing else with it.
+  const binning = new Set(saved.map((s) => s.file.id));
+  const inInbox = new Set(inbox.flatMap((p) => {
+    const left = p.items.filter((i) => !binning.has(i.id)).map((i) => i.id);
+    return p.items.length && !left.length ? [] : [p.id, ...left];
+  }));
   const hashesIn = new Set(listing.filter((f) => inInbox.has(f.id) && f.md5Checksum).map((f) => f.md5Checksum));
   const subjectOf = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
   // Only a run that saw the whole inbox can say a thing is gone: an instructions run reads none (TL-P4-11 I2).
@@ -1025,6 +1059,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   }
   // A runner file made again goes into `.bower`, a captured place.
   if ((!requests || !hashesFile || (!questionsFile && questionsText !== null)) && sys?.folder) places.set(sys.id, sys);
+  // The file a thing already saved copies is recorded as the run saw it, so its report row names a captured file.
+  for (const s of saved) if (s.dup.of === 'filed') places.set(s.dup.file.id, s.dup.file);
   const capturedPlaces = [...places.values()].map((f) => ({ file: seen(f), path: ix.pathOf(f.id) ?? '' })).sort((a, b) => a.path.localeCompare(b.path));
   const captured = journal.map((l) => ({ recordId: l.rec.id, sha256: l.sha256, fileIds: l.files.map((f) => f.id) }));
   const captureValue: ManifestCapture = { piles: capturedPiles, members, journal: captured, places: capturedPlaces };
@@ -1175,6 +1211,18 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (op) fromAnswer.set(id, [...(fromAnswer.get(id) ?? []), op]);
   }
   for (const f of filing.filter((x) => x.merge)) await fileOne(f);
+  // Things already saved go to the Bin (never deleted), a copy of this run's thing after that one's move; each is
+  // reported as already saved under the name of the file it copies, and gets no note and no line.
+  for (const s of saved) {
+    const kept = s.dup.of === 'run' ? s.dup.keptId : null;
+    const after = kept === null ? undefined : moveOf.get(kept);
+    const as = s.dup.of === 'filed' ? s.dup.file.name : filing.find((f) => f.thing.file.id === kept)?.name;
+    if (as === undefined || (kept !== null && after === undefined)) return refused('a copy of a thing the run does not file');
+    const op = await add({ kind: 'bin', before: seen(s.file), capturedChildIds: [] }, after ? [after] : []);
+    movesOf.set(s.pile.id, [...(movesOf.get(s.pile.id) ?? []), op]);
+    reportPlan.push({ requires: [op], when: 'applied', value: { ...empty(), alreadySaved: [{ name: s.file.name, as }] } });
+    reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: s.file.name, why: NOT_FILED }] } });
+  }
   for (const pile of capturedPiles) {
     const note = notesOf.get(pile.pileId);
     // A pile partly asked about keeps its folder, with what is asked about and its words.

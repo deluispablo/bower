@@ -152,15 +152,20 @@ function question(value: unknown): boolean {
     && text(value.id) && text(value.text) && text(value.yes) && text(value.no) && integer(value.askedAt)
     && (!Object.hasOwn(value, 'about') || text(value.about));
 }
+/** A thing already saved (TL-P4-10 addendum 2): its name, and the name of the file it is a copy of. */
+function savedRow(value: unknown): value is { name: string; as: string } {
+  return closed(value, ['name', 'as']) && text(value.name) && text(value.as);
+}
 /** The existing RunReport shape, closed; optional counts and requests are omitted, never null. */
 function runReport(value: unknown): value is RunReport {
-  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady'])
+  if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded', 'nothingReady', 'alreadySaved'])
     || !every(value.filed, filed) || !every(value.created, pathChange) || !every(value.updated, pathChange)
     || !every(value.setAside, setAside) || !every(value.questions, question)) return false;
   if (Object.hasOwn(value, 'yourChanges') && !integer(value.yourChanges)) return false;
   if (Object.hasOwn(value, 'rulesWorded') && !integer(value.rulesWorded)) return false;
   if (Object.hasOwn(value, 'requests') && !list(value.requests, text)) return false;
   if (Object.hasOwn(value, 'nothingReady') && value.nothingReady !== true) return false;
+  if (Object.hasOwn(value, 'alreadySaved') && !(list(value.alreadySaved, savedRow) && value.alreadySaved.length > 0)) return false;
   // Question IDs are identities; a materialized report never repeats one.
   return unique(value.questions.map((item) => (item as { id: unknown }).id));
 }

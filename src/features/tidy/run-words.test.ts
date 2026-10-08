@@ -68,6 +68,12 @@ describe('how long a run takes', () => {
     const d = runDetail({ ...base, phase: 'done', report: { ...empty, requests: ['Put my visa papers together'], rulesWorded: 1, yourChanges: 5 } });
     expect(d).toBe('"Put my visa papers together" done, 1 rule worded and 5 other changes of yours read.');
   });
+  it('the report says a thing already saved, by the name it is saved as', () => {
+    const empty = { filed: [], created: [], updated: [], setAside: [], questions: [] };
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, alreadySaved: [{ name: 'Offer copy.pdf', as: 'Offer letter.pdf' }] } })).toBe('1 thing already saved as Offer letter.');
+    const two = [{ name: 'a.pdf', as: 'A.pdf' }, { name: 'b.pdf', as: 'B.pdf' }];
+    expect(runDetail({ ...base, phase: 'done', report: { ...empty, alreadySaved: two } })).toBe('2 things already saved.');
+  });
 });
 
 

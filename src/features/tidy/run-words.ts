@@ -1,6 +1,7 @@
 import { clock, elapsed, plural } from '@/app/words';
 import type { Pose } from '@/bird/Bower';
 import { RUN_STEPS, type RunPhase, type RunReport, type RunState } from '@/data/types';
+import { thingName } from '@/data/tree';
 
 /**
  * Every word a run shows comes from here, so the sheet, the chip, Home and
@@ -94,6 +95,10 @@ export function runDetail(r: RunState): string {
       if (rep.updated.length) parts.push(`${plural(rep.updated.length, 'note')} brought up to date`);
       if (rep.questions.length) parts.push(`${plural(rep.questions.length, 'question')} for you`);
       if (rep.setAside.length) parts.push(`${plural(rep.setAside.length, 'thing')} set aside`);
+      // Things already saved went to the Bin: one alone names the file already saved, without its extension.
+      const saved = rep.alreadySaved ?? [];
+      if (saved.length === 1) parts.push(`1 thing already saved as ${thingName(saved[0]?.as ?? '')}`);
+      else if (saved.length) parts.push(`${plural(saved.length, 'thing')} already saved`);
       const asked = rep.requests ?? [];
       if (asked.length === 1) parts.push(`"${asked[0] ?? ''}" done`);
       else if (asked.length) parts.push(`${plural(asked.length, 'thing')} you asked done`);
