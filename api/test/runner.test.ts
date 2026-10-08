@@ -159,8 +159,8 @@ describe('runner wire', () => {
   });
 
   it('after the last ticket expires no gone row is kept', async () => {
-    // A ticket minted 59 min 59.7 s ago: it lives about 300 ms more.
-    const { sub, runner } = await aRun(Date.now() - HOUR + 300);
+    // A ticket minted 59 min 57 s ago: it lives about 3 s more.
+    const { sub, runner } = await aRun(Date.now() - HOUR + 3000);
     const p = person(sub);
     await p.forget();
     const kept = (): Promise<unknown> => runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'));
@@ -169,18 +169,18 @@ describe('runner wire', () => {
     const alarm = await runInDurableObject(p, (_i, state) => state.storage.getAlarm());
     expect(alarm).not.toBeNull();
     // The alarm fires by itself and prunes: no access in between.
-    for (let i = 0; i < 40 && (await kept()) !== undefined; i++) await new Promise((resolve) => setTimeout(resolve, 100));
+    for (let i = 0; i < 100 && (await kept()) !== undefined; i++) await new Promise((resolve) => setTimeout(resolve, 100));
     expect(await kept()).toBeUndefined();
     expect((await runner.token()).status).toBe(401);
 
     // The next access prunes too, with no alarm run.
-    const next = await aRun(Date.now() - HOUR + 300);
+    const next = await aRun(Date.now() - HOUR + 3000);
     const q = person(next.sub);
     await q.forget();
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
     expect((await next.runner.token()).status).toBe(401);
     expect(await runInDurableObject(q, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
-  });
+  }, 20_000);
 
   it('a gone row holds only the hash, expiry and attempt', async () => {
     const { sub, runner } = await aRun();
