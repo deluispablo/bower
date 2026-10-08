@@ -166,9 +166,14 @@ export class DriveHttp implements DriveApi, ResumableDrive {
   }
 
   /** Drive v3 has no If-Match on files: this reads, then writes, which leaves a short window. */
-  async writeText(id: string, text: string, ifModified: string): Promise<DriveFile> {
+  /**
+   * `appProperties`, when given, go in the same request: a multipart `files.update`, metadata then media
+   * (https://developers.google.com/workspace/drive/api/guides/manage-uploads#multipart).
+   */
+  async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     const now = await this.get(id);
     if (now.modifiedTime !== ifModified) throw driveError('conflict');
+    if (appProperties) return this.multipart({ appProperties }, new Blob([text], { type: mimeOf(now.name) }), id);
     const res = await this.call(`${UPLOAD}/files/${id}?uploadType=media&fields=${FIELDS}`, { method: 'PATCH', headers: { 'content-type': mimeOf(now.name) }, body: text });
     return toFile((await res.json()) as WireFile);
   }
@@ -180,8 +185,9 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     return this.json(`${API}/files/${id}?${q}`, 'PATCH', { ...(patch.name ? { name: patch.name } : {}), ...(patch.appProperties ? { appProperties: patch.appProperties } : {}) });
   }
 
-  async trash(id: string): Promise<void> {
-    await this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: true });
+  /** `appProperties`, when given, are set by the same `files.update` that puts it in the Bin. */
+  async trash(id: string, appProperties?: Record<string, string>): Promise<void> {
+    await this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: true, ...(appProperties ? { appProperties } : {}) });
   }
 
   async untrash(id: string): Promise<DriveFile> {
@@ -335,7 +341,8 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     return this.changed(toFile((await res.json()) as WireFile));
   }
 
-  private async multipart(meta: Record<string, unknown>, content: Blob): Promise<DriveFile> {
+  /** A create, or with `id` an update of that file's metadata and content in one request. */
+  private async multipart(meta: Record<string, unknown>, content: Blob, id?: string): Promise<DriveFile> {
     const boundary = `bower${Math.random().toString(36).slice(2)}`;
     const body = new Blob([
       `--${boundary}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
@@ -343,8 +350,8 @@ export class DriveHttp implements DriveApi, ResumableDrive {
       content,
       `\r\n--${boundary}--`,
     ]);
-    const res = await this.call(`${UPLOAD}/files?uploadType=multipart&fields=${FIELDS}`, {
-      method: 'POST',
+    const res = await this.call(`${UPLOAD}/files${id ? `/${id}` : ''}?uploadType=multipart&fields=${FIELDS}`, {
+      method: id ? 'PATCH' : 'POST',
       headers: { 'content-type': `multipart/related; boundary=${boundary}` },
       body,
     });

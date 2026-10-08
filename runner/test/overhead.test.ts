@@ -34,4 +34,21 @@ describe('the runner overhead', () => {
     const phases = calls.filter((x) => x.kind === 'status').length;
     expect(phases).toBeGreaterThanOrEqual(3);
   });
+
+  it('a run writes one opening and one closing checkpoint per batch', async () => {
+    const { checkpoints, ms, code } = await modelled();
+    expect(code).toBe(0);
+    console.log(`checkpoints: modelled C04 wrote ${checkpoints.length} in ${ms}ms`);
+    expect(checkpoints.length).toBeGreaterThanOrEqual(2);
+    expect(checkpoints.length).toBeLessThanOrEqual(4);
+    // The first checkpoint; the opening names every operation of the batch before any effect; the closing settles them
+    // all at once, with the report pending; then done.
+    const [first, opening, closing, done] = checkpoints;
+    expect(first?.phase).toBe('queued');
+    expect(opening?.outcomes.length).toBeGreaterThan(1);
+    expect(opening?.outcomes.every((o) => o.state === 'possible-effect' || o.state === 'before-effect-refused')).toBe(true);
+    expect(closing?.outcomes.every((o) => o.state === 'applied' || o.state === 'rejected')).toBe(true);
+    expect(closing?.report.state).toBe('pending');
+    expect(done?.phase).toBe('done');
+  });
 });

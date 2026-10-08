@@ -12,12 +12,20 @@
  * - After it, stored evidence decides: the effect applied is read back from Drive (`shows`, `readBackEdit`). A write
  *   sent that shows no effect stops the run unresolved; it is never sent again blindly (TL-P2-16).
  * - A write whose answer never came (a network error, or a 5xx the adapter does not retry) is read back the same way
- *   (`reconcile`, TL-P3-28): landed, it counts as applied; the folder still as the plan saw it, it is not done and
- *   settles rejected with what stays as it was; anything else stops the run unresolved, for a redispatch to read back.
+ *   by its stamp (`reconcile`, TL-P3-28): landed, it counts as applied; no stamp, it is not done and settles rejected
+ *   with what stays as it was; unreadable, the run stops unresolved, for a redispatch to read back.
+ *
+ * - Every write carries the run's stamp in the same request (TL-P4-05 addendum): one `appProperties` key, `bowerOp`,
+ *   naming `<run_id>:<operation id>` and overwritten by the next write, never one key per run. Only Bower's OAuth
+ *   client sees it, and a person's edits in Drive keep it (https://developers.google.com/workspace/drive/api/guides/properties).
+ *   An operation named by an open batch is read back by it first: stamped, it landed, and whatever the person changed
+ *   since is kept; not stamped, it never landed, and it is sent only if its checks still pass (otherwise set aside, as
+ *   an uninterrupted run would); unreadable, the run stops.
  *
  * Drive v3 offers no compare-and-swap on files: these are prechecks with a short window, not a lock (ARCHITECTURE,
  * "Safety at the actual storage boundary").
  */
+import { createHash } from 'node:crypto';
 import { BowerError } from '../../src/data/types';
 import type { Checkpoint, EffectEvidence, Failure } from '../../src/data/contracts/run-checkpoint';
 import { readBackEdit, recheckEdit, savedLinkKey } from '../../src/data/contracts/note-edit';
@@ -41,6 +49,16 @@ const ARRIVED = 'Something new arrived in it, so it stays in your inbox.';
 const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
 const UNRESOLVED = 'Bower could not check one of the things it moved. It will look again later.';
 const NOT_REACHED = "Bower couldn't reach Google Drive, so it stayed as it was.";
+
+/** The run's stamp on every effect it sends (TL-P4-05 addendum). */
+export const STAMP = 'bowerOp';
+
+/**
+ * The stamp of one operation of one run: `<run_id>:<operation id>`, by its SHA-256 (base64url, 192 bits). Written
+ * out, a run id (87 characters) and an operation id (64) are more than the 124 bytes Drive keeps for one property's
+ * key and value (https://developers.google.com/workspace/drive/api/guides/properties).
+ */
+export const stampOf = (runId: string, operationId: string): string => createHash('sha256').update(`${runId}:${operationId}`).digest('base64url').slice(0, 32);
 
 type Effect = OperationV2['effect'];
 
@@ -76,6 +94,33 @@ async function now(drive: RunnerDrive, id: string): Promise<DriveFile | null> {
     if (e instanceof BowerError && e.code === 'not-found') return null;
     throw e;
   }
+}
+
+/** Whether `from` waits on `to`, through `dependsOn`. */
+function waitsOn(manifest: RunManifest, from: string, to: string): boolean {
+  const byId = new Map(manifest.operations.map((o) => [o.operationId, o]));
+  const seen = new Set<string>();
+  const next = [...(byId.get(from)?.dependsOn ?? [])];
+  for (let id = next.pop(); id !== undefined; id = next.pop()) {
+    if (id === to) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    next.push(...(byId.get(id)?.dependsOn ?? []));
+  }
+  return false;
+}
+
+/**
+ * What a stamp found on a thing says of `op`. `landed`: it is `op`'s own, or that of an operation of the same run
+ * waiting on `op`, which is only ever sent once `op` applied (the note an edit changes and then moves carries the
+ * move's stamp). `not-landed`: none, another run's, or that of an operation `op` waits on (sent before it).
+ * `unknown`: another operation of this run, unrelated to it.
+ */
+function stampSays(found: string | undefined, runId: string, op: OperationV2, manifest: RunManifest): 'landed' | 'not-landed' | 'unknown' {
+  const id = found === undefined ? undefined : manifest.operations.find((o) => stampOf(runId, o.operationId) === found)?.operationId;
+  if (id === undefined) return 'not-landed';
+  if (id === op.operationId || waitsOn(manifest, id, op.operationId)) return 'landed';
+  return waitsOn(manifest, op.operationId, id) ? 'not-landed' : 'unknown';
 }
 
 export function driveEffects(drive: RunnerDrive): Effects {
@@ -154,67 +199,76 @@ export function driveEffects(drive: RunnerDrive): Effects {
   };
 
   /** Sends the effect once through the fenced writes. */
-  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null): Promise<void> => {
+  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null, stamp: string): Promise<void> => {
+    const op = { [STAMP]: stamp };
     switch (e.kind) {
       case 'move': {
         const from = e.before.parents[0];
         await w.update(e.before.fileId, {
           ...(e.name !== e.before.name ? { name: e.name } : {}),
           ...(parentId !== from ? { addParent: parentId, ...(from ? { removeParent: from } : {}) } : {}),
-          appProperties: { ...e.properties },
+          appProperties: { ...e.properties, ...op },
         });
         return;
       }
       case 'create-folder':
-        await w.createFolder(parentId, e.name, { bowerItem: e.createKey });
+        await w.createFolder(parentId, e.name, { bowerItem: e.createKey, ...op });
         return;
       case 'bin':
-        await w.trash(e.before.fileId);
+        await w.trash(e.before.fileId, op);
         return;
       case 'write-runner-json':
       case 'edit-text':
         if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
-        await w.writeText(e.before.fileId, e.text, modifiedTime);
+        await w.writeText(e.before.fileId, e.text, modifiedTime, op);
         return;
       case 'create-text':
         // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17); a runner file
         // made again only with its create key. Either way a lost reply is found again by that key.
-        await w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey } : { bowerItem: e.createKey });
+        await w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...op } : { bowerItem: e.createKey, ...op });
         return;
     }
   };
 
   /**
-   * Whether the folder still shows what the plan saw for this operation, so a send whose answer was never kept did not
-   * land: nothing made with its create key, the thing it moves or puts in the Bin where it was, the file it writes with
-   * the bytes it was planned on.
+   * An operation possibly sent, read back by the run's stamp first (TL-P4-05 addendum, strengthening TL-P3-23):
+   * - the stamp is there: it landed. What the person changed since (a rename, a move back, the Bin) is kept, and the
+   *   evidence is what Drive stores now;
+   * - no stamp: it never landed. The caller sends it only if its checks still pass, so a thing the person changed
+   *   meanwhile is set aside with the same words an uninterrupted run would use;
+   * - a read fails, the thing is gone, or a made thing has a lookalike with its create key and no stamp (made before
+   *   stamps, or by something else): unreadable, since making it again could make it twice.
    */
-  const untouched = async (op: OperationV2, head: Checkpoint): Promise<boolean> => {
+  const reconcile = async (op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<ReadBack> => {
     const e = op.effect;
-    if (e.kind === 'create-folder' || e.kind === 'create-text') {
-      const parentId = parentOf(head, e);
-      if (!parentId) return false;
-      return !(await drive.list(parentId)).some((f) => f.appProperties?.bowerItem === e.createKey);
-    }
-    const ev = await drive.evidence(e.before.fileId);
-    if (!ev || ev.trashed || !samePlace(ev.file, e.before)) return false;
-    if (e.kind === 'move' || e.kind === 'bin') return true;
-    return ev.content?.size === e.beforeContent.size && ev.content.sha256 === e.beforeContent.sha256;
-  };
-
-  /**
-   * An operation possibly sent by an earlier runner, read back as the adapter's lost-reply read-back does: landed on
-   * stored evidence of this very effect, not landed when the folder still shows what the plan saw, and unreadable
-   * when a read fails or the folder shows anything else.
-   */
-  const reconcile = async (op: OperationV2, head: Checkpoint): Promise<ReadBack> => {
+    const encoding = e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'bin' ? 'blob' : 'utf8';
+    const landed = async (id: string): Promise<ReadBack> => {
+      const ev = await drive.evidence(id);
+      return ev ? { state: 'landed', evidence: toEvidence(ev, encoding) } : { state: 'unreadable', why: `Operation ${op.ordinal} shows a thing that is gone` };
+    };
+    const other = (): ReadBack => ({ state: 'unreadable', why: `Operation ${op.ordinal} shows another operation's stamp` });
     try {
-      const seen = await observe(op, head);
-      if (seen) return { state: 'landed', evidence: seen };
-      if (await untouched(op, head)) return { state: 'not-landed' };
-      return { state: 'unreadable', why: `Operation ${op.ordinal} shows neither its effect nor what the plan saw` };
-    } catch (e) {
-      console.error(e);
+      if (e.kind === 'create-folder' || e.kind === 'create-text') {
+        const parentId = parentOf(head, e);
+        if (!parentId) return { state: 'unreadable', why: `Operation ${op.ordinal} has no folder to look in` };
+        // Its own stamp, in the Bin or not: whatever the person did with it since is kept.
+        const mine = await drive.stamped(parentId, STAMP, stampOf(head.runId, op.operationId));
+        const [only, ...more] = mine;
+        if (more.length) return { state: 'unreadable', why: `Operation ${op.ordinal} shows its stamp more than once` };
+        if (only) return landed(only.file.id);
+        // A thing with its create key and no stamp of its own: made by an operation waiting on it, or it cannot be told.
+        const alike = (await drive.list(parentId)).filter((f) => f.appProperties?.bowerItem === e.createKey);
+        const [one, ...others] = alike;
+        if (!one) return { state: 'not-landed' };
+        return !others.length && stampSays(one.appProperties?.[STAMP], head.runId, op, manifest) === 'landed' ? landed(one.id) : other();
+      }
+      const ev = await drive.evidence(e.before.fileId);
+      if (!ev) return { state: 'unreadable', why: `Operation ${op.ordinal} changes a thing that is gone` };
+      const says = stampSays(ev.file.appProperties?.[STAMP], head.runId, op, manifest);
+      if (says === 'landed') return { state: 'landed', evidence: toEvidence(ev, encoding) };
+      return says === 'unknown' ? other() : { state: 'not-landed' };
+    } catch (err) {
+      console.error(err);
       return { state: 'unreadable', why: `Operation ${op.ordinal} could not be read back` };
     }
   };
@@ -223,12 +277,13 @@ export function driveEffects(drive: RunnerDrive): Effects {
     observe,
     readBack: reconcile,
     async apply(op, head, w, manifest, sending) {
+      const stamp = stampOf(head.runId, op.operationId);
       const ok = await check(op, head, manifest);
       if ('refused' in ok) return ok.refused;
       // Possibly sent from here on: everything before it only read.
       await sending();
       try {
-        await send(op.effect, w, ok.parentId, ok.modifiedTime);
+        await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
       } catch (e) {
         // Refused by the fence's own read before anything was sent: an honest rejection.
         if (e instanceof BowerError && e.code === 'conflict' && (e.message === notAsSeen().message || op.effect.kind === 'write-runner-json' || op.effect.kind === 'edit-text')) {
@@ -238,7 +293,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
         // No answer kept (a network error, or Google's 5xx): read back once, never sent again blindly (TL-P3-28).
         if (e instanceof BowerError && e.code === 'offline') {
           console.error(e);
-          const back = await reconcile(op, head);
+          const back = await reconcile(op, head, manifest);
           if (back.state === 'landed') return { state: 'applied', evidence: back.evidence };
           if (back.state === 'not-landed') return refused('offline', NOT_REACHED);
           console.error(back.why);

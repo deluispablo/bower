@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { setTimeout as realSleep } from 'node:timers/promises';
+import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import { loadCorpus } from '../src/corpus';
 import { runScripted } from './corpus-run';
 import { API, paging } from './drive-v3';
@@ -24,12 +25,14 @@ export interface Call {
  * has nothing else to do, then the clock jumps to the earliest due call. Calls the runner makes at the same time
  * overlap as they would on the wire, and the run's time is the clock's. No real waiting beyond a few milliseconds.
  */
-export async function modelled(): Promise<{ calls: Call[]; ms: number; code: number }> {
+export async function modelled(): Promise<{ calls: Call[]; ms: number; code: number; checkpoints: Checkpoint[] }> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-offer-and-flat');
   if (!c) throw new Error('the C04 case is missing');
   // Drive's own page size, so a listing is the one call it is on Drive.
   paging.size = 1000;
   const calls: Call[] = [];
+  /** Every checkpoint the run created, in order: the record is the second part of its multipart create. */
+  const checkpoints: Checkpoint[] = [];
   const names = new Map<string, string>();
   const due: Array<{ at: number; wake: () => void }> = [];
   let clock = 0;
@@ -41,6 +44,10 @@ export async function modelled(): Promise<{ calls: Call[]; ms: number; code: num
     const kind = worker ? (url.pathname.endsWith('/token') ? 'token' : url.pathname.endsWith('/attempt') ? 'attempt' : 'status') : method === 'GET' ? 'read' : 'write';
     const call: Call = { kind, method, path: `${url.pathname}${url.search}`, at: clock };
     calls.push(call);
+    if (method === 'POST' && url.searchParams.get('uploadType') === 'multipart') {
+      const text = await new Response(init?.body).text();
+      if (/"name":"checkpoint-\d+-/.test(text)) checkpoints.push(JSON.parse(text.split(/\r\n--[^\r\n]+/)[1]?.split('\r\n\r\n')[1] ?? '{}') as Checkpoint);
+    }
     await new Promise<void>((wake) => due.push({ at: clock + (worker ? WORKER_MS : DRIVE_MS), wake }));
     const res = await inner(input, init);
     if (kind === 'write') {
@@ -73,6 +80,6 @@ export async function modelled(): Promise<{ calls: Call[]; ms: number; code: num
     next.wake();
   }
   const run = await running;
-  return { calls, ms: clock, code: run.code };
+  return { calls, ms: clock, code: run.code, checkpoints };
 }
 

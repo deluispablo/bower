@@ -235,9 +235,9 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     return this.changed(f);
   }
 
-  async writeText(id: string, text: string, ifModified: string): Promise<DriveFile> {
+  async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.reply(this.applyWrite(id, text, ifModified));
+    return this.reply(this.applyWrite(id, text, ifModified, appProperties));
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
@@ -245,10 +245,9 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     return this.reply(this.applyUpdate(id, patch));
   }
 
-  async trash(id: string): Promise<void> {
+  async trash(id: string, appProperties?: Record<string, string>): Promise<void> {
     await this.gate();
-    this.find(id).trashed = true;
-    this.changed(null);
+    this.applyTrash(id, appProperties);
   }
 
   async untrash(id: string): Promise<DriveFile> {
@@ -481,11 +480,8 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
       createFolder: (parentId, name, appProperties) => run({ op: 'create-folder', parentId, name, ...props(appProperties) }, () => this.changed(this.add(parentId, name, true, null, appProperties))),
       createText: (parentId, name, text, appProperties) => run({ op: 'create-text', parentId, name, text, ...props(appProperties) }, () => this.changed(this.add(parentId, name, false, text, appProperties))),
       update: (id, patch) => run({ op: 'update', id, patch }, () => this.applyUpdate(id, patch)),
-      trash: (id) => run({ op: 'trash', id }, () => {
-        this.find(id).trashed = true;
-        this.changed(null);
-      }),
-      writeText: (id, text, ifModified) => run({ op: 'write-text', id, text, ifModified }, () => this.applyWrite(id, text, ifModified)),
+      trash: (id, appProperties) => run({ op: 'trash', id, ...props(appProperties) }, () => this.applyTrash(id, appProperties)),
+      writeText: (id, text, ifModified, appProperties) => run({ op: 'write-text', id, text, ifModified, ...props(appProperties) }, () => this.applyWrite(id, text, ifModified, appProperties)),
     };
   }
 
@@ -523,14 +519,22 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   }
 
   /** `writeText` after its gate, with nothing awaited: shared by `writeText` and fenced writes. */
-  private applyWrite(id: string, text: string, ifModified: string): DriveFile {
+  private applyWrite(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): DriveFile {
     const f = this.find(id);
     if (f.meta.modifiedTime !== ifModified) throw driveError('conflict');
     f.content = text;
     delete f.bytesUnavailable;
     delete f.sha256;
-    f.meta = { ...f.meta, modifiedTime: this.stamp(), size: text.length };
+    f.meta = { ...f.meta, ...(appProperties ? { appProperties: { ...f.meta.appProperties, ...appProperties } } : {}), modifiedTime: this.stamp(), size: text.length };
     return this.changed(this.copy(f.meta));
+  }
+
+  /** `trash` after its gate, with its properties set in the same change (Drive's `files.update` with `trashed`). */
+  private applyTrash(id: string, appProperties?: Record<string, string>): void {
+    const f = this.find(id);
+    f.trashed = true;
+    if (appProperties) f.meta = { ...f.meta, appProperties: { ...f.meta.appProperties, ...appProperties } };
+    this.changed(null);
   }
 
   /**
@@ -566,8 +570,8 @@ export type FencedCall =
   | { op: 'create-folder'; parentId: string; name: string; appProperties?: Record<string, string> }
   | { op: 'create-text'; parentId: string; name: string; text: string; appProperties?: Record<string, string> }
   | { op: 'update'; id: string; patch: DrivePatch }
-  | { op: 'trash'; id: string }
-  | { op: 'write-text'; id: string; text: string; ifModified: string };
+  | { op: 'trash'; id: string; appProperties?: Record<string, string> }
+  | { op: 'write-text'; id: string; text: string; ifModified: string; appProperties?: Record<string, string> };
 /** `refuse`: no effect, as with no network; `lose-reply`: the change lands, then its answer is lost. */
 export type FaultAction = 'pass' | 'refuse' | 'lose-reply';
 export interface FaultHook {
@@ -579,8 +583,9 @@ export interface FencedDrive {
   createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   update(id: string, patch: DrivePatch): Promise<DriveFile>;
-  trash(id: string): Promise<void>;
-  writeText(id: string, text: string, ifModified: string): Promise<DriveFile>;
+  /** `appProperties`, when given, are set in the same request (a run's stamp on its effect). */
+  trash(id: string, appProperties?: Record<string, string>): Promise<void>;
+  writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
 }
 /** What a fenced check sees of a stored file at the instant of the change. */
 export interface PeekedFile {

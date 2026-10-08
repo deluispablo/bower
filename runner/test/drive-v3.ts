@@ -174,6 +174,13 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
       : {};
     return json(200, { ...wireFile(made, false), ...sums });
   }
+  if (method === 'PATCH' && one?.[1] && url.searchParams.get('uploadType') === 'multipart') {
+    // Metadata and content in one files.update (the run's stamp with its write).
+    const id = decodeURIComponent(one[2] ?? '');
+    const { meta, content } = await multipart(body);
+    const stored = await drive.get(id);
+    return json(200, wireFile(await drive.writeText(id, content, stored.modifiedTime, meta.appProperties), false));
+  }
   if (method === 'PATCH' && one?.[1] && url.searchParams.get('uploadType') === 'media') {
     const id = decodeURIComponent(one[2] ?? '');
     // Drive v3 takes no precondition on a content update: it writes over whatever is there.
@@ -182,9 +189,9 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
   }
   if (method === 'PATCH' && one && !one[1]) {
     const id = decodeURIComponent(one[2] ?? '');
-    const patch = JSON.parse(await new Response(body).text()) as { name?: string; appProperties?: Record<string, string | null>; trashed?: boolean };
+    const patch = JSON.parse(await new Response(body).text()) as { name?: string; appProperties?: Record<string, string>; trashed?: boolean };
     if (patch.trashed === true) {
-      await drive.trash(id);
+      await drive.trash(id, patch.appProperties);
       const stored = await drive.evidence(id);
       return stored ? json(200, wireFile(stored.file, true)) : json(404, driveFailure(404, 'notFound'));
     }
@@ -204,6 +211,13 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
 async function list(drive: FakeDrive, url: URL): Promise<Response> {
   const q = url.searchParams.get('q') ?? '';
   const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1] ?? '');
+  // A run's stamp, looked for in one folder, in the Bin or not.
+  const has = /^'([^']+)' in parents and appProperties has \{ key='([^']+)' and value='([^']+)' \}$/.exec(q);
+  if (has) {
+    const data = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: DriveFile; trashed: boolean }> };
+    const files = data.files.filter((f) => f.meta.parents[0] === has[1] && f.meta.appProperties?.[has[2] ?? ''] === has[3]);
+    return json(200, { kind: 'drive#fileList', files: files.map((f) => wireFile(f.meta, f.trashed)) });
+  }
   if (!parents.length || !/trashed = false/.test(q)) return json(400, driveFailure(400, 'invalidQuery'));
   const all: DriveFile[] = [];
   for (const parent of parents) all.push(...(await drive.listAll(parent)).filter((f) => f.parents[0] === parent));
