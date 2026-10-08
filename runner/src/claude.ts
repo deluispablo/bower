@@ -234,7 +234,7 @@ function promptInstructions(): string {
     '   neither a goal nor an ongoing responsibility, goes to Resources. Say why: a NEW folder under Projects needs "basis",',
     '   a rule line copied from "rules" or the path of a note below that shows the goal. A NEW folder under Areas needs',
     `   "basis" or "responsibility": one short phrase (at most ${RESPONSIBILITY_MAX} characters) naming the ongoing responsibility, such as`,
-    '   "pay and tax records". The report shows the new folder and why. Without one Bower refuses the reply.',
+    '   "keeping the household running". The report shows the new folder and why. Without one Bower refuses the reply.',
     '3. Ask: when where a thing goes is genuinely unclear, never guess. Leave it out of "things" and add one plain yes-or-no',
     `   question about it to "asks" by its "fileId" (at most ${ASK.text} characters, no links, answers at most ${ASK.answer}). For a pile of`,
     '   words only, or a pile unclear as a whole, give its "pileId" instead and leave the whole pile out of "things" and "notes".',
@@ -257,16 +257,23 @@ function promptInstructions(): string {
     '  a status, a date, a deadline or an amount, and add a line to that note too. When a thing disagrees with a note,',
     '  never change it silently: the line gives both figures, the note\'s and the thing\'s, and cites the thing.',
     '- Every summary, line and question is one short plain line, the outcome first.',
+    '- Names: every "name" says what the thing is, in plain words. A name made with underscores (Offer_letter_final), a copy',
+    '  number such as "(2)", the word "final", or a camera or scanner id (IMG_1234, DSC_0012, scan0001) says nothing: replace it',
+    '  with a plain name from what the thing is or says ("Offer, Industrial Designer, Ferrowick"), and keep the extension.',
+    '  A photo or scan that nothing says anything about is asked about, not filed under its id.',
+    '- Numbers: write only a figure, date or amount that is in the thing\'s own text, the pile\'s words or a note below, as it',
+    '  is written there. Never work one out or round one, and never add a limit, a score or a count that no input has.',
     '',
     'Kinds of document (where each usually goes, and what its note says first):',
-    '- receipt or bill: Areas, money (by month when a rule says so); shop or sender, date, total.',
-    '- payslip: Areas, pay and tax records; employer, month, net pay.',
-    '- job offer: the job hunt project; role, employer, salary, start, reply by.',
-    '- rental listing: the flat hunt project; address, rent, rooms, available.',
+    '- receipt or bill: the person\'s money area (by month when a rule says so); shop or sender, date, total.',
+    '- payslip: the person\'s money area; employer, month, net pay.',
+    '- job offer: the person\'s project for finding a job; role, employer, salary, start, reply by.',
+    '- rental listing: the person\'s project for finding a flat; address, rent, rooms, available.',
     '- contract or agreement: the project or area it binds; parties, start, end, notice.',
     '- booking or ticket: the trip\'s project; what, when, where, reference.',
     '- recipe: a Resources topic; dish, serves, time.',
     'A kind not listed is handled like the closest kind; a letter or newsletter goes with what it is about.',
+    'Each line says what the place is for. Look at the folders below for the one that is: never copy the words of a line as a folder name.',
     '',
     'Budget: decide each thing\'s kind and place from its name and the pile\'s words first, then read its text.',
     'Use at most 5 of the notes below for one thing. A long text is cut where marked "[cut here: ...]": work from what is shown. When',
@@ -422,6 +429,8 @@ export const REFUSALS = {
   thingTwice: 'a thing placed twice',
   placeOutside: 'a place outside the main folders',
   nameChangesKind: 'a name that changes what a thing is',
+  rawName: 'a name that says nothing (underscores, a copy number, "final" or a camera id)',
+  numbers: 'a number that is in none of its sources',
   newFolder: 'a new folder under Areas or Projects with no rule line or note cited',
   noteForNote: 'a note for a thing filed as a note',
   noteKeys: 'a note with keys outside the intent',
@@ -492,7 +501,52 @@ export interface Seen {
   folders?: ReadonlySet<string>;
   /** The rules text it was shown, for a cited rule line. */
   rules?: string;
+  /** What a number may come from besides the cited thing: the piles' words, and the notes shown (paths and text). When given, numbers are checked. */
+  words?: string;
+  shownNotes?: string;
 }
+
+/**
+ * Numbers grounded (TL-P4-08 addendum 5). Every number in an authored summary, note body or Timeline line must be in the
+ * cited thing's text, the piles' words or a note shown; a figure the model made up ("the 30-minute commute limit") is
+ * refused and asked again. This is a deterministic check, as Instructor's validate-and-retry
+ * (https://python.useinstructor.com/concepts/retrying/) and the grounding checks of retrieval answers do; it judges no style.
+ * Forms compared: a thousands separator is ignored (42,000 is 42000, 1.250.000 is 1250000), a decimal comma is a point
+ * (7,5 is 7.5), leading zeros are ignored (02 is 2), so a date counts by its day and year numbers (2 November is 2, and
+ * 2026-11-02 holds 2026, 11 and 2). List markers ("1."), [[link]] targets and web addresses are not figures.
+ */
+const NUMBER = /\d+(?:[.,]\d+)*/g;
+const GROUPED = /^\d{1,3}(?:[,.]\d{3})+$/;
+const ZEROS = (n: string): string => n.replace(/(^|\.)0+(?=\d)/g, '$1');
+/** The forms a number token may be written as. */
+function forms(token: string): string[] {
+  const alt = GROUPED.test(token) ? [token.replace(/[,.]/g, '')] : [];
+  return [...alt, ...(/^\d+,\d{1,2}$/.test(token) ? [token.replace(',', '.')] : []), token].map(ZEROS);
+}
+/** Every number a source holds, in every form it may be written as; the parts of a date or a time count on their own. */
+function groundsOf(source: string): Set<string> {
+  const plain = source.replace(/\[cut here:[^\]]*\]|\[\d+ pages not read\]/g, ' ');
+  const out = new Set<string>();
+  for (const [token] of plain.matchAll(NUMBER)) {
+    for (const f of forms(token)) out.add(f);
+    if (!GROUPED.test(token)) for (const part of token.split(/[.,]/)) out.add(ZEROS(part));
+  }
+  for (const [run] of plain.matchAll(/\d+/g)) out.add(ZEROS(run));
+  return out;
+}
+/** The first number of `text` that `ground` does not hold, or null. */
+function ungrounded(text: string, ground: ReadonlySet<string>): string | null {
+  const figures = text
+    .replace(/\[\[[^\]]*\]\]/g, ' ')
+    .replace(/\]\([^)]*\)/g, ' ')
+    .replace(new RegExp(WEB.source, 'gi'), ' ')
+    .replace(/^\s*(?:[-*]\s+)?\d+[.)]\s/gm, ' ');
+  for (const [token] of figures.matchAll(NUMBER)) if (!forms(token).some((f) => ground.has(f))) return token;
+  return null;
+}
+
+/** A raw file name: underscores, a copy number "(2)", the word "final", or a camera or scanner id (IMG_1234, DSC_0012, scan0001). */
+const RAW_NAME = /_|\(\d+\)|\bfinal\b|^(?:IMG|DSC|DSCN|PXL|MVIMG|VID|MOV|PHOTO|SCAN)[-\s]?\d+/i;
 
 const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
 const MD_LINK = /\[[^\]]*\]\(\s*<?([^)\s>]*)>?[^)]*\)/g;
@@ -559,6 +613,18 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
   const piles = new Map(took.taken.piles.map((p) => [p.pileId, p]));
   const admitted = new Map(took.taken.piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
   const areas = new Map<string, string>();
+  // The numbers a thing's note or a line citing it may hold: its text, the admitted things' names, the piles' words, the notes shown.
+  const names = [...admitted.values()].map((a) => a.name).join('\n');
+  const common = seen.words === undefined ? null : groundsOf(`${names}\n${seen.words}\n${seen.shownNotes ?? ''}\n${seen.rules ?? ''}`);
+  const grounded = (fileId: string | undefined, texts: readonly string[]): string | null => {
+    if (!common) return null;
+    const own = fileId === undefined ? null : groundsOf(seen.texts?.get(fileId) ?? '');
+    for (const text of texts) {
+      const n = ungrounded(text, own ? new Set([...common, ...own]) : common);
+      if (n) return `a number that is in none of its sources: "${n}" in {where} "${admitted.get(fileId ?? '')?.name ?? 'a note'}"; write only figures from the thing's text, the pile's words or the notes shown, or leave the figure out`;
+    }
+    return null;
+  };
   const placed = new Map<string, Placement>();
   const authored = new Map<string, AuthoredNote>();
   for (const t of things as unknown[]) {
@@ -569,6 +635,7 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     if (!placeOk(t.to)) return no('placeOutside');
     const was = extensionOf(thing.name);
     if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return no('nameChangesKind');
+    if (RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, ''))) return no('rawName', `a name that says nothing: "${t.name}" has underscores, a copy number, "final" or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`);
     const fresh = newPlace(t.to, t.basis, t.responsibility, seen, areas);
     if (fresh) return no('newFolder', fresh);
     placed.set(t.fileId, { to: t.to, name: t.name });
@@ -578,6 +645,8 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
       const note = authoredOf(t.note);
       if (typeof note === 'string') return no(note);
       authored.set(t.fileId, note);
+      const bad = grounded(t.fileId, [note.summary, note.body]);
+      if (bad) return no('numbers', bad.replace('{where}', 'the note for'));
     }
   }
   const words = new Map<string, Placement>();
@@ -598,6 +667,8 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     if (typeof l.note !== 'string' || !notes.has(l.note)) return no('lineNote');
     if (!lineOk(l.text, AUTHORED.line) || /\[\[|\]\]|·|\]\(/.test(l.text) || new RegExp(WEB.source, 'i').test(l.text)) return no('lineText');
     if ('cites' in l && (typeof l.cites !== 'string' || !placed.has(l.cites))) return no('lineCites');
+    const bad = grounded(typeof l.cites === 'string' ? l.cites : undefined, [l.text]);
+    if (bad) return no('numbers', bad.replace('{where}', 'the Timeline line on'));
     timeline.push({ path: l.note, text: l.text.trim(), cites: typeof l.cites === 'string' ? l.cites : null });
   }
   // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
@@ -796,7 +867,15 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
     }
     const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => (t.text === null ? [] : [[t.fileId, t.text] as const]))));
-    const seen: Seen = { notes: new Set(shown.notes.map((n) => n.path)), names: shown.names ?? new Set(), texts, folders: new Set(shown.folders), ...(shown.rules ? { rules: shown.rules } : {}) };
+    const seen: Seen = {
+      notes: new Set(shown.notes.map((n) => n.path)),
+      names: shown.names ?? new Set(),
+      texts,
+      folders: new Set(shown.folders),
+      words: shown.piles.map((p) => p.words).join('\n'),
+      shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'),
+      ...(shown.rules ? { rules: shown.rules } : {}),
+    };
     // One reply read and checked. Every refusal of the reply asks the model once more, telling it why (TL-P4-08
     // addendum 4); a second one ends the run. A run that went wrong (a cap, an error result) ends it at once.
     const check = (done: ClaudeExit): { ok: true; intent: Extract<Intent, { ok: true }> } | Refused => {

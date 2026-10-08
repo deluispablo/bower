@@ -5,7 +5,7 @@
   "duration_ms": 41250,
   "duration_api_ms": 40980,
   "num_turns": 1,
-  "result": "{\"kind\": \"tidy-intent\", \"v\": 1, \"things\": [{\"fileId\": \"f10\", \"to\": \"Areas/Money/Payslips\", \"name\": \"Payslip August (2).pdf\"}, {\"fileId\": \"f11\", \"to\": \"Areas/Health\", \"name\": \"Dentist, 14 Oct.pdf\"}, {\"fileId\": \"f14\", \"to\": \"Projects/Flat hunt/Viewing photos\", \"name\": \"Wrenfield Road, kitchen.jpg\"}, {\"fileId\": \"f19\", \"to\": \"Resources/Reading\", \"name\": \"listing-88213.example.url\"}, {\"fileId\": \"f20\", \"to\": \"Projects/Job hunt/Applications\", \"name\": \"Offer, Industrial Designer, Ferrowick.pdf\"}], \"notes\": [{\"pileId\": \"p-garden\", \"to\": \"Resources/Ideas\", \"name\": \"Ideas for the garden in spring..md\"}]}",
+  "result": "{\"kind\": \"tidy-intent\", \"v\": 1, \"things\": [{\"fileId\": \"f10\", \"to\": \"Areas/Money/Payslips\", \"name\": \"Payslip August.pdf\"}, {\"fileId\": \"f11\", \"to\": \"Areas/Health\", \"name\": \"Dentist, 14 Oct.pdf\"}, {\"fileId\": \"f14\", \"to\": \"Projects/Flat hunt/Viewing photos\", \"name\": \"Wrenfield Road, kitchen.jpg\"}, {\"fileId\": \"f19\", \"to\": \"Resources/Reading\", \"name\": \"listing-88213.example.url\"}, {\"fileId\": \"f20\", \"to\": \"Projects/Job hunt/Applications\", \"name\": \"Offer, Industrial Designer, Ferrowick.pdf\"}], \"notes\": [{\"pileId\": \"p-garden\", \"to\": \"Resources/Ideas\", \"name\": \"Ideas for the garden in spring..md\"}]}",
   "stop_reason": "end_turn",
   "session_id": "6b1f2c4e-0000-4000-8000-000000000001",
   "total_cost_usd": 0.0912,
