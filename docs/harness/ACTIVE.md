@@ -161,3 +161,4 @@ P3-9 is closed.
 - P4-3: runner-checkpoint-cost running (bower-escalated, bower-p4-ckpt at 62fbe3d). 354/355.
 - TL-P4-03 (98886fd): runner-checkpoint-cost also caches the Claude Code install; c04-incorporation (first P4-C slice) running (bower-escalated, bower-p4-c04 at 60791e9). 354/356.
 - runner-checkpoint-cost closed (da5a50b): a checkpoint is 3 Drive calls → 2 (the write's checksum replaces the read-back); modelled C04 overhead 43.4 → 38.0 s; admission now timed in parts (the split needs a staging run); no checkpoint merges (each one changes an existing test); Claude Code cached. 355/356.
+- c04-incorporation closed (3453ce9; unpdf 1.8.1). runner-checkpoint-cost re-closed after the verify-name fix (59fc380). 356/356. P4-3 close: Opus delta and the four suites.
