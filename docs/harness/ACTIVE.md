@@ -261,3 +261,4 @@ P3-9 is closed.
   - Next: a check of the fix, the four suites, main, the SHA, then live offer-and-flat ×3 + garden ×1 + a C05 case.
 - drive-calls-cut re-closed (ee1f639): fresh fence read before every send; 134 -> 80 calls (-40.3%); modelled apply 13.4 -> 4.7 s. 380/383. Fix-round check and suites running.
 - P4-13 fix-round check PASS (counts confirmed: 80 calls, apply 4.7 s modelled; minors to polish). Waiting for the suites.
+- Suites at 5e756a1: check 3620/190/155, e2e 226, e2e:fake 250, e2e:pwa pass. Main moves; SHA to the lead.
