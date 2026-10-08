@@ -412,3 +412,4 @@ state-no-adoption	118aec58befb12dd	2026-10-08	known-green: red by hand at tests-
 home-reads-once	f7dcdd7391ee4eb3	2026-10-08	red (fixed in 624f8be)
 state-no-adoption	e8f159e96eb9e95d	2026-10-08	known-green: red by hand at tests-only 0c3f1fc: 5 of 6 verify tests fail on assertions (fallback repeats the person's line; unmarked rewrite not refused; undo keeps bower_state); green at a058374
 state-no-adoption	da4e8e910b40245b	2026-10-08	known-green: red by hand at tests-only 50f026d: the 3 new tests fail on assertions; the 6 earlier ones were proved at 0c3f1fc and b485b75; green at af231e1
+corpus-offer-real-pdf	62d40732aa6f9f1e	2026-10-08	known-green: red by hand at tests-only 2a63292: corpus PDFs are valid PDFs fails on assertions (payslip and c05 offer unreadable); green at 59308cc (data-only change)

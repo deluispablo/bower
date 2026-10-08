@@ -5128,7 +5128,7 @@
     "id": "corpus-offer-real-pdf",
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "The corpus offer letters are real minimal PDFs with the same text, so live runs read them as the scripted runs do.",
     "steps": [
       "Replace text-with-PDF-header offers in harness/corpus with minimal valid PDFs carrying the same text.",

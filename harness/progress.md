@@ -167,3 +167,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: home-reads-once passes — Home reads each file once per load: in-flight and per-load reads shared (73 -> 40 on the live-shaped folder)
 - 2026-10-08: state-no-adoption passes — Fallback line names only what is new; rewriteState refuses an unmarked section without a rule; undo of an adoption drops the mark (P4-16 fix)
 - 2026-10-08: state-no-adoption passes — A person-edited section's fallback names none of Bower's last lines; release only on a marked section; capitals kept (P4-16b fix)
+- 2026-10-08: corpus-offer-real-pdf passes — Corpus PDFs are real minimal PDFs with the same text; a readable payslip now gets its note (TL-P4-11 addendum 3)
