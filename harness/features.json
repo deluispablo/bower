@@ -5093,7 +5093,7 @@
       "Close a question when its thing leaves the inbox.",
       "Tests: two differently worded asks give one question; binning closes it; a re-upload does not add one."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"two differently worded asks about one thing give one question|a thing that leaves the inbox closes its question|a re-upload of the same thing adds no question|binning the only thing left in the inbox closes its question|an instructions run keeps an open thing question|a pile ask then a thing ask leave one question\"",
+    "verify": "pnpm -C runner exec vitest run -t \"two differently worded asks about one thing give one question|a thing that leaves the inbox closes its question|a re-upload of the same thing adds no question|an instructions run keeps an open thing question|a pile ask then a thing ask leave one question\" && pnpm vitest run src/data/vault/drive-vault.test.ts -t \"binning the only thing left in the inbox closes its question\"",
     "note": "TL-P4-11 addendum (main 1f91b43). The owner saw the IMG_2301 question repeated in the app. Cause (coordinator): each live offer-and-flat run re-uploaded the pile after a reset (new fileIds, so new q-ask ids) and binned piles never closed their questions. Reopened by P4-15 (BLOCK): binning the last inbox thing leaves its question open; a scripted instructions run or any answer drops every q-ask; a pile ask then a thing ask on one photo give two questions."
   }
 ]
