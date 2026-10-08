@@ -14,7 +14,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { RunRecords } from '../../src/data/spine/records';
 import { MOVED_AWAY } from '../../src/data/spine/report';
 import { SYSTEM } from '../../src/data/vault/layout';
-import { driveEffects, stampOf } from '../src/effects';
+import { STAMP, driveEffects, stampOf } from '../src/effects';
 import { runTidy, type TidyEnd } from '../src/main';
 import { providerFor } from '../src/provider';
 import type { Effects } from '../src/spine/run';
@@ -91,6 +91,7 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
   wire.attempt = attempt;
   const process: Process = { killed: false };
   let ids = 0;
+  const stamps = new Map<string, string>();
   const fetchFn: typeof fetch = async (input, init = {}) => {
     if (process.killed) throw new TypeError('The runner was killed.');
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -111,11 +112,10 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
             opts.onRename?.();
           }
         }
+        stamps.set(stampOf(RUN_ID, op.operationId), op.operationId);
         return real.apply(op, head, fenced, manifest, async () => {
           await sending();
           await opts.afterIntent?.(op);
-          // Counted only when the send can go out: a killed runner sends nothing more.
-          if (!process.killed) w.sends.set(op.operationId, (w.sends.get(op.operationId) ?? 0) + 1);
         });
       },
     };
@@ -132,7 +132,14 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
     newId: () => `attempt${attempt}-${++ids}`,
     onDrive: (d) => {
       d.fault = {
-        before: (call) => (opts.loseReply?.(call) ? 'lose-reply' : 'pass'),
+        before: (call) => {
+          // Counted as sent when the request goes out (operations run together, so a kill can come while one waits
+          // its turn): a killed runner sends nothing more.
+          const stamp = (call.op === 'update' ? call.patch.appProperties : 'appProperties' in call ? call.appProperties : undefined)?.[STAMP];
+          const id = typeof stamp === 'string' ? stamps.get(stamp) : undefined;
+          if (id !== undefined && !process.killed) w.sends.set(id, (w.sends.get(id) ?? 0) + 1);
+          return opts.loseReply?.(call) ? 'lose-reply' : 'pass';
+        },
         applied: (call) => opts.applied?.(call, process),
       };
     },

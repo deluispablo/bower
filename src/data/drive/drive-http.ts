@@ -170,8 +170,9 @@ export class DriveHttp implements DriveApi, ResumableDrive {
    * `appProperties`, when given, go in the same request: a multipart `files.update`, metadata then media
    * (https://developers.google.com/workspace/drive/api/guides/manage-uploads#multipart).
    */
-  async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    const now = await this.get(id);
+  /** `current`, when given, is the file as the caller read it moments ago (the runner's fence): it is compared in place of one more read. */
+  async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>, current?: DriveFile): Promise<DriveFile> {
+    const now = current ?? (await this.get(id));
     if (now.modifiedTime !== ifModified) throw driveError('conflict');
     if (appProperties) return this.multipart({ appProperties }, new Blob([text], { type: mimeOf(now.name) }), id);
     const res = await this.call(`${UPLOAD}/files/${id}?uploadType=media&fields=${FIELDS}`, { method: 'PATCH', headers: { 'content-type': mimeOf(now.name) }, body: text });
