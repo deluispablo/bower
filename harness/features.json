@@ -4901,5 +4901,20 @@
     "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step\"",
     "passes": true,
     "note": "TL-P4-07 addendum 2 (main c924560)."
+  },
+  {
+    "id": "second-brain-method",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "The provider instructions follow the second-brain method of TL-P4-08 points 1-8: fit, then create (say why), then ask (the item stays in the inbox with a question, the run goes on); the value gate; Current state rewritten and Timeline appended with sources; new notes link a hub and 1-5 related notes; a type table; at most 5 notes read per source; update what the document changes; outcome-first report. Missing operations are registered, not stretched. C04-C15 rubrics checked against the method; any change is logged.",
+    "steps": [
+      "Rewrite the provider instructions from TL-P4-08 points 1-8.",
+      "Register missing operations (e.g. leave in the inbox with a question, update the timeline) instead of stretching existing ones.",
+      "Check C04-C15 rubrics against the method; change a rubric only where it contradicts the method, logging each change.",
+      "Regenerate the model-input golden on purpose."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the instructions carry the method fit, create, ask in that order|an ambiguous thing stays in the inbox with a question and the run goes on|a document that only confirms a known fact updates the note and makes none|the C04 to C15 rubrics agree with the method\"",
+    "passes": false,
+    "note": "TL-P4-08 (main f296674). Method only, never vault content. Runs after placement-check (both edit the prompt)."
   }
 ]
