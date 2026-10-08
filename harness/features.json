@@ -4653,10 +4653,26 @@
       "Measure press→dispatch inside the Worker (admission, manifest reads, pile notes) vs dispatch→job created (R3: 2 s).",
       "Cut the Worker admission time where safe.",
       "Merge checkpoints / drop the read-back only where kill-after-every-step recovery tests pass unchanged.",
-      "A modelled test shows the checkpoint cost per run reduced; recovery, ordered-status and dispositions suites green."
+      "A modelled test shows the checkpoint cost per run reduced; recovery, ordered-status and dispositions suites green.",
+      "tidy.yml caches the Claude Code install with actions/cache (SHA-pinned, keyed on the version)."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"checkpoints cost fewer Drive round trips per operation|a kill after every step still recovers with merged checkpoints\" && pnpm -C api exec vitest run -t \"admission timing is logged in parts\"",
+    "verify": "pnpm -C runner exec vitest run -t \"checkpoints cost fewer Drive round trips per operation|a kill after every step still recovers with merged checkpoints|the Claude Code install is cached by version\" && pnpm -C api exec vitest run -t \"admission timing is logged in parts\"",
     "passes": false,
-    "note": "TL-P4-01 P4-3 (lead approval after the staging runs 37734385418, 37734625824, 37734833636)."
+    "note": "TL-P4-01 P4-3 (lead approval after the staging runs 37734385418, 37734625824, 37734833636). TL-P4-03 adds the Claude Code cache."
+  },
+  {
+    "id": "c04-incorporation",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "The first P4-C slice: the model sees bounded content, not just names: the app prepared text from the C15 preparation contract where it exists, else the runner own extraction (plain text and the PDF text layer via a maintained library; OCR later), plus the note text of notes it is asked to update; the intent carries note text; the provider still returns structured operations only and the spine validates them; proven by scripted proposals first, then the corpus C04 cases scored by the corpus scorer.",
+    "steps": [
+      "Prepared text from the C15 contract when present; runner extraction otherwise (text, PDF text layer), bounded per thing and per run.",
+      "Note text of the notes the model may update goes into the context, bounded.",
+      "The intent carries note text for new and updated notes; the runner builds the operations.",
+      "Scripted proposals pass the C04 corpus cases; recorded Claude replies on the C04 cases score green."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the model context carries bounded extracted text for each admitted thing|the C04 corpus cases score green with scripted proposals|a recorded Claude reply on a C04 case writes a note with its content\"",
+    "passes": false,
+    "note": "TL-P4-03 batch P4-3 (first P4-C slice)."
   }
 ]
