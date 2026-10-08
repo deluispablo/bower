@@ -138,3 +138,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: placement-check passes — a new Area/Project folder needs a cited rule line or shown note (basis); refused once with the reason and retried, a second refusal ends the run as C12 does
 - 2026-10-08: drive-calls-golden passes — C04 on the fake makes 134 Drive calls (106 reads, 28 writes, 4 checkpoints) and 66 Worker calls at a566241 and HEAD alike; the live rise is Drive latency; counts pinned
 - 2026-10-08: fingerprint-normalised passes — input= hashes the normalised model input (shared with the golden), so fresh-id runs of the same case match
+- 2026-10-08: placement-check passes — fix round: a new Area carries a responsibility phrase shown in the report (New area Money, for pay and tax records); Projects need a rule or note; a cut Rules.md says so; corpus untouched
