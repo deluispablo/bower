@@ -4743,7 +4743,7 @@
       "Test on the real bundle line from the built runner bundle; a made-up address still refuses."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the deploy scan passes the real unpdf bundle line and still refuses a real address\"",
-    "passes": false,
+    "passes": true,
     "note": "Lead 3ce00dd: deploy-scan-unpdf-literal allowed the wrong string."
   },
   {
