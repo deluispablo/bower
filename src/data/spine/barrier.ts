@@ -14,8 +14,7 @@
  *
  * Reads come through the records' small read interface and writes through a `FencedDrive`; no I/O of its own.
  */
-import type { DriveFile } from '../drive/drive-api';
-import type { FencedDrive } from '../drive/fake-drive';
+import type { DriveFile, FencedDrive } from '../drive/drive-api';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { BowerError, type Question, type RunReport } from '../types';
 import { SYSTEM, isRunnerFile, type LastRunFile, type RunnerFiles } from '../vault/layout';

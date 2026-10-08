@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BowerError } from '../types';
 import { DriveHttp } from './drive-http';
 import { FakeDrive } from './fake-drive';
+import { RETRIES } from './transport';
 
 // Expected bytes are literal source fixtures, not decoded/re-encoded implementation output.
 const fixtures = [
@@ -200,7 +201,8 @@ describe('drive raw bytes preserve source authority', () => {
     const missing = http(() => new Response(null, { status: 404 }));
     await expect(missing.drive.readBytes('FILE_A')).rejects.toMatchObject({ code: 'not-found' }); expect(missing.calls).toHaveLength(1);
     const offline = http(() => { throw new TypeError('Synthetic transport offline'); });
-    await expect(offline.drive.readBytes('FILE_A')).rejects.toMatchObject({ code: 'offline' }); expect(offline.calls).toHaveLength(1);
+    // A read is sent again on the network, as every idempotent request is (`transport.ts`), then told offline.
+    await expect(offline.drive.readBytes('FILE_A')).rejects.toMatchObject({ code: 'offline' }); expect(offline.calls).toHaveLength(1 + RETRIES);
   });
 
   it.each([

@@ -189,7 +189,8 @@ export async function admission(env: Env, person: PersonHandle, ask: AdmissionAs
       }
       return await token;
     },
-    fetch: async (input, init) => await fetchImpl(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init),
+    fetch: fetchImpl,
+    context: 'headless',
   });
   let planned;
   try {

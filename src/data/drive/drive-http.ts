@@ -1,30 +1,31 @@
 /**
- * Google Drive over its REST API (v3), with the person's short-lived access
- * token from the Worker. A 401 asks for a fresh token once; rate limits and
- * server errors are retried three times with a growing wait; everything
- * else becomes one of `DRIVE_MESSAGES`.
+ * Google Drive over its REST API (v3): the one Drive transport for the app, the runner and the Worker
+ * (c2-drive-transport). The access token comes from the caller (the Worker's route, the run's ticket route, or the
+ * Worker's own refresh); a 401 asks for a fresh one once. Every request goes under the one retry policy
+ * (`transport.ts`: a bound per attempt, idempotent requests sent again with backoff inside a budget); everything
+ * else becomes one of `DRIVE_MESSAGES`, worded for where it ran (`context`: never "offline" outside a browser).
  */
 import { BowerError } from '../types';
-import { answered } from '../wait';
+import { noAnswer, send, type Context, type Fetch } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
-import { driveError, RESUMABLE_UNIT, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
+import { DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
-const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
+export const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
 /** A file made by a resumable upload, with its content's checksum to check it. */
 const UPLOADED_FIELDS = `${FIELDS},sha256Checksum`;
 /** A listing with checksums: also `md5Checksum`, which names the same content uploaded again. */
 const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
 /** The only session addresses that get the person's token. */
 const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';
-const FOLDER = 'application/vnd.google-apps.folder';
+export const FOLDER = 'application/vnd.google-apps.folder';
 const BATCH = 40;
 const SMALL = 5 * 1024 * 1024;
 const CHUNK = 8 * 1024 * 1024;
-const WAITS = [500, 1000, 2000];
 
-interface WireFile {
+/** A file as Drive v3 answers it (`FIELDS`, and the checksums when asked); the one wire type of every client. */
+export interface WireFile {
   id: string;
   name: string;
   mimeType?: string;
@@ -41,10 +42,12 @@ interface WireFile {
 export interface DriveHttpOptions {
   /** The access token; `fresh` asks the Worker for a new one. */
   token: (fresh: boolean) => Promise<string>;
-  fetch?: typeof fetch;
+  fetch?: Fetch;
+  /** Where it runs: `browser` (the default) words a request with no answer as offline; `headless` never does. */
+  context?: Context;
 }
 
-const toFile = (w: WireFile): DriveFile => ({
+export const toFile = (w: WireFile): DriveFile => ({
   id: w.id,
   name: w.name,
   folder: w.mimeType === FOLDER,
@@ -57,10 +60,9 @@ const toFile = (w: WireFile): DriveFile => ({
   ...(w.md5Checksum ? { md5Checksum: w.md5Checksum } : {}),
 });
 
-const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+export const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 const mimeOf = (name: string): string => (name.endsWith('.md') ? 'text/markdown' : 'text/plain');
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
+/** Drive's 403 for a rate limit, told apart from a refusal by its reason. */
 async function isRateLimit(res: Response): Promise<boolean> {
   if (res.status !== 403) return false;
   try {
@@ -74,7 +76,8 @@ async function isRateLimit(res: Response): Promise<boolean> {
 
 export class DriveHttp implements DriveApi, ResumableDrive {
   private readonly token: (fresh: boolean) => Promise<string>;
-  private readonly fetchFn: typeof fetch;
+  private readonly fetchFn: Fetch;
+  private readonly context: Context;
   /** Ids known under each root from the last listing, so full-text hits stay inside it. */
   private known = new Map<string, Set<string>>();
   /** Root and descendant folders from the same listing, for parent-scoped searches. */
@@ -82,7 +85,13 @@ export class DriveHttp implements DriveApi, ResumableDrive {
 
   constructor(opts: DriveHttpOptions) {
     this.token = opts.token;
-    this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+    this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
+    this.context = opts.context ?? 'browser';
+  }
+
+  /** No answer, worded for where this runs. */
+  private lost(): BowerError {
+    return noAnswer(this.context, { offline: DRIVE_MESSAGES.offline, elsewhere: DRIVE_MESSAGES.unknown });
   }
 
   /**
@@ -129,7 +138,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     } catch (e) {
       console.error(e);
       if (e instanceof BowerError) throw e;
-      throw driveError(e instanceof TypeError ? 'offline' : 'unknown');
+      throw e instanceof TypeError ? this.lost() : driveError('unknown');
     }
   }
 
@@ -248,7 +257,8 @@ export class DriveHttp implements DriveApi, ResumableDrive {
 
   async sessionStatus(session: string, size: number): Promise<SessionStatus> {
     this.mustBeSession(session);
-    const res = await this.raw(session, { method: 'PUT', headers: { 'content-range': `bytes */${size}` } });
+    // A question, not a write: safe to ask again after a stall.
+    const res = await this.raw(session, { method: 'PUT', headers: { 'content-range': `bytes */${size}` } }, true);
     return this.sessionAnswer(res, 'an upload status');
   }
 
@@ -281,38 +291,33 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     return driveError('unknown');
   }
 
-  /** One resumable request with the token, its one refresh and the retries; every other answer goes back as is. */
-  private async raw(url: string, init: RequestInit): Promise<Response> {
+  /**
+   * One resumable request with the token, its one refresh and the retries; every other answer goes back as is. Busy or
+   * failing on Google's side is asked again: a chunk carries its range, a create its reserved id. A stall is sent
+   * again only for a status question (`idempotent`); a chunk or a create is not, and its caller asks the status.
+   */
+  private async raw(url: string, init: RequestInit, idempotent = false): Promise<Response> {
+    return this.authorized(url, init, { idempotent, again: async (res) => res.status === 429 || res.status >= 500 || (await isRateLimit(res)) });
+  }
+
+  /** The request under the transport's policy, with the token and its one refresh; any answer but a 401 goes back. */
+  private async authorized(url: string, init: RequestInit, opts: Parameters<typeof send>[3]): Promise<Response> {
     let token = await this.token(false);
-    let refreshed = false;
-    let tries = 0;
-    for (;;) {
+    for (let refreshed = false; ; refreshed = true) {
       let res: Response;
       try {
-        res = await answered(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } });
+        res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, opts);
       } catch (e) {
         if (e instanceof BowerError) throw e;
         // Stopped on purpose: the queue tells this from a failure.
-        if (e instanceof DOMException && e.name === 'AbortError') throw e;
-        if (e instanceof TypeError) throw driveError('offline');
+        if (e instanceof DOMException && e.name === 'AbortError' && init.signal) throw e;
+        if (e instanceof TypeError) throw this.lost();
         console.error(e);
         throw driveError('unknown');
       }
-      if (res.status === 401) {
-        if (refreshed) throw driveError('auth');
-        refreshed = true;
-        token = await this.token(true);
-        continue;
-      }
-      // Busy or failing on Google's side: ask again with a growing wait. A resumable
-      // request is safe to repeat: a chunk carries its range, a create its reserved id.
-      const wait = WAITS[tries];
-      if (wait !== undefined && (res.status === 429 || res.status >= 500 || (await isRateLimit(res)))) {
-        tries++;
-        await sleep(wait);
-        continue;
-      }
-      return res;
+      if (res.status !== 401) return res;
+      if (refreshed) throw driveError('auth');
+      token = await this.token(true);
     }
   }
 
@@ -363,39 +368,18 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     return this.changed(toFile((await res.json()) as WireFile));
   }
 
-  /** One request with the token, the one refresh and the retries. Answers ok or 308 (resumable). */
-  private async call(url: string, init: RequestInit = {}): Promise<Response> {
-    let token = await this.token(false);
-    let refreshed = false;
-    let tries = 0;
-    for (;;) {
-      let res: Response;
-      try {
-        res = await answered(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } });
-      } catch (e) {
-        if (e instanceof BowerError) throw e;
-        if (e instanceof TypeError) throw driveError('offline');
-        console.error(e);
-        throw driveError('unknown');
-      }
-      if (res.ok || res.status === 308) return res;
-      if (res.status === 401) {
-        if (refreshed) throw driveError('auth');
-        refreshed = true;
-        token = await this.token(true);
-        continue;
-      }
-      const wait = WAITS[tries];
-      // A create that failed on Google's side may still have made the file: never send it twice.
-      const safe = res.status === 429 || (await isRateLimit(res)) || (res.status >= 500 && (init.method ?? 'GET') !== 'POST');
-      if (safe && wait !== undefined) {
-        tries++;
-        await sleep(wait);
-        continue;
-      }
-      if (res.status === 404) throw driveError('not-found');
-      console.error(`Drive answered ${res.status} for ${init.method ?? 'GET'} ${new URL(url).pathname}`);
-      throw driveError('unknown');
-    }
+  /**
+   * One request with the token, the one refresh and the retries (`transport.ts`): a read is sent again after a stall.
+   * Answers ok or 308 (resumable), or a status in `pass` for the caller to read; anything else is a `BowerError`.
+   */
+  async call(url: string, init: RequestInit = {}, pass: readonly number[] = []): Promise<Response> {
+    const method = (init.method ?? 'GET').toUpperCase();
+    // A create that failed on Google's side may still have made the file: never send it twice.
+    const again = async (res: Response): Promise<boolean> => res.status === 429 || (await isRateLimit(res)) || (res.status >= 500 && method !== 'POST');
+    const res = await this.authorized(url, init, { idempotent: method === 'GET', again });
+    if (res.ok || res.status === 308 || pass.includes(res.status)) return res;
+    if (res.status === 404) throw driveError('not-found');
+    console.error(`Drive answered ${res.status} for ${method} ${new URL(url).pathname}`);
+    throw driveError('unknown');
   }
 }

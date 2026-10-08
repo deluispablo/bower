@@ -8,8 +8,7 @@
  * once, read back and compared byte for byte, and a reply lost after it landed is reconciled by its exact body,
  * never written again. The pure record guards live in `contracts/`.
  */
-import type { DriveFile } from '../drive/drive-api';
-import type { FencedDrive } from '../drive/fake-drive';
+import type { DriveFile, FencedDrive } from '../drive/drive-api';
 import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { parsePileDisposition, type Disposition } from '../contracts/pile-disposition';
 import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpoint, type Outcome, type ReportRecord } from '../contracts/run-checkpoint';

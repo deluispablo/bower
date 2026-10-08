@@ -1,7 +1,8 @@
 /**
- * The runner's fenced Drive: the fake's `FencedDrive` on real Drive, built on
- * the app's `DriveHttp` with Node's `fetch` and the run ticket's token route
- * (TL-P3-19).
+ * The runner's fenced Drive: `FencedDrive` on real Drive, built on the one Drive
+ * transport (`DriveHttp`, headless: its token refresh, retry policy, errors and
+ * wire type) with Node's `fetch` and the run ticket's token route (TL-P3-19).
+ * What is left here is the fence and the attempt check.
  *
  * Two checks guard every write, and both are PRECHECKS, NOT COMPARE-AND-SWAP
  * (ARCHITECTURE, "Safety at the actual storage boundary"):
@@ -35,15 +36,13 @@
  * `lose-reply`: the write lands, then its answer is lost).
  */
 import { BowerError } from '../../src/data/types';
-import { driveError, type DriveFile, type DrivePatch } from '../../src/data/drive/drive-api';
-import { DriveHttp } from '../../src/data/drive/drive-http';
-import type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from '../../src/data/drive/fake-drive';
+import type { DriveFile, DrivePatch, FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from '../../src/data/drive/drive-api';
+import { DriveHttp, FIELDS, quote, toFile, type WireFile } from '../../src/data/drive/drive-http';
 import type { SpineRead } from '../../src/data/spine/plan';
 import type { AdmissionScope } from '../../src/data/spine/admission';
 import { admissionRead } from '../../src/data/spine/read';
 import { md5Hex, sha256, sha256Hex } from '../../src/data/contracts/hashes';
 import { SeenFiles, targetOf, type StoredNow } from './still-as-seen';
-import { retried } from './retry';
 import { staleAttempt, type RunnerToken } from './token';
 
 export interface RunnerDriveOptions {
@@ -54,9 +53,6 @@ export interface RunnerDriveOptions {
 }
 
 const API = 'https://www.googleapis.com/drive/v3';
-const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
-const FOLDER = 'application/vnd.google-apps.folder';
-const WAITS = [500, 1000, 2000];
 /** What a create's answer is asked to carry besides its metadata, to confirm the bytes Drive stored. */
 const CHECKSUMS = 'md5Checksum,sha256Checksum';
 /** A run's records (`checkpointName`, `reportName`, `dispositionName`) and its `dispositions.json`: written once, never changed. */
@@ -75,25 +71,11 @@ const HOLD_MS = 3000;
 /** What one of this run's own writes did to a folder listing: the file as Drive answered, or the file put in the Bin. */
 export type Change = { file: DriveFile } | { gone: string };
 
-interface WireFile {
-  id: string;
-  name: string;
-  mimeType?: string;
-  parents?: string[];
-  modifiedTime: string;
-  createdTime: string;
-  size?: string;
-  appProperties?: Record<string, string>;
-}
-
-const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
 export class RunnerDrive {
   /** Sees, and may refuse or lose the reply of, every fenced write. */
   fault: FaultHook | null = null;
   private readonly http: DriveHttp;
-  private readonly fetchFn: typeof fetch;
+  private readonly fetchFn: (url: string, init?: RequestInit) => Promise<Response>;
   private readonly token: RunnerToken;
   private readonly attempt: number;
   private readonly seen = new SeenFiles();
@@ -123,8 +105,9 @@ export class RunnerDrive {
   constructor(opts: RunnerDriveOptions) {
     this.token = opts.token;
     this.attempt = opts.attempt;
-    this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
-    this.http = new DriveHttp({ token: (fresh) => this.token.token(fresh), fetch: (input, init) => this.hooked(input, init) });
+    this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
+    // Headless: a request with no answer is never worded as offline; a lost write's answer is still read back (`isNoAnswer`).
+    this.http = new DriveHttp({ token: (fresh) => this.token.token(fresh), fetch: (url, init) => this.hooked(url, init), context: 'headless' });
     this.writes = {
       createFolder: (parentId, name, appProperties) => this.fenced({ op: 'create-folder', parentId, name, ...(appProperties ? { appProperties } : {}) }, () => this.http.createFolder(parentId, name, appProperties)),
       createText: (parentId, name, text, appProperties) => this.fenced({ op: 'create-text', parentId, name, text, ...(appProperties ? { appProperties } : {}) }, () => this.http.createText(parentId, name, text, appProperties)),
@@ -275,7 +258,7 @@ export class RunnerDrive {
       const q = `appProperties has { key=${quote(key)} and value=${quote(value)} }`;
       const params = new URLSearchParams({ q, fields: `nextPageToken,files(${FIELDS})`, pageSize: '1000' });
       if (pageToken) params.set('pageToken', pageToken);
-      const body = (await this.read(`${API}/files?${params}`)) as { files?: Array<WireFile & { trashed?: boolean }>; nextPageToken?: string };
+      const body = (await this.read(`${API}/files?${params}`)) as { files?: WireFile[]; nextPageToken?: string };
       for (const w of body.files ?? []) out.push({ file: w.trashed === true ? toFile(w) : this.seen.note(toFile(w)), trashed: w.trashed === true });
       pageToken = body.nextPageToken ?? '';
     } while (pageToken);
@@ -350,14 +333,15 @@ export class RunnerDrive {
    * content's size and SHA-256 (`sha256Checksum`, or the bytes read when Drive keeps none). Null when it is gone.
    */
   async evidence(id: string): Promise<StoredEvidence | null> {
-    let w: WireFile & { trashed?: boolean; sha256Checksum?: string };
+    let w: WireFile;
     try {
       w = (await this.read(`${API}/files/${encodeURIComponent(id)}?fields=${FIELDS},sha256Checksum`)) as typeof w;
     } catch (e) {
       if (e instanceof BowerError && e.code === 'not-found') return null;
       throw e;
     }
-    const file = toFile(w);
+    // The checksum goes in the evidence, not on the file, as before.
+    const file = toFile({ ...w, sha256Checksum: undefined });
     this.seen.note(file);
     if (file.folder) return { file, trashed: w.trashed === true, content: null };
     if (w.sha256Checksum !== undefined && file.size !== undefined) return { file, trashed: w.trashed === true, content: { size: file.size, sha256: w.sha256Checksum } };
@@ -445,17 +429,16 @@ export class RunnerDrive {
   }
 
   /** The fetch `DriveHttp` uses: a fenced write's own request meets the fault hook once. */
-  private async hooked(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  private async hooked(url: string, init?: RequestInit): Promise<Response> {
     const now = this.current;
-    // A read is safe to send again after a network error (`retry.ts`); DriveHttp retries its 429s and 5xx itself.
-    if ((init?.method ?? 'GET').toUpperCase() === 'GET') return retried(() => this.fetchFn(input, init), false);
-    if (!now) return this.fetchFn(input, init);
+    // Reads, and writes outside a fence, go as they are: the transport bounds, retries and words them (`transport.ts`).
+    if ((init?.method ?? 'GET').toUpperCase() === 'GET' || !now) return this.fetchFn(url, init);
     now.action ??= this.fault?.before?.(now.call) ?? 'pass';
-    // A TypeError is how fetch fails with no network; DriveHttp reads it as offline.
+    // A TypeError is how fetch fails with no network; the transport reads it as no answer (`isNoAnswer`).
     if (now.action === 'refuse') throw new TypeError('A fault refused this write.');
     // A record's or report file's create, and any text write, asks its answer for the stored checksums too.
     // Every fenced write asks its answer for the stored checksums too: the answer then shows the effect, with no read-back.
-    const res = await this.fetchFn(withChecksums(input), init);
+    const res = await this.fetchFn(withChecksums(url), init);
     // A write Google failed on may still have landed: read as a lost answer, so it is read back, never sent again.
     if (res.status >= 500) {
       console.error(`Drive answered ${res.status} to a write`);
@@ -497,66 +480,17 @@ export class RunnerDrive {
     else if (body.sha256Checksum !== undefined || body.md5Checksum !== undefined) console.error(`Drive stored other bytes for file ${body.id} than were sent`);
   }
 
-  /** A read with the token, its one refresh and the retries (`retry.ts`; a 403 rate limit as `DriveHttp` does). */
+  /** A read through the transport: the token, its one refresh, the retry policy and the error mapping (`DriveHttp.call`). */
   private async read(url: string): Promise<unknown> {
-    let refreshed = false;
-    let tries = 0;
-    for (;;) {
-      let res: Response;
-      try {
-        const token = await this.token.token(refreshed);
-        res = await retried(() => this.fetchFn(url, { headers: { authorization: `Bearer ${token}` } }));
-      } catch (e) {
-        if (e instanceof BowerError) throw e;
-        if (e instanceof TypeError) throw driveError('offline');
-        console.error(e);
-        throw driveError('unknown');
-      }
-      if (res.ok) return res.json();
-      if (res.status === 401) {
-        if (refreshed) throw driveError('auth');
-        refreshed = true;
-        continue;
-      }
-      const wait = WAITS[tries];
-      if (wait !== undefined && (await rateLimited(res))) {
-        tries++;
-        await sleep(wait);
-        continue;
-      }
-      if (res.status === 404) throw driveError('not-found');
-      console.error(`Drive answered ${res.status} for a listing`);
-      throw driveError('unknown');
-    }
+    return (await this.http.call(url)).json();
   }
 }
 
 /** A create's address asking its answer for the stored content's checksums too (`fields`). */
-function withChecksums(input: string | URL | Request): string | URL | Request {
-  if (input instanceof Request) return input;
+function withChecksums(input: string): string {
   const url = new URL(input);
   const fields = url.searchParams.get('fields');
   if (fields === null) return input;
   url.searchParams.set('fields', `${fields},${CHECKSUMS}`);
-  return typeof input === 'string' ? url.href : url;
-}
-
-/** Drive's 403 for a rate limit, told apart from a refusal by its reason, as `DriveHttp` does. */
-async function rateLimited(res: Response): Promise<boolean> {
-  if (res.status !== 403) return false;
-  const body = (await res.clone().json().catch(() => null)) as { error?: { errors?: Array<{ reason?: string }> } } | null;
-  return (body?.error?.errors ?? []).some((e) => e.reason === 'rateLimitExceeded' || e.reason === 'userRateLimitExceeded');
-}
-
-function toFile(w: WireFile): DriveFile {
-  return {
-    id: w.id,
-    name: w.name,
-    folder: w.mimeType === FOLDER,
-    parents: w.parents ?? [],
-    modifiedTime: w.modifiedTime,
-    createdTime: w.createdTime,
-    ...(w.size !== undefined ? { size: Number(w.size) } : {}),
-    ...(w.appProperties ? { appProperties: w.appProperties } : {}),
-  };
+  return url.href;
 }

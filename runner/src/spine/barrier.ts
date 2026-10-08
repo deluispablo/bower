@@ -16,7 +16,7 @@
  * it, is not written again; the view's times come from the chain, so a redispatch writes the same view.
  */
 import { BowerError } from '../../../src/data/types';
-import type { FencedDrive } from '../../../src/data/drive/fake-drive';
+import type { FencedDrive } from '../../../src/data/drive/drive-api';
 import type { Checkpoint } from '../../../src/data/contracts/run-checkpoint';
 import { fixedReport, jsonText, lastRunText, olderView, saveReport, type Checksum } from '../../../src/data/spine/barrier';
 import type { AdmissionManifest } from '../../../src/data/spine/admission';

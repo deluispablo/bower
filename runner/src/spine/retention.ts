@@ -5,7 +5,7 @@
  * verified, or a run still going, is never let go of. Newest is by when the run ended (the terminal checkpoint's
  * `phaseAt`), then by folder name, so the choice is the same on every runner.
  */
-import type { FencedDrive } from '../../../src/data/drive/fake-drive';
+import type { FencedDrive } from '../../../src/data/drive/drive-api';
 import type { RunRecords } from '../../../src/data/spine/records';
 
 export const KEEP_FINISHED = 20;

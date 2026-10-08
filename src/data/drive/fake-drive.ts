@@ -5,7 +5,10 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
-import { driveError, RESUMABLE_UNIT, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
+import { noAnswer } from './transport';
+import { DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
+/** The fence's types live with the Drive ports; kept here for the tests that import them from the fake. */
+export type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from './drive-api';
 
 interface Stored {
   meta: DriveFile;
@@ -484,11 +487,12 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
     const run = async <T>(call: FencedCall, apply: () => T): Promise<T> => {
       await this.gate();
       const action = this.fault?.before?.(call) ?? 'pass';
-      if (action === 'refuse') throw driveError('offline');
+      // A run's write with no answer, worded as the runner's transport words it: never offline (`transport.ts`).
+      if (action === 'refuse') throw runNoAnswer();
       check((id) => this.peek(id));
       const out = apply();
       this.fault?.applied?.(call);
-      if (action === 'lose-reply') throw driveError('offline');
+      if (action === 'lose-reply') throw runNoAnswer();
       return out;
     };
     const props = (appProperties?: Record<string, string>): { appProperties?: Record<string, string> } => (appProperties ? { appProperties: { ...appProperties } } : {});
@@ -581,28 +585,6 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   }
 }
 
-/** A write through `fenced`, as the fault hook sees it. */
-export type FencedCall =
-  | { op: 'create-folder'; parentId: string; name: string; appProperties?: Record<string, string> }
-  | { op: 'create-text'; parentId: string; name: string; text: string; appProperties?: Record<string, string> }
-  | { op: 'update'; id: string; patch: DrivePatch }
-  | { op: 'trash'; id: string; appProperties?: Record<string, string> }
-  | { op: 'write-text'; id: string; text: string; ifModified: string; appProperties?: Record<string, string> };
-/** `refuse`: no effect, as with no network; `lose-reply`: the change lands, then its answer is lost. */
-export type FaultAction = 'pass' | 'refuse' | 'lose-reply';
-export interface FaultHook {
-  before?: (call: FencedCall) => FaultAction;
-  /** Told after a fenced write changed the Drive. */
-  applied?: (call: FencedCall) => void;
-}
-export interface FencedDrive {
-  createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  update(id: string, patch: DrivePatch): Promise<DriveFile>;
-  /** `appProperties`, when given, are set in the same request (a run's stamp on its effect). */
-  trash(id: string, appProperties?: Record<string, string>): Promise<void>;
-  writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-}
 /** What a fenced check sees of a stored file at the instant of the change. */
 export interface PeekedFile {
   file: DriveFile;
@@ -611,11 +593,6 @@ export interface PeekedFile {
   children: string[];
 }
 export type Peek = (id: string) => PeekedFile | null;
-export interface StoredEvidence {
-  file: DriveFile;
-  trashed: boolean;
-  content: { size: number; sha256: string } | null;
-}
 
 /** The resumable part of a snapshot. */
 interface KeptResumable {
@@ -624,6 +601,9 @@ interface KeptResumable {
   sessionSeq: number;
   sessions: Array<{ url: string; target: ResumableTarget; b64?: string; fileId: string | null }>;
 }
+
+/** A fenced write that got no answer, as the runner's headless transport words it. */
+const runNoAnswer = (): BowerError => noAnswer('headless', { offline: DRIVE_MESSAGES.offline, elsewhere: DRIVE_MESSAGES.unknown });
 
 /** Files bigger than this keep only their name and size across a reload. */
 const KEEP_BYTES = 256 * 1024;

@@ -10,7 +10,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { RunnerDrive } from '../src/drive';
 import { main } from '../src/main';
-import { BASE_MS, backoff } from '../src/retry';
+import { BASE_MS, backoff } from '../../src/data/drive/transport';
 import { RunnerStatus } from '../src/status';
 import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
@@ -116,23 +116,23 @@ describe('runner network retry', () => {
     const granted = settle(new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: token.fetch }).grant());
     await vi.advanceTimersByTimeAsync(0);
     expect(token.calls()).toBe(1);
-    await vi.advanceTimersByTimeAsync(499);
+    await vi.advanceTimersByTimeAsync(249);
     expect(token.calls()).toBe(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(token.calls()).toBe(2);
-    await vi.advanceTimersByTimeAsync(999);
+    await vi.advanceTimersByTimeAsync(499);
     expect(token.calls()).toBe(2);
     await vi.advanceTimersByTimeAsync(1);
     expect(token.calls()).toBe(3);
     expect(await granted).toEqual({ ok: { ...grantBody, manifest: null } });
 
-    // A fourth failure gives up: four sends, then the offline sentence.
+    // A fourth failure gives up: four sends, then the server sentence; a runner is never told it is offline.
     const down = scripted([offline]);
     const gaveUp = settle(new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: down.fetch }).grant());
     await vi.runAllTimersAsync();
     expect(down.calls()).toBe(4);
     const end = await gaveUp;
-    expect('error' in end && end.error instanceof BowerError && end.error.code).toBe('offline');
+    expect('error' in end && end.error instanceof BowerError && end.error.code).toBe('unknown');
 
     // The status report: a 503 and a 429 are retried too.
     const report = scripted([() => json(503, {}), () => json(429, {}), () => json(200, { run: { id: RUN_ID, phase: 'writing' }, revision: 1 })]);
@@ -153,7 +153,7 @@ describe('runner network retry', () => {
     expect(signedOut.calls()).toBe(1);
     expect('error' in (await signedOutEnd)).toBe(true);
 
-    // DriveHttp bounds each request at 30 s (src/data/wait.ts), so a read is given the retries' own waits (7 s at most),
+    // The transport bounds each request at 30 s (src/data/wait.ts), so a read is given the retries' own waits (3.5 s at most),
     // never `runAllTimersAsync`, which would also run that bound out before the first failure is even retried.
     const RETRY_WAITS_MS = 10_000;
     // Drive reads: a listing, a file's metadata and its bytes, each failing twice on the network first.

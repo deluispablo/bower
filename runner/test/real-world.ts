@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { ClaudeSpawn } from '../src/claude';
 import { main } from '../src/main';
-import { backoff } from '../src/retry';
+import { backoff } from '../../src/data/drive/transport';
 import { realDrive } from './drive-v3-real';
 import type { ApiHost, ApiOptions, Dispatched, Fetch, Hop, RealWorld } from './real-world-types';
 
@@ -51,7 +51,7 @@ export interface WorldOptions {
 }
 
 export async function realWorld(opts: WorldOptions = {}): Promise<RealWorld> {
-  // Replayed transports take no real time: the runner's retries wait none here (`src/retry.ts`).
+  // Replayed transports take no real time: the runner's retries wait none here (`src/data/drive/transport.ts`).
   backoff.baseMs = 0;
   const drive = new FakeDrive();
   const rootId = opts.seed ? await opts.seed(drive) : await demoFolder(drive);

@@ -7,7 +7,7 @@
  * or Google access revoked or unreadable) drops the kept token.
  */
 import { BowerError } from '../../src/data/types';
-import { retried } from './retry';
+import { noAnswer, send, type Fetch } from '../../src/data/drive/transport';
 import { isAdmissionManifest, type AdmissionManifest } from '../../src/data/spine/admission';
 
 /** What `GET /runner/runs/:id/token` answers. */
@@ -26,7 +26,7 @@ export interface RunnerTokenOptions {
   api: string;
   runId: string;
   ticket: string;
-  fetch?: typeof fetch;
+  fetch?: Fetch;
   now?: () => number;
 }
 
@@ -53,9 +53,16 @@ export const gone = (): BowerError => new BowerError('auth', NO_LONGER_ALLOWED, 
 
 export const isGone = (e: unknown): boolean => e instanceof BowerError && e.cause === GONE;
 
+/** Bower's server got no answer through: a runner is never told it is offline (`transport.ts`). */
+const UNREACHED = "Bower couldn't reach its server. It will try again.";
+export const unreached = (): BowerError => noAnswer('headless', { offline: UNREACHED, elsewhere: UNREACHED });
+
+/** A runner route's answer worth asking again: rate limited, or the server failed (Google Cloud retry strategy). */
+export const serverBusy = (res: Response): boolean => res.status === 429 || res.status >= 500;
+
 export class RunnerToken {
   private readonly url: string;
-  private readonly fetchFn: typeof fetch;
+  private readonly fetchFn: Fetch;
   private readonly now: () => number;
   private kept: TokenGrant | null = null;
 
@@ -65,7 +72,7 @@ export class RunnerToken {
     const run = `${opts.api.replace(/\/$/, '')}/runner/runs/${encodeURIComponent(opts.runId)}`;
     this.url = `${run}/token`;
     this.attemptUrl = `${run}/attempt`;
-    this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+    this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
     this.now = opts.now ?? Date.now;
   }
 
@@ -101,11 +108,11 @@ export class RunnerToken {
   private async ask(url: string, route: string): Promise<unknown> {
     let res: Response;
     try {
-      // Idempotent: asking again changes nothing on the Worker (`retry.ts`).
-      res = await retried(() => this.fetchFn(url, { headers: { authorization: `Bearer ${this.opts.ticket}` } }));
+      // Idempotent: asking again changes nothing on the Worker (`transport.ts`).
+      res = await send(this.fetchFn, url, { headers: { authorization: `Bearer ${this.opts.ticket}` } }, { idempotent: true, again: serverBusy });
     } catch (e) {
       console.error(e);
-      throw new BowerError('offline', "Bower couldn't reach its server. It will try again.");
+      throw unreached();
     }
     const body = (await res.json().catch((e: unknown) => {
       console.error(e);
