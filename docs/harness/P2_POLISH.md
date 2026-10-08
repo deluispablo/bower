@@ -242,3 +242,8 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - "Leave them" is not remembered until ask-answer-loop.
   - bowerMd5 is set on every edit-text, including Rules.md and pile notes (harmless).
   - fakeRead reads the bytes of every file that carries a bowerMd5 (fake only).
+- P4-13 fix-round minors:
+  - runner/test/recovery.test.ts:552: a non-renaming move sent over a rename passes the red.
+  - runner/src/still-as-seen.ts:49: under the pool of 4, another op's list() of the source folder overwrites expectSeen before the fence.
+  - runner/src/spine/schedule.ts:27: createdBy parent claims the op id, not the folder id, and the file:F vs dir:F clash has no unit test.
+  - overhead.test.ts:39 does not check that the read is of the target.
