@@ -79,7 +79,7 @@ function NoteView({ path }: { path: string }) {
   const opened = fresh?.path === path;
   useEffect(() => {
     // Seen once what was new in it is known, so its new Timeline lines stay marked while it is open.
-    if (opened) void vault.markSeen(path).catch((e: unknown) => console.error(e));
+    if (opened) void vault.markSeen(path).catch((e: unknown) => report(e, 'That did not work. Try again.'));
   }, [opened, path, vault]);
 
   if (error && !note) return <div className={s.page}><p>{error.message}</p></div>;

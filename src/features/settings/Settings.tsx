@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSources, useRules, useUser } from '@/data/provider';
 import { usePrefs, type Theme } from '@/app/prefs';
+import { plural } from '@/app/words';
 import { Button } from '@/ui/Button';
 import { toast } from '@/ui/toast';
 import { afterOverlaysClosed } from '@/ui/back';
@@ -96,7 +97,7 @@ export function Settings() {
           Open in Drive
         </Button>
       </Row>
-      <Row title="Rules" sub={`${rules?.length ?? 0} rules`}>
+      <Row title="Rules" sub={plural(rules?.length ?? 0, 'rule')}>
         <Button size="sm" variant="ghost" onClick={() => nav('/bower')}>
           See them
         </Button>

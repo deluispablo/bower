@@ -7,6 +7,8 @@ import { focusRouteHeading } from '@/ui/focus';
 
 /** The demo panel loads only with the demo or the pretend Drive. */
 const DemoPanel = lazy(() => import('@/data/demo/DemoPanel').then((m) => ({ default: m.DemoPanel })));
+/** BirdLab preview screen loads only in development builds. */
+const BirdLab = import.meta.env.DEV ? lazy(() => import('@/bird/BirdLab').then((m) => ({ default: m.BirdLab }))) : null;
 import { useSources } from '@/data/provider';
 import { BowerError, type FolderState, type User } from '@/data/types';
 import type { Scenario, TimeScale } from '@/data/demo/scenario';
@@ -21,7 +23,6 @@ import { FolderScreen } from '@/features/files/FolderScreen';
 import { NoteScreen } from '@/features/note/NoteScreen';
 import { BowerScreen } from '@/features/bower/BowerScreen';
 import { Settings } from '@/features/settings/Settings';
-import { BirdLab } from '@/bird/BirdLab';
 import { NotFound } from './NotFound';
 import { OpenElsewhere } from './OpenElsewhere';
 
@@ -180,7 +181,7 @@ function Signed() {
         <Route path="note/*" element={<NoteScreen />} />
         <Route path="bower" element={<BowerScreen />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="_bird" element={<BirdLab />} />
+        {BirdLab && <Route path="_bird" element={<Suspense fallback={null}><BirdLab /></Suspense>} />}
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

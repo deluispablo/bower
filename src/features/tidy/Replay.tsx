@@ -10,6 +10,7 @@ import { BowerLayer, type BowerController } from '@/bird/Bower';
 import { Button } from '@/ui/Button';
 import { Icon } from '@/ui/Icon';
 import { useIsDesktop } from '@/ui/media';
+import { report } from '@/ui/report';
 import { landedSummary } from './run-words';
 import { useBackCloses } from '@/ui/back';
 import { returnFocusTo } from '@/ui/focus';
@@ -28,12 +29,12 @@ export function Replay() {
   const { runs } = useSources();
   const showing = !!replayRunId && !!run && run.id === replayRunId && !!run.report;
   useBackCloses(showing, () => {
-    if (run) void runs.markSeen(run.id);
+    if (run) void runs.markSeen(run.id).catch((e: unknown) => report(e, 'That did not work. Try again.'));
     startReplay(null);
   });
   if (!replayRunId || !run || run.id !== replayRunId || !run.report) return null;
   const close = (): void => {
-    void runs.markSeen(run.id);
+    void runs.markSeen(run.id).catch((e: unknown) => report(e, 'That did not work. Try again.'));
     startReplay(null);
   };
   return createPortal(<Court items={run.report.filed} summary={landedSummary(run)} updated={run.report.updated.length} onClose={close} />, document.body);
