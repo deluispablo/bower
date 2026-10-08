@@ -254,6 +254,42 @@ describe('DriveHttp', () => {
       expect(isUnconfirmedWrite(stale)).toBe(false);
     });
 
+    it('a write that times out says Bower could not confirm it', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      const s = stub((c) => (c.method === 'GET' ? json(file('f1', 'a.md', 'ROOT')) : new Promise<Response>(() => undefined)));
+      const p = new DriveHttp({ token: tokens().token, fetch: s.fetch }).update('f1', { name: 'b.md' }).catch((x: unknown) => x);
+      await vi.advanceTimersByTimeAsync(120_000);
+      const e = await p;
+      expect(e).toMatchObject({ code: 'unknown', message: WRITE });
+      expect(isUnconfirmedWrite(e)).toBe(true);
+    });
+
+    it.each([['browser'], ['headless']] as const)('a write with a network error says Bower could not confirm it (%s)', async (context) => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const s = stub((c) => {
+        if (c.method === 'GET') return json(file('f1', 'a.md', 'ROOT'));
+        throw new TypeError('Failed to fetch');
+      });
+      const e = await new DriveHttp({ token: tokens().token, fetch: s.fetch, context }).update('f1', { name: 'b.md' }).catch((x: unknown) => x);
+      expect(e).toMatchObject({ code: 'unknown', message: WRITE });
+      expect(isUnconfirmedWrite(e)).toBe(true);
+      expect(s.calls.filter((c) => c.method !== 'GET')).toHaveLength(1);
+    });
+
+    it('a write tried while known offline says you are offline', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+      const s = stub((c) => {
+        if (c.method === 'GET') return json(file('f1', 'a.md', 'ROOT'));
+        throw new TypeError('Failed to fetch');
+      });
+      const e = await new DriveHttp({ token: tokens().token, fetch: s.fetch }).update('f1', { name: 'b.md' }).catch((x: unknown) => x);
+      online.mockRestore();
+      expect(e).toMatchObject({ code: 'offline', message: "You're offline. Try again when you're back." });
+      expect(isUnconfirmedWrite(e)).toBe(false);
+    });
+
     it('a read with no answer still says Google Drive did not answer', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       vi.useFakeTimers();
