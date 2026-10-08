@@ -44,6 +44,9 @@ export interface CaseRun {
   props: Record<string, Record<string, string>>;
   lastRun: unknown;
   code: number;
+  /** The pretend Drive the run worked on, and the folder's id in it, for what a test does after the run (an undo). */
+  drive: FakeDrive;
+  root: string;
 }
 
 export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false): Promise<CaseRun> {
@@ -54,9 +57,12 @@ export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalT
  * Runs a case through the Claude provider with `claude` answering in place of the model: a recorded reply, or
  * scripted proposals in the same intent shape (P4-3). No live call.
  */
-export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn, props?: Record<string, Record<string, string>>): Promise<CaseRun> {
-  return runCase(c, { claude, ...(props ? { props } : {}) });
+export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn, props?: Record<string, Record<string, string>>, before?: Before): Promise<CaseRun> {
+  return runCase(c, { claude, ...(props ? { props } : {}), ...(before ? { before } : {}) });
 }
+
+/** What a test does to the folder once the case is in it and before admission (the person binning a file). */
+export type Before = (drive: FakeDrive, root: string) => Promise<void>;
 
 interface CaseOptions {
   around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
@@ -64,9 +70,10 @@ interface CaseOptions {
   claude?: ClaudeSpawn;
   /** More appProperties for some of the case's folder files, by path (as an older run or the original app left them). */
   props?: Record<string, Record<string, string>>;
+  before?: Before;
 }
 
-async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {} }: CaseOptions): Promise<CaseRun> {
+async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {}, before }: CaseOptions): Promise<CaseRun> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const folders = new Map<string, string>();
@@ -107,12 +114,13 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
     if (pile.line) await drive.createText(folder, PILE_NOTE, `${pile.line}\n`);
     for (const f of pile.files) await add(folder, f, {});
   }
+  await before?.(drive, root);
   const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope, clock: () => AT, newId: () => 'admission-1' });
   const wire = driveV3(drive);
   wire.folderId = root;
   // The token route's expiry on the real clock, as the Worker's is, so the runner keeps a token as it does on Actions.
   if (realTokens) wire.now = Date.now();
-  if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root)), lastRun: null, code: -1 };
+  if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root)), lastRun: null, code: -1, drive, root };
   wire.manifest = admitted.manifest;
   const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
   const file = join(dir, 'event.json');
@@ -121,7 +129,7 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
   const { after, props: kept } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
-  return { after, props: kept, lastRun, code };
+  return { after, props: kept, lastRun, code, drive, root };
 }
 
 async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>> }> {
