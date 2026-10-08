@@ -20,8 +20,8 @@ it('the pile retry button sends only failed uploads', async () => {
   const root = await drive.createFolder('root', 'Bower');
   await drive.createFolder(root.id, 'Inbox');
   vault = new DriveVault({ drive, rootId: async () => root.id, runningPiles: () => new Set() });
-  const actualUpload = drive.upload.bind(drive);
-  const uploads = vi.spyOn(drive, 'upload').mockImplementationOnce(actualUpload).mockRejectedValueOnce(new BowerError('offline', 'You are offline.'));
+  const actualOpen = drive.openResumable.bind(drive);
+  const uploads = vi.spyOn(drive, 'openResumable').mockImplementationOnce(actualOpen).mockRejectedValueOnce(new BowerError('offline', 'You are offline.'));
   const pile = await vault.addPile({ text: 'Two pictures', items: [
     { name: 'one.png', kind: 'image', origin: 'This device', body: new Blob(['one']) },
     { name: 'two.png', kind: 'image', origin: 'This device', body: new Blob(['two']) },

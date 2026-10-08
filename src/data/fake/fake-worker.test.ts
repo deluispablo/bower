@@ -31,6 +31,7 @@ import { SET_ASIDE_TEXT } from '../pile-readiness';
 import * as runner from './fake-runner';
 import * as runManifest from '../contracts/run-manifest';
 import * as runRecords from './fake-run-records';
+import { beforeUpload } from '@/testing/upload-hook';
 
 afterEach(() => vi.useRealTimers());
 
@@ -1423,11 +1424,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     it('takes the B path beside a pile that has not fully arrived, leaving that pile out of the capture', async () => {
       const w = await bWorld();
       const declaring = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
-      const upload = w.drive.upload.bind(w.drive);
-      w.drive.upload = async (parent, name, body, onProgress, props) => {
+      beforeUpload(w.drive, ({ name }) => {
         if (name === 'missing.pdf') throw driveError('offline');
-        return upload(parent, name, body, onProgress, props);
-      };
+      });
       await declaring.addPile({ text: 'Papers', items: [pdf('arrived.pdf'), pdf('missing.pdf')] });
       await declaring.settled();
       const out = await plan(w);
@@ -2466,11 +2465,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     /** A declared pile whose second thing never arrives: readiness holds it. Returns its folder and every id in it. */
     async function addHeld(w: World): Promise<{ folder: string; ids: Set<string> }> {
       const declaring = new DriveVault({ drive: w.drive, rootId: async () => w.rootId, runningPiles: () => new Set(), declarePiles: true, device: 'DEVICE_A' });
-      const upload = w.drive.upload.bind(w.drive);
-      w.drive.upload = async (parent, name, body, onProgress, props) => {
+      beforeUpload(w.drive, ({ name }) => {
         if (name === DIDNT) throw driveError('offline');
-        return upload(parent, name, body, onProgress, props);
-      };
+      });
       await declaring.addPile({ text: 'Papers still coming', items: [pdf('arrived.pdf'), pdf(DIDNT)] });
       await declaring.settled();
       const listing = await w.drive.listAll(w.rootId);
@@ -2624,11 +2621,9 @@ describe('report save failure cannot publish done or repeat effects on the B pat
 
     it('keeps the B path while a declared loose file has not arrived, and captures nothing for it', async () => {
       const w = await bWorld({ declared: true });
-      const real = w.drive.upload.bind(w.drive);
-      w.drive.upload = async (parent, name, body, onProgress, props) => {
+      beforeUpload(w.drive, ({ name }) => {
         if (name === 'loose.pdf') throw driveError('offline');
-        return real(parent, name, body, onProgress, props);
-      };
+      });
       const loose = await w.uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
       await w.uploader.settled();
       const planned = await runPlan(w);
@@ -3086,7 +3081,8 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       const pile = planned.manifest.capture.piles.find((p) => p.anchor?.fileId === folder);
       expect(pile).toMatchObject({ source: { kind: 'observed' }, memberKeys: things.map(() => null), context: { kind: 'text', memberKey: null, file: { fileId: context } } });
       expect(pile?.childFileIds).toEqual([...things, context].sort());
-      expect(planned.manifest.capture.members.filter((m) => m.pileId === pile?.pileId).map((m) => ({ id: m.file.fileId, key: m.memberKey }))).toEqual(things.map((id) => ({ id, key: null })));
+      const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
+      expect(planned.manifest.capture.members.filter((m) => m.pileId === pile?.pileId).map((m) => ({ id: m.file.fileId, key: m.memberKey })).sort(byId)).toEqual(things.map((id) => ({ id, key: null })).sort(byId));
       return planned;
     }
 

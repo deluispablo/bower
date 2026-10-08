@@ -2,7 +2,7 @@
  * The real doors: the Bower folder in Google Drive, and the Worker for the
  * session and tidy-ups. The same screens run on these as on the demo.
  */
-import { isKnownDriveWrite, type DriveApi, type ResumableDrive } from '../drive/drive-api';
+import { isKnownDriveWrite, type DriveApi } from '../drive/drive-api';
 import type { Sources } from '../sources';
 import { DriveVault } from '../vault/drive-vault';
 import { outboxKey } from '../vault/journal';
@@ -10,7 +10,7 @@ import { PROP } from '../vault/layout';
 import type { WorkerApi } from '../worker/worker-api';
 import { BowerError } from '../types';
 import { broadcastBus, createUploadQueue, type QueueRole, type UploadQueue } from '../upload-queue';
-import { indexedDbUploadStore } from '../upload-store';
+import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
 import { sha256 } from '../vault/hashes';
 import { LiveRuns } from './runs';
 import { LiveSession } from './session';
@@ -27,11 +27,10 @@ export interface LiveOptions {
   /** Declares each new pile before sending it, through the same fenced Drive client as every other write. */
   declarePiles?: boolean;
   /**
-   * Send pile files through the persistent upload queue: `true` builds it over
-   * this device (needs a resumable Drive client and IndexedDB), a queue uses that
-   * one. Off unless asked for: the real resumable protocol waits for P3 (TL-P2-07).
+   * The queue every pile file goes through. Default: one over this device's
+   * IndexedDB (this page's memory where the browser has none, as in tests).
    */
-  uploadQueue?: boolean | UploadQueue | null;
+  uploadQueue?: UploadQueue;
   /**
    * One active place per person (TL-P2-13): `true` uses this browser's tab id, Web Locks, BroadcastChannel
    * and timers; options replace them (tests). `world` keeps demo, each fake scenario and real apart.
@@ -45,19 +44,14 @@ export async function uploadAccount(email: string): Promise<string> {
   return sha256(new Blob([email.trim().toLowerCase()]));
 }
 
-const isResumable = (drive: DriveApi): drive is DriveApi & ResumableDrive =>
-  'generateIds' in drive && 'openResumable' in drive && 'putChunk' in drive && 'sessionStatus' in drive && 'getUploaded' in drive;
-
 /**
  * The app's upload queue over this device's IndexedDB, Web Locks and storage.
- * None without a resumable Drive, or where there is no IndexedDB at all (tests):
- * things are then sent straight, as before.
+ * Where the browser has no IndexedDB at all (tests), its store is this page's memory.
  */
-function deviceQueue(drive: DriveApi): UploadQueue | null {
-  if (!isResumable(drive) || typeof indexedDB === 'undefined') return null;
+function deviceQueue(drive: DriveApi): UploadQueue {
   const nav = typeof navigator === 'undefined' ? undefined : navigator;
   const bus = broadcastBus();
-  return createUploadQueue({ drive, store: indexedDbUploadStore(), ...(nav?.locks ? { locks: nav.locks } : {}), ...(nav?.storage ? { storage: nav.storage } : {}), ...(bus ? { bus } : {}) });
+  return createUploadQueue({ drive, store: typeof indexedDB === 'undefined' ? memoryUploadStore() : indexedDbUploadStore(), ...(nav?.locks ? { locks: nav.locks } : {}), ...(nav?.storage ? { storage: nav.storage } : {}), ...(bus ? { bus } : {}) });
 }
 
 export interface LiveSources extends Sources {
@@ -170,10 +164,10 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       // Things added here that exist only in this page's memory: the block screen says so (TL-P2-24).
       // They wait in the upload queue, or in this page on their way to Drive (sent straight, or a link or note).
       pageOnly: {
-        now: () => (queue?.onlyHere() ?? 0) > 0 || waitingHere.count > 0,
+        now: () => queue.onlyHere() > 0 || waitingHere.count > 0,
         subscribe: (cb) => {
           waitingHere.listeners.add(cb);
-          const off = queue?.subscribe(cb) ?? (() => undefined);
+          const off = queue.subscribe(cb);
           return () => {
             waitingHere.listeners.delete(cb);
             off();
@@ -183,9 +177,9 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     });
   }
   // One queue for the page: each lifetime starts it for its own person and folder. Its uploads go only from the active place.
-  const queue = opts.uploadQueue === true ? deviceQueue(guard ? fenceDrive(drive, guard) : drive) : opts.uploadQueue || null;
+  const queue = opts.uploadQueue ?? deviceQueue(guard ? fenceDrive(drive, guard) : drive);
   // A place that is not active never starts the queue; becoming active starts it (below).
-  const vaultQueue = queue && guard ? new Proxy(queue, {
+  const vaultQueue = guard ? new Proxy(queue, {
     get(target, key, receiver) {
       const value: unknown = Reflect.get(target, key, receiver);
       if (typeof value !== 'function') return value;
@@ -334,7 +328,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       declarePiles: opts.declarePiles ?? false,
       drive: bound(drive),
       rootId: boundRoot,
-      ...(vaultQueue ? { uploads: { queue: vaultQueue, account } } : {}),
+      uploads: { queue: vaultQueue, account },
       runningPiles: () => {
         if (!active()) return new Set();
         const mine = r?.runningPiles() ?? new Set<string>();
@@ -348,7 +342,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   const invalidate = (): void => {
     epoch++;
     // Signed out, or someone else: stop sending; what this device kept stays for that person.
-    queue?.stop();
+    queue.stop();
     detachVault();
     detachRuns();
     v?.dispose();
@@ -359,7 +353,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     connectRuns();
   };
   session = new LiveSession(worker, drive, () => undefined, invalidate);
-  if (queue) {
+  {
     const leave = session.deleteAccount.bind(session);
     // Leaving Bower removes the uploads this device kept for that person, once the Worker agreed.
     session.deleteAccount = async (): Promise<void> => {
@@ -422,7 +416,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   // expected: quiet logs every failure except the ones listed in it, after which the lines simply wait.
   const flush = (): Promise<void> => vault.flushJournal().catch(quiet);
   // Uploads that waited for a connection go on by themselves; ones Drive refused wait for Try again.
-  const resume = (): void => queue?.retry('offline');
+  const resume = (): void => queue.retry('offline');
   const online = (): void => {
     if (!guard) {
       void flush();
@@ -443,7 +437,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
   /** This place is no longer active: it stops sending and asking, and keeps what waits on this device or in this page. */
   function blockedHere(): void {
     // Blocked is not closed (TL-P2-24): what is only in this page's memory waits, paused, for Use here.
-    queue?.pause();
+    queue.pause();
     if (paused) return;
     paused = true;
     detachRuns();
@@ -470,7 +464,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       await step(() => vault.refresh());
       await step(() => runs.current());
     }
-    if (queue) await step(async () => queue.start(await account(), await root()));
+    await step(async () => queue.start(await account(), await root()));
     await flush();
   }
   return {
@@ -490,7 +484,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
       runListeners.clear();
       r.dispose();
       v.dispose();
-      queue?.stop();
+      queue.stop();
       session.dispose();
     },
   };

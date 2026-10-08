@@ -12,21 +12,21 @@ async function vaultOnFreshDrive(): Promise<{ drive: FakeDrive; root: string; va
 
 describe('every upload goes through the queue', () => {
   it('every upload goes through the queue: a vault given no queue still reserves an id and opens a session', async () => {
-    const { drive, vault } = await vaultOnFreshDrive();
+    const { drive, root, vault } = await vaultOnFreshDrive();
     const direct: string[] = [];
     const real = drive.upload.bind(drive);
     drive.upload = async (parent, name, body, onProgress, props) => {
       direct.push(name);
       return real(parent, name, body, onProgress, props);
     };
-    const pile = await vault.addPile({ text: 'Receipts', items: [{ name: 'scan.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob(['%PDF scan']) }] });
+    await vault.addPile({ text: 'Receipts', items: [{ name: 'scan.pdf', kind: 'pdf', origin: 'From this computer', body: new Blob(['%PDF scan']) }] });
     await vault.settled();
     // Today: the direct path sends it (1 direct call, 0 ids reserved, 0 sessions opened).
     expect(direct).toEqual([]);
     expect(drive.resumableCalls.filter((c) => c.op === 'generateIds')).toHaveLength(1);
     const opened = drive.resumableCalls.filter((c) => c.op === 'open');
     expect(opened).toHaveLength(1);
-    const made = (await drive.listAll(pile.id)).filter((f) => f.appProperties?.asAdded === 'scan.pdf');
+    const made = (await drive.listAll(root)).filter((f) => f.appProperties?.asAdded === 'scan.pdf');
     expect(made.map((f) => f.id)).toEqual(opened.map((c) => ('id' in c ? c.id : '')));
   });
 

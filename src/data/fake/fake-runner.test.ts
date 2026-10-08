@@ -11,6 +11,7 @@ import { tidyUp, type TidyUpResult } from '@/testing/tidy-up';
 import { SET_ASIDE_TEXT } from '../pile-readiness';
 import { PROP, SYSTEM } from '../vault/layout';
 import { parseNote } from '../vault/note-format';
+import { beforeUpload } from '@/testing/upload-hook';
 
 let drive: FakeDrive;
 let root: string;
@@ -483,12 +484,10 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
 
   /** Alex adds arrived.pdf and missing.pdf to one pile; missing.pdf does not get through. */
   async function incompletePile(uploader: DriveVault) {
-    const real = drive.upload.bind(drive);
     let fail = true;
-    drive.upload = async (parent, name, body, onProgress, props) => {
+    beforeUpload(drive, ({ name }) => {
       if (name === 'missing.pdf' && fail) throw driveError('offline');
-      return real(parent, name, body, onProgress, props);
-    };
+    });
     const pile = await uploader.addPile({ text: 'Papers from Alex', items: [pdf('arrived.pdf'), pdf('missing.pdf')] });
     await uploader.settled();
     return { pile, heal: (): void => { fail = false; } };
@@ -549,7 +548,7 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
   it('a client without the file is asked to choose it again, and sends nothing', async () => {
     const { pile } = await incompletePile(declaring());
     const second = fresh();
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await expect(second.retryPile(pile.id)).rejects.toMatchObject({ name: 'BowerError', code: 'conflict', message: 'Choose missing.pdf again on this device to send it.' });
     await second.settled();
     expect(upload).not.toHaveBeenCalled();
@@ -564,10 +563,10 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     const declared = await declarations();
     expect(declared).toHaveLength(1);
     heal();
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await uploader.retryPile(pile.id);
     await uploader.settled();
-    expect(upload.mock.calls.map((c) => c[1])).toEqual(['missing.pdf']);
+    expect(upload.mock.calls.map((c) => c[0].name)).toEqual(['missing.pdf']);
     const folder = await folderOf(pile.id);
     const writes = appliedWrites();
     const out = await tidyUp(drive, root);
@@ -588,12 +587,10 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
   // loose-pile-declaration (TL-P2-06 §6.2, fixture 07): one loose file, no folder, declared before it is sent.
   it('a declared loose file stays pending until it arrives', async () => {
     const uploader = declaring();
-    const real = drive.upload.bind(drive);
     let fail = true;
-    drive.upload = async (parent, name, body, onProgress, props) => {
+    beforeUpload(drive, ({ name }) => {
       if (name === 'loose.pdf' && fail) throw driveError('offline');
-      return real(parent, name, body, onProgress, props);
-    };
+    });
     const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
     await uploader.settled();
     const inbox = (await drive.listAll(root)).find((f) => f.folder && drive.pathOf(f.id, root) === 'Inbox');
@@ -625,10 +622,10 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
 
     // Try again from the uploader: sent once, under its declared key, straight into the inbox.
     fail = false;
-    const upload = vi.spyOn(drive, 'upload');
+    const upload = vi.spyOn(drive, 'openResumable');
     await uploader.retryPile(pile.id);
     await uploader.settled();
-    expect(upload.mock.calls.map((c) => c[1])).toEqual(['loose.pdf']);
+    expect(upload.mock.calls.map((c) => c[0].name)).toEqual(['loose.pdf']);
     const member = (JSON.parse(declared[0]?.text ?? '{}') as { members: Array<{ memberKey: string }> }).members[0]?.memberKey;
     const arrived = (await drive.listAll(root)).filter((f) => f.appProperties?.[PROP.item] === member);
     expect(arrived.map((f) => f.parents)).toEqual([[inbox?.id]]);
@@ -645,9 +642,9 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
 
   it('a declared loose file that has not arrived is looked up in the Bin once per listing', async () => {
     const uploader = declaring();
-    drive.upload = async () => {
+    beforeUpload(drive, () => {
       throw driveError('offline');
-    };
+    });
     const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
     await uploader.settled();
     const bin = vi.spyOn(drive, 'binnedByItem');
@@ -667,9 +664,9 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
 
   it('a declared loose file removed before it arrives is gone from every device, its declaration in the Bin', async () => {
     const uploader = declaring();
-    drive.upload = async () => {
+    beforeUpload(drive, () => {
       throw driveError('offline');
-    };
+    });
     const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
     await uploader.settled();
     const [declaration] = await declarations();
@@ -738,9 +735,9 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
 
     it('a loose pile that never arrived: every declaration copy goes to the Bin, and Undo restores them', async () => {
       const uploader = declaring();
-      drive.upload = async () => {
+      beforeUpload(drive, () => {
         throw driveError('offline');
-      };
+      });
       const pile = await uploader.addPile({ text: '', items: [pdf('loose.pdf')] });
       await uploader.settled();
       const copies = await twoCopies();
