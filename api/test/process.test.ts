@@ -494,41 +494,39 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     if (folder === null) throw new Error('no folder');
     await folder.drive.createText(folder.inbox, 'photo.jpg', 'jpg bytes', { pile: 'p-photo' });
     await folder.drive.createText(folder.inbox, 'other.pdf', '%PDF other', { pile: 'p-other' });
+    // The run's clock is T0, far ahead of the wall clock, so the runtime never fires the alarm itself in this test.
+    await person(sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: T0 + 3600_000 });
     // A tidy-up is going, pressed before the answers.
-    const going = (await (await post(cookie, { scope: 'instructions', allowWeb: false, requestId: 'press-1' }, fence)).json()) as Reply;
-    const goingId = going.run?.id ?? '';
+    const { run: going } = await admitted(sub, ask('press-1', T0, { scope: 'instructions' }));
     // Two answers on two subjects, the first sent twice (a retry): each is told it waits; none starts a run now.
     for (const body of [answer('answer-a', 'p-receipt'), answer('answer-a', 'p-receipt'), answer('answer-b', 'p-photo')]) {
       const r = await post(cookie, body, fence);
       expect(r.status).toBe(200);
       const reply = (await r.json()) as Reply;
-      expect(reply.run?.id).toBe(goingId);
+      expect(reply.run?.id).toBe(going.id);
       expect(reply.waits).toBe(true);
     }
     expect(await quota(sub)).toEqual([{ counter: 1 }]);
-    // The run ends: the person object wakes at once, with no press.
-    const ticket = (await person(sub).mintTicket(goingId, 2, Date.now())) ?? '';
-    const ended = await person(sub).runnerReport(goingId, await hashTicket(ticket), { attempt: 2, seq: 1, phase: 'done' }, Date.now());
+    // The run ends: the person object sets its alarm for then, to wake with no press.
+    const ticket = (await person(sub).mintTicket(going.id, 1, T0)) ?? '';
+    const ended = await person(sub).runnerReport(going.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'done' }, T0 + 1000);
     expect(ended).toMatchObject({ accepted: true });
-    const alarm = await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm());
-    expect(alarm).not.toBeNull();
-    expect(alarm ?? Infinity).toBeLessThanOrEqual(Date.now());
-    const outbound = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => await folder.fetchImpl(input instanceof Request ? input.url : String(input), init));
-    try {
-      // Woken twice (a retried alarm, a second end): one run.
-      await runInDurableObject(person(sub), async (instance: Person) => {
-        await instance.alarm();
-        await instance.alarm();
-      });
-      const dispatches = outbound.mock.calls.filter(([input]) => String(input instanceof Request ? input.url : input).includes('/dispatches'));
-      expect(dispatches).toHaveLength(1);
-    } finally {
-      outbound.mockRestore();
-    }
+    expect(await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm())).toBe(T0 + 1000);
+    // Woken twice (a retried alarm, a second end): one run, dispatched once.
+    const sent: string[] = [];
+    const github = { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: async (input: string, init?: RequestInit) => {
+      sent.push(`${init?.method ?? 'GET'} ${new URL(input).pathname}`);
+      return await folder.fetchImpl(input, init);
+    } };
+    await runInDurableObject(person(sub), async (instance: Person) => {
+      await instance.wake(T0 + 1000, github);
+      await instance.wake(T0 + 2000, github);
+    });
+    expect(sent.filter((r) => r.endsWith('/dispatches'))).toHaveLength(1);
     const next = await status(cookie);
-    expect(next.run?.id).not.toBe(goingId);
+    expect(next.run?.id).not.toBe(going.id);
     expect(next.run).toMatchObject({ scope: 'all', phase: 'queued' });
-    // Scoped to the answers' subjects: the two piles answered about, never the other one; counted once.
+    // Scoped to the answers' subjects: the two piles answered about, never the other one, with your changes; counted once.
     const manifest = await runInDurableObject(person(sub), (_i, state) =>
       JSON.parse(state.storage.sql.exec<{ manifest: string }>('SELECT manifest FROM runs ORDER BY seq DESC LIMIT 1').one().manifest) as AdmissionManifest);
     expect(manifest.piles.map((p) => p.pileId).sort()).toEqual(['p-photo', 'p-receipt']);

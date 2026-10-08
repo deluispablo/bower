@@ -20,7 +20,7 @@ import { HttpError } from './errors.js';
 import { refreshAccessToken } from './google.js';
 import { clearSessionCookie } from './session.js';
 import type { FetchLike } from './google.js';
-import type { DriveAccessToken, Person } from './person.js';
+import type { DriveAccessToken } from './person.js';
 
 export type DriveToken = DriveAccessToken;
 
@@ -49,10 +49,18 @@ export async function accessTokenFor(env: Env, sub: string, options: DriveTokenO
   return await accessTokenOf(env, env.PERSON.get(env.PERSON.idFromName(sub)), options);
 }
 
+/** What minting a Drive token asks of the person object: its stub, or the object itself (`Person.wake`). */
+export interface DriveTokenKeeper {
+  cachedDriveToken(usableUntil: number): DriveAccessToken | null | Promise<DriveAccessToken | null>;
+  encryptedRefreshToken(): string | null | Promise<string | null>;
+  forgetGoogleAccess(refused: string): boolean | Promise<boolean>;
+  cacheDriveToken(token: DriveAccessToken): void | Promise<void>;
+}
+
 /** `accessTokenFor` for a person object already in hand (the runner reaches it by its id, not by `sub`). */
 export async function accessTokenOf(
   env: Env,
-  person: DurableObjectStub<Person>,
+  person: DriveTokenKeeper,
   options: DriveTokenOptions = {},
 ): Promise<DriveToken> {
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));

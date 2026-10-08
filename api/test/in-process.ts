@@ -272,7 +272,7 @@ export async function startApi(opts: ApiOptions): Promise<ApiHost> {
       if (at === null) return false;
       // The runtime clears an alarm as it delivers it.
       storage.alarm = null;
-      await person.recover(at, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: (input, init) => opts.outside(input, init) });
+      await person.wake(at, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: (input, init) => opts.outside(input, init) });
       return true;
     },
   };

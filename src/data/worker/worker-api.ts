@@ -16,8 +16,21 @@ import type { RunWire } from '../contracts/run-wire';
  * A run with the Worker's revision of it (TL-P3-15): the revision only rises, so of two answers the higher is the
  * newer, whatever order they arrive in.
  */
-export interface RunReply { run: RunWire; revision: number }
+export interface RunReply {
+  run: RunWire;
+  revision: number;
+  /** An answer kept for the end of the run going (`run`): the Worker starts its run then (TL-P4-13 addendum). */
+  waits?: true;
+}
 export interface StatusReply { run: RunWire | null; revision: number }
+
+/** How a press is sent: see `WorkerApi.process`. */
+export interface ProcessOptions {
+  allowWeb?: boolean;
+  requestId?: string;
+  subject?: string;
+  answer?: boolean;
+}
 
 export interface Me {
   user: User;
@@ -40,9 +53,10 @@ export interface WorkerApi {
   /**
    * Starts a tidy-up, or answers the one already going. `requestId`: made once per press of Tidy up and sent on
    * every retry of it (TL-P3-15); a repeat answers that press's run, even once it has ended. `subject`: an answer's
-   * run takes only the pile of the inbox that holds this thing or pile (TL-P4-08 addendum 8).
+   * run takes only the pile of the inbox that holds this thing or pile (TL-P4-08 addendum 8). `answer`: while a run is
+   * going, the Worker keeps the answer and starts its run when that run ends, and answers `waits` (TL-P4-13 addendum).
    */
-  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean; requestId?: string; subject?: string }): Promise<RunReply>;
+  process(scope: 'all' | 'instructions', opts?: ProcessOptions): Promise<RunReply>;
   /** The run going now, or the last one. */
   status(): Promise<StatusReply>;
   /**

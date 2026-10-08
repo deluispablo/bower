@@ -9,7 +9,7 @@
  * and server errors keep the beat (retry only what can change: Google Cloud
  * retry strategy, https://cloud.google.com/storage/docs/retry-strategy).
  */
-import type { RunSource, StartOptions, Unsubscribe } from '../sources';
+import type { RunSource, StartedRun, StartOptions, Unsubscribe } from '../sources';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
 import { httpStatusOf, type RunWire, type StatusReply, type WorkerApi } from '../worker/worker-api';
@@ -98,7 +98,7 @@ export class LiveRuns implements RunSource {
     return this.took.size ? this.took : new Set(['*']);
   }
 
-  start(scope: 'all' | 'instructions', opts: StartOptions = {}): Promise<RunState> {
+  start(scope: 'all' | 'instructions', opts: StartOptions = {}): Promise<StartedRun> {
     // One per press (TL-P3-15): a UUID is lowercase letters, digits and dashes, 36 characters. An answer's run brings its own.
     const requestId = opts.requestId ?? crypto.randomUUID().toLowerCase();
     const work = () => this.startNow(scope, { ...opts, requestId });
@@ -108,7 +108,7 @@ export class LiveRuns implements RunSource {
     return next;
   }
 
-  private async startNow(scope: 'all' | 'instructions', opts: StartOptions & { requestId: string }): Promise<RunState> {
+  private async startNow(scope: 'all' | 'instructions', opts: StartOptions & { requestId: string }): Promise<StartedRun> {
     this.checkOpen();
     // What you did while Drive was out of reach goes first, so this tidy-up knows it.
     await this.vault.flushJournal();
@@ -127,13 +127,14 @@ export class LiveRuns implements RunSource {
     // The admission answer counts like any other: one older than what this took is dropped.
     if (reply.revision >= this.revision) {
       this.revision = reply.revision;
-      this.take(reply.run, piles);
+      // An answer that waits is told the run going, which took its own piles, not the answer's.
+      this.take(reply.run, reply.waits ? undefined : piles);
     }
     await this.hydrate();
     this.checkOpen();
     if (!this.last) throw new BowerError('conflict', 'The tidy-up status changed; try again.');
     this.schedule();
-    return this.state(this.last);
+    return reply.waits ? { ...this.state(this.last), waits: true } : this.state(this.last);
   }
 
   private checkOpen(): void {

@@ -9,12 +9,14 @@
  * question; a yes to Bower keeping the summaries it did not write (`q-adopt-states`) records that as a rule. A yes to
  * writing over a Current state you edited (`q-state-…`) is not something Bower can do yet: it says so, starts nothing,
  * and the next tidy-up closes the question, your summary as you wrote it (P4-20 I2; the lead decides whether to build it).
- * While a run is going, an answer starts none: it waits for the next run, and says so (P4-20 I1).
+ * While a run is going, an answer starts none now: the Worker keeps it, and when that run ends its person object starts
+ * the answer's run with no press (TL-P4-13 addendum); the answer says so. With the day's tidy-ups used up it is refused,
+ * and the answer says it is saved for the next tidy-up, and why.
  *
  * The run is asked for as a press of Tidy up is, with an Idempotency-Key made from the question (its id and when it
  * was asked), so answering twice, on one device or two, is one run
  * (https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/). The Worker admits it as any press:
- * the daily quota, one run at a time (a run going is answered, and the answer waits for the next run).
+ * the daily quota, one run at a time (a run going is answered with `waits`, and the answer's run starts at its end).
  */
 import type { RunSource, VaultSource } from './sources';
 import type { Question, RunState } from './types';
@@ -24,8 +26,6 @@ export type AnswerRun = { scope: 'all'; subject: string } | { scope: 'instructio
 
 /** A question about keeping one note: the corpus' and the runner's wording (`runner/src/claude.ts`, `mergesOf`). */
 const KEEP_ONE = /\bkeep one note\b/i;
-/** The phases of a run still going (the Worker's `ACTIVE_PHASES`). */
-const GOING: readonly RunState['phase'][] = ['queued', 'reading', 'writing', 'saving'];
 /** A subject the Worker takes: a Drive file id or a pile id. */
 const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -52,7 +52,7 @@ export async function answerRequestId(q: Pick<Question, 'id' | 'askedAt'>): Prom
 
 /**
  * What an answer did, once the run it asks for has answered: `now` a run of its own started; `waits` a run is going and
- * the answer waits for the next; `failed` the run could not start (the answer is kept for the next tidy-up); `next`
+ * the answer's run starts when it ends; `failed` the run could not start (the answer is kept for the next tidy-up); `next`
  * it starts no run and the next tidy-up closes it; `not-yet` Bower cannot do what was chosen yet (the question closes).
  */
 export type AnswerOutcome =
@@ -71,7 +71,7 @@ export interface Answered {
  * Records the answer, then asks for the run it starts, if any. Null when the question is no longer open (answered
  * already, here or elsewhere): nothing is recorded or started again.
  */
-export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'answer'>, runs: Pick<RunSource, 'start' | 'current'>, id: string, yes: boolean, opts: { allowWeb: boolean }): Promise<Answered | null> {
+export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'answer'>, runs: Pick<RunSource, 'start'>, id: string, yes: boolean, opts: { allowWeb: boolean }): Promise<Answered | null> {
   const question = (await vault.questions()).find((q) => q.id === id);
   if (!question) return null;
   await vault.answer(id, yes);
@@ -80,10 +80,9 @@ export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'ans
   if (!plan) return { question, outcome: { kind: 'next' } };
   const requestId = await answerRequestId(question);
   try {
-    // A run going keeps what it took: the answer waits for the next run, and is not told it is being done now.
-    const current = await runs.current();
-    if (current && GOING.includes(current.phase)) return { question, outcome: { kind: 'waits' } };
-    const run = await runs.start(plan.scope, { allowWeb: opts.allowWeb, requestId, ...(plan.scope === 'all' ? { subject: plan.subject } : {}) });
+    // The Worker decides, in one step: a run of its own now, or, while a run is going, at that run's end (`waits`).
+    const run = await runs.start(plan.scope, { allowWeb: opts.allowWeb, requestId, ...(plan.scope === 'all' ? { subject: plan.subject } : {}), answer: true });
+    if (run.waits) return { question, outcome: { kind: 'waits' } };
     return { question, outcome: { kind: 'now', run } };
   } catch (error) {
     // The answer is kept; the person hears one sentence (`answerToast`), the details go to the console.
