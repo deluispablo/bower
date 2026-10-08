@@ -293,3 +293,4 @@ P3-9 is closed.
 - fallback-no-duplicate closed (926e725). 389/394. P4-17 Opus check (duplicate-by-hash + fallback) running; home-inbox-first back to reproduce the live delay.
 - P4-17 check BLOCK (duplicate-by-hash): twin binned mid-run, changed inbox copy binned without check, pile words binned unreported. Reopened; fix round with the same escalated worker. fallback-no-duplicate passes. 388/394.
 - duplicate-by-hash re-closed (28f3ee3): twin rechecked before the bin, copy bin passes md5/modifiedTime, pile words kept. 389/394. P4-17b check and home-inbox-first running.
+- P4-17b fix-round check PASS (duplicate-by-hash; minors to polish). c05-incorporation (implementer) dispatched; home-inbox-first running.
