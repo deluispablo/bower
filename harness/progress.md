@@ -180,3 +180,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: ask-answer-loop passes — In-run answers say they wait; a yes to Write it says honestly Bower cannot write yet and closes next run; the later answer counts (P4-20 fix)
 - 2026-10-08: home-errors-shown passes — Home says why a failed inbox read happened, offers Try again, and the sheet leaves busy (TL-P4-13)
 - 2026-10-08: ask-answer-loop passes — Waiting answers start one scoped run when the active run ends (quota, idempotent, no press); the copy says so (TL-P4-13 addendum)
+- 2026-10-08: home-cache-stable passes — A report refresh keeps unchanged reads; the count waits for readiness; Home within 35% of the call minimum (TL-P4-13 addendum 2)

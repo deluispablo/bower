@@ -5238,7 +5238,7 @@
     "note": "TL-P4-13 (main aea42fe). P4-18 minor: Home.tsx:38 ignored usePiles().error."
   },
   {
-    "passes": false,
+    "passes": true,
     "id": "home-cache-stable",
     "task": "p4-b",
     "category": "fix",
