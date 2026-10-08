@@ -10,7 +10,7 @@ import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
 import { noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
-import { DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
+import { BIN_KEYS, DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -23,8 +23,6 @@ const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
 const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';
 export const FOLDER = 'application/vnd.google-apps.folder';
 const BATCH = SEARCH_FOLDERS;
-/** Keys looked up in one Bin query. */
-const BIN_KEYS = 20;
 /** How many folders up a binned file's place is looked for. */
 const BIN_DEPTH = 8;
 const SMALL = 5 * 1024 * 1024;

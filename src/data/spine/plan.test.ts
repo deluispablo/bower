@@ -10,7 +10,7 @@ import { sha256 } from '../vault/hashes';
 import { PILE_NOTE } from '../piles';
 import { PROP } from '../vault/layout';
 import { SET_ASIDE, capturePiles, planAdmission, type PileShape } from './plan';
-import { driveRead, fakeRead } from './read';
+import { admissionRead, driveRead, fakeRead } from './read';
 
 const FOLDER = 'application/vnd.google-apps.folder';
 const AT = Date.UTC(2026, 9, 7, 9, 0, 0);
@@ -19,7 +19,7 @@ const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=UTF-8' } });
 
 /** Drive v3 as Google answers it (files.list paged, files.get with the fields asked, alt=media), over a pretend Drive. */
-function driveV3(drive: FakeDrive): typeof fetch {
+function driveV3(drive: FakeDrive, root = ''): typeof fetch {
   const wire = async (f: DriveFile, fields: string): Promise<Record<string, unknown>> => {
     const digest = fields.includes('sha256Checksum') && !f.folder ? await drive.storedDigest(f.id) : null;
     return {
@@ -35,6 +35,11 @@ function driveV3(drive: FakeDrive): typeof fetch {
       ...(digest ? { sha256Checksum: digest.sha256 } : {}),
       trashed: false,
     };
+  };
+  const binned = async (q: string): Promise<Response> => {
+    const keys = [...q.matchAll(/value='([^']*)'/g)].map((m) => m[1] ?? '');
+    const hits = await drive.binnedByItem(root, keys);
+    return json(200, { files: await Promise.all(hits.map(async (h) => ({ ...(await wire(h.file, '')), trashed: true, ...(h.sha256 ? { sha256Checksum: h.sha256 } : {}), ...(h.size !== null ? { size: String(h.size) } : {}) }))) });
   };
   const f = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input));
@@ -70,6 +75,7 @@ function driveV3(drive: FakeDrive): typeof fetch {
     if (method !== 'GET') return json(400, { error: { code: 400, message: 'badRequest' } });
     if (url.pathname === '/drive/v3/files') {
       const q = url.searchParams.get('q') ?? '';
+      if (q.startsWith('trashed = true')) return await binned(q);
       const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1] ?? '');
       const all: DriveFile[] = [];
       for (const parent of parents) all.push(...(await drive.listAll(parent)).filter((x) => x.parents[0] === parent));
@@ -198,6 +204,34 @@ describe('the shared plan', () => {
     expect(capFake.get(ready.id)?.blocked).toBeNull();
     expect(capFake.get(edited.id)).toEqual({ blocked: SET_ASIDE.changed });
     expect(capFake.get(doubled.id)).toEqual({ blocked: SET_ASIDE.declaration });
+  });
+});
+
+describe('the admission read offers the Bin lookup the app uses', () => {
+  it('the admission read offers the Bin lookup the app uses', async () => {
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const root = (await seedFakeDrive(drive, 'default', AT)) ?? '';
+    const http = new DriveHttp({ token: async () => 'drive-token', fetch: driveV3(drive, root) });
+    const vault = new DriveVault({ drive: http, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+    const pdf = (name: string) => ({ name, kind: 'pdf' as const, origin: 'From this computer', body: new Blob([`%PDF ${name}`]) });
+    const pile = await vault.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf'), pdf('b.pdf')] });
+    await vault.settled();
+    // A member filed elsewhere, then put in the Bin, with the bytes declared for it: the pile is still ready, as Home shows it.
+    const listing = await drive.listAll(root);
+    const member = listing.find((f) => f.name === 'b.pdf');
+    const elsewhere = listing.find((f) => f.folder && f.name === 'Areas');
+    await drive.update(member?.id ?? '', { addParent: elsewhere?.id ?? '', removeParent: member?.parents[0] ?? '' });
+    await drive.trash(member?.id ?? '');
+    const opts = { scope: 'all' as const, clock: () => AT, newId: () => 'admission-1' };
+    const inApp = await planAdmission(fakeRead(drive), root, opts);
+    if (inApp.kind !== 'manifest') throw new Error('the app held the pile');
+    expect(inApp.manifest.piles.map((p) => p.pileId)).toContain(pile.id);
+    for (const [name, read] of [['driveRead', driveRead(http)], ['admissionRead', admissionRead(http, 'all')]] as const) {
+      expect(typeof read.binnedByItem, name).toBe('function');
+      const runner = await planAdmission(read, root, opts);
+      expect(runner, name).toEqual(inApp);
+    }
   });
 });
 

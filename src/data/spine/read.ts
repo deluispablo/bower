@@ -3,7 +3,7 @@
  * runner), the Worker's admission reader over it (`admissionRead`), and the pretend Drive (the fake and demo sources). Both give digests from what Drive keeps, never by
  * reading a file's content.
  */
-import type { DriveApi, DriveFile, ResumableDrive } from '../drive/drive-api';
+import { BIN_KEYS, SEARCH_MAX_PAGES, type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
 import { declarationCopies, pileRecords } from '../pile-readiness';
 import { PILE_NOTE } from '../piles';
 import type { Pile } from '../types';
@@ -23,7 +23,7 @@ export interface ScriptedRead extends SpineRead {
   provenance: 'fake-stored' | 'adapter-read';
 }
 
-type DriveReads = Pick<DriveApi, 'listAll' | 'readBytes' | 'readText'> & Pick<ResumableDrive, 'getUploaded'>;
+type DriveReads = Pick<DriveApi, 'listAll' | 'readBytes' | 'readText' | 'binnedByItem'> & Pick<ResumableDrive, 'getUploaded'>;
 
 /** Drive v3: the listing, Bower's own files, and `sha256Checksum` with `size` from `files.get`. */
 export function driveRead(drive: DriveReads): SpineRead {
@@ -35,6 +35,7 @@ export function driveRead(drive: DriveReads): SpineRead {
       const now = await drive.getUploaded(file.id);
       return now.sha256 !== undefined && now.size !== undefined ? { size: now.size, sha256: now.sha256 } : null;
     },
+    binnedByItem: (rootId, keys) => drive.binnedByItem(rootId, keys),
   };
 }
 
@@ -56,7 +57,7 @@ export function fakeRead(drive: Pick<DriveApi, 'listAll' | 'readBytes' | 'readTe
 export const READ_AHEAD = 8;
 
 /** The Drive admission reads: `DriveHttp`, whose listing can carry each file's checksum. */
-type AdmissionDrive = Pick<DriveApi, 'readBytes' | 'readText'> &
+type AdmissionDrive = Pick<DriveApi, 'readBytes' | 'readText' | 'binnedByItem'> &
   Pick<ResumableDrive, 'getUploaded'> & { listAll(rootId: string, opts: { checksums: boolean }): Promise<DriveFile[]> };
 
 /** Runs each task with at most `limit` running at once, in the order given. */
@@ -190,6 +191,15 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budg
       if ((file.sha256 === undefined || file.size === undefined) && !afford(`d:${file.id}`)) throw new NotReadHere();
       const known = file.sha256 !== undefined && file.size !== undefined ? file : await drive.getUploaded(file.id);
       return known.sha256 !== undefined && known.size !== undefined ? { size: known.size, sha256: known.sha256 } : null;
+    },
+    // Asked only for a declared member missing from the listing. `DriveHttp` makes at most 2 queries for each 20 keys
+    // (and a `files.get` for a folder outside the listing), so each batch is granted as that many reads, or left to the runner.
+    binnedByItem: async (rootId, keys) => {
+      for (let i = 0; i < keys.length; i += BIN_KEYS) {
+        const batch = keys.slice(i, i + BIN_KEYS).join('\n');
+        for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) if (!afford(`n:${batch}:${page}`)) throw new NotReadHere();
+      }
+      return drive.binnedByItem(rootId, keys);
     },
   };
 }
