@@ -226,3 +226,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - Template `pileId` placeholders are normalised too.
   - A loose thing asked by fileId becomes a pile question with no `about`.
 - Recurring e2e flake: `e2e/qa10.spec.ts:149` on desktop (the "Main folders stay" status toast is not found within 5 s under full-suite load). Seen at a2dafd9 and 222f9c0; 10 of 10 pass when run alone. Wait for the status before the second key press.
+- P4-11 check minors (numbers-grounded):
+  - Any figure in any shown note or name grounds a number: the hub's date grounds "28-minute limit", and IMG_2301 grounds "2301".
+  - An honest reformat is refused (2 November becomes 2026-11-02).
+  - An uncited line that uses its thing's figure is refused.
+  - 7.05 matches 7.5.
+  - A retry usually recovers.

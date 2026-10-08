@@ -242,3 +242,4 @@ P3-9 is closed.
 - TL-P4-08 addendum 5 (1c9148d): c04-prompt-fixes (implementer) and things-normalised round 2 (mechanical). Then offer-and-flat x3 + garden x1 closes C04; next drive-calls-cut beside C05. 376/382.
 - c04-prompt-fixes closed (2f60dfd): numbers grounded (digits only), rawName refusal, kinds describe areas, offer-and-flat rubric change 3 logged. 377/382. things-normalised round 2 running.
 - things-normalised round 2 closed (1b135a8): things sorted within a pile in the section hash (Drive listing order varied). 378/382. P4-11 delta check running.
+- P4-11 check BLOCK: the prompt's naming example was the corpus answer. c04-prompt-fixes and things-normalised reopened; one fix round (implementer): a made-up example plus a no-corpus-names test, rawName false positives, money globs, things sorted in prepared(). Number minors to polish. 376/382.

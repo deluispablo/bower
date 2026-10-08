@@ -5016,21 +5016,21 @@
     "id": "things-normalised",
     "task": "p4-c",
     "category": "fix",
-    "passes": true,
+    "passes": false,
     "what": "The things section of the model input carries a per-run value (live, its hash changed on every garden run while the others stayed). Found and normalised in the fingerprint, or dropped from the input if the model does not need it.",
     "steps": [
       "Find the per-run value in shown piles.",
       "Normalise it in the fingerprint only, unless it is noise the model does not need (then drop it from the input).",
       "Test: two fresh runs of the same case give the same things hash."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"two fresh runs of the same case give the same things section hash|a multi-thing pile with a link gives the same things section hash on fresh runs\"",
-    "note": "TL-P4-08 addendum 4 (main 1ffb63a). Reopened by TL-P4-08 addendum 5: the things hash still varied across offer-and-flat runs (multi-thing and link piles)."
+    "verify": "pnpm -C runner exec vitest run -t \"two fresh runs of the same case give the same things section hash|a multi-thing pile with a link gives the same things section hash on fresh runs|the model input lists a pile things in a stable order\"",
+    "note": "TL-P4-08 addendum 4 (main 1ffb63a). Reopened by TL-P4-08 addendum 5: the things hash still varied across offer-and-flat runs (multi-thing and link piles). Reopened by the P4-11 check: sort things in prepared() so input= is stable too; drop the parse fallback."
   },
   {
     "id": "c04-prompt-fixes",
     "task": "p4-c",
     "category": "fix",
-    "passes": true,
+    "passes": false,
     "what": "Every number in an authored note, summary or line appears in the cited thing text, the pile words or a shown note, else refuse and retry; a concrete naming rule (underscores, (2), final and camera ids become a plain name); the kinds table describes areas, never ready-made folder names; the c04-offer-and-flat rubric accepts the photo ask, the listing note without an address and any money, pay or finance Area, logged.",
     "steps": [
       "numbers-grounded check with refusal and retry.",
@@ -5038,7 +5038,7 @@
       "Kinds table describes the area, not a folder name.",
       "Update and log the c04-offer-and-flat rubric per addendum 5."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"a number not found in its sources is refused and retried once|a raw file name is replaced by a plain name|the kinds table names no ready-made folder|the offer-and-flat rubric accepts the photo ask and a money area\"",
-    "note": "TL-P4-08 addendum 5 (main 1c9148d). Live b54392c offer-and-flat: run 1 offer not renamed, run 3 invented a 30-minute limit."
+    "verify": "pnpm -C runner exec vitest run -t \"a number not found in its sources is refused and retried once|a raw file name is replaced by a plain name|the kinds table names no ready-made folder|the offer-and-flat rubric accepts the photo ask and a money area|the prompt holds no corpus answer name\"",
+    "note": "TL-P4-08 addendum 5 (main 1c9148d). Live b54392c offer-and-flat: run 1 offer not renamed, run 3 invented a 30-minute limit. Reopened by the P4-11 check: the naming example in the prompt was the corpus answer."
   }
 ]
