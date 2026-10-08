@@ -16,3 +16,9 @@ After Delete me, a run can start for the person, and a run row and manifest (per
 
 ## Options (for the lead; the coordinator does not design)
 Any fix belongs to the one admission path (`admitSync`), not a second check elsewhere.
+
+## Ruling (lead, DECISIONS main 314380d)
+- The fix goes in the one admission path and reuses the existing generation floor; no new mechanism.
+- Admission records the person's generation when it starts. admitSync, in its synchronous section, refuses if the account is gone or the generation moved: no run row, no quota, no manifest, and a gone answer.
+- Tests: a forget during the admission reads, on the alarm path and on /process. They are folded into the c2-worker-dispatch fix round: "a Delete me during the alarm's admission reads admits no run" and "a Delete me during a press's admission reads admits no run".
+- The v13/v14 deploy skew is accepted (rollout only; skew answers 503 since c1-worker-routes).
