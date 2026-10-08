@@ -204,3 +204,4 @@ P3-9 is closed.
 - P4-7 review BLOCK: the fingerprint golden bypasses the real read path (provider aimed reads, planReads) and uses a made-up plot note. model-input-fingerprint reopened; fix round (implementer) with the minors: the citation, the [[Garden plot prefix match, putNew counting a checkpoint twice on resume, prompt wording that refers to rules the model never sees. 367/369.
 - model-input-fingerprint re-closed (00d4316). 368/369. Short Opus fix-round check running.
 - P4-7 fix-round check PASS (2 minors to polish). No src/e2e/api change since a566241, so the P4-6 e2e suites stand; check green at done.sh. Main moves.
+- Main and backup at cd3af43. Deploy SHA sent to the lead; 5 C04 runs to follow when Claude is on.
