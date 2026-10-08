@@ -81,7 +81,13 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
   }
 
-  async listAll(rootId: string): Promise<DriveFile[]> {
+  /**
+   * Every file and folder under `rootId`, one `files.list` per level of up to 40 folders, paged. With `checksums`,
+   * each file also carries the `sha256Checksum` Drive keeps (Drive v3, "Return specific fields"), so a reader checks
+   * stored bytes from the listing rather than one `files.get` per file.
+   */
+  async listAll(rootId: string, opts: { checksums?: boolean } = {}): Promise<DriveFile[]> {
+    const fields = opts.checksums ? UPLOADED_FIELDS : FIELDS;
     const out: DriveFile[] = [];
     let level = [rootId];
     while (level.length) {
@@ -89,7 +95,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
       for (let i = 0; i < level.length; i += BATCH) {
         const ids = level.slice(i, i + BATCH);
         const q = `(${ids.map((id) => `${quote(id)} in parents`).join(' or ')}) and trashed = false`;
-        for (const f of await this.query(q)) {
+        for (const f of await this.query(q, Infinity, fields)) {
           out.push(f);
           if (f.folder) next.push(f.id);
         }
@@ -299,13 +305,13 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     }
   }
 
-  private async query(q: string, maxPages = Infinity): Promise<DriveFile[]> {
+  private async query(q: string, maxPages = Infinity, fields = FIELDS): Promise<DriveFile[]> {
     const out: DriveFile[] = [];
     let pageToken = '';
     let pages = 0;
     do {
       if (++pages > maxPages) break;
-      const params = new URLSearchParams({ q, fields: `nextPageToken,files(${FIELDS})`, pageSize: '1000' });
+      const params = new URLSearchParams({ q, fields: `nextPageToken,files(${fields})`, pageSize: '1000' });
       if (pageToken) params.set('pageToken', pageToken);
       const body = (await (await this.call(`${API}/files?${params}`)).json()) as { files?: WireFile[]; nextPageToken?: string };
       out.push(...(body.files ?? []).map(toFile));

@@ -16,7 +16,7 @@ export interface DriveFile {
   createdTime: string;
   size?: number;
   appProperties?: Record<string, string>;
-  /** SHA-256 of the content, hex; only from `ResumableDrive.getUploaded`. */
+  /** SHA-256 of the content, hex; only from `ResumableDrive.getUploaded`, or a listing that asks for it. */
   sha256?: string;
   /**
    * Drive keeps no checksum of its content, so no run can check its bytes without reading them: in the pretend
