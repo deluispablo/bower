@@ -688,7 +688,8 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     async function twoCopies(): Promise<Array<{ id: string; name: string; text: string }>> {
       const [first] = await declarations();
       if (!first) throw new Error('no declaration');
-      await drive.createText((await drive.get(first.id)).parents[0] ?? '', first.name, first.text);
+      const kept = await drive.get(first.id);
+      await drive.createText(kept.parents[0] ?? '', first.name, first.text, kept.appProperties);
       const all = await declarations();
       expect(all).toHaveLength(2);
       return all;

@@ -8,7 +8,7 @@ import { PROP } from '../vault/layout';
  */
 export async function liveShape(drive: FakeDrive, root: string, opts: { earlier?: number; stamped?: boolean } = {}): Promise<void> {
   // Earlier runs leave a declaration and a disposition each in `.bower/piles`, half of them a loose thing's (the live
-  // folder had 53 and 56 after a month, TL-P4-16). `stamped: false` is a folder written before the pile-id stamp.
+  // folder had 53 and 56 after a month, TL-P4-16). `stamped: false` leaves them unstamped (staging test folders only; never read).
   const earlier = opts.earlier ?? 20;
   const stamped = opts.stamped ?? true;
   const hex = (n: number): string => n.toString(16).padStart(64, '0');
