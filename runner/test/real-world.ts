@@ -14,6 +14,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
+import type { ClaudeSpawn } from '../src/claude';
 import { main } from '../src/main';
 import { backoff } from '../src/retry';
 import { realDrive } from './drive-v3-real';
@@ -33,14 +34,27 @@ interface Job {
 const json = (status: number, body: unknown): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=UTF-8' } });
 const urlOf = (input: string | URL | Request): URL => new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 
-export async function realWorld(): Promise<RealWorld> {
-  // Replayed transports take no real time: the runner's retries wait none here (`src/retry.ts`).
-  backoff.baseMs = 0;
-  const drive = new FakeDrive();
+/** The demo fixture's folder on `drive`, as the fake world seeds it; its id. */
+async function demoFolder(drive: FakeDrive): Promise<string | null> {
   // Loaded at run time: the seed reaches the demo's modules, which type-check with the browser's types, not Node's.
   const seedModule = new URL('../../src/data/fake/seed.ts', import.meta.url).pathname;
   const { seedFakeDrive } = (await import(/* @vite-ignore */ seedModule)) as { seedFakeDrive(d: FakeDrive, scenario: 'default', now: number): Promise<string | null> };
-  const rootId = await seedFakeDrive(drive, 'default', Date.now());
+  return await seedFakeDrive(drive, 'default', Date.now());
+}
+
+/** What a world starts from, when not the demo fixture with the scripted provider. */
+export interface WorldOptions {
+  /** Makes Alex's folder on `drive` and gives its id (a corpus case, `seedCase`); the demo fixture by default. */
+  seed?: (drive: FakeDrive) => Promise<string>;
+  /** Answers for the model in every job, through the Claude provider (as `corpus-run.ts` does); no live call. */
+  claude?: ClaudeSpawn;
+}
+
+export async function realWorld(opts: WorldOptions = {}): Promise<RealWorld> {
+  // Replayed transports take no real time: the runner's retries wait none here (`src/retry.ts`).
+  backoff.baseMs = 0;
+  const drive = new FakeDrive();
+  const rootId = opts.seed ? await opts.seed(drive) : await demoFolder(drive);
   if (rootId === null) throw new Error('the default scenario has a Bower folder');
   const wire = realDrive(drive);
   let revoked = false;
@@ -96,7 +110,8 @@ export async function realWorld(): Promise<RealWorld> {
       return hop ? await hop(url, init, next) : await next();
     };
     try {
-      return await main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: event }, { fetch: runner as typeof fetch });
+      const claude = opts.claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
+      return await main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: event, ...claude }, { fetch: runner as typeof fetch, ...(opts.claude ? { claude: opts.claude } : {}) });
     } finally {
       job.status = 'completed';
       job.completedAt = new Date().toISOString();

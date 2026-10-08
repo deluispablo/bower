@@ -73,9 +73,12 @@ interface CaseOptions {
   before?: Before;
 }
 
-async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {}, before }: CaseOptions): Promise<CaseRun> {
-  const drive = fixedDrive();
-  const root = (await drive.createFolder('root', 'Bower')).id;
+/**
+ * Puts a case's folder on `drive` as `runCase` does (its notes, Bower's files, questions, journal and inbox) under a new
+ * `Bower` folder in `parent`; its id. The real-adapter world seeds a case with it (`real-world.ts`).
+ */
+export async function seedCase(drive: FakeDrive, c: LoadedCase, props: Record<string, Record<string, string>> = {}, parent = 'root'): Promise<string> {
+  const root = (await drive.createFolder(parent, 'Bower')).id;
   const folders = new Map<string, string>();
   const inbox = await ensureFolder(drive, root, folders, 'Inbox');
   for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) await ensureFolder(drive, root, folders, name);
@@ -114,6 +117,12 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude, prop
     if (pile.line) await drive.createText(folder, PILE_NOTE, `${pile.line}\n`);
     for (const f of pile.files) await add(folder, f, {});
   }
+  return root;
+}
+
+async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {}, before }: CaseOptions): Promise<CaseRun> {
+  const drive = fixedDrive();
+  const root = await seedCase(drive, c, props);
   await before?.(drive, root);
   const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope, clock: () => AT, newId: () => 'admission-1' });
   const wire = driveV3(drive);
