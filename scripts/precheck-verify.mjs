@@ -24,7 +24,9 @@ const open = features.filter((f) => !f.passes && (argv.length ? argv.includes(f.
 
 const kinds = new Set(open.flatMap((f) => [...f.verify.matchAll(/pnpm\s+(?:(?:-C|--dir)\s+(api|runner)\b|e2e)|playwright test|e2e-both/g)].map((m) => m[1] ?? 'e2e')));
 if (open.some((f) => /\bvitest run/.test(f.verify) && !/\bpnpm\s+(?:-C|--dir)\s+(?:api|runner)\b[^&]*vitest run/.test(f.verify))) kinds.add('unit');
-const lists = testsPath ? JSON.parse(readFileSync(testsPath, 'utf8')) : {
+// Given lists stand in for the listing, so only the kinds the verifies run are kept, as the listing would.
+const given = testsPath ? JSON.parse(readFileSync(testsPath, 'utf8')) : null;
+const lists = given ? Object.fromEntries(Object.entries(given).map(([k, v]) => [k, kinds.has(k) ? v : []])) : {
   unit: kinds.has('unit') ? unitTitles('.') : [],
   api: kinds.has('api') ? unitTitles('api') : [],
   runner: kinds.has('runner') ? unitTitles('runner') : [],
