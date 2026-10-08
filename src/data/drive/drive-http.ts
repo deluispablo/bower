@@ -303,7 +303,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
   /** The request under the transport's policy, with the token and its one refresh; any answer but a 401 goes back. */
   private async authorized(url: string, init: RequestInit, opts: Parameters<typeof send>[3], write = false): Promise<Response> {
     // Only a browser known offline before the call proves nothing was sent; any other write with no answer may have landed.
-    const knownOffline = this.context === 'browser' && typeof navigator !== 'undefined' && navigator.onLine === false;
+    const knownOffline = this.context === 'browser' && (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine === false;
     let token = await this.token(false);
     for (let refreshed = false; ; refreshed = true) {
       let res: Response;

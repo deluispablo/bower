@@ -40,13 +40,13 @@ async function after<T>(p: Promise<T>, ms: number): Promise<{ state: 'pending' }
 afterEach(() => vi.useRealTimers());
 
 describe('a write that gets no answer', () => {
-  it('a write that gets no answer ends in the lost-reply path after the bounded wait', async () => {
+  it('a write that gets no answer ends as unconfirmed after the bounded wait', async () => {
     vi.useFakeTimers();
     const drive = new DriveHttp({ token: async () => 'TOKEN', fetch: silent });
     const rename = await after(drive.update('FILE_ID', { name: 'Lemon cake.md' }), LONG);
     expect(rename.state).toBe('rejected');
     expect((rename as { error: unknown }).error).toBeInstanceOf(BowerError);
-    expect((rename as { error: BowerError }).error).toMatchObject({ code: 'offline', message: "You're offline. Try again when you're back." });
+    expect((rename as { error: BowerError }).error).toMatchObject({ code: 'unknown', message: "Bower couldn't confirm that change. Refresh to check." });
 
     const text = await after(drive.writeText('FILE_ID', 'Words', 'T'), LONG);
     expect(text.state).toBe('rejected');
@@ -68,9 +68,9 @@ describe('a write that gets no answer', () => {
     expect(done.state).toBe('ok');
   });
 
-  it('a lost reply on the way ends as the lost-reply path words it', async () => {
+  it('a lost reply on the way ends as unconfirmed', async () => {
     vi.useFakeTimers();
-    // The rename never answers; reading it back is answered too, but shows the old name: offline, not "sure".
+    // The rename never answers; reading it back is answered too, but shows the old name: unconfirmed, not "sure".
     const fake = new FakeDrive();
     const root = (await seedFakeDrive(fake, 'default', Date.now())) ?? '';
     const tart = (await fake.listAll(root)).find((f) => fake.pathOf(f.id, root) === TART);
@@ -86,7 +86,7 @@ describe('a write that gets no answer', () => {
     await vault.tree();
     const moved = await after(vault.rename(TART, 'Lemon cake'), LONG);
     expect(moved.state).toBe('rejected');
-    expect((moved as { error: unknown }).error).toMatchObject({ name: 'BowerError', code: 'offline', message: "You're offline. Try again when you're back." });
+    expect((moved as { error: unknown }).error).toMatchObject({ name: 'BowerError', code: 'unknown', message: "Bower couldn't confirm that change. Refresh to check." });
     // It was read back after the wait, not assumed.
     expect(gets.length).toBeGreaterThan(1);
   });
@@ -99,6 +99,6 @@ describe('a write that gets no answer', () => {
     const outcome = await after(adding, LONG);
     expect(outcome.state).not.toBe('pending');
     expect(outcome.state).toBe('rejected');
-    expect((outcome as { error: unknown }).error).toMatchObject({ name: 'BowerError', code: 'offline', message: "You're offline. Try again when you're back." });
+    expect((outcome as { error: unknown }).error).toMatchObject({ name: 'BowerError', code: 'unknown', message: "Bower couldn't confirm that change. Refresh to check." });
   });
 });

@@ -5,8 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
-import { noAnswer } from './transport';
-import { DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
+import { driveError, RESUMABLE_UNIT, unconfirmedWriteError, type BinLookup, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
 /** The fence's types live with the Drive ports; kept here for the tests that import them from the fake. */
 export type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from './drive-api';
 
@@ -602,8 +601,8 @@ interface KeptResumable {
   sessions: Array<{ url: string; target: ResumableTarget; b64?: string; fileId: string | null }>;
 }
 
-/** A fenced write that got no answer, as the runner's headless transport words it. */
-const runNoAnswer = (): BowerError => noAnswer('headless', { offline: DRIVE_MESSAGES.offline, elsewhere: DRIVE_MESSAGES.unknown });
+/** A fenced write that got no answer, as the runner's headless transport words it: unconfirmed. */
+const runNoAnswer = (): BowerError => unconfirmedWriteError();
 
 /** Files bigger than this keep only their name and size across a reload. */
 const KEEP_BYTES = 256 * 1024;
