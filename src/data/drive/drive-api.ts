@@ -78,8 +78,11 @@ export interface DriveApi {
   /**
    * Bin entries under `rootId` whose `bowerItem` is one of `keys`, in one call: Drive's `files.list` with
    * `trashed = true` and an `appProperties has` for each key (https://developers.google.com/workspace/drive/api/guides/search-files).
+   * A file in a folder that is itself in the Bin is trashed too (`files.list`, `trashed`), so its place is found by walking
+   * up its folders; `beforeGet`, when given, is called before each such `files.get` and may throw to stop the look (the
+   * Worker's subrequest grant).
    */
-  binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
+  binnedByItem(rootId: string, keys: readonly string[], beforeGet?: () => void): Promise<BinnedItem[]>;
 }
 
 /** `files.list` pageSize (https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), the largest a page holds. */

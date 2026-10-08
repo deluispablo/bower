@@ -193,13 +193,18 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budg
       return known.sha256 !== undefined && known.size !== undefined ? { size: known.size, sha256: known.sha256 } : null;
     },
     // Asked only for a declared member missing from the listing. `DriveHttp` makes at most 2 queries for each 20 keys
-    // (and a `files.get` for a folder outside the listing), so each batch is granted as that many reads, or left to the runner.
+    // (a `files.get` up a binned folder spends from those two), so each batch is granted as that many reads, or left to the runner.
     binnedByItem: async (rootId, keys) => {
       for (let i = 0; i < keys.length; i += BIN_KEYS) {
         const batch = keys.slice(i, i + BIN_KEYS).join('\n');
         for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) if (!afford(`n:${batch}:${page}`)) throw new NotReadHere();
       }
-      return drive.binnedByItem(rootId, keys);
+      // The walk up a binned folder spends from the same grant: no more fetches than the pages granted, else the runner's.
+      const start = budget?.used() ?? 0;
+      const allowance = Math.ceil(keys.length / BIN_KEYS) * SEARCH_MAX_PAGES;
+      return drive.binnedByItem(rootId, keys, () => {
+        if (budget && budget.used() - start >= allowance) throw new NotReadHere();
+      });
     },
   };
 }

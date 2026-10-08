@@ -918,14 +918,12 @@ describe('an incomplete pile retains every member across tidy-up and retry', () 
     const { pile, folder } = await filedWithLateChild();
     await asIfFiledByTheLegacyRunner();
     for (const f of (await drive.listAll(root)).filter((x) => x.appProperties?.[PROP.item] && x.name.endsWith('.pdf') && x.parents[0] !== folder.id)) await drive.trash(f.id);
-    // Counts calls to the optional Bin lookup, when the pretend Drive has one.
-    const lookups: unknown[][] = [];
-    const lookup: unknown = Reflect.get(drive, 'binnedByItem');
-    if (typeof lookup === 'function') Reflect.set(drive, 'binnedByItem', (...args: unknown[]): unknown => { lookups.push(args); return Reflect.apply(lookup, drive, args); });
+    // Counts calls to the Bin lookup.
+    const spy = vi.spyOn(drive, 'binnedByItem');
     const seen = (await fresh().piles()).find((p) => p.id === pile.id);
     expect(seen?.items.map((i) => [i.name, i.upload])).toEqual([['later.txt', undefined]]);
-    expect(lookups).toHaveLength(1);
-    expect((lookups[0]?.[1] as string[] | undefined)?.length).toBe(2);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[1]).toHaveLength(2);
   });
 
   it('a matching file in the Bin outside the Bower folder does not count', async () => {
