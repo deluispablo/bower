@@ -177,3 +177,4 @@ P3-9 is closed.
 - Staging c76fd2f: scripted run press to done 1:23, press to job 11 s (was 25–31); checkpoints still about 2 s each (the cost is the Drive write). P4-5 running: deploy-scan-extracted-token (mechanical) and runner-stops-when-gone (escalated), at 22a48a6. 360/362. Waiting for the lead to switch claude on for 3 C04 runs.
 - C04 comparison on c76fd2f: 3/3 PASS, from fresh folders. Press to done 1:35, 1:17, 1:28; model 3–4 s, 1 turn. P4-5 closed: deploy-scan-extracted-token (22e2e2c), runner-stops-when-gone (5632d95). 362/362. P4-5 Opus delta and suites running.
 - TL-P4-05 (c588797): checkpoints in the DO declined; checkpoint-per-batch running (escalated, bower-p4-ckbatch at 5c55e7d); runner-reads-and-report next; then C05. 362/364.
+- P4-5 review BLOCK (runner-stops-when-gone: the token route answers 401, not 410, on revoked access). Reopened (98e6ae7); fix round running. 361/364.
