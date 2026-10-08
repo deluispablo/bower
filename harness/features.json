@@ -5136,5 +5136,19 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"corpus PDFs are valid PDFs\"",
     "note": "Live c05-hub-lines on 2b08fc1: the corpus offer was unreadable, so it was filed with no terms."
+  },
+  {
+    "id": "qa10-phone-flake",
+    "task": "p4-b",
+    "category": "fix",
+    "passes": false,
+    "what": "e2e/qa10.spec.ts:165 (one thing, one name) passes under full-suite load on phone: the wait it races is fixed, never with a retry.",
+    "steps": [
+      "Reproduce under full-suite load (--repeat-each or the suite's workers).",
+      "Fix the wait the test races (the sheet list is read before it fills).",
+      "No retries added."
+    ],
+    "verify": "pnpm e2e:fake e2e/qa10.spec.ts:165 --project=phone --repeat-each=30",
+    "note": "TL lead 2026-10-08: failed in the full e2e:fake run at 8821e84 and 07ff1e4; the file alone passes 3/3."
   }
 ]
