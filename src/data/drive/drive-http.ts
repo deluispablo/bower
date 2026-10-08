@@ -252,10 +252,18 @@ export class DriveHttp implements DriveApi, ResumableDrive {
       if (depth >= BIN_DEPTH) return Promise.resolve(false);
       let known = placed.get(id);
       if (!known) {
-        known = this.call(`${API}/files/${id}?fields=id,parents`).then(async (res) => {
+        known = (async () => {
+          let res: Response;
+          try {
+            res = await this.call(`${API}/files/${id}?fields=id,parents`);
+          } catch (e) {
+            // expected: a folder outside this Drive (or not shared) is not below the folder; anything else stops the look.
+            if (e instanceof BowerError && e.code === 'not-found') return false;
+            throw e;
+          }
           const parents = ((await res.json()) as { parents?: string[] }).parents ?? [];
           return (await Promise.all(parents.map((p) => below(p, depth + 1)))).some(Boolean);
-        }, () => false);
+        })();
         placed.set(id, known);
       }
       return known;
