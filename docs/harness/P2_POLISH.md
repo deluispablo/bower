@@ -252,3 +252,6 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-15 (ask-one-per-thing, minor): scripted.ts:476 `mayHold` size > 40 threshold is uncommented.
 - P4-14b (admission, minor): a 5xx/429 retry burst during the read-ahead could pass the 15-fetch slack; reads granted at listing can't be withdrawn.
 - P4-14b (admission, minor): no damaged-note test for an unread pile left to the runner.
+- P4-15b (questions, minor): DriveVault.questions() runs a full piles() pass, so a failed pile-note read fails the questions list too (drive-vault.ts:1235).
+- P4-15b (questions, minor): a re-upload not asked again leaves a stale hidden row in questions.json; a thing moved to another pile can show pile and thing questions (scripted.ts:474-476).
+- P4-15b (questions, minor): an answer line for a question whose thing left stays pending in the journal.
