@@ -229,3 +229,4 @@ P3-9 is closed.
 - fingerprint-normalised round 3 closed (06ed7c8, test only): the fake gives equal input=; live still differs. Proposed per-section hashes to the lead. 374/378. Short Opus check of note-required next.
 - TL-P4-08 addendum 3 (e35644e): input-sections (mechanical) before the SHA. 374/379.
 - note-required delta check PASS (minors to polish; the fingerprint test's log write and missing main() go to the input-sections worker).
+- input-sections closed (57ac56d). No src/e2e/api change since c6ddb96, so its suites stand; check 3609/190/135. Main moves.
