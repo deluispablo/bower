@@ -5100,7 +5100,7 @@
     "id": "state-no-adoption",
     "task": "p4-c",
     "category": "fix",
-    "passes": true,
+    "passes": false,
     "what": "An unmarked Current state is the person's unless a rule line grants it; a Bower write never adopts it (TL-P4-10 point 2 withdrawn). The fallback line reads as plain news.",
     "steps": [
       "Remove adoption by md5Checksum/bowerMd5; keep bowerMd5 only if something else uses it.",
@@ -5108,7 +5108,7 @@
       "Reword the fallback Timeline line (no \"Bower's current state would now read\", no \".;\")."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"after a Bower append the next run only adds a line|an unmarked Current state is never adopted without a rule|the fallback line reads as plain news|the fallback line names only what the section lacks\" && pnpm vitest run src/data/contracts/state-rewrite.test.ts -t \"rewriteState refuses an unmarked section unless the change says a rule granted it|undo of an adopted rewrite gives the person their lines back without a mark\"",
-    "note": "TL-P4-10 addendum (main 657c081). Live on 2b08fc1: run JNxHTk appended to Job hunt after a hand edit and set bowerMd5, so the next run would adopt the person's state (scripted.ts:694). Reopened by P4-16 (BLOCK): the fallback line repeats the person's own line as news (\"New: One application open, …\")."
+    "note": "TL-P4-10 addendum (main 657c081). Live on 2b08fc1: run JNxHTk appended to Job hunt after a hand edit and set bowerMd5, so the next run would adopt the person's state (scripted.ts:694). Reopened by P4-16 (BLOCK): the fallback line repeats the person's own line as news (\"New: One application open, …\"). Reopened by P4-16b (BLOCK): on a person-edited marked section the fallback still presents Bower's last-written line as news."
   },
   {
     "id": "home-reads-once",
