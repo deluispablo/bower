@@ -301,7 +301,9 @@ export class DriveHttp implements DriveApi, ResumableDrive {
   }
 
   /** The request under the transport's policy, with the token and its one refresh; any answer but a 401 goes back. */
-  private async authorized(url: string, init: RequestInit, opts: Parameters<typeof send>[3]): Promise<Response> {
+  private async authorized(url: string, init: RequestInit, opts: Parameters<typeof send>[3], write = false): Promise<Response> {
+    // Only a browser known offline before the call proves nothing was sent; any other write with no answer may have landed.
+    const knownOffline = this.context === 'browser' && typeof navigator !== 'undefined' && navigator.onLine === false;
     let token = await this.token(false);
     for (let refreshed = false; ; refreshed = true) {
       let res: Response;
@@ -311,7 +313,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
         if (e instanceof BowerError) throw e;
         // Stopped on purpose: the queue tells this from a failure.
         if (e instanceof DOMException && e.name === 'AbortError' && init.signal) throw e;
-        if (e instanceof TypeError) throw this.lost();
+        if (e instanceof TypeError) throw write && !knownOffline ? unconfirmedWriteError() : this.lost();
         console.error(e);
         throw driveError('unknown');
       }
@@ -370,7 +372,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
 
   /**
    * One request with the token, the one refresh and the retries (`transport.ts`): a read is sent again after a stall
-   * or a 5xx; a write only after a rate limit, which says it did not land.
+   * or a 5xx; a write only after a rate limit, which says it did not land. A write with no definitive answer (5xx, network error, stall) is unconfirmed, unless the browser was known offline before it (nothing was sent).
    * Answers ok or 308 (resumable), or a status in `pass` for the caller to read; anything else is a `BowerError`.
    */
   async call(url: string, init: RequestInit = {}, pass: readonly number[] = []): Promise<Response> {
@@ -378,7 +380,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     // A rate limit says the request did not land: ask again. A 5xx on a write may have landed (a create made the
     // file, an update overwrote a newer edit): only a read is asked again; a write's 5xx is told as unconfirmed below.
     const again = async (res: Response): Promise<boolean> => res.status === 429 || (await isRateLimit(res)) || (res.status >= 500 && method === 'GET');
-    const res = await this.authorized(url, init, { idempotent: method === 'GET', again });
+    const res = await this.authorized(url, init, { idempotent: method === 'GET', again }, method !== 'GET');
     if (res.ok || res.status === 308 || pass.includes(res.status)) return res;
     if (res.status === 404) throw driveError('not-found');
     console.error(`Drive answered ${res.status} for ${method} ${new URL(url).pathname}`);
