@@ -45,10 +45,12 @@ export type RuleRemove = { recordId: string; text: string };
 /**
  * The closed change union of manifest v2; an edit holds at most one of each, in this order. `state-rewrite`
  * (TL-P4-08 addendum 1 point 1) replaces the lines of Bower's own `## Current state`, which must read `previous`,
- * with `lines`: the manifest keeps the previous text, so an undo (C13) restores it (`undoChanges`).
+ * with `lines`: the manifest keeps the previous text, so an undo (C13) restores it (`undoChanges`). `adopted`: the section
+ * had no mark and a rule let Bower take it over (without it an unmarked section is refused); `release`: an undo of that,
+ * which gives the lines back to the person without a mark.
  */
 export type Change =
-  | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[] }
+  | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true }
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
   | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[] }
   | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] };
@@ -296,7 +298,8 @@ function ruleRemove(value: unknown): value is RuleRemove {
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
-    case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines']) && recordIds(value.recordIds)
+    case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines'], ['adopted', 'release']) && recordIds(value.recordIds)
+      && (value.adopted === undefined || value.adopted === true) && (value.release === undefined || value.release === true)
       && list(value.previous, text) && list(value.lines, text) && stateLinesOk(value.previous as string[], value.lines as string[]);
     case 'link-rewrite': return closed(value, ['kind', 'recordIds', 'renames']) && recordIds(value.recordIds)
       && list(value.renames, rename) && value.renames.length > 0 && unique((value.renames as Rename[]).map((item) => item.from.toLowerCase()));
