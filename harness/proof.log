@@ -364,3 +364,4 @@ runner-checkpoint-cost	8671a6d09468572d	2026-10-08	red (fixed in b681161)
 runner-checkpoint-cost	185c66fae33f9a11	2026-10-08	known-green: Red at fcce87c (tests only, incl. the cache test): cost expected 56 to be 0 read-backs; verify renamed to the real cache test title.
 c04-incorporation	ad338974365c06b5	2026-10-08	red (fixed in 97ebefb)
 c04-incorporation	07187b5538df3ad3	2026-10-08	red (fixed in 9fcf3c1)
+deploy-scan-unpdf-literal	385739bb1209075a	2026-10-08	red (fixed in 84bd430)

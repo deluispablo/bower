@@ -4686,7 +4686,7 @@
       "A stubbed test: the literal passes; a real address still refuses."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the deploy scan allows the unpdf literal and still refuses a real address\"",
-    "passes": false,
+    "passes": true,
     "note": "Lead 04d8a54: the runner-bundle scan refused on an unpdf literal at the P4-3 deploy."
   }
 ]
