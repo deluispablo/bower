@@ -72,10 +72,10 @@ export interface AdmitInput {
   requestId: string;
   now: number;
   /**
-   * The person's session generation when admission started (before its Drive reads): a Delete me or a sign-out in
-   * between moves it, and admission refuses as `gone` with nothing written.
+   * The person's account epoch when admission started (before its Drive reads): a Delete me in between moves it, and
+   * admission refuses as `gone` with nothing written. A sign-out does not: runs never depend on a browser session.
    */
-  generation: number;
+  accountEpoch: number;
   /** `DAILY_RUN_LIMIT`: new runs a person may start per UTC day. */
   dailyLimit: number;
   /** What a new run takes (TL-P3-21); null when none was built, because the press looked like a repeat or a run going. */
@@ -238,9 +238,9 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       return fetchImpl(input, init);
     };
     const requestId = body.requestId ?? crypto.randomUUID();
-    // The generation the session was checked at: a Delete me during the reads below moves it, and admission refuses.
-    const generation = c.get('account')?.generation;
-    if (generation === undefined) throw new HttpError(401, 'signed-out');
+    // The account the session was checked for: a Delete me during the reads below moves it, and admission refuses.
+    const accountEpoch = c.get('account')?.accountEpoch;
+    if (accountEpoch === undefined) throw new HttpError(401, 'signed-out');
     const person = personFor(env, sub);
     const ask: AdmissionAsk = { scope: body.scope, subjects: body.subject !== undefined ? [body.subject] : [], now };
     let manifest: AdmissionManifest | null = null;
@@ -249,7 +249,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       allowWeb: body.allowWeb,
       requestId,
       now,
-      generation,
+      accountEpoch,
       dailyLimit: Number(env.DAILY_RUN_LIMIT),
       manifest,
       ...(body.answer ? { answer: true } : {}),

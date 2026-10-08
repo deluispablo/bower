@@ -67,7 +67,7 @@ async function aRun(expiresAt?: number): Promise<{ sub: string; runner: FakeRunn
   await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
   await p.setFolderId('FOLDER_ID');
   await p.cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + HOUR });
-  const admitted = await p.admit({ generation: (await p.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
+  const admitted = await p.admit({ accountEpoch: (await p.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
   if (!admitted.admitted) throw new Error('not admitted');
   const { ticket } = await dispatchOf(gh, admitted.run.id);
   if (expiresAt !== undefined) {

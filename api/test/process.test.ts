@@ -83,8 +83,8 @@ const ask = (requestId: string, now: number, more: Partial<AdmitInput> = {}): Ad
   allowWeb: false,
   requestId,
   now,
-  // Each test signs in a new person: the first generation.
-  generation: 0,
+  // Each test signs in a new person: the first account.
+  accountEpoch: 0,
   dailyLimit: 100,
   manifest: MANIFEST,
   ...more,
@@ -670,12 +670,13 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     });
     const { ticket } = await dispatchOf(gh, going.id);
     expect(await person(sub).runnerReport(going.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'done' }, T0 + 1000)).toMatchObject({ accepted: true });
-    const before = gh.dispatched.length;
+    const sent: string[] = [];
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const held = await runInDurableObject(person(sub), async (instance: Person, state) => {
         let landed = false;
         const fetchImpl = async (input: string, init?: RequestInit): Promise<Response> => {
+          sent.push(`${init?.method ?? 'GET'} ${new URL(input).pathname}`);
           if (!landed && input.startsWith('https://www.googleapis.com/')) {
             landed = true;
             during(instance);
@@ -686,7 +687,7 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
         expect(landed).toBe(true);
         return { runs: state.storage.sql.exec('SELECT id FROM runs').toArray(), quota: state.storage.sql.exec('SELECT counter FROM quota').toArray() };
       });
-      return { ...held, log: log.mock.calls.map((c) => c.map(String).join(' ')).join('\n'), dispatches: gh.dispatched.length - before };
+      return { ...held, log: log.mock.calls.map((c) => c.map(String).join(' ')).join('\n'), dispatches: sent.filter((r) => r.endsWith('/dispatches')).length };
     } finally {
       log.mockRestore();
     }

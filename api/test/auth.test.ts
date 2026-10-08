@@ -220,7 +220,7 @@ describe('GET /auth/callback', () => {
     expect(stored).not.toBeNull();
     expect(stored).not.toContain(REFRESH_TOKEN);
     expect(await decrypt(stored ?? '', await importEncryptionKey(env.TOKEN_ENC_KEY))).toBe(REFRESH_TOKEN);
-    expect(await person(sub).account()).toEqual({ email: EMAIL, name: 'Alex', generation: 0 });
+    expect(await person(sub).account()).toEqual({ email: EMAIL, name: 'Alex', generation: 0, accountEpoch: 0 });
   });
 
   it('the callback refuses an ID token with the wrong audience or nonce', async () => {

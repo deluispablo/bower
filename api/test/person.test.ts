@@ -264,7 +264,7 @@ describe('Delete me', () => {
     await alex.session('laptop', 'check', 0, t0);
     await alex.session('laptop', 'leave', 0, t0);
     await alex.session('phone', 'check', 0, t0);
-    const admitted = await alex.admit({ generation: (await alex.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ accountEpoch: (await alex.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     if (!admitted.admitted) throw new Error('not admitted');
     const gh = pretendGitHub(env as Env);
     await runInDurableObject(alex, async (instance: Person) => {
@@ -273,7 +273,7 @@ describe('Delete me', () => {
     gh.restore();
     const ticket = gh.dispatched[0]?.ticket ?? '';
     expect(await alex.runnerReport(admitted.run.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'reading', total: 1 }, t0)).toMatchObject({ accepted: true });
-    await alex.admit({ generation: (await alex.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 'p-receipt', answer: true, now: t0, dailyLimit: 100, manifest: null });
+    await alex.admit({ accountEpoch: (await alex.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 'p-receipt', answer: true, now: t0, dailyLimit: 100, manifest: null });
     const tables = async (): Promise<Record<string, Record<string, SqlStorageValue>[]>> =>
       await runInDurableObject(alex, (_i, state) => {
         const sql = state.storage.sql;
@@ -338,7 +338,7 @@ describe('person storage migration', () => {
     await evictDurableObject(alex);
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
-    expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0 });
+    expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0, accountEpoch: 0 });
     expect(await alex.vaultState()).toEqual({ folderId: null, complete: false, pending: null, templateIds: null });
     expect(await alex.encryptedRefreshToken()).toBe('enc-token');
     expect(await alex.folderId()).toBeNull();
@@ -370,7 +370,7 @@ describe('person storage migration', () => {
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
     // Every value survives: the account, the folder, the claim, the token and the lease.
-    expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0 });
+    expect(await alex.account()).toEqual({ email: 'you@example.com', name: 'Alex', generation: 0, accountEpoch: 0 });
     expect(await alex.encryptedRefreshToken()).toBe('enc-token');
     expect(await alex.folderId()).toBe('FOLDER_ID');
     expect(await alex.cachedDriveToken(0)).toEqual({ accessToken: 'access-1', expiresAt: 9_999_999_999_999 });
@@ -432,7 +432,7 @@ describe('person storage migration', () => {
     // The status revision carries on from the kept control row.
     expect((await alex.runStatus(2_000)).revision).toBe(4);
     // Admitted far ahead: its stale deadline is not due, so the real alarm never looks the run up on GitHub.
-    const admitted = await alex.admit({ generation: (await alex.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: farAhead(), dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ accountEpoch: (await alex.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: farAhead(), dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true, revision: 5 });
     expect(await alex.holdsLease('laptop', 1)).toBe(true);
   });
@@ -441,7 +441,7 @@ describe('person storage migration', () => {
     const alex = personFor('sub-alex-v7');
     const t0 = farAhead();
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    const admitted = await alex.admit({ generation: (await alex.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ accountEpoch: (await alex.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true });
     // Put the database back as P3-8 shipped it: no ticket columns, a version row of 7, a v1 ticket row.
     const before = await runInDurableObject(alex, (_instance, state) => {
@@ -478,7 +478,7 @@ describe('person storage migration', () => {
     const alex = personFor('sub-alex-v8');
     const t0 = farAhead();
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
-    const admitted = await alex.admit({ generation: (await alex.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ accountEpoch: (await alex.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     expect(admitted).toMatchObject({ admitted: true });
     // Put the database back as P3-9 shipped it: runs with no manifest column, a version row of 8.
     const before = await runInDurableObject(alex, (_instance, state) => {
@@ -532,7 +532,7 @@ describe('person storage migration', () => {
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
     expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
     expect(await alex.session('laptop', 'check', 0, 1_000)).toEqual({ active: true, epoch: 1 });
-    const admitted = await alex.admit({ generation: (await alex.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    const admitted = await alex.admit({ accountEpoch: (await alex.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     if (!('run' in admitted)) throw new Error('not admitted');
     const runId = admitted.run.id;
     // Put the database back as P3-12 left it (a version row of 10, attempt 2's ticket with its attempt named epoch,
