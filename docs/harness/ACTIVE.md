@@ -246,3 +246,4 @@ P3-9 is closed.
 - P4-11 fix round merged (ed6d2c6); c04-prompt-fixes and things-normalised re-closed. 378/382. Fix-round check running.
 - P4-11 fix-round check PASS (minors to polish). Runner and corpus only since b54392c; check green. Main moves.
 - Main and backup at 327b987; SHA sent to the lead for offer-and-flat x3 + garden x1 (C04 close).
+- 327b987 live: C04 PASS (offer-and-flat 3/3, garden 1/1; input= stable within each case; no retries). Asked the lead to start drive-calls-cut and C05 (state-rewrite-change).
