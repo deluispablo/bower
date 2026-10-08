@@ -298,3 +298,4 @@ P3-9 is closed.
 - TL-P4-08 addendum 7 (f10109d): hub-lines expected.json grounded (rubric change); keep-one-note-merge (escalated) registered on top of claude/p4-c05inc; ask-answer-loop into C05, waiting for the owner. 389/395.
 - TL-P4-08 addendum 8 (5de7297): ask-answer-loop updated (answer applies at once, scoped run); queued (escalated) after keep-one-note-merge.
 - home-inbox-first closed (5454151): latency fake 17 s -> 0.6 s to Inbox (7 calls before it); full read ~6 s; refresh still drops reads. 390/395. P4-18 Opus check running; c05inc grounding hub-lines.
+- P4-18 check PASS (home-inbox-first; minors to polish, one on a swallowed read error). keep-one-note-merge running; ask-answer-loop waits for it (its yes-to-merge test needs the merge).
