@@ -64,6 +64,17 @@ async function wired(rich = false): Promise<{ wire: DriveV3; root: string; admis
     const words = (await drive.createFolder(inbox, 'Garden', { pile: 'p-garden' })).id;
     await drive.createText(words, PILE_NOTE, 'Ideas for the garden in spring.\n');
   }
+  // Folders the recorded replies file into already exist: a new one under Areas or Projects needs a cited note (placement-check).
+  const under = async (parent: string, name: string): Promise<string> => (await drive.createFolder(parent, name)).id;
+  const at = async (name: string): Promise<string> => (await drive.listAll(root)).find((f) => f.name === name)?.id ?? root;
+  const areas = await at('Areas');
+  await under(await under(areas, 'Money'), 'Payslips');
+  await under(areas, 'Health');
+  const projectsId = await at('Projects');
+  const jobs = (await drive.listAll(root)).find((f) => f.name === 'Job hunt')?.id;
+  if (jobs) await under(jobs, 'Applications');
+  const flat = (await drive.listAll(root)).find((f) => f.name === 'Flat hunt')?.id;
+  await under(flat ?? await under(projectsId, 'Flat hunt'), 'Viewing photos');
   const admitted = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
   if (admitted.kind !== 'manifest') throw new Error(`nothing admitted: ${admitted.cause}`);
   const wire = driveV3(drive);
@@ -136,9 +147,10 @@ describe('the Claude provider', () => {
   it('a new Area with no cited rule or note is refused and retried once', async () => {
     const { wire } = await wired();
     const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Areas/Community garden'; });
-    const replies = [newArea, recorded('reply-ok.json')];
+    const toResources = edited((m) => { for (const t of m.things as Array<{ to: string }>) t.to = 'Resources'; });
+    const replies = [newArea, toResources];
     const calls: ClaudeCall[] = [];
-    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: replies[calls.length - 1] ?? replies[1] ?? '' });
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: replies[calls.length - 1] ?? toResources });
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);

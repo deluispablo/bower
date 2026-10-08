@@ -162,6 +162,8 @@ interface Shown {
   own?: string;
   piles: Array<{ pileId: string; words: string; things: ShownThing[] }>;
   notes: Array<{ path: string; text: string; cut: number }>;
+  /** The person's `Rules.md`, bounded, when the folder has one. */
+  rules?: string;
   /** The paths and names of the folder's files, for the check on a note's links; not shown to the model. */
   names?: Set<string>;
   folders: string[];
@@ -185,8 +187,8 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.',
     'Reply with one JSON object and nothing else, of exactly this shape:',
     '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>",',
-    '  "note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
-    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md"}],',
+    '  "basis":"<a rule line or the path of a note below>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
+    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>"}],',
     ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId>"}]}',
     `A folder path starts with one of ${MAIN_FOLDERS.join(', ')}; missing folders are made. A thing keeps its extension`,
     '(a saved link may become a ".md" note). A thing left out stays in the inbox with its whole pile.',
@@ -196,6 +198,9 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'Projects hold a goal with an end date, Areas an ongoing responsibility with no end date, Resources topics and reference',
     'material (one folder per topic), Archive what is no longer active. A thing that fits no folder below, and is neither a',
     'goal nor an ongoing responsibility, goes to Resources.',
+    '"basis" (optional) is one line copied from "rules" below, or the path of a note below, that shows an ongoing responsibility',
+    'or a goal. A NEW folder under Areas or Projects needs one; without it Bower refuses the reply, so use Resources instead.',
+    'A folder below needs none.',
     `"note" is optional: a note beside the thing, saying what it says. Use only facts from its text; invent none.`,
     `Its summary is at most ${AUTHORED.summary} characters, its body at most ${AUTHORED.body}, with no front matter and`,
     'no "## Current state", "## Timeline" or "## Bower\'s note" heading: Bower writes those. A saved link filed as a note takes none.',
@@ -208,7 +213,7 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'Name only the things, piles and notes below. Never add ids, hashes or other keys: Bower computes them, checks your',
     'reply, and refuses the whole reply if it names anything else; then nothing changes.',
     '',
-    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: shown.piles, notes: shown.notes, folders: shown.folders }),
+    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: shown.piles, notes: shown.notes, folders: shown.folders, ...(shown.rules ? { rules: shown.rules } : {}) }),
   ].join('\n');
 }
 
@@ -273,7 +278,9 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted): Pr
     const path = f.folder ? undefined : ix.pathOf(f.id);
     return path === undefined ? [] : [path, f.name];
   }));
-  return { own: ix.file(SYSTEM.dir)?.id, piles, notes: await notesShown(read, listing, ix), folders, names };
+  const rulesFile = listing.find((f) => !f.folder && f.name === 'Rules.md' && f.parents.includes(run.rootId));
+  const rules = rulesFile ? bounded(await read.readText(rulesFile.id), CONTEXT_BOUNDS.perNote).text : null;
+  return { own: ix.file(SYSTEM.dir)?.id, piles, notes: await notesShown(read, listing, ix), folders, names, ...(rules ? { rules } : {}) };
 }
 
 /**
@@ -328,7 +335,7 @@ const exactly = (value: unknown, keys: readonly string[], optional: readonly str
   !!value && typeof value === 'object' && !Array.isArray(value)
   && keys.every((k) => k in value) && Object.keys(value).every((k) => keys.includes(k) || optional.includes(k));
 
-type Intent = { ok: true; filing: Filing; held: Set<string> } | { ok: false; why: string };
+type Intent = { ok: true; filing: Filing; held: Set<string> } | { ok: false; why: string; placement?: true };
 
 /** Bower's sections and front matter: a model's note body never carries one, so it cannot pass for Bower's own. */
 const OWN_SECTION = /^(?:---\s*|##\s*(?:current state|timeline|bower's note)\s*)$/im;
@@ -364,6 +371,10 @@ export interface Seen {
   notes: ReadonlySet<string>;
   names?: ReadonlySet<string>;
   texts?: ReadonlyMap<string, string>;
+  /** The folders there are under the main folders; when given, a new folder under Areas or Projects needs a cited note. */
+  folders?: ReadonlySet<string>;
+  /** The rules text it was shown, for a cited rule line. */
+  rules?: string;
 }
 
 const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
@@ -381,6 +392,20 @@ function bodyLinks(body: string, ownText: string, named: (target: string) => boo
   return null;
 }
 
+/**
+ * Why a place makes a new folder under Areas or Projects with no note cited, or null. The standard fix for model output
+ * that is well-formed but wrong is to validate it and ask again with the error (Instructor, retrying,
+ * https://python.useinstructor.com/concepts/retrying/). The original only worded this in its rulebook ("an existing
+ * folder, or a new direct subfolder of" the PARA folders, `vault-template/CLAUDE.md:232`; Areas hold an ongoing
+ * responsibility, `:34-37`) and never checked it, so this check is new here. `basis` is a note path or a rule line it was shown.
+ */
+function newPlace(to: string, basis: unknown, seen: Seen): string | null {
+  const [root = ''] = to.split('/');
+  if (!seen.folders || !['Areas', 'Projects'].includes(root) || to === root || seen.folders.has(to)) return null;
+  if (typeof basis === 'string' && (seen.notes.has(basis) || (basis.trim().length >= 12 && (seen.rules ?? '').includes(basis.trim())))) return null;
+  return `a new folder "${to}" under ${root} with no rule line or note of an ongoing responsibility or goal cited in "basis"; file it in an existing folder or in Resources`;
+}
+
 export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
   const { notes } = seen;
   if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines']) || value.kind !== 'tidy-intent' || value.v !== 1) return { ok: false, why: 'a reply that is not a tidy-up intent' };
@@ -391,13 +416,15 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
   const placed = new Map<string, Placement>();
   const authored = new Map<string, AuthoredNote>();
   for (const t of things as unknown[]) {
-    if (!exactly(t, ['fileId', 'to', 'name'], ['note'])) return { ok: false, why: 'a thing with keys outside the intent' };
+    if (!exactly(t, ['fileId', 'to', 'name'], ['note', 'basis'])) return { ok: false, why: 'a thing with keys outside the intent' };
     const thing = typeof t.fileId === 'string' ? admitted.get(t.fileId) : undefined;
     if (!thing || typeof t.fileId !== 'string') return { ok: false, why: 'a thing it was not admitted to take' };
     if (placed.has(t.fileId)) return { ok: false, why: 'a thing placed twice' };
     if (!placeOk(t.to)) return { ok: false, why: 'a place outside the main folders' };
     const was = extensionOf(thing.name);
     if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return { ok: false, why: 'a name that changes what a thing is' };
+    const fresh = newPlace(t.to, t.basis, seen);
+    if (fresh) return { ok: false, why: fresh, placement: true };
     placed.set(t.fileId, { to: t.to, name: t.name });
     if ('note' in t) {
       // A saved link filed as a note is that note: it takes no second one.
@@ -409,11 +436,13 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
   }
   const words = new Map<string, Placement>();
   for (const n of worded as unknown[]) {
-    if (!exactly(n, ['pileId', 'to', 'name'])) return { ok: false, why: 'a note with keys outside the intent' };
+    if (!exactly(n, ['pileId', 'to', 'name'], ['basis'])) return { ok: false, why: 'a note with keys outside the intent' };
     if (typeof n.pileId !== 'string' || !piles.has(n.pileId)) return { ok: false, why: 'a pile it was not admitted to take' };
     if (words.has(n.pileId)) return { ok: false, why: 'a pile placed twice' };
     if (!placeOk(n.to)) return { ok: false, why: 'a place outside the main folders' };
     if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return { ok: false, why: 'a note name that is not a note' };
+    const fresh = newPlace(n.to, n.basis, seen);
+    if (fresh) return { ok: false, why: fresh, placement: true };
     words.set(n.pileId, { to: n.to, name: n.name });
   }
   if (lines.length > AUTHORED.lines) return { ok: false, why: 'more Timeline lines than one reply may add' };
@@ -528,6 +557,15 @@ function statsOf(stdout: string): ModelStats | null {
   };
 }
 
+/** What the model is told when its reply was refused for where it files: the reason, then the same task again. */
+const retryNote = (why: string): string => `Your reply was refused: ${why}. Reply again with the whole JSON object, changed so it passes.`;
+
+/** The input with the retry note put before its last line, the context, which stays last. */
+const withRetryNote = (input: string, why: string): string => {
+  const at = input.lastIndexOf('\n');
+  return `${input.slice(0, at)}\n${retryNote(why)}\n${input.slice(at + 1)}`;
+};
+
 /** The token said nowhere: each place it shows in `text` replaced. */
 const hidden = (text: string, token: string | undefined): string => (token ? text.split(token).join('[hidden]') : text);
 
@@ -552,6 +590,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     // Its own empty folder, with an empty home in it: no checkout's or person's settings or CLAUDE.md to find.
     const work = await mkdtemp(join(tmpdir(), 'bower-claude-'));
     let exit: ClaudeExit;
+    let asked: (why: string) => Promise<ClaudeExit>;
     try {
       const home = join(work, 'home');
       const cwd = join(work, 'run');
@@ -568,18 +607,38 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       };
       const ask = (): Promise<ClaudeExit> => (setup.spawn ?? spawnClaude)(call);
       exit = setup.timing ? await setup.timing.time('model', ask) : await ask();
+      asked = async (why) => {
+        const again = (): Promise<ClaudeExit> => (setup.spawn ?? spawnClaude)({ ...call, input: withRetryNote(input, why) });
+        return setup.timing ? setup.timing.time('model', again) : again();
+      };
     } catch (e) {
       return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
     } finally {
       await rm(work, { recursive: true, force: true });
     }
-    const stats = statsOf(exit.stdout);
-    if (setup.timing && stats) setup.timing.model = stats;
-    const reply = replyOf(exit, maxTurns);
-    if (!reply.ok) return refuse(reply.why, exit.stderr);
     const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => (t.text === null ? [] : [[t.fileId, t.text] as const]))));
-    const intent = intentOf(reply.value, took, { notes: new Set(shown.notes.map((n) => n.path)), names: shown.names ?? new Set(), texts });
-    if (!intent.ok) return refuse(intent.why);
+    const seen: Seen = { notes: new Set(shown.notes.map((n) => n.path)), names: shown.names ?? new Set(), texts, folders: new Set(shown.folders), ...(shown.rules ? { rules: shown.rules } : {}) };
+    // One reply read and checked; a placement refusal asks the model once more, telling it why. A second one ends the run.
+    const check = (done: ClaudeExit): { ok: true; intent: Extract<Intent, { ok: true }> } | { ok: false; why: string; placement: boolean } => {
+      const stats = statsOf(done.stdout);
+      if (setup.timing && stats) setup.timing.model = stats;
+      const reply = replyOf(done, maxTurns);
+      if (!reply.ok) return refuse(reply.why, done.stderr);
+      const got = intentOf(reply.value, took, seen);
+      return got.ok ? { ok: true, intent: got } : { ok: false, why: got.why, placement: got.placement === true };
+    };
+    let checked = check(exit);
+    if (!checked.ok && checked.placement) {
+      console.error(`The Claude provider's plan for run ${run.runId} was refused: ${checked.why}; asking once more.`);
+      try {
+        checked = check(await asked(checked.why));
+      } catch (e) {
+        if (e instanceof BowerError) throw e;
+        return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
+      }
+    }
+    if (!checked.ok) return refuse(checked.why);
+    const intent = checked.intent;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     const t = took.taken;
     const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), filing: intent.filing, updates: [] }, undefined, intent.held);

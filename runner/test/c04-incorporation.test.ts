@@ -131,7 +131,7 @@ describe('what the model is shown (P4-3)', () => {
 
 /** A proposal by names, as a script would write it: the runner's context gives each thing's file id. */
 interface Proposal {
-  things: Array<{ thing: string; to: string; name: string; note?: { name: string; summary: string; body: string } }>;
+  things: Array<{ thing: string; to: string; name: string; basis?: string; note?: { name: string; summary: string; body: string } }>;
   lines?: Array<{ note: string; text: string; cites?: string }>;
 }
 
@@ -153,16 +153,17 @@ const PROPOSALS: Record<string, Proposal> = {
     things: [{
       thing: 'receipt-2026-09-14.pdf',
       to: 'Areas/Money/Receipts/2026-09',
+      basis: 'Receipts go to Areas / Money / Receipts, in a folder for each month.',
       name: 'Saltmere Hardware, 2026-09-14.pdf',
       note: { name: 'Saltmere Hardware, 2026-09-14.md', summary: 'Saltmere Hardware receipt, 2026-09-14, total 51.91.', body: 'Four items, total 51.91 paid by card. Returns within 28 days.' },
     }],
   },
   'c04-offer-and-flat': {
     things: [
-      { thing: 'Offer_letter_final(2).pdf', to: 'Projects/Job hunt/Applications', name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Salary 42,000 a year. Start 2 November.' } },
+      { thing: 'Offer_letter_final(2).pdf', to: 'Projects/Job hunt/Applications', basis: 'Projects/Job hunt/Job hunt.md', name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Salary 42,000 a year. Start 2 November.' } },
       { thing: 'listing-88213.example.url', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
-      { thing: 'IMG_2301.jpg', to: 'Projects/Flat hunt/Viewing photos', name: 'Wrenfield Road, kitchen.jpg' },
-      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', name: 'Payslip August (2).pdf' },
+      { thing: 'IMG_2301.jpg', to: 'Projects/Flat hunt/Viewing photos', basis: 'Projects/Flat hunt/Flat hunt.md', name: 'Wrenfield Road, kitchen.jpg' },
+      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', basis: 'Payslips go to Areas / Money / Payslips.', name: 'Payslip August (2).pdf' },
     ],
     lines: [
       { note: 'Projects/Flat hunt/Flat hunt.md', text: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example.url' },
@@ -174,7 +175,7 @@ const PROPOSALS: Record<string, Proposal> = {
     things: [{ thing: 'Community garden newsletter, autumn.pdf', to: 'Resources/Garden', name: 'Community garden newsletter, autumn.pdf', note: { name: 'Community garden newsletter, autumn.md', summary: 'Autumn newsletter of the community garden.', body: 'Bulb planting on 18 October; plot fees due by 31 January.' } }],
   },
   'bench-3-receipt-pdf': {
-    things: [{ thing: 'receipt-2026-09-14.pdf', to: 'Areas/Money/Receipts', name: 'Example Hardware, 2026-09-14.pdf', note: { name: 'Example Hardware, 2026-09-14.md', summary: 'Hardware receipt, total 51.91.', body: 'Total 51.91, paid by card.' } }],
+    things: [{ thing: 'receipt-2026-09-14.pdf', to: 'Resources/Receipts', name: 'Example Hardware, 2026-09-14.pdf', note: { name: 'Example Hardware, 2026-09-14.md', summary: 'Hardware receipt, total 51.91.', body: 'Total 51.91, paid by card.' } }],
   },
 };
 
