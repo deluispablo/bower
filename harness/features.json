@@ -4931,7 +4931,7 @@
     "note": "TL-P4-08 addendum (main c85da86) point 4: fix in this batch if it repeats today."
   },
   {
-    "passes": true,
+    "passes": false,
     "id": "state-rewrite-change",
     "task": "p4-c",
     "category": "feature",
@@ -4942,7 +4942,7 @@
       "Undo restores the previous text."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a Bower-owned Current state is rewritten and undo restores it|a Current state the person edited gets a line and a question, never a rewrite\"",
-    "note": "TL-P4-08 addendum (main c85da86) point 1: first C05 entry (escalated)."
+    "note": "TL-P4-08 addendum (main c85da86) point 1: first C05 entry (escalated). Reopened by the P4-12 review (BLOCK): an unmarked Current state counts as Bower-owned, so person edits on every existing note go uncaught; the unmarked case awaits the lead."
   },
   {
     "passes": false,
