@@ -5358,7 +5358,7 @@
       "One mechanism; remove the copies it replaces in the same entry.",
       "Card: removed: <lines>; goldens equal or lower."
     ],
-    "verify": "pnpm vitest run -t \"every Drive method is classed read or write\"",
+    "verify": "pnpm vitest run -t \"every Drive method is classed read or write|no id is reserved on a lost lease\"",
     "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-mechanical. TL-P4-14 addendum: generateIds is a write and stays fenced; test that no id is reserved on a lost lease."
   },
   {
