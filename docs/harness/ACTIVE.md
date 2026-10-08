@@ -205,3 +205,4 @@ P3-9 is closed.
 - model-input-fingerprint re-closed (00d4316). 368/369. Short Opus fix-round check running.
 - P4-7 fix-round check PASS (2 minors to polish). No src/e2e/api change since a566241, so the P4-6 e2e suites stand; check green at done.sh. Main moves.
 - Main and backup at cd3af43. Deploy SHA sent to the lead; 5 C04 runs to follow when Claude is on.
+- C04 x5 on cd3af43: 4/5 PASS (run 2 Areas). press→done 0:50–0:59 (1:46 with a runner wait). checkpoints now 4 per run. input= differs per run (raw input carries fresh file ids); asked the lead about hashing the normalised input.
