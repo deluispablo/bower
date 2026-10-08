@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -140,6 +140,19 @@ export interface Filing {
    * the inbox untouched, its pile's words with it, and the rest of its pile is filed.
    */
   thingAsks?: ReadonlyMap<string, Ask>;
+  /** Notes the person said yes to keeping as one (C05, `keep-one-note-merge`), each with the answer that says so. */
+  keep?: readonly KeepOne[];
+}
+
+/**
+ * Two notes kept as one (C05, TL-P4-08 addendum 7): the model names the note kept and the other, and the spine
+ * checked the person's yes (`answer`, a journal record id). The other note's facts and Timeline lines go to the kept
+ * note's Timeline (a person's words there untouched), links to it follow the kept note, and it goes to the Bin.
+ */
+export interface KeepOne {
+  kept: string;
+  other: string;
+  answer: string;
 }
 
 /**
@@ -218,7 +231,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
    * answers then wait for a run that can act on them, never archived unanswered.
    */
   const demo = !opts.filing;
-  let journal = demo ? lines : lines.filter((l) => l.rec.kind !== 'request' && l.rec.kind !== 'answer');
+  // Notes kept as one: each by its yes, among the lines this run took; one held back (`keep:<answer>`) waits with it.
+  const keeps = (opts.filing?.keep ?? []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && l.rec.text === 'yes'));
+  const keepAnswers = new Set(keeps.map((k) => k.answer));
+  let journal = demo ? lines : lines.filter((l) => (l.rec.kind !== 'request' && l.rec.kind !== 'answer') || keepAnswers.has(l.rec.id));
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
   // Rules.md made when it is missing; a line whose words cannot be worded stays pending.
   const ruleWords = ruleChangesOf(journal);
@@ -661,15 +677,38 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const moved = journal.filter((l) => l.rec.kind === 'rename' || l.rec.kind === 'move');
   const taken = new Set([...ix.entries().keys()].filter((p) => p.endsWith('.md')).map((p) => displayName(nameOf(p)).toLowerCase()));
   const allRenames = renamesFor(moved.map((l) => ({ id: l.rec.id, at: l.rec.at, kind: l.rec.kind, what: l.rec.what, ...(l.rec.path ? { path: l.rec.path } : {}), ...(l.rec.from ? { from: l.rec.from } : {}) })), taken);
-  const renames = allRenames.filter(renameOk);
+  const journalRenames = allRenames.filter(renameOk);
   // A rename no link can be written with keeps its lines where they are, as the resolver still follows them (rule 7).
-  let holdRenames = renames.length !== allRenames.length;
+  let holdRenames = journalRenames.length !== allRenames.length;
   if (holdRenames) console.error('A former name cannot be written into links; the rename lines stay for the next tidy-up');
+  // Notes kept as one (C05): the other note's facts and Timeline lines on the kept note's Timeline, each line naming
+  // the answer (so its archive waits for it), and every link to the other note rewritten to the kept one.
+  const keeping: Array<{ k: KeepOne; kept: DriveFile; other: DriveFile; rename: Rename; lines: WantedLine[] }> = [];
+  for (const k of date ? keeps : []) {
+    const kept = ix.file(k.kept);
+    const other = ix.file(k.other);
+    const rename = { from: displayName(nameOf(k.other)), to: displayName(nameOf(k.kept)) };
+    const noteOk = (path: string): boolean => path.endsWith('.md') && MAIN_FOLDERS.includes(path.split('/')[0] ?? '');
+    if (!kept || kept.folder || !other || other.folder || !noteOk(k.kept) || !noteOk(k.other) || !renameOk(rename)) {
+      console.error('A note to keep as one is not there or cannot be named in links; its answer waits for the next tidy-up');
+      return planScripted(drive, rootId, opts, editCap, new Set([...held, `keep:${k.answer}`]));
+    }
+    const was = await drive.readText(kept.id);
+    const lines = carriedLines(parseNote(k.other, await drive.readText(other.id)), parseNote(k.kept, was), was)
+      .map((entry): WantedLine => ({ entry: { ...entry, date: date ?? '' }, record: k.answer, what: null, after: null }));
+    want(kept, k.kept).lines.push(...lines);
+    keeping.push({ k, kept, other, rename, lines });
+    // The other note is recorded as the run saw it, so its Bin is checked against that (`stillAsSeen`) and undone from it.
+    places.set(other.id, other);
+  }
+  const keepRenames = keeping.map((x) => x.rename);
+  const renames = [...journalRenames, ...keepRenames.filter((r) => !journalRenames.some((j) => j.from.toLowerCase() === r.from.toLowerCase()))];
+  const binned = new Set(keeping.map((x) => x.other.id));
   if (renames.length) {
     for (const [path, entry] of ix.entries()) {
       if (entry.type !== 'file' || !path.endsWith('.md') || path.startsWith('Inbox/') || path.startsWith(`${SYSTEM.dir}/`)) continue;
       const f = ix.file(path);
-      if (f && !f.folder) want(f, path).renames = renames;
+      if (f && !f.folder && !binned.has(f.id)) want(f, path).renames = renames;
     }
   }
   // Rules.md takes its rules-wording change in its one edit (TL-P2-20 rule 3), within the edit cap.
@@ -688,6 +727,9 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const twins = new Map<WantedLine, WantedLine>();
   const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[]; rules: RulesWording | null; state: StateRewrite | null; stateAfter: string | null }> = [];
   const editing = [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path));
+  /** Notes that changed while read, and the bytes of notes whose links could not be rewritten: a keep waits on either. */
+  const raced = new Set<string>();
+  const notRelinked = new Set<Uint8Array>();
   // What the next loops read, one after the other: the notes to edit, and the saved links being filed.
   drive.warm?.([...editing.map((w) => ({ id: w.file.id, as: 'bytes' as const })), ...things.filter((t) => t.item.kind === 'link').map((t) => ({ id: t.file.id, as: 'text' as const }))]);
   for (const w of editing) {
@@ -706,6 +748,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     }
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
       console.error('A note changed while it was read; no edit is planned for it this time');
+      raced.add(f.id);
       if (w.renames) holdRenames = true;
       // A passing race, not a refusal: its lines wait for the next run, like those past the cap.
       for (const l of w.lines) lineState.set(l, 'deferred');
@@ -719,7 +762,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       rewrite = result.ok;
       if (result.ok) rewritten = result.bytes;
       // A note that links to a former name but cannot be rewritten keeps the rename lines (rule 7).
-      if (!result.ok && result.reason !== 'unchanged' && mentions(bytes, w.renames)) {
+      if (!result.ok && result.reason !== 'unchanged') notRelinked.add(bytes);
+      if (!result.ok && result.reason !== 'unchanged' && mentions(bytes, journalRenames)) {
         console.error(`A note's links could not be rewritten (${result.reason}); the rename lines stay for the next tidy-up`);
         holdRenames = true;
       }
@@ -803,8 +847,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const appendOf = (lines: WantedLine[]): Change[] => (lines.length
     ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
     : []);
+  /** The answers whose keep a note's link rewrite is for: the notes it links to the other note of each. */
+  const keptFor = (bytes: Uint8Array): string[] => keeping.filter((x) => mentions(bytes, [x.rename])).map((x) => x.k.answer);
   const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
-    [...(c.state ? [c.state] : []), ...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...appendOf(c.lines), ...(c.rules ? [c.rules] : [])];
+    [...(c.state ? [c.state] : []), ...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds: [...recordIds, ...keptFor(c.bytes)], renames }] : []), ...appendOf(c.lines), ...(c.rules ? [c.rules] : [])];
   const authored = candidates.slice(0, editCap).flatMap((c) => {
     const result = applyChanges(c.bytes, changesOf(c, []));
     if (result.ok) return [{ c, text: result.text }];
@@ -813,13 +859,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     return [];
   });
   const renameIds = holdRenames ? [] : moved.map((l) => l.rec.id);
-  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[] }> = [];
+  const edits: Array<{ file: DriveFile; path: string; what: string | null; before: VerifiedContent; bytes: Uint8Array; changes: Change[]; text: string; after: string[]; keeps: string[] }> = [];
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
     const what = c.lines.find((l) => l.what !== null)?.what ?? (c.state ? STATE_UPDATED : null);
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
-    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after });
+    // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
+    const keeps = [...new Set([...keeping.filter((x) => x.kept.id === c.file.id).map((x) => x.k.answer), ...(c.rewrite ? keptFor(c.bytes) : [])])];
+    edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after, keeps });
     places.set(c.file.id, c.file);
   }
   for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'refused');
@@ -833,6 +881,17 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // becomes ADOPT_STATES_RULE (C11), and Bower then adopts them.
   if (unmarkedStates.some((l) => lineState.get(l) === 'planned' || lineState.get(l) === 'present')) {
     askedPiles.push({ id: ADOPT_STATES_ID, text: ADOPT_STATES_QUESTION, yes: 'Keep them up to date', no: 'Leave them', askedAt: opts.requestedAt });
+  }
+  // A keep goes whole or waits whole with its answer: every line it carries written (or there already), every note
+  // linking the other note rewritten, and the other note edited by nothing else; otherwise it is planned again held.
+  for (const x of keeping) {
+    const planned = (l: WantedLine): boolean => ['planned', 'present'].includes(lineState.get(l) ?? '');
+    const relinked = candidates.filter((c) => mentions(c.bytes, [x.rename])).every((c) => edits.some((e) => e.file.id === c.file.id && e.changes.some((ch) => ch.kind === 'link-rewrite')));
+    const unlinked = raced.size > 0 || [...notRelinked].some((b) => mentions(b, [x.rename]));
+    if (!x.lines.every(planned) || !relinked || unlinked || edits.some((e) => e.file.id === x.other.id)) {
+      console.error('Two notes could not be kept as one now; the answer waits for the next tidy-up');
+      return planScripted(drive, rootId, opts, editCap, new Set([...held, `keep:${x.k.answer}`]));
+    }
   }
   /** A merge's line, when its note is one a line can go to at all. */
   const lineOf = (m: Merge): WantedLine | undefined => wanted.get(ix.idOf(m.into) ?? '')?.lines.find((l) => l.record === m.answer && l.entry.text === m.line);
@@ -1205,8 +1264,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   for (const edit of edits) {
     // A line citing a thing filed by this run waits for that thing's move (C06).
     const cited = edit.after.flatMap((id) => moveOf.get(id) ?? []);
-    const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text) }, cited);
+    const beforeText = edit.keeps.length ? { beforeText: new TextDecoder().decode(edit.bytes) } : {};
+    const op = await add({ kind: 'edit-text', before: seen(edit.file), path: edit.path, beforeContent: edit.before, changes: edit.changes, text: edit.text, content: await utf8(edit.text), ...beforeText }, cited);
     editOf.set(edit.file.id, op);
+    for (const answer of edit.keeps) fromAnswer.set(answer, [...(fromAnswer.get(answer) ?? []), op]);
     for (const id of edit.changes.flatMap((c) => (c.kind === 'rules-wording' ? [...c.add, ...c.remove].map((r) => r.recordId) : c.recordIds))) editsFrom.set(id, [...(editsFrom.get(id) ?? []), op]);
     // Only a Timeline line marks a note new (m3); a link fix never does.
     if (edit.changes.some((c) => c.kind === 'timeline-append')) {
@@ -1220,6 +1281,17 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (op) fromAnswer.set(id, [...(fromAnswer.get(id) ?? []), op]);
   }
   for (const f of filing.filter((x) => x.merge)) await fileOne(f);
+  // The other note of each keep goes to the Bin (never deleted), once the kept note and every link to it are written;
+  // the report says so in one line on the kept note, and the answer's question goes once it is done (R4-1).
+  for (const x of keeping) {
+    const written = fromAnswer.get(x.k.answer) ?? [];
+    const op = await add({ kind: 'bin', before: seen(x.other), capturedChildIds: [] }, written);
+    fromAnswer.set(x.k.answer, [...written, op]);
+    // Grounded by the kept note's edit first, then the link rewrites, then the Bin (`grounded`); with nothing new to
+    // write on the kept note there is no edit to ground it, and the Bin says it alone.
+    const keptEdit = editOf.get(x.kept.id);
+    if (keptEdit) reportPlan.push({ requires: [keptEdit, ...written.filter((w) => w !== keptEdit), op], when: 'applied', value: { ...empty(), updated: [{ path: ix.pathOf(x.kept.id) ?? x.k.kept, what: keptLine(displayName(nameOf(x.k.other))) }] } });
+  }
   // Things already saved go to the Bin (never deleted), a copy of this run's thing after that one's move; each is
   // reported as already saved under the name of the file it copies, and gets no note and no line.
   for (const s of saved) {
@@ -1732,6 +1804,32 @@ function tookLines(lines: readonly JournalLine[], taken: AdmissionManifest): Jou
  * A run's create keys: minted from its run id, which is random per run, and the order they are asked for; so the
  * same run plans the same keys again, and no two runs share one (never derived from a name or a time alone).
  */
+/** A note's text made one Timeline field: links as their shown words, no Timeline separator, one line. */
+const asLineText = (text: string): string => text
+  .replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_m, target: string, alias?: string) => (alias ?? target).trim())
+  .replace(/\s+·\s+/g, ', ').split('').map((c) => (c < ' ' || c === '\u007f' ? ' ' : c)).join('').replace(/^#+\s*|^[-*+]\s+/, '').trim();
+
+/**
+ * What the other note of a keep brings to the kept one (C05): its properties the kept note lacks or says otherwise
+ * ("Rent: ..."), its Current state and its own words, line by line, and its Timeline lines, each saying the day it
+ * happened ("From 2026-10-02: ...") with its source. A line the kept note already says is not repeated. Dated by the
+ * caller (the run's day, as every line a run writes).
+ */
+function carriedLines(other: ParsedNote, kept: ParsedNote, keptText: string): EditEntry[] {
+  const has = new Set(kept.properties.map((p) => `${p.key}\n${p.value}`));
+  const out: EditEntry[] = [];
+  const add = (text: string, source: string | null): void => {
+    const line = asLineText(text);
+    const src = source !== null && /^[^\]|#^\r\n]+$/.test(source) ? source : null;
+    if (line && !keptText.includes(line) && !out.some((e) => e.text === line)) out.push({ date: '', text: line, source: src });
+  };
+  for (const p of other.properties) if (!has.has(`${p.key}\n${p.value}`)) add(`${p.label}: ${p.value}`, null);
+  for (const line of other.currentState) add(line, null);
+  for (const line of other.body.split('\n')) add(line, null);
+  for (const t of other.timeline) add(`From ${t.date}: ${t.text}`, t.source ?? null);
+  return out;
+}
+
 export async function runKeys(runId: string): Promise<(kind: string) => string> {
   const base = (await sha256(new Blob([new TextEncoder().encode(`bower-create-key\n${runId}`)]))).slice(0, 20);
   let n = 0;

@@ -95,7 +95,8 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
  * - a move's subject is a thing, a pile folder or one of your changes the run took; any other move only sets
  *   Bower's "new" mark in place: cleared from last run's things, or set again on a note the plan edits;
  * - a Bin's subject is a pile folder or a pile's note the run took (a pile of words, once its note is written), or a
- *   thing it took that is already saved (`duplicates.ts`, planned by the runner, never named by the model);
+ *   thing it took that is already saved (`duplicates.ts`, planned by the runner, never named by the model); or the
+ *   other note of two the person said yes to keeping as one (`kept`, the paths the checked intent names), as captured;
  * - a runner-JSON write's subject is one of Bower's own files in `.bower`;
  * - a note edit carries only what the runner authors from your changes and its fixed hub list (`applyChanges`): a
  *   Timeline line or a link rewrite on a note, and on `Rules.md` your typed rules (`rules-wording`) or a link
@@ -106,8 +107,10 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
  * refused whole, before any write.
  */
 /** `own` is the id of Bower's own folder (`.bower`) in the run's folder, as the run listed it. */
-export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | undefined): string | null {
+export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | undefined, kept: ReadonlySet<string> = new Set()): string | null {
   const t = took.taken;
+  // A note kept as one with another goes to the Bin only as the run captured it, by the path the intent named.
+  const keptOther = (fileId: string): boolean => m.capture.places.some((p) => p.file.fileId === fileId && !p.file.folder && p.path.endsWith('.md') && kept.has(p.path));
   const anchors = new Set(t.piles.flatMap((p) => (p.anchor ? [p.anchor.fileId] : [])));
   const taken = new Set([...anchors, ...t.piles.flatMap((p) => p.items.map((i) => i.fileId)), ...t.journal.map((j) => j.fileId)]);
   const edited = new Set(m.operations.flatMap((o) => (o.effect.kind === 'edit-text' ? [o.effect.before.fileId] : [])));
@@ -122,7 +125,7 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
         break;
       }
       case 'bin':
-        if (!taken.has(e.before.fileId)) return 'a Bin of a thing it was not admitted to take';
+        if (!taken.has(e.before.fileId) && !keptOther(e.before.fileId)) return 'a Bin of a thing it was not admitted to take';
         break;
       case 'write-runner-json':
         if (own === undefined || !sameParents([own], e.before.parents) || !runnerFiles.has(`${SYSTEM.dir}/${e.before.name}`)) return "a write to a file that is not Bower's own";

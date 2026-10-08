@@ -54,10 +54,14 @@ export type Change =
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
   | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[] }
   | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] };
-/** Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. */
+/**
+ * Manifest v2's one new effect: `text` is the whole file after every change, authored by `applyChanges`. `beforeText`
+ * (optional, `keep-one-note-merge`): the whole file as read, described by `beforeContent`, so an undo can put it back
+ * (`undoEdit`) where the changes alone cannot be taken back (a link rewrite).
+ */
 export type EditText = {
   kind: 'edit-text'; before: SeenFile; path: string; beforeContent: VerifiedContent;
-  changes: Change[]; text: string; content: Content;
+  changes: Change[]; text: string; content: Content; beforeText?: string;
 };
 export type EffectV2 = Effect | EditText;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
@@ -316,9 +320,10 @@ function change(value: unknown): value is Change {
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || CHANGE_ORDER.indexOf(changes[i - 1]?.kind ?? item.kind) < CHANGE_ORDER.indexOf(item.kind));
 function editText(value: unknown): value is EditText {
-  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content']) && value.kind === 'edit-text'
+  return closed(value, ['kind', 'before', 'path', 'beforeContent', 'changes', 'text', 'content'], ['beforeText']) && value.kind === 'edit-text'
     && seenFile(value.before) && path(value.path) && verifiedContent(value.beforeContent)
-    && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content);
+    && list(value.changes, change) && canonical(value.changes as Change[]) && text(value.text) && content(value.content)
+    && (!Object.hasOwn(value, 'beforeText') || text(value.beforeText));
 }
 const effectV2 = (value: unknown): value is EffectV2 => effect(value) || editText(value);
 function operationV2(value: unknown): value is OperationV2 {
@@ -370,6 +375,8 @@ function texts(value: Manifest | ManifestV2): { text: string; content: Content }
   const found: { text: string; content: Content }[] = value.capture.piles.flatMap((pile) => pile.context.kind === 'text' ? [pile.context] : []);
   for (const { effect } of value.operations) {
     if (effect.kind === 'create-text' || effect.kind === 'write-runner-json' || effect.kind === 'edit-text') found.push(effect);
+    // A before-image is the very text `beforeContent` describes.
+    if (effect.kind === 'edit-text' && effect.beforeText !== undefined) found.push({ text: effect.beforeText, content: effect.beforeContent });
   }
   return found;
 }

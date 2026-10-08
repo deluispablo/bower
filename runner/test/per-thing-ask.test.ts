@@ -146,6 +146,9 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       askTwice: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg')), ask(id('IMG_2301.jpg'))] })),
       askAlsoFiles: edit((i, id) => ({ ...i, asks: [ask(id('IMG_2301.jpg'))] })),
       askText: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { text: 'one\ntwo' })] })),
+      keepKeys: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', extra: 1 }] })),
+      keepNote: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/None.md' }] })),
+      keepNotAsked: edit((i) => ({ ...i, keep: [{ kept: 'Projects/Job hunt/Job hunt.md', other: 'Projects/Flat hunt/Flat hunt.md' }] })),
     };
     expect(Object.keys(bad).sort()).toEqual(Object.keys(REFUSALS).sort());
     const good = intentReply((_ctx, id) => filed(id));

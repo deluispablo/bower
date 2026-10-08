@@ -54,7 +54,7 @@ const SCRIPTS: Record<string, ClaudeSpawn> = {
     ],
   })),
   // The person said yes to keeping one note; nothing is in the inbox, so the model's only work is the merge.
-  'c05-keep-one-note': answering(() => ({ kind: 'tidy-intent', v: 1, things: [] })),
+  'c05-keep-one-note': answering(() => ({ kind: 'tidy-intent', v: 1, things: [], keep: [{ kept: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', other: 'Projects/Flat hunt/Flat 3 (second).md' }] })),
 };
 
 describe('the C05 slice through the Claude provider', () => {

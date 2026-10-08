@@ -44,7 +44,7 @@ import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { duplicatesOf } from '../../src/data/spine/duplicates';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import { planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type KeepOne, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { SYSTEM } from '../../src/data/vault/layout';
@@ -404,6 +404,46 @@ async function notesShown(read: ScriptedRead, listing: readonly DriveFile[], ix:
   return notes;
 }
 
+/** A question about keeping one note: the person is asked whether two notes are one (the fake's and the corpus' wording). */
+const KEEP_ONE = /\bkeep one note\b/i;
+
+/**
+ * The pairs of notes shown that the person said yes to keeping as one (`keep-one-note-merge`): a yes answer among the
+ * changes this run took, to an open question about keeping one note that names both notes (as a [[link]] or by name).
+ * Only these may be kept as one; the answer's record id goes with the pair, so the spine archives it once done.
+ */
+async function mergesOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, notes: readonly string[]): Promise<NonNullable<Seen['merges']>> {
+  if (!took.taken.journal.length || notes.length < 2) return [];
+  const listing = await read.listAll(run.rootId);
+  const file = VaultIndex.build(run.rootId, listing).file(SYSTEM.questions);
+  if (!file || file.folder) return [];
+  const json = (text: string): unknown => {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      if (!(e instanceof SyntaxError)) throw e;
+      // A file that is not JSON offers no answer; the plan says so when it reads it again.
+      console.error('A file of your changes or questions is not valid JSON');
+      return null;
+    }
+  };
+  const open = json(await read.readText(file.id)) as { questions?: unknown } | null;
+  const questions = Array.isArray(open?.questions) ? (open.questions as Array<{ id?: unknown; text?: unknown }>) : [];
+  const shownName = (path: string): string => (path.split('/').at(-1) ?? path).replace(/\.md$/i, '').toLowerCase();
+  const merges: Array<{ notes: readonly [string, string]; answer: string }> = [];
+  for (const line of took.taken.journal) {
+    const rec = json(await read.readText(line.fileId)) as { id?: unknown; kind?: unknown; text?: unknown; questionId?: unknown } | null;
+    if (rec?.kind !== 'answer' || rec.text !== 'yes' || typeof rec.id !== 'string') continue;
+    const q = questions.find((x) => x.id === rec.questionId);
+    if (typeof q?.text !== 'string' || !KEEP_ONE.test(q.text)) continue;
+    const said = q.text.toLowerCase();
+    const named = notes.filter((n) => said.includes(shownName(n)));
+    // Two notes, and only two: a question naming more is not one about these two.
+    if (named.length === 2) merges.push({ notes: [named[0] ?? '', named[1] ?? ''], answer: rec.id });
+  }
+  return merges;
+}
+
 /**
  * What the model is shown of what the run took: everything but the things already saved (`duplicates.ts`), which the
  * plan bins on its own, and a pile of nothing else with them. Decided from the listing the run reads anyway.
@@ -489,6 +529,9 @@ export const REFUSALS = {
   askTwice: 'a thing or pile asked about twice',
   askAlsoFiles: 'a question about a thing or pile it also files',
   askText: 'a question that is not one short plain line',
+  keepKeys: 'a note kept with keys outside the intent: give "kept" and "other"',
+  keepNote: 'a note kept that is not two different notes below, each named once and the other given no line or state',
+  keepNotAsked: 'a note kept that the person did not say yes to keeping as one',
 } as const;
 export type RefusalKind = keyof typeof REFUSALS;
 type Refused = { ok: false; kind: RefusalKind; why: string };
@@ -539,6 +582,11 @@ export interface Seen {
   /** What a number may come from besides the cited thing: the piles' words, and the notes shown (paths and text). When given, numbers are checked. */
   words?: string;
   shownNotes?: string;
+  /**
+   * The pairs of notes the person said yes to keeping as one (`keep-one-note-merge`): each from a yes answer this run
+   * took to a question about keeping one note that names both notes; `answer` is that answer's record id.
+   */
+  merges?: ReadonlyArray<{ notes: readonly [string, string]; answer: string }>;
 }
 
 /**
@@ -642,9 +690,9 @@ const RESPONSIBILITY_MAX = 60;
 
 export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
   const { notes } = seen;
-  if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines', 'asks', 'states']) || value.kind !== 'tidy-intent' || value.v !== 1) return no('notIntent');
-  const { things, notes: worded = [], lines = [], asks = [], states = [] } = value;
-  if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines) || !Array.isArray(asks) || !Array.isArray(states)) return no('notIntent');
+  if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines', 'asks', 'states', 'keep']) || value.kind !== 'tidy-intent' || value.v !== 1) return no('notIntent');
+  const { things, notes: worded = [], lines = [], asks = [], states = [], keep = [] } = value;
+  if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines) || !Array.isArray(asks) || !Array.isArray(states) || !Array.isArray(keep)) return no('notIntent');
   const piles = new Map(took.taken.piles.map((p) => [p.pileId, p]));
   const admitted = new Map(took.taken.piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
   const areas = new Map<string, string>();
@@ -748,6 +796,20 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     if (!plain(a.text, ASK.text) || !plain(a.yes, ASK.answer) || !plain(a.no, ASK.answer)) return no('askText');
     (whole ? asked : askedThings).set(whole ? pile.pileId : fileId, { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() });
   }
+  // Notes kept as one (C05, `keep-one-note-merge`): two different notes it was shown, each in one pair only, the other
+  // given no line or state (it goes to the Bin), and only a pair the person said yes to keeping as one.
+  const kept: KeepOne[] = [];
+  const inPairs = new Set<string>();
+  for (const k of keep as unknown[]) {
+    if (!exactly(k, ['kept', 'other'])) return no('keepKeys');
+    const { kept: into, other } = k;
+    if (typeof into !== 'string' || typeof other !== 'string' || into === other || !notes.has(into) || !notes.has(other)) return no('keepNote');
+    if (inPairs.has(into) || inPairs.has(other) || timeline.some((l) => l.path === other) || current.some((x) => x.path === other)) return no('keepNote');
+    const pair = seen.merges?.find((m) => m.notes.includes(into) && m.notes.includes(other));
+    if (!pair) return no('keepNotAsked');
+    inPairs.add(into).add(other);
+    kept.push({ kept: into, other, answer: pair.answer });
+  }
   // A pile with a thing neither placed nor asked about waits whole for the next run.
   const held = new Set(took.taken.piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
   // Links in each note body: only to what is in the folder or what this reply files or writes (P4-3 review).
@@ -757,7 +819,7 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     const why = bodyLinks(n.body, seen.texts?.get(id) ?? '', named);
     if (why) return no(why);
   }
-  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings } };
+  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings, ...(kept.length ? { keep: kept } : {}) } };
 }
 
 /** The runner's environment cut down to the allow-list, with a home of the run's own. */
@@ -927,6 +989,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       words: shown.piles.map((p) => p.words).join('\n'),
       shownNotes: shown.notes.map((n) => `${n.path}\n${n.text}`).join('\n'),
       ...(shown.rules ? { rules: shown.rules } : {}),
+      merges: await mergesOf(read, run, shownTook, shown.notes.map((n) => n.path)),
     };
     // One reply read and checked. Every refusal of the reply asks the model once more, telling it why (TL-P4-08
     // addendum 4); a second one ends the run. A run that went wrong (a cap, an error result) ends it at once.
@@ -962,7 +1025,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const manifest: RunManifest = plan.manifest;
     const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId);
     if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);
-    const stray = outsideAdmitted(manifest, took, shown.own);
+    const stray = outsideAdmitted(manifest, took, shown.own, new Set((intent.filing.keep ?? []).map((k) => k.other)));
     if (stray) return refuse(stray);
     console.log(`The Claude provider planned ${manifest.operations.length} operations with ${model}.`);
     return manifest;
