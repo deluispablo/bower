@@ -36,10 +36,10 @@ function driveV3(drive: FakeDrive, root = ''): typeof fetch {
       trashed: false,
     };
   };
-  const binned = async (q: string, fields: string): Promise<Response> => {
+  const binned = async (q: string): Promise<Response> => {
     const keys = [...q.matchAll(/value='([^']*)'/g)].map((m) => m[1] ?? '');
     const hits = await drive.binnedByItem(root, keys);
-    return json(200, { files: await Promise.all(hits.map(async (h) => ({ ...(await wire(h.file, fields)), trashed: true, ...(h.sha256 ? { sha256Checksum: h.sha256 } : {}) }))) });
+    return json(200, { files: await Promise.all(hits.map(async (h) => ({ ...(await wire(h.file, '')), trashed: true, ...(h.sha256 ? { sha256Checksum: h.sha256 } : {}), ...(h.size !== null ? { size: String(h.size) } : {}) }))) });
   };
   const f = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input));
@@ -75,7 +75,7 @@ function driveV3(drive: FakeDrive, root = ''): typeof fetch {
     if (method !== 'GET') return json(400, { error: { code: 400, message: 'badRequest' } });
     if (url.pathname === '/drive/v3/files') {
       const q = url.searchParams.get('q') ?? '';
-      if (q.startsWith('trashed = true')) return await binned(q, fields);
+      if (q.startsWith('trashed = true')) return await binned(q);
       const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1] ?? '');
       const all: DriveFile[] = [];
       for (const parent of parents) all.push(...(await drive.listAll(parent)).filter((x) => x.parents[0] === parent));

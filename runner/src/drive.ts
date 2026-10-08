@@ -321,6 +321,8 @@ export class RunnerDrive {
       readText: (id) => this.reads.text(at(id), () => current().reads.readText(id)),
       // By version: a file changed since (a newer modifiedTime in the listing) is never paired with an older digest.
       digest: (file) => this.reads.digest(file, () => current().reads.digest(file)),
+      // The Bin is asked fresh each time, only for a declared member missing from the listing.
+      binnedByItem: (rootId, keys) => current().reads.binnedByItem(rootId, keys),
       // The plan's own hint that it is about to read these: started together, kept for the reads that follow. A read
       // that fails here is met again, as it failed, by the read of its own.
       warm: (wanted) => {

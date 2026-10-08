@@ -34,8 +34,8 @@ export interface SpineRead {
    * together (bounded) so each is answered when asked for. Reads only; an answer is never needed from it.
    */
   warm?(reads: ReadonlyArray<{ id: string; as: 'text' | 'bytes' }>): void;
-  /** Bin entries by item key, where the Drive can say so in one call (the pretend Drive). */
-  binnedByItem?(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
+  /** Bin entries by item key below `rootId`: asked only for a declared member that is not in the listing. */
+  binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
 }
 
 /** Why a declared pile waits for a later tidy-up, and what you can do about it. */
@@ -122,8 +122,7 @@ async function digestOf(read: SpineRead, f: DriveFile): Promise<Digest | null> {
 export async function capturePiles(read: SpineRead, rootId: string, piles: readonly PileShape[], opts: CaptureOptions): Promise<Map<string, Capture>> {
   const listing = await read.listAll(rootId);
   const ix = VaultIndex.build(rootId, listing);
-  const lookup = read.binnedByItem?.bind(read);
-  const binned = lookup ? (keys: readonly string[]) => lookup(rootId, keys) : undefined;
+  const binned = (keys: readonly string[]) => read.binnedByItem(rootId, keys);
   let records: Promise<unknown[]> | null = null;
   const journal = (): Promise<unknown[]> => (records ??= journalValues(ix.journalFiles(true), (id) => read.readText(id)));
   const out = new Map<string, Capture>();
@@ -386,13 +385,12 @@ async function journalOf(read: SpineRead, ix: VaultIndex): Promise<DriveFile[]> 
  */
 export async function planAdmission(source: SpineRead, rootId: string, opts: AdmissionOptions): Promise<Admission> {
   const listing = await source.listAll(rootId);
-  const binnedByItem = source.binnedByItem?.bind(source);
   const read: SpineRead = {
     listAll: async (id) => (id === rootId ? listing : await source.listAll(id)),
     readBytes: (id) => source.readBytes(id),
     readText: (id) => source.readText(id),
     digest: (f) => source.digest(f),
-    ...(binnedByItem ? { binnedByItem } : {}),
+    binnedByItem: (id, keys) => source.binnedByItem(id, keys),
   };
   const ix = VaultIndex.build(rootId, listing);
   const journal = (await journalOf(read, ix)).map(admitted).sort((a, b) => byCodePoint(a.fileId, b.fileId));

@@ -86,6 +86,8 @@ export interface DriveApi {
 export const SEARCH_PAGE_SIZE = 1000;
 /** A search reads this many pages for each batch of `SEARCH_FOLDERS` folders; the rest of its hits are not read. */
 export const SEARCH_MAX_PAGES = 2;
+/** Item keys looked up in one Bin query (`binnedByItem`); each query reads at most `SEARCH_MAX_PAGES` pages. */
+export const BIN_KEYS = 20;
 export const SEARCH_FOLDERS = 40;
 
 /** What a resumable upload creates: the reserved file id, where it goes and what it is. */
