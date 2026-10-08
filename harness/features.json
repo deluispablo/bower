@@ -4688,5 +4688,48 @@
     "verify": "pnpm -C runner exec vitest run -t \"the deploy scan allows the unpdf literal and still refuses a real address\"",
     "passes": true,
     "note": "Lead 04d8a54: the runner-bundle scan refused on an unpdf literal at the P4-3 deploy."
+  },
+  {
+    "id": "admission-reads-cost",
+    "task": "p4-b",
+    "category": "perf",
+    "what": "Worker admission reads take 19.7–23.5 s of the 27 s from press to job; cut them to under 3 s with one files.list per folder (minimal fields) and pile notes read in parallel with bounded concurrency, with the same admission result.",
+    "steps": [
+      "One files.list per folder with minimal fields and paging.",
+      "Pile notes read in parallel, bounded concurrency.",
+      "Admission decisions unchanged (same tests).",
+      "A modelled-latency test shows admission reads under 3 s."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"admission reads finish under the budget with modelled Drive latency|admission reads give the same result in fewer calls\"",
+    "passes": false,
+    "note": "TL-P4-04 batch P4-4 (live tail: admission 19.7–23.5 s, dispatch 0.45 s)."
+  },
+  {
+    "id": "attempt-check-light",
+    "task": "p4-b",
+    "category": "perf",
+    "what": "The per-write attempt check stops calling GET /token: a new GET /runner/runs/:id/attempt is answered by the Durable Object alone, and the runner caches the Drive token until near expiry; 409 stale-attempt and the recovery tests stay the bar.",
+    "steps": [
+      "GET /runner/runs/:id/attempt served by the person DO only (ticket auth as today).",
+      "The runner checks the attempt there before each fenced write and keeps the Drive token until near expiry.",
+      "409 stale-attempt behaviour and every recovery/kill test unchanged."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the attempt route answers from the person object alone\" && pnpm -C runner exec vitest run -t \"the attempt check before a write does not fetch a token|a stale attempt is still refused before any write\"",
+    "passes": false,
+    "note": "TL-P4-04 batch P4-4 (live tail: GET /token every 1–2 s; one 500)."
+  },
+  {
+    "id": "dispatch-retry",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "The Worker retries a failed GitHub dispatch twice with backoff on a network error or 5xx, then arms the recovery alarm at 60 s instead of 17 min, so one network blip never leaves a run queued for 17 minutes.",
+    "steps": [
+      "Two retries with backoff and jitter on network errors and 5xx; never on 4xx.",
+      "After the retries fail, the alarm is set 60 s out.",
+      "Tests with a stubbed GitHub."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a dispatch network error is retried twice with backoff|a dispatch that keeps failing arms the alarm at 60 seconds\"",
+    "passes": false,
+    "note": "TL-P4-04 batch P4-4 (run 3 dispatch failed: network error after 40 ms)."
   }
 ]
