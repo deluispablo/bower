@@ -7,7 +7,7 @@ import { createApp } from '../src/index.js';
 import { dispatchTidy } from '../src/github.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import type { RunReply } from '../src/process.js';
-import { personIdOf } from '../src/run-ticket.js';
+import { hashTicket, personIdOf } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
 import { driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
@@ -273,6 +273,60 @@ describe('dispatch retries', () => {
       });
       expect(sent.filter((c) => c.startsWith('POST'))).toHaveLength(1);
       expect((await person(who.sub).runStatus((alarm ?? 0) + 1)).run?.id).toBe(run?.id);
+    } finally {
+      log.mockRestore();
+    }
+  });
+  it("a lost dispatch's early look-up leaves a run that has reported alone", async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const who = await holder();
+      const gh = github(null);
+      const { run } = await process(who, gh.fetchImpl, 'press-1');
+      const ticket = gh.sent[0]?.body.client_payload.ticket ?? '';
+      const p = person(who.sub);
+      const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
+      // GitHub took one of the tries after all: the runner starts and reports.
+      const reported = await p.runnerReport(run?.id ?? '', await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'reading', total: 2 }, alarm - 40_000);
+      if (!reported.accepted) throw new Error('report refused');
+      const down = vi.fn((): Promise<Response> => Promise.resolve(new Response(null, { status: 502 })));
+      await runInDurableObject(p, async (instance) => {
+        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
+      });
+      expect((await p.runStatus(alarm + 1)).run?.phase).toBe('reading');
+      expect(down.mock.calls.filter(([url]) => String(url).includes('/dispatches'))).toHaveLength(0);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('an early look-up that GitHub cannot answer waits and rechecks', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const who = await holder();
+      const { run } = await process(who, github(null).fetchImpl, 'press-1');
+      const p = person(who.sub);
+      const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
+      const down = (): Promise<Response> => Promise.resolve(new Response(null, { status: 502 }));
+      await runInDurableObject(p, async (instance) => {
+        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
+      });
+      expect((await p.runStatus(alarm + 1)).run?.phase).toBe('queued');
+      expect(await runInDurableObject(p, (_i, state) => state.storage.getAlarm())).toBe(alarm + 1 + 60_000);
+      expect(run?.id).toBeDefined();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a refused dispatch keeps the normal stale window', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const who = await holder();
+      const gh = github(404);
+      const { run } = await process(who, gh.fetchImpl, 'press-1');
+      expect(gh.sent).toHaveLength(1);
+      expect(await runInDurableObject(person(who.sub), (_i, state) => state.storage.getAlarm())).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
     } finally {
       log.mockRestore();
     }
