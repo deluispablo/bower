@@ -11,6 +11,7 @@ P4 adds the real second brain. Claude understands, connects and writes. The P3 s
   - the scripted provider, which stays as the test double behind the same provider interface;
   - the staging environment;
   - `bower-home` as the instance repository (TL-P3-13).
+- **Behaviour reference:** the owner's local second brain method ([TL-P4-08](harness/2026-10-08-tl-p4-08-second-brain-method.md)); it wins where it differs from the original.
 - **Reuse from the original app** (owner rule: reuse first):
   - `agent/prompts/ingest.md` and `lint.md`;
   - `agent/claude-settings.json`, the permission policy for every run;
