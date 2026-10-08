@@ -1,9 +1,9 @@
 import { env as testEnv, evictDurableObject, runInDurableObject } from 'cloudflare:test';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
 import type { Person } from '../src/person.js';
-import { QUEUED_STALE_MS } from '../src/process.js';
+import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
 
 const env = testEnv as unknown as Env;
@@ -11,6 +11,20 @@ const HOUR = 3600_000;
 const MINUTE = 60_000;
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
+
+interface Row {
+  kind: string;
+  key: string;
+  at: number;
+}
+
+async function rowsOf(sub: string): Promise<Row[]> {
+  return await runInDurableObject(person(sub), (_i, state) =>
+    state.storage.sql.exec<{ kind: string; key: string; at: number }>('SELECT kind, key, at FROM deadlines ORDER BY kind, key').toArray(),
+  );
+}
+
+const noGitHub = { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) };
 
 async function alarmOf(sub: string): Promise<number | null> {
   return await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm());
@@ -94,5 +108,73 @@ describe('worker deadlines (TL-P4-14)', () => {
       await instance.wake(Date.now(), { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
     });
     expect(await alarmOf(sub)).toBe(t0 + QUEUED_STALE_MS);
+  });
+
+  it('a handler that always throws stops after 6 attempts and its run ends failed', async () => {
+    const sub = `deadlines-throws-${crypto.randomUUID()}`;
+    const p = person(sub);
+    const t0 = Date.now() + HOUR;
+    const runId = await admitted(sub, 'press-1', t0);
+    const [row] = await rowsOf(sub);
+    if (row === undefined) throw new Error('no deadline');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let calls = 0;
+    try {
+      // Cloudflare retries a throwing alarm with exponential backoff from 2 seconds, up to 6 times: so does each deadline.
+      let at = row.at;
+      for (let attempt = 1; attempt <= 6; attempt += 1) {
+        await runInDurableObject(p, async (instance: Person) => {
+          vi.spyOn(instance, 'recover').mockImplementation(() => {
+            calls += 1;
+            return Promise.reject(new Error('recovery broke'));
+          });
+          await instance.wake(at, noGitHub).catch(() => undefined);
+        });
+        expect(calls).toBe(attempt);
+        if (attempt < 6) {
+          const next = at + 2000 * 2 ** (attempt - 1);
+          expect(await rowsOf(sub)).toEqual([{ kind: 'run', key: runId, at: next }]);
+          expect(await alarmOf(sub)).toBe(next);
+          expect((await p.runStatus(at)).run?.phase).toBe('queued');
+          at = next;
+        }
+      }
+      // The sixth failure is the last: the run ends failed with its sentence, nothing is left to wake for, and the
+      // details are logged.
+      const status = await p.runStatus(at);
+      expect(status.run?.phase).toBe('failed');
+      expect(status.run?.failure).toBe(STALE_FAILURE);
+      expect(await rowsOf(sub)).toEqual([]);
+      expect(await alarmOf(sub)).toBeNull();
+      expect(log.mock.calls.some((c) => String(c[0]).includes('gave up') && c.some((a) => a instanceof Error && a.message === 'recovery broke'))).toBe(true);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a deadline its handler set again is kept, and only what was due as read goes', async () => {
+    const sub = `deadlines-rearmed-${crypto.randomUUID()}`;
+    const p = person(sub);
+    const t0 = Date.now() + HOUR;
+    const runId = await admitted(sub, 'press-1', t0);
+    const [row] = await rowsOf(sub);
+    if (row === undefined) throw new Error('no deadline');
+    // The handler moves the run's deadline while the alarm handles it: compare-and-delete keeps the new one.
+    await runInDurableObject(p, async (instance: Person, state) => {
+      vi.spyOn(instance, 'recover').mockImplementation(() => {
+        state.storage.sql.exec('UPDATE deadlines SET at = ? WHERE kind = ?', row.at + 5000, 'run');
+        return Promise.resolve();
+      });
+      await instance.wake(row.at, noGitHub);
+    });
+    expect(await rowsOf(sub)).toEqual([{ kind: 'run', key: runId, at: row.at + 5000 }]);
+    expect(await alarmOf(sub)).toBe(row.at + 5000);
+    // Handled as read, it goes.
+    await runInDurableObject(p, async (instance: Person) => {
+      vi.spyOn(instance, 'recover').mockResolvedValue(undefined);
+      await instance.wake(row.at + 5000, noGitHub);
+    });
+    expect(await rowsOf(sub)).toEqual([]);
+    expect(await alarmOf(sub)).toBeNull();
   });
 });
