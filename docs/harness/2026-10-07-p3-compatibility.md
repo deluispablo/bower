@@ -52,3 +52,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `f4d73a9a` | c1-small-fixes | none: red tests only; no app, runner or Worker behaviour changed |
 | `f8758d76` | c1-small-fixes | none: BirdLab route is gated by `import.meta.env.DEV` (dev-only, screen only); Settings displays correct plural for rule counts (screen words only); markSeen errors reported via `report()` (screen only). No file shape or check changed; app and runner need not deploy together |
 | `75ce21c6` | c1-digest-library | none: `hashes.ts` computes SHA-256 and MD5 with @noble/hashes instead of hand-written code; identical output bytes (fuzz-checked against node:crypto). Deploys alone |
+| `9a32c5bb` | c1-still-as-seen | none: red tests only (`still-as-seen.test.ts`) |
+| `6290eb31` | c1-still-as-seen | none on the wire: one still-as-seen expectation and check in `src/data/contracts/still-as-seen.ts` serves app, fake and runner; parents compare as a set everywhere (the app had accepted a changed second parent, the fake and app had refused reordered parents). Deploys alone |
