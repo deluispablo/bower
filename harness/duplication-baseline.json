@@ -1,7 +1,7 @@
 {
   "date": "2026-10-08",
-  "clones": 28,
-  "duplicatedLines": 269,
-  "duplicatedTokens": 2442,
-  "note": "Initial baseline from c1-duplication-gate entry (production code only, tests excluded)"
+  "clones": 25,
+  "duplicatedLines": 245,
+  "duplicatedTokens": 2268,
+  "note": "Updated by update-duplication-baseline.mjs"
 }

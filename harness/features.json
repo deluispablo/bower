@@ -5449,15 +5449,15 @@
     "id": "c1-duplication-gate",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": true,
+    "passes": false,
     "what": "jscpd in pnpm check with a committed baseline from today's count that may only fall; a new clone fails the check (TL-P4-15).",
     "steps": [
       "Red from today's drift: new copy-paste goes unnoticed",
       "One mechanism; remove the copies it replaces in the same entry.",
       "Card: removed: <lines>; goldens equal or lower."
     ],
-    "verify": "pnpm vitest run -t \"a new clone fails the duplication gate\"",
-    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-mechanical."
+    "verify": "pnpm vitest run -t \"a new clone fails the duplication gate|a lower count asks to lower the baseline\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-mechanical. Lead (2026-10-08): ratchet both ways: the check also fails when the count is below the baseline, saying lower the baseline to N; baseline set to 25."
   },
   {
     "id": "c1-dependency-rules",
