@@ -309,3 +309,4 @@ P3-9 is closed.
 - TL-P4-13 (aea42fe): packet template with the checklist (packet-template.md); 6 entries registered (home-errors-shown, home-cache-stable, safety-polish, corpus-grounded-scorer, verify-names-precheck, state-yes-writes). P4-20b check and home-errors-shown running. Fix rounds now start fresh sessions.
 - P4-20b check BLOCK (ask-answer-loop): waits toast promises an auto run; Write it offered then refused (lead asked: build first or reword). Reopened; fresh fix round for the toast. 392/401.
 - TL-P4-13 addendum (b3b3ab7): waiting answers start their scoped run when the active run ends; state-yes-writes before the C05 deploy. ask-answer-loop round 3 redirected (escalated, fresh).
+- home-errors-shown closed (84d9459). 393/401. home-cache-stable (implementer) dispatched; ask-answer-loop round 3 running.
