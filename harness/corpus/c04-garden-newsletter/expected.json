@@ -1,8 +1,8 @@
 {
   "files": {
     "present": [
-      "Resources/*ewsletter*.pdf",
-      "Resources/*ewsletter*.md"
+      "*ewsletter*.pdf",
+      "*ewsletter*.md"
     ],
     "absent": [
       "Inbox/*"
@@ -10,7 +10,7 @@
   },
   "notes": [
     {
-      "path": "Resources/*ewsletter*.md",
+      "path": "*ewsletter*.md",
       "contains": [
         "18 October",
         "8 November",
@@ -23,5 +23,20 @@
   "report": {
     "filed": 1,
     "createdAtLeast": 1
+  },
+  "placement": {
+    "files": [
+      "*ewsletter*.pdf",
+      "*ewsletter*.md"
+    ],
+    "allowed": [
+      {
+        "under": "Resources"
+      },
+      {
+        "under": "Areas/Home",
+        "linking": "Garden plot"
+      }
+    ]
   }
 }

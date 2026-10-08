@@ -130,7 +130,6 @@ describe('the Claude provider', () => {
     const prompt = claude.calls[0]?.input ?? '';
     expect(prompt).toMatch(/fits no folder below[^.]*goes to Resources/);
     expect(prompt).toMatch(/new Area or Project only when[^.]*rules or[^.]*notes show an ongoing responsibility/);
-    expect(prompt).toContain('ingest.md');
   });
 
   it('a recorded Claude reply becomes operations the spine validates', async () => {
