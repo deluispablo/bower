@@ -365,3 +365,4 @@ P3-9 is closed.
 - c2-transport-outcome-kind: lead ruled no-answer writes in scope (fix round queued for the next slot, then review, then close). Queue: outcome-kind fix round, delete-me-admit-window diagnoser.
 - lost-bytes-slow logged (regression from c2-drive-transport: 10 ms → 3.5 s; flakes pnpm check under load). c2-cache2 check rerun. Outcome-kind fix round dispatched.
 - c2-read-cache fix round merged (red 6d3a4da1, fix 20d1e0fa; net -2; check green on merged tree on the second run, first run hit lost-bytes-slow). Verify widened. Fix-round check queued; closes after it passes.
+- P4-27 BLOCK (c2-worker-dispatch): a press during recover's GitHub look-up has its dispatch-now deadline replaced by +17 min (person.ts:1023). Fresh escalated fix round (plus v13→v14 direct test, fireDue throws). delete-me-admit-window diagnosed by P4-27 §4 (predates); ruling asked.
