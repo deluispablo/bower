@@ -253,21 +253,22 @@ export class Journal {
     const files = (await this.place.files()).filter((f) => !f.folder && f.name.endsWith('.json'));
     const byId = new Map<string, JournalRecord>();
     const seenFiles = new Map<string, string[]>();
-    for (const f of files) {
-      if (!this.read.has(f.id)) {
-        let rec: JournalRecord;
-        try {
-          const v: unknown = JSON.parse(await (this.place.readText ?? ((id: string) => this.drive.readText(id)))(f.id));
-          if (!isJournalRecord(v)) throw new BowerError('unknown', 'Bower could not read your changes.');
-          rec = v;
-        } catch (e) {
-          console.error(e);
-          if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
-          throw e;
-        }
-        this.checkCurrent();
-        this.read.set(f.id, rec);
+    // The lines not read yet are asked for together: a dozen of them at 300 ms each are one wait, not a dozen.
+    await Promise.all(files.filter((f) => !this.read.has(f.id)).map(async (f) => {
+      let rec: JournalRecord;
+      try {
+        const v: unknown = JSON.parse(await (this.place.readText ?? ((id: string) => this.drive.readText(id)))(f.id));
+        if (!isJournalRecord(v)) throw new BowerError('unknown', 'Bower could not read your changes.');
+        rec = v;
+      } catch (e) {
+        console.error(e);
+        if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
+        throw e;
       }
+      this.checkCurrent();
+      this.read.set(f.id, rec);
+    }));
+    for (const f of files) {
       const rec = this.read.get(f.id);
       if (rec) {
         byId.set(rec.id, rec);

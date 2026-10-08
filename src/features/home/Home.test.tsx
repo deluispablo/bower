@@ -314,3 +314,29 @@ describe('a failed full read of the piles says why on Home', () => {
     expect(within(sheet).getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 });
+
+describe('the Tidy up count waits for the full read', () => {
+  const at = Date.now();
+  const thing = (id: string): Pile['items'][number] => ({ id, name: `${id}.pdf`, kind: 'pdf', origin: 'From this computer' });
+  const listed: Pile[] = [
+    { id: 'a', path: 'Inbox/A', text: 'Papers', createdAt: at, items: [thing('a1'), thing('a2')] },
+    { id: 'b', path: 'Inbox/B', text: 'Receipts', createdAt: at - 1, items: [thing('b1')] },
+  ];
+
+  it('the listed Inbox shows with no count and no Tidy up button until readiness is known, then the number never drops', async () => {
+    const base = loadingSources();
+    let finish!: (piles: Pile[]) => void;
+    const full = new Promise<Pile[]>((r) => { finish = r; });
+    const doors: Record<string, unknown> = { piles: () => full, pilesListed: async () => listed, uploadNotice: async () => null, questions: async () => [], changes: async () => [], suggestions: async () => [] };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Home /></DataProvider></MemoryRouter>);
+    const inbox = screen.getByRole('region', { name: 'Inbox' });
+    await within(inbox).findByRole('link', { name: /Papers/ });
+    expect(within(inbox).queryByRole('button', { name: /^Tidy up/ })).toBeNull();
+    expect(within(inbox).queryByText(/\d+ things? waiting/)).toBeNull();
+    // The full read finds one pile already filed: the count that appears is the one that stays.
+    finish([listed[0] as Pile]);
+    expect(await within(inbox).findByRole('button', { name: 'Tidy up 2 things' })).toBeVisible();
+    expect(within(inbox).getByText(/2 things waiting/)).toBeVisible();
+  });
+});

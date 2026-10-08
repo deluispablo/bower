@@ -102,10 +102,14 @@ export class DriveVault implements VaultSource {
   private dispositionCache = new Map<string, DispositionResult>();
   /**
    * Single-flight reads (the standard request-coalescing pattern): a file asked for twice while the folder looks the
-   * same is read once, whether the second ask comes during the first or after it. Forgotten at every refresh and
-   * change, so a person's change or another device's shows at the next load. Never used to verify a write.
+   * same is read once, whether the second ask comes during the first or after it. Forgotten at every change; a
+   * refresh forgets only the files whose listed version (modifiedTime) moved or that left, so a person's change or
+   * another device's shows at the next load while reads in flight are not restarted (invalidation by version, as an
+   * ETag does, not by clearing everything). Never used to verify a write.
    */
-  private readonce = new Map<string, Promise<string | Uint8Array>>();
+  private readonce = new Map<string, { read: Promise<string | Uint8Array>; version: string | undefined }>();
+  /** The modifiedTime of each file in the latest listing, the version a read is kept under. */
+  private listedVersions = new Map<string, string>();
   /** Pile folders whose declaration could not be read, already logged: once per failure, not per listing. */
   private unreadableLogged = new Set<string>();
   /**
@@ -209,9 +213,13 @@ export class DriveVault implements VaultSource {
   /** Lists the folder again (after a tidy-up, or when another device may have changed it). */
   async refresh(): Promise<void> {
     this.ix = null;
-    this.readonce.clear();
     await this.index();
-    this.emit();
+    // Reads of files the new listing shows unchanged stay (and the ones on their way finish for their callers).
+    for (const [key, kept] of this.readonce) {
+      if (kept.version === undefined || kept.version !== this.listedVersions.get(key.slice(2))) this.readonce.delete(key);
+    }
+    if (!this.current()) return;
+    this.listeners.forEach((l) => l());
   }
 
   subscribe(cb: () => void): Unsubscribe {
@@ -550,9 +558,10 @@ export class DriveVault implements VaultSource {
       }));
     // A thing whose lost answer already shows in the folder is listed as itself, once.
     const listed = (id: string | null): boolean => id !== null && ix.pathOf(id) !== undefined;
-    for (const f of ix.filesIn('Inbox')) {
+    // Each pile is read at the same time as the others: the slowest pile, not their sum, is the wait.
+    const row = async (f: DriveFile): Promise<Pile | null> => {
       const path = ix.pathOf(f.id);
-      if (!path) continue;
+      if (!path) return null;
       const id = f.appProperties?.[PROP.pile] ?? f.id;
       const queued = this.queuedItems(id).filter((i) => !listed(i.reserved));
       const sending = [...(this.uploads.get(id)?.entries ?? []).filter((e) => !listed(this.reservedFor(e))).map((e) => e.item), ...queued.map(queuedRow)];
@@ -561,8 +570,7 @@ export class DriveVault implements VaultSource {
         const loose = f.appProperties?.[PROP.declaration] ? await this.looseState(f) : null;
         const item = loose?.changed ? { ...itemOf(f), changed: true as const } : itemOf(f);
         const setAside = loose?.setAside ?? (await this.untidied(id, f, [f]));
-        out.push({ id, path, text: '', createdAt: Date.parse(f.createdTime), items: [item], ...(setAside ? { setAside } : {}) });
-        continue;
+        return { id, path, text: '', createdAt: Date.parse(f.createdTime), items: [item], ...(setAside ? { setAside } : {}) };
       }
       const kids = ix.filesIn(path).filter((k) => !k.folder);
       const note = kids.find((k) => k.name === PILE_NOTE);
@@ -631,8 +639,9 @@ export class DriveVault implements VaultSource {
       // Its note is shown read-only until a listing reads it (RFC 9110 §13.1.1: no update over an unseen version).
       if (noteLocked) this.lockedNotes.set(id, refused ? SET_ASIDE_TEXT[refused] : NOTE_LOCKED);
       else this.lockedNotes.delete(id);
-      out.push({ id, path, text: refused ? '' : text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(noteLocked ? { noteLocked: true as const } : {}) });
-    }
+      return { id, path, text: refused ? '' : text, createdAt: Date.parse(f.createdTime), items, ...(setAside ? { setAside } : {}), ...(noteLocked ? { noteLocked: true as const } : {}) };
+    };
+    for (const pile of await Promise.all(ix.filesIn('Inbox').map(row))) if (pile) out.push(pile);
     // A lone thing still on its way has no file yet: show it from here.
     for (const [id, u] of this.uploads) if (u.lone && !out.some((p) => p.id === id)) out.push({ id, text: '', createdAt: u.createdAt, items: u.entries.map((e) => e.item) });
     // A lone thing a reload left on its way: the upload queue still holds it.
@@ -1275,10 +1284,12 @@ export class DriveVault implements VaultSource {
 
   async questions(): Promise<Question[]> {
     const all = (await this.json(SYSTEM.questions))?.questions ?? [];
-    const answered = new Set((await this.journal.list()).filter((r) => r.kind === 'answer').map((r) => r.questionId));
+    // Your changes and the inbox are read together: neither needs the other.
+    const [lines, inbox] = await Promise.all([this.journal.list(), this.piles()]);
+    const answered = new Set(lines.filter((r) => r.kind === 'answer').map((r) => r.questionId));
     // A question about a thing that is no longer in the inbox is closed, even when no tidy-up can run (an empty inbox
     // has nothing to tidy): its subject is the thing's or pile's id (older ones carry it in their id).
-    const here = new Set((await this.piles()).flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
+    const here = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
     const subject = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
     return all.filter((q) => !answered.has(q.id) && (subject(q) === undefined || here.has(subject(q) ?? '')));
   }
@@ -1336,7 +1347,9 @@ export class DriveVault implements VaultSource {
     if (!this.ix) {
       const p = (async () => {
         const root = await this.rootId();
-        return VaultIndex.build(root, await this.drive.listAll(root));
+        const files = await this.drive.listAll(root);
+        if (this.current()) this.listedVersions = new Map(files.map((f) => [f.id, f.modifiedTime]));
+        return VaultIndex.build(root, files);
       })();
       this.ix = p;
       // expected: the caller hears the error; this only forgets the failed listing, so the next call lists again.
@@ -1400,7 +1413,7 @@ export class DriveVault implements VaultSource {
    * the stored size (a byte-order mark, dropped by the read, shows as a size that differs). Otherwise null.
    */
   private async bytesFromText(f: DriveFile): Promise<Uint8Array | null> {
-    const read = this.readonce.get(`t:${f.id}`);
+    const read = this.readonce.get(`t:${f.id}`)?.read;
     if (!read || f.size === undefined) return null;
     let text: string;
     try {
@@ -1416,12 +1429,12 @@ export class DriveVault implements VaultSource {
 
   private once(key: string, read: () => Promise<string | Uint8Array>, keep: boolean): Promise<string | Uint8Array> {
     const have = this.readonce.get(key);
-    if (have) return have;
+    if (have) return have.read;
     const p = read();
-    this.readonce.set(key, p);
+    this.readonce.set(key, { read: p, version: this.listedVersions.get(key.slice(2)) });
     // A file others write (Bower's own runner files) is shared only while the read is on its way: the next ask reads again.
     const forget = (): void => {
-      if (this.readonce.get(key) === p) this.readonce.delete(key);
+      if (this.readonce.get(key)?.read === p) this.readonce.delete(key);
     };
     // expected: the caller hears the error; this only forgets a failed read (so the next ask reads again).
     p.then(keep ? () => undefined : forget, forget);
