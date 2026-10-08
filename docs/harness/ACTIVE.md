@@ -344,3 +344,4 @@ P3-9 is closed.
 - c1-dependency-rules closed (36d41f08); c1-shared-contracts closed (0675be81; removed 341; old leaves count as none after 24 h; new real folders' About me.md now has the app's front matter). deadlines-test-flake diagnosing. Gate ratchet fix round dispatched. 408/415.
 - Lead accepted the shared-contracts choices (8b064bd). Waiting: deadlines-test-flake note, gate ratchet; then safety-polish, verify-names-precheck, suites, SHA.
 - safety-polish closed as superseded (TL-P4-14 addendum 3, 03f20c6); its 8 items become acceptance tests in their owner packets: docs/harness/2026-10-08-safety-polish-carryover.md. Entry removed from features.json. Stage 1 ends with c1-api-test-harness and verify-names-precheck.
+- verify-names-precheck closed (e8c65a8c); c1-api-test-harness closed (381ec99d; deadlines-test-flake fixed). Stage 1 entries all closed. 411/415. Suites next.
