@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
+import { dispatchTidy } from '../src/github.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import type { RunReply } from '../src/process.js';
 import { personIdOf } from '../src/run-ticket.js';
@@ -149,7 +150,7 @@ describe('dispatch on admission', () => {
         const who = await holder();
         const gh = github(status);
         const reply = await process(who, gh.fetchImpl, 'press-1');
-        expect(gh.sent).toHaveLength(1);
+        expect(gh.sent).toHaveLength(3);
         expect(reply.run?.phase).toBe('queued');
         expect(reply.revision).toBe(1);
         const lines = log.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
@@ -200,6 +201,79 @@ describe('dispatch on admission', () => {
       expect(String(outbound.mock.calls[0]?.[0])).toContain(`/repos/${env.GITHUB_REPO}/actions/runs?event=repository_dispatch`);
     } finally {
       outbound.mockRestore();
+      log.mockRestore();
+    }
+  });
+});
+
+describe('dispatch retries', () => {
+  const input = { repo: 'owner/name', token: 'test-github-token', runId: 'run-1', attempt: 1, ticket: 't', scope: 'instructions' as const, allowWeb: true };
+  /** A pretend GitHub that answers each call from `script` (null: the network fails), then 204. */
+  function scripted(script: (number | null)[]) {
+    const calls: number[] = [];
+    const fetchImpl = (): Promise<Response> => {
+      const next = script[calls.length];
+      calls.push(calls.length);
+      if (next === null) return Promise.reject(new Error('network down'));
+      return Promise.resolve(new Response(null, { status: next ?? 204 }));
+    };
+    return { calls, fetchImpl };
+  }
+
+  it('a dispatch network error is retried twice with backoff', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const waits: number[] = [];
+      const sleep = (ms: number): Promise<void> => {
+        waits.push(ms);
+        return Promise.resolve();
+      };
+      const lost = scripted([null, null, null]);
+      expect(await dispatchTidy(input, lost.fetchImpl, sleep)).toBe(false);
+      expect(lost.calls).toHaveLength(3);
+      expect(waits).toHaveLength(2);
+      expect(waits[0]).toBeGreaterThan(0);
+      expect(waits[1] ?? 0).toBeGreaterThanOrEqual(waits[0] ?? 0);
+      // A blip that clears on the second try is accepted; a 5xx is retried too.
+      const blip = scripted([null]);
+      expect(await dispatchTidy(input, blip.fetchImpl, sleep)).toBe(true);
+      expect(blip.calls).toHaveLength(2);
+      const flaky = scripted([503, 502]);
+      expect(await dispatchTidy(input, flaky.fetchImpl, sleep)).toBe(true);
+      expect(flaky.calls).toHaveLength(3);
+      // A 4xx is never retried.
+      const refused = scripted([404]);
+      expect(await dispatchTidy(input, refused.fetchImpl, sleep)).toBe(false);
+      expect(refused.calls).toHaveLength(1);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a dispatch that keeps failing arms the alarm at 60 seconds', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const who = await holder();
+      const gh = github(null);
+      const before = Date.now();
+      const { run } = await process(who, gh.fetchImpl, 'press-1');
+      const after = Date.now();
+      expect(gh.sent).toHaveLength(3);
+      const alarm = await runInDurableObject(person(who.sub), (_i, state) => state.storage.getAlarm());
+      expect(alarm).toBeGreaterThanOrEqual(before + 60_000);
+      expect(alarm).toBeLessThanOrEqual(after + 60_000);
+      // At that alarm the run is looked up, and attempt 1 with no job is redispatched once, as attempt 2.
+      const sent: string[] = [];
+      const fetchImpl = (url: string, init?: RequestInit): Promise<Response> => {
+        sent.push(`${init?.method ?? 'GET'} ${url}`);
+        return Promise.resolve(init?.method === 'POST' ? new Response(null, { status: 204 }) : Response.json({ workflow_runs: [] }));
+      };
+      await runInDurableObject(person(who.sub), async (instance) => {
+        await instance.recover((alarm ?? 0) + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl });
+      });
+      expect(sent.filter((c) => c.startsWith('POST'))).toHaveLength(1);
+      expect((await person(who.sub).runStatus((alarm ?? 0) + 1)).run?.id).toBe(run?.id);
+    } finally {
       log.mockRestore();
     }
   });

@@ -66,6 +66,14 @@ const GENERATION_FLOOR = 'generationFloor';
 const RECOVERY_WATCH = 'recoveryWatch';
 /** When a run moved during the alarm's lookup and is somehow still due, the alarm looks again this much later. */
 const RECHECK_MS = 60 * 1000;
+/** Key-value entry: a dispatch that failed after its retries (`DispatchLost`); the alarm looks at the run then. */
+const DISPATCH_LOST = 'dispatchLost';
+
+/** The run whose dispatch was lost, and when the alarm should look at it (`RECHECK_MS` after the loss). */
+interface DispatchLost {
+  runId: string;
+  at: number;
+}
 
 /** A stale run the alarm looks up on GitHub: what it saw, so the second section can tell whether anything moved. */
 interface RecoveryLookup {
@@ -576,10 +584,23 @@ export class Person extends DurableObject<Env> {
     const hash = ticket === null ? null : await hashTicket(ticket);
     const send = this.ctx.storage.transactionSync(() => this.applyRecovery(lookup, outcome, hash, now));
     if (send === null || ticket === null) return;
-    await dispatchTidy(
+    const sent = await dispatchTidy(
       { repo: github.repo, token, runId: lookup.run.id, attempt: send.attempt, ticket, scope: lookup.run.scope, allowWeb: send.allowWeb },
       github.fetchImpl,
     );
+    if (!sent) this.dispatchLostSync(lookup.run.id, now + RECHECK_MS);
+  }
+
+  /** A dispatch failed after its retries: the alarm looks at the going run `RECHECK_MS` from `now`, not at its stale deadline. */
+  async dispatchLost(runId: string, now: number): Promise<void> {
+    this.dispatchLostSync(runId, now + RECHECK_MS);
+  }
+
+  private dispatchLostSync(runId: string, at: number): void {
+    const run = this.currentRunRow();
+    if (run === undefined || run.id !== runId || !ACTIVE_PHASES.includes(run.phase)) return;
+    this.ctx.storage.kv.put(DISPATCH_LOST, { runId, at } satisfies DispatchLost);
+    void this.ctx.storage.setAlarm(at);
   }
 
   /** Section 1 of `recover`: the run to look up, or null when the alarm is set or the run ended here. */
@@ -593,8 +614,13 @@ export class Person extends DurableObject<Env> {
     const attempt = this.attemptOf(run.id);
     const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
     const deadline = staleDeadline(wire, attempt, watch);
-    if (deadline > now) {
-      void this.ctx.storage.setAlarm(deadline);
+    const lost = this.ctx.storage.kv.get<DispatchLost>(DISPATCH_LOST);
+    const lostHere = lost?.runId === run.id ? lost : undefined;
+    if (lost !== undefined && lostHere === undefined) this.ctx.storage.kv.delete(DISPATCH_LOST);
+    // A lost dispatch brings the look-up forward, once; the rules after it are unchanged.
+    if (lostHere !== undefined && lostHere.at <= now) this.ctx.storage.kv.delete(DISPATCH_LOST);
+    else if (deadline > now) {
+      void this.ctx.storage.setAlarm(lostHere === undefined ? deadline : Math.min(deadline, lostHere.at));
       return null;
     }
     if (!configured) {
