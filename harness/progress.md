@@ -134,3 +134,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: checkpoint-count passes — the 8 was the timing counter: it timed every run record (manifest, report, dispositions) as a checkpoint; now only checkpoint- records count, 4 on C04
 - 2026-10-08: placement-guidance passes — prompt adopts the original's PARA placement wording (no fitting folder → Resources; new Area/Project only for an ongoing responsibility); C04 rubric allows Resources or Areas/Home linking the plot note
 - 2026-10-08: model-input-fingerprint passes — timing line carries input=<12 hex of sha256 of the model input>, tested through the provider; golden C04 fixture input pinned
+- 2026-10-08: model-input-fingerprint passes — fix round: the golden runs the C04 corpus case through main() on the Drive v3 fake; exact link match, checkpoints counted once, wording only from what the model sees
