@@ -4958,7 +4958,7 @@
     "note": "TL-P4-08 addendum (main c85da86) point 2: C11 slice."
   },
   {
-    "passes": false,
+    "passes": true,
     "id": "ask-answer-loop",
     "task": "p4-c",
     "category": "feature",
