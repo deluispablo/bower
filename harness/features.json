@@ -5379,7 +5379,7 @@
     "id": "c1-worker-deadlines",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One deadlines(kind, key, at) table and a single rearm(); alarm() handles whatever is due.",
     "steps": [
       "Red from today's drift: gone-ticket rows outliving the hour after Delete me; four kinds of deadline setting and clearing one alarm",
