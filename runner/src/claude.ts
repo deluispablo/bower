@@ -409,7 +409,7 @@ const KEEP_ONE = /\bkeep one note\b/i;
 
 /**
  * The pairs of notes shown that the person said yes to keeping as one (`keep-one-note-merge`): a yes answer among the
- * changes this run took, to an open question about keeping one note that names both notes (as a [[link]] or by name).
+ * changes this run took, to an open question about keeping one note that links both notes by their exact names.
  * Only these may be kept as one; the answer's record id goes with the pair, so the spine archives it once done.
  */
 async function mergesOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, notes: readonly string[]): Promise<NonNullable<Seen['merges']>> {
@@ -436,8 +436,9 @@ async function mergesOf(read: ScriptedRead, run: ScriptedRun, took: Admitted, no
     if (rec?.kind !== 'answer' || rec.text !== 'yes' || typeof rec.id !== 'string') continue;
     const q = questions.find((x) => x.id === rec.questionId);
     if (typeof q?.text !== 'string' || !KEEP_ONE.test(q.text)) continue;
-    const said = q.text.toLowerCase();
-    const named = notes.filter((n) => said.includes(shownName(n)));
+    // Named exactly, by a [[link]] to the note (its target before any "|", "#" or "^"), never by part of a name.
+    const said = new Set([...q.text.matchAll(/\[\[([^\]|#^]*)/g)].map((m) => (m[1] ?? '').trim().replace(/\.md$/i, '').toLowerCase()));
+    const named = notes.filter((n) => said.has(shownName(n)));
     // Two notes, and only two: a question naming more is not one about these two.
     if (named.length === 2) merges.push({ notes: [named[0] ?? '', named[1] ?? ''], answer: rec.id });
   }
