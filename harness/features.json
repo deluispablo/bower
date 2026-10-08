@@ -5223,5 +5223,85 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"keep one note carries the facts and bins the other|undo of keep one note restores both notes and links|the other note changed after the read is not binned|a line that only starts like a kept line is carried|the C05 corpus cases score green with scripted proposals\"",
     "note": "TL-P4-08 addendum 7 (main f10109d). ask-answer-loop moves into C05 but waits for the owner's trigger ruling. Reopened by P4-19 (BLOCK): the other note is binned on name/place only (a person edit after the plan read is lost); carriedLines drops a line found as a substring of the kept text."
+  },
+  {
+    "passes": false,
+    "id": "home-errors-shown",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "Home shows a failed full read of the piles (BowerError sentence, details to console.error) instead of ignoring usePiles().error; the sheet never stays busy on it.",
+    "steps": [
+      "Show the error where the Inbox is.",
+      "The tidy-up sheet leaves busy on that error."
+    ],
+    "verify": "pnpm e2e:fake --grep \"a failed inbox read says why on Home\"",
+    "note": "TL-P4-13 (main aea42fe). P4-18 minor: Home.tsx:38 ignored usePiles().error."
+  },
+  {
+    "passes": false,
+    "id": "home-cache-stable",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "Home is complete within 2 s on the latency fake: loadReport's refreshFolder() no longer clears the read cache mid-piles(); the Tidy up count shows only once readiness is known; a Home golden pins the calls.",
+    "steps": [
+      "Stop the refresh from restarting reads within a load.",
+      "Show the count only after readiness.",
+      "Golden for one Home load on the latency fake."
+    ],
+    "verify": "pnpm vitest run -t \"Home is complete within 2 s on the latency fake|a report refresh does not restart the inbox reads\"",
+    "note": "TL-P4-13 (main aea42fe). home-inbox-first left it: full read about 6 s, refresh drops reads."
+  },
+  {
+    "passes": false,
+    "id": "safety-polish",
+    "task": "p4-c",
+    "category": "fix",
+    "what": "The data-safety and honesty minors from P2_POLISH (P4 items only): a refused Bin keeps its hash question; KEEP_CHANGED wording when the other note moved or was binned; disagreeing answers by time; a held subject pile and the quota; other items the lead marks.",
+    "steps": [
+      "List the P4 polish items that touch data or honesty, with the lead's selection.",
+      "Fix each with a test."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"safety polish\"",
+    "note": "TL-P4-13 (main aea42fe)."
+  },
+  {
+    "passes": false,
+    "id": "corpus-grounded-scorer",
+    "task": "p4-c",
+    "category": "fix",
+    "what": "The corpus scorer refuses an expected.json whose numbers are not grounded in the case's own files (the numbers-grounded rule); c07-rent-disagrees fixed.",
+    "steps": [
+      "Scorer check over every case.",
+      "Fix c07's Ferrowick line."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"every expected number is grounded in its case\"",
+    "note": "TL-P4-13 (main aea42fe)."
+  },
+  {
+    "passes": false,
+    "id": "verify-names-precheck",
+    "task": "p4-a",
+    "category": "fix",
+    "what": "A harness precheck rejects a verify whose test names exist in no test file, before merge (not only at check time).",
+    "steps": [
+      "A script that lists each entry's verify names and finds them in test files.",
+      "Run it in done.sh before the red."
+    ],
+    "verify": "pnpm vitest run -t \"a verify naming no test is refused before merge\"",
+    "note": "TL-P4-13 (main aea42fe)."
+  },
+  {
+    "passes": false,
+    "id": "state-yes-writes",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "A yes to Write it (q-state) starts a run scoped to that note that writes Bower's update into the person-edited Current state, the yes being the grant; undoable; the copy matches.",
+    "steps": [
+      "Scoped run on the note.",
+      "Write the update, marked as Bower's, undoable.",
+      "Copy says what happens."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a yes to Write it writes the update in a scoped run\"",
+    "note": "TL-P4-13 (main aea42fe). Escalated."
   }
 ]

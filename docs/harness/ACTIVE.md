@@ -306,3 +306,4 @@ P3-9 is closed.
 - ask-answer-loop closed (694321d; red by hand at adc533f; merged claude/p3; C06 e2e line grounded). C05 entries all closed. 393/395. P4-20 Opus check and suites running.
 - P4-20 check BLOCK (ask-answer-loop): copy says doing it now during a run; Write it (q-state) is never done. Reopened; fix round with the same worker. 392/395. Suites at ab223bd running.
 - ask-answer-loop re-closed (bcf6f3f; Write it honest, not built). Suites green at ab223bd after killing an orphaned reviewer vite on 5191. Owner asked: findings and errors to the lead (2026-10-08-p4-c05-findings.md); waiting for the lead before the next deploy.
+- TL-P4-13 (aea42fe): packet template with the checklist (packet-template.md); 6 entries registered (home-errors-shown, home-cache-stable, safety-polish, corpus-grounded-scorer, verify-names-precheck, state-yes-writes). P4-20b check and home-errors-shown running. Fix rounds now start fresh sessions.
