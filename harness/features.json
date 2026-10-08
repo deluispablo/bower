@@ -5365,7 +5365,7 @@
     "id": "c1-worker-routes",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "A person middleware that maps RPC errors once (503 on version skew), jsonBody, HttpError with details, one authorize RPC, one refreshToken(env, person).",
     "steps": [
       "Red from today's drift: requireSession answering 500 during a deploy; three copies of each helper",

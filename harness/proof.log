@@ -437,3 +437,4 @@ c1-digest-library	1c2413ca7e7e4351	2026-10-08	known-green: reason: one commit he
 c1-worker-deadlines	5eaea5ee1133b2c3	2026-10-08	red (fixed in 1461f5f9)
 c1-admit-once	d823a70cde77dc10	2026-10-08	known-green: reason: the comment-wording commit f495c2f2 touched the same lines. Red by hand at tests-only 6a420145: the verify fails on its assertion (Drive reads before the 429); green at 51e9d830
 c1-still-as-seen	1cf8c33ece0dbe62	2026-10-08	red (fixed in 6290eb31)
+c1-worker-routes	0d93494544f64637	2026-10-08	red (fixed in 5cfbba83)
