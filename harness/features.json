@@ -5212,7 +5212,7 @@
     "id": "keep-one-note-merge",
     "task": "p4-c",
     "category": "feature",
-    "passes": true,
+    "passes": false,
     "what": "Keep one note: the intent names the kept note and the other; the other note's facts and Timeline carry over with their sources, the other goes to the Drive Bin, links to it are rewritten to the kept note, all undoable.",
     "steps": [
       "An intent field (kept, other) validated by the spine.",
@@ -5222,6 +5222,6 @@
       "Proved with scripted proposals whose answer comes from the c05-keep-one-note fixture."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"keep one note carries the facts and bins the other|undo of keep one note restores both notes and links|the C05 corpus cases score green with scripted proposals\"",
-    "note": "TL-P4-08 addendum 7 (main f10109d). ask-answer-loop moves into C05 but waits for the owner's trigger ruling."
+    "note": "TL-P4-08 addendum 7 (main f10109d). ask-answer-loop moves into C05 but waits for the owner's trigger ruling. Reopened by P4-19 (BLOCK): the other note is binned on name/place only (a person edit after the plan read is lost); carriedLines drops a line found as a substring of the kept text."
   }
 ]
