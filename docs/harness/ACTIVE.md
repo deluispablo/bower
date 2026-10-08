@@ -323,3 +323,4 @@ P3-9 is closed.
 - Stage 1 registered (11 c1-* entries plus safety-polish and verify-names-precheck already open). Dispatch waits for the lead's go after the baseline.
 - Write it on a fresh question: hub run gpHq3SsL asked q-state (state recorded); Write it started aao9URR2 at once (79 s) but wrote nothing and closed the question silently (write-it-silent, same class, c3-subject). Owner widened permissions in chat (Undo anywhere in A's folder; hand-written question if the real run does not ask). Hub runs done.
 - TL-P4-16 addendum 2 (7661ef8): write-it-silent is a design flaw; c3-subject stores the shown text, a yes applies it with no model call (in the note; goes in c3-subject's packet). Stage 1 dispatch: c1-digest (implementer) and c1-drive-ops-table (mechanical).
+- c1-digest closed (8b7eb3f3; removed 38). c1-drive-ops-table reworked (1e64a9f0 red, 6a9573dc) but not merged: it drops the live after-check for openResumable/putChunk; P4-21 review of both decides.
