@@ -4899,7 +4899,7 @@
       "Golden of the per-step call counts."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 addendum 2 (main c924560)."
   }
 ]
