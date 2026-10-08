@@ -82,8 +82,13 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   const { drive, rootId, fresh } = await pretendDrive(scenario);
   drive.latency = scenario === 'slow' ? 1500 : scale === 'instant' ? 0 : 40;
   drive.offline = scenario === 'offline';
-  // A report and a question file that Drive answers late: Home shows the Inbox first, and these fill in after it.
-  if (scenario === 'slow-report') drive.readDelay = (name) => (name === 'last-run.json' || name === 'questions.json' ? 6000 : 0);
+  // The live shape: about 300 ms a call and four at once, as a browser talks to Drive. Home must show the Inbox first.
+  if (scenario === 'slow-report') {
+    drive.latency = 300;
+    drive.concurrency = 4;
+    drive.calls = 0;
+    (window as unknown as { __driveCalls: () => number }).__driveCalls = () => drive.calls;
+  }
   // The pretend Worker's run service owns runs on the B path, across reloads, beside the pretend Drive.
   const runs = pretendRuns(scenario, drive, fresh, scale);
   // The pretend Worker's session lease, shared by this browser's tabs as devices share the real Worker's.

@@ -54,8 +54,12 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   /** Can change after seeding, so a folder fills at once and then answers slowly or not at all. */
   latency: number;
   offline: boolean;
-  /** An extra wait, in ms, before a file's text is read, by its name: a report or a question file that Drive answers late. */
-  readDelay?: (name: string) => number;
+  /** How many calls have been made (for measuring what a screen asks of Drive). */
+  calls = 0;
+  /** At most this many calls wait at once, as a browser holds a few connections to one host; 0 is no limit. */
+  concurrency = 0;
+  private active = 0;
+  private queue: Array<() => void> = [];
 
   constructor(opts: FakeDriveOptions = {}) {
     this.clock = opts.clock ?? Date.now;
@@ -158,8 +162,6 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   async readText(id: string): Promise<string> {
     await this.gate();
     const f = this.find(id);
-    const extra = this.readDelay?.(f.meta.name) ?? 0;
-    if (extra) await new Promise((r) => setTimeout(r, extra));
     if (f.content === null) return '';
     return typeof f.content === 'string' ? f.content : f.content.text();
   }
@@ -406,7 +408,17 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   }
 
   private async gate(): Promise<void> {
-    if (this.latency) await new Promise((r) => setTimeout(r, this.latency * (0.6 + Math.random() * 0.8)));
+    this.calls++;
+    if (this.latency) {
+      if (this.concurrency && this.active >= this.concurrency) await new Promise<void>((r) => this.queue.push(r));
+      this.active++;
+      try {
+        await new Promise((r) => setTimeout(r, this.latency * (0.6 + Math.random() * 0.8)));
+      } finally {
+        this.active--;
+        this.queue.shift()?.();
+      }
+    }
     if (this.offline) throw driveError('offline');
     const code = this.failing;
     if (!code) return;
