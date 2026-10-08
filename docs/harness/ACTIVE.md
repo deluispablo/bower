@@ -314,3 +314,4 @@ P3-9 is closed.
 - P4-20c check PASS (ask-answer-loop; minors to polish; Worker ships first). state-yes-writes (escalated) dispatched; home-cache-stable running.
 - home-cache-stable delivered but misses 2 s (3.7-4.3 s, 46 calls, floor 3.45 s); test renamed bound to the call floor; not merged; ruling asked. corpus-grounded-scorer (implementer) dispatched.
 - TL-P4-13 addendum 2 (e317fc7): about 4 s accepted; home-cache-stable closed (15586a1; test renamed to its bound; compat row added by me). home-reads-bounded registered (queued). 395/402. state-yes-writes and corpus-grounded-scorer running.
+- TL-P4-14 (2b7a6bb): consolidation before C06; stage 0: suites and SHA for the C05 live baseline. Nothing else starts. Also closed before the stop: home-cache-stable, corpus-grounded-scorer. 397/402.
