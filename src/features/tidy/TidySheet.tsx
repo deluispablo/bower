@@ -110,7 +110,7 @@ function Confirm() {
               Not now
             </Button>
             <Button block onClick={() => void start()} disabled={busy}>
-              {busy ? 'Starting…' : `Tidy up ${plural(count, 'thing')}`}
+              {busy ? 'Starting…' : error ? 'Try again' : `Tidy up ${plural(count, 'thing')}`}
             </Button>
           </>
         )}

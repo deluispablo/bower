@@ -11,6 +11,7 @@ export const SCENARIOS = {
   running: 'A tidy-up is running',
   empty: 'Nothing waiting in the inbox',
   'fail-run': 'The next tidy-up fails (trying again works)',
+  'start-fails': 'The next tidy-up cannot start (trying again works)',
   slow: 'Everything answers slowly',
   offline: 'Offline',
 } as const;
