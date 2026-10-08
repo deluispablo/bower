@@ -45,3 +45,14 @@ The ruling waits for its diagnosis note.
 
 **Write it, live.** At most 2 more hub runs, to get a run that proposes a state change. If neither does, the live check of Write it and its Undo moves to after `c3-subject`, and the scripted e2e covers it until then.
 - **A C05 quality note, for when C05 resumes:** in about half the hub runs the model proposed no Current-state update even though the facts changed. The prompt and the corpus check address it then; no fix now.
+
+## Addendum 2: write-it-silent
+
+On a fresh question (`gpHq3SsL`), "Write it" started its scoped run at once (`aao9URR2`), but that run wrote nothing and the question closed silently. The scoped run asks the model again, and the model may simply not propose a state update this time. That is a design flaw, not just a missing check: a yes to "Should Bower write its update there?" must apply **the update the person was shown**, not a fresh guess.
+
+The rule joins `c3-subject`'s ruling:
+- the q-state question stores Bower's proposed text with its evidence;
+- a yes applies that stored text, deterministically and through the usual fence, with no model call;
+- if the section changed since, the person is asked again with the reason.
+
+The same goes for any question whose yes means "do what you proposed".
