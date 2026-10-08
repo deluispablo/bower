@@ -10,6 +10,7 @@
  * retry strategy, https://cloud.google.com/storage/docs/retry-strategy).
  */
 import type { RunSource, StartedRun, StartOptions, Unsubscribe } from '../sources';
+import { ACTIVE_PHASES } from '../contracts/run-phases';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
 import { httpStatusOf, type RunWire, type StatusReply, type WorkerApi } from '../worker/worker-api';
@@ -17,7 +18,6 @@ import { httpStatusOf, type RunWire, type StatusReply, type WorkerApi } from '..
 const FAST_MS = 4_000;
 const SLOW_MS = 60_000;
 const SEEN = 'bower:run-seen';
-const ACTIVE: readonly RunWire['phase'][] = ['queued', 'reading', 'writing', 'saving'];
 
 const clientError = (e: unknown): e is BowerError => {
   if (!(e instanceof BowerError)) return false;
@@ -268,7 +268,7 @@ export class LiveRuns implements RunSource {
         if (finished(wire)) console.error(new Error(`Conflicting terminal status for run ${wire.id}`));
         return;
       }
-      if (!finished(wire) && ACTIVE.indexOf(wire.phase) < ACTIVE.indexOf(before.phase)) return;
+      if (!finished(wire) && ACTIVE_PHASES.indexOf(wire.phase) < ACTIVE_PHASES.indexOf(before.phase)) return;
     }
     const changed = JSON.stringify(before) !== JSON.stringify(wire);
     if (before && before.id !== wire.id) this.retired.add(before.id);

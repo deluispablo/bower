@@ -32,6 +32,7 @@ import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, m
 import { firstCheckpoint, nextCheckpoint, type CheckpointPatch } from '../spine/records';
 import { fixedReport, lastRunText, sameView, saveReport } from '../spine/barrier';
 import { checksumOf, md5Hex } from '../contracts/hashes';
+import { PHASE_RANK, isRunPhase } from '../contracts/run-phases';
 import { B_FAILURE } from '../spine/scripted';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
@@ -905,8 +906,7 @@ export class FakeRunService {
 /** How many admitted run ids a row remembers for the view order. */
 const ADMITTED_KEPT = 50;
 
-const RANK: Record<string, number> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
-const rank = (phase: string): number => RANK[phase] ?? 0;
+const rank = (phase: string): number => (isRunPhase(phase) ? PHASE_RANK[phase] : 0);
 
 /** A persisted service state, checked before it is trusted. */
 function isState(v: unknown): v is { v: 1; seq: number; revoked: string[]; rows: Record<string, Omit<Row, 'admitted'> & { admitted?: string[] }> } {

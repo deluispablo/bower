@@ -29,8 +29,9 @@ import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import type { Person, RunnerGrant } from './person.js';
-import type { RunPhase, RunReply } from './process.js';
-import { PHASE_RANK, hashTicket, personIdOf } from './run-ticket.js';
+import { isRunPhase } from '../../src/data/contracts/run-phases.js';
+import type { RunReply } from './process.js';
+import { hashTicket, personIdOf } from './run-ticket.js';
 import type { RunnerRefusal, RunnerReport, RunnerReportResult } from './run-ticket.js';
 import { jsonBody, personById, unreadable } from './route-helpers.js';
 import { limitBody, requireJsonBody } from './security.js';
@@ -97,7 +98,7 @@ function parseReport(value: unknown): RunnerReport {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
   const { attempt, seq, phase, total, failure } = value as Record<string, unknown>;
   if (!wholeFrom(attempt, 1) || !wholeFrom(seq, 1)) throw unreadable();
-  if (typeof phase !== 'string' || !Object.hasOwn(PHASE_RANK, phase)) throw unreadable();
+  if (!isRunPhase(phase)) throw unreadable();
   if (total !== undefined && !wholeFrom(total, 0)) throw unreadable();
   if (failure !== undefined) {
     const sentence = typeof failure === 'string' && failure.trim() !== '' && failure.length <= MAX_FAILURE_LENGTH;
@@ -106,7 +107,7 @@ function parseReport(value: unknown): RunnerReport {
   return {
     attempt,
     seq,
-    phase: phase as RunPhase,
+    phase,
     ...(total === undefined ? {} : { total }),
     ...(failure === undefined ? {} : { failure }),
   };

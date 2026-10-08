@@ -13,11 +13,11 @@ import { thingsIn } from '../piles';
 import { NOTHING } from '../spine/admission';
 import { planAdmission } from '../spine/plan';
 import { fakeRead } from '../spine/read';
-import { BowerError, PARA_ROOTS } from '../types';
+import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../contracts/folder-template';
+import { PHASE_RANK as RANK } from '../contracts/run-phases';
+import { BowerError } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { BOWER_FOLDER, SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
-import { serializeNote } from '../vault/note-format';
-import { RULES_TEMPLATE } from '../vault/rules-format';
 import type { Me, ProcessOptions, RunReply, RunWire, StatusReply, WorkerApi } from '../worker/worker-api';
 import { planRun, type HubUpdate } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
@@ -136,7 +136,7 @@ export class FakeWorker implements WorkerApi {
     return 'fake-token';
   }
 
-  /** The template: the five main folders, Rules.md, About me.md and Bower's own folder. */
+  /** The contracts' folder template: the five main folders, Rules.md, About me.md and Bower's own folder. */
   async createFolder(): Promise<{ id: string; found: boolean }> {
     this.fenced();
     // After a deleted account, the folder it had is found again, as the Worker finds it in the Drive.
@@ -145,16 +145,21 @@ export class FakeWorker implements WorkerApi {
     if (this.rootId) return { id: this.rootId, found };
     const d = this.drive;
     const root = (await d.createFolder('root', BOWER_FOLDER)).id;
-    for (const r of PARA_ROOTS) await d.createFolder(root, r);
-    await d.createText(root, 'Rules.md', RULES_TEMPLATE.text, { ...RULES_TEMPLATE.appProperties });
-    const about = serializeNote({ summary: 'What Bower knows about you. Change it whenever you like.', properties: [], tags: [], currentState: [], body: 'Write a few lines about yourself: where you live, what you do, who is in your life.', timeline: [], byBower: false });
-    await d.createText(root, 'About me.md', about);
-    const sys = (await d.createFolder(root, '.bower')).id;
-    await d.createFolder(sys, 'changes');
-    await d.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
-    await d.createText(sys, 'suggestions.json', '{ "v": 1, "suggestions": [] }\n');
-    await d.createText(sys, 'requests.json', '{ "v": 1, "done": [] }\n');
-    await d.createText(sys, 'hashes.json', '{ "v": 1, "hashes": {} }\n');
+    // The contracts' template, as the real Worker creates it: a folder for each path, a file where there is content.
+    const folders = new Map<string, string>([['', root]]);
+    const folder = async (path: string): Promise<string> => {
+      const known = folders.get(path);
+      if (known !== undefined) return known;
+      const cut = path.lastIndexOf('/');
+      const id = (await d.createFolder(await folder(cut < 0 ? '' : path.slice(0, cut)), path.slice(cut + 1))).id;
+      folders.set(path, id);
+      return id;
+    };
+    for (const file of FOLDER_TEMPLATE) {
+      const cut = file.path.lastIndexOf('/');
+      const parent = await folder(cut < 0 ? '' : file.path.slice(0, cut));
+      if (file.path.slice(cut + 1) !== PLACEHOLDER_FILE) await d.createText(parent, file.path.slice(cut + 1), file.content, file.appProperties);
+    }
     this.rootId = root;
     return { id: root, found: false };
   }
@@ -405,8 +410,6 @@ function forget(yes: boolean): void {
     console.error(e);
   }
 }
-
-const RANK: Record<RunWire['phase'], number> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
 
 /** What a report answers: the run and revision when taken, or the refusal the Worker would give. */
 export type LedgerAnswer = { status: 200; reply: RunReply } | { status: 409; code: 'stale-report' | 'stale-attempt'; reply: RunReply };

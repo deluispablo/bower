@@ -16,7 +16,8 @@
 
 import { sha256Hex } from '../../src/data/contracts/hashes.js';
 import { base64UrlEncode } from './crypto.js';
-import type { RunPhase, RunReply } from './process.js';
+import type { RunPhase } from '../../src/data/contracts/run-phases.js';
+import type { RunReply } from './process.js';
 
 /** Random bytes in a ticket. */
 const TICKET_BYTES = 32;
@@ -78,12 +79,3 @@ export type RunnerReportResult =
   /** A late report: with the Worker's current `seq` of this attempt (0 before any) and phase, so a runner can go on. */
   | { accepted: false; refused: 'stale-report'; current: { seq: number; phase: RunPhase } };
 
-/** How far along a phase is: a report never moves a run to a lower rank (`done` and `failed` are both last). */
-export const PHASE_RANK: Readonly<Record<RunPhase, number>> = {
-  queued: 0,
-  reading: 1,
-  writing: 2,
-  saving: 3,
-  done: 4,
-  failed: 4,
-};

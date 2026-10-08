@@ -14,21 +14,12 @@
 import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
 
+import type { SessionAction } from '../../src/data/contracts/lease.js';
 import { requireSession } from './auth.js';
 import { jsonBody, personFor, signedInSub, unreadable } from './route-helpers.js';
 import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
 import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
-
-/** A lease nobody renewed for this long is free (the app's `LEASE_TTL_MS`, src/data/session.ts). */
-export const LEASE_TTL_MS = 3 * 60_000;
-
-export type SessionAction = 'check' | 'take' | 'leave';
-
-export interface LeaseReply {
-  active: boolean;
-  epoch: number;
-}
 
 /** The refusal of a call from a place that does not hold the lease (approved copy, TL-P2-13). */
 export const STALE_SESSION_TEXT = 'Bower is open in another window.';

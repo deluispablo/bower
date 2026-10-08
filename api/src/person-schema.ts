@@ -7,6 +7,11 @@
  * steps below have run; a later entry adds a step and bumps
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
+import { RUN_PHASES } from '../../src/data/contracts/run-phases.js';
+
+/** The run phases as a SQL list (the same text the step always had). */
+const PHASES_SQL = RUN_PHASES.map((p) => `'${p}'`).join(', ');
+
 
 export const SCHEMA_VERSION = 13;
 
@@ -122,7 +127,7 @@ const STEPS: readonly (readonly string[])[] = [
       request_id TEXT NOT NULL UNIQUE,
       scope TEXT NOT NULL CHECK (scope IN ('all', 'instructions')),
       allow_web INTEGER NOT NULL CHECK (allow_web IN (0, 1)),
-      phase TEXT NOT NULL CHECK (phase IN ('queued', 'reading', 'writing', 'saving', 'done', 'failed')),
+      phase TEXT NOT NULL CHECK (phase IN (${PHASES_SQL})),
       requested_at INTEGER NOT NULL,
       phase_at INTEGER NOT NULL,
       finished_at INTEGER,

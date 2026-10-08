@@ -5,7 +5,7 @@ import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
-import { LEASE_TTL_MS } from '../src/session-lease.js';
+import { LEASE_TTL_MS } from '../../src/data/contracts/lease.js';
 import { allowKey } from '../src/store.js';
 
 const env = testEnv as unknown as Env;

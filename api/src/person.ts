@@ -9,14 +9,17 @@ import { applyingWatch, decide, staleDeadline, staleFailure, unrecoveredCeiling 
 import type { Recovery, RecoveryWatch } from './recovery.js';
 import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
-import { ACTIVE_PHASES, QUEUED_STALE_MS, admission, dispatchNew, utcDay } from './process.js';
-import type { AdmitInput, AdmitResult, RunPhase, RunReply, RunScope, RunWire } from './process.js';
+import { ACTIVE_PHASES, PHASE_RANK } from '../../src/data/contracts/run-phases.js';
+import type { RunPhase } from '../../src/data/contracts/run-phases.js';
+import type { RunScope, RunWire } from '../../src/data/contracts/run-wire.js';
+import { QUEUED_STALE_MS, admission, dispatchNew, utcDay } from './process.js';
+import type { AdmitInput, AdmitResult, RunReply } from './process.js';
 import type { FetchLike } from './google.js';
 import { HttpError } from './errors.js';
-import { PHASE_RANK, TICKET_TTL_MS, hashTicket, makeRunId, newTicket } from './run-ticket.js';
+import { TICKET_TTL_MS, hashTicket, makeRunId, newTicket } from './run-ticket.js';
 import type { RunnerAccess, RunnerReport, RunnerReportResult } from './run-ticket.js';
-import { LEASE_TTL_MS } from './session-lease.js';
-import type { LeaseReply, SessionAction } from './session-lease.js';
+import { LEAVE_KEPT_MS, decideLease, holdsLease } from '../../src/data/contracts/lease.js';
+import type { Lease, LeaseReply, SessionAction } from '../../src/data/contracts/lease.js';
 
 /** What a live runner ticket opens: its attempt and folder, and what the run was admitted to take (null for a run from before v9). */
 export interface RunnerGrant extends RunnerAccess {
@@ -25,8 +28,6 @@ export interface RunnerGrant extends RunnerAccess {
 
 /** `session_lease.place` while nobody holds the lease (a real place is 1 to 64 characters). */
 const FREE_PLACE = '';
-/** How long a place's latest leave generation is kept. */
-const LEAVE_KEPT_MS = 24 * 60 * 60 * 1000;
 
 /** The person's account row, as `GET /me` and the session check read it. */
 export interface PersonAccount {
@@ -464,15 +465,8 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
-   * `POST /session` (worker contract, "One active session"; TL-P2-14/25, TL-P3-14), the same rules as the
-   * app's pretend lease (`src/data/fake/fake-lease.ts`):
-   * - a `check` whose `gen` is older than its place's latest `leave` began before that leave: it grants and
-   *   renews nothing, and answers the current state for that place;
-   * - a `check` by the holder renews it with the same epoch, even after the TTL when nobody took it, and so
-   *   does one by the place that let it go while nobody had it since;
-   * - a free or expired lease goes to whoever checks, and `take` always moves it, with epoch + 1;
-   * - `leave` records the place's generation (never lowering it) and, by the holder, frees the lease with
-   *   its epoch kept.
+   * `POST /session` (worker contract, "One active session"; TL-P2-14/25, TL-P3-14): the rules are `decideLease`
+   * (`src/data/contracts/lease.ts`), the same function the app's pretend lease runs; this method reads and stores.
    * One synchronous transaction, so no other call reads between the read and the write (a fencing token in
    * Kleppmann's sense: the epoch only grows while anyone has had the lease).
    */
@@ -480,7 +474,21 @@ export class Person extends DurableObject<Env> {
     return this.ctx.storage.transactionSync(() => {
       const sql = this.ctx.storage.sql;
       const lease = this.lease();
-      const write = (holder: string | null, epoch: number, beatAt: number, left: string | null): void => {
+      const row = sql.exec<{ gen: number; left_at: number }>('SELECT gen, left_at FROM session_leave WHERE place = ?', place).toArray()[0];
+      const decision = decideLease(lease, row === undefined ? undefined : { gen: row.gen, at: row.left_at }, { place, action, gen, now });
+      if (decision.leave !== undefined) {
+        sql.exec(
+          `INSERT INTO session_leave (place, gen, left_at) VALUES (?, ?, ?)
+           ON CONFLICT (place) DO UPDATE SET gen = excluded.gen, left_at = excluded.left_at`,
+          place,
+          decision.leave.gen,
+          decision.leave.at,
+        );
+        // A check in flight lasts seconds; a place that left long ago has nothing on its way.
+        sql.exec('DELETE FROM session_leave WHERE left_at < ?', now - LEAVE_KEPT_MS);
+      }
+      if (decision.lease !== lease) {
+        const { holder, epoch, beatAt, left } = decision.lease;
         sql.exec(
           `INSERT INTO session_lease (id, place, epoch, beat_at, left_place) VALUES (1, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET place = excluded.place, epoch = excluded.epoch,
@@ -490,36 +498,8 @@ export class Person extends DurableObject<Env> {
           beatAt,
           left,
         );
-      };
-      if (action === 'leave') {
-        sql.exec(
-          `INSERT INTO session_leave (place, gen, left_at) VALUES (?, ?, ?)
-           ON CONFLICT (place) DO UPDATE SET gen = MAX(gen, excluded.gen), left_at = excluded.left_at`,
-          place,
-          gen,
-          now,
-        );
-        // A check in flight lasts seconds; a place that left long ago has nothing on its way.
-        sql.exec('DELETE FROM session_leave WHERE left_at < ?', now - LEAVE_KEPT_MS);
-        if (lease.holder === place) write(null, lease.epoch, lease.beatAt, place);
-        return { active: false, epoch: lease.epoch };
       }
-      if (action === 'check') {
-        const last = sql
-          .exec<{ gen: number }>('SELECT gen FROM session_leave WHERE place = ?', place)
-          .toArray()[0]?.gen;
-        if (last !== undefined && gen < last) return { active: lease.holder === place, epoch: lease.epoch };
-        if (lease.holder === place || (lease.holder === null && lease.left === place)) {
-          write(place, lease.epoch, now, null);
-          return { active: true, epoch: lease.epoch };
-        }
-      }
-      const live = lease.holder !== null && now - lease.beatAt < LEASE_TTL_MS;
-      if (action === 'take' || !live) {
-        write(place, lease.epoch + 1, now, null);
-        return { active: true, epoch: lease.epoch + 1 };
-      }
-      return { active: false, epoch: lease.epoch };
+      return decision.reply;
     });
   }
 
@@ -528,11 +508,10 @@ export class Person extends DurableObject<Env> {
    * nobody took is still its holder's (TL-P2-25); a stale epoch or another place is not.
    */
   holdsLease(place: string, epoch: number): boolean {
-    const lease = this.lease();
-    return lease.holder === place && lease.epoch === epoch;
+    return holdsLease(this.lease(), place, epoch);
   }
 
-  private lease(): { holder: string | null; epoch: number; beatAt: number; left: string | null } {
+  private lease(): Lease {
     const row = this.ctx.storage.sql
       .exec<{ place: string; epoch: number; beat_at: number; left_place: string | null }>(
         'SELECT place, epoch, beat_at, left_place FROM session_lease WHERE id = 1',

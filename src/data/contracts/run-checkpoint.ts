@@ -1,5 +1,6 @@
 /** Run checkpoint and report record validation only; no claim, dispatch or permission authority. */
 import type { RunReport } from './types';
+import { PHASE_RANK, isRunPhase, type RunPhase } from './run-phases';
 import { canonicalRecordJson, hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -31,7 +32,7 @@ export type ReportState = { state: 'not-ready' }
 export type Checkpoint = {
   v: 1; kind: 'run-checkpoint'; scope: Scope; runId: string; manifestHash: string;
   revision: number; previous: string | null; attemptId: string; epoch: number;
-  phase: 'queued' | 'reading' | 'writing' | 'saving' | 'done' | 'failed'; phaseAt: number;
+  phase: RunPhase; phaseAt: number;
   outcomes: Outcome[]; report: ReportState; retainedPileIds: string[];
 };
 /** Independently supplied by a caller that already holds the verified manifest. */
@@ -189,7 +190,7 @@ function checkpoint(value: unknown): value is Checkpoint {
     && value.v === 1 && value.kind === 'run-checkpoint' && scope(value.scope) && id(value.runId)
     && hash(value.manifestHash) && integer(value.revision) && (value.previous === null || hash(value.previous))
     && id(value.attemptId) && integer(value.epoch)
-    && oneOf(value.phase, ['queued', 'reading', 'writing', 'saving', 'done', 'failed']) && integer(value.phaseAt)
+    && isRunPhase(value.phase) && integer(value.phaseAt)
     && list(value.outcomes, outcome) && reportState(value.report)
     && list(value.retainedPileIds, id) && unique(value.retainedPileIds);
 }
@@ -272,7 +273,6 @@ function allowed(before: Outcome, after: Outcome): boolean {
     default: return false;
   }
 }
-const PHASE_RANK: Record<Checkpoint['phase'], number> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
 /** Phases never go back and may repeat; failed may follow any non-terminal phase; nothing follows done or failed. */
 function forwardPhase(before: Checkpoint['phase'], after: Checkpoint['phase']): boolean {
   if (before === 'done' || before === 'failed') return false;

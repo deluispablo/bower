@@ -5,9 +5,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "wrangler dev",
-    "template": "node scripts/bundle-template.mjs",
-    "template:check": "node scripts/bundle-template.mjs --check",
-    "lint": "eslint . && node scripts/bundle-template.mjs --check",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
   },

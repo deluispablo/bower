@@ -42,27 +42,14 @@ import { accessTokenOf } from './drive-token.js';
 import type { DriveTokenKeeper } from './drive-token.js';
 import type { AppEnv, Env } from './env.js';
 import type { FetchLike } from './google.js';
+import { ACTIVE_PHASES } from '../../src/data/contracts/run-phases.js';
+import type { RunScope, RunWire } from '../../src/data/contracts/run-wire.js';
 import { HttpError } from './errors.js';
 import { jsonBody, personFor, signedInSub, unreadable } from './route-helpers.js';
 import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
 import type { AuthDeps } from './auth.js';
 import { dispatchOutcome } from './github.js';
-
-export type RunScope = 'all' | 'instructions';
-export type RunPhase = 'queued' | 'reading' | 'writing' | 'saving' | 'done' | 'failed';
-
-/** A run as the app receives it (worker contract, `RunWire`). */
-export interface RunWire {
-  id: string;
-  scope: RunScope;
-  phase: RunPhase;
-  requestedAt: number;
-  phaseAt: number;
-  finishedAt?: number;
-  total?: number;
-  failure?: string;
-}
 
 /** What `POST /process` and `GET /status` answer: the run, and the person's status revision. */
 export interface RunReply {
@@ -103,8 +90,6 @@ export const RUNNING_STALE_MS = 30 * 60 * 1000;
 export const STALE_FAILURE = 'This tidy-up took too long and stopped. Try again.';
 /** The failure a run stuck in `saving` is given: its changes were made, its summary was not saved (TL-P3-22). */
 export const SAVING_FAILURE = "Bower made changes but couldn't save the summary of this tidy-up.";
-
-export const ACTIVE_PHASES: readonly RunPhase[] = ['queued', 'reading', 'writing', 'saving'];
 
 /** Whether `run` is still going but past its window at `now`: queued from `requestedAt`, a started phase from `phaseAt`. */
 export function isStale(run: Pick<RunWire, 'phase' | 'requestedAt' | 'phaseAt'>, now: number): boolean {

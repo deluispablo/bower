@@ -9,7 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { FakeLease } from '../fake/fake-lease';
+import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from './folder-template';
 import { LEASE_CASES } from './lease-cases';
+import { parseNote, serializeNote } from './note-format';
+import { PHASE_RANK, RUN_PHASES, RUN_STEPS, isRunPhase } from './run-phases';
+import { isRunWire } from './run-wire';
+import { PARA_ROOTS } from './types';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -48,6 +53,30 @@ describe('the run phases and the folder template are one each', () => {
     expect(where(/\{ "v": 1, "hashes": \{\} \}/)).toEqual(['src/data/contracts/folder-template.ts']);
     expect(where(/Write a few lines about yourself/)).toEqual(['src/data/contracts/folder-template.ts']);
     expect(statSyncOrNull(join(ROOT, 'api/template'))).toBeNull();
+  });
+});
+
+describe('what the shared lists say', () => {
+  it('the phases are ranked in order, the steps are the ones before done, and a run wire takes only them', () => {
+    expect(RUN_STEPS).toEqual(RUN_PHASES.slice(0, 4));
+    expect(RUN_PHASES.map((p) => PHASE_RANK[p])).toEqual([0, 1, 2, 3, 4, 4]);
+    expect(RUN_PHASES.every(isRunPhase)).toBe(true);
+    const wire = { id: 'r1', scope: 'all', requestedAt: 1, phaseAt: 1 };
+    expect(RUN_PHASES.every((phase) => isRunWire({ ...wire, phase }))).toBe(true);
+    expect(isRunWire({ ...wire, phase: 'paused' })).toBe(false);
+  });
+
+  it('the folder template has the five main folders, Bower\'s own folder and a Rules.md only Bower words', () => {
+    const folders = new Set(FOLDER_TEMPLATE.flatMap((f) => (f.path.endsWith(`/${PLACEHOLDER_FILE}`) ? [f.path.slice(0, -PLACEHOLDER_FILE.length - 1)] : [])));
+    for (const root of PARA_ROOTS) expect(folders.has(root) || FOLDER_TEMPLATE.some((f) => f.path.startsWith(`${root}/`))).toBe(true);
+    expect(FOLDER_TEMPLATE.map((f) => f.path)).toEqual([...FOLDER_TEMPLATE.map((f) => f.path)].sort());
+    expect(FOLDER_TEMPLATE.find((f) => f.path === 'Rules.md')?.appProperties).toMatchObject({ by: 'bower' });
+  });
+
+  it('About me.md is the note the accepted app made: the same bytes serializeNote writes', () => {
+    const about = FOLDER_TEMPLATE.find((f) => f.path === 'About me.md')?.content ?? '';
+    expect(about).toBe(serializeNote({ summary: 'What Bower knows about you. Change it whenever you like.', properties: [], tags: [], currentState: [], body: 'Write a few lines about yourself: where you live, what you do, who is in your life.', timeline: [], byBower: false }));
+    expect(parseNote('About me.md', about).summary).toBe('What Bower knows about you. Change it whenever you like.');
   });
 });
 

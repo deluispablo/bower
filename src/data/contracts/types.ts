@@ -3,6 +3,8 @@
  * contract (the runner's report, the vault's layout) so that phase 2 only
  * adds adapters behind the same interfaces.
  */
+import type { RunPhase } from './run-phases';
+
 
 export type ParaRoot = 'Inbox' | 'Projects' | 'Areas' | 'Resources' | 'Archive';
 export const PARA_ROOTS: readonly ParaRoot[] = ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive'];
@@ -184,8 +186,7 @@ export interface Suggestion {
   why: string;
 }
 
-export type RunPhase = 'queued' | 'reading' | 'writing' | 'saving' | 'done' | 'failed';
-export const RUN_STEPS = ['queued', 'reading', 'writing', 'saving'] as const satisfies readonly RunPhase[];
+export { RUN_STEPS, type RunPhase } from './run-phases';
 
 export interface FiledItem {
   /** As it arrived. */

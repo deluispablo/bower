@@ -15,7 +15,7 @@
  * with it inside one synchronous section.
  */
 import { QUEUED_STALE_MS, RUNNING_STALE_MS, SAVING_FAILURE, STALE_FAILURE } from './process.js';
-import type { RunWire } from './process.js';
+import type { RunWire } from '../../src/data/contracts/run-wire.js';
 
 /**
  * The sentence a run ended for staleness is given, by the phase it was in (TL-P3-22 point 2). The runner reports
