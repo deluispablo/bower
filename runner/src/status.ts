@@ -9,6 +9,7 @@
  * - otherwise (a restarted runner whose `seq` started over) the report is sent once more from `seq + 1`. Refused
  *   again, a `done` or `failed` throws, so the job fails visibly; it is never swallowed.
  */
+import { PHASE_RANK as RANK } from '../../src/data/contracts/run-phases';
 import { BowerError, type RunPhase } from '../../src/data/types';
 import { retried } from './retry';
 import { staleAttempt } from './token';
@@ -21,7 +22,6 @@ export interface RunnerStatusOptions {
   fetch?: typeof fetch;
 }
 
-const RANK: Readonly<Record<RunPhase, number>> = { queued: 0, reading: 1, writing: 2, saving: 3, done: 4, failed: 4 };
 const ended = (phase: RunPhase): boolean => phase === 'done' || phase === 'failed';
 
 /** Where the Worker is, from a `stale-report` body; null when it does not say. */

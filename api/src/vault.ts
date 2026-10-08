@@ -49,8 +49,8 @@ import { personFor, signedInSub } from './route-helpers.js';
 import type { FetchLike } from './google.js';
 import { requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
-import { TEMPLATE_FILES } from './template.generated.js';
-import type { TemplateFile } from './template.generated.js';
+import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../../src/data/contracts/folder-template.js';
+import type { FolderTemplateFile } from '../../src/data/contracts/folder-template.js';
 import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
@@ -60,25 +60,21 @@ export const FOLDER_MARKER = { bowerFolder: '1' } as const;
 export { OLD_RULES_TEMPLATE };
 
 /** A template file, with the app properties it is created with. */
-export interface VaultFile extends TemplateFile {
-  appProperties?: Record<string, string>;
-}
+export type VaultFile = FolderTemplateFile;
 
 /**
- * The file `Rules.md` a new folder gets: the contracts' `RULES_TEMPLATE`, which the fake Worker uses too, so a
- * rule typed in the app is Bower's to word on real Drive too. It
- * is not in `api/template/`, whose bundler cannot run the app's code.
+ * The file `Rules.md` a new folder gets: the contracts' `RULES_TEMPLATE`, so a rule typed in the app is Bower's
+ * to word on real Drive too (and the fake Worker makes the same file).
  */
 export const RULES_FILE: VaultFile = { path: 'Rules.md', content: RULES_TEMPLATE.text, appProperties: { ...RULES_TEMPLATE.appProperties } };
 
-/** Every file a new Bower folder gets. */
-export const VAULT_TEMPLATE: readonly VaultFile[] = [...TEMPLATE_FILES, RULES_FILE];
+/** Every file a new Bower folder gets: the contracts' `FOLDER_TEMPLATE`, which the fake Worker uses too. */
+export const VAULT_TEMPLATE: readonly VaultFile[] = FOLDER_TEMPLATE;
 
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
-/** Exists only so the template keeps an empty folder in git: the folder is made, the file is not uploaded. */
-const PLACEHOLDER = '.gitkeep';
+const PLACEHOLDER = PLACEHOLDER_FILE;
 
 export interface VaultResult {
   folderId: string;

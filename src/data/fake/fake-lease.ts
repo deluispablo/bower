@@ -3,28 +3,17 @@
  * `{holder, epoch, beatAt}`, kept in this browser's localStorage so every
  * tab and window of the fake shares it as devices share the real Worker.
  *
- * - `check` by the holder renews its lease with the same epoch, even after
- *   the TTL when nobody took it meanwhile (TL-P2-25); a free lease, or one
- *   another place let expire, is granted to whoever checks, with a higher
- *   epoch; a live lease held by another place answers `active: false`.
- * - `take` always moves the lease to the place, with a higher epoch.
- * - `leave` by the holder frees it at once (the epoch stays). A `check` by
- *   the place that left, with nobody in between, takes it back with the
- *   same epoch (a failed sign-out, a reload); any other grant raises it.
- * - Each place's latest `leave` generation is kept (TL-P3-14): a `check` with
- *   an older one (a missing one counts as 0) began before that leave, so it
- *   grants and renews nothing and answers how things stand for that place.
+ * The rules are `decideLease` (contracts/lease.ts), the same function the Worker's person object runs; this class only
+ * stores its answer.
  */
-import { LEASE_TTL_MS, createPlaceGuard, sessionBus, type LeaseReply, type PlaceDeps, type PlaceGuard, type PlaceOptions, type SessionAction } from '../session';
+import { decideLease, holdsLease, leaveCounts, type Lease, type LeaveMark } from '../contracts/lease';
+import { createPlaceGuard, sessionBus, type LeaseReply, type PlaceDeps, type PlaceGuard, type PlaceOptions, type SessionAction } from '../session';
 
-export interface LeaseRecord {
-  holder: string | null;
-  epoch: number;
-  beatAt: number;
+export interface LeaseRecord extends Omit<Lease, 'left'> {
   /** The place that let it go, while nobody else has had it since. */
   left?: string;
-  /** Each place's latest leave generation. */
-  gens?: Record<string, number>;
+  /** Each place's latest leave. */
+  leaves?: Record<string, LeaveMark>;
 }
 
 export interface FakeLeaseOptions {
@@ -32,7 +21,6 @@ export interface FakeLeaseOptions {
   key: string;
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
   now?: () => number;
-  ttlMs?: number;
 }
 
 /** Demo, each fake scenario and real are separate worlds; the person is never an email (a hash or an id). */
@@ -42,50 +30,38 @@ export function leaseKey(world: string, person: string): string {
 
 const FREE: LeaseRecord = { holder: null, epoch: 0, beatAt: 0 };
 
-const isGens = (v: unknown): v is Record<string, number> =>
+const isMark = (v: unknown): v is LeaveMark => !!v && typeof v === 'object' && typeof (v as LeaveMark).gen === 'number' && Number.isSafeInteger((v as LeaveMark).gen) && (v as LeaveMark).gen >= 0 && Number.isFinite((v as LeaveMark).at);
+const isLeaves = (v: unknown): v is Record<string, LeaveMark> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every(isMark);
+/** What the pretend lease kept before leaves carried a time: the generations alone, read as left at time 0 (so long ago). */
+const isLegacyGens = (v: unknown): v is Record<string, number> =>
   !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every((n) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0);
 
 const isRecord = (v: unknown): v is LeaseRecord => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const r = v as Record<string, unknown>;
-  return (r.holder === null || typeof r.holder === 'string') && typeof r.epoch === 'number' && Number.isSafeInteger(r.epoch) && r.epoch >= 0 && typeof r.beatAt === 'number' && Number.isFinite(r.beatAt) && (r.left === undefined || typeof r.left === 'string') && (r.gens === undefined || isGens(r.gens));
+  return (r.holder === null || typeof r.holder === 'string') && typeof r.epoch === 'number' && Number.isSafeInteger(r.epoch) && r.epoch >= 0 && typeof r.beatAt === 'number' && Number.isFinite(r.beatAt) && (r.left === undefined || typeof r.left === 'string') && (r.leaves === undefined || isLeaves(r.leaves));
 };
 
 export class FakeLease {
   private readonly storage: Pick<Storage, 'getItem' | 'setItem'>;
   private readonly now: () => number;
-  private readonly ttl: number;
 
   constructor(private readonly opts: FakeLeaseOptions) {
     this.storage = opts.storage ?? localStorage;
     this.now = opts.now ?? Date.now;
-    this.ttl = opts.ttlMs ?? LEASE_TTL_MS;
   }
 
   async session(place: string, action: SessionAction, gen = 0): Promise<LeaseReply> {
-    const lease = this.read();
-    const gens = lease.gens ?? {};
-    const write = (next: Omit<LeaseRecord, 'gens'>, kept = gens): void => this.write({ ...next, ...(Object.keys(kept).length ? { gens: kept } : {}) });
-    const live = this.live(lease);
-    if (action === 'leave') {
-      const kept = { ...gens, [place]: Math.max(gens[place] ?? 0, gen) };
-      if (lease.holder === place) write({ holder: null, epoch: lease.epoch, beatAt: lease.beatAt, left: place }, kept);
-      else write({ holder: lease.holder, epoch: lease.epoch, beatAt: lease.beatAt, ...(lease.left !== undefined ? { left: lease.left } : {}) }, kept);
-      return { active: false, epoch: lease.epoch };
+    const stored = this.read();
+    const now = this.now();
+    const lease: Lease = { holder: stored.holder, epoch: stored.epoch, beatAt: stored.beatAt, left: stored.left ?? null };
+    const decision = decideLease(lease, stored.leaves?.[place], { place, action, gen, now });
+    const leaves = Object.fromEntries(Object.entries({ ...stored.leaves, ...(decision.leave ? { [place]: decision.leave } : {}) }).filter(([, m]) => leaveCounts(m, now)));
+    if (decision.lease !== lease || decision.leave) {
+      const { holder, epoch, beatAt, left } = decision.lease;
+      this.write({ holder, epoch, beatAt, ...(left !== null ? { left } : {}), ...(Object.keys(leaves).length ? { leaves } : {}) });
     }
-    // Begun before this place's latest leave: it says nothing about the lease now (TL-P3-14).
-    if (action === 'check' && gen < (gens[place] ?? 0)) return { active: lease.holder === place, epoch: lease.epoch };
-    // Back after the TTL with nobody in between, or back after letting it go: the same epoch carries on (TL-P2-25).
-    if (action === 'check' && (lease.holder === place || (lease.holder === null && lease.left === place))) {
-      write({ holder: place, epoch: lease.epoch, beatAt: this.now() });
-      return { active: true, epoch: lease.epoch };
-    }
-    if (action === 'take' || !live) {
-      const next = { holder: place, epoch: lease.epoch + 1, beatAt: this.now() };
-      write(next);
-      return { active: true, epoch: next.epoch };
-    }
-    return { active: false, epoch: lease.epoch };
+    return decision.reply;
   }
 
   /**
@@ -94,7 +70,7 @@ export class FakeLease {
    */
   holds(place: string | null, epoch: number | null): boolean {
     const lease = this.read();
-    return place !== null && epoch !== null && lease.holder === place && lease.epoch === epoch;
+    return holdsLease({ holder: lease.holder, epoch: lease.epoch, beatAt: lease.beatAt, left: lease.left ?? null }, place, epoch);
   }
 
   read(): LeaseRecord {
@@ -107,14 +83,14 @@ export class FakeLease {
       if (!(e instanceof SyntaxError)) throw e;
       value = null;
     }
-    if (isRecord(value)) return value;
+    if (isRecord(value)) {
+      const legacy = (value as { gens?: unknown }).gens;
+      if (value.leaves === undefined && isLegacyGens(legacy)) return { ...value, leaves: Object.fromEntries(Object.entries(legacy).map(([place, gen]) => [place, { gen, at: 0 }])) };
+      return value;
+    }
     // An unreadable lease is free, as an expired one: the next place takes it with a higher epoch than any it saw.
     console.error('The pretend session lease is unreadable');
     return { ...FREE };
-  }
-
-  private live(lease: LeaseRecord): boolean {
-    return lease.holder !== null && this.now() - lease.beatAt < this.ttl;
   }
 
   private write(lease: LeaseRecord): void {

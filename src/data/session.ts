@@ -11,6 +11,7 @@
  * write already in flight when the session moves cannot be recalled
  * (accepted, TL-P2-13). The runner's own effects are never fenced here.
  */
+import type { LeaseReply, SessionAction } from './contracts/lease';
 import { BowerError } from './types';
 import type { Session, Sources, Unsubscribe } from './sources';
 import type { WorkerApi } from './worker/worker-api';
@@ -24,19 +25,12 @@ export const NO_ANSWER_TEXT = "Bower's server didn't answer. Try again.";
 export const COULD_NOT_OPEN_TEXT = "Bower couldn't open here. Try again.";
 /** Approved copy (TL-P2-24): the block screen's line while things added here exist only in this page. */
 export const PAGE_ONLY_TEXT = 'Some things you added here are only on this page. Use Bower here to send them.';
-/** A lease nobody renewed for this long is free: the next place takes it without asking. */
-export const LEASE_TTL_MS = 3 * 60_000;
 /** How often the active place renews its lease. */
 export const HEARTBEAT_MS = 30_000;
 /** How long a confirmed lease is trusted for ordinary writes. */
 export const TRUST_MS = 5_000;
 
-export type SessionAction = 'check' | 'take' | 'leave';
-/** The Worker's answer to `POST /session` (a P3 obligation; the fake answers it in P2). */
-export interface LeaseReply {
-  active: boolean;
-  epoch: number;
-}
+export { LEASE_TTL_MS, type LeaseReply, type SessionAction } from './contracts/lease';
 /**
  * `gen` is the place's leave generation (TL-P3-14): it goes with every `check` and `leave`, so the Worker
  * discards a check that began before the place's latest leave. A call without it counts as 0.
