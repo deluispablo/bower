@@ -153,6 +153,16 @@ describe('state-no-adoption guards', () => {
     expect(text(back)).not.toContain(STATE_KEY);
   });
 
+  it('a release is never taken on a section Bower did not mark', () => {
+    const release = { ...plain(['One application open.'], ['Two applications open.']), release: true } as Change;
+    expect(applyChanges(enc(HUB), [release])).toEqual({ ok: false, reason: 'person-edited' });
+  });
+
+  it('the fallback line keeps the capitals of the first new line', () => {
+    expect(stateNewsLine(['Alex called back.'], ['One application open.'])).toBe('New: Alex called back.');
+    expect(stateNewsLine(['An offer to answer.'], ['One application open.'])).toBe('New: an offer to answer.');
+  });
+
   it('the fallback line names only what the section lacks', () => {
     expect(stateNewsLine(['One application open.', 'An offer from Ferrowick to answer.'], ['One application open.'])).toBe('New: an offer from Ferrowick to answer.');
     expect(stateNewsLine(['One application open.'], ['One application open.'])).toBeNull();

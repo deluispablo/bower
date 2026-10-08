@@ -299,7 +299,7 @@ function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
     case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines'], ['adopted', 'release']) && recordIds(value.recordIds)
-      && (value.adopted === undefined || value.adopted === true) && (value.release === undefined || value.release === true)
+      && (value.adopted === undefined || value.adopted === true) && (value.release === undefined || (value.release === true && value.adopted === undefined))
       && list(value.previous, text) && list(value.lines, text) && stateLinesOk(value.previous as string[], value.lines as string[]);
     case 'link-rewrite': return closed(value, ['kind', 'recordIds', 'renames']) && recordIds(value.recordIds)
       && list(value.renames, rename) && value.renames.length > 0 && unique((value.renames as Rename[]).map((item) => item.from.toLowerCase()));

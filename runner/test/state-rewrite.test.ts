@@ -113,8 +113,8 @@ describe('a change kind of its own for Current state (C05)', () => {
     const note = parseNote(HUB, run.after[HUB] ?? '');
     expect(note.currentState).toEqual(['Two applications open, one interview on Friday.']);
     // What Bower would have written goes on the Timeline, citing the thing, and the person is asked.
-    // Nothing of the person's section is in it, so both lines are new against it.
-    const line = note.timeline.find((t) => t.text === 'New: one application open, an offer from Ferrowick to answer.');
+    // Bower's mark says it last wrote the first line, so only the offer is news.
+    const line = note.timeline.find((t) => t.text === 'New: an offer from Ferrowick to answer.');
     expect(line?.source).toBe('Industrial Designer, Ferrowick');
     const questions = JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string; about?: string }> };
     const asked = questions.questions.find((q) => q.id.startsWith('q-state-'));
@@ -138,6 +138,17 @@ describe('a change kind of its own for Current state (C05)', () => {
     // One thing new: only that is named, never the person's own line.
     const more = await runWithClaude(c, proposing);
     const news = parseNote(HUB, more.after[HUB] ?? '').timeline.filter((t) => t.text.startsWith('New: ')).map((t) => t.text);
+    expect(news).toEqual(['New: an offer from Ferrowick to answer.']);
+  });
+
+  it("a person-edited section's fallback names none of Bower's last-written lines", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    const edited = (c.folder[HUB] ?? '')
+      .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(['One application open.'])}\n`)
+      .replace('- One application open.', '- Two applications open, one interview on Friday.');
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposing);
+    const news = parseNote(HUB, run.after[HUB] ?? '').timeline.filter((t) => t.text.startsWith('New: ')).map((t) => t.text);
     expect(news).toEqual(['New: an offer from Ferrowick to answer.']);
   });
 
