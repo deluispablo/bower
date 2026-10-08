@@ -164,6 +164,47 @@ describe('the Claude provider', () => {
     expect(folders).toEqual([]);
   });
 
+  it('a new Area with a responsibility is made and the report says why', async () => {
+    const { wire } = await wired();
+    const money = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Areas/Finance/Payslips', responsibility: 'pay and tax records' }); });
+    const calls: ClaudeCall[] = [];
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: money });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
+
+    // Asked once: the responsibility is the basis for the new Area, and the report says why it was made.
+    expect(calls).toHaveLength(1);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
+    const listing = await wire.drive.listAll(wire.folderId);
+    expect(listing.filter((f) => f.folder && f.name === 'Finance')).toHaveLength(1);
+    const last = listing.find((f) => f.name === 'last-run.json');
+    const report = JSON.parse(await wire.drive.readText(last?.id ?? '')) as unknown;
+    expect(JSON.stringify(report)).toContain('New area Finance, for pay and tax records');
+  });
+
+  it('a responsibility does not open a new Project', async () => {
+    const { wire } = await wired();
+    const project = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Projects/Garden', responsibility: 'the garden' }); });
+    const calls: ClaudeCall[] = [];
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: project });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn });
+    expect(calls).toHaveLength(2);
+    expect(wire.statuses.at(-1)?.phase).toBe('failed');
+  });
+
+  it('a cut Rules.md is marked as cut in the model input', async () => {
+    const { wire, root } = await wired();
+    const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(200)}`;
+    await wire.drive.createText(root, 'Rules.md', long, { by: 'bower' });
+    const claude = recordedClaude({ stdout: recorded('reply-ok.json') });
+    await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
+    const context = JSON.parse((claude.calls[0]?.input ?? '').split('\n').at(-1) ?? '{}') as { rules?: string };
+    expect(context.rules?.length).toBeLessThan(long.length);
+    expect(context.rules).toMatch(/\[cut here: \d+ more characters of the rules not shown; the list may go on\]$/);
+  });
+
   it('a second refusal ends the run honestly', async () => {
     const { wire } = await wired();
     const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Projects/Community garden'; });
