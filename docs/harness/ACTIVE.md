@@ -210,3 +210,4 @@ P3-9 is closed.
 - placement-check closed (e0d8f56). Lead asked to confirm two worker choices: Rules.md shown to the model; c04-offer-and-flat fixture gained a payslip rule. fingerprint-normalised running (mechanical). 369/372.
 - TL-P4-07 addendum 3 (0c1eb8b): placement-check reopened as a fix round (revert the fixture rule; responsibility basis for a new Area, shown in the report; a cut Rules.md says so). Live after: garden x5, offer-and-flat x3. 368/372.
 - placement-check fix round queued (worktree bower-p4-plcheck2 at d269d5e); both slots busy (drive-calls-golden, fingerprint-normalised).
+- drive-calls-golden closed (5cbbc27): 134 Drive calls on C04 at a566241 and HEAD alike; the live 35→49 s rise is Drive latency. 369/372. placement-check fix round running (implementer, bower-p4-plcheck2).
