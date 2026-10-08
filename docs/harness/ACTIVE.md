@@ -349,3 +349,4 @@ P3-9 is closed.
 - Stage 1 smoke on 9265d860: garden PASS (6-KotARu, 57 s); offer-and-flat attempt 1 stopped (smoke-runner-offline/silent-stop), recovered by the v13 deadline table at +17 min, attempt 2 PASS (75 s; only Job hunt got a hub line); c05-hub-lines PASS (YU-CNZ8, 76 s; edit kept, q-state asked); Home empty Inbox 59 s / 144 calls (home-empty-48s, stage 2). Stage 2 registration next.
 - Stage 2 registered (c2-drive-transport, c2-runner-exit, c2-read-cache, c2-fake-parity, c2-one-engine, c2-write-once, c2-upload-queue-only, c2-worker-dispatch; c2-pile-records already open). Opening with c2-drive-transport and c2-runner-exit (escalated).
 - c2-runner-exit closed (8c6c1343; compat row added by me on the branch before merge; smoke-runner-silent-stop fixed). P4-24 review running; c2-drive-transport running. 412/423.
+- P4-24 PASS (c2-runner-exit; minors to polish). c2-worker-dispatch (escalated) dispatched; c2-drive-transport running.
