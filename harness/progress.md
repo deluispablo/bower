@@ -194,3 +194,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c1-still-as-seen passes — One still-as-seen expectation and check for every write; parents compare as a set (TL-P4-14 stage 1; removed 63 lines)
 - 2026-10-08: c1-worker-routes passes — One person middleware maps RPC errors once (503 on version skew); one JSON body reader (TL-P4-14 stage 1; removed 137 lines)
 - 2026-10-08: c1-duplication-gate passes — jscpd duplication gate in pnpm check with a baseline that may only fall; tested on a fixture tree (TL-P4-15)
+- 2026-10-08: c1-worker-deadlines passes — One deadlines table; a throwing handler backs off up to 6 attempts, then its deadline fails and its run ends failed (TL-P4-14 addendum 2; schema v13)

@@ -439,3 +439,4 @@ c1-admit-once	d823a70cde77dc10	2026-10-08	known-green: reason: the comment-wordi
 c1-still-as-seen	1cf8c33ece0dbe62	2026-10-08	red (fixed in 6290eb31)
 c1-worker-routes	0d93494544f64637	2026-10-08	red (fixed in 5cfbba83)
 c1-duplication-gate	2812a612501a7fbc	2026-10-08	red (fixed in e922b1b7)
+c1-worker-deadlines	632332d4ce55df63	2026-10-08	red (fixed in 63815f71)
