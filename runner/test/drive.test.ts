@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FakeDrive, FaultHook, FencedCall, FencedDrive } from '../../src/data/drive/fake-drive';
 import { RunnerDrive } from '../src/drive';
+import { driveEffects } from '../src/effects';
+import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
+import type { OperationV2 } from '../../src/data/contracts/run-manifest';
+import type { RunManifest } from '../../src/data/spine/records';
 import { SeenFiles, targetOf } from '../src/still-as-seen';
 import { RunnerToken } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
@@ -54,6 +58,30 @@ describe('runner drive adapter', () => {
     expect(writesSent(wire)).toEqual([]);
     expect((await wire.drive.get(note.id)).name).toBe('Renamed elsewhere.md');
     expect(seenNote.name).toBe('Note.md');
+  });
+
+  it('a person change between the check and the send is refused (edit)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, note } = await seeded();
+    const adapter = adapterOn(wire);
+    const text = 'First words.';
+    const bytes = new TextEncoder().encode(text);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const content = { encoding: 'utf8' as const, size: bytes.byteLength, sha256 };
+    const op = {
+      operationId: 'e'.repeat(64),
+      ordinal: 0,
+      dependsOn: [],
+      effect: { kind: 'edit-text', before: { fileId: note.id, name: note.name, parents: note.parents, modifiedTime: note.modifiedTime }, path: 'Note.md', beforeContent: content, changes: [], text, content },
+    } as unknown as OperationV2;
+    const head = { runId: RUN_ID, outcomes: [] } as unknown as Checkpoint;
+    const manifest = { operations: [op] } as unknown as RunManifest;
+    // The person writes between the check and the send (the effect's `sending` is awaited after its check).
+    const settled = await driveEffects(adapter).apply(op, head, await adapter.batch(), manifest, async () => {
+      await wire.drive.writeText(note.id, 'The person wrote this.', (await wire.drive.get(note.id)).modifiedTime);
+    });
+    expect(settled.state).toBe('rejected');
+    expect(await wire.drive.readText(note.id)).toBe('The person wrote this.');
   });
 
   it('the adapter refuses a write after a newer attempt took over, even in a batch it began before', async () => {

@@ -523,6 +523,36 @@ describe('recovery without the browser', () => {
     expect(outcome?.state === 'applied' ? outcome.evidence.file.parents : null).toEqual([inbox?.id]);
   });
 
+  it('a person change between the check and the send is refused', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // After an operation's check and before its send (the pool runs four at once), the person changes what it touches:
+    // a rename for a move, a move elsewhere for a Bin (an edit's case is in drive.test.ts). The change is kept; nothing is sent over it.
+    const changed = new Set<string>();
+    const w = await world();
+    const drive = w.wire.drive;
+    const outside = new Map<string, string>();
+    await tidy(w, 1, {
+      afterIntent: async (op) => {
+        const e = op.effect;
+        if ((e.kind !== 'move' && e.kind !== 'bin') || changed.has(e.kind)) return;
+        changed.add(e.kind);
+        const id = e.before.fileId;
+        if (e.kind === 'move') {
+          await drive.update(id, { name: 'Person renamed.pdf' });
+          outside.set(e.kind, id);
+        } else {
+          const now = await drive.get(id);
+          const other = (await drive.listAll(w.root)).find((f) => f.folder && !now.parents.includes(f.id));
+          await drive.update(id, { addParent: other?.id ?? '', removeParent: now.parents[0] ?? '' });
+          outside.set(e.kind, id);
+        }
+      },
+    }).catch((e: unknown) => e);
+    expect([...changed].sort()).toEqual(['bin', 'move']);
+    expect((await drive.get(outside.get('move') ?? '')).name).toBe('Person renamed.pdf');
+    expect((await drive.evidence(outside.get('bin') ?? ''))?.trashed).toBe(false);
+  });
+
   it('the bowerOp stamp is never accumulated', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // An earlier run's stamp is already on the payslip.
