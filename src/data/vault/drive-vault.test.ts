@@ -2581,3 +2581,88 @@ describe('a question about a thing that is gone (TL-P4-11 addendum)', () => {
     expect(await vault.questions()).toEqual([]);
   });
 });
+
+describe('one Home load on a folder like the live one (TL-P4-11 addendum)', () => {
+  const declaring = (): DriveVault => new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), declarePiles: true });
+  const hex = (n: number): string => n.toString(16).padStart(64, '0');
+
+  /** Makes a folder, or finds it. */
+  async function folderAt(path: string): Promise<string> {
+    const all = await drive.listAll(root);
+    const found = all.find((f) => f.folder && drive.pathOf(f.id, root) === path);
+    if (found) return found.id;
+    const cut = path.lastIndexOf('/');
+    const parent = cut < 0 ? root : await folderAt(path.slice(0, cut));
+    return (await drive.createFolder(parent, path.slice(cut + 1))).id;
+  }
+
+  /**
+   * A declared pile made through the app, past runs' leftovers in .bower, a dozen changes and some archived ones,
+   * questions and a last run; Drive says nothing of what it stored, so a check of a thing's bytes reads them, as on
+   * Google Drive. Returns what one Home load reads, by path, and how many times it lists the folder.
+   */
+  async function homeLoad(): Promise<{ reads: string[]; lists: number }> {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    for (const p of await vault.piles()) await vault.removePile(p.id);
+    const uploader = declaring();
+    const pile = await uploader.addPile({ text: 'Papers from Alex', items: ['a', 'b', 'c', 'd'].map((n) => ({ name: `${n}.pdf`, kind: 'pdf' as const, origin: 'From this computer', body: new Blob([`%PDF ${n}`]) })) });
+    await uploader.settled();
+    const piles = await folderAt('.bower/piles');
+    for (let i = 0; i < 20; i++) await drive.createText(piles, `disposition-${hex(i)}.json`, '{}');
+    const bower = await folderAt('.bower');
+    for (let i = 0; i < 4; i++) {
+      await drive.createText(bower, `checkpoint-${i}.json`, '{}');
+      await drive.createText(bower, `manifest-${i}.json`, '{}');
+      await drive.createText(bower, `report-${i}.json`, '{}');
+    }
+    const archive = await folderAt('.bower/changes/archive');
+    for (let i = 0; i < 5; i++) await drive.createText(archive, `old-${i}.json`, '{}');
+    for (let i = 0; i < 12; i++) await uploader.addRequest(`Tidy shelf ${i}`);
+    const q = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
+    const things = (await uploader.piles()).find((p) => p.id === pile.id)?.items ?? [];
+    const asks = things.slice(0, 3).map((t, i) => ({ id: `q-ask-${t.id}`, text: `Is it from the viewing ${i}?`, yes: 'Yes', no: 'No', subject: t.id, askedAt: i }));
+    if (q) await drive.writeText(q.id, JSON.stringify({ v: 1, questions: asks }), q.modifiedTime);
+    else await drive.createText(bower, 'questions.json', JSON.stringify({ v: 1, questions: asks }));
+    const fresh = declaring();
+    (drive as { storedDigest?: unknown }).storedDigest = undefined;
+    const names = new Map((await drive.listAll(root)).map((f) => [f.id, drive.pathOf(f.id, root)]));
+    const reads: string[] = [];
+    for (const m of ['readText', 'readBytes'] as const) {
+      const real = drive[m].bind(drive) as (id: string) => Promise<unknown>;
+      vi.spyOn(drive, m).mockImplementation((async (id: string) => { reads.push(names.get(id) ?? id); return real(id); }) as never);
+    }
+    const listAll = vi.spyOn(drive, 'listAll');
+    await Promise.all([fresh.piles(), fresh.changes(), fresh.questions(), fresh.suggestions(), fresh.tree(), fresh.lastRun(), fresh.piles()]);
+    return { reads, lists: listAll.mock.calls.length };
+  }
+
+  const twice = (reads: string[]): string[] => [...new Set(reads.filter((c, i) => reads.indexOf(c) !== i))];
+
+  it('Home reads each file at most once', async () => {
+    const { reads } = await homeLoad();
+    expect(reads.length).toBeGreaterThan(0);
+    expect(twice(reads)).toEqual([]);
+  });
+
+  it('Home Drive calls match the golden', async () => {
+    const { reads, lists } = await homeLoad();
+    const kind = (p: string): string => p.replace(/[0-9a-f]{64}/, '<hash>').replace(/-\d+\.json$/, '-<n>.json').replace(/changes\/[^/]*\.json$/, 'changes/<change>.json').replace(/Inbox\/[^/]*\//, 'Inbox/<pile>/').replace(/\/[^/]+\.pdf$/, '/<thing>.pdf').replace(/declaration-.*\.json$/, 'declaration-<id>.json');
+    const tally = new Map<string, number>();
+    for (const r of reads) tally.set(kind(r), (tally.get(kind(r)) ?? 0) + 1);
+    // The golden: what one Home load reads, in total, by kind of file. Archived changes, past runs' checkpoints,
+    // manifests and reports are never read.
+    expect({ lists, reads: Object.fromEntries([...tally].sort(([a], [b]) => a.localeCompare(b))) }).toEqual({
+      lists: 1,
+      reads: {
+        '.bower/changes/<change>.json': 12,
+        '.bower/piles/declaration-<id>.json': 1,
+        '.bower/piles/disposition-<hash>.json': 20,
+        '.bower/questions.json': 1,
+        '.bower/suggestions.json': 1,
+        'Inbox/<pile>/<thing>.pdf': 4,
+        'Inbox/<pile>/Pile note.md': 1,
+        'Rules.md': 1,
+      },
+    });
+  });
+});
