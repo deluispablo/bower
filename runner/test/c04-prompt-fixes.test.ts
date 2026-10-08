@@ -3,7 +3,8 @@
  * must be in its sources, a raw file name is replaced by a plain one, the kinds table describes an area and names no
  * ready-made folder, and the offer-and-flat rubric accepts the photo ask and any money area. No live call.
  */
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCorpus, score, type LoadedCase } from '../src/corpus';
@@ -96,12 +97,46 @@ describe('c04 prompt fixes (TL-P4-08 addendum 5)', () => {
     expect(calls).toHaveLength(2);
     expect(calls[1]?.input).toMatch(/Your reply was refused: .*name.*Reply again/);
     expect({ code: run.code, plain: 'Projects/Job hunt/Offer, Industrial Designer, Ferrowick.pdf' in run.after, raw: Object.keys(run.after).some((p) => /Offer_letter/.test(p)) }).toEqual({ code: 0, plain: true, raw: false });
+    // Plain names that only look like raw ones pass at once.
+    for (const name of ['Final offer.pdf', 'Quarter-final tickets.pdf', 'Tax return (2025).pdf', 'Photo 1 of the offer.pdf']) {
+      const plain: ClaudeCall[] = [];
+      await runWithClaude(c, answering([(id) => reply(id, { offerName: name })], plain));
+      expect({ name, calls: plain.length, why: plain[1]?.input.match(/refused: [^\n]*/)?.[0] }).toEqual({ name, calls: 1, why: undefined });
+    }
+    // More raw shapes: "_final", "-final", "final(2)" as a token.
+    for (const name of ['Offer-final.pdf', 'Offer final(2).pdf', 'Offer FINAL.pdf', 'Offer_final.pdf']) {
+      const raw: ClaudeCall[] = [];
+      await runWithClaude(c, answering([(id) => reply(id, { offerName: name }), (id) => reply(id)], raw));
+      expect({ name, calls: raw.length }).toEqual({ name, calls: 2 });
+    }
     // A camera id and a scanner id are raw too.
     for (const name of ['IMG_2301.jpg', 'DSC0012.jpg', 'scan0001.jpg']) {
       const raw: ClaudeCall[] = [];
       await runWithClaude(c, answering([(id) => ({ ...(reply(id) as object), things: (reply(id) as { things: Array<Record<string, unknown>> }).things.map((t) => (t.fileId === id('IMG_2301.jpg') ? { ...t, name } : t)) }), (id) => reply(id)], raw));
       expect({ name, calls: raw.length }).toEqual({ name, calls: 2 });
     }
+  });
+
+  it('the prompt holds no corpus answer name', async () => {
+    const c = await offerAndFlat();
+    const calls: ClaudeCall[] = [];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await runWithClaude(c, answering([(id) => reply(id)], calls));
+    const prompt = (calls[0]?.input ?? '').split('\n').slice(0, -1).join('\n');
+    // Every place a case expects something to land (not the inbox, not Bower's own files): its stem, and each capitalised word of a stem written with a wildcard.
+    const paths = (v: unknown): string[] => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(paths) : []);
+    const stems = new Set<string>();
+    for (const dir of readdirSync(ROOT, { withFileTypes: true }).filter((d) => d.isDirectory())) {
+      let expected: unknown;
+      try { expected = JSON.parse(readFileSync(resolve(ROOT, dir.name, 'expected.json'), 'utf8')); } catch { continue; }
+      for (const path of paths(expected).filter((p) => /^(Projects|Areas|Resources|Archive)\//.test(p))) {
+        const stem = basename(path).replace(/\.[A-Za-z0-9]{1,5}$/, '');
+        if (!stem.includes('*')) { if (stem.length > 3) stems.add(stem); continue; }
+        for (const word of stem.split('*').filter((w) => /^[A-Z][a-z]{3,}/.test(w))) stems.add(word);
+      }
+    }
+    expect(stems.size).toBeGreaterThan(5);
+    expect([...stems].filter((s) => prompt.includes(s))).toEqual([]);
   });
 
   it('the kinds table names no ready-made folder', async () => {
@@ -146,9 +181,11 @@ describe('c04 prompt fixes (TL-P4-08 addendum 5)', () => {
     expect(score({ ...base, lastRun: asked, after: move(run.after, photo, 'Inbox/Job offer and a flat near it/IMG_2301.jpg') })).toEqual({ pass: true, unmet: [] });
 
     // Any Area named for money, pay or finance takes the payslip; the listing note needs no address.
-    for (const area of ['Areas/Pay and tax records', 'Areas/Finance', 'Areas/Money/Payslips', 'Areas/Pay', 'Areas/Taxes']) {
+    for (const area of ['Areas/Pay and tax records', 'Areas/Finance', 'Areas/Money/Payslips', 'Areas/Pay']) {
       expect({ area, ...score({ ...base, after: move(run.after, payslip, `${area}/Payslip August.pdf`) }) }).toEqual({ area, pass: true, unmet: [] });
     }
+    // Beyond money, pay or finance is refused: a tax or salary area is not named for it.
+    for (const area of ['Areas/Taxes', 'Areas/Salary', 'Areas/Income']) expect({ area, pass: score({ ...base, after: move(run.after, payslip, `${area}/Payslip August.pdf`) }).pass }).toEqual({ area, pass: false });
     // Still refused: the payslip in a project, or the offer filed under the flat hunt.
     expect(score({ ...base, after: move(run.after, payslip, 'Projects/Job hunt/Payslip August.pdf') }).pass).toBe(false);
     const offer = Object.keys(run.after).find((p) => p.endsWith('Ferrowick.pdf')) ?? '';

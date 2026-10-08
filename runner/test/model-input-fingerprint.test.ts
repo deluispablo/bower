@@ -320,3 +320,24 @@ describe('model input fingerprint', () => {
     expect(Object.keys(sections1).length).toBeGreaterThanOrEqual(4); // At least prompt, tree, things, notes
   });
 });
+
+describe('model input order', () => {
+  it('the model input lists a pile things in a stable order', async () => {
+    const drive = fixedDrive();
+    const root = (await drive.createFolder('root', 'Bower')).id;
+    const box = (await drive.createFolder(root, 'Inbox')).id;
+    for (const name of ['Zeta.txt', 'Alpha.txt', 'Mid.txt']) await drive.createText(box, name, `${name} text\n`);
+    const folder = (await drive.createFolder(box, 'Three things', { pile: 'p-1' })).id;
+    for (const name of ['Zeta.txt', 'Alpha.txt', 'Mid.txt']) await drive.createText(folder, name, `${name} text\n`);
+    const admitted = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+    if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
+    const calls: ClaudeCall[] = [];
+    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: root, runId: RUN_ID, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    const sent = JSON.parse((calls[0]?.input ?? '').split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string }> }> };
+    const lists = sent.piles.map((p) => p.things.map((t) => t.name));
+    expect(lists.some((l) => l.length > 2)).toBe(true);
+    for (const names of lists) expect(names).toEqual([...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+  });
+});

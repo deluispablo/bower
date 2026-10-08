@@ -194,7 +194,7 @@ function calculateSectionHashes(
   return {
     prompt: hash(promptInstructions()),
     tree: hash(JSON.stringify(shown.folders)),
-    things: hash(JSON.stringify(shown.piles)),
+    things: hash(JSON.stringify(inStableOrder(shown.piles))),
     notes: hash(JSON.stringify(shown.notes)),
     ...(shown.rules ? { rules: hash(shown.rules) } : {}),
   };
@@ -258,8 +258,8 @@ function promptInstructions(): string {
     '  never change it silently: the line gives both figures, the note\'s and the thing\'s, and cites the thing.',
     '- Every summary, line and question is one short plain line, the outcome first.',
     '- Names: every "name" says what the thing is, in plain words. A name made with underscores (Offer_letter_final), a copy',
-    '  number such as "(2)", the word "final", or a camera or scanner id (IMG_1234, DSC_0012, scan0001) says nothing: replace it',
-    '  with a plain name from what the thing is or says ("Offer, Industrial Designer, Ferrowick"), and keep the extension.',
+    '  number such as "(2)", "final" ending a name, or a camera or scanner id (IMG_1234, DSC_0012, scan0001) says nothing: replace it',
+    '  with a plain name from what the thing is or says ("Lease, two-bedroom flat, Example Street"), and keep the extension.',
     '  A photo or scan that nothing says anything about is asked about, not filed under its id.',
     '- Numbers: write only a figure, date or amount that is in the thing\'s own text, the pile\'s words or a note below, as it',
     '  is written there. Never work one out or round one, and never add a limit, a score or a count that no input has.',
@@ -287,10 +287,16 @@ function promptInstructions(): string {
   ].join('\n');
 }
 
+/** A pile's things by name, then kind, compared by code unit: the input does not depend on the Drive listing order. */
+function inStableOrder(piles: Shown['piles']): Shown['piles'] {
+  const by = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  return piles.map((p) => ({ ...p, things: [...p.things].sort((a, b) => by(a.name, b.name) || by(a.kind, b.kind)) }));
+}
+
 function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
   return [
     promptInstructions(),
-    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: shown.piles, notes: shown.notes, folders: shown.folders, ...(shown.rules ? { rules: shown.rules } : {}) }),
+    JSON.stringify({ runId: run.runId, admission: took.taken.id, piles: inStableOrder(shown.piles), notes: shown.notes, folders: shown.folders, ...(shown.rules ? { rules: shown.rules } : {}) }),
   ].join('\n');
 }
 
@@ -429,7 +435,7 @@ export const REFUSALS = {
   thingTwice: 'a thing placed twice',
   placeOutside: 'a place outside the main folders',
   nameChangesKind: 'a name that changes what a thing is',
-  rawName: 'a name that says nothing (underscores, a copy number, "final" or a camera id)',
+  rawName: 'a name that says nothing (underscores, a copy number, "final" at the end or a camera id)',
   numbers: 'a number that is in none of its sources',
   newFolder: 'a new folder under Areas or Projects with no rule line or note cited',
   noteForNote: 'a note for a thing filed as a note',
@@ -545,8 +551,8 @@ function ungrounded(text: string, ground: ReadonlySet<string>): string | null {
   return null;
 }
 
-/** A raw file name: underscores, a copy number "(2)", the word "final", or a camera or scanner id (IMG_1234, DSC_0012, scan0001). */
-const RAW_NAME = /_|\(\d+\)|\bfinal\b|^(?:IMG|DSC|DSCN|PXL|MVIMG|VID|MOV|PHOTO|SCAN)[-\s]?\d+/i;
+/** A raw file name: underscores, a copy number "(2)", "final" ending a name, or a camera or scanner id (IMG_1234, DSC_0012, scan0001). */
+const RAW_NAME = /_|\s?\(\d{1,2}\)$|(?:^|[\s-])final$|^(?:IMG|DSC|DSCN|PXL|MVIMG|VID|MOV|SCAN)[-\s]?\d{3,}/i;
 
 const WIKI_LINK = /\[\[([^\]|#]*)(?:[|#][^\]]*)?\]\]/g;
 const MD_LINK = /\[[^\]]*\]\(\s*<?([^)\s>]*)>?[^)]*\)/g;
@@ -635,7 +641,7 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     if (!placeOk(t.to)) return no('placeOutside');
     const was = extensionOf(thing.name);
     if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return no('nameChangesKind');
-    if (RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, ''))) return no('rawName', `a name that says nothing: "${t.name}" has underscores, a copy number, "final" or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`);
+    if (RAW_NAME.test(t.name.replace(/\.[A-Za-z0-9]{1,5}$/, ''))) return no('rawName', `a name that says nothing: "${t.name}" has underscores, a copy number, "final" at the end or a camera or scanner id; give it a plain name from what the thing is or says, or ask about it`);
     const fresh = newPlace(t.to, t.basis, t.responsibility, seen, areas);
     if (fresh) return no('newFolder', fresh);
     placed.set(t.fileId, { to: t.to, name: t.name });

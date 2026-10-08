@@ -41,8 +41,8 @@ What to write:
   never change it silently: the line gives both figures, the note's and the thing's, and cites the thing.
 - Every summary, line and question is one short plain line, the outcome first.
 - Names: every "name" says what the thing is, in plain words. A name made with underscores (Offer_letter_final), a copy
-  number such as "(2)", the word "final", or a camera or scanner id (IMG_1234, DSC_0012, scan0001) says nothing: replace it
-  with a plain name from what the thing is or says ("Offer, Industrial Designer, Ferrowick"), and keep the extension.
+  number such as "(2)", "final" ending a name, or a camera or scanner id (IMG_1234, DSC_0012, scan0001) says nothing: replace it
+  with a plain name from what the thing is or says ("Lease, two-bedroom flat, Example Street"), and keep the extension.
   A photo or scan that nothing says anything about is asked about, not filed under its id.
 - Numbers: write only a figure, date or amount that is in the thing's own text, the pile's words or a note below, as it
   is written there. Never work one out or round one, and never add a limit, a score or a count that no input has.

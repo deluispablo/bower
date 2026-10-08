@@ -65,15 +65,6 @@
         },
         {
           "under": "Areas/*inance*"
-        },
-        {
-          "under": "Areas/*ax*"
-        },
-        {
-          "under": "Areas/*alary*"
-        },
-        {
-          "under": "Areas/*ncome*"
         }
       ]
     }
