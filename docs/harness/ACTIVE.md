@@ -340,3 +340,4 @@ P3-9 is closed.
 - c1-duplication-gate merged (cf11d037) but not closed: its test checks jscpd, not the gate script, copies whole packages (node_modules) to tmp, and has no red. Fresh fix round (implementer).
 - My error: the first c1-duplication-gate delivery was merged before pnpm check ran; its test fails typecheck (duplication-gate.test.ts:84), so check is red on claude/p3 until the gate fix round lands. c1-worker-deadlines fix round merged (63815f71, schema v13), closes after that.
 - c1-duplication-gate closed (ca2396d7; gate 0.12 s; real tree 25 clones vs baseline 28, baseline not lowered: asking the lead). c1-worker-deadlines closed (70b0b6d9; schema v13). check green again. 407/415. c1-shared-contracts and c1-dependency-rules (implementers) dispatched.
+- Duplication baseline set to 25 (lead ok). c1-duplication-gate reopened for a two-way ratchet (queued). DEFECT_LOG: merge-before-check process slip. 406/415.
