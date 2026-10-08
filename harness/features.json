@@ -4732,5 +4732,32 @@
     "verify": "pnpm -C api exec vitest run -t \"a dispatch network error is retried twice with backoff|a dispatch that keeps failing arms the alarm at 60 seconds|a lost dispatch.s early look-up leaves a run that has reported alone\"",
     "passes": true,
     "note": "TL-P4-04 batch P4-4 (run 3 dispatch failed: network error after 40 ms). Reopened: P4-4 review BLOCK (person.ts:617 early look-up fails a reporting run on a 502)."
+  },
+  {
+    "id": "deploy-scan-extracted-token",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "The deploy scan allows the token its own ADDRESS_RE actually extracts from the real unpdf bundle line (jm@kbswfq.pkbgltMlwbaof), not the shorter literal, so the runner bundle passes; every other address still refuses; tested on the real bundle line.",
+    "steps": [
+      "Allow exactly the extracted token, with a comment naming unpdf.",
+      "Test on the real bundle line from the built runner bundle; a made-up address still refuses."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the deploy scan passes the real unpdf bundle line and still refuses a real address\"",
+    "passes": false,
+    "note": "Lead 3ce00dd: deploy-scan-unpdf-literal allowed the wrong string."
+  },
+  {
+    "id": "runner-stops-when-gone",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "When the person is deleted (Delete me) or Google access is revoked, the attempt route answers gone and the runner drops its cached Drive token and stops before the next write; a plain sign-out does not stop an admitted run.",
+    "steps": [
+      "The attempt route answers 410 gone after Delete me or a revoked/unreadable refresh token.",
+      "The runner drops its cached token and ends the attempt truthfully before the next write.",
+      "A plain sign-out leaves an admitted run running."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the attempt route answers gone after delete me or revoked access|a plain sign-out leaves the attempt route answering\" && pnpm -C runner exec vitest run -t \"the runner drops its token and stops before the next write when the person is gone\"",
+    "passes": false,
+    "note": "Lead 3ce00dd (P4-4 review minor rated Important for delete me and revocation)."
   }
 ]
