@@ -208,3 +208,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c2-transport-outcome-kind passes — A write with no definite answer is unconfirmed and says so; reads keep their wording (P4-28b PASS)
 - 2026-10-09: c2-worker-dispatch passes — Only the alarm dispatches; a press during recovery is dispatched at once; Delete me during admission admits nothing (P4-27, P4-29 PASS)
 - 2026-10-09: c2-worker-dispatch passes — Admission compares the account epoch (kept generation floor), never the session; sign-out keeps waiting answers (P4-30 PASS)
+- 2026-10-09: c2-transport-options passes — Backoff, sleep and signal are send options; known-offline uploads show offline at once (P4-33 PASS)
