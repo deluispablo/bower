@@ -384,3 +384,4 @@ P3-9 is closed.
 - c2-transport-options closed (523e792e, red by hand at 1fc06958, P4-33 PASS). P4-31 BLOCK (c2-fake-parity): plan.ts:125,389 keeps a has-it check, the runner has no Bin lookup (binned member ready vs held). P4-32 PASS (c2-pile-records) but the ruled fix round drops the legacy branch. Both fix rounds dispatched. 417/425.
 - c2-pile-records closed (e5810bc6; home-empty-48s fixed in code). c2-fake-parity fix round merged (red b7d23243, fix df715481; removed 12; check green). qa10-toast-flake logged. P4-31b check + c2-one-engine dispatched. 418/425.
 - P4-31b BLOCK (c2-fake-parity): the binned-folder files.get walk (drive-http.ts:255, from c2-pile-records) bypasses Worker subrequest grants once admission uses the Bin lookup (30 → 33 > 32). Fresh fix round 3 (implementer).
+- c2-fake-parity fix round 3 merged (red fdf26db7, fix 8e176ebe; the binned-folder walk spends from the grant); verify widened; P4-31c check dispatched.

@@ -5567,7 +5567,7 @@
       "Ports on both Drives.",
       "Fake search parity."
     ],
-    "verify": "pnpm vitest run -t \"the fake and real Drive offer the same ports|the admission read offers the Bin lookup the app uses\"",
+    "verify": "pnpm vitest run -t \"the fake and real Drive offer the same ports|the admission read offers the Bin lookup the app uses\" && pnpm -C api exec vitest run -t \"the Bin lookup in admission stays within its subrequest grant\"",
     "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer. Before c2-one-engine."
   },
   {
