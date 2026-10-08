@@ -4820,18 +4820,18 @@
     "note": "TL-P4-05 addendum 2 (ce36da1): left out of checkpoint-per-batch; scheduled with the C12 slice, not the P4-6 close."
   },
   {
-    "id": "model-context-regression",
+    "id": "model-input-fingerprint",
     "task": "p4-c",
-    "category": "fix",
-    "what": "On a566241 the Claude provider filed C04 under Areas in 3 of 3 live runs (Resources on c76fd2f). The model input on the C04 fixture is the same as on c76fd2f, read savings kept, pinned by a golden test.",
+    "category": "feature",
+    "what": "The timing line carries input=<first 12 hex of sha256 of the model input>, and a golden test pins the model input on the C04 fixture, so a change in what the model sees is caught.",
     "steps": [
-      "Capture the provider input on c76fd2f and a566241 from the C04 fixture with the scripted fake, no model, and diff them.",
-      "Restore what the model sees (suspects: aimed reads in provider.ts and drive.planReads; repairRules inside plan()), keeping the read savings.",
-      "Golden test of the model input on the C04 fixture."
+      "Add input=<12 hex> to the timing line (after out=).",
+      "Golden test of the C04 fixture model input (ids and times normalised).",
+      "Tests: the fingerprint is on the timing line and matches the golden input."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"the model input on the C04 fixture equals its golden copy\"",
+    "verify": "pnpm -C runner exec vitest run -t \"the model input on the C04 fixture equals its golden copy|the timing line carries the model input fingerprint\"",
     "passes": false,
-    "note": "TL-P4-07 (main 9f9eb22): speed counts only with 3/3 passes. Live runs 37751420040, 37751677244, 37751871102."
+    "note": "TL-P4-07 addendum (main 50a99a1): inputs identical on c76fd2f and a566241 (fixture and live token counts); runs after placement-guidance, since that changes the prompt."
   },
   {
     "id": "checkpoint-count",
@@ -4846,5 +4846,19 @@
     "verify": "pnpm -C runner exec vitest run -t \"the C04 run writes and counts exactly 4 checkpoints\"",
     "passes": false,
     "note": "TL-P4-07 (main 9f9eb22). Timing: checkpoints=16011/8, 11500/8, 11604/8."
+  },
+  {
+    "id": "placement-guidance",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "The Claude prompt adopts the original app placement wording (agent/prompts/ingest.md): with no fitting folder a thing goes to Resources; a new Area or Project only when rules or notes show an ongoing responsibility. The C04 expected.json follows its rubric.",
+    "steps": [
+      "Adopt the placement wording from the original ingest.md into the provider prompt.",
+      "Align harness/corpus/c04-garden-newsletter/expected.json with its rubric (Areas/Home allowed when the plot note is linked).",
+      "Tests on the prompt text and the scorer; live proof is 5 C04 runs, 5/5 (coordinator)."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the prompt says a thing with no fitting folder goes to Resources|the C04 scorer accepts its rubric placements and refuses others\"",
+    "passes": false,
+    "note": "TL-P4-07 addendum (main 50a99a1): Areas placement on a566241 is model variance on an under-specified case. The 0:43 counts once C04 passes 5/5."
   }
 ]
