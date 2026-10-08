@@ -221,3 +221,4 @@ P3-9 is closed.
 - ask-not-repeated closed (test only; it already held: q-ask-<pileId> deduped by the planner). 371/377. P4-8 fix round running.
 - P4-8 fix round merged (533e7b5): retry keeps its folder, fingerprint normalises fileId and admission id, whole-line rule basis, New area only top-level, ask-only runs keep uncited lines. placement-check and fingerprint-normalised re-closed. 373/377. Fix-round check (Opus) running.
 - P4-8 fix-round check PASS (minors to polish). Waiting for the suites, then main and the SHA.
+- P4-8 suites at 71e80f7: check 3609/190/129, e2e 226, e2e:fake 250, e2e:pwa pass. P4-8 closed; main moves.
