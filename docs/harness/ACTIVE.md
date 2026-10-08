@@ -247,3 +247,4 @@ P3-9 is closed.
 - P4-11 fix-round check PASS (minors to polish). Runner and corpus only since b54392c; check green. Main moves.
 - Main and backup at 327b987; SHA sent to the lead for offer-and-flat x3 + garden x1 (C04 close).
 - 327b987 live: C04 PASS (offer-and-flat 3/3, garden 1/1; input= stable within each case; no retries). Asked the lead to start drive-calls-cut and C05 (state-rewrite-change).
+- TL-P4-08 addendum 6 (cf592bf): C04 closed. state-rewrite-change (escalated, C05) and drive-calls-cut (implementer) running. 378/383.
