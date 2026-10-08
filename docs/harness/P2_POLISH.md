@@ -213,3 +213,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - (P4-4 fix-round check, PASS at d4b4677) Minors:
   - person.ts:587: the early-null look-up re-arms the flag with the current phaseAt, not lookup.run's. A report during that look-up, then found:false 60 s later, redispatches attempt 2. Needs an odd GitHub answer; fix by comparing attempt and phaseAt before re-arming.
   - github.ts:94: a 429 or rate-limit 403 counts as refused and keeps the 17 min window (the honest outcome).
+- P4-6 review minors (deferred): no test runs a gone row's alarm alongside an active run's recovery or 60 s dispatch alarm (api/src/person.ts:591); no test changes a note during the plan reads; Rules.md repair runs alongside takeAdmitted in runner/src/main.ts:509 and would race if Rules.md were ever admitted.

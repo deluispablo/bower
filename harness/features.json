@@ -4773,9 +4773,9 @@
       "A modelled C04 run writes 2–4 checkpoints.",
       "Every effect carries appProperties bowerOp=<run_id>:<op id> in the same request (overwritten); reconcile reads the stamp: present=landed, absent=not landed (sent only if still as planned, else set aside and reported), unreadable=honest stop."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"a run writes one opening and one closing checkpoint per batch|a kill at every step including mid-batch ends equal to an uninterrupted run|a rename inside a batch then a kill is kept and reported|an undo of a landed effect then a kill is kept and reported|the bowerOp stamp is never accumulated\"",
-    "passes": true,
-    "note": "TL-P4-05 (tail: attempt check median 127 ms; the checkpoint cost is its two Drive writes; checkpoints in the DO declined). TL-P4-05 addendum (9a12727): option (b), the bowerOp stamp."
+    "verify": "pnpm -C runner exec vitest run -t \"a run writes one opening and one closing checkpoint per batch|a kill at every step including mid-batch ends equal to an uninterrupted run|a rename inside a batch then a kill is kept and reported|an undo of a landed effect then a kill is kept and reported|the bowerOp stamp is never accumulated|a made thing the person moves after a kill is not made twice\"",
+    "passes": false,
+    "note": "TL-P4-05 (tail: attempt check median 127 ms; the checkpoint cost is its two Drive writes; checkpoints in the DO declined). TL-P4-05 addendum (9a12727): option (b), the bowerOp stamp. Reopened by the P4-6 review (BLOCK): the stamp lookup is limited to the planned parent, so a made folder the person moves after a kill is made again."
   },
   {
     "id": "runner-reads-and-report",

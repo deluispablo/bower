@@ -189,3 +189,4 @@ P3-9 is closed.
 - TL-P4-05 addendum 2 (ce36da1): ckbatch deviations accepted. Entry report-kept-your-change added for the C12 slice. 363/366.
 - checkpoint-per-batch closed (a38306a): 4 checkpoints per run, bowerOp = 32 hex of sha256(run_id:op id); modelled C04 37.9 → 19.6 s with reads-and-report. 364/366. Waiting on the gone-ticket flake fix, then the P4-6 close.
 - gone-ticket-rows-expire closed (57f8fdb). 365/366 (open: report-kept-your-change, C12). P4-6 close: Opus delta 4d8191a..57f8fdb and the four suites.
+- P4-6 review BLOCK: checkpoint-per-batch makes a moved new folder twice after a mid-batch kill (stamp looked up in the planned parent only). Reopened; fix round with the same worker, plus the stamp as 32 hex (addendum 2) and a purged file set aside, not a stop. Other minors to P2_POLISH. 364/366.
