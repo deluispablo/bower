@@ -86,11 +86,17 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
 
+    // Total Drive calls (reads + writes): 106 reads + 28 writes = 134 calls
+    const totalDriveCalls = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
+    expect(totalDriveCalls).toBe(134);
+
     const count = analyzeCalls(calls);
 
     // Golden values from C04 runs on both a566241 and 35edc8b (current HEAD):
-    // Both have identical call counts, confirming the runner got slower due to timing
-    // attribution changes (checkpoints timing), not real extra Drive calls.
+    // Both have identical call counts: 134 total Drive calls, with no difference.
+    // Modelled total: ~461ms (a566241) to ~481ms (HEAD).
+    // Live rise from 35s to 49s is NOT explained by extra calls or timing attribution alone:
+    // modelled shows no difference, so the live rise is real Drive latency variance.
     expect(count.token).toBe(2);
     expect(count.reads).toBe(17);
     expect(count.model).toBe(2);
