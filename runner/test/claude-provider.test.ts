@@ -205,6 +205,56 @@ describe('the Claude provider', () => {
     expect(context.rules).toMatch(/\[cut here: \d+ more characters of the rules not shown; the list may go on\]$/);
   });
 
+  it('the retry runs the model in a folder that still exists', async () => {
+    const { wire } = await wired();
+    const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Areas/Community garden'; });
+    const toResources = edited((m) => { for (const t of m.things as Array<{ to: string }>) t.to = 'Resources'; });
+    const replies = [newArea, toResources];
+    const there: boolean[] = [];
+    const home: boolean[] = [];
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => {
+      there.push(existsSync(call.cwd));
+      home.push(existsSync(call.env.HOME ?? ''));
+      return { code: 0, stderr: '', cut: null, stdout: replies[there.length - 1] ?? toResources };
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
+
+    expect(there).toEqual([true, true]);
+    expect(home).toEqual([true, true]);
+  });
+
+  it('a rule basis is a whole rules line, never part of one or the cut marker', async () => {
+    const { wire, root } = await wired();
+    const long = `---\nsummary: Rules.\nby: bower\nkind: Rules\n---\n\n## Rules\n\n${'- Receipts go to Areas / Money / Receipts.\n'.repeat(200)}`;
+    await wire.drive.createText(root, 'Rules.md', long, { by: 'bower' });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const asks = async (basis: string): Promise<number> => {
+      const reply = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Projects/Community garden', basis }); });
+      const claude = recordedClaude({ stdout: reply });
+      await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
+      return claude.calls.length;
+    };
+    
+    expect(await asks('more characters of the rules not shown')).toBe(2);
+    expect(await asks('Receipts go to Areas / Money')).toBe(2);
+    expect(await asks('Receipts go to Areas / Money / Receipts.')).toBe(1);
+  });
+
+  it('a new subfolder of an existing Area is not reported as a new area', async () => {
+    const { wire } = await wired();
+    const sub = edited((m) => { for (const t of (m.things as Array<Record<string, string>>).slice(0, 1)) Object.assign(t, { to: 'Areas/Money/Statements', responsibility: 'bank statements' }); });
+    const claude = recordedClaude({ stdout: sub });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
+
+    expect(claude.calls).toHaveLength(1);
+    const last = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'last-run.json');
+    expect(JSON.stringify(JSON.parse(await wire.drive.readText(last?.id ?? '')))).not.toContain('New area');
+  });
+
   it('a second refusal ends the run honestly', async () => {
     const { wire } = await wired();
     const newArea = edited((m) => { for (const t of (m.things as Array<{ to: string }>).slice(0, 1)) t.to = 'Projects/Community garden'; });

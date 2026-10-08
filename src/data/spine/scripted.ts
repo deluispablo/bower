@@ -864,7 +864,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     console.error(new BowerError('unknown', NOT_ASKED), `${SYSTEM.dir} is missing; the question is not asked`);
   }
   // A run that only asks, about piles asked about already, has nothing new to do: nothing was ready yet.
-  if (all && !capturedPiles.length && !journal.length && questionsText === null) {
+  // A Timeline line the model added on a note is something to do, so a run with one is not "nothing ready".
+  if (all && !capturedPiles.length && !journal.length && questionsText === null && ![...wanted.values()].some((w) => w.lines.length)) {
     if (opts.taken) return nothingReadyPlan(rootId, opts);
     throw new BowerError('conflict', NOTHING_READY);
   }

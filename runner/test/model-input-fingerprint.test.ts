@@ -33,8 +33,10 @@ function fakeScripted(drive: FakeDrive): ScriptedRead {
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 
 /** Alex's folder with the garden newsletter in the inbox and Bower's plot note. */
-async function gardenFolder(): Promise<{ drive: FakeDrive; root: string }> {
+async function gardenFolder(spare = 0): Promise<{ drive: FakeDrive; root: string }> {
   const drive = fixedDrive();
+  // Throwaway folders first, so every Drive id after them differs from a folder made without.
+  for (let i = 0; i < spare; i++) await drive.createFolder('root', `spare ${i}`);
   const root = (await drive.createFolder('root', 'Bower')).id;
   const box = (await drive.createFolder(root, 'Inbox')).id;
   const ids = new Map<string, string>();
@@ -139,5 +141,30 @@ describe('model input fingerprint', () => {
 
     // The fingerprints should be the same when inputs are normalized
     expect(fingerprint1).toBe(fingerprint2);
+  });
+
+  it('two fresh folders with different Drive and admission ids give the same fingerprint', async () => {
+    const fingerprintOf = async (spare: number, admission: string, runId: string): Promise<{ fingerprint: string; input: string }> => {
+      const g = await gardenFolder(spare);
+      const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => admission });
+      if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
+      const calls: ClaudeCall[] = [];
+      const timing = new RunTiming();
+      const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+      return { fingerprint: /input=([0-9a-f]{12})/.exec(timing.line('done'))?.[1] ?? '', input: calls[0]?.input ?? '' };
+    };
+    const a = await fingerprintOf(0, 'admission-1', 'run-a');
+    const b = await fingerprintOf(7, 'admission-2', 'run-b');
+    expect(b.input).not.toBe(a.input);
+    expect(a.fingerprint).toMatch(/^[0-9a-f]{12}$/);
+    expect(b.fingerprint).toBe(a.fingerprint);
+  });
+
+  it('an id written inside a note still changes the fingerprint', () => {
+    const input = (text: string): string => `{"runId":"r","admission":"a","piles":[{"things":[{"fileId":"f1","text":${JSON.stringify(text)}}]}]}`;
+    expect(normalizeModelInput(input('"id":"x"'))).not.toBe(normalizeModelInput(input('"id":"y"')));
+    expect(normalizeModelInput(input('"fileId":"x"'))).not.toBe(normalizeModelInput(input('"fileId":"y"')));
   });
 });
