@@ -526,6 +526,8 @@ describe('recovery without the browser', () => {
     const ops = found.kind === 'run' ? found.manifest.operations : [];
     const move = ops.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === payslip?.id);
     expect((await w.wire.drive.get(payslip?.id ?? '')).appProperties?.bowerOp).toBe(stampOf(RUN_ID, move?.operationId ?? ''));
+    // The stamp is the first 32 hex characters of SHA-256(run_id:op id) (TL-P4-05 addendum 2).
+    expect(stampOf(RUN_ID, move?.operationId ?? '')).toBe(createHash('sha256').update(`${RUN_ID}:${move?.operationId ?? ''}`).digest('hex').slice(0, 32));
     // One stamp key on every file, overwritten by the run's last write to it, never one per run or per operation.
     const stamped = (await stateOf(w.wire.drive, w.root)).filter((e) => Object.keys(e.appProperties).some((k) => k.startsWith('bowerOp')));
     expect(stamped.length).toBeGreaterThan(1);
@@ -533,5 +535,54 @@ describe('recovery without the browser', () => {
       expect(Object.keys(e.appProperties).filter((k) => k.startsWith('bowerOp')), e.path).toEqual(['bowerOp']);
       expect(ops.some((o) => stampOf(RUN_ID, o.operationId) === e.appProperties.bowerOp), e.path).toBe(true);
     }
+  });
+
+  it('a made thing the person moves after a kill is not made twice', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    // Killed right after the run made its first folder, inside the batch.
+    let made: { name: string; key: string } | null = null;
+    await tidy(w, 1, {
+      applied: (call, process) => {
+        if (made || !madeFolder(call) || call.op !== 'create-folder') return;
+        made = { name: call.name, key: call.appProperties?.bowerItem ?? '' };
+        process.killed = true;
+      },
+    }).catch((e: unknown) => e);
+    const key = (made as { key: string } | null)?.key ?? '';
+    expect(key).not.toBe('');
+    const folder = (await w.wire.drive.listAll(w.root)).find((f) => f.folder && f.appProperties?.bowerItem === key);
+    expect(folder).toBeDefined();
+    // The person moves it elsewhere before the run is taken over.
+    await w.wire.drive.update(folder?.id ?? '', { addParent: w.root, removeParent: folder?.parents[0] ?? '' });
+
+    expect((await tidy(w, 2)).phase).toBe('done');
+    // Found by its stamp where the person put it: kept there, and never made a second time.
+    const all = (await w.wire.drive.listAll(w.root)).filter((f) => f.folder && f.appProperties?.bowerItem === key);
+    expect(all.map((f) => f.id)).toEqual([folder?.id]);
+    expect((await w.wire.drive.get(folder?.id ?? '')).parents).toEqual([w.root]);
+  });
+
+  it('a never-sent thing purged after a kill is set aside like an uninterrupted run', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    const payslip = (await w.wire.drive.listAll(w.root)).find((f) => f.name === 'Payslip_Aug.pdf');
+    // Killed right after the batch's opening, before any of its effects was sent.
+    await tidy(w, 1, {
+      applied: (call, process) => {
+        if (isCheckpoint(call) && call.op === 'create-text' && call.text.includes('"possible-effect"')) process.killed = true;
+      },
+    }).catch((e: unknown) => e);
+    // The person puts the payslip in the Bin and empties it: Drive no longer has it.
+    (w.wire.drive as unknown as { files: Map<string, unknown> }).files.delete(payslip?.id ?? '');
+
+    expect((await tidy(w, 2)).phase).toBe('done');
+    const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+    const move = found.kind === 'run' ? found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === payslip?.id) : undefined;
+    const outcome = (await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === move?.operationId);
+    // Never sent, set aside and reported as moved away, as a run that found it gone before its move would.
+    expect(w.sends.get(move?.operationId ?? '') ?? 0).toBe(0);
+    expect(outcome?.state).toBe('rejected');
+    expect(JSON.stringify((await endOf(w)).view)).toContain(MOVED_AWAY);
   });
 });
