@@ -39,7 +39,7 @@ const recorded = (name: string): string => readFileSync(new URL(`./fixtures/clau
  * what the demo's folder has and the scripted plan does more for: two of Bower's hub notes it brings up to date, a
  * saved link filed as a note, an offer that gets its own note, and a pile of words only that becomes a note.
  */
-async function wired(rich = false): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
+async function wired(rich = false, withText = false): Promise<{ wire: DriveV3; root: string; admission: AdmissionManifest }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const inbox = (await drive.createFolder(root, 'Inbox')).id;
@@ -52,6 +52,7 @@ async function wired(rich = false): Promise<{ wire: DriveV3; root: string; admis
   const pile = (await drive.createFolder(inbox, 'Flat photos', { pile: 'p-photos' })).id;
   await drive.createText(pile, PILE_NOTE, 'The kitchen at the Wrenfield Road viewing.\n');
   await drive.createText(pile, 'IMG_2301.jpg', 'made-up photo bytes');
+  if (withText) await drive.createText(inbox, 'Leek soup.txt', 'Leeks, potatoes and stock, simmered for twenty minutes.\n', { pile: 'p-soup' });
   if (rich) {
     const projects = (await drive.listAll(root)).find((f) => f.name === 'Projects')?.id ?? root;
     const hub = (summary: string): string => serializeNote({ summary, properties: [], tags: [], currentState: [], body: '', timeline: [], byBower: true });
@@ -253,6 +254,62 @@ describe('the Claude provider', () => {
     expect(claude.calls).toHaveLength(1);
     const last = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'last-run.json');
     expect(JSON.stringify(JSON.parse(await wire.drive.readText(last?.id ?? '')))).not.toContain('New area');
+  });
+
+  it('a thing with text and no note or citing line is refused and retried once', async () => {
+    const { wire } = await wired(false, true);
+        const soup = async (): Promise<string> => (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'Leek soup.txt')?.id ?? '';
+    const id = await soup();
+    const plain = edited((m) => { (m.things as unknown[]).push({ fileId: id, to: 'Resources', name: 'Leek soup.txt' }); });
+    const noted = edited((m) => { (m.things as unknown[]).push({ fileId: id, to: 'Resources', name: 'Leek soup.txt', note: { name: 'Leek soup.md', summary: 'A simple leek soup.', body: 'Leeks, potatoes and stock.' } }); });
+    const replies = [plain, noted];
+    const calls: ClaudeCall[] = [];
+    const spawn = async (call: ClaudeCall): Promise<ClaudeExit> => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: replies[calls.length - 1] ?? noted });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: spawn })).toBe(0);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.input).toMatch(/refused/);
+    expect(calls[1]?.input).toMatch(/no note/);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
+
+    // Never a third ask: a second bare reply ends the run as C12 does, with nothing written.
+    const again = await wired(false, true);
+    const stuck: ClaudeCall[] = [];
+    const never = async (call: ClaudeCall): Promise<ClaudeExit> => (stuck.push(call), { code: 0, stderr: '', cut: null, stdout: plain });
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: again.wire.fetch, claude: never })).toBe(0);
+    expect(stuck).toHaveLength(2);
+    expect(again.wire.statuses.at(-1)?.phase).toBe('failed');
+    expect(again.wire.requests.filter((r) => r.method !== 'GET')).toEqual([]);
+  });
+
+  it('a thing cited by a Timeline line on an existing note needs no note', async () => {
+    const { wire } = await wired(true, true);
+    const id = (await wire.drive.listAll(wire.folderId)).find((f) => f.name === 'Leek soup.txt')?.id ?? '';
+    const cited = edited((m) => {
+      (m.things as unknown[]).push({ fileId: id, to: 'Resources', name: 'Leek soup.txt' });
+      m.lines = [{ note: 'Projects/Flat hunt/Flat hunt.md', text: 'Matches what this note already says.', cites: id }];
+    });
+    const claude = recordedClaude({ stdout: cited });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
+
+    expect(claude.calls).toHaveLength(1);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
+  });
+
+  it('a photo with no text needs no note', async () => {
+    const { wire } = await wired();
+    const photo = edited((m) => { m.things = (m.things as Array<{ fileId: string }>).filter((t) => t.fileId === 'f14'); });
+    const claude = recordedClaude({ stdout: photo });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn })).toBe(0);
+
+    expect(claude.calls).toHaveLength(1);
+    expect(wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
   });
 
   it('a second refusal ends the run honestly', async () => {

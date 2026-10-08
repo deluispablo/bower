@@ -220,7 +220,9 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'What to write:',
     '- Value: a thing that only confirms what a note below already says makes no new note. File the thing beside that note',
     '  and add a Timeline line to it saying so, citing the thing.',
-    `- "note" (optional) is a note beside a thing, saying what it says, from its text only: invent nothing. Its summary is at`,
+    `- "note" is a note beside a thing, saying what it says, from its text only: invent nothing. Every thing with text gets one,`,
+    '  unless a Timeline line on a note below cites it (the value gate above); a photo or a thing with no text needs none.',
+    `  Bower refuses a reply that leaves one out. Its summary is at`,
     `  most ${AUTHORED.summary} characters, its body at most ${AUTHORED.body}, with no front matter and no "## Current state", "## Timeline" or`,
     '  "## Bower\'s note" heading: Bower writes those. A saved link filed as a note takes none. Every new note links its hub',
     '  (the note named as its folder, or its project\'s or area\'s note) when there is one, and 1 to 5 related notes below,',
@@ -524,6 +526,12 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     if (!lineOk(l.text, AUTHORED.line) || /\[\[|\]\]|·|\]\(/.test(l.text) || new RegExp(WEB.source, 'i').test(l.text)) return { ok: false, why: 'a Timeline line that is not one short line' };
     if ('cites' in l && (typeof l.cites !== 'string' || !placed.has(l.cites))) return { ok: false, why: 'a line citing a thing it does not file' };
     timeline.push({ path: l.note, text: l.text.trim(), cites: typeof l.cites === 'string' ? l.cites : null });
+  }
+  // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
+  const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
+  for (const [id, place] of placed) {
+    if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
+    return { ok: false, why: `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`, placement: true };
   }
   // A question about a pile it does not file: the pile stays in the inbox untouched (TL-P4-08 point 1).
   const asked = new Map<string, Ask>();
