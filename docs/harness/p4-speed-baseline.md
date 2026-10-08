@@ -120,3 +120,13 @@ Admission budget, honest start error, one question per thing, drive-calls-cut an
 | c05-hub-lines 2 (hand edit) | 1:48 | 49.4 | 10.0 | 22.5 | 13.3 | edit kept, line + one folder question; no listing line in Flat hunt |
 
 **Reading.** Apply is 21–24 s on offer-and-flat (was 26–37 s), far from the modelled 4.7 s; reads grew to 24–49 s. Home took about 24 s to show the Inbox, with 221 Drive calls (189 media reads of 42 files, one file up to 10 times).
+
+## C05 no-adoption check on `924e6d6` (2026-10-08)
+
+Hubs restored with Bower's `bower_state` mark (Bower-owned), then hand-edited for runs 2 and 3. Home with one 2-thing pile: about 108 Drive calls, each file read at most twice (was 221, up to 10×); the Inbox showed after about 45 s, behind the last run's report.
+
+| Run | Press → done | reads | model | apply | report (s) | Result |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| c05 clean | 1:36 | 38.3 | 13.3 | 18.4 | 13.0 | pass; Job hunt state rewritten, both hubs got cited lines |
+| c05 after hand edit | 1:18 | 16.8 | 11.6 | 23.5 | 11.1 | edit kept, one question; Job hunt offer line twice (model line + "New:" line) |
+| c05 third run | 1:21 | 24.7 | 14.8 | 15.4 | 10.8 | pass; edit kept, no adoption, no new question |

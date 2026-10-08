@@ -287,3 +287,4 @@ P3-9 is closed.
 - corpus-offer-real-pdf closed (57243c4; escalated; red by hand at 2a63292): 12 corpus PDFs real, payslip note in 4 scripted fixtures. 386/389. Suites next.
 - Suites at 07ff1e4: check 3629+/194/165 harness 386/389, e2e 226, e2e:fake 251 + qa10:165 phone (2nd suite in a row; file alone 3/3 pass), pwa 4. Main moves.
 - 924e6d6 on staging. qa10-phone-flake registered (implementer, running). Live c05-hub-lines x3 + Home calls next. 386/390.
+- 924e6d6 live: c05 clean pass, after-edit keeps the edit (+ duplicate offer line), third run no adoption. Home ~108 Drive calls (was 221). qa10-phone-flake closed (known-green). 387/390.
