@@ -5167,7 +5167,7 @@
   {
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "id": "duplicate-by-hash",
     "what": "A thing with the same content hash as a file already filed goes to the Drive Bin and is reported \"already saved as <name>\", with no line and no note (local second-brain method).",
     "steps": [
