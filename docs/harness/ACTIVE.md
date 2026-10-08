@@ -195,3 +195,4 @@ P3-9 is closed.
 - Main and backup at a566241 (remote checked). Deploy SHA sent to the lead for the real C04 measurement (3 runs). Next: C05 slice.
 - C04 x3 on a566241 (staging e0b85749): press→done 0:56, 0:42, 0:43 (was 1:17–1:35); all 3 FAIL placement (Areas, not Resources; 4 dates present); timing says 8 checkpoints, not 4. Sent to the lead with an offer to investigate.
 - TL-P4-07 (9f9eb22): speed counts only with 3/3 passes. Entries model-context-regression (implementer) and checkpoint-count (mechanical) added and running. 365/368.
+- model-context-regression: model input on the C04 fixture byte-identical on c76fd2f and a566241 (worker stopped, no commit). Asked the lead: live-folder capture, more runs, or golden test anyway.
