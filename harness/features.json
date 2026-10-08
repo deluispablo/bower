@@ -5212,7 +5212,7 @@
     "id": "keep-one-note-merge",
     "task": "p4-c",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "what": "Keep one note: the intent names the kept note and the other; the other note's facts and Timeline carry over with their sources, the other goes to the Drive Bin, links to it are rewritten to the kept note, all undoable.",
     "steps": [
       "An intent field (kept, other) validated by the spine.",
