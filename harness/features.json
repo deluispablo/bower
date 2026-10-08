@@ -5493,7 +5493,7 @@
     "id": "c1-api-test-harness",
     "task": "p4-consolidation",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "One api test time/alarm helper; a setupFiles guard that fails on any unstubbed global fetch; the four time races fixed with range assertions. No fake clock in Person.",
     "steps": [
       "One helper for times and alarms in api tests.",
