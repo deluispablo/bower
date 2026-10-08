@@ -9,6 +9,8 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import { EMPTY_MD5, duplicatesOf } from '../../src/data/spine/duplicates';
+import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { runWithClaude, type CaseRun } from './corpus-run';
@@ -204,5 +206,27 @@ describe('a thing already saved (duplicate-by-hash)', () => {
     expect(run.code).toBe(0);
     expect(reportOf(run).alreadySaved).toEqual([{ name: OFFER, as: 'Offer letter.pdf' }]);
     expect((JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: unknown[] }).questions).toEqual([]);
+  });
+
+  it('a Google Doc, a saved link, an empty file and a file in the inbox or Bower\'s own files are never saved copies', () => {
+    const at = '2026-10-07T09:00:00.000Z';
+    const file = (id: string, name: string, parent: string, more: Partial<DriveFile> = {}): DriveFile => ({ id, name, parents: [parent], folder: false, modifiedTime: at, createdTime: at, ...more });
+    const folder = (id: string, name: string, parent: string): DriveFile => ({ ...file(id, name, parent), folder: true });
+    const same = '0123456789abcdef0123456789abcdef';
+    const listing = [
+      folder('inbox', 'Inbox', 'root'), folder('projects', 'Projects', 'root'), folder('own', '.bower', 'root'),
+      // A Google Doc has no md5Checksum: never compared.
+      file('doc-filed', 'Plan', 'projects'), file('doc-new', 'Plan', 'inbox'),
+      file('link-filed', 'Listing.url', 'projects', { md5Checksum: same }), file('link-new', 'listing.url', 'inbox', { md5Checksum: same, appProperties: { kind: 'link' } }),
+      file('empty-filed', 'Blank.txt', 'projects', { md5Checksum: EMPTY_MD5 }), file('empty-new', 'empty.txt', 'inbox', { md5Checksum: EMPTY_MD5 }),
+      file('own-copy', 'hashes.json', 'own', { md5Checksum: 'aa'.repeat(16) }), file('inbox-other', 'other.json', 'inbox', { md5Checksum: 'aa'.repeat(16) }),
+      file('own-new', 'notes.json', 'inbox', { md5Checksum: 'aa'.repeat(16), createdTime: '2026-10-07T09:00:01.000Z' }),
+    ];
+    const ix = VaultIndex.build('root', listing);
+    const dups = duplicatesOf(listing, ix, ['doc-new', 'link-new', 'empty-new', 'own-new']);
+    // Only the second of two copies the run took is one: the file in Bower's own files is not filed, and the other
+    // inbox file was not taken.
+    expect([...dups.keys()]).toEqual([]);
+    expect([...duplicatesOf(listing, ix, ['inbox-other', 'own-new'])]).toEqual([['own-new', { of: 'run', keptId: 'inbox-other' }]]);
   });
 });

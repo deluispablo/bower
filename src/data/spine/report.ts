@@ -49,6 +49,7 @@ export function materialize(manifest: RunManifest, manifestHash: string, outcome
     if (c.value.requests) report.requests = [...(report.requests ?? []), ...c.value.requests];
     if (c.value.yourChanges !== undefined) report.yourChanges = (report.yourChanges ?? 0) + c.value.yourChanges;
     if (c.value.rulesWorded !== undefined) report.rulesWorded = (report.rulesWorded ?? 0) + c.value.rulesWorded;
+    if (c.value.alreadySaved?.length) report.alreadySaved = [...(report.alreadySaved ?? []), ...c.value.alreadySaved];
   }
   // No other change is said by leaving the count out (TL-P2-23): a claimed line may count 0.
   if (report.yourChanges === 0) delete report.yourChanges;
@@ -97,13 +98,19 @@ export function dispositionsFor(manifest: RunManifest, outcomes: readonly Outcom
 }
 
 
+/** The Bin of a thing already saved (TL-P4-10 addendum 2): a captured member binned, rather than moved. */
+export function savedBin(manifest: RunManifest, op: OperationV2): boolean {
+  const e = op.effect;
+  return e.kind === 'bin' && manifest.capture.members.some((m) => m.file.fileId === e.before.fileId);
+}
+
 /** Where an admitted item ends: exactly one of these. A journal line (one of your changes) has no pile. */
 export type ItemDisposition = { fileId: string; pileId: string | null; disposition: 'filed' | 'set-aside' | 'waiting' };
 
 /**
  * One disposition for every item in the admitted manifest, none left out and none twice. An item the run did not
  * capture changed since admission and waits for the next run (`takeAdmitted` leaves its whole pile out). A captured
- * thing is filed when its filing move was applied, and set aside otherwise: it stays in the inbox, untouched. What
+ * thing is filed when its filing move (or, already saved, its Bin) was applied, and set aside otherwise: it stays in the inbox, untouched. What
  * else is in a captured pile (its pile note) goes with its pile: filed when every thing in it was filed and the note
  * written from its words (a pile of words only) was made, so a pile written into a new note is filed as its report
  * says. What a captured pile leaves out of its capture (a thing asked about, and the pile note kept beside it, TL-P4-08
@@ -112,8 +119,9 @@ export type ItemDisposition = { fileId: string; pileId: string | null; dispositi
  */
 export function itemDispositions(admission: AdmissionManifest, manifest: RunManifest, outcomes: readonly Outcome[]): ItemDisposition[] {
   const applied = new Set(outcomes.filter((o) => o.state === 'applied').map((o) => o.operationId));
-  const filed = new Set(manifest.operations.flatMap((o) => (o.effect.kind === 'move' && filingMove(manifest, o) && applied.has(o.operationId) ? [o.effect.before.fileId] : [])));
   const members = new Map(manifest.capture.members.map((m) => [m.file.fileId, m.pileId]));
+  // Filed: moved to its place, or (a thing already saved) gone to the Bin, so it left the inbox too.
+  const filed = new Set(manifest.operations.flatMap((o) => (applied.has(o.operationId) && (filingMove(manifest, o) || savedBin(manifest, o)) && 'before' in o.effect ? [o.effect.before.fileId] : [])));
   const captured = new Map(manifest.capture.piles.map((p) => [p.pileId, new Set(p.childFileIds)]));
   const whole = (pileId: string): boolean => {
     const things = manifest.capture.members.filter((m) => m.pileId === pileId);
@@ -174,7 +182,7 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
   const by = new Map(items.map((i) => [i.fileId, i]));
   const thingOf = (id: string): string[] => {
     const op = ops.get(id);
-    return op?.effect.kind === 'move' && filingMove(manifest, op) ? [op.effect.before.fileId] : [];
+    return (op?.effect.kind === 'move' || op?.effect.kind === 'bin') && (filingMove(manifest, op) || savedBin(manifest, op)) ? [op.effect.before.fileId] : [];
   };
   const subjects = (c: RunManifest['reportPlan'][number]): Set<string> => new Set(c.requires.flatMap((id) => {
     const op = ops.get(id);
@@ -200,6 +208,10 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
   for (const row of report.filed) {
     const from = given.filter((c) => c.value.filed.some((f) => f.name === row.name && f.to === row.to && f.title === row.title && f.kind === row.kind && f.note === row.note));
     trace(`filed ${row.name}`, from, ['filed'], named.filed);
+  }
+  for (const row of report.alreadySaved ?? []) {
+    const from = given.filter((c) => c.value.alreadySaved?.some((a) => a.name === row.name && a.as === row.as));
+    trace(`already saved ${row.name}`, from, ['filed'], named.filed);
   }
   for (const row of report.setAside) {
     const from = given.filter((c) => c.value.setAside.some((a) => a.name === row.name));

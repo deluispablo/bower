@@ -202,6 +202,11 @@ export interface RunReport {
   updated: Array<{ path: string; what: string }>;
   setAside: Array<{ name: string; why: string }>;
   questions: Question[];
+  /**
+   * Things whose content was already filed (TL-P4-10 addendum 2): each went to the Bin, with the name of the file
+   * already saved. Left out when there are none.
+   */
+  alreadySaved?: Array<{ name: string; as: string }>;
   /** How many of your changes (the journal) the run read. */
   yourChanges?: number;
   /** What you asked Bower that this run did, in your words. */

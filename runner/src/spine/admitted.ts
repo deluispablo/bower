@@ -94,7 +94,8 @@ export async function takeAdmitted(manifest: AdmissionManifest, drive: AdmittedR
  *
  * - a move's subject is a thing, a pile folder or one of your changes the run took; any other move only sets
  *   Bower's "new" mark in place: cleared from last run's things, or set again on a note the plan edits;
- * - a Bin's subject is a pile folder or a pile's note the run took (a pile of words, once its note is written);
+ * - a Bin's subject is a pile folder or a pile's note the run took (a pile of words, once its note is written), or a
+ *   thing it took that is already saved (`duplicates.ts`, planned by the runner, never named by the model);
  * - a runner-JSON write's subject is one of Bower's own files in `.bower`;
  * - a note edit carries only what the runner authors from your changes and its fixed hub list (`applyChanges`): a
  *   Timeline line or a link rewrite on a note, and on `Rules.md` your typed rules (`rules-wording`) or a link

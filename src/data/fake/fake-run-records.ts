@@ -324,8 +324,49 @@ export function grounded(manifest: RunManifest): boolean {
   const setAside = new Set<string>();
   const claimedNotes = new Set<string>();
   const alone = new Set<string>();
+  /**
+   * A thing already saved (TL-P4-10 addendum 2): one Bin of a captured member, with an applied row saying it is
+   * already saved as the file it copies (a captured file of the folder by that name, its Bin depending on nothing;
+   * or the thing this run files first, its Bin depending on that one move, under the name that move gives it) and a
+   * rejected row setting it aside. Each claimed once.
+   */
+  const saved = new Set<string>();
+  const savedRow = (c: ReportContribution): boolean => {
+    const v = c.value;
+    const [id, ...more] = c.requires;
+    const op = id === undefined ? undefined : ops.get(id);
+    if (more.length || op?.effect.kind !== 'bin') return false;
+    const member = members.get(op.effect.before.fileId);
+    if (!member || v.filed.length || v.created.length || v.updated.length || v.questions.length) return false;
+    if (v.requests !== undefined || v.yourChanges !== undefined || v.rulesWorded !== undefined) return false;
+    const fileId = member.file.fileId;
+    if (c.when === 'rejected') {
+      const [row, ...rest] = v.setAside;
+      if (v.alreadySaved !== undefined || !row || rest.length || row.name !== member.file.name || setAside.has(fileId)) return false;
+      setAside.add(fileId);
+      return true;
+    }
+    const [row, ...rest] = v.alreadySaved ?? [];
+    if (v.setAside.length || !row || rest.length || row.name !== member.file.name || saved.has(fileId)) return false;
+    const [after, ...others] = op.dependsOn;
+    const kept = after === undefined ? undefined : ops.get(after)?.effect;
+    const copies = after === undefined
+      ? manifest.capture.places.some((p) => !p.file.folder && p.file.name === row.as && !members.has(p.file.fileId))
+      : !others.length && kept?.kind === 'move' && members.has(kept.before.fileId) && kept.name === row.as;
+    if (!copies) return false;
+    saved.add(fileId);
+    return true;
+  };
+  const binsMember = (c: ReportContribution): boolean => c.requires.some((id) => {
+    const o = ops.get(id);
+    return o?.effect.kind === 'bin' && members.has(o.effect.before.fileId);
+  });
   for (const c of manifest.reportPlan) {
     const v = c.value;
+    if (v.alreadySaved !== undefined || binsMember(c)) {
+      if (!savedRow(c)) return false;
+      continue;
+    }
     if (v.questions.length) {
       if (!questionRow(c)) return false;
       continue;
@@ -396,7 +437,7 @@ export function grounded(manifest: RunManifest): boolean {
   for (const o of manifest.operations) {
     if (o.effect.kind === 'create-text' && wordsRules(o) && (worded.get(o.operationId) ?? 0) !== parseRules(o.effect.text).length) return false;
   }
-  return [...members.keys()].every((id) => filed.has(id) && setAside.has(id))
+  return [...members.keys()].every((id) => (filed.has(id) || saved.has(id)) && setAside.has(id))
     && manifest.capture.journal.every((j) => claimed.has(j.recordId))
     && notes.every((o) => written.has(o.operationId) && unwritten.has(o.operationId))
     && requestNotes.every((o) => written.has(o.operationId))
