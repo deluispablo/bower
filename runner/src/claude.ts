@@ -257,7 +257,7 @@ function promptInstructions(): string {
     '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
     '  When a thing disagrees with a note, never change it silently: the line gives both figures, the note\'s and the',
     '  thing\'s, and cites the thing.',
-    `- "states" (optional): a note\'s whole "## Current state" as it should read now, at most ${AUTHORED.stateLines} lines of at most`,
+    `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${AUTHORED.stateLines} lines of at most`,
     `  ${AUTHORED.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
     '  at most one per note, citing the thing; add a Timeline line saying what changed too. Bower rewrites it only if the',
     '  person has not edited it; otherwise it asks them.',
