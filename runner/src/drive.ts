@@ -18,6 +18,15 @@
  *   itself can still let one land (a precheck, not a lock), and that attempt's
  *   next status report is refused (409 `stale-attempt`).
  *
+ * A created file is confirmed by the create's own answer: Drive v3 gives the
+ * stored content's `md5Checksum` (and `sha256Checksum`, when it has one) when
+ * `fields` asks for them (https://developers.google.com/drive/api/reference/rest/v3/files,
+ * https://developers.google.com/drive/api/guides/fields-parameter). When the
+ * answer's checksum is that of the bytes sent, the one read-back that follows
+ * a checkpoint's create (one per step of a run) is answered from them, with no
+ * second request; with no checksum, or another one, it is read from Drive as
+ * before. Other files are read back from Drive as they always were.
+ *
  * Faults for tests come through the fetch: `fault` sees each fenced write's
  * request once, as the fake's `FaultHook` does (`refuse`: nothing is sent;
  * `lose-reply`: the write lands, then its answer is lost).
@@ -45,6 +54,10 @@ const API = 'https://www.googleapis.com/drive/v3';
 const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
 const FOLDER = 'application/vnd.google-apps.folder';
 const WAITS = [500, 1000, 2000];
+/** What a create's answer is asked to carry besides its metadata, to confirm the bytes Drive stored. */
+const CHECKSUMS = 'md5Checksum,sha256Checksum';
+/** A run's checkpoint record (`checkpointName`): the writes a create's answer confirms. */
+const CHECKPOINT = /^checkpoint-\d+-[0-9a-f]{64}\.json$/;
 /** How long a plan read is answered again from the first (`planReads`). */
 const PLAN_KEEP_MS = 5000;
 
@@ -74,6 +87,8 @@ export class RunnerDrive {
   /** The fenced write whose request is in flight, and what the fault hook said of it. */
   private current: { call: FencedCall; action: FaultAction | null } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
+  /** Files whose create's answer confirmed the bytes sent, by id: the text, for the one read-back that follows. */
+  private readonly confirmed = new Map<string, string>();
   /** Rises when a fenced write is about to be sent and again when it ends: a listing read at one value is current at it. */
   generation = 0;
 
@@ -138,7 +153,15 @@ export class RunnerDrive {
   }
 
   async readText(id: string): Promise<string> {
-    return this.http.readText(id);
+    return this.confirmedText(id) ?? this.http.readText(id);
+  }
+
+  /** The text a create's answer confirmed, taken once: any later read goes to Drive. */
+  private confirmedText(id: string): string | null {
+    const text = this.confirmed.get(id);
+    if (text === undefined) return null;
+    this.confirmed.delete(id);
+    return text;
   }
 
   /**
@@ -190,7 +213,8 @@ export class RunnerDrive {
 
   /** The bytes of a file. */
   async readBytes(id: string): Promise<Uint8Array> {
-    return this.http.readBytes(id);
+    const text = this.confirmedText(id);
+    return text === null ? this.http.readBytes(id) : new TextEncoder().encode(text);
   }
 
   /** The MD5 of a file's stored bytes, hex, as Drive's `md5Checksum` gives it. */
@@ -205,6 +229,7 @@ export class RunnerDrive {
       // takeover sends nothing more (TL-P3-23).
       // and the target read again (still as seen). Both must pass before anything is sent; neither waits for the other.
       const target = targetOf(call);
+      if ('id' in call) this.confirmed.delete(call.id);
       const [, now] = await Promise.all([this.stillCurrent(), this.peek(target.id)]);
       this.seen.assert(target, now);
       this.current = { call, action: null };
@@ -238,7 +263,8 @@ export class RunnerDrive {
     now.action ??= this.fault?.before?.(now.call) ?? 'pass';
     // A TypeError is how fetch fails with no network; DriveHttp reads it as offline.
     if (now.action === 'refuse') throw new TypeError('A fault refused this write.');
-    const res = await this.fetchFn(input, init);
+    const created = now.call.op === 'create-text' && CHECKPOINT.test(now.call.name) ? now.call : null;
+    const res = await this.fetchFn(created ? withChecksums(input) : input, init);
     // A write Google failed on may still have landed: read as a lost answer, so it is read back, never sent again.
     if (res.status >= 500) {
       console.error(`Drive answered ${res.status} to a write`);
@@ -248,7 +274,19 @@ export class RunnerDrive {
     this.current = null;
     this.fault?.applied?.(now.call);
     if (now.action === 'lose-reply') throw new TypeError('A fault lost the answer to this write.');
+    if (created) await this.confirm(created.text, res.clone());
     return res;
+  }
+
+  /** Keeps the text sent when the create's answer carries its checksum; an answer with none confirms nothing. */
+  private async confirm(text: string, res: Response): Promise<void> {
+    const body = (await res.json().catch(() => null)) as { id?: string; md5Checksum?: string; sha256Checksum?: string } | null;
+    if (!body?.id) return;
+    const bytes = new TextEncoder().encode(text);
+    const sha = body.sha256Checksum !== undefined && body.sha256Checksum === createHash('sha256').update(bytes).digest('hex');
+    const md5 = body.md5Checksum !== undefined && body.md5Checksum === createHash('md5').update(bytes).digest('hex');
+    if (sha || md5) this.confirmed.set(body.id, text);
+    else if (body.sha256Checksum !== undefined || body.md5Checksum !== undefined) console.error(`Drive stored other bytes for file ${body.id} than were sent`);
   }
 
   /** A read with the token, its one refresh and the retries (`retry.ts`; a 403 rate limit as `DriveHttp` does). */
@@ -283,6 +321,16 @@ export class RunnerDrive {
       throw driveError('unknown');
     }
   }
+}
+
+/** A create's address asking its answer for the stored content's checksums too (`fields`). */
+function withChecksums(input: string | URL | Request): string | URL | Request {
+  if (input instanceof Request) return input;
+  const url = new URL(input);
+  const fields = url.searchParams.get('fields');
+  if (fields === null) return input;
+  url.searchParams.set('fields', `${fields},${CHECKSUMS}`);
+  return typeof input === 'string' ? url.href : url;
 }
 
 /** Drive's 403 for a rate limit, told apart from a refusal by its reason, as `DriveHttp` does. */

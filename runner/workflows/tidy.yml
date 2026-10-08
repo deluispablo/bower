@@ -44,11 +44,21 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '24'
-      - name: Install Claude Code
+      # Claude Code is kept between runs by its pinned version, as the original's ingest.yml keeps its CLI
+      # (https://github.com/actions/cache): restored on a hit, installed into the same folder on a miss.
+      - name: Cache Claude Code
+        id: cache-claude-cli
         if: vars.BOWER_PROVIDER == 'claude'
-        run: |
-          npm install --prefix "$HOME/claude-cli" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
-          printf '%s\n' "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/claude-cli
+          key: claude-code-${{ runner.os }}-${{ env.CLAUDE_CODE_VERSION }}
+      - name: Install Claude Code
+        if: vars.BOWER_PROVIDER == 'claude' && steps.cache-claude-cli.outputs.cache-hit != 'true'
+        run: npm install --prefix "$HOME/claude-cli" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+      - name: Put Claude Code on the path
+        if: vars.BOWER_PROVIDER == 'claude'
+        run: printf '%s\n' "$HOME/claude-cli/node_modules/.bin" >> "$GITHUB_PATH"
       # The scripted provider's step: no secret in its environment.
       - name: Tidy up
         if: vars.BOWER_PROVIDER != 'claude'
