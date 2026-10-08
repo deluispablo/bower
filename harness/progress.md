@@ -202,3 +202,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c1-api-test-harness passes — One api test time helper; a setup guard fails any unstubbed fetch; four time races fixed with ranges (deadlines-test-flake ruling)
 - 2026-10-08: c2-runner-exit passes — One runner exit reports attempt ended; the Worker redispatches at +60 s through the deadline table (TL-P4-16 addendum 4)
 - 2026-10-08: c2-drive-transport passes — One Drive transport for app, runner and Worker with one retry policy; a runner Drive error is never offline (TL-P4-16 addendum 4; removed 450 lines)
+- 2026-10-08: c2-drive-transport passes — P4-25 fix round: read budget bounds idempotent requests only; a write is never resent on a 5xx
