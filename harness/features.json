@@ -5535,7 +5535,7 @@
     "id": "c2-transport-outcome-kind",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "The transport tells a read that failed from a write whose outcome is unknown, and the copy follows the kind: a failed read says \"Google Drive didn't answer. Try again.\"; a write with an unknown outcome says \"Bower couldn't confirm that change. Refresh to check.\"",
     "steps": [
       "A note save whose answer from Drive is lost shows: Bower couldn't confirm that change. Refresh to check.",

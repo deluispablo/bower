@@ -205,3 +205,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c2-drive-transport passes — P4-25 fix round: read budget bounds idempotent requests only; a write is never resent on a 5xx
 - 2026-10-09: c2-worker-dispatch passes — Only the alarm dispatches (compare-and-set claim, schema v14); Delete me deletes personal tables by class; carry-over #4
 - 2026-10-09: c2-read-cache passes — One Drive read cache by id + modifiedTime; refresh lists again only; digest bytes not kept (P4-26, P4-28a PASS)
+- 2026-10-09: c2-transport-outcome-kind passes — A write with no definite answer is unconfirmed and says so; reads keep their wording (P4-28b PASS)
