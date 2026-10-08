@@ -74,6 +74,13 @@ describe('what the repository promises', () => {
     for (const part of ['docs/harness/LEAD.md', 'docs/harness/HANDOFF.md', 'never asks the owner', 'under 120 characters']) expect(note, part).toContain(part);
   });
 
+  it('the quiet output style holds the one-line rule for the coordinator and workers (TL-P4-12)', () => {
+    const style = read('.claude/output-styles/bower-quiet.md');
+    expect(style).toMatch(/^---\nname: Bower quiet\n/);
+    expect(style).toContain('keep-coding-instructions: true');
+    for (const part of ['No text between tool calls', 'exactly one line under 120 characters', 'Never ask the owner']) expect(style, part).toContain(part);
+  });
+
   it('the Worker config never targets the original production Worker, and serves the app as a single-page app (TL-P3-08)', () => {
     const config = read('api/wrangler.jsonc');
     expect(config).not.toMatch(/"name":\s*"bower-api"/);
