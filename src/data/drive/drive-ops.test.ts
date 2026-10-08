@@ -4,11 +4,10 @@ import { FakeDrive } from './fake-drive';
 import { createUploadQueue } from '../upload-queue';
 import { indexedDbUploadStore } from '../upload-store';
 import { sha256 } from '../vault/hashes';
-import { DRIVE_OPS, type BinLookup, type DriveApi, type ResumableDrive } from './drive-api';
-import type { StoredDigests } from '../pile-readiness';
+import { DRIVE_OPS, type DriveApi, type ResumableDrive } from './drive-api';
 import { drivePolicy, fenceDrive, openElsewhere, type PlaceGuard } from '../session';
 
-type Method = keyof (DriveApi & ResumableDrive & BinLookup & StoredDigests);
+type Method = keyof (DriveApi & ResumableDrive);
 
 /** What each Drive method is. `satisfies` fails the type check when a method is left out. */
 const EXPECTED = {

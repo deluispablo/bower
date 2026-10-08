@@ -5,7 +5,7 @@
  * Every call rejects with a `BowerError`.
  */
 import { BowerError, type ErrorCode } from '../types';
-import type { StoredDigests } from '../pile-readiness';
+import type { Digest } from '../pile-readiness';
 import { UNCONFIRMED_WRITE } from './transport';
 
 export interface DriveFile {
@@ -47,20 +47,6 @@ export interface BinnedItem {
   sha256: string | null;
 }
 
-/**
- * Optional, feature-detected: Bin entries under `rootId` whose `bowerItem` is
- * one of `keys`, in one call. The pretend Drive has it; P3 equivalent: one
- * Drive query `trashed = true` with an appProperties OR over the keys,
- * bounded and paginated.
- */
-export interface BinLookup {
-  binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
-}
-
-export function hasBinLookup(drive: object): drive is BinLookup {
-  return typeof (drive as { binnedByItem?: unknown }).binnedByItem === 'function';
-}
-
 export interface DriveApi {
   /** Every file and folder under `rootId`, at any depth, not in the Bin. */
   listAll(rootId: string): Promise<DriveFile[]>;
@@ -78,9 +64,29 @@ export interface DriveApi {
   /** To Drive's Bin; the app never deletes for good. */
   trash(id: string): Promise<void>;
   untrash(id: string): Promise<DriveFile>;
-  /** Files under `rootId` whose name or text contains `query`. */
+  /**
+   * Files under `rootId` whose name or text has every word of `query` (Drive's `fullText contains`: whole words, any
+   * order, case-insensitive), at most `SEARCH_MAX_PAGES` pages of `SEARCH_PAGE_SIZE` for each batch of `SEARCH_FOLDERS`
+   * folders.
+   */
   fullText(rootId: string, query: string): Promise<DriveFile[]>;
+  /**
+   * A file's size and SHA-256 from its stored content; null when they cannot be checked. `known` is the file's bytes
+   * when the caller already holds them: a Drive that has to read the file then does not.
+   */
+  storedDigest(id: string, known?: Uint8Array): Promise<Digest | null>;
+  /**
+   * Bin entries under `rootId` whose `bowerItem` is one of `keys`, in one call: Drive's `files.list` with
+   * `trashed = true` and an `appProperties has` for each key (https://developers.google.com/workspace/drive/api/guides/search-files).
+   */
+  binnedByItem(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
 }
+
+/** `files.list` pageSize (https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), the largest a page holds. */
+export const SEARCH_PAGE_SIZE = 1000;
+/** A search reads this many pages for each batch of `SEARCH_FOLDERS` folders; the rest of its hits are not read. */
+export const SEARCH_MAX_PAGES = 2;
+export const SEARCH_FOLDERS = 40;
 
 /** What a resumable upload creates: the reserved file id, where it goes and what it is. */
 export interface ResumableTarget {
@@ -163,7 +169,7 @@ export const DRIVE_OPS = {
   untrash: 'write',
   openResumable: 'write',
   putChunk: 'write',
-} as const satisfies Record<keyof (DriveApi & ResumableDrive & BinLookup & StoredDigests), 'read' | 'write'>;
+} as const satisfies Record<keyof (DriveApi & ResumableDrive), 'read' | 'write'>;
 
 export const isDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Record<PropertyKey, string>)[key] !== 'read';
 

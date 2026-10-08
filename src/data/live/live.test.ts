@@ -1296,6 +1296,7 @@ describe('foreground discovery', () => {
       upload: (parent, name, body, progress, props) => backend.upload(parent, name, body, progress, props),
       writeText: (id, text, version) => backend.writeText(id, text, version), update: (id, patch) => backend.update(id, patch),
       trash: (id) => backend.trash(id), untrash: (id) => backend.untrash(id), fullText: (root, query) => backend.fullText(root, query),
+      storedDigest: (id, known) => backend.storedDigest(id, known), binnedByItem: (root, keys) => backend.binnedByItem(root, keys),
     };
   }
 
