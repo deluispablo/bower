@@ -51,3 +51,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `c734261a` | c1-digest | none on the wire: one digest module in `hashes.ts` serves app, runner and Worker; the fake's report check now uses MD5 like the runner (it used SHA-256); file contents and Drive layout unchanged. Deploys alone |
 | `f4d73a9a` | c1-small-fixes | none: red tests only; no app, runner or Worker behaviour changed |
 | `f8758d76` | c1-small-fixes | none: BirdLab route is gated by `import.meta.env.DEV` (dev-only, screen only); Settings displays correct plural for rule counts (screen words only); markSeen errors reported via `report()` (screen only). No file shape or check changed; app and runner need not deploy together |
+| `75ce21c6` | c1-digest-library | none: `hashes.ts` computes SHA-256 and MD5 with @noble/hashes instead of hand-written code; identical output bytes (fuzz-checked against node:crypto). Deploys alone |
