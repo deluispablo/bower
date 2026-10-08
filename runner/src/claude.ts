@@ -31,7 +31,6 @@
  *   summary and body), and Timeline lines for the notes it was shown. The runner still builds every operation, id
  *   and digest from it (`planScripted`), and `applyChanges` alone writes a Timeline line, on Bower's notes only.
  */
-import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -51,6 +50,7 @@ import { SYSTEM } from '../../src/data/vault/layout';
 import { VaultIndex } from '../../src/data/vault/vault-index';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { extract, readable } from './extract';
+import { sha256Sync } from '../../src/data/contracts/hashes';
 import { outsideAdmitted } from './spine/admitted';
 import type { ModelStats, RunTiming } from './timing';
 
@@ -192,7 +192,7 @@ function calculateSectionHashes(
 ): { prompt: string; tree: string; things: string; notes: string; rules?: string; answers?: string } {
   const hash = (text: string): string => {
     const normalized = normalizeModelInput(text);
-    return createHash('sha256').update(normalized).digest('hex').slice(0, 6);
+    return sha256Sync(normalized).slice(0, 6);
   };
 
   return {
@@ -1018,7 +1018,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     // so that the same case run twice with different IDs produces the same fingerprint
     if (setup.timing) {
       const normalized = normalizeModelInput(input);
-      const fingerprint = createHash('sha256').update(normalized).digest('hex').slice(0, 12);
+      const fingerprint = sha256Sync(normalized).slice(0, 12);
       setup.timing.setInputFingerprint(fingerprint);
       // Also calculate and set section hashes (TL-P4-08 addendum 3)
       const sectionHashes = calculateSectionHashes(shown);
