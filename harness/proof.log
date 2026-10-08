@@ -443,3 +443,4 @@ c1-worker-deadlines	632332d4ce55df63	2026-10-08	red (fixed in 63815f71)
 c1-dependency-rules	c132f2e4ad3d4af2	2026-10-08	red (fixed in c4e1d762)
 c1-shared-contracts	95be68b0fcf53084	2026-10-08	known-green: reason: the lint-fix commit d5ca3cbd touched the same lines. Red by hand at tests-only 5fa03a94: the verify fails on its assertions (old leave discards an older check; several phase lists and templates); green at c8cfacec+d5ca3cbd
 c1-duplication-gate	8c4211c3a3f03441	2026-10-08	red (fixed in 9ff194bb)
+verify-names-precheck	371114bd413843c9	2026-10-08	red (fixed in 70529f5b)
