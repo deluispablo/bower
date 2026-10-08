@@ -197,3 +197,4 @@ P3-9 is closed.
 - TL-P4-07 (9f9eb22): speed counts only with 3/3 passes. Entries model-context-regression (implementer) and checkpoint-count (mechanical) added and running. 365/368.
 - model-context-regression: model input on the C04 fixture byte-identical on c76fd2f and a566241 (worker stopped, no commit). Asked the lead: live-folder capture, more runs, or golden test anyway.
 - TL-P4-07 addendum (50a99a1): Areas is model variance. model-context-regression becomes model-input-fingerprint (after placement-guidance); placement-guidance (implementer) running. 365/369.
+- checkpoint-count closed: the 8 was the timing counter (every run record timed as a checkpoint); real writes were 4. Non-checkpoint record writes are no longer labelled on the timing line. 366/369.
