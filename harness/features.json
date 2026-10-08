@@ -5114,7 +5114,7 @@
     "id": "home-reads-once",
     "task": "p4-b",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "Home reads each Drive file at most once per load, with a Home Drive-call golden.",
     "steps": [
       "Find the duplicate reads (likely questions() calling piles() again, and repeated media reads).",
