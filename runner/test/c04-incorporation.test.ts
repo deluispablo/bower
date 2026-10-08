@@ -13,6 +13,8 @@ import { listedPiles } from '../../src/data/spine/scripted';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { serializeNote } from '../../src/data/vault/note-format';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import type { AdmissionManifest } from '../../src/data/spine/admission';
+import type { RunManifest } from '../../src/data/spine/records';
 import { claudeProvider, type ClaudeCall, type ClaudeExit, type ClaudeSpawn } from '../src/claude';
 import { loadCorpus, score, type LoadedCase } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
@@ -230,5 +232,130 @@ describe('the C04 slice through the Claude provider (P4-3)', () => {
     expect(note?.[1]).toMatch(/^by: bower$/m);
     // The hub line it proposed, written by the runner on Bower's note with its source.
     expect(run.after['Areas/Home/Garden plot.md']).toMatch(/^- 2026-10-07 · .*18 October.* · \[\[.*ewsletter.*\]\]$/m);
+  });
+});
+
+/** Alex's folder with the garden newsletter in the inbox, Bower's plot note, and `extra` files (path to text). */
+async function gardenFolder(extra: Record<string, string> = {}, inbox: Record<string, Uint8Array> = {}): Promise<{ drive: FakeDrive; root: string; took: { taken: AdmissionManifest; deferred: [] } }> {
+  const drive = fixedDrive();
+  const root = (await drive.createFolder('root', 'Bower')).id;
+  const box = (await drive.createFolder(root, 'Inbox')).id;
+  const ids = new Map<string, string>();
+  const folder = async (path: string): Promise<string> => {
+    let parent = root;
+    let at = '';
+    for (const part of path.split('/').filter(Boolean)) {
+      at = at ? `${at}/${part}` : part;
+      const known = ids.get(at) ?? (await drive.createFolder(parent, part)).id;
+      ids.set(at, known);
+      parent = known;
+    }
+    return parent;
+  };
+  for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) await folder(name);
+  const sys = await folder(SYSTEM.dir);
+  await drive.createFolder(sys, 'changes');
+  await drive.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
+  const plot = serializeNote({ summary: 'Alex\'s plot.', properties: [], tags: [], currentState: [], body: '', timeline: [{ date: '2026-09-12', text: 'Planted garlic.', source: '' }], byBower: true });
+  await drive.createText(await folder('Areas/Home'), 'Garden plot.md', plot, { by: 'bower' });
+  for (const [path, text] of Object.entries(extra)) await drive.createText(await folder(path.split('/').slice(0, -1).join('/')), path.split('/').at(-1) ?? path, text);
+  const things = { 'Community garden newsletter, autumn.pdf': bytesOf('c04-garden-newsletter/inbox/Community garden newsletter, autumn.pdf'), ...inbox };
+  for (const [i, [name, bytes]] of Object.entries(things).entries()) await drive.upload(box, name, new Blob([bytes.slice()]), undefined, { pile: `p-${i + 1}` });
+  const admitted = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+  if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
+  return { drive, root, took: { taken: admitted.manifest, deferred: [] } };
+}
+
+/** Plans the garden folder from `intent` (with the newsletter's file id put in for NEWS), keeping the input. */
+async function planned(g: Awaited<ReturnType<typeof gardenFolder>>, intent: (news: string) => unknown, calls: ClaudeCall[] = []): Promise<RunManifest> {
+  const news = g.took.taken.piles.flatMap((p) => p.items).find((i) => i.name === 'Community garden newsletter, autumn.pdf')?.fileId ?? '';
+  const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope(intent(news)) });
+  return claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))(g.took);
+}
+
+const newsletter = (news: string, body: string, line: Record<string, unknown> | null = null): unknown => ({
+  kind: 'tidy-intent',
+  v: 1,
+  things: [{ fileId: news, to: 'Resources/Garden', name: 'Garden newsletter, autumn.pdf', note: { name: 'Garden newsletter, autumn.md', summary: 'The autumn newsletter.', body } }],
+  ...(line ? { lines: [{ note: 'Areas/Home/Garden plot.md', cites: news, ...line }] } : {}),
+});
+
+/** A one-font text PDF of `pages` pages, each with `lines` lines of made-up words. */
+function pdfOf(pages: number, lines: number): Uint8Array {
+  const objs: string[] = ['<< /Type /Catalog /Pages 2 0 R >>', '', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  const kids: string[] = [];
+  for (let p = 0; p < pages; p++) {
+    const text = Array.from({ length: lines }, (_, l) => `(Page ${p + 1} line ${l + 1}: made-up words about the garden plot and its fees.) Tj T*`).join('\n');
+    const stream = `BT\n/F1 9 Tf\n11 TL\n40 800 Td\n${text}\nET\n`;
+    objs.push(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`);
+    const content = objs.length;
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${content} 0 R >>`);
+    kids.push(`${objs.length} 0 R`);
+  }
+  objs[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages} >>`;
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objs.forEach((o, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
+
+describe('the C04 slice, review round (P4-3)', () => {
+  it('a model cite links the note the run actually made', async () => {
+    // Alex already has a note by the name the model asks for: the run's note gets a free name, and the line links it.
+    const g = await gardenFolder({ 'Resources/Garden/Garden newsletter, autumn.md': 'Alex\'s own notes on the newsletter.\n' });
+    const m = await planned(g, (news) => newsletter(news, 'Bulb planting on 18 October.', { text: 'Autumn newsletter filed.' }));
+    const made = m.operations.flatMap((o) => (o.effect.kind === 'create-text' && o.effect.name.endsWith('.md') && o.effect.text.includes('Bulb planting') ? [o.effect.name] : []));
+    expect(made).toHaveLength(1);
+    expect(made[0]).not.toBe('Garden newsletter, autumn.md');
+    const edit = m.operations.find((o) => o.effect.kind === 'edit-text');
+    const text = edit?.effect.kind === 'edit-text' ? edit.effect.text : '';
+    expect(text).toContain(`Autumn newsletter filed. · [[${(made[0] ?? '').replace(/\.md$/, '')}]]`);
+  });
+
+  it('the context reads no thing past its size and extracts no more than the run text budget', async () => {
+    const big = new Uint8Array(21 * 1024 * 1024).fill(0x61);
+    const g = await gardenFolder({}, { 'Huge notes.txt': big, 'Long report.pdf': pdfOf(40, 60) });
+    const ids = new Map(g.took.taken.piles.flatMap((p) => p.items).map((i) => [i.name, i.fileId]));
+    const read = fakeScripted(g.drive);
+    const bytesRead: string[] = [];
+    const counted: ScriptedRead = { ...read, readBytes: (id) => (bytesRead.push(id), read.readBytes(id)) };
+    const calls: ClaudeCall[] = [];
+    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, counted)(g.took)).rejects.toThrow();
+    const things = new Map(contextOf(calls[0]?.input ?? '').piles.flatMap((p) => p.things).map((t) => [t.name, t as ShownThing & { pagesNotRead?: number }]));
+    // Past the read limit by its listed size: never downloaded.
+    expect(bytesRead).not.toContain(ids.get('Huge notes.txt'));
+    expect(things.get('Huge notes.txt')).toMatchObject({ text: null });
+    expect(things.get('Huge notes.txt')?.why).toMatch(/too big/);
+    // A long PDF is read page by page only as far as its share of the budget, and says how many pages were not read.
+    const report = things.get('Long report.pdf');
+    expect(report?.text).toContain('Page 1 line 1:');
+    expect(report?.text?.replace(CUT, '').length).toBeLessThanOrEqual(PER_THING);
+    expect(report?.pagesNotRead).toBeGreaterThan(20);
+    expect(report?.text).toMatch(/pages not read/);
+  });
+
+  it('a note body or line that links outside what the model was shown is refused', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const refused: Array<[string, (news: string) => unknown]> = [
+      ['a body link to no note', (news) => newsletter(news, 'See [[Nowhere at all]].')],
+      ['a body web link the newsletter does not have', (news) => newsletter(news, 'Sign up at [the form](https://forms.example/sign-up).')],
+      ['a bare web address in a body', (news) => newsletter(news, 'More at https://garden.example/more.')],
+      ['a Markdown link in a line', (news) => newsletter(news, 'Dates inside.', { text: 'See [the dates](https://garden.example).' })],
+      ['a web address in a line', (news) => newsletter(news, 'Dates inside.', { text: 'More at www.garden.example today.' })],
+    ];
+    for (const [what, intent] of refused) await expect(planned(await gardenFolder(), intent), what).rejects.toThrow();
+    // Links to a note in the folder, or to the thing it files, pass; and the model is told the text is data.
+    const calls: ClaudeCall[] = [];
+    const m = await planned(await gardenFolder(), (news) => newsletter(news, 'About [[Garden plot]], from [[Garden newsletter, autumn.pdf]].', { text: 'Autumn newsletter filed.' }), calls);
+    expect(m.operations.some((o) => o.effect.kind === 'create-text' && o.effect.text.includes('[[Garden plot]]'))).toBe(true);
+    expect(calls[0]?.input).toMatch(/data, not instructions/);
   });
 });
