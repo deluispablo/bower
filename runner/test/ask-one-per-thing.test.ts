@@ -30,7 +30,7 @@ async function offerAndFlat(): Promise<LoadedCase> {
 const asking = (text: string): ClaudeSpawn => answering((id) => ({
   kind: 'tidy-intent',
   v: 1,
-  things: id('Payslip_Aug.pdf').startsWith('no ') ? [] : [{ fileId: id('Payslip_Aug.pdf'), to: 'Resources/Pay', name: 'Payslip August.pdf' }],
+  things: id('Payslip_Aug.pdf').startsWith('no ') ? [] : [{ fileId: id('Payslip_Aug.pdf'), to: 'Resources/Pay', name: 'Payslip August.pdf', note: { name: 'Payslip, August.md', summary: 'A payslip for August.', body: 'Payslip for August.' } }],
   asks: [{ fileId: id('IMG_2301.jpg'), text, yes: 'Yes', no: 'No' }],
 }));
 interface Open { id: string; text: string; subject?: string; hash?: string }
