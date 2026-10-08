@@ -232,3 +232,8 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - An uncited line that uses its thing's figure is refused.
   - 7.05 matches 7.5.
   - A retry usually recovers.
+- P4-11 fix-round minors:
+  - runner/src/claude.ts:555: "Cup final" and "Semi-final" are still refused (a retry recovers); PHOTO-0001 is no longer caught; "Offer (2) signed" passes.
+  - claude.ts:261: the prompt shows c04's raw input "Offer_letter_final".
+  - runner/src/corpus.ts:225: area globs are case-sensitive.
+  - claude.ts:291: things with the same name and kind keep the Drive listing order.
