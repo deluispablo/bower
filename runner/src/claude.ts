@@ -221,7 +221,7 @@ function promptInstructions(): string {
     '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
     ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
     ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId>"}],',
-    ' "asks":[{"pileId":"<a pile you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}]}',
+    ' "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}]}',
     `Every key but "things" is optional. A folder path starts with one of ${MAIN_FOLDERS.join(', ')}. A thing keeps its extension`,
     '(a saved link may become a ".md" note). "rules" below are the person\'s rules and win; a list that ends "[cut here: ..." goes on.',
     '',
@@ -235,9 +235,11 @@ function promptInstructions(): string {
     '   a rule line copied from "rules" or the path of a note below that shows the goal. A NEW folder under Areas needs',
     `   "basis" or "responsibility": one short phrase (at most ${RESPONSIBILITY_MAX} characters) naming the ongoing responsibility, such as`,
     '   "pay and tax records". The report shows the new folder and why. Without one Bower refuses the reply.',
-    '3. Ask: when where it goes is genuinely unclear, never guess. Leave the whole pile out of "things" and "notes" and add',
-    `   one plain yes-or-no question about it to "asks" (at most ${ASK.text} characters, no links, answers at most ${ASK.answer}).`,
-    '   The pile stays in the inbox untouched until the person answers. File everything else: the run never waits.',
+    '3. Ask: when where a thing goes is genuinely unclear, never guess. Leave it out of "things" and add one plain yes-or-no',
+    `   question about it to "asks" by its "fileId" (at most ${ASK.text} characters, no links, answers at most ${ASK.answer}). For a pile of`,
+    '   words only, or a pile unclear as a whole, give its "pileId" instead and leave the whole pile out of "things" and "notes".',
+    '   What is asked about stays in the inbox untouched, with the pile\'s words, until the person answers. File everything',
+    '   else, the rest of its pile too: the run never waits.',
     '',
     'What to write:',
     '- Value: a thing that only confirms what a note below already says makes no new note. File the thing beside that note',
@@ -406,7 +408,50 @@ const exactly = (value: unknown, keys: readonly string[], optional: readonly str
   !!value && typeof value === 'object' && !Array.isArray(value)
   && keys.every((k) => k in value) && Object.keys(value).every((k) => keys.includes(k) || optional.includes(k));
 
-type Intent = { ok: true; filing: Filing; held: Set<string> } | { ok: false; why: string; placement?: true };
+/**
+ * Every reason Bower refuses a model's reply, by kind (TL-P4-08 addendum 4). Each one asks the model once more with
+ * its reason (validate, then ask again with the error: Instructor, retrying,
+ * https://python.useinstructor.com/concepts/retrying/); a second refusal ends the run as C12 does.
+ */
+export const REFUSALS = {
+  notJson: 'a result that is not JSON',
+  noText: 'a result with no text',
+  notIntent: 'a reply that is not a tidy-up intent',
+  thingKeys: 'a thing with keys outside the intent',
+  thingNotAdmitted: 'a thing it was not admitted to take',
+  thingTwice: 'a thing placed twice',
+  placeOutside: 'a place outside the main folders',
+  nameChangesKind: 'a name that changes what a thing is',
+  newFolder: 'a new folder under Areas or Projects with no rule line or note cited',
+  noteForNote: 'a note for a thing filed as a note',
+  noteKeys: 'a note with keys outside the intent',
+  noteName: 'a note name that is not a note',
+  noteSummary: 'a note summary that is not one short line',
+  noteBody: 'a note body past its bound',
+  noteSections: "a note body with one of Bower's sections",
+  noteLink: 'a note link to nothing in the folder',
+  noteMdLink: 'a note link that is not in its thing',
+  noteWeb: 'a web address that is not in its thing',
+  pileNotAdmitted: 'a pile it was not admitted to take',
+  pileTwice: 'a pile placed twice',
+  tooManyLines: 'more Timeline lines than one reply may add',
+  lineKeys: 'a line with keys outside the intent',
+  lineNote: 'a line on a note it was not shown',
+  lineText: 'a Timeline line that is not one short line',
+  lineCites: 'a line citing a thing it does not file',
+  noNote: 'a thing with text and no note',
+  askKeys: 'a question with keys outside the intent: give it a "fileId" or a "pileId", not both',
+  askNotAdmitted: 'a question about a thing or pile it was not admitted to take',
+  askTwice: 'a thing or pile asked about twice',
+  askAlsoFiles: 'a question about a thing or pile it also files',
+  askText: 'a question that is not one short plain line',
+} as const;
+export type RefusalKind = keyof typeof REFUSALS;
+type Refused = { ok: false; kind: RefusalKind; why: string };
+/** A refusal of this kind, with its reason worded more closely when `why` is given. */
+const no = (kind: RefusalKind, why: string = REFUSALS[kind]): Refused => ({ ok: false, kind, why });
+
+type Intent = { ok: true; filing: Filing; held: Set<string> } | Refused;
 
 
 /** Bower's sections and front matter: a model's note body never carries one, so it cannot pass for Bower's own. */
@@ -421,13 +466,13 @@ const lineOk = (text: unknown, max: number): text is string =>
   typeof text === 'string' && text.trim() !== '' && text.length <= max && !/[\r\n\t]/.test(text) && !CONTROL.test(text) && !HIDDEN_CHARS.test(text);
 
 /** A thing's own note as the model wrote it, or why it is refused. */
-function authoredOf(n: unknown): AuthoredNote | string {
-  if (!exactly(n, ['name', 'summary', 'body'])) return 'a note with keys outside the intent';
-  if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return 'a note name that is not a note';
-  if (!lineOk(n.summary, AUTHORED.summary)) return 'a note summary that is not one short line';
+function authoredOf(n: unknown): AuthoredNote | RefusalKind {
+  if (!exactly(n, ['name', 'summary', 'body'])) return 'noteKeys';
+  if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return 'noteName';
+  if (!lineOk(n.summary, AUTHORED.summary)) return 'noteSummary';
   const body = typeof n.body === 'string' ? n.body.replace(/\r\n?/g, '\n') : null;
-  if (body === null || body.length > AUTHORED.body || CONTROL.test(body) || HIDDEN_CHARS.test(body)) return 'a note body past its bound';
-  if (OWN_SECTION.test(body)) return "a note body with one of Bower's sections";
+  if (body === null || body.length > AUTHORED.body || CONTROL.test(body) || HIDDEN_CHARS.test(body)) return 'noteBody';
+  if (OWN_SECTION.test(body)) return 'noteSections';
   return { name: n.name, summary: n.summary.trim(), body: body.trim() };
 }
 
@@ -457,10 +502,10 @@ const WEB = /\b(?:https?:\/\/|www\.)[^\s<>()[\]]+/gi;
  * Why a model's note body links outside what it was shown, or null: each [[link]] names a file or note of the folder,
  * or one the reply files or writes; each Markdown link and web address is one its thing's own text has.
  */
-function bodyLinks(body: string, ownText: string, named: (target: string) => boolean): string | null {
-  for (const m of body.matchAll(WIKI_LINK)) if (!named((m[1] ?? '').trim())) return 'a note link to nothing in the folder';
-  for (const m of body.matchAll(MD_LINK)) if (!(m[1] ?? '') || !ownText.includes(m[1] ?? '')) return 'a note link that is not in its thing';
-  for (const m of body.matchAll(WEB)) if (!ownText.includes(m[0].replace(/[.,;:!?'"]+$/, ''))) return 'a web address that is not in its thing';
+function bodyLinks(body: string, ownText: string, named: (target: string) => boolean): RefusalKind | null {
+  for (const m of body.matchAll(WIKI_LINK)) if (!named((m[1] ?? '').trim())) return 'noteLink';
+  for (const m of body.matchAll(MD_LINK)) if (!(m[1] ?? '') || !ownText.includes(m[1] ?? '')) return 'noteMdLink';
+  for (const m of body.matchAll(WEB)) if (!ownText.includes(m[0].replace(/[.,;:!?'"]+$/, ''))) return 'noteWeb';
   return null;
 }
 
@@ -508,80 +553,90 @@ const RESPONSIBILITY_MAX = 60;
 
 export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
   const { notes } = seen;
-  if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines', 'asks']) || value.kind !== 'tidy-intent' || value.v !== 1) return { ok: false, why: 'a reply that is not a tidy-up intent' };
+  if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines', 'asks']) || value.kind !== 'tidy-intent' || value.v !== 1) return no('notIntent');
   const { things, notes: worded = [], lines = [], asks = [] } = value;
-  if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines) || !Array.isArray(asks)) return { ok: false, why: 'a reply that is not a tidy-up intent' };
+  if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines) || !Array.isArray(asks)) return no('notIntent');
   const piles = new Map(took.taken.piles.map((p) => [p.pileId, p]));
   const admitted = new Map(took.taken.piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
   const areas = new Map<string, string>();
   const placed = new Map<string, Placement>();
   const authored = new Map<string, AuthoredNote>();
   for (const t of things as unknown[]) {
-    if (!exactly(t, ['fileId', 'to', 'name'], ['note', 'basis', 'responsibility'])) return { ok: false, why: 'a thing with keys outside the intent' };
+    if (!exactly(t, ['fileId', 'to', 'name'], ['note', 'basis', 'responsibility'])) return no('thingKeys');
     const thing = typeof t.fileId === 'string' ? admitted.get(t.fileId) : undefined;
-    if (!thing || typeof t.fileId !== 'string') return { ok: false, why: 'a thing it was not admitted to take' };
-    if (placed.has(t.fileId)) return { ok: false, why: 'a thing placed twice' };
-    if (!placeOk(t.to)) return { ok: false, why: 'a place outside the main folders' };
+    if (!thing || typeof t.fileId !== 'string') return no('thingNotAdmitted');
+    if (placed.has(t.fileId)) return no('thingTwice');
+    if (!placeOk(t.to)) return no('placeOutside');
     const was = extensionOf(thing.name);
-    if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return { ok: false, why: 'a name that changes what a thing is' };
+    if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return no('nameChangesKind');
     const fresh = newPlace(t.to, t.basis, t.responsibility, seen, areas);
-    if (fresh) return { ok: false, why: fresh, placement: true };
+    if (fresh) return no('newFolder', fresh);
     placed.set(t.fileId, { to: t.to, name: t.name });
     if ('note' in t) {
       // A saved link filed as a note is that note: it takes no second one.
-      if (extensionOf(t.name) === '.md') return { ok: false, why: 'a note for a thing filed as a note' };
+      if (extensionOf(t.name) === '.md') return no('noteForNote');
       const note = authoredOf(t.note);
-      if (typeof note === 'string') return { ok: false, why: note };
+      if (typeof note === 'string') return no(note);
       authored.set(t.fileId, note);
     }
   }
   const words = new Map<string, Placement>();
   for (const n of worded as unknown[]) {
-    if (!exactly(n, ['pileId', 'to', 'name'], ['basis', 'responsibility'])) return { ok: false, why: 'a note with keys outside the intent' };
-    if (typeof n.pileId !== 'string' || !piles.has(n.pileId)) return { ok: false, why: 'a pile it was not admitted to take' };
-    if (words.has(n.pileId)) return { ok: false, why: 'a pile placed twice' };
-    if (!placeOk(n.to)) return { ok: false, why: 'a place outside the main folders' };
-    if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return { ok: false, why: 'a note name that is not a note' };
+    if (!exactly(n, ['pileId', 'to', 'name'], ['basis', 'responsibility'])) return no('noteKeys');
+    if (typeof n.pileId !== 'string' || !piles.has(n.pileId)) return no('pileNotAdmitted');
+    if (words.has(n.pileId)) return no('pileTwice');
+    if (!placeOk(n.to)) return no('placeOutside');
+    if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return no('noteName');
     const fresh = newPlace(n.to, n.basis, n.responsibility, seen, areas);
-    if (fresh) return { ok: false, why: fresh, placement: true };
+    if (fresh) return no('newFolder', fresh);
     words.set(n.pileId, { to: n.to, name: n.name });
   }
-  if (lines.length > AUTHORED.lines) return { ok: false, why: 'more Timeline lines than one reply may add' };
+  if (lines.length > AUTHORED.lines) return no('tooManyLines');
   const timeline: AuthoredLine[] = [];
   for (const l of lines as unknown[]) {
-    if (!exactly(l, ['note', 'text'], ['cites'])) return { ok: false, why: 'a line with keys outside the intent' };
-    if (typeof l.note !== 'string' || !notes.has(l.note)) return { ok: false, why: 'a line on a note it was not shown' };
-    if (!lineOk(l.text, AUTHORED.line) || /\[\[|\]\]|·|\]\(/.test(l.text) || new RegExp(WEB.source, 'i').test(l.text)) return { ok: false, why: 'a Timeline line that is not one short line' };
-    if ('cites' in l && (typeof l.cites !== 'string' || !placed.has(l.cites))) return { ok: false, why: 'a line citing a thing it does not file' };
+    if (!exactly(l, ['note', 'text'], ['cites'])) return no('lineKeys');
+    if (typeof l.note !== 'string' || !notes.has(l.note)) return no('lineNote');
+    if (!lineOk(l.text, AUTHORED.line) || /\[\[|\]\]|·|\]\(/.test(l.text) || new RegExp(WEB.source, 'i').test(l.text)) return no('lineText');
+    if ('cites' in l && (typeof l.cites !== 'string' || !placed.has(l.cites))) return no('lineCites');
     timeline.push({ path: l.note, text: l.text.trim(), cites: typeof l.cites === 'string' ? l.cites : null });
   }
   // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
   const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
   for (const [id, place] of placed) {
     if (!seen.texts?.has(id) || authored.has(id) || cited.has(id) || ['.md', '.url'].includes(extensionOf(place.name))) continue;
-    return { ok: false, why: `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`, placement: true };
+    return no('noNote', `a thing with text and no note: "${place.name}" needs a "note", or a Timeline line citing it on a note below that it only confirms`);
   }
-  // A question about a pile it does not file: the pile stays in the inbox untouched (TL-P4-08 point 1).
+  // A question about one thing, or a whole pile, it does not file: what is asked about stays in the inbox untouched,
+  // with the pile's words, and the rest of the pile is filed (TL-P4-08 point 1, addendum 4). A loose thing is its pile.
   const asked = new Map<string, Ask>();
+  const askedThings = new Map<string, Ask>();
   const plain = (text: unknown, max: number): text is string => lineOk(text, max) && !/\[\[|\]\]|\]\(/.test(text) && !new RegExp(WEB.source, 'i').test(text);
   for (const a of asks as unknown[]) {
-    if (!exactly(a, ['pileId', 'text', 'yes', 'no'])) return { ok: false, why: 'a question with keys outside the intent' };
-    const pile = typeof a.pileId === 'string' ? piles.get(a.pileId) : undefined;
-    if (!pile) return { ok: false, why: 'a question about a pile it was not admitted to take' };
-    if (asked.has(pile.pileId)) return { ok: false, why: 'a pile asked about twice' };
-    if (words.has(pile.pileId) || thingsOf(pile).some((i) => placed.has(i.fileId))) return { ok: false, why: 'a question about a pile it also files' };
-    if (!plain(a.text, ASK.text) || !plain(a.yes, ASK.answer) || !plain(a.no, ASK.answer)) return { ok: false, why: 'a question that is not one short plain line' };
-    asked.set(pile.pileId, { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() });
+    if (!exactly(a, ['text', 'yes', 'no'], ['pileId', 'fileId']) || ('pileId' in a) === ('fileId' in a)) return no('askKeys');
+    const thing = typeof a.fileId === 'string' ? admitted.get(a.fileId) : undefined;
+    const pile = piles.get(thing ? thing.pileId : typeof a.pileId === 'string' ? a.pileId : '');
+    if (!pile) return no('askNotAdmitted');
+    const whole = !thing || !pile.anchor;
+    const fileId = typeof a.fileId === 'string' ? a.fileId : '';
+    if (asked.has(pile.pileId) || (whole ? thingsOf(pile).some((i) => askedThings.has(i.fileId)) : askedThings.has(fileId))) return no('askTwice');
+    if (whole ? words.has(pile.pileId) || thingsOf(pile).some((i) => placed.has(i.fileId)) : placed.has(fileId)) {
+      return no('askAlsoFiles', !thing && pile.anchor
+        ? 'a question about a pile it also files: to ask about one thing of a pile, give that thing\'s "fileId" and file the rest'
+        : REFUSALS.askAlsoFiles);
+    }
+    if (!plain(a.text, ASK.text) || !plain(a.yes, ASK.answer) || !plain(a.no, ASK.answer)) return no('askText');
+    (whole ? asked : askedThings).set(whole ? pile.pileId : fileId, { text: a.text.trim(), yes: a.yes.trim(), no: a.no.trim() });
   }
-  const held = new Set(took.taken.piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId))).map((p) => p.pileId));
+  // A pile with a thing neither placed nor asked about waits whole for the next run.
+  const held = new Set(took.taken.piles.filter((p) => thingsOf(p).some((i) => !placed.has(i.fileId) && !askedThings.has(i.fileId))).map((p) => p.pileId));
   // Links in each note body: only to what is in the folder or what this reply files or writes (P4-3 review).
   const made = new Set([...placed.values(), ...words.values()].flatMap((p) => [p.name, `${p.to}/${p.name}`]).concat([...authored.entries()].flatMap(([id, n]) => [n.name, `${placed.get(id)?.to ?? ''}/${n.name}`])));
   const named = (target: string): boolean => [target, `${target}.md`].some((t) => made.has(t) || (seen.names?.has(t) ?? false));
   for (const [id, n] of authored) {
     const why = bodyLinks(n.body, seen.texts?.get(id) ?? '', named);
-    if (why) return { ok: false, why };
+    if (why) return no(why);
   }
-  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, areas, asks: asked } };
+  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, areas, asks: asked, thingAsks: askedThings } };
 }
 
 /** The runner's environment cut down to the allow-list, with a home of the run's own. */
@@ -631,27 +686,28 @@ export const spawnClaude: ClaudeSpawn = (call) =>
     child.stdin.end(call.input);
   });
 
-type Read = { ok: true; value: unknown } | { ok: false; why: string };
+/** The reply's JSON, or why there is none: a refusal of the model's answer (asked once more), or a run that went wrong. */
+type Read = { ok: true; value: unknown } | Refused | { ok: false; kind: null; why: string };
 
 /** The manifest JSON out of `claude -p --output-format json`'s result, or why there is none. */
 function replyOf(exit: ClaudeExit, maxTurns: number): Read {
-  if (exit.cut) return { ok: false, why: `stopped at its ${exit.cut} cap` };
+  if (exit.cut) return { ok: false, kind: null, why: `stopped at its ${exit.cut} cap` };
   let envelope: unknown;
   try {
     envelope = JSON.parse(exit.stdout);
   } catch {
-    return { ok: false, why: `exit ${exit.code}, no JSON result` };
+    return { ok: false, kind: null, why: `exit ${exit.code}, no JSON result` };
   }
-  if (!envelope || typeof envelope !== 'object' || (envelope as { type?: unknown }).type !== 'result') return { ok: false, why: `exit ${exit.code}, not a result` };
+  if (!envelope || typeof envelope !== 'object' || (envelope as { type?: unknown }).type !== 'result') return { ok: false, kind: null, why: `exit ${exit.code}, not a result` };
   const { subtype, is_error: isError, num_turns: turns, result } = envelope as Record<string, unknown>;
-  if (subtype === 'error_max_turns' || (typeof turns === 'number' && turns > maxTurns)) return { ok: false, why: `over its turn cap of ${maxTurns}` };
-  if (subtype !== 'success' || isError !== false || exit.code !== 0) return { ok: false, why: `an error result (${String(subtype)}, exit ${exit.code})` };
-  if (typeof result !== 'string') return { ok: false, why: 'a result with no text' };
+  if (subtype === 'error_max_turns' || (typeof turns === 'number' && turns > maxTurns)) return { ok: false, kind: null, why: `over its turn cap of ${maxTurns}` };
+  if (subtype !== 'success' || isError !== false || exit.code !== 0) return { ok: false, kind: null, why: `an error result (${String(subtype)}, exit ${exit.code})` };
+  if (typeof result !== 'string') return no('noText');
   const text = result.trim().replace(/^```(?:json)?\n([\s\S]*)\n```$/, '$1');
   try {
     return { ok: true, value: JSON.parse(text) };
   } catch {
-    return { ok: false, why: 'a result that is not JSON' };
+    return no('notJson');
   }
 }
 
@@ -676,7 +732,7 @@ function statsOf(stdout: string): ModelStats | null {
   };
 }
 
-/** What the model is told when its reply was refused for where it files: the reason, then the same task again. */
+/** What the model is told when its reply was refused: the reason, then the same task again. */
 const retryNote = (why: string): string => `Your reply was refused: ${why}. Reply again with the whole JSON object, changed so it passes.`;
 
 /** The input with the retry note put before its last line, the context, which stays last. */
@@ -741,20 +797,21 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     }
     const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => (t.text === null ? [] : [[t.fileId, t.text] as const]))));
     const seen: Seen = { notes: new Set(shown.notes.map((n) => n.path)), names: shown.names ?? new Set(), texts, folders: new Set(shown.folders), ...(shown.rules ? { rules: shown.rules } : {}) };
-    // One reply read and checked; a placement refusal asks the model once more, telling it why. A second one ends the run.
-    const check = (done: ClaudeExit): { ok: true; intent: Extract<Intent, { ok: true }> } | { ok: false; why: string; placement: boolean } => {
+    // One reply read and checked. Every refusal of the reply asks the model once more, telling it why (TL-P4-08
+    // addendum 4); a second one ends the run. A run that went wrong (a cap, an error result) ends it at once.
+    const check = (done: ClaudeExit): { ok: true; intent: Extract<Intent, { ok: true }> } | Refused => {
       const stats = statsOf(done.stdout);
       if (setup.timing && stats) setup.timing.model = stats;
       const reply = replyOf(done, maxTurns);
-      if (!reply.ok) return refuse(reply.why, done.stderr);
+      if (!reply.ok) return reply.kind === null ? refuse(reply.why, done.stderr) : reply;
       const got = intentOf(reply.value, took, seen);
-      return got.ok ? { ok: true, intent: got } : { ok: false, why: got.why, placement: got.placement === true };
+      return got.ok ? { ok: true, intent: got } : got;
     };
     let checked: ReturnType<typeof check>;
     try {
       checked = check(exit);
-      if (!checked.ok && checked.placement) {
-        console.error(`The Claude provider's plan for run ${run.runId} was refused: ${checked.why}; asking once more.`);
+      if (!checked.ok) {
+        console.error(`The Claude provider's plan for run ${run.runId} was refused (${checked.kind}): ${checked.why}; asking once more.`);
         // The retry runs in the same folder and home, so they stay until it ends.
         try {
           checked = check(await asked(checked.why));
@@ -766,7 +823,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     } finally {
       await rm(work, { recursive: true, force: true });
     }
-    if (!checked.ok) return refuse(checked.why);
+    if (!checked.ok) return refuse(`${checked.why} (${checked.kind}, after one retry)`);
     const intent = checked.intent;
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     const t = took.taken;

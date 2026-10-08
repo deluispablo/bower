@@ -69,7 +69,8 @@ describe('model input fingerprint', () => {
     const calls: ClaudeCall[] = [];
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
-    expect(calls).toHaveLength(1);
+    // The reply is refused and asked once more (TL-P4-08 addendum 4); the first call carries the input as prepared.
+    expect(calls).toHaveLength(2);
 
     // Normalize the input using the shared function
     const input = calls[0]?.input ?? '';

@@ -106,14 +106,15 @@ export type ItemDisposition = { fileId: string; pileId: string | null; dispositi
  * thing is filed when its filing move was applied, and set aside otherwise: it stays in the inbox, untouched. What
  * else is in a captured pile (its pile note) goes with its pile: filed when every thing in it was filed and the note
  * written from its words (a pile of words only) was made, so a pile written into a new note is filed as its report
- * says. A journal line the run read is filed when its archive move was applied, and set aside (left in
+ * says. What a captured pile leaves out of its capture (a thing asked about, and the pile note kept beside it, TL-P4-08
+ * addendum 4) stays where it is and waits. A journal line the run read is filed when its archive move was applied, and set aside (left in
  * `.bower/changes`) otherwise; one it did not read waits.
  */
 export function itemDispositions(admission: AdmissionManifest, manifest: RunManifest, outcomes: readonly Outcome[]): ItemDisposition[] {
   const applied = new Set(outcomes.filter((o) => o.state === 'applied').map((o) => o.operationId));
   const filed = new Set(manifest.operations.flatMap((o) => (o.effect.kind === 'move' && filingMove(manifest, o) && applied.has(o.operationId) ? [o.effect.before.fileId] : [])));
   const members = new Map(manifest.capture.members.map((m) => [m.file.fileId, m.pileId]));
-  const captured = new Set(manifest.capture.piles.map((p) => p.pileId));
+  const captured = new Map(manifest.capture.piles.map((p) => [p.pileId, new Set(p.childFileIds)]));
   const whole = (pileId: string): boolean => {
     const things = manifest.capture.members.filter((m) => m.pileId === pileId);
     const notes = wordsNotes(manifest, pileId);
@@ -127,7 +128,7 @@ export function itemDispositions(admission: AdmissionManifest, manifest: RunMani
       done.add(item.fileId);
       const disposition: ItemDisposition['disposition'] = members.has(item.fileId)
         ? (filed.has(item.fileId) ? 'filed' : 'set-aside')
-        : captured.has(pile.pileId) ? (whole(pile.pileId) ? 'filed' : 'set-aside') : 'waiting';
+        : captured.get(pile.pileId)?.has(item.fileId) ? (whole(pile.pileId) ? 'filed' : 'set-aside') : 'waiting';
       out.push({ fileId: item.fileId, pileId: pile.pileId, disposition });
     }
   }
