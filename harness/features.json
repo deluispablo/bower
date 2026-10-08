@@ -5016,7 +5016,7 @@
     "id": "things-normalised",
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "The things section of the model input carries a per-run value (live, its hash changed on every garden run while the others stayed). Found and normalised in the fingerprint, or dropped from the input if the model does not need it.",
     "steps": [
       "Find the per-run value in shown piles.",

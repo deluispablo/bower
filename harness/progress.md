@@ -151,3 +151,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c04-prompt-fixes passes — numbers grounded in the sources (refuse and retry); raw names (underscore, (2), final, camera ids) refused with a retry; the kinds table describes areas; offer-and-flat rubric per addendum 5, logged
 - 2026-10-08: things-normalised passes — round 2: the things section hash sorts things within a pile (Drive listing order varied); multi-thing and link piles hash alike on fresh runs
 - 2026-10-08: c04-prompt-fixes passes — P4-11 fix round: made-up naming examples (no corpus answers), raw-name false positives fixed, money globs tightened, things sorted in prepared()
+- 2026-10-08: things-normalised passes — P4-11 fix round: made-up naming examples (no corpus answers), raw-name false positives fixed, money globs tightened, things sorted in prepared()
