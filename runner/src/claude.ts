@@ -676,7 +676,7 @@ function forms(token: string): string[] {
   return [...alt, ...(/^\d+,\d{1,2}$/.test(token) ? [token.replace(',', '.')] : []), token].map(ZEROS);
 }
 /** Every number a source holds, in every form it may be written as; the parts of a date or a time count on their own. */
-function groundsOf(source: string): Set<string> {
+export function groundsOf(source: string): Set<string> {
   const plain = source.replace(/\[cut here:[^\]]*\]|\[\d+ pages not read\]/g, ' ');
   const out = new Set<string>();
   for (const [token] of plain.matchAll(NUMBER)) {
@@ -687,7 +687,7 @@ function groundsOf(source: string): Set<string> {
   return out;
 }
 /** The first number of `text` that `ground` does not hold, or null. */
-function ungrounded(text: string, ground: ReadonlySet<string>): string | null {
+export function ungrounded(text: string, ground: ReadonlySet<string>): string | null {
   const figures = text
     .replace(/\[\[[^\]]*\]\]/g, ' ')
     .replace(/\]\([^)]*\)/g, ' ')
