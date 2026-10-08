@@ -17,6 +17,7 @@ import { parseNote } from './note-format';
 import { parseOwnership, type ByteSpan, type OwnershipFailure } from './ownership-format';
 import { parseRules } from './rules-format';
 import type { Change, EditEntry, EditText, Rename, RuleAdd, RuleRemove } from './run-manifest';
+import { notAsSeen } from './still-as-seen';
 
 /** Files larger than 1 MiB are never edited (TL-P2-20 rule 6). */
 export const EDIT_FILE_LIMIT = 1024 * 1024;
@@ -832,9 +833,9 @@ export async function recheckEdit(effect: EditText, bytes: Uint8Array): Promise<
 /** Rule 5: after a lost reply, the same file not in the Bin reads as `text` (applied), as before, or as other. */
 export async function readBackEdit(effect: EditText, observed: Observed): Promise<ReadBack> {
   const { before } = effect;
-  const same = !observed.trashed && observed.fileId === before.fileId && observed.name === before.name
-    && observed.parents.length === before.parents.length && observed.parents.every((parent, i) => parent === before.parents[i]);
-  if (!same) return 'unresolved';
+  // The same file by the name and place it was read with (`notAsSeen`, the one check), out of the Bin.
+  const now = { id: observed.fileId, name: observed.name, parents: observed.parents, modifiedTime: '', trashed: observed.trashed };
+  if (notAsSeen({ id: before.fileId, name: before.name, parents: before.parents }, now) !== null) return 'unresolved';
   const text = encoder.encode(effect.text);
   if (observed.bytes.length === text.length && observed.bytes.every((byte, i) => byte === text[i])) return 'applied';
   if (observed.bytes.byteLength === effect.beforeContent.size && await digest(observed.bytes) === effect.beforeContent.sha256) return 'possible-effect';

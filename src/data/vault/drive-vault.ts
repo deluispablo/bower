@@ -41,6 +41,7 @@ import { parseRules } from './rules-format';
 import { isSeen, markSeen } from './seen';
 import { VaultIndex } from './vault-index';
 import { NOT_SENT_TEXT, PERSIST_REFUSED_TEXT, UNREADABLE_TEXT, stoppedText, type QueueItem, type UploadQueue } from '../upload-queue';
+import { notAsSeen, notAsSeenError, type SeenExpectation } from '../contracts/still-as-seen';
 
 export interface DriveVaultOptions {
   driveLinks?: boolean;
@@ -74,6 +75,8 @@ export const NOT_THE_SAME_TEXT = {
   link: "That isn't the same link. Paste the link you added before.",
 } as const;
 
+/** A file by the name and place it was listed with: what a move or a rename must still find. */
+const seenPlace = (f: DriveFile): SeenExpectation => ({ id: f.id, name: f.name, parents: f.parents });
 const where = (folder: string): string => folder.replaceAll('/', ' / ') || 'your Bower folder';
 const inInbox = (path: string): boolean => path === 'Inbox' || path.startsWith('Inbox/');
 
@@ -1691,13 +1694,12 @@ export class DriveVault implements VaultSource {
     for (const id of ids) await this.queued?.queue.discard(id);
   }
 
-  /** Refuses to change a file that changed name or place elsewhere since the folder was listed. */
+  /** Refuses to change a file that changed name or place elsewhere since the folder was listed (`notAsSeen`, the one check). */
   protected async stillAsSeen(f: DriveFile): Promise<void> {
-    const now = await this.drive.get(f.id);
-    if (now.name !== f.name || now.parents[0] !== f.parents[0]) {
-      void this.refresh();
-      throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
-    }
+    const reason = notAsSeen(seenPlace(f), { ...(await this.drive.get(f.id)), trashed: false });
+    if (reason === null) return;
+    void this.refresh();
+    throw notAsSeenError(reason, 'This changed somewhere else. Look again and try once more.');
   }
 
   /**
@@ -1721,7 +1723,7 @@ export class DriveVault implements VaultSource {
         throw new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
       }
       if (intended) return now;
-      if (now.name === f.name && now.parents[0] === f.parents[0] && (!text || now.modifiedTime === f.modifiedTime)) throw e;
+      if (notAsSeen({ ...seenPlace(f), ...(text ? { modifiedTime: f.modifiedTime } : {}) }, { ...now, trashed: false }) === null) throw e;
       void this.refresh();
       throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
     }

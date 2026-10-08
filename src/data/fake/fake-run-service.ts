@@ -25,6 +25,7 @@ import { readBackEdit, recheckEdit, savedLinkKey } from '../contracts/note-edit'
 import type { EditText, OperationV2, SeenFile } from '../contracts/run-manifest';
 import { PHASE_MS, type TimeScale } from '../demo/scenario';
 import { BowerError, type RunReport } from '../types';
+import { notAsSeen, notAsSeenError, notAsSeenReason, type SeenExpectation, type StoredNow } from '../contracts/still-as-seen';
 import { SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import type { RunWire } from '../worker/worker-api';
 import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, SOURCE_NOT_AS_SEEN, textHash, toEvidence, type RunManifest } from './fake-run-records';
@@ -136,12 +137,12 @@ const NAME_TAKEN = 'Something else has that name there, so Bower left it as it w
 /** Attempts in a row before this instance stops retrying a run that keeps failing; it stays saving. */
 const MAX_TRIES = 5;
 
-/** A source no longer as the plan saw it, found inside the boundary before anything was sent. */
-class NotAsSeen extends BowerError {
-  constructor(readonly failure: { code: 'conflict' | 'not-found'; message: string }) {
-    super(failure.code, failure.message);
-  }
-}
+const NO_FOLDER = 'The folder for it could not be made.';
+const ARRIVED = 'Something new arrived in it, so it stays in your inbox.';
+const LIST_CHANGED = "Bower's list of your files changed meanwhile.";
+
+/** A file as the boundary sees it, for the one still-as-seen check. */
+const storedNow = (peeked: ReturnType<Peek>): StoredNow | null => peeked && { ...peeked.file, trashed: peeked.trashed, children: peeked.children };
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 const keyOf = (b: Binding): string => `${b.account}:${b.rootId}`;
@@ -507,7 +508,7 @@ export class FakeRunService {
       await this.dispatch(attempt, head, op, dispatchId, pre.modifiedTime, reused);
     } catch (e) {
       // Refused inside the boundary before it passed: nothing was sent, so the outcome is an honest rejection.
-      if (e instanceof NotAsSeen) return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'rejected', failure: e.failure });
+      if (notAsSeenReason(e) !== null && e instanceof BowerError) return this.resolve(attempt, head, op, { operationId: op.operationId, state: 'rejected', failure: { code: e.code, message: e.message } });
       throw e;
     }
     const seen = await this.observe(head, op);
@@ -594,11 +595,11 @@ export class FakeRunService {
     const e = op.effect;
     // What it depends on must have happened: a pile folder whose things did not all go stays, and so do the hashes.
     if (op.dependsOn.some((id) => head.outcomes.find((o) => o.operationId === id)?.state !== 'applied')) return { failure: { code: 'conflict', message: 'Some of its things stayed where they were, so it stays too.' } };
-    if (e.kind !== 'bin' && e.kind !== 'write-runner-json' && e.kind !== 'edit-text' && !this.parentOf(head, op)) return { failure: { code: 'not-found', message: 'The folder for it could not be made.' } };
+    if (e.kind !== 'bin' && e.kind !== 'write-runner-json' && e.kind !== 'edit-text' && !this.parentOf(head, op)) return { failure: { code: 'not-found', message: NO_FOLDER } };
     if (e.kind === 'edit-text') return this.precheckEdit(e);
     if (e.kind !== 'write-runner-json') return { modifiedTime: null };
     const ev = await this.drive.evidence(e.before.fileId);
-    if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { failure: { code: 'conflict', message: 'Bower\'s list of your files changed meanwhile.' } };
+    if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { failure: { code: 'conflict', message: LIST_CHANGED } };
     return { modifiedTime: ev.file.modifiedTime };
   }
 
@@ -613,40 +614,48 @@ export class FakeRunService {
    */
   private async precheckEdit(e: EditText): Promise<{ failure: { code: 'conflict' | 'not-found'; message: string } } | { modifiedTime: string }> {
     const ev = await this.drive.evidence(e.before.fileId);
-    const same = !!ev && !ev.trashed && ev.file.name === e.before.name && ev.file.parents.length === e.before.parents.length && ev.file.parents.every((p, i) => p === e.before.parents[i]);
-    if (!ev || !same) return { failure: { code: 'conflict', message: NOT_AS_SEEN } };
+    if (!ev || notAsSeen({ id: e.before.fileId, name: e.before.name, parents: e.before.parents }, { ...ev.file, trashed: ev.trashed }) !== null) return { failure: { code: 'conflict', message: NOT_AS_SEEN } };
     if (ev.content?.size !== e.beforeContent.size || ev.content.sha256 !== e.beforeContent.sha256) return { failure: { code: 'conflict', message: NOTE_CHANGED } };
     if ((await recheckEdit(e, await this.drive.readBytes(e.before.fileId))) !== 'ok') return { failure: { code: 'conflict', message: NOTE_CHANGED } };
     return { modifiedTime: ev.file.modifiedTime };
   }
 
-  /** Whether the stored source is still as the plan saw it, at the instant of the change; null when it is. */
-  private stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek, reused: Reused | null): { code: 'conflict' | 'not-found'; message: string } | null {
+  /**
+   * Whether the stored source is still as the plan saw it, at the instant of the change (`notAsSeen`, the one check):
+   * the refusal, or null when it is.
+   */
+  private stillAsSeen(op: OperationV2, parentId: string, modifiedTime: string | null, peek: Peek, reused: Reused | null): BowerError | null {
     const e = op.effect;
     if (e.kind === 'create-folder' || e.kind === 'move' || e.kind === 'create-text') {
       const parent = peek(parentId);
-      if (!parent || parent.trashed) return { code: 'not-found', message: 'The folder for it could not be made.' };
+      if (!parent || parent.trashed) return notAsSeenError('gone', NO_FOLDER, 'not-found');
       if (e.kind === 'create-folder') return null;
       // Any file or folder already at a made file's path is a lookalike, never overwritten (TL-P2-17).
       if (e.kind === 'create-text') {
         const taken = parent.children.some((id) => peek(id)?.file.name.toLowerCase() === e.name.toLowerCase());
-        return taken ? { code: 'conflict', message: e.purpose === 'generated' ? NOTE_THERE : NAME_TAKEN } : null;
+        return taken ? notAsSeenError('children', e.purpose === 'generated' ? NOTE_THERE : NAME_TAKEN) : null;
       }
     }
     if (reused) {
       // The note it is filed beside: still where and as it was captured, and still the note for this very link.
       const note = peek(reused.file.fileId);
-      const there = !!note && !note.trashed && note.file.name === reused.file.name && note.file.parents.length === reused.file.parents.length
-        && note.file.parents.every((p, i) => p === reused.file.parents[i]) && note.file.appProperties?.bowerItem === reused.key;
-      if (!there) return { code: 'conflict', message: NOTE_NOT_AS_SEEN };
+      const why = notAsSeen({ id: reused.file.fileId, name: reused.file.name, parents: reused.file.parents }, storedNow(note))
+        ?? (note?.file.appProperties?.bowerItem === reused.key ? null : 'id');
+      if (why) return notAsSeenError(why, NOTE_NOT_AS_SEEN);
     }
-    const now = peek(e.before.fileId);
-    const same = !!now && !now.trashed && now.file.name === e.before.name && now.file.parents.length === e.before.parents.length && now.file.parents.every((p, i) => p === e.before.parents[i]);
-    if (!now || !same) return { code: 'conflict', message: NOT_AS_SEEN };
-    if (e.kind === 'bin' && now.children.some((id) => !e.capturedChildIds.includes(id))) return { code: 'conflict', message: 'Something new arrived in it, so it stays in your inbox.' };
-    if (e.kind === 'write-runner-json' && now.file.modifiedTime !== modifiedTime) return { code: 'conflict', message: 'Bower\'s list of your files changed meanwhile.' };
-    if (e.kind === 'edit-text' && now.file.modifiedTime !== modifiedTime) return { code: 'conflict', message: NOTE_CHANGED };
-    return null;
+    // A move or a Bin by the name and place it read; a content write with the modifiedTime its precheck read too.
+    const content = e.kind === 'write-runner-json' || e.kind === 'edit-text';
+    const seen: SeenExpectation = {
+      id: e.before.fileId,
+      name: e.before.name,
+      parents: e.before.parents,
+      ...(content ? { modifiedTime: modifiedTime ?? '' } : {}),
+      ...(e.kind === 'bin' ? { children: e.capturedChildIds } : {}),
+    };
+    const why = notAsSeen(seen, storedNow(peek(e.before.fileId)));
+    if (!why) return null;
+    const message = why === 'children' ? ARRIVED : why !== 'modified' ? NOT_AS_SEEN : e.kind === 'write-runner-json' ? LIST_CHANGED : NOTE_CHANGED;
+    return notAsSeenError(why, message);
   }
 
   /**
@@ -660,8 +669,8 @@ export class FakeRunService {
     const parentId = this.parentOf(head, op) ?? '';
     const w = this.drive.fenced((peek) => {
       this.check(attempt);
-      const failure = this.stillAsSeen(op, parentId, modifiedTime, peek, reused);
-      if (failure) throw new NotAsSeen(failure);
+      const refused = this.stillAsSeen(op, parentId, modifiedTime, peek, reused);
+      if (refused) throw refused;
       if (!row.crossed.includes(dispatchId)) row.crossed.push(dispatchId);
       this.changed();
     });
