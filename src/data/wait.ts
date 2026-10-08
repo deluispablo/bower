@@ -22,11 +22,11 @@ export function waitFor(body: unknown): number {
 }
 
 /**
- * `fetchFn(url, init)`, given up on after `waitFor(init.body)` if no answer has arrived. The caller's own
+ * `fetchFn(url, init)`, given up on after `ms` (by default `waitFor(init.body)`) if no answer has arrived. The caller's own
  * `signal` still stops it on purpose and keeps its `AbortError`; only the bound ends as a `TypeError`.
  * The bound covers the wait for the answer to start, not the reading of its body.
  */
-export async function answered(fetchFn: typeof fetch, url: string, init: RequestInit = {}): Promise<Response> {
+export async function answered(fetchFn: (url: string, init: RequestInit) => Promise<Response>, url: string, init: RequestInit = {}, ms = waitFor(init.body)): Promise<Response> {
   const own = init.signal ?? undefined;
   const control = new AbortController();
   const stop = (): void => control.abort(own?.reason);
@@ -39,7 +39,7 @@ export async function answered(fetchFn: typeof fetch, url: string, init: Request
       late = true;
       control.abort();
       reject(new TypeError('No answer in time'));
-    }, waitFor(init.body));
+    }, ms);
   });
   try {
     return await Promise.race([fetchFn(url, { ...init, signal: control.signal }), tooLate]);

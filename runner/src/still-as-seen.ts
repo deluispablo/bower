@@ -12,8 +12,7 @@
  * tests, so both refuse the same writes.
  */
 import { notAsSeen, notAsSeenError } from '../../src/data/contracts/still-as-seen';
-import type { DriveFile } from '../../src/data/drive/drive-api';
-import type { FencedCall, FencedDrive } from '../../src/data/drive/fake-drive';
+import type { DriveFile, FencedCall, FencedDrive } from '../../src/data/drive/drive-api';
 
 /** A file as stored at the moment of the check; null when it is gone. */
 export interface StoredNow {

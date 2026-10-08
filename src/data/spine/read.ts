@@ -3,9 +3,8 @@
  * runner), the Worker's admission reader over it (`admissionRead`), and the pretend Drive (the fake and demo sources). Both give digests from what Drive keeps, never by
  * reading a file's content.
  */
-import type { DriveApi, DriveFile, ResumableDrive } from '../drive/drive-api';
-import type { FakeDrive } from '../drive/fake-drive';
-import { declarationCopies } from '../pile-readiness';
+import type { BinLookup, DriveApi, DriveFile, ResumableDrive } from '../drive/drive-api';
+import { declarationCopies, type StoredDigests } from '../pile-readiness';
 import { PILE_NOTE } from '../piles';
 import type { Pile } from '../types';
 import { PROP, SYSTEM } from '../vault/layout';
@@ -40,7 +39,7 @@ export function driveRead(drive: DriveReads): SpineRead {
 }
 
 /** The pretend Drive: what it stored (`fake-stored`), and its Bin lookup by item key. */
-export function fakeRead(drive: Pick<FakeDrive, 'listAll' | 'readBytes' | 'readText' | 'storedDigest' | 'binnedByItem'>): SpineRead {
+export function fakeRead(drive: Pick<DriveApi, 'listAll' | 'readBytes' | 'readText'> & StoredDigests & BinLookup): SpineRead {
   return {
     listAll: (rootId) => drive.listAll(rootId),
     readBytes: (id) => drive.readBytes(id),

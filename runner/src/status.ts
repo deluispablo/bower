@@ -14,15 +14,15 @@
 import { attemptEnded } from '../../src/data/contracts/attempt-ended';
 import { PHASE_RANK as RANK } from '../../src/data/contracts/run-phases';
 import { BowerError, type RunPhase } from '../../src/data/types';
-import { retried } from './retry';
-import { staleAttempt } from './token';
+import { send, type Fetch } from '../../src/data/drive/transport';
+import { serverBusy, staleAttempt, unreached } from './token';
 
 export interface RunnerStatusOptions {
   api: string;
   runId: string;
   ticket: string;
   attempt: number;
-  fetch?: typeof fetch;
+  fetch?: Fetch;
 }
 
 const ended = (phase: RunPhase): boolean => phase === 'done' || phase === 'failed';
@@ -38,14 +38,14 @@ type Answer = { kind: 'taken' } | { kind: 'late'; current: { seq: number; phase:
 
 export class RunnerStatus {
   private readonly url: string;
-  private readonly fetchFn: typeof fetch;
+  private readonly fetchFn: Fetch;
   private seq = 0;
   /** The phase the Worker holds this run ended in, once a report found it ended; nothing more is sent. */
   private endedAs: RunPhase | null = null;
 
   constructor(private readonly opts: RunnerStatusOptions) {
     this.url = `${opts.api.replace(/\/$/, '')}/runner/runs/${encodeURIComponent(opts.runId)}/status`;
-    this.fetchFn = opts.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+    this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
   }
 
   /** Whether the Worker already holds this run ended (`done` or `failed`). */
@@ -103,20 +103,15 @@ export class RunnerStatus {
 
   /**
    * One report sent, with retries: idempotent, since the Worker answers a repeat of the last seq with the current
-   * state and changes nothing, even once the run ended, and an ended report only sets when it looks (TL-P3-28; `retry.ts`).
+   * state and changes nothing, even once the run ended, and an ended report only sets when it looks (TL-P3-28; `transport.ts`).
    */
   private async request(body: object): Promise<Response> {
     try {
-      return await retried(() =>
-        this.fetchFn(this.url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` },
-          body: JSON.stringify(body),
-        }),
-      );
+      const init = { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` }, body: JSON.stringify(body) };
+      return await send(this.fetchFn, this.url, init, { idempotent: true, again: serverBusy });
     } catch (e) {
       console.error(e);
-      throw new BowerError('offline', "Bower couldn't reach its server. It will try again.");
+      throw unreached();
     }
   }
 

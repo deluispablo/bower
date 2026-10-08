@@ -1,7 +1,7 @@
 {
   "date": "2026-10-08",
-  "clones": 25,
-  "duplicatedLines": 245,
-  "duplicatedTokens": 2268,
+  "clones": 23,
+  "duplicatedLines": 224,
+  "duplicatedTokens": 2082,
   "note": "Updated by update-duplication-baseline.mjs"
 }

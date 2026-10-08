@@ -5,15 +5,8 @@
  * entry that removes it; the list may only shrink (a test fails when a line is no longer needed).
  * ROOTS: files that wire the app together and so choose between the real and the pretend source.
  */
-const FAKE_DRIVE = 'src/data/drive/fake-drive.ts';
 module.exports = {
   KNOWN: [
-    // FencedDrive and StoredEvidence move into drive-api.ts.
-    ...['src/data/spine/records.ts', 'src/data/spine/barrier.ts', 'src/data/spine/read.ts', 'runner/src/effects.ts', 'runner/src/drive.ts', 'runner/src/still-as-seen.ts', 'runner/src/spine/barrier.ts', 'runner/src/spine/retention.ts', 'runner/src/spine/run.ts'].map((from) => ({
-      from,
-      to: [FAKE_DRIVE],
-      entry: 'c2-drive-transport',
-    })),
     // The fake run service becomes only a Drive adapter; the shared engine owns these records.
     { from: 'runner/src/effects.ts', to: ['src/data/fake/fake-run-records.ts'], entry: 'c2-one-engine' },
     { from: 'src/data/spine/scripted.ts', to: ['src/data/fake/fake-run-records.ts'], entry: 'c2-one-engine' },

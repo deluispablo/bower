@@ -18,7 +18,7 @@
  *   stops there without a send, since sending it again could apply it twice.
  */
 import { BowerError } from '../../../src/data/types';
-import type { FencedDrive } from '../../../src/data/drive/fake-drive';
+import type { FencedDrive } from '../../../src/data/drive/drive-api';
 import type { Checkpoint, EffectEvidence, Failure, Outcome } from '../../../src/data/contracts/run-checkpoint';
 import { parseRunManifestV2, type OperationV2 } from '../../../src/data/contracts/run-manifest';
 import { canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type AttemptMark, type CheckpointPatch, type RunManifest, type RunRecords } from '../../../src/data/spine/records';

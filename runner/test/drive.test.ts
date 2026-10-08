@@ -198,7 +198,7 @@ describe('runner drive adapter', () => {
     const viaAdapter = await scenario({ outside: wire.drive, get: (id) => adapter.get(id), batch: () => adapter.batch(), setFault: (h) => { adapter.fault = h; } });
 
     expect(viaAdapter.steps).toEqual(viaFake.steps);
-    expect(viaFake.steps.map((s) => s.error ?? 'ok')).toEqual(['ok', 'ok', 'ok', 'ok', 'offline', 'offline', 'conflict', 'ok']);
+    expect(viaFake.steps.map((s) => s.error ?? 'ok')).toEqual(['ok', 'ok', 'ok', 'ok', 'unknown', 'unknown', 'conflict', 'ok']);
     expect(await visible(wire.drive)).toEqual(await visible(fake));
     expect([...fake.dump().entries()]).toEqual([['Tidy/Lost.md', 'Lost words.']]);
     expect(viaAdapter.applied).toEqual(viaFake.applied);

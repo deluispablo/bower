@@ -164,3 +164,33 @@ export const isDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Record<
 
 /** A method the table knows as a write. An unknown key is not one, but is not a read either (the after-check still runs). */
 export const isKnownDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Record<PropertyKey, string>)[key] === 'write';
+
+/** A write through a fence (the runner's, the fake's `fenced`), as the fault hook sees it. */
+export type FencedCall =
+  | { op: 'create-folder'; parentId: string; name: string; appProperties?: Record<string, string> }
+  | { op: 'create-text'; parentId: string; name: string; text: string; appProperties?: Record<string, string> }
+  | { op: 'update'; id: string; patch: DrivePatch }
+  | { op: 'trash'; id: string; appProperties?: Record<string, string> }
+  | { op: 'write-text'; id: string; text: string; ifModified: string; appProperties?: Record<string, string> };
+/** `refuse`: no effect, as with no network; `lose-reply`: the change lands, then its answer is lost. */
+export type FaultAction = 'pass' | 'refuse' | 'lose-reply';
+export interface FaultHook {
+  before?: (call: FencedCall) => FaultAction;
+  /** Told after a fenced write changed the Drive. */
+  applied?: (call: FencedCall) => void;
+}
+/** The writes a run may make, each checked against what it read right before it is sent. */
+export interface FencedDrive {
+  createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+  update(id: string, patch: DrivePatch): Promise<DriveFile>;
+  /** `appProperties`, when given, are set in the same request (a run's stamp on its effect). */
+  trash(id: string, appProperties?: Record<string, string>): Promise<void>;
+  writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
+}
+/** What Drive stores for a file now, as evidence of an effect: metadata, Bin state, and the content's size and SHA-256. */
+export interface StoredEvidence {
+  file: DriveFile;
+  trashed: boolean;
+  content: { size: number; sha256: string } | null;
+}

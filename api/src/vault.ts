@@ -52,6 +52,7 @@ import { requireLease } from './session-lease.js';
 import { FOLDER_TEMPLATE, PLACEHOLDER_FILE } from '../../src/data/contracts/folder-template.js';
 import type { FolderTemplateFile } from '../../src/data/contracts/folder-template.js';
 import { OLD_RULES_TEMPLATE, RULES_TEMPLATE } from '../../src/data/contracts/rules-format.js';
+import { DriveHttp, FOLDER, quote, type WireFile } from '../../src/data/drive/drive-http.js';
 
 /** The marker every Bower folder carries in `appProperties` (private to this OAuth client). */
 export const FOLDER_MARKER = { bowerFolder: '1' } as const;
@@ -73,7 +74,6 @@ export const VAULT_TEMPLATE: readonly VaultFile[] = FOLDER_TEMPLATE;
 
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
-const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const PLACEHOLDER = PLACEHOLDER_FILE;
 
 export interface VaultResult {
@@ -87,14 +87,8 @@ export interface VaultOptions {
   files?: readonly VaultFile[];
 }
 
-interface DriveItem {
-  id: string;
-  name?: string;
-  trashed?: boolean;
-  mimeType?: string;
-  modifiedTime?: string;
-  appProperties?: Record<string, string>;
-}
+/** Drive's wire file, with only the fields each request asks for. */
+type DriveItem = Partial<WireFile> & { id: string };
 
 /** How long one call may hold the person's claim, and how often a waiting call looks again. */
 const CLAIM_MS = 60_000;
@@ -105,168 +99,103 @@ function driveError(what: string, cause?: unknown): HttpError {
   return new HttpError(500, 'internal', undefined, { cause: cause ?? new Error(what) });
 }
 
-function quote(value: string): string {
-  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+/** A Drive answer's body as JSON, or the person's "try again". */
+async function json<T>(what: string, response: Response): Promise<T> {
+  try {
+    return (await response.json()) as T;
+  } catch (err) {
+    throw driveError(`${what} answered unreadable JSON`, err);
+  }
 }
 
-/** A tiny Drive client for one person: one token, refreshed once when Drive answers 401. */
-class Drive {
-  private token: string | undefined;
-  constructor(
-    private readonly env: Env,
-    private readonly sub: string,
-    private readonly fetchImpl: FetchLike,
-  ) {}
-
-  private async send(url: string, init: RequestInit = {}, retried = false): Promise<Response> {
-    this.token ??= (await accessTokenFor(this.env, this.sub, { fetchImpl: this.fetchImpl })).accessToken;
-    const headers = new Headers(init.headers);
-    headers.set('authorization', `Bearer ${this.token}`);
-    let response: Response;
-    try {
-      response = await this.fetchImpl(url, { ...init, headers });
-    } catch (err) {
-      throw driveError('Drive unreachable', err);
-    }
-    if (response.status === 401 && !retried) {
-      this.token = (await accessTokenFor(this.env, this.sub, { fetchImpl: this.fetchImpl, fresh: true })).accessToken;
-      return this.send(url, init, true);
-    }
-    return response;
-  }
-
-  private async json<T>(what: string, response: Response): Promise<T> {
-    if (!response.ok) throw driveError(`${what} answered ${response.status}`);
-    try {
-      return (await response.json()) as T;
-    } catch (err) {
-      throw driveError(`${what} answered unreadable JSON`, err);
-    }
-  }
-
-  /** `files.get`: the item, or null when Drive says 404. */
-  async get(id: string): Promise<DriveItem | null> {
-    const params = new URLSearchParams({ fields: 'id,mimeType,trashed' });
-    const response = await this.send(`${FILES_URL}/${encodeURIComponent(id)}?${params}`);
-    if (response.status === 404) return null;
-    return this.json<DriveItem>('get', response);
-  }
-
-  private async list(q: string, orderBy?: string): Promise<DriveItem[]> {
-    const params = new URLSearchParams({ q, fields: 'files(id,name,mimeType)', pageSize: '1000', spaces: 'drive' });
-    if (orderBy !== undefined) params.set('orderBy', orderBy);
-    const body = await this.json<{ files?: DriveItem[] }>('list', await this.send(`${FILES_URL}?${params}`));
+/**
+ * The few Drive v3 requests this route makes, for one person, over the one Drive transport (`DriveHttp.call`: the
+ * token and its one refresh, the retry policy and the error mapping, c2-drive-transport). A 404 or a 409 is read
+ * here; any other failure rejects, and the route answers it 500.
+ */
+function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike) {
+  // One token for the call, asked again only after Drive answers 401.
+  let kept: string | undefined;
+  const http = new DriveHttp({
+    token: async (fresh) => {
+      if (fresh || kept === undefined) kept = (await accessTokenFor(env, sub, { fetchImpl, ...(fresh ? { fresh: true } : {}) })).accessToken;
+      return kept;
+    },
+    fetch: fetchImpl,
+    context: 'headless',
+  });
+  const list = async (q: string, fields: string, extra: Record<string, string> = {}): Promise<DriveItem[]> => {
+    const params = new URLSearchParams({ q, fields, pageSize: '1000', spaces: 'drive', ...extra });
+    const body = await json<{ files?: DriveItem[] }>('list', await http.call(`${FILES_URL}?${params}`));
     return Array.isArray(body.files) ? body.files : [];
-  }
-
-  /** The person's oldest live folder carrying the Bower marker, or null. */
-  async findMarked(): Promise<DriveItem | null> {
-    const [key, value] = Object.entries(FOLDER_MARKER)[0] ?? ['', ''];
-    const q = `mimeType = '${FOLDER_MIME}' and trashed = false and 'me' in owners and appProperties has { key=${quote(key)} and value=${quote(value)} }`;
-    return (await this.list(q, 'createdTime'))[0] ?? null;
-  }
-
-  async children(parentId: string): Promise<DriveItem[]> {
-    return this.list(`${quote(parentId)} in parents and trashed = false`);
-  }
-
-  /** `files.generateIds`: `count` ids (Drive allows 1 to 1000) to create files with later. */
-  async generateIds(count: number): Promise<string[]> {
-    const params = new URLSearchParams({ count: String(count), space: 'drive', type: 'files' });
-    const body = await this.json<{ ids?: unknown }>('generate ids', await this.send(`${FILES_URL}/generateIds?${params}`));
-    const ids = Array.isArray(body.ids) ? body.ids : [];
-    if (ids.length !== count || !ids.every((id) => typeof id === 'string' && id !== '')) {
-      throw driveError('generate ids answered the wrong ids');
-    }
-    return ids as string[];
-  }
-
-  /**
-   * `files.create` for a folder. With `id` (from `generateId`), Drive answers
-   * 409 when a file with that id exists already: that is our folder, made by
-   * an earlier try whose answer was lost.
-   */
-  async createFolder(
-    name: string,
-    parentId: string | null,
-    extra: { appProperties?: Record<string, string>; id?: string } = {},
-  ): Promise<string> {
-    const params = new URLSearchParams({ fields: 'id' });
-    const metadata: Record<string, unknown> = { name, mimeType: FOLDER_MIME };
-    if (extra.id !== undefined) metadata.id = extra.id;
-    if (parentId !== null) metadata.parents = [parentId];
-    if (extra.appProperties !== undefined) metadata.appProperties = extra.appProperties;
-    const response = await this.send(`${FILES_URL}?${params}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json; charset=UTF-8' },
-      body: JSON.stringify(metadata),
-    });
-    if (response.status === 409 && extra.id !== undefined) return extra.id;
-    const created = await this.json<DriveItem>('create folder', response);
-    if (typeof created.id !== 'string') throw driveError('create folder answered no id');
-    return created.id;
-  }
-
-  /**
-   * `files.create` with a multipart upload of a new text file. With `id`,
-   * Drive answers 409 when that id exists: made by an earlier try, so done.
-   */
-  async createText(name: string, parentId: string, content: string, id?: string, appProperties?: Record<string, string>): Promise<void> {
-    const mimeType = name.endsWith('.md') ? 'text/markdown' : name.endsWith('.json') ? 'application/json' : 'text/plain';
+  };
+  /** `files.get` with these fields: the item, or null when Drive says 404. */
+  const get = async (id: string, fields: string): Promise<DriveItem | null> => {
+    const response = await http.call(`${FILES_URL}/${encodeURIComponent(id)}?${new URLSearchParams({ fields })}`, {}, [404]);
+    return response.status === 404 ? null : json<DriveItem>('get', response);
+  };
+  /** A multipart upload (Drive v3, "Upload file data"): metadata, then the text. With `id`, a 409 says that id exists. */
+  const multipart = async (url: string, method: string, metadata: Record<string, unknown>, mimeType: string, content: string): Promise<Response> => {
     const boundary = `bower-${crypto.randomUUID()}`;
     const body =
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-      `${JSON.stringify({ name, mimeType, parents: [parentId], ...(id === undefined ? {} : { id }), ...(appProperties === undefined ? {} : { appProperties }) })}\r\n` +
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
       `--${boundary}\r\nContent-Type: ${mimeType}; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
-    const params = new URLSearchParams({ uploadType: 'multipart', fields: 'id' });
-    const response = await this.send(`${UPLOAD_URL}?${params}`, {
-      method: 'POST',
-      headers: { 'content-type': `multipart/related; boundary=${boundary}` },
-      body,
-    });
-    if (response.status === 409 && id !== undefined) return;
-    await this.json('upload', response);
-  }
-
-  /** The one live file called `name` in `parentId` with what the repair checks, or null when there is none or more than one. */
-  async onlyNamed(parentId: string, name: string): Promise<DriveItem | null> {
-    const q = `${quote(parentId)} in parents and name = ${quote(name)} and trashed = false`;
-    const params = new URLSearchParams({ q, fields: 'files(id,mimeType,modifiedTime,appProperties)', pageSize: '2', spaces: 'drive' });
-    const body = await this.json<{ files?: DriveItem[] }>('list', await this.send(`${FILES_URL}?${params}`));
-    return Array.isArray(body.files) && body.files.length === 1 ? (body.files[0] ?? null) : null;
-  }
-
-  /** `files.get` with `alt=media`: the text of a file, or null when Drive says 404. */
-  async text(id: string): Promise<string | null> {
-    const response = await this.send(`${FILES_URL}/${encodeURIComponent(id)}?alt=media`);
-    if (response.status === 404) return null;
-    if (!response.ok) throw driveError(`read answered ${response.status}`);
-    return response.text();
-  }
-
-  /** `files.get`: when the file last changed, or null when Drive says 404. */
-  async modifiedTime(id: string): Promise<string | null> {
-    const params = new URLSearchParams({ fields: 'modifiedTime' });
-    const response = await this.send(`${FILES_URL}/${encodeURIComponent(id)}?${params}`);
-    if (response.status === 404) return null;
-    return (await this.json<DriveItem>('get', response)).modifiedTime ?? null;
-  }
-
-  /** `files.update` with a multipart upload: new text and app properties for one file (Drive v3, "Upload file data"). */
-  async replaceText(id: string, content: string, appProperties: Record<string, string>): Promise<void> {
-    const boundary = `bower-${crypto.randomUUID()}`;
-    const body =
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ appProperties })}\r\n` +
-      `--${boundary}\r\nContent-Type: text/markdown; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
-    const params = new URLSearchParams({ uploadType: 'multipart', fields: 'id' });
-    const response = await this.send(`${UPLOAD_URL}/${encodeURIComponent(id)}?${params}`, {
-      method: 'PATCH',
-      headers: { 'content-type': `multipart/related; boundary=${boundary}` },
-      body,
-    });
-    await this.json('update', response);
-  }
+    return http.call(url, { method, headers: { 'content-type': `multipart/related; boundary=${boundary}` }, body }, [409]);
+  };
+  return {
+    get: (id: string) => get(id, 'id,mimeType,trashed'),
+    /** The person's oldest live folder carrying the Bower marker, or null. */
+    async findMarked(): Promise<DriveItem | null> {
+      const [key, value] = Object.entries(FOLDER_MARKER)[0] ?? ['', ''];
+      const q = `mimeType = '${FOLDER}' and trashed = false and 'me' in owners and appProperties has { key=${quote(key)} and value=${quote(value)} }`;
+      return (await list(q, 'files(id,name,mimeType)', { orderBy: 'createdTime' }))[0] ?? null;
+    },
+    children: (parentId: string) => list(`${quote(parentId)} in parents and trashed = false`, 'files(id,name,mimeType)'),
+    /** `files.generateIds`: `count` ids (Drive allows 1 to 1000) to create files with later. */
+    generateIds: (count: number) => http.generateIds(count),
+    /**
+     * `files.create` for a folder. With `id` (from `generateIds`), Drive answers 409 when a file with that id exists
+     * already: that is our folder, made by an earlier try whose answer was lost.
+     */
+    async createFolder(name: string, parentId: string | null, extra: { appProperties?: Record<string, string>; id?: string } = {}): Promise<string> {
+      const metadata = { name, mimeType: FOLDER, ...(extra.id !== undefined ? { id: extra.id } : {}), ...(parentId !== null ? { parents: [parentId] } : {}), ...(extra.appProperties !== undefined ? { appProperties: extra.appProperties } : {}) };
+      const response = await http.call(`${FILES_URL}?fields=id`, { method: 'POST', headers: { 'content-type': 'application/json; charset=UTF-8' }, body: JSON.stringify(metadata) }, [409]);
+      if (response.status === 409) {
+        if (extra.id !== undefined) return extra.id;
+        throw driveError('create folder answered 409');
+      }
+      const created = await json<DriveItem>('create folder', response);
+      if (typeof created.id !== 'string') throw driveError('create folder answered no id');
+      return created.id;
+    },
+    /** `files.create` with a multipart upload of a new text file. With `id`, Drive answers 409 when that id exists: made by an earlier try, so done. */
+    async createText(name: string, parentId: string, content: string, id?: string, appProperties?: Record<string, string>): Promise<void> {
+      const mimeType = name.endsWith('.md') ? 'text/markdown' : name.endsWith('.json') ? 'application/json' : 'text/plain';
+      const metadata = { name, mimeType, parents: [parentId], ...(id === undefined ? {} : { id }), ...(appProperties === undefined ? {} : { appProperties }) };
+      const response = await multipart(`${UPLOAD_URL}?uploadType=multipart&fields=id`, 'POST', metadata, mimeType, content);
+      if (response.status === 409 && id === undefined) throw driveError('upload answered 409');
+    },
+    /** The one live file called `name` in `parentId` with what the repair checks, or null when there is none or more than one. */
+    async onlyNamed(parentId: string, name: string): Promise<DriveItem | null> {
+      const files = await list(`${quote(parentId)} in parents and name = ${quote(name)} and trashed = false`, 'files(id,mimeType,modifiedTime,appProperties)', { pageSize: '2' });
+      return files.length === 1 ? (files[0] ?? null) : null;
+    },
+    /** `files.get` with `alt=media`: the text of a file, or null when Drive says 404. */
+    async text(id: string): Promise<string | null> {
+      const response = await http.call(`${FILES_URL}/${encodeURIComponent(id)}?alt=media`, {}, [404]);
+      return response.status === 404 ? null : response.text();
+    },
+    /** `files.get`: when the file last changed, or null when Drive says 404. */
+    modifiedTime: async (id: string): Promise<string | null> => (await get(id, 'modifiedTime'))?.modifiedTime ?? null,
+    /** `files.update` with a multipart upload: new text and app properties for one file. */
+    async replaceText(id: string, content: string, appProperties: Record<string, string>): Promise<void> {
+      const response = await multipart(`${UPLOAD_URL}/${encodeURIComponent(id)}?uploadType=multipart&fields=id`, 'PATCH', { appProperties }, 'text/markdown', content);
+      if (response.status === 409) throw driveError('update answered 409');
+    },
+  };
 }
+
+type Drive = ReturnType<typeof vaultDrive>;
 
 /**
  * The one-time repair: a folder made before the fix has `Rules.md` as plain text without Bower's mark, so a rule
@@ -280,7 +209,7 @@ class Drive {
  */
 async function repairRules(drive: Drive, folderId: string): Promise<void> {
   const file = await drive.onlyNamed(folderId, RULES_FILE.path);
-  if (file === null || file.mimeType === FOLDER_MIME || file.modifiedTime === undefined) return;
+  if (file === null || file.mimeType === FOLDER || file.modifiedTime === undefined) return;
   if (file.appProperties?.['by'] === 'bower') return;
   if ((await drive.text(file.id)) !== OLD_RULES_TEMPLATE) return;
   if ((await drive.modifiedTime(file.id)) !== file.modifiedTime) return;
@@ -317,7 +246,7 @@ async function completeTemplate(
     const slash = path.lastIndexOf('/');
     const parent = await folder(slash === -1 ? '' : path.slice(0, slash));
     const name = path.slice(slash + 1);
-    const existing = (await childrenOf(parent)).find((c) => c.name === name && c.mimeType === FOLDER_MIME);
+    const existing = (await childrenOf(parent)).find((c) => c.name === name && c.mimeType === FOLDER);
     let id: string;
     if (existing === undefined) {
       id = await drive.createFolder(name, parent, ids[path] === undefined ? {} : { id: ids[path] });
@@ -369,7 +298,7 @@ async function withVaultClaim<T>(person: PersonStub, work: () => Promise<T>): Pr
 }
 
 const isLiveFolder = (item: DriveItem | null): boolean =>
-  item !== null && item.trashed !== true && item.mimeType === FOLDER_MIME;
+  item !== null && item.trashed !== true && item.mimeType === FOLDER;
 
 /** The pointer if it names a live folder, else a reserved one, else the marked one, else a new one from the template. */
 export async function ensureVault(
@@ -381,7 +310,7 @@ export async function ensureVault(
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
   const files = options.files ?? VAULT_TEMPLATE;
   const person = personFor(env, sub);
-  const drive = new Drive(env, sub, fetchImpl);
+  const drive = vaultDrive(env, sub, fetchImpl);
 
   // Delete me or a sign-out may land while this call waits on Drive: each person-object write below carries
   // the generation the request was authenticated with and the person object refuses it when it differs
