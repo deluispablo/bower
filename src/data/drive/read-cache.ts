@@ -24,33 +24,30 @@ type Kind = 'text' | 'bytes' | 'digest';
 export class ReadCache {
   private readonly kept = new Map<string, { modifiedTime: string; reads: Map<Kind, Promise<unknown>> }>();
 
-  /** A file's text at this version. */
   text(v: Version, read: () => Promise<string>): Promise<string> {
     return this.once('text', v, read);
   }
 
-  /** A file's bytes at this version; each caller gets its own copy. */
+  /** Each caller gets its own copy. */
   async bytes(v: Version, read: () => Promise<Uint8Array>): Promise<Uint8Array> {
     return (await this.once('bytes', v, read)).slice();
   }
 
-  /** What a file's content works out to (its size and hash) at this version. */
   digest<T>(v: Version, read: () => Promise<T>): Promise<T> {
     return this.once('digest', v, read);
   }
 
-  /** The text kept for this version, read or on its way, without reading anything. */
+  /** The text kept for this version, read or on its way. */
   keptText(v: Version): Promise<string> | undefined {
     const entry = this.kept.get(v.id);
     return entry && entry.modifiedTime === v.modifiedTime ? (entry.reads.get('text') as Promise<string> | undefined) : undefined;
   }
 
-  /** Text this page wrote, under the version Drive's answer gave: the next read of that version is not sent. */
+  /** Text this page wrote, under the version Drive's answer gave. */
   wrote(v: Version, text: string): void {
     this.once('text', v, () => Promise.resolve(text));
   }
 
-  /** Forgets everything (the page is closed, or the person signed out). */
   clear(): void {
     this.kept.clear();
   }

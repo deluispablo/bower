@@ -864,7 +864,8 @@ export class DriveVault implements VaultSource {
       if (d) return d;
       throw new NoDigest();
     }
-    const bytes = (await this.bytesFromText(f)) ?? (await this.readBytesOnce(f.id));
+    // Uncached: the digest is what is kept; the bytes behind it are not.
+    const bytes = (await this.bytesFromText(f)) ?? (await this.drive.readBytes(f.id));
     return { size: bytes.byteLength, sha256: await sha256(new Blob([new Uint8Array(bytes).buffer])) };
   }
 
