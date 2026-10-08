@@ -4701,7 +4701,7 @@
       "A modelled-latency test shows admission reads under 3 s."
     ],
     "verify": "pnpm -C api exec vitest run -t \"admission reads finish under the budget with modelled Drive latency|admission reads give the same result in fewer calls\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-04 batch P4-4 (live tail: admission 19.7–23.5 s, dispatch 0.45 s)."
   },
   {

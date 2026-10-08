@@ -121,3 +121,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c04-incorporation passes — Timing counts cache-read tokens; cites link the name used; size checked before reading; body links validated (P4-3 review)
 - 2026-10-08: deploy-scan-unpdf-literal passes — The deploy scan allows exactly the unpdf literal and still refuses a real address
 - 2026-10-08: attempt-check-light passes — Attempt checked from the person object alone; the runner keeps the Drive token until near expiry (TL-P4-04)
+- 2026-10-08: admission-reads-cost passes — Admission reads in half the calls, pile notes read 8 at a time; same manifest (TL-P4-04)
