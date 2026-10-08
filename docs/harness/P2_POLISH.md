@@ -202,3 +202,7 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - claude.ts:204 nameOk: partOk(name) counts the extension, though the comment says not; a 118-character name plus ".pdf" refuses the whole run.
   - scripted.ts:1174: Claude runs still word rules through RULE_WORDING (the demo table, Rules.md only). P4-C.
   - drive.ts:165: readText and readBytes are still cached by id. It fails closed (effects.ts:138 checks beforeContent).
+- (P4-3 review and fix check, PASS at fe61665; notes /private/tmp/p4-3-review-notes.md) Minors:
+  - claude.ts intentOf: one loop covers Markdown and www line links, so the first refusal hides the second case.
+  - claude.ts shownOf: its room leaves out the "[N pages not read]" marker, so a run can pass 48k by a few dozen characters.
+  - new-instance.test.ts fails 2 in a fresh worktree while dependencies install (environment, not the diff).

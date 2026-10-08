@@ -163,3 +163,4 @@ P3-9 is closed.
 - runner-checkpoint-cost closed (da5a50b): a checkpoint is 3 Drive calls → 2 (the write's checksum replaces the read-back); modelled C04 overhead 43.4 → 38.0 s; admission now timed in parts (the split needs a staging run); no checkpoint merges (each one changes an existing test); Claude Code cached. 355/356.
 - c04-incorporation closed (3453ce9; unpdf 1.8.1). runner-checkpoint-cost re-closed after the verify-name fix (59fc380). 356/356. P4-3 close: Opus delta and the four suites.
 - P4-3 review BLOCK (claude.ts cache_read_input_tokens renamed; the timing undercounts). c04-incorporation reopened (509f1f9); fix round with the same worker plus 5 minors (cite freeName, size before read, link checks plus data-not-instructions, checksum-mismatch test, actions/cache v6.1.0). 355/356.
+- P4-3 fix-round check PASS (3 minors to polish). Waiting for the suites at 8808970, then main, deploy, and the live C04 runs (3 or more per case).
