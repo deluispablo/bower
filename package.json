@@ -20,6 +20,7 @@
     "icons": "node scripts/icons.mjs"
   },
   "dependencies": {
+    "@noble/hashes": "^1.4.0",
     "@radix-ui/react-context-menu": "^2.3.7",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",

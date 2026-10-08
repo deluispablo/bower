@@ -102,8 +102,8 @@ describe('the shape of the code', () => {
 
   describe('the shared core', () => {
     const CONTRACTS = join(SRC, 'data', 'contracts');
-    /** Pure libraries a contract may import. None today: the contracts need only the platform (Web Crypto, TextEncoder). */
-    const ALLOWLIST: Record<string, string> = {};
+    /** Pure libraries a contract may import. @noble/hashes for SHA-256 and MD5 in hashes.ts. */
+    const ALLOWLIST: Record<string, string> = { '@noble/hashes/sha2': 'pure', '@noble/hashes/legacy': 'pure' };
     const FORBIDDEN = /\b(window|document|localStorage|sessionStorage|indexedDB|fetch|React|import\.meta\.env|process\.env)\b|from 'react/;
     const specs = (text: string): string[] =>
       [...text.matchAll(/(?:^|\n)\s*(?:import|export)\b[^'"]*?from\s+'([^']+)'|import\(\s*'([^']+)'\s*\)|(?:^|\n)\s*import\s+'([^']+)'/g)].map((m) => m[1] ?? m[2] ?? m[3] ?? '');

@@ -52,4 +52,10 @@ describe('one digest module serves app, runner and Worker', () => {
     const offenders = ALL.filter((p) => PRIMITIVE.test(readFileSync(p, 'utf8'))).map((p) => relative(ROOT, p));
     expect(offenders).toEqual([]);
   });
+
+  it('hashes.ts has no hand-written hash', () => {
+    const content = readFileSync(HOME, 'utf8');
+    const HAND_WRITTEN = /const SHA_K|const MD5_S|const MD5_K|rotr\(|for \(let i = 0; i < 64; i\)/;
+    expect(content, 'hashes.ts should not contain hand-written SHA-256 or MD5 implementations').not.toMatch(HAND_WRITTEN);
+  });
 });
