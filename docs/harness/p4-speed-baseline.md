@@ -89,3 +89,16 @@ Five live runs, all PASS. Press → done took 0:52–1:03. The runner's steps, i
 - **Against the original:** 6:38 before its speed work, and its goal of 1.5–2 min after it. The new app takes about 1 min from press to done, with every note required.
 | 2026-10-08 | b54392c | claude (Sonnet 5.5), `c04-offer-and-flat` ×3 (runs `37771712279`, `37772135160`, `37772493065`) | 1:52, 1:14, 1:22 | 12.6 / 13.4 / 13.7 s | 1 each | out 1406 / 1662 / 1602 | Reset before each run. Offer to Job hunt with a correct note; link to Flat hunt with a note; payslip to a new Area, "Pay and tax records"; the photo asked about. Run 1 did not rename the offer, and run 3 invented a 30-minute commute limit. Strict rubric 0/3 (photo, Money); ruling asked. Apply took 23–35 s |
 | 2026-10-08 | b54392c | claude (Sonnet 5.5), `c04-garden-newsletter` ×2 (runs `37772839504`, `37773135151`) | 1:16, 0:59 | 7.6 / 7.0 s | 1 each | out 808 / 710 | PASS 2/2; the same input= on both (2d345dd279ce) |
+
+## C04 closed on `327b987` (2026-10-08)
+
+All four runs pass against the updated rubric, with no retries and 4 checkpoints each. Within each case `input=` is the same.
+
+| Case | Press → done | reads | model | apply | report (s) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| offer-and-flat 1 | 1:48 | 25.0 | 13.6 | 37.1 | 9.7 |
+| offer-and-flat 2 | 1:20 | 16.5 | 13.4 | 26.0 | 7.4 |
+| offer-and-flat 3 | 1:30 | 18.1 | 12.5 | 28.6 | 8.4 |
+| garden | 0:54 | 13.0 | 6.5 | 12.2 | 7.0 |
+
+**Reading.** On a 4-thing pile, apply is the biggest step: 26–37 s for 3 moves and 4 notes, about 5 s per effect. `drive-calls-cut` covers reads and apply.
