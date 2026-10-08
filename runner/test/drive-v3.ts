@@ -3,6 +3,7 @@
  * over a `FakeDrive` that holds the stored files. No network: the runner's
  * adapter talks to this in tests.
  */
+import { createHash } from 'node:crypto';
 import { BowerError } from '../../src/data/types';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
@@ -40,6 +41,8 @@ export interface DriveV3 {
   dropDone: number | null;
   /** When set, every `done` report is answered `stale-report` (a Worker that refuses it). */
   refuseDone: boolean;
+  /** Whether a create's answer carries the checksums its `fields` ask for, as Drive's does; off, it carries none. */
+  checksums: boolean;
 }
 
 export interface StatusPost {
@@ -72,6 +75,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     statuses: [],
     dropDone: null,
     refuseDone: false,
+    checksums: true,
     fetch: async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
       const method = (init.method ?? 'GET').toUpperCase();
@@ -93,7 +97,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
       if (url.origin !== 'https://www.googleapis.com') return json(404, driveFailure(404, 'notFound'));
       if (!live.has(auth.replace(/^Bearer /, ''))) return json(401, driveFailure(401, 'authError'));
       try {
-        return await answer(drive, method, url, init.body ?? null);
+        return await answer(wire, method, url, init.body ?? null);
       } catch (e) {
         if (e instanceof BowerError && e.code === 'not-found') return json(404, driveFailure(404, 'notFound'));
         throw e;
@@ -120,7 +124,8 @@ function status(wire: DriveV3, body: Omit<StatusPost, 'after'>): Response {
   return json(200, { run: { id: RUN_ID, phase: body.phase }, revision: wire.statuses.length });
 }
 
-async function answer(drive: FakeDrive, method: string, url: URL, body: RequestInit["body"]): Promise<Response> {
+async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit["body"]): Promise<Response> {
+  const drive = wire.drive;
   const path = url.pathname;
   const one = /^\/(upload\/)?drive\/v3\/files\/([^/]+)$/.exec(path);
   if (method === 'GET' && path === '/drive/v3/files') return list(drive, url);
@@ -142,7 +147,18 @@ async function answer(drive: FakeDrive, method: string, url: URL, body: RequestI
   }
   if (method === 'POST' && path === '/upload/drive/v3/files' && url.searchParams.get('uploadType') === 'multipart') {
     const { meta, content } = await multipart(body);
-    return json(200, wireFile(await drive.createText(meta.parents[0] ?? '', meta.name, content, meta.appProperties), false));
+    const made = await drive.createText(meta.parents[0] ?? '', meta.name, content, meta.appProperties);
+    // Drive's answer to a create carries the stored content's checksums when `fields` names them
+    // (https://developers.google.com/drive/api/reference/rest/v3/files: md5Checksum, sha256Checksum).
+    const fields = url.searchParams.get('fields') ?? '';
+    const bytes = await drive.readBytes(made.id);
+    const sums = wire.checksums
+      ? {
+          ...(fields.includes('md5Checksum') ? { md5Checksum: createHash('md5').update(bytes).digest('hex') } : {}),
+          ...(fields.includes('sha256Checksum') ? { sha256Checksum: createHash('sha256').update(bytes).digest('hex') } : {}),
+        }
+      : {};
+    return json(200, { ...wireFile(made, false), ...sums });
   }
   if (method === 'PATCH' && one?.[1] && url.searchParams.get('uploadType') === 'media') {
     const id = decodeURIComponent(one[2] ?? '');

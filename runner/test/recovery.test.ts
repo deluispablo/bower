@@ -338,4 +338,33 @@ describe('recovery without the browser', () => {
       expect(new Map([...w.sends].filter(([, n]) => n > 0)), `sends after checkpoint ${at}`).toEqual(sends);
     }
   }, 60_000);
+  it('a kill after every step still recovers with merged checkpoints', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w0 = await world();
+    let steps = 0;
+    expect((await tidy(w0, 1, { applied: () => void steps++ })).phase).toBe('done');
+    const expected = await endOf(w0);
+    // Each checkpoint is confirmed by the create's own answer (its stored checksum), never read back after it.
+    const checkpoints = new Set((await w0.wire.drive.listAll(w0.root)).filter((f) => /^checkpoint-\d+-/.test(f.name)).map((f) => f.id));
+    const readBack = w0.wire.requests.filter((r) => r.url.searchParams.get('alt') === 'media' && checkpoints.has(decodeURIComponent(r.url.pathname.split('/').at(-1) ?? '')));
+    expect(readBack).toEqual([]);
+    expect(steps).toBeGreaterThan(checkpoints.size);
+
+    // Killed right after any write landed (a checkpoint, a record or an operation's effect), then taken over.
+    for (let at = 0; at < steps; at++) {
+      const w = await world();
+      let written = 0;
+      await tidy(w, 1, {
+        applied: (_call, process) => {
+          if (written++ === at) process.killed = true;
+        },
+      }).catch((e: unknown) => e);
+      expect(w.wire.statuses.map((s) => s.phase), `step ${at}`).not.toContain('done');
+      const second = await tidy(w, 2);
+      expect(second.phase, `resumed after step ${at}`).toBe('done');
+      expect(await endOf(w), `resumed after step ${at}`).toEqual(expected);
+      // No operation sent twice, and each sent as often as in the uninterrupted run.
+      expect(new Map([...w.sends].filter(([, n]) => n > 0)), `sends after step ${at}`).toEqual(w0.sends);
+    }
+  }, 120_000);
 });

@@ -209,6 +209,55 @@ describe('runner checkpoints', () => {
     expect((await chainOf(other.wire, other.root)).at(-1)).toEqual(head);
   });
 
+  it('checkpoints cost fewer Drive round trips per operation', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    /**
+     * One run with effects that touch no Drive, so every Drive request after checkpoint 0 lands is a checkpoint's:
+     * the fence's read of its folder, its create and, when the create's answer cannot confirm its bytes, a read-back.
+     */
+    const cost = async (checksums: boolean): Promise<{ requests: number; checkpoints: number; ops: number; readBacks: number }> => {
+      const { wire, root, manifest } = await seeded();
+      wire.checksums = checksums;
+      const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
+      const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
+      let from = -1;
+      adapter.fault = {
+        applied: (call) => {
+          if (from < 0 && call.op === 'create-text' && call.name.startsWith('checkpoint-0-')) from = wire.requests.length;
+        },
+      };
+      let ids = 0;
+      const end = await runOperations({
+        rootId: root,
+        runId: RUN_ID,
+        attempt: 1,
+        records: new RunRecords(runnerReads(adapter, RUN_ID), root),
+        batch: () => adapter.batch(),
+        fenced: () => adapter.fencedWrites(),
+        effects: new CountedEffects(),
+        plan: async () => manifest,
+        clock: () => AT,
+        newId: () => `attempt1-${++ids}`,
+      });
+      expect(end.state).toBe('settled');
+      const chain = await chainOf(wire, root);
+      const written = new Set((await wire.drive.listAll(root)).filter((f) => f.name.startsWith('checkpoint-')).map((f) => f.id));
+      const readBacks = wire.requests.filter((r) => r.url.searchParams.get('alt') === 'media' && written.has(decodeURIComponent(r.url.pathname.split('/').at(-1) ?? ''))).length;
+      return { requests: wire.requests.length - from, checkpoints: chain.length - 1, ops: manifest.operations.length, readBacks };
+    };
+    // A create whose answer carries no checksum is read back, as before: three Drive requests per checkpoint.
+    const before = await cost(false);
+    expect(before.readBacks).toBe(before.checkpoints + 1);
+    expect(before.requests).toBe(3 * before.checkpoints + 1);
+    // Drive's answer carries the stored bytes' checksum: the fence's read and the create, nothing more.
+    const after = await cost(true);
+    expect(after.checkpoints).toBe(before.checkpoints);
+    expect(after.readBacks).toBe(0);
+    expect(after.requests).toBe(2 * after.checkpoints);
+    console.log(`checkpoint cost: before=${(before.requests / before.ops).toFixed(2)} after=${(after.requests / after.ops).toFixed(2)} Drive requests per operation`);
+    expect(after.requests / after.ops).toBeLessThan(before.requests / before.ops);
+  });
+
   it('only the last 20 finished run folders are kept', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const drive = fixedDrive();

@@ -172,4 +172,26 @@ describe('tidy.yml', () => {
       expect(line, line).toMatch(/@[0-9a-f]{40}\b/);
     }
   });
+  it('the Install Claude Code step restores from the cache key and still installs on a miss', () => {
+    const tidy = readFileSync(join(ROOT, 'runner', 'workflows', 'tidy.yml'), 'utf8');
+    const steps = tidy.split(/\n(?= {6}- )/).slice(1);
+    const at = (pattern: RegExp): number => steps.findIndex((s) => pattern.test(s));
+    // Restored by the pinned version, as the original's ingest.yml caches its CLI (actions/cache, keyed on the version).
+    const cache = at(/uses: actions\/cache@[0-9a-f]{40}\b/);
+    const step = steps[cache] ?? '';
+    expect(step).toMatch(/\n {8}id: cache-claude-cli\n/);
+    expect(step).toMatch(/\n {8}if: vars\.BOWER_PROVIDER == 'claude'\n/);
+    expect(step).toMatch(/\n {10}path: ~\/claude-cli\n/);
+    expect(step).toMatch(/\n {10}key: claude-code-\$\{\{ runner\.os \}\}-\$\{\{ env\.CLAUDE_CODE_VERSION \}\}(\n|$)/);
+    // Installed only on a miss, into the folder the cache keeps; on the path either way.
+    const install = at(/name: Install Claude Code\n/);
+    expect(install).toBeGreaterThan(cache);
+    expect(steps[install]).toMatch(/\n {8}if: vars\.BOWER_PROVIDER == 'claude' && steps\.cache-claude-cli\.outputs\.cache-hit != 'true'\n/);
+    expect(steps[install]).toContain('npm install --prefix "$HOME/claude-cli" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"');
+    const path = at(/>> "\$GITHUB_PATH"/);
+    expect(path).toBeGreaterThan(cache);
+    expect(steps[path]).toMatch(/\n {8}if: vars\.BOWER_PROVIDER == 'claude'\n/);
+    expect(steps[path]).not.toContain('cache-hit');
+    expect(at(/name: Tidy up with Claude\n/)).toBeGreaterThan(Math.max(install, path));
+  });
 });

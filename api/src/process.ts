@@ -13,6 +13,11 @@
  * https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/), one active run,
  * the daily quota, then admission, keeping the manifest with the run.
  *
+ * Admission is timed in parts and logged as one line of numbers (`admission timing`): session and lease, the
+ * would-admit check, the Drive reads, the admit, the ticket and dispatch, and the whole, in milliseconds. A Worker's
+ * clock moves only across I/O (https://developers.cloudflare.com/workers/reference/security-model/#step-1-disallow-timers-and-multi-threading),
+ * which is all these parts are. What follows the dispatch, until the job starts, is GitHub's queue.
+ *
  * Staleness reuses the original app's thresholds and rule (bower `api/src/process.ts`,
  * `runStaleness`/`markStale`), measured on this contract's `requestedAt` and `phaseAt`.
  */
@@ -184,12 +189,49 @@ async function admission(env: Env, sub: string, scope: RunScope, now: number, fe
   return planned.manifest;
 }
 
+/** The parts of an admission, in the order they happen; each one's milliseconds are added up. */
+const PARTS = ['session', 'check', 'reads', 'admit', 'dispatch'] as const;
+type Part = (typeof PARTS)[number];
+
+/** Times the parts of one admission and logs them as one line of numbers. */
+class AdmissionTiming {
+  private readonly start = Date.now();
+  private at = this.start;
+  private readonly ms: Record<Part, number> = { session: 0, check: 0, reads: 0, admit: 0, dispatch: 0 };
+
+  /** Ends `part` now: the time since the last part ended is its. */
+  lap(part: Part): void {
+    const now = Date.now();
+    this.ms[part] += now - this.at;
+    this.at = now;
+  }
+
+  async time<T>(part: Part, work: () => Promise<T>): Promise<T> {
+    this.at = Date.now();
+    try {
+      return await work();
+    } finally {
+      this.lap(part);
+    }
+  }
+
+  log(): void {
+    console.log(`admission timing: ${PARTS.map((p) => `${p}=${this.ms[p]}ms`).join(' ')} total=${Date.now() - this.start}ms`);
+  }
+}
+
 /** `POST /process`, mounted at `/` by `index.ts`. */
 export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const fetchImpl: FetchLike = deps.fetchImpl ?? ((input, init) => fetch(input, init));
   const routes = new Hono<AppEnv>();
+  const timings = new WeakMap<Request, AdmissionTiming>();
 
-  routes.post('/process', requireSameOrigin, requireSession, requireLease, limitBody, requireJsonBody, async (c) => {
+  routes.post('/process', async (c, next) => {
+    timings.set(c.req.raw, new AdmissionTiming());
+    await next();
+  }, requireSameOrigin, requireSession, requireLease, limitBody, requireJsonBody, async (c) => {
+    const timing = timings.get(c.req.raw) ?? new AdmissionTiming();
+    timing.lap('session');
     const sub = signedInSub(c.get('userId'));
     let value: unknown;
     try {
@@ -204,8 +246,8 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const requestId = body.requestId ?? crypto.randomUUID();
     const person = personFor(env, sub);
     // Drive is read only for a press that would admit a new run; a repeat or a run going answers from the object.
-    const fresh = await reach('would admit', async (): Promise<boolean> => await person.wouldAdmit(requestId, now));
-    let manifest = fresh ? await admission(env, sub, body.scope, now, fetchImpl) : null;
+    const fresh = await timing.time('check', () => reach('would admit', async (): Promise<boolean> => await person.wouldAdmit(requestId, now)));
+    let manifest = fresh ? await timing.time('reads', () => admission(env, sub, body.scope, now, fetchImpl)) : null;
     const input = (): AdmitInput => ({
       scope: body.scope,
       allowWeb: body.allowWeb,
@@ -214,17 +256,20 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       dailyLimit: Number(env.DAILY_RUN_LIMIT),
       manifest,
     });
-    let result = await reach('admit', async (): Promise<AdmitResult> => await person.admit(input()));
+    const admit = (): Promise<AdmitResult> => timing.time('admit', () => reach('admit', async (): Promise<AdmitResult> => await person.admit(input())));
+    let result = await admit();
     // The run it looked like ended in between: this press is new after all, so it reads the inbox once.
     if (!result.admitted && result.refused === 'needs-manifest' && manifest === null) {
-      manifest = await admission(env, sub, body.scope, now, fetchImpl);
-      result = await reach('admit', async (): Promise<AdmitResult> => await person.admit(input()));
+      manifest = await timing.time('reads', () => admission(env, sub, body.scope, now, fetchImpl));
+      result = await admit();
     }
     if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
     if (!result.admitted) throw new HttpError(429, 'rate-limited');
     if (result.created === true) {
-      await dispatchNew(env, sub, result.run, body.allowWeb, now, fetchImpl);
+      const run = result.run;
+      await timing.time('dispatch', () => dispatchNew(env, sub, run, body.allowWeb, now, fetchImpl));
     }
+    timing.log();
     const reply: RunReply = { run: result.run, revision: result.revision };
     return c.json(reply);
   });
