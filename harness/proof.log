@@ -398,3 +398,4 @@ things-normalised	9a4a330340cfc01c	2026-10-08	red (fixed in afd863f)
 c04-prompt-fixes	4647861cdad60510	2026-10-08	red (fixed in ed6d2c6)
 things-normalised	cb3d0c3b8a38e800	2026-10-08	red (fixed in ed6d2c6)
 state-rewrite-change	8253f98b612a633f	2026-10-08	known-green: red by hand at bbc1d0e: both tests fail on assertions (Current state not rewritten; no question for an edited section); 335d2fa no longer reverts cleanly over later claude.ts commits
+drive-calls-cut	e0b5cd89dbdaf95d	2026-10-08	red (fixed in f41e508)
