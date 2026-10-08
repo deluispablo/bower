@@ -33,3 +33,13 @@
 2. **Proposing type-table rows** waits for the C11 slice (rules and proposals) as `type-proposals`: a report field, at most 2 per run, applied only once the person accepts.
 3. **`bench-4-scanned-pdf` stays unchanged,** so the speed comparison with the original stays like for like. Its file `scan0001.pdf` has no text and a name that says nothing, so under the method "asks" is the correct outcome. Quality is judged that way. The original's filing is recorded as the original's behaviour, not as Bower's bar.
 4. **The answer to an ask reaching the model** waits for the C11 slice as `ask-answer-loop`. Until then, an item that is asked about stays in the inbox, and a later run does not repeat a question that is already open.
+
+**Addendum 2, 2026-10-08: live garden ×5 on `c6ddb96` passes 2/5, because the note is dropped.** Every run filed the PDF in `Resources/Community garden`, with no ask and no new area. In three runs no note was made: `created=[]`, with 355–439 output tokens against about 670 in the passing runs. The input, `"note" (optional)` in `runner/src/claude.ts`, leaves the note to the model. The value gate is the only stated reason to skip it, and a fresh folder has no note it could confirm.
+- **The method requires the note.** In the local method every binary gets a source note. In the original, "a document (a PDF or a converted file) gets its companion note". The value gate decides only whether a compiled note is created or updated, never whether a document's own note is written.
+- **`document-note-required`** (`bower-implementer`), with the same validation as `placement-check`:
+  - Every thing with prepared text gets its `note`, unless a Timeline line on an existing note cites it (the value gate).
+  - The spine refuses a reply that breaks this, retries once with the reason, and a second refusal ends the run as C12 does.
+  - Photos and things with no text need no note.
+  - The prompt says so in the same words. Scripted tests cover all three paths.
+- **`fingerprint-normalised` is reopened** (`bower-mechanical`): `input=` still differs every run. The test is two runs on fresh fake folders with the same case, which must give the same fingerprint.
+- **`c04-offer-and-flat` waits** for these two entries, so its runs measure the fixed prompt. Claude is off.
