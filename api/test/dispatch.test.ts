@@ -112,6 +112,27 @@ describe('dispatch on admission', () => {
     expect(await token.json()).toMatchObject({ folderId: who.folder.root, attempt: 1 });
   });
 
+  it('admission timing is logged in parts', async () => {
+    const who = await holder();
+    const gh = github();
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { run } = await process(who, gh.fetchImpl, 'press-1');
+    await process(who, gh.fetchImpl, 'press-1');
+    const lines = log.mock.calls.map((args) => args.map(String).join(' ')).filter((line) => line.startsWith('admission timing'));
+    log.mockRestore();
+    // One line per press, in milliseconds: session and lease, the would-admit check, the Drive reads, the admit, the
+    // ticket and dispatch to GitHub, and the whole; a repeat reads nothing and dispatches nothing.
+    const part = (name: string): string => `${name}=(\\d+)ms`;
+    const shape = new RegExp(`^admission timing: ${['session', 'check', 'reads', 'admit', 'dispatch', 'total'].map(part).join(' ')}$`);
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(line).toMatch(shape);
+    const [, , , readsRepeat, , dispatchRepeat] = shape.exec(lines[1] ?? '') ?? [];
+    expect([readsRepeat, dispatchRepeat]).toEqual(['0', '0']);
+    // Numbers only: no run id, folder or ticket.
+    const ticket = gh.sent[0]?.body.client_payload.ticket ?? '';
+    for (const line of lines) for (const secret of [run?.id ?? '', who.folder.root, ticket]) expect(line).not.toContain(secret);
+  });
+
   it('a repeat or an active run dispatches nothing', async () => {
     const who = await holder();
     const gh = github();
