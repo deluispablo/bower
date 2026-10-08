@@ -78,7 +78,7 @@ describe('the second-brain method (TL-P4-08)', () => {
     const run = await runWithClaude(c, answering((ctx, id) => ({
       kind: 'tidy-intent',
       v: 1,
-      things: [{ fileId: id('Leek soup.txt'), to: 'Resources/Cooking', name: 'Leek soup.txt' }],
+      things: [{ fileId: id('Leek soup.txt'), to: 'Resources/Cooking', name: 'Leek soup.txt', note: { name: 'Leek soup.md', summary: 'A simple leek soup.', body: 'Leeks, potatoes and stock.' } }],
       asks: [{ pileId: ctx.piles.find((p) => /not sure/i.test(p.words))?.pileId ?? 'none', text: 'Is the letter of 14 October for the flat hunt?', yes: 'Yes, the flat hunt', no: 'No, the job hunt' }],
     })));
     expect(run.code).toBe(0);
@@ -114,7 +114,7 @@ describe('the second-brain method (TL-P4-08)', () => {
     const asking = (text: string) => answering((ctx, id) => ({
       kind: 'tidy-intent',
       v: 1,
-      things: [{ fileId: id('Leek soup.txt'), to: 'Resources/Cooking', name: 'Leek soup.txt' }].filter(() => ctx.piles.some((p) => p.things.some((t) => t.name === 'Leek soup.txt'))),
+      things: [{ fileId: id('Leek soup.txt'), to: 'Resources/Cooking', name: 'Leek soup.txt', note: { name: 'Leek soup.md', summary: 'A simple leek soup.', body: 'Leeks, potatoes and stock.' } }].filter(() => ctx.piles.some((p) => p.things.some((t) => t.name === 'Leek soup.txt'))),
       asks: [{ pileId: ctx.piles.find((p) => /not sure/i.test(p.words))?.pileId ?? 'none', text, yes: 'Yes, the flat hunt', no: 'No, the job hunt' }],
     }), calls);
     const questionsOf = (after: Record<string, string>) => (JSON.parse(after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string; text: string }> }).questions;
