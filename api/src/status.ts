@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 
 import { requireSession } from './auth.js';
 import type { AppEnv } from './env.js';
-import { personFor, reach, signedInSub } from './process.js';
+import { personFor, signedInSub } from './route-helpers.js';
 import type { RunReply } from './process.js';
 
 /** `GET /status`, mounted at `/` by `index.ts`. */
@@ -17,7 +17,7 @@ export function createStatusRoutes(): Hono<AppEnv> {
 
   status.get('/status', requireSession, async (c) => {
     const sub = signedInSub(c.get('userId'));
-    const reply: RunReply = await reach('runStatus', () => personFor(c.get('env'), sub).runStatus(Date.now()));
+    const reply: RunReply = await personFor(c.get('env'), sub).runStatus(Date.now());
     return c.json({ run: reply.run, revision: reply.revision });
   });
 

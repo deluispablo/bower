@@ -15,7 +15,8 @@ import { Hono } from 'hono';
 import type { MiddlewareHandler } from 'hono';
 
 import { requireSession } from './auth.js';
-import type { AppEnv, Env } from './env.js';
+import { jsonBody, personFor, signedInSub, unreadable } from './route-helpers.js';
+import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
 import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
 
@@ -42,11 +43,6 @@ interface SessionBody {
   gen: number;
 }
 
-/** A body that fails validation is refused as the JSON guard refuses one: 415, no other code. */
-function unreadable(): HttpError {
-  return new HttpError(415, 'unsupported-media-type');
-}
-
 function parseBody(value: unknown): SessionBody {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
   const { place, action, gen } = value as Record<string, unknown>;
@@ -55,25 +51,6 @@ function parseBody(value: unknown): SessionBody {
   // A missing gen counts as 0: a place with any recorded leave then has its check discarded (TL-P3-14).
   if (gen !== undefined && !(typeof gen === 'number' && Number.isSafeInteger(gen) && gen >= 0)) throw unreadable();
   return { place, action: action as SessionAction, gen: gen ?? 0 };
-}
-
-function personFor(env: Env, sub: string) {
-  return env.PERSON.get(env.PERSON.idFromName(sub));
-}
-
-/** Calls the person object; any failure on the way is `internal` with no cause, logged here only (TL-P3-04). */
-async function reach<T>(what: string, call: () => Promise<T>): Promise<T> {
-  try {
-    return await call();
-  } catch (err) {
-    console.error(`person object: ${what} failed`, err);
-    throw new HttpError(500, 'internal');
-  }
-}
-
-function signedInSub(sub: string | undefined): string {
-  if (sub === undefined) throw new HttpError(500, 'internal');
-  return sub;
 }
 
 /**
@@ -90,7 +67,7 @@ export const requireLease: MiddlewareHandler<AppEnv> = async (c, next) => {
     place !== undefined &&
     PLACE.test(place) &&
     Number.isSafeInteger(epoch) &&
-    (await reach('holdsLease', () => personFor(c.get('env'), sub).holdsLease(place, epoch)));
+    (await personFor(c.get('env'), sub).holdsLease(place, epoch));
   if (!holds) throw new HttpError(409, 'stale-session', STALE_SESSION_TEXT);
   await next();
 };
@@ -101,15 +78,8 @@ export function createSessionRoutes(): Hono<AppEnv> {
 
   routes.post('/session', requireSameOrigin, requireSession, limitBody, requireJsonBody, async (c) => {
     const sub = signedInSub(c.get('userId'));
-    let value: unknown;
-    try {
-      value = await c.req.json();
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      throw unreadable();
-    }
-    const { place, action, gen } = parseBody(value);
-    const reply = await reach('session', () => personFor(c.get('env'), sub).session(place, action, gen, Date.now()));
+    const { place, action, gen } = await jsonBody(c, parseBody);
+    const reply = await personFor(c.get('env'), sub).session(place, action, gen, Date.now());
     return c.json({ active: reply.active, epoch: reply.epoch });
   });
 

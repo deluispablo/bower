@@ -24,17 +24,17 @@ beforeEach(async () => {
 });
 
 /** The person object, except that `method` answers as an older version without it would. */
-function skewed(method: string): Env {
+function skewed(method: string, failure: Error = new TypeError(`The RPC receiver does not implement the method "${method}"`)): Env {
   const wrap = (stub: object): object =>
     new Proxy(stub, {
       get(target, prop) {
         if (prop === method) {
           return async () => {
-            throw new TypeError(`The RPC receiver does not implement the method "${method}"`);
+            throw failure;
           };
         }
         const value = Reflect.get(target, prop) as unknown;
-        return typeof value === 'function' && prop !== 'then' ? (...args: unknown[]) => (value as (...a: unknown[]) => unknown).apply(target, args) : value;
+        return typeof value === 'function' && prop !== 'then' ? (...args: unknown[]) => (Reflect.get(target, prop) as (...a: unknown[]) => unknown)(...args) : value;
       },
     });
   const person = {
@@ -115,5 +115,20 @@ describe('person routes on a version skew', () => {
       }
     }
     expect(failures).toEqual([]);
+  });
+
+  it('a person object on the previous version answers 503 with Retry-After', async () => {
+    const me = await someone();
+    const response = await createApp().request(`${APP}/status`, { headers: me.headers }, skewed('runStatus'));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('5');
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('internal');
+  });
+
+  it('another person object failure still answers 500', async () => {
+    const me = await someone();
+    const response = await createApp().request(`${APP}/status`, { headers: me.headers }, skewed('runStatus', new Error('storage failed')));
+    expect(response.status).toBe(500);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('internal');
   });
 });

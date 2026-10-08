@@ -45,6 +45,7 @@ import type { AuthDeps } from './auth.js';
 import { accessTokenFor } from './drive-token.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
+import { personFor, signedInSub } from './route-helpers.js';
 import type { FetchLike } from './google.js';
 import { requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
@@ -383,7 +384,7 @@ export async function ensureVault(
 ): Promise<VaultResult> {
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
   const files = options.files ?? VAULT_TEMPLATE;
-  const person = env.PERSON.get(env.PERSON.idFromName(sub));
+  const person = personFor(env, sub);
   const drive = new Drive(env, sub, fetchImpl);
 
   // Delete me or a sign-out may land while this call waits on Drive: each person-object write below carries
@@ -491,8 +492,7 @@ export function createVaultRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   // Only the window holding the person's session lease may make or find the folder (TL-P3-14).
   vault.post('/vault', requireSameOrigin, requireSession, requireLease, async (c) => {
-    const sub = c.get('userId');
-    if (sub === undefined) throw new HttpError(500, 'internal');
+    const sub = signedInSub(c.get('userId'));
     const options: VaultOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
     const account = c.get('account');

@@ -43,6 +43,7 @@ import type { DriveTokenKeeper } from './drive-token.js';
 import type { AppEnv, Env } from './env.js';
 import type { FetchLike } from './google.js';
 import { HttpError } from './errors.js';
+import { jsonBody, personFor, signedInSub, unreadable } from './route-helpers.js';
 import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
 import type { AuthDeps } from './auth.js';
@@ -131,11 +132,6 @@ interface ProcessBody {
   answer: boolean;
 }
 
-/** A body that fails validation is refused as the JSON guard refuses one: 415, no other code. */
-function unreadable(): HttpError {
-  return new HttpError(415, 'unsupported-media-type');
-}
-
 function parseBody(value: unknown): ProcessBody {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
   const { scope, allowWeb, requestId, subject, answer } = value as Record<string, unknown>;
@@ -147,31 +143,6 @@ function parseBody(value: unknown): ProcessBody {
   return { scope, allowWeb, requestId, subject, answer: answer === true };
 }
 
-export function personFor(env: Env, sub: string) {
-  return env.PERSON.get(env.PERSON.idFromName(sub));
-}
-
-/** Calls the person object; any failure on the way is `internal` with no cause, logged here only (TL-P3-04). */
-export async function reach<T>(what: string, call: () => Promise<T>): Promise<T> {
-  try {
-    return await call();
-  } catch (err) {
-    // Version skew: a newer version reached an old person object (Cloudflare Durable Objects gradual deployment)
-    // The RPC call fails with a TypeError about an unimplemented method.
-    if (err instanceof TypeError && /^The RPC receiver does not implement the method/.test(err.message)) {
-      console.error(`person object: ${what} failed (version skew)`, err);
-      throw new HttpError(503, 'internal');
-    }
-    console.error(`person object: ${what} failed`, err);
-    throw new HttpError(500, 'internal');
-  }
-}
-
-export function signedInSub(sub: string | undefined): string {
-  if (sub === undefined) throw new HttpError(500, 'internal');
-  return sub;
-}
-
 /**
  * Sends a new run to GitHub with attempt 1's ticket. A failure never changes the answer: the run stays
  * `queued` and the alarm recovers it. Nothing here logs the ticket.
@@ -181,7 +152,7 @@ export async function dispatchNew(env: Env, person: PersonHandle, run: RunWire, 
     console.error('tidy dispatch is not configured: no GitHub token');
     return;
   }
-  const ticket = await reach('mint ticket', async () => await person.mintTicket(run.id, 1, now));
+  const ticket = await person.mintTicket(run.id, 1, now);
   if (ticket === null) return;
   const outcome = await dispatchOutcome(
     { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, runId: run.id, attempt: 1, ticket, scope: run.scope, allowWeb },
@@ -218,7 +189,7 @@ export interface AdmissionAsk {
  */
 export async function admission(env: Env, person: PersonHandle, ask: AdmissionAsk, fetchImpl: FetchLike, spent: () => number): Promise<AdmissionManifest> {
   const { scope, subjects, now } = ask;
-  const folderId = await reach('folder', async () => await person.folderId());
+  const folderId = await person.folderId();
   if (folderId === null) throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
   // The token is asked of the person object once per press, not once per Drive call; a 401 asks for a fresh one.
   let token: Promise<string> | null = null;
@@ -291,14 +262,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const timing = timings.get(c.req.raw) ?? new AdmissionTiming();
     timing.lap('session');
     const sub = signedInSub(c.get('userId'));
-    let value: unknown;
-    try {
-      value = await c.req.json();
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      throw unreadable();
-    }
-    const body = parseBody(value);
+    const body = await jsonBody(c, parseBody);
     const env = c.get('env');
     const now = Date.now();
     // Every fetch this press makes counts against a Worker invocation's subrequests: 50 on the free plan
@@ -322,7 +286,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       ...(body.answer ? { answer: true } : {}),
       ...(body.subject !== undefined ? { subject: body.subject } : {}),
     });
-    const admit = (label: 'check' | 'admit'): Promise<AdmitResult> => timing.time(label, () => reach('admit', async (): Promise<AdmitResult> => await person.admit(input())));
+    const admit = (label: 'check' | 'admit'): Promise<AdmitResult> => timing.time(label, async () => await person.admit(input()));
     // The object decides first, with no manifest: a repeat, a run going, an answer that waits or the day's limit answer
     // with no Drive read. Only a press that would admit a new run (`needs-manifest`) reads the inbox, once.
     let result = await admit('check');
