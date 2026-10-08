@@ -15,7 +15,7 @@ import { parseRunCheckpoint, parseRunReport, verifyCheckpointChain, type Checkpo
 import { parseRunManifestV2, type Manifest, type OperationV2 } from '../contracts/run-manifest';
 import { BowerError } from '../types';
 import { sha256 } from '../vault/hashes';
-import { SYSTEM } from '../vault/layout';
+import { SYSTEM, recordStamp } from '../vault/layout';
 
 /** `.bower/runs`, as Drive names it. */
 export const RUNS_NAME = 'runs';
@@ -157,7 +157,7 @@ export class RunRecords {
    * other bytes refuse. A failed create whose record landed anyway (a lost
    * reply) is reconciled by its exact body. Confirmed by reading it back.
    */
-  async put(w: FencedDrive, where: Where, name: string, text: string): Promise<void> {
+  async put(w: FencedDrive, where: Where, name: string, text: string, stamp?: Record<string, string>): Promise<void> {
     const bytes = new TextEncoder().encode(text);
     /** Whether the record is there with these bytes, from a listing (one is taken when none is given). */
     const there = async (found: Folders | null = null): Promise<boolean> => {
@@ -175,7 +175,7 @@ export class RunRecords {
     this.placed.set(this.placeOf(where), parent);
     let made: DriveFile;
     try {
-      made = await w.createText(parent, name, text);
+      made = await w.createText(parent, name, text, stamp);
     } catch (e) {
       if (!(await there())) throw e;
       // The record landed and only its answer was lost: it is the same record, not a second one.
@@ -349,7 +349,7 @@ export class RunRecords {
       console.error(`A disposition of pile ${value.pileId} was refused (${parsed.ok ? 'hash' : parsed.reason})`);
       throw new BowerError('unknown', SAVE_FAILED);
     }
-    await this.put(w, 'piles', dispositionName(c.hash), c.text);
+    await this.put(w, 'piles', dispositionName(c.hash), c.text, recordStamp(value.pileId));
   }
 
   /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed. */
