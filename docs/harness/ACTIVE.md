@@ -263,3 +263,4 @@ P3-9 is closed.
 - P4-13 fix-round check PASS (counts confirmed: 80 calls, apply 4.7 s modelled; minors to polish). Waiting for the suites.
 - Suites at 5e756a1: check 3620/190/155, e2e 226, e2e:fake 250, e2e:pwa pass. Main moves; SHA to the lead.
 - Main and backup at ba74598; SHA sent to the lead (offer-and-flat x3 + garden x1 + a C05 case suggested).
+- ba74598 live: POST /process 500 on every press (no Actions run); sheet stuck on Starting. Asked the lead for the Worker stack. Presses stopped.
