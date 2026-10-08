@@ -42,6 +42,14 @@ export class SeenFiles {
     return file;
   }
 
+  /**
+   * What the plan saw of a file, as the run's own view of it: the name and place it must still have. Its modifiedTime
+   * is not compared unless `withTime` (a text change elsewhere does not clash with a move or a Bin).
+   */
+  expectPlace(file: DriveFile, withTime = false): void {
+    this.seen.set(file.id, { ...file, parents: [...file.parents], ...(withTime ? {} : { modifiedTime: '' }) });
+  }
+
   forget(id: string): void {
     this.seen.delete(id);
   }
@@ -55,7 +63,7 @@ export class SeenFiles {
     else {
       if (now.file.name !== seen.name) moved.push('name');
       if (!sameParents(now.file.parents, seen.parents)) moved.push('parents');
-      if (target.part === 'target' && now.file.modifiedTime !== seen.modifiedTime) moved.push('modifiedTime');
+      if (target.part === 'target' && seen.modifiedTime !== '' && now.file.modifiedTime !== seen.modifiedTime) moved.push('modifiedTime');
     }
     if (!moved.length) return;
     console.error(`Refused a write to ${target.part} ${target.id}: ${moved.join(', ')}`);
