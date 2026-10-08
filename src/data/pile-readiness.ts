@@ -70,8 +70,8 @@ const PILES_NAME = SYSTEM.piles.slice(SYSTEM.dir.length + 1);
  * The one pile-records query (TL-P4-16 b): the declarations or dispositions in `.bower/piles` (by real parents) that can be
  * about these piles, from the listing alone; none is read. Records are stamped with their pile id when written
  * (`PROP.recordPile`; Drive `files.list` returns `appProperties` with each file, so no second call is needed), so a
- * stamped record is picked by its stamp, never by its name; a record written before the stamp has none and is always
- * included, to be read and matched by the pile id in its own bytes. With no `pileIds`, every record.
+ * stamped record is picked by its stamp, never by its name. A record with no stamp is not read (TL-P4-16 ruling: only
+ * staging test folders have them). With no `pileIds`, every stamped record.
  */
 export function pileRecords(files: readonly DriveFile[], rootId: string, kind: 'declaration' | 'disposition', pileIds?: ReadonlySet<string>): DriveFile[] {
   const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
@@ -80,7 +80,7 @@ export function pileRecords(files: readonly DriveFile[], rootId: string, kind: '
     if (f.folder || !f.name.startsWith(`${kind}-`) || !f.parents.some((p) => piles.has(p))) return false;
     if (kind === 'declaration' && !f.name.endsWith('.json')) return false;
     const stamp = f.appProperties?.[PROP.recordPile];
-    return !pileIds || stamp === undefined || pileIds.has(stamp);
+    return stamp !== undefined && (!pileIds || pileIds.has(stamp));
   });
 }
 
@@ -198,9 +198,7 @@ export async function findLooseDeclarations(files: readonly DriveFile[], rootId:
   const wanted = pileRecords(files, rootId, 'declaration', onlyPile === undefined ? undefined : new Set([onlyPile])).filter((copy) => {
     // A declaration a live folder or file carries is read through that pile, never here.
     if (skip.has(copy.name.slice('declaration-'.length, -'-.json'.length - 64))) return false;
-    const stamp = copy.appProperties?.[PROP.recordPile];
-    if (stamp === undefined) return true;
-    return copy.appProperties?.[PROP.recordAnchor] !== 'folder' && !retired.has(stamp);
+    return copy.appProperties?.[PROP.recordAnchor] !== 'folder' && !retired.has(copy.appProperties?.[PROP.recordPile] ?? '');
   });
   // The copies are read together (a score of them is one wait on a slow Drive, not a score); the merge keeps their order.
   const parsedCopies = await Promise.all(wanted.map(async (copy) => {
@@ -316,7 +314,7 @@ export interface Accounting extends Readiness {
 
 /**
  * Reads (and keeps, by file id and modified time) the dispositions that can be about this pile (`pileRecords`), all at
- * once: those stamped with its id and those written before the stamp. The rest of the history is never read.
+ * once: those stamped with its id. The rest of the history is never read.
  */
 async function readDispositions(rootId: string, pileId: string, files: readonly DriveFile[], read: ReadBytes, cache?: Map<string, DispositionResult>): Promise<{ f: DriveFile; parsed: DispositionResult }[]> {
   const candidates = pileRecords(files, rootId, 'disposition', new Set([pileId]));

@@ -209,3 +209,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c2-worker-dispatch passes — Only the alarm dispatches; a press during recovery is dispatched at once; Delete me during admission admits nothing (P4-27, P4-29 PASS)
 - 2026-10-09: c2-worker-dispatch passes — Admission compares the account epoch (kept generation floor), never the session; sign-out keeps waiting answers (P4-30 PASS)
 - 2026-10-09: c2-transport-options passes — Backoff, sleep and signal are send options; known-offline uploads show offline at once (P4-33 PASS)
+- 2026-10-09: c2-pile-records passes — One pile-records query by stamped pile id; Home reads only inbox piles' records; no legacy branch (P4-32 PASS, lead ruling 787f0cd)

@@ -2657,7 +2657,6 @@ describe('one Home load on a folder like the live one (TL-P4-11 addendum)', () =
       reads: {
         '.bower/changes/<change>.json': 12,
         '.bower/piles/declaration-<id>.json': 1,
-        '.bower/piles/disposition-<hash>.json': 20,
         '.bower/questions.json': 1,
         '.bower/suggestions.json': 1,
         'Inbox/<pile>/<thing>.pdf': 4,

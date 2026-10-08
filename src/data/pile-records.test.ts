@@ -12,7 +12,7 @@ const file = (id: string, name: string, parent: string, appProperties?: Record<s
 const base = (): DriveFile[] => [file('BOWER', '.bower', 'ROOT_ID', undefined, true), file('PILES', 'piles', 'BOWER', undefined, true)];
 
 describe('the pile-records query picks records by the pile id they are stamped with', () => {
-  it('returns the stamped records of the piles asked for, and every record written before the stamp', () => {
+  it('returns the stamped records of the piles asked for, and never an unstamped one', () => {
     const files = [
       ...base(),
       file('d-1', `declaration-decl-1-${hash}.json`, 'PILES', recordStamp('pile-1', 'folder')),
@@ -25,8 +25,9 @@ describe('the pile-records query picks records by the pile id they are stamped w
       file('x-away', `disposition-${'4'.repeat(64)}.json`, 'ROOT_ID', recordStamp('pile-1')),
     ];
     expect(pileRecords(files, 'ROOT_ID', 'disposition', new Set(['pile-1'])).map((f) => f.id)).toEqual(['x-1']);
-    expect(pileRecords(files, 'ROOT_ID', 'declaration', new Set(['pile-1'])).map((f) => f.id)).toEqual(['d-1', 'd-old']);
+    expect(pileRecords(files, 'ROOT_ID', 'declaration', new Set(['pile-1'])).map((f) => f.id)).toEqual(['d-1']);
     expect(pileRecords(files, 'ROOT_ID', 'disposition').map((f) => f.id)).toEqual(['x-1', 'x-10', 'x-named']);
+    expect(pileRecords(files, 'ROOT_ID', 'declaration').map((f) => f.id)).toEqual(['d-1', 'd-10']);
   });
 
   it('a new pile declaration is stamped with its pile id and layout, so a later Home never reads it for another pile', async () => {
@@ -44,7 +45,7 @@ describe('the pile-records query picks records by the pile id they are stamped w
 });
 
 describe('loose declarations are read only when they can be waiting', () => {
-  it('skips folder declarations and those a stamped disposition retired, reads the rest together, and never loses one written before the stamp', async () => {
+  it('skips folder declarations and those a stamped disposition retired, and reads the rest together', async () => {
     const reads: string[] = [];
     const files = [
       ...base(),
@@ -56,10 +57,10 @@ describe('loose declarations are read only when they can be waiting', () => {
     ];
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', async (id) => { reads.push(id); return new Uint8Array(); });
-    expect(reads.sort()).toEqual(['keep', 'old']);
+    expect(reads).toEqual(['keep']);
   });
 
-  it('for one pile asks only its own copies and the unstamped ones, whatever retired it', async () => {
+  it('for one pile asks only its own copies, whatever retired it', async () => {
     const reads: string[] = [];
     const files = [
       ...base(),
@@ -70,6 +71,6 @@ describe('loose declarations are read only when they can be waiting', () => {
     ];
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', async (id) => { reads.push(id); return new Uint8Array(); }, undefined, new Set(), 'pile-1');
-    expect(reads.sort()).toEqual(['mine', 'old']);
+    expect(reads).toEqual(['mine']);
   });
 });
