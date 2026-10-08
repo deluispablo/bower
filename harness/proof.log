@@ -400,3 +400,4 @@ things-normalised	cb3d0c3b8a38e800	2026-10-08	red (fixed in ed6d2c6)
 state-rewrite-change	8253f98b612a633f	2026-10-08	known-green: red by hand at bbc1d0e: both tests fail on assertions (Current state not rewritten; no question for an edited section); 335d2fa no longer reverts cleanly over later claude.ts commits
 drive-calls-cut	e0b5cd89dbdaf95d	2026-10-08	red (fixed in f41e508)
 state-rewrite-change	a706fe5a55ca5da3	2026-10-08	known-green: red by hand at aea3176: 3 of 6 fail on assertions (md5 adoption, no-bowerMd5 line and question, empty undo); the other 3 pin first-round behaviour; aa8e320 no longer reverts cleanly over the drive-calls-cut effects.ts
+drive-calls-cut	7754cbf452152723	2026-10-08	red (fixed in 4170cc2)
