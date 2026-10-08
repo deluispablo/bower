@@ -185,3 +185,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: ask-answer-loop passes — Verify updated after state-yes-writes replaced the Write it test (TL-P4-13 addendum)
 - 2026-10-08: corpus-grounded-scorer passes — Every corpus expectation's numbers are grounded in its own case; c07's ungrounded offer line fixed (TL-P4-13)
 - 2026-10-08: c1-digest passes — One digest module serves app, runner and Worker; the fake's report check uses MD5 like the runner (TL-P4-14 stage 1; removed 38 lines)
+- 2026-10-08: c1-small-fixes passes — BirdLab only in development; Settings plural; markSeen errors reported (TL-P4-14 stage 1)

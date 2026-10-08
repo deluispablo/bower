@@ -5435,7 +5435,7 @@
     "id": "c1-small-fixes",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "BirdLab only in development builds; Settings plural; markSeen errors reported.",
     "steps": [
       "Red from today's drift: visible defects",
