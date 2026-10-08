@@ -25,7 +25,7 @@
  * Drive v3 offers no compare-and-swap on files: these are prechecks with a short window, not a lock (ARCHITECTURE,
  * "Safety at the actual storage boundary").
  */
-import { createHash } from 'node:crypto';
+import { sha256Hex, sha256Sync } from '../../src/data/contracts/hashes';
 import { BowerError } from '../../src/data/types';
 import type { Checkpoint, EffectEvidence, Failure } from '../../src/data/contracts/run-checkpoint';
 import { readBackEdit, recheckEdit, savedLinkKey } from '../../src/data/contracts/note-edit';
@@ -61,7 +61,7 @@ export const STAMP = 'bowerOp';
  * (TL-P4-05 addendum 2). Written out, a run id (87 characters) and an operation id (64) are more than the 124 bytes Drive keeps for one property's
  * key and value (https://developers.google.com/workspace/drive/api/guides/properties).
  */
-export const stampOf = (runId: string, operationId: string): string => createHash('sha256').update(`${runId}:${operationId}`).digest('hex').slice(0, 32);
+export const stampOf = (runId: string, operationId: string): string => sha256Sync(`${runId}:${operationId}`).slice(0, 32);
 
 type Effect = OperationV2['effect'];
 
@@ -185,7 +185,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
         if (err instanceof BowerError && err.code === 'not-found') return { refused: refused('conflict', NOT_AS_SEEN) };
         throw err;
       }
-      if (createHash('sha256').update(bytes).digest('hex') !== e.beforeContent.sha256) return { refused: refused('conflict', NOTE_CHANGED) };
+      if ((await sha256Hex(bytes)) !== e.beforeContent.sha256) return { refused: refused('conflict', NOTE_CHANGED) };
       if ((await recheckEdit(e, bytes)) !== 'ok') return { refused: refused('conflict', NOTE_CHANGED) };
       // The write carries the modifiedTime the plan saw, and the fence reads the file right before the send and refuses
       // it if its name, place or modifiedTime differ: that read is the check, with no earlier one to go stale.
@@ -269,10 +269,10 @@ export function driveEffects(drive: RunnerDrive): Effects {
       return ev && shows(e, ev, parentId) ? toEvidence(ev, 'blob') : null;
     }
     const bytes = new TextEncoder().encode(e.text);
-    if (!drive.confirmsBytes(answer.id, bytes)) return null;
+    if (!(await drive.confirmsBytes(answer.id, bytes))) return null;
     const stored = drive.answeredFile(answer.id);
     if (!stored) return null;
-    const ev: StoredEvidence = { file: stored, trashed: false, content: { size: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') } };
+    const ev: StoredEvidence = { file: stored, trashed: false, content: { size: bytes.byteLength, sha256: await sha256Hex(bytes) } };
     if (e.kind === 'edit-text') {
       const read = await readBackEdit(e, { fileId: stored.id, name: stored.name, parents: stored.parents, trashed: false, bytes });
       return read === 'applied' && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256 ? toEvidence(ev, 'utf8') : null;

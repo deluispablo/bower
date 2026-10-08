@@ -24,6 +24,7 @@ import { isJournalRecord, type JournalRecord } from '../contracts/journal-record
 import { PROP, SYSTEM, isRunnerFile, type HashesFile, type QuestionsFile, type RequestsFile } from '../vault/layout';
 import { ruleLike } from '../rules';
 import { linkTitle, savedLinkAddress, savedLinkUrl } from '../search-text';
+import { EMPTY_MD5 } from '../contracts/hashes';
 import { sha256 } from '../vault/hashes';
 import { parseNote, serializeNote, type ParsedNote } from '../vault/note-format';
 import { parseRules, serializeRules } from '../vault/rules-format';
@@ -545,7 +546,6 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const pileOf = new Map(inbox.flatMap((p) => p.items.map((i) => [i.id, p.id] as const)));
   const related = (x: string | undefined, y: string | undefined): boolean => x !== undefined && y !== undefined && (x === y || pileOf.get(x) === y || pileOf.get(y) === x);
   /** Equal content is the same subject only for the same thing uploaded again: not the empty file, and not while both are in the inbox. */
-  const EMPTY_MD5 = 'd41d8cd98f00b204e9800998ecf8427e';
   const sameContent = (a: Question, b: Question): boolean => !!a.hash && a.hash === b.hash && a.hash !== EMPTY_MD5 && !inInbox.has(subjectOf(a) ?? '');
   const sameThing = (a: Question, b: Question): boolean => a.id === b.id || related(subjectOf(a), subjectOf(b)) || sameContent(a, b) || sameContent(b, a);
   /** A list too small to hold a question (`{"v":1,"questions":[]}` is 24 bytes, one question over 100) is not read. */

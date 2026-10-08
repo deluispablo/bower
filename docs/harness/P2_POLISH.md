@@ -270,3 +270,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-20b (ask-answer-loop, minor): the Worker computes `created` (person.ts:585) but drops it; answer-loop.ts GOING duplicates api ACTIVE_PHASES with no shared constant; the no-then-yes order is untested and scripted settles both.
 - home-errors-shown (left out): TidyButton, StatusBar and Palette still ignore usePiles().error.
 - P4-20c (ask-answer-loop, minor): a failed run-end start is silent and a retry still says `waits` (person.ts admitSync/startWaiting); Delete me during the alarm's Drive reads can admit a run (same race as /process); the latest answer's allowWeb applies to all waiting answers; untested: a press racing startWaiting, failStale waking answers, waitingFailed retries. Deploy: Worker first.
+- P4-21 (c1-drive-ops-table, minor): bound() skips the after-check for unknown keys (fails open; unreachable today).

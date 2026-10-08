@@ -17,14 +17,13 @@
  */
 import type { Checkpoint } from '../contracts/run-checkpoint';
 import type { OperationV2, SeenFile } from '../contracts/run-manifest';
+import { EMPTY_MD5 } from '../contracts/hashes';
 import type { DriveFile } from '../drive/drive-api';
 import { PILE_NOTE } from '../piles';
 import { SYSTEM } from '../vault/layout';
 import type { VaultIndex } from '../vault/vault-index';
 import type { RunManifest } from './records';
 
-/** The MD5 of no bytes at all: every empty file has it, so it never says two files are the same. */
-export const EMPTY_MD5 = 'd41d8cd98f00b204e9800998ecf8427e';
 
 /** What a thing is a copy of: a file already filed (by its listing entry), or another thing of the same run. */
 export type Duplicate = { of: 'filed'; file: DriveFile } | { of: 'run'; keptId: string };

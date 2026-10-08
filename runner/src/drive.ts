@@ -34,7 +34,6 @@
  * request once, as the fake's `FaultHook` does (`refuse`: nothing is sent;
  * `lose-reply`: the write lands, then its answer is lost).
  */
-import { createHash } from 'node:crypto';
 import { BowerError } from '../../src/data/types';
 import { driveError, type DriveFile, type DrivePatch } from '../../src/data/drive/drive-api';
 import { DriveHttp } from '../../src/data/drive/drive-http';
@@ -42,7 +41,7 @@ import type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } 
 import type { SpineRead } from '../../src/data/spine/plan';
 import type { AdmissionScope } from '../../src/data/spine/admission';
 import { admissionRead } from '../../src/data/spine/read';
-import { sha256 } from '../../src/data/contracts/hashes';
+import { md5Hex, sha256, sha256Hex } from '../../src/data/contracts/hashes';
 import { SeenFiles, targetOf, type StoredNow } from './still-as-seen';
 import { retried } from './retry';
 import { staleAttempt, type RunnerToken } from './token';
@@ -224,12 +223,12 @@ export class RunnerDrive {
   }
 
   /** Whether the answer to this run's own write to `id` confirms exactly these bytes (the md5 or sha-256 Drive stored). */
-  confirmsBytes(id: string, bytes: Uint8Array): boolean {
+  async confirmsBytes(id: string, bytes: Uint8Array): Promise<boolean> {
     const sum = this.sums.get(id);
     if (!sum) return false;
     if (sum.size !== undefined && sum.size !== bytes.byteLength) return false;
-    if (sum.sha256 !== undefined) return sum.sha256 === createHash('sha256').update(bytes).digest('hex');
-    return sum.md5 !== undefined && sum.md5 === createHash('md5').update(bytes).digest('hex');
+    if (sum.sha256 !== undefined) return sum.sha256 === (await sha256Hex(bytes));
+    return sum.md5 !== undefined && sum.md5 === md5Hex(bytes);
   }
 
   /** The file this run's own write answered, as it was then. */
@@ -382,7 +381,7 @@ export class RunnerDrive {
       this.answered.delete(id);
       return answered;
     }
-    return createHash('md5').update(await this.http.readBytes(id)).digest('hex');
+    return md5Hex(await this.http.readBytes(id));
   }
 
   /** One fenced write: one at a time, after its still-as-seen read. */
@@ -492,8 +491,8 @@ export class RunnerDrive {
     }
     if (text === null) return;
     const bytes = new TextEncoder().encode(text);
-    const sha = body.sha256Checksum !== undefined && body.sha256Checksum === createHash('sha256').update(bytes).digest('hex');
-    const md5 = body.md5Checksum !== undefined && body.md5Checksum === createHash('md5').update(bytes).digest('hex');
+    const sha = body.sha256Checksum !== undefined && body.sha256Checksum === (await sha256Hex(bytes));
+    const md5 = body.md5Checksum !== undefined && body.md5Checksum === md5Hex(bytes);
     if (sha || md5) this.confirmed.set(body.id, text);
     else if (body.sha256Checksum !== undefined || body.md5Checksum !== undefined) console.error(`Drive stored other bytes for file ${body.id} than were sent`);
   }
