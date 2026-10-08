@@ -5150,5 +5150,60 @@
     ],
     "verify": "pnpm e2e:fake e2e/qa10.spec.ts:165 --project=phone --repeat-each=30",
     "note": "TL lead 2026-10-08: failed in the full e2e:fake run at 8821e84 and 07ff1e4; the file alone passes 3/3."
+  },
+  {
+    "task": "p4-c",
+    "category": "fix",
+    "passes": false,
+    "id": "fallback-no-duplicate",
+    "what": "No Current-state fallback line when the same run already adds a line to that note citing the same thing.",
+    "steps": [
+      "Drop the fallback when a line in the same run cites the same thing on that note.",
+      "Keep the question for the person-edited section."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"no fallback line when the run already cites the same thing on that note\"",
+    "note": "TL-P4-10 addendum 2 (main 59c86ab). Live nyLnIC on 924e6d6: Job hunt got the offer line twice (model line + New: line)."
+  },
+  {
+    "task": "p4-c",
+    "category": "fix",
+    "passes": false,
+    "id": "duplicate-by-hash",
+    "what": "A thing with the same content hash as a file already filed goes to the Drive Bin and is reported \"already saved as <name>\", with no line and no note (local second-brain method).",
+    "steps": [
+      "Compare an admitted thing's md5Checksum with filed files (listing, no extra reads).",
+      "Bin it (never delete), report already saved as <name>; no note, no Timeline line.",
+      "Undo restores it from the Bin."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a thing whose content is already filed goes to the Bin as already saved|undo brings an already-saved thing back to the inbox\"",
+    "note": "TL-P4-10 addendum 2. Live 1_dTAZ on 924e6d6: the third offer upload added a confirmation line instead."
+  },
+  {
+    "task": "p4-b",
+    "category": "fix",
+    "passes": false,
+    "id": "home-inbox-first",
+    "what": "Home renders the Inbox from the listing first; the last run report and questions fill in after. Inbox within 3 s.",
+    "steps": [
+      "Render the Inbox from the listing before the report and questions reads finish.",
+      "Report and questions fill in after, without moving the Inbox.",
+      "e2e on the fake with a slow report read."
+    ],
+    "verify": "pnpm e2e:fake --grep \"the inbox shows before a slow report\"",
+    "note": "TL-P4-10 addendum 2. Live 924e6d6: Inbox showed after about 45 s, behind the last run report."
+  },
+  {
+    "task": "p4-c",
+    "category": "fix",
+    "passes": false,
+    "id": "c05-incorporation",
+    "what": "The C05 slice (updates of existing knowledge, the keep-one-note question) passes its corpus cases with scripted proposals through the Claude provider, then live.",
+    "steps": [
+      "Scripted proposals pass c05-hub-lines, c05-confirms-known-fact, c05-line-not-repeated and c05-keep-one-note.",
+      "The corpus scorer scores them green.",
+      "Then live on staging."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the C05 corpus cases score green with scripted proposals\"",
+    "note": "P4_PLAN P4-C: each slice proven with scripted proposals before the model. TL-P4-10 addendum 2: then the rest of C05."
   }
 ]
