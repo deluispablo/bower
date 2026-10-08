@@ -1,4 +1,4 @@
-import { env as testEnv, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import { env as testEnv, runInDurableObject } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
@@ -168,8 +168,8 @@ describe('runner wire', () => {
     // The alarm is set at the earliest expiry.
     const alarm = await runInDurableObject(p, (_i, state) => state.storage.getAlarm());
     expect(alarm).not.toBeNull();
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(await runDurableObjectAlarm(p)).toBe(true);
+    // The alarm fires by itself and prunes: no access in between.
+    for (let i = 0; i < 40 && (await kept()) !== undefined; i++) await new Promise((resolve) => setTimeout(resolve, 100));
     expect(await kept()).toBeUndefined();
     expect((await runner.token()).status).toBe(401);
 
