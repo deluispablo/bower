@@ -402,3 +402,4 @@ drive-calls-cut	e0b5cd89dbdaf95d	2026-10-08	red (fixed in f41e508)
 state-rewrite-change	a706fe5a55ca5da3	2026-10-08	known-green: red by hand at aea3176: 3 of 6 fail on assertions (md5 adoption, no-bowerMd5 line and question, empty undo); the other 3 pin first-round behaviour; aa8e320 no longer reverts cleanly over the drive-calls-cut effects.ts
 drive-calls-cut	7754cbf452152723	2026-10-08	red (fixed in 4170cc2)
 process-error-honest	44c65da75e84f07f	2026-10-08	red (fixed in b8fd381)
+admission-subrequest-budget	74b4360c99c8ed10	2026-10-08	red (fixed in 718914a)

@@ -5059,7 +5059,7 @@
     "id": "admission-subrequest-budget",
     "task": "p4-b",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "Admission counts every Worker subrequest (token, listing pages, read-ahead, dispatch) against a budget of 35 (the free plan allows 50 per invocation); the read-ahead takes what fits and the runner reads the rest, so a bigger folder no longer fails /process with 500.",
     "steps": [
       "Count every subrequest in /process admission.",
