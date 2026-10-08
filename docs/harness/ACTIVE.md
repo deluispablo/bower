@@ -333,3 +333,4 @@ P3-9 is closed.
 - c1-worker-deadlines closed (7ef5a810; schema v12; removed 43). P4-22 review (escalated) running; c1-still-as-seen running. 403/415.
 - P4-22 PASS (c1-worker-deadlines; minors to polish, one: a throwing handler retries forever). c1-admit-once (implementer) dispatched.
 - c1-admit-once closed (65dc654d; red by hand at 6a420145); over-limit + empty inbox now 429 not 409 (lead told). c1-worker-routes (implementer) dispatched. 404/415.
+- TL-P4-14 addendum 2 (dbf3b49): 429-before-409 accepted; c1-worker-deadlines reopened for backoff (6 attempts, then failed honestly); fix round queued after c1-worker-routes (both in api/src). 403/415.

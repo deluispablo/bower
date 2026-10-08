@@ -5379,15 +5379,15 @@
     "id": "c1-worker-deadlines",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": true,
+    "passes": false,
     "what": "One deadlines(kind, key, at) table and a single rearm(); alarm() handles whatever is due.",
     "steps": [
       "Red from today's drift: gone-ticket rows outliving the hour after Delete me; four kinds of deadline setting and clearing one alarm",
       "One mechanism; remove the copies it replaces in the same entry.",
       "Card: removed: <lines>; goldens equal or lower."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"one deadline table rearms the alarm\"",
-    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated."
+    "verify": "pnpm -C api exec vitest run -t \"one deadline table rearms the alarm|a handler that always throws stops after 6 attempts and its run ends failed\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Reopened by TL-P4-14 addendum 2 (main dbf3b49): a throwing handler retried every minute forever; exponential backoff up to 6 attempts, then the deadline is marked failed, console.error, and its run or ticket ends failed with its sentence."
   },
   {
     "id": "c1-admit-once",
