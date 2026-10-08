@@ -46,22 +46,38 @@ export async function answerRequestId(q: Pick<Question, 'id' | 'askedAt'>): Prom
   return `answer-${hex.slice(0, 40)}`;
 }
 
-/** What an answer did: the question it answered, and the tidy-up it asked for, if any (its failure is the caller's). */
+/**
+ * What an answer did, once the run it asks for has answered: `now` a run of its own started; `waits` a run is going and
+ * the answer waits for the next; `failed` the run could not start (the answer is kept for the next tidy-up); `next`
+ * it starts no run and the next tidy-up closes it; `not-yet` Bower cannot do what was chosen yet (the question closes).
+ */
+export type AnswerOutcome =
+  | { kind: 'now'; run: RunState }
+  | { kind: 'waits' }
+  | { kind: 'failed'; error: unknown }
+  | { kind: 'next' }
+  | { kind: 'not-yet' };
+
 export interface Answered {
   question: Question;
-  run: Promise<RunState> | null;
+  outcome: AnswerOutcome;
 }
 
 /**
  * Records the answer, then asks for the run it starts, if any. Null when the question is no longer open (answered
  * already, here or elsewhere): nothing is recorded or started again.
  */
-export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'answer'>, runs: Pick<RunSource, 'start'>, id: string, yes: boolean, opts: { allowWeb: boolean }): Promise<Answered | null> {
+export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'answer'>, runs: Pick<RunSource, 'start' | 'current'>, id: string, yes: boolean, opts: { allowWeb: boolean }): Promise<Answered | null> {
   const question = (await vault.questions()).find((q) => q.id === id);
   if (!question) return null;
   await vault.answer(id, yes);
   const plan = answerRun(question, yes);
-  if (!plan) return { question, run: null };
+  if (!plan) return { question, outcome: { kind: 'next' } };
   const requestId = await answerRequestId(question);
-  return { question, run: runs.start(plan.scope, { allowWeb: opts.allowWeb, requestId, ...(plan.scope === 'all' ? { subject: plan.subject } : {}) }) };
+  try {
+    const run = await runs.start(plan.scope, { allowWeb: opts.allowWeb, requestId, ...(plan.scope === 'all' ? { subject: plan.subject } : {}) });
+    return { question, outcome: { kind: 'now', run } };
+  } catch (error) {
+    return { question, outcome: { kind: 'failed', error } };
+  }
 }

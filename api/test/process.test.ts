@@ -141,6 +141,31 @@ describe('POST /process', () => {
     expect((await post(cookie, { scope: 'all', allowWeb: false, requestId: 'a'.repeat(64) }, fence)).status).toBe(200);
   });
 
+  it("an answer's run names its subject only with scope all, as a Drive or pile id", async () => {
+    const { cookie, fence } = await withThings();
+    const bad: unknown[] = [
+      { scope: 'instructions', allowWeb: false, requestId: 'answer-1', subject: 'file-1' },
+      { scope: 'all', allowWeb: false, requestId: 'answer-1', subject: '' },
+      { scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 'has space' },
+      { scope: 'all', allowWeb: false, requestId: 'answer-1', subject: '../up' },
+      { scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 'a'.repeat(129) },
+      { scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 7 },
+    ];
+    for (const body of bad) expect((await post(cookie, body, fence)).status, JSON.stringify(body)).toBe(415);
+    const ok = await post(cookie, { scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 'File_ID-1' }, fence);
+    expect(ok.status).toBe(200);
+  });
+
+  it("an answer's run asked twice counts once in the daily quota", async () => {
+    const { sub, cookie, fence } = await withThings();
+    const body = { scope: 'all', allowWeb: false, requestId: 'answer-twice', subject: 'File_ID-1' };
+    const first = (await (await post(cookie, body, fence)).json()) as RunReply;
+    const again = (await (await post(cookie, body, fence)).json()) as RunReply;
+    expect(again.run?.id).toBe(first.run?.id);
+    const quota = await runInDurableObject(person(sub), (_instance, state) => state.storage.sql.exec('SELECT counter FROM quota').toArray());
+    expect(quota).toEqual([{ counter: 1 }]);
+  });
+
   it('process and status answer the revision', async () => {
     const { cookie, fence } = await withThings();
     expect(await status(cookie)).toEqual({ run: null, revision: 0 });
