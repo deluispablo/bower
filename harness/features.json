@@ -5407,7 +5407,7 @@
     "id": "c1-shared-contracts",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "The Worker imports RunWire, phases, lease types and the folder template from src/data/contracts; one pure decideLease() for the Durable Object and the fake.",
     "steps": [
       "Red from today's drift: four phase lists, two lease state machines that differ on old leaves, three folder templates that differ",
