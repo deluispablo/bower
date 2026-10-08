@@ -219,3 +219,9 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-8 review minor: the c11 and c15 corpus `expected.json` files pin the implementation id `q-ask-p-N`; a rubric should match the question, not its id.
 - P4-8 fix-round minors: runner/src/claude.ts:713, the work folder is not removed if building the texts throws between the two tries (practically unreachable); runner/src/model-input.ts:16, the schema placeholder `"fileId":"<a thing's fileId>"` is blanked too, so an edit there does not move the hash; the retry overwrites the first try's model stats; a Rules.md front-matter line of 12 or more characters can serve as a basis.
 - P4-9 check minors (runner/src/claude.ts:533): a `.url` kept as `.url` is exempt from the note rule, but the prompt only exempts a link filed as a note; an empty `.txt` needs a note though it has nothing to say (untested); no test shows that a cite naming a different thing fails the check; a mis-indented line at runner/test/claude-provider.test.ts:261.
+- P4-10 check minors:
+  - src/data/spine/scripted.ts:316: a held pile drops its per-thing asks this run, so they are asked again on a later run.
+  - runner/src/claude.ts:209: a words note for a partly asked pile is accepted but silently ignored.
+  - Untested: a declared pile partly asked; a run with a partly asked pile killed and resumed; the sent input keeping the real pileId.
+  - Template `pileId` placeholders are normalised too.
+  - A loose thing asked by fileId becomes a pile question with no `about`.
