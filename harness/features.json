@@ -5030,7 +5030,7 @@
     "id": "c04-prompt-fixes",
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "Every number in an authored note, summary or line appears in the cited thing text, the pile words or a shown note, else refuse and retry; a concrete naming rule (underscores, (2), final and camera ids become a plain name); the kinds table describes areas, never ready-made folder names; the c04-offer-and-flat rubric accepts the photo ask, the listing note without an address and any money, pay or finance Area, logged.",
     "steps": [
       "numbers-grounded check with refusal and retry.",
