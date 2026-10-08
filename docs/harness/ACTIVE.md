@@ -362,3 +362,4 @@ P3-9 is closed.
 - P4-26 BLOCK (c2-read-cache): real Drive keeps every pile item's bytes read for a digest until sign-out (drive-vault.ts:867). Fresh implementer fix round. c2-transport-outcome-kind (implementer) dispatched. Queued: P4-27 review (c2-worker-dispatch), delete-me-admit-window diagnoser.
 - close-before-review (process slip, lead): c2-worker-dispatch reopened as integrated-open until P4-27 PASS (also happened with c2-drive-transport 13a6ecad). P4-27 takes the next free slot. 413/424.
 - c2-transport-outcome-kind merged (red b3f3eb3b, fix e3d1cc54; check green on merged tree). Open: a write with no HTTP answer (network error, timeout) keeps the offline / no-answer wording; lead asked whether that is in scope. P4-27 dispatched.
+- c2-transport-outcome-kind: lead ruled no-answer writes in scope (fix round queued for the next slot, then review, then close). Queue: outcome-kind fix round, delete-me-admit-window diagnoser.
