@@ -81,3 +81,12 @@ No run needed a retry.
 **Then** offer-and-flat ×3 and garden ×1. C04 closes when they pass.
 
 **Speed.** On offer-and-flat, apply takes 23–35 s and reads 15–36 s. `drive-calls-cut` (`bower-implementer`) runs beside the C05 slice once C04 closes. Its aim is a ≥40% cut of the Drive calls per run on the C04 golden, with batching and the listing reused.
+
+**Addendum 6, 2026-10-08: C04 passes live on `327b987`.** Offer-and-flat passes 3/3 and garden 1/1. There were no retries and no invented numbers, and names say what each thing is. The payslip's new Area Money gives its reason. The photo is asked about. Timings are in [p4-speed-baseline](p4-speed-baseline.md).
+
+Next, two workers in parallel:
+- **C05**, opening with `state-rewrite-change`.
+- **`drive-calls-cut`.** Fewer Drive calls per run (at least 40% fewer on the C04 golden), and apply on offer-and-flat at no more than half its median.
+  - Effects that do not depend on each other run with bounded concurrency.
+  - Each effect still has its `bowerOp` stamp and its own `stillAsSeen` check, and the checkpoint barrier stays as it is.
+  - The Drive-call golden is updated on purpose.
