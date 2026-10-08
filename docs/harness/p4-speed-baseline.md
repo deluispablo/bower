@@ -33,6 +33,10 @@ The spec's goal was a tidy-up of one to three files in about 1.5 to 2 minutes, e
 
 With no model at all, the new runner's overhead (the job, Node, the token, the Drive reads and writes, a checkpoint per operation and an attempt check before every write) already takes about as long as the original's whole goal. **Adding the model on top would make the new app slower than the original.** That is a P4 risk, so it is measured and cut, not assumed.
 
+## Reading after the C04 comparison (2026-10-08)
+
+The C04 median is 1:28 from the press to `done` with the quality check passing, against the original's 6:38 before its speed work and its 1.5–2 min goal after it. The model step takes 3–4 s and 1 turn, against 44 s and 14 turns in the original's bench case 2. What remains is about 60 s of spine overhead (TL-P4-05).
+
 ## How P4 compares
 
 - **Same cases.** `p4-corpus` includes the original's five bench cases as they are, so the comparison is like for like.
