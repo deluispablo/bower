@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { paging } from './drive-v3';
 import { modelled, type Call } from './modelled';
 
@@ -9,6 +9,22 @@ afterEach(() => {
 });
 
 describe('the runner overhead', () => {
+  it('the C04 run writes and counts exactly 4 checkpoints', async () => {
+    const said: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => said.push(args.map(String).join(' ')));
+
+    const { code } = await modelled();
+    expect(code).toBe(0);
+
+    const timingLines = said.filter((l) => l.includes('checkpoints='));
+    expect(timingLines.length).toBeGreaterThan(0);
+    const timingLine = timingLines[0] ?? '';
+    const match = timingLine.match(/checkpoints=(\d+)\/(\d+)/);
+    expect(match).not.toBeNull();
+    const checkpointCount = Number(match?.[2]);
+    expect(checkpointCount).toBe(4);
+  });
+
   it('a scripted run with modelled Drive latency finishes under the runner budget', async () => {
     const { calls, ms, code } = await modelled();
     const count = (k: Call['kind']): number => calls.filter((x) => x.kind === k).length;

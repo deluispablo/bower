@@ -174,8 +174,20 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const records = new RunRecords(reads, rootId);
   const put = records.put.bind(records);
   const putNew = records.putNew.bind(records);
-  records.put = (...args) => timing.time('checkpoints', () => put(...args));
-  records.putNew = (...args) => timing.time('checkpoints', () => putNew(...args));
+  records.put = (...args) => {
+    const name = args[2];
+    if (typeof name === 'string' && name.startsWith('checkpoint-')) {
+      return timing.time('checkpoints', () => put(...args));
+    }
+    return put(...args);
+  };
+  records.putNew = (...args) => {
+    const name = args[2];
+    if (typeof name === 'string' && name.startsWith('checkpoint-')) {
+      return timing.time('checkpoints', () => putNew(...args));
+    }
+    return putNew(...args);
+  };
   const checksum: Checksum = { stored: (id) => drive.md5(id), of: async (bytes) => md5(bytes) };
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
