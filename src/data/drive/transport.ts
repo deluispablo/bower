@@ -115,3 +115,13 @@ export function noAnswer(context: Context, words: { offline: string; elsewhere: 
 
 /** A request that may have been sent and got no answer, in any context: a lost answer, to be read back. */
 export const isNoAnswer = (e: unknown): boolean => e instanceof BowerError && (e.code === 'offline' || e.cause === NO_ANSWER);
+
+/** The marker on a write that got a 5xx: it may have landed, so nobody is told to try again (`BowerError` cause). */
+export const UNCONFIRMED_WRITE = 'unconfirmed-write';
+
+/**
+ * A 5xx on a non-idempotent request may have been applied before the server failed (RFC 9110 9.2.2: only idempotent
+ * methods may be repeated automatically); Drive's "Resolve errors" guide lists 5xx as retry-with-backoff for reads.
+ * Nothing here reads it back or sends it again; the caller says what it could not confirm.
+ */
+export const isUnconfirmedWrite = (e: unknown): boolean => e instanceof BowerError && e.cause === UNCONFIRMED_WRITE;
