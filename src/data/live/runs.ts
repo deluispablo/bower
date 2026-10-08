@@ -9,7 +9,7 @@
  * and server errors keep the beat (retry only what can change: Google Cloud
  * retry strategy, https://cloud.google.com/storage/docs/retry-strategy).
  */
-import type { RunSource, Unsubscribe } from '../sources';
+import type { RunSource, StartOptions, Unsubscribe } from '../sources';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
 import { httpStatusOf, type RunWire, type StatusReply, type WorkerApi } from '../worker/worker-api';
@@ -98,9 +98,9 @@ export class LiveRuns implements RunSource {
     return this.took.size ? this.took : new Set(['*']);
   }
 
-  start(scope: 'all' | 'instructions', opts: { allowWeb?: boolean } = {}): Promise<RunState> {
-    // One per press (TL-P3-15): a UUID is lowercase letters, digits and dashes, 36 characters.
-    const requestId = crypto.randomUUID().toLowerCase();
+  start(scope: 'all' | 'instructions', opts: StartOptions = {}): Promise<RunState> {
+    // One per press (TL-P3-15): a UUID is lowercase letters, digits and dashes, 36 characters. An answer's run brings its own.
+    const requestId = opts.requestId ?? crypto.randomUUID().toLowerCase();
     const work = () => this.startNow(scope, { ...opts, requestId });
     const next = this.starts.then(work);
     // expected: the caller receives next's failure; only the queue recovers so another admission can be tried.
@@ -108,12 +108,15 @@ export class LiveRuns implements RunSource {
     return next;
   }
 
-  private async startNow(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId: string }): Promise<RunState> {
+  private async startNow(scope: 'all' | 'instructions', opts: StartOptions & { requestId: string }): Promise<RunState> {
     this.checkOpen();
     // What you did while Drive was out of reach goes first, so this tidy-up knows it.
     await this.vault.flushJournal();
     this.checkOpen();
-    const piles = scope === 'all' ? (await this.vault.piles()).map((p) => p.id) : [];
+    // The piles it takes: the whole inbox, or for an answer's run only the pile that holds its subject.
+    const inbox = scope === 'all' ? await this.vault.piles() : [];
+    const subject = opts.subject;
+    const piles = (subject === undefined ? inbox : inbox.filter((p) => p.id === subject || p.items.some((i) => i.id === subject))).map((p) => p.id);
     this.checkOpen();
     const reply = await this.worker.process(scope, opts);
     this.checkOpen();

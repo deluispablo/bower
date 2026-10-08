@@ -307,6 +307,18 @@ export interface AdmissionOptions {
   scope: AdmissionScope;
   clock: () => number;
   newId: () => string;
+  /**
+   * An answer's run (TL-P4-08 addendum 8): only the pile of the inbox that holds this thing or pile is read and taken,
+   * with your changes. Only with scope `all`.
+   */
+  subject?: string;
+}
+
+/** Whether `f`, a pile folder or loose thing of the inbox, is or holds `subject` (its pile id, its id, or a thing's id in it). */
+function holds(ix: VaultIndex, f: DriveFile, subject: string): boolean {
+  if (f.id === subject || f.appProperties?.[PROP.pile] === subject) return true;
+  const path = f.folder ? ix.pathOf(f.id) : undefined;
+  return path !== undefined && ix.filesIn(path).some((k) => k.id === subject);
 }
 
 const byCodePoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -317,9 +329,9 @@ const admitted = (f: DriveFile): AdmittedFile => ({ fileId: f.id, name: f.name, 
  * Whether anything waits in the inbox, from its listing alone: a loose thing, or a pile folder with a thing or a note
  * that is not empty. Whether it is ready is the capture's to say.
  */
-function inboxPiles(ix: VaultIndex): PileShape[] {
+function inboxPiles(ix: VaultIndex, only: (f: DriveFile) => boolean = () => true): PileShape[] {
   const out: PileShape[] = [];
-  for (const f of ix.filesIn('Inbox')) {
+  for (const f of ix.filesIn('Inbox').filter(only)) {
     const path = ix.pathOf(f.id);
     if (!path) continue;
     const id = f.appProperties?.[PROP.pile] ?? f.id;
@@ -379,15 +391,18 @@ export async function planAdmission(source: SpineRead, rootId: string, opts: Adm
   };
   const ix = VaultIndex.build(rootId, listing);
   const journal = (await journalOf(read, ix)).map(admitted).sort((a, b) => byCodePoint(a.fileId, b.fileId));
+  const subject = opts.scope === 'all' ? opts.subject : undefined;
   const manifest = (piles: AdmittedPile[]): Admission => {
-    const value: AdmissionManifest = { v: 1, id: opts.newId(), rootId, scope: opts.scope, at: opts.clock(), piles, journal };
+    const value: AdmissionManifest = { v: 1, id: opts.newId(), rootId, scope: opts.scope, at: opts.clock(), piles, journal, ...(subject !== undefined ? { subject } : {}) };
     return { kind: 'manifest', manifest: value };
   };
   if (opts.scope === 'instructions') return journal.length ? manifest([]) : { kind: 'nothing', cause: 'new' };
-  if (!inboxPiles(ix).some((p) => p.itemIds.length || p.hasWords)) return { kind: 'nothing', cause: 'waiting' };
+  // An answer's run reads and takes only the pile that holds its subject; the rest of the inbox is not read.
+  const only = (f: DriveFile): boolean => subject === undefined || holds(ix, f, subject);
+  if (!inboxPiles(ix, only).some((p) => p.itemIds.length || p.hasWords)) return subject !== undefined && journal.length ? manifest([]) : { kind: 'nothing', cause: 'waiting' };
   const unread = new Set<string>();
   // A pile whose note was not read has words when the note is not empty (its size is in the listing), as `inboxPiles` says.
-  const piles = (await listedPiles(read, rootId, unread)).map((p) => {
+  const piles = (await listedPiles(read, rootId, unread, only)).map((p) => {
     const shape = pileShape(p);
     return unread.has(p.id) ? { ...shape, hasWords: ix.filesIn(p.path ?? '').some((k) => !k.folder && k.name === PILE_NOTE && k.size !== 0) } : shape;
   });
@@ -426,10 +441,10 @@ function listedItem(f: DriveFile): PileItem {
  * the words of its first note, and each loose thing. A note Bower will not parse, or cannot read now, holds its pile
  * with the Inbox's reason; a sign-out stops the run. What a run takes of each is decided by `capturePiles`, as in the fake.
  */
-export async function listedPiles(read: SpineRead, rootId: string, unread?: Set<string>): Promise<Pile[]> {
+export async function listedPiles(read: SpineRead, rootId: string, unread?: Set<string>, only: (f: DriveFile) => boolean = () => true): Promise<Pile[]> {
   const ix = VaultIndex.build(rootId, await read.listAll(rootId));
   const out: Pile[] = [];
-  for (const f of ix.filesIn('Inbox')) {
+  for (const f of ix.filesIn('Inbox').filter(only)) {
     const path = ix.pathOf(f.id);
     if (!path) continue;
     const id = f.appProperties?.[PROP.pile] ?? f.id;

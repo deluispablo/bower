@@ -34,6 +34,11 @@ export interface AdmissionManifest {
   piles: AdmittedPile[];
   /** Your changes the run reads: `.bower/changes` files with a record Bower can read. */
   journal: AdmittedFile[];
+  /**
+   * An answer's run (TL-P4-08 addendum 8): the thing or pile its question is about. `piles` then holds only the pile
+   * that holds it. Absent for a press of Tidy up.
+   */
+  subject?: string;
 }
 
 /** Why there is nothing to admit, worded as the worker contract's 409 `nothing`. */
@@ -60,7 +65,8 @@ export function isAdmissionManifest(value: unknown): value is AdmissionManifest 
   if (!object(value)) return false;
   return value.v === 1 && id(value.id) && id(value.rootId) && (value.scope === 'all' || value.scope === 'instructions')
     && typeof value.at === 'number' && Number.isSafeInteger(value.at) && value.at >= 0
-    && Array.isArray(value.piles) && value.piles.every(pile) && Array.isArray(value.journal) && value.journal.every(file);
+    && Array.isArray(value.piles) && value.piles.every(pile) && Array.isArray(value.journal) && value.journal.every(file)
+    && (value.subject === undefined || id(value.subject));
 }
 
 type JsonObject = Record<string, unknown>;

@@ -32,6 +32,7 @@ import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationC
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
+import { ADOPT_STATES_ID, ADOPT_STATES_RULE } from '../contracts/note-edit';
 import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, type RunnerFiles, type LastRunFile } from './layout';
 import { sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
@@ -132,6 +133,8 @@ export class DriveVault implements VaultSource {
   private uploads = new Map<string, Upload>();
   private sendingPiles = new Set<string>();
   private making = new Map<string, Promise<string>>();
+  /** Answers being recorded on this page, by question: a second tap waits for the first (TL-P4-08 addendum 8). */
+  private answering = new Map<string, Promise<void>>();
   private sending = new Set<Promise<void>>();
   private disposed = false;
   private readonly queued: DriveVaultUploads | null;
@@ -1280,11 +1283,28 @@ export class DriveVault implements VaultSource {
     return all.filter((q) => !answered.has(q.id) && (subject(q) === undefined || here.has(subject(q) ?? '')));
   }
 
+  /**
+   * One answer per question (TL-P4-08 addendum 8): a question answered already, or being answered now on this page,
+   * records nothing more. A yes to Bower keeping the summaries it did not write is also your rule saying so.
+   */
   async answer(id: string, yes: boolean): Promise<void> {
-    const q = (await this.questions()).find((x) => x.id === id);
-    if (!q) return;
-    await this.journal.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`, { questionId: id, text: yes ? 'yes' : 'no' });
-    this.emit();
+    const going = this.answering.get(id);
+    if (going) return await going;
+    const work = (async () => {
+      const q = (await this.questions()).find((x) => x.id === id);
+      if (!q) return;
+      await this.journal.record('answer', `Answered "${yes ? q.yes : q.no}" to a question`, { questionId: id, text: yes ? 'yes' : 'no' });
+      if (yes && id === ADOPT_STATES_ID && !ruleLike(await this.rules(), ADOPT_STATES_RULE)) {
+        await this.journal.record('rule', `New rule: "${ADOPT_STATES_RULE}"`, { path: 'Rules.md', text: ADOPT_STATES_RULE });
+      }
+      this.emit();
+    })();
+    this.answering.set(id, work);
+    try {
+      await work;
+    } finally {
+      this.answering.delete(id);
+    }
   }
 
   async suggestions(): Promise<Suggestion[]> {

@@ -79,8 +79,8 @@ export class WorkerHttp implements WorkerApi {
     return { id: r.folderId, found: r.found };
   }
 
-  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string } = {}): Promise<RunReply> {
-    const body = { scope, allowWeb: !!opts.allowWeb, ...(opts.requestId !== undefined ? { requestId: opts.requestId } : {}) };
+  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string } = {}): Promise<RunReply> {
+    const body = { scope, allowWeb: !!opts.allowWeb, ...(opts.requestId !== undefined ? { requestId: opts.requestId } : {}), ...(opts.subject !== undefined ? { subject: opts.subject } : {}) };
     const reply = await this.call<RunReply>('POST', '/process', body, isRunReply, this.fence());
     return { run: reply.run, revision: reply.revision };
   }

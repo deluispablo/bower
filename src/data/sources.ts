@@ -98,9 +98,21 @@ export interface VaultSource {
   subscribe(cb: () => void): Unsubscribe;
 }
 
+/** How a tidy-up is asked for: a press of Tidy up, or an answer's run. */
+export interface StartOptions {
+  allowWeb?: boolean;
+  /** The one thing or pile of the inbox the run takes (a Drive file id or a pile id); the whole inbox when absent. */
+  subject?: string;
+  /** The press's id, sent on every retry of it; a new one per call when absent (TL-P3-15). */
+  requestId?: string;
+}
+
 export interface RunSource {
-  /** `allowWeb`: the person lets Bower look things up on the web in this tidy-up (Settings). */
-  start(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean }): Promise<RunState>;
+  /**
+   * `allowWeb`: the person lets Bower look things up on the web in this tidy-up (Settings). An answer's run
+   * (`answer-loop.ts`) also gives `subject`, the one thing or pile of the inbox it takes, and its own `requestId`.
+   */
+  start(scope: 'all' | 'instructions', opts?: StartOptions): Promise<RunState>;
   /**
    * The run going now, or the last one. `again`: the person asked (Try again),
    * so a remembered client error is asked once more instead of answered.

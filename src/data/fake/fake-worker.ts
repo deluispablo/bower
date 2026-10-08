@@ -10,6 +10,9 @@ import type { FakeDrive } from '../drive/fake-drive';
 import { ALEX } from '../demo/fixture';
 import { keepSignedIn, keptSignedIn, type Scenario } from '../demo/scenario';
 import { thingsIn } from '../piles';
+import { NOTHING } from '../spine/admission';
+import { planAdmission } from '../spine/plan';
+import { fakeRead } from '../spine/read';
 import { BowerError, PARA_ROOTS } from '../types';
 import { DriveVault } from '../vault/drive-vault';
 import { BOWER_FOLDER, SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
@@ -172,11 +175,11 @@ export class FakeWorker implements WorkerApi {
     return { run, revision: this.revision };
   }
 
-  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string } = {}): Promise<RunReply> {
+  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string } = {}): Promise<RunReply> {
     return this.stamp(await this.admit(scope, opts));
   }
 
-  private async admit(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string }): Promise<RunWire> {
+  private async admit(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string }): Promise<RunWire> {
     this.online();
     this.fenced();
     await this.loaded;
@@ -223,7 +226,7 @@ export class FakeWorker implements WorkerApi {
     return run;
   }
 
-  private async begin(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string }): Promise<RunWire> {
+  private async begin(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string }): Promise<RunWire> {
     const root = this.rootId;
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
     const vault = new DriveVault({ drive: this.drive, rootId: async () => root, runningPiles: () => new Set(), device: 'worker' });
@@ -233,7 +236,10 @@ export class FakeWorker implements WorkerApi {
     const minted = this.runs.ids();
     const runId = minted.runId;
     const requestId = opts.requestId ?? minted.requestId;
-    const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(this.updates ? { updates: this.updates } : {}) });
+    // An answer's run takes only the pile that holds its subject (TL-P4-08 addendum 8), admitted as the Worker does.
+    const scoped = opts.subject === undefined ? null : await planAdmission(fakeRead(this.drive), root, { scope, subject: opts.subject, clock: () => Date.now(), newId: () => requestId });
+    if (scoped?.kind === 'nothing') throw new BowerError('conflict', NOTHING[scoped.cause]);
+    const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(scoped ? { taken: scoped.manifest } : {}), ...(this.updates ? { updates: this.updates } : {}) });
     const failAt = this.failOnce;
     this.failOnce = false;
     const wire = await this.runs.admit(this.binding(root), plan.manifest, failAt ? { failAt: 'writing' } : {});

@@ -39,9 +39,10 @@ export interface WorkerApi {
   createFolder(): Promise<{ id: string; found: boolean }>;
   /**
    * Starts a tidy-up, or answers the one already going. `requestId`: made once per press of Tidy up and sent on
-   * every retry of it (TL-P3-15); a repeat answers that press's run, even once it has ended.
+   * every retry of it (TL-P3-15); a repeat answers that press's run, even once it has ended. `subject`: an answer's
+   * run takes only the pile of the inbox that holds this thing or pile (TL-P4-08 addendum 8).
    */
-  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean; requestId?: string }): Promise<RunReply>;
+  process(scope: 'all' | 'instructions', opts?: { allowWeb?: boolean; requestId?: string; subject?: string }): Promise<RunReply>;
   /** The run going now, or the last one. */
   status(): Promise<StatusReply>;
   /**
