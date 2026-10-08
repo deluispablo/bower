@@ -4715,7 +4715,7 @@
       "409 stale-attempt behaviour and every recovery/kill test unchanged."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the attempt route answers from the person object alone\" && pnpm -C runner exec vitest run -t \"the attempt check before a write does not fetch a token|a stale attempt is still refused before any write\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-04 batch P4-4 (live tail: GET /token every 1–2 s; one 500)."
   },
   {

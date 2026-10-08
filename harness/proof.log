@@ -365,3 +365,4 @@ runner-checkpoint-cost	185c66fae33f9a11	2026-10-08	known-green: Red at fcce87c (
 c04-incorporation	ad338974365c06b5	2026-10-08	red (fixed in 97ebefb)
 c04-incorporation	07187b5538df3ad3	2026-10-08	red (fixed in 9fcf3c1)
 deploy-scan-unpdf-literal	385739bb1209075a	2026-10-08	red (fixed in 84bd430)
+attempt-check-light	5565164d735cf308	2026-10-08	red (fixed in 4ba075c)
