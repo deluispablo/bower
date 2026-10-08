@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -232,7 +232,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
    */
   const demo = !opts.filing;
   // Notes kept as one: each by its yes, among the lines this run took; one held back (`keep:<answer>`) waits with it.
-  const keeps = (opts.filing?.keep ?? []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && l.rec.text === 'yes'));
+  // A run with no day to date its lines (outside years 0000-9999) keeps nothing: the answer waits, never archived unmerged.
+  const keepDay = timelineDate(opts.requestedAt) !== null;
+  if (!keepDay && opts.filing?.keep?.length) console.error('A run with no date cannot keep one note; the answer waits for the next tidy-up');
+  const keeps = (keepDay ? (opts.filing?.keep ?? []) : []).filter((k) => !held.has(`keep:${k.answer}`) && lines.some((l) => l.rec.id === k.answer && l.rec.kind === 'answer' && l.rec.text === 'yes'));
   const keepAnswers = new Set(keeps.map((k) => k.answer));
   let journal = demo ? lines : lines.filter((l) => (l.rec.kind !== 'request' && l.rec.kind !== 'answer') || keepAnswers.has(l.rec.id));
   // Your rules (TL-P2-20 rules-wording): one change for every rule line, worded below in one edit of Rules.md, or
@@ -694,7 +697,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       return planScripted(drive, rootId, opts, editCap, new Set([...held, `keep:${k.answer}`]));
     }
     const was = await drive.readText(kept.id);
-    const lines = carriedLines(parseNote(k.other, await drive.readText(other.id)), parseNote(k.kept, was), was)
+    const lines = carriedLines(parseNote(k.other, await drive.readText(other.id)), parseNote(k.kept, was))
       .map((entry): WantedLine => ({ entry: { ...entry, date: date ?? '' }, record: k.answer, what: null, after: null }));
     want(kept, k.kept).lines.push(...lines);
     keeping.push({ k, kept, other, rename, lines });
@@ -1290,6 +1293,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     // Grounded by the kept note's edit first, then the link rewrites, then the Bin (`grounded`); with nothing new to
     // write on the kept note there is no edit to ground it, and the Bin says it alone.
     const keptEdit = editOf.get(x.kept.id);
+    // The other note changed after it was read (the Bin checks its modifiedTime): it stays, and so does the question.
+    reportPlan.push({ requires: [op], when: 'rejected', value: { ...empty(), setAside: [{ name: displayName(nameOf(x.k.other)), why: KEEP_CHANGED }] } });
     if (keptEdit) reportPlan.push({ requires: [keptEdit, ...written.filter((w) => w !== keptEdit), op], when: 'applied', value: { ...empty(), updated: [{ path: ix.pathOf(x.kept.id) ?? x.k.kept, what: keptLine(displayName(nameOf(x.k.other))) }] } });
   }
   // Things already saved go to the Bin (never deleted), a copy of this run's thing after that one's move; each is
@@ -1815,15 +1820,20 @@ const asLineText = (text: string): string => text
  * happened ("From 2026-10-02: ...") with its source. A line the kept note already says is not repeated. Dated by the
  * caller (the run's day, as every line a run writes).
  */
-function carriedLines(other: ParsedNote, kept: ParsedNote, keptText: string): EditEntry[] {
-  const has = new Set(kept.properties.map((p) => `${p.key}\n${p.value}`));
+function carriedLines(other: ParsedNote, kept: ParsedNote): EditEntry[] {
+  // Whole lines only, compared as they would be written: a line the kept note says as part of a longer one is carried.
+  const same = (text: string): string => asLineText(text).replace(/\s+/g, ' ').toLowerCase();
+  const said = new Set([
+    ...kept.properties.map((p) => `${p.label}: ${p.value}`),
+    ...kept.currentState, ...kept.body.split('\n'), ...kept.timeline.map((t) => t.text),
+  ].map(same).filter(Boolean));
   const out: EditEntry[] = [];
   const add = (text: string, source: string | null): void => {
     const line = asLineText(text);
     const src = source !== null && /^[^\]|#^\r\n]+$/.test(source) ? source : null;
-    if (line && !keptText.includes(line) && !out.some((e) => e.text === line)) out.push({ date: '', text: line, source: src });
+    if (line && !said.has(same(line)) && !out.some((e) => same(e.text) === same(line))) out.push({ date: '', text: line, source: src });
   };
-  for (const p of other.properties) if (!has.has(`${p.key}\n${p.value}`)) add(`${p.label}: ${p.value}`, null);
+  for (const p of other.properties) add(`${p.label}: ${p.value}`, null);
   for (const line of other.currentState) add(line, null);
   for (const line of other.body.split('\n')) add(line, null);
   for (const t of other.timeline) add(`From ${t.date}: ${t.text}`, t.source ?? null);

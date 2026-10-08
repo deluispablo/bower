@@ -13,7 +13,7 @@ import type { DriveFile } from '../drive/drive-api';
 import type { StoredEvidence } from '../drive/fake-drive';
 import type { EffectEvidence } from '../contracts/run-checkpoint';
 import type { Effect, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
-import { STATE_UPDATED, keptLine, savedLinkKey } from '../contracts/note-edit';
+import { KEEP_CHANGED, STATE_UPDATED, keptLine, savedLinkKey } from '../contracts/note-edit';
 import { displayName, join, nameOf, parentOf, thingName } from '../tree';
 import { PARA_ROOTS, type Question } from '../types';
 import { sha256 } from '../vault/hashes';
@@ -365,6 +365,19 @@ export function grounded(manifest: RunManifest): boolean {
     saved.add(fileId);
     return true;
   };
+  /** A keep's other note that stayed (C05): its one Bin rejected, set aside under its shown name, once. */
+  const keptStayed = new Set<string>();
+  const keptStays = (c: ReportContribution): boolean => {
+    const v = c.value;
+    const [id, ...more] = c.requires;
+    const bin = id === undefined ? undefined : ops.get(id)?.effect;
+    const path = bin?.kind === 'bin' ? places.get(bin.before.fileId) : undefined;
+    const [row, ...rest] = v.setAside;
+    if (c.when !== 'rejected' || more.length || bin?.kind !== 'bin' || path === undefined || !path.endsWith('.md') || !row || rest.length) return false;
+    if (v.filed.length || v.created.length || row.name !== displayName(nameOf(path)) || row.why !== KEEP_CHANGED || keptStayed.has(bin.before.fileId)) return false;
+    keptStayed.add(bin.before.fileId);
+    return true;
+  };
   const binsMember = (c: ReportContribution): boolean => c.requires.some((id) => {
     const o = ops.get(id);
     return o?.effect.kind === 'bin' && members.has(o.effect.before.fileId);
@@ -391,6 +404,7 @@ export function grounded(manifest: RunManifest): boolean {
       if (!updatedRow(c)) return false;
       continue;
     }
+    if (keptStays(c)) continue;
     if (v.updated.length || v.questions.length || v.rulesWorded !== undefined) return false;
     const moves = c.requires.flatMap((id) => {
       const op = ops.get(id);
