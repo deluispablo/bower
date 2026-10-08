@@ -4958,7 +4958,7 @@
     "note": "TL-P4-08 addendum (main c85da86) point 2: C11 slice."
   },
   {
-    "passes": true,
+    "passes": false,
     "id": "ask-answer-loop",
     "task": "p4-c",
     "category": "feature",
@@ -4969,7 +4969,7 @@
       "Counts in the daily quota; waits for the next run while one is active.",
       "A no or no-change choice closes the question with no run."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"a yes to keep one note starts a scoped run that merges|answering twice starts one run|an answer during a run is applied by the next|a no closes the question with no run|a yes to Write it closes its question in the next tidy-up|of two answers to one question, the later one counts\" && pnpm -C api exec vitest run -t \"an answer during a run starts its scoped run when the run ends\" && pnpm vitest run src/data/answer-loop.test.ts -t \"an answer during a run says Bower will do it when the tidy-up ends\"",
+    "verify": "pnpm -C runner exec vitest run -t \"a yes to keep one note starts a scoped run that merges|answering twice starts one run|an answer during a run is applied by the next|a no closes the question with no run|a yes to Write it writes the update in a scoped run|of two answers to one question, the later one counts\" && pnpm -C api exec vitest run -t \"an answer during a run starts its scoped run when the run ends\" && pnpm vitest run src/data/answer-loop.test.ts -t \"an answer during a run says Bower will do it when the tidy-up ends\"",
     "note": "TL-P4-08 addendum (main c85da86) point 4: C11 slice. TL-P4-08 addendum 8 (main 5de7297): moved into C05; owner chose immediate application. Reopened by P4-20 (BLOCK): a yes during a run says doing it now but waits; Write it (q-state) promises the next tidy-up but no run does it. Reopened by P4-20b (BLOCK): the waits toast promises a run after the current one that never starts; Write it still offered then refused (lead asked). TL-P4-13 addendum (main b3b3ab7): when the active run ends, the person object admits one scoped run for the waiting answers (quota, idempotent, no press)."
   },
   {
@@ -5301,7 +5301,7 @@
       "Write the update, marked as Bower's, undoable.",
       "Copy says what happens."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"a yes to Write it writes the update in a scoped run\"",
+    "verify": "pnpm -C runner exec vitest run -t \"a yes to Write it writes the update in a scoped run|a person edit after the question stops Write it|undo of Write it restores the person's section\"",
     "note": "TL-P4-13 (main aea42fe). Escalated."
   },
   {
