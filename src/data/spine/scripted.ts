@@ -524,7 +524,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   /** A line wanted twice in one note (the same words): written once, and it goes as its twin goes. */
   const twins = new Map<WantedLine, WantedLine>();
   const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[]; rules: RulesWording | null }> = [];
-  for (const w of [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path))) {
+  const editing = [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path));
+  // What the next loops read, one after the other: the notes to edit, and the saved links being filed.
+  drive.warm?.([...editing.map((w) => ({ id: w.file.id, as: 'bytes' as const })), ...things.filter((t) => t.item.kind === 'link').map((t) => ({ id: t.file.id, as: 'text' as const }))]);
+  for (const w of editing) {
     const f = w.file;
     for (const l of w.lines) lineState.set(l, 'refused');
     const before = await verified(f, 'utf8');

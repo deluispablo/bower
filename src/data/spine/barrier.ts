@@ -65,16 +65,20 @@ export function lastRunText(body: LastRunFile): string {
 /** Brings the report files up to date, then writes `last-run.json` last; gives the paths written, in order. */
 export async function saveReport(save: ReportSave): Promise<string[]> {
   const written: string[] = [];
+  // What is stored of each file is read together (reads only, of different files); the writes then go one at a time,
+  // in order, each on what it read of its own file.
+  const paths: readonly string[] = [...(save.report ? REPORT_FILES : []), SYSTEM.lastRun];
+  const before = new Map(await Promise.all(paths.map(async (path) => [path, await stored(save, path)] as const)));
   if (save.report) {
     for (const path of REPORT_FILES) {
-      const found = await stored(save, path);
+      const found = before.get(path) ?? null;
       const text = nextText(path, found ? found.text : null, save.report);
       if (text === null) continue;
-      await write(save, path, found, text, (now) => now === text);
+      await write(save, path, found, text, (n) => n === text);
       written.push(path);
     }
   }
-  const view = await stored(save, SYSTEM.lastRun);
+  const view = before.get(SYSTEM.lastRun) ?? null;
   if (view && sameView(view.text, save.view)) {
     // Already there (a restarted run): read back by its checksum all the same before anyone says done.
     const [now, read] = await Promise.all([save.checksum.stored(view.file.id), save.checksum.of(encode(view.text))]);

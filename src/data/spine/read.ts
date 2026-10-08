@@ -60,7 +60,7 @@ type AdmissionDrive = Pick<DriveApi, 'readBytes' | 'readText'> &
   Pick<ResumableDrive, 'getUploaded'> & { listAll(rootId: string, opts: { checksums: boolean }): Promise<DriveFile[]> };
 
 /** Runs each task with at most `limit` running at once, in the order given. */
-function limiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
+export function limiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
   let running = 0;
   const waiting: Array<() => void> = [];
   return async <T>(task: () => Promise<T>): Promise<T> => {

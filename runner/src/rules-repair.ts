@@ -16,7 +16,7 @@
  * - The text is written first, then the mark: the text alone already makes the file Bower's to word (its front
  *   matter says `by: bower`), and a mark is never put on a text the person changed. A runner that stops between
  *   the two leaves the template's text without the mark; the next run sees those bytes and adds only the mark.
- * - Cost: one listing of the folder's root per new run, plus one read of `Rules.md` only when its size says the
+ * - Cost: no listing of its own (the run's record listing holds the folder's root; one listing without it), plus one read of `Rules.md` only when its size says the
  *   bytes might match. Once repaired, the old text is gone, so a later run finds nothing to do; no state is kept.
  * - With a rule waiting in the same run: the repair lands first, then the planner reads a Bower-owned file and words
  *   the rule into it in this run.
@@ -35,8 +35,10 @@ const NEW_SIZE = bytesOf(RULES_TEMPLATE.text);
 const marked = (f: DriveFile): boolean => Object.entries(RULES_TEMPLATE.appProperties).every(([k, v]) => f.appProperties?.[k] === v);
 
 /** Repairs the old template's `Rules.md` in the folder `rootId`; leaves every other file, and a changed one, alone. */
-export async function repairRules(drive: RunnerDrive, rootId: string): Promise<void> {
-  const named = (await drive.list(rootId)).filter((f) => f.name === RULES_FILE_NAME);
+export async function repairRules(drive: RunnerDrive, rootId: string, listed?: () => Promise<DriveFile[]>): Promise<void> {
+  // The folder's root as the run has just listed it (`listed`), when it can say; otherwise listed here.
+  const children = listed ? (await listed()).filter((f) => f.parents.includes(rootId)) : await drive.list(rootId);
+  const named = children.filter((f) => f.name === RULES_FILE_NAME);
   const file = named.length === 1 ? named[0] : undefined;
   if (!file || file.folder) return;
   const mightBeOld = file.size === undefined || file.size === OLD_SIZE;

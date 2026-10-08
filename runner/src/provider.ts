@@ -4,6 +4,7 @@
  * headless Claude Code; `BOWER_PROVIDER` names one, and a name this runner does not know stops it before any call,
  * so a dispatch never runs with a provider it did not ask for.
  */
+import type { AdmissionScope } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { listedPiles, scriptedProvider, type ScriptedRun } from '../../src/data/spine/scripted';
@@ -21,18 +22,33 @@ export function providerNamed(name: string | undefined): ProviderName {
   return known;
 }
 
-/** The scripted provider's reads over Drive v3: the plan's reads, and the inbox's piles from the listing. */
-export function runnerScripted(drive: RunnerDrive): ScriptedRead {
+/**
+ * The scripted provider's reads over Drive v3: the plan's reads, and the inbox's piles from the listing. `aim` tells the
+ * reads what the run will plan from (its scope), so the files it will read are started together once the folder is listed.
+ */
+export function runnerScripted(drive: RunnerDrive): ScriptedRead & { aim(scope: AdmissionScope): void } {
   const reads = drive.planReads();
-  return { ...reads, piles: (rootId) => listedPiles(reads, rootId), provenance: 'adapter-read' };
+  return { ...reads, piles: (rootId) => listedPiles(reads, rootId), provenance: 'adapter-read', aim: (scope) => { reads.scope = scope; } };
+}
+
+/** A provider that aims the reads at the scope of the set the run took, then plans. */
+function aimed(read: { aim(scope: AdmissionScope): void }, provider: RunProvider): RunProvider {
+  return (admitted) => {
+    read.aim(admitted.taken.scope);
+    return provider(admitted);
+  };
 }
 
 /** `claude` is the Claude provider's setup: the runner's environment (its credential, model and turn cap). */
 export function providerFor(name: ProviderName, drive: RunnerDrive, run: ScriptedRun, claude: ClaudeSetup = { env: {} }): RunProvider {
   switch (name) {
-    case 'scripted':
-      return scriptedProvider(runnerScripted(drive), run);
-    case 'claude':
-      return claudeProvider(claude, run, runnerScripted(drive));
+    case 'scripted': {
+      const read = runnerScripted(drive);
+      return aimed(read, scriptedProvider(read, run));
+    }
+    case 'claude': {
+      const read = runnerScripted(drive);
+      return aimed(read, claudeProvider(claude, run, read));
+    }
   }
 }

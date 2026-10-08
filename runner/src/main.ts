@@ -177,7 +177,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   records.put = (...args) => timing.time('checkpoints', () => put(...args));
   records.putNew = (...args) => timing.time('checkpoints', () => putNew(...args));
   const checksum: Checksum = { stored: (id) => drive.md5(id), of: async (bytes) => md5(bytes) };
-  const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), admission: grant.manifest, clock, newId };
+  const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
   if (await timing.time('reads', () => shownDone(reads, rootId, opts.runId))) {
@@ -210,10 +210,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
     effects: opts.effects(drive),
     // The old template's Rules.md is repaired first, so the planner sees a file Bower may word (`rules-repair.ts`).
     plan: () =>
-      timing.time('reads', async () => {
-        await repairRules(drive, rootId);
-        return await plan();
-      }),
+      timing.time('reads', () => plan(() => repairRules(drive, rootId, () => reads.listAll(rootId)))),
     clock,
     newId,
     onChain: (chain) => {

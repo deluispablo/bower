@@ -26,6 +26,11 @@ export interface SpineRead {
   readText(id: string): Promise<string>;
   /** A file's stored size and SHA-256, as Drive keeps them; null when it keeps none. */
   digest(file: DriveFile): Promise<Digest | null>;
+  /**
+   * A hint that the plan is about to read these files, one after the other: a reader over a network starts them
+   * together (bounded) so each is answered when asked for. Reads only; an answer is never needed from it.
+   */
+  warm?(reads: ReadonlyArray<{ id: string; as: 'text' | 'bytes' }>): void;
   /** Bin entries by item key, where the Drive can say so in one call (the pretend Drive). */
   binnedByItem?(rootId: string, keys: readonly string[]): Promise<BinnedItem[]>;
 }
