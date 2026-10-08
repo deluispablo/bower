@@ -129,7 +129,8 @@ describe('the Claude provider', () => {
     await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: claude.spawn });
     const prompt = claude.calls[0]?.input ?? '';
     expect(prompt).toMatch(/fits no folder below[^.]*goes to Resources/);
-    expect(prompt).toMatch(/new Area or Project only when[^.]*rules or[^.]*notes show an ongoing responsibility/);
+    expect(prompt).toMatch(/Projects hold a goal with an end date, Areas an ongoing responsibility with no end date/);
+    expect(prompt).not.toMatch(/the rules/);
   });
 
   it('a recorded Claude reply becomes operations the spine validates', async () => {
