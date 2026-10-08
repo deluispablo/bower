@@ -3,7 +3,7 @@
  * and a golden test of the C04 fixture input ensures future changes are intentional.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { planAdmission } from '../../src/data/spine/plan';
@@ -76,26 +76,28 @@ describe('model input fingerprint', () => {
       .replace(/"runId":"[^"]+"/g, '"runId":"RUN_ID"')
       .replace(/"id":"[^"]+"/g, '"id":"ID"');
 
-    // Verify against golden file
+    // Verify against golden file (must exist; golden files are not created by tests)
     const goldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.golden.txt');
-    mkdirSync(resolve(import.meta.dirname, 'fixtures'), { recursive: true });
     const golden = readFileSync(goldenPath, 'utf8');
     expect(normalized).toBe(golden);
   });
 
   it('the timing line carries the model input fingerprint', async () => {
-    const input = 'test input data for fingerprinting';
-    const hash = createHash('sha256').update(input).digest('hex').slice(0, 12);
-    expect(hash).toHaveLength(12);
-    expect(/^[0-9a-f]{12}$/.test(hash)).toBe(true);
+    const g = await gardenFolder();
+    const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+    if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
 
-    // Test that timing line includes the fingerprint
+    const calls: ClaudeCall[] = [];
     const timing = new RunTiming();
-    timing.model = { wallMs: 1000, apiMs: 900, turns: 1, inputTokens: 10, outputTokens: 10 };
-    timing.setInputFingerprint(hash);
+    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+
+    // The timing line should have the model input fingerprint
+    const modelInput = calls[0]?.input ?? '';
+    const expectedHash = createHash('sha256').update(modelInput).digest('hex').slice(0, 12);
     const line = timing.line('done');
 
-    // Timing line should include the fingerprint after out=
-    expect(line).toContain(`input=${hash}`);
+    expect(line).toContain(`input=${expectedHash}`);
   });
 });
