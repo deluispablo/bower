@@ -4675,5 +4675,18 @@
     "verify": "pnpm -C runner exec vitest run -t \"the model context carries bounded extracted text for each admitted thing|the C04 corpus cases score green with scripted proposals|a recorded Claude reply on a C04 case writes a note with its content|the timing line counts cache-read input tokens|a model cite links the note the run actually made\"",
     "passes": true,
     "note": "TL-P4-03 batch P4-3 (first P4-C slice). Reopened: P4-3 review BLOCK (cache_read_input_tokens renamed, in= undercounts)."
+  },
+  {
+    "id": "deploy-scan-unpdf-literal",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "The deploy scan allows exactly the obfuscated unpdf literal jm@kbswfq.pkbglt (no real TLD) in the runner bundle, with a source comment, and refuses every other address as before; the pattern is never loosened.",
+    "steps": [
+      "scripts/deploy-staging.sh allows that exact string with a comment naming unpdf as its source.",
+      "A stubbed test: the literal passes; a real address still refuses."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the deploy scan allows the unpdf literal and still refuses a real address\"",
+    "passes": false,
+    "note": "Lead 04d8a54: the runner-bundle scan refused on an unpdf literal at the P4-3 deploy."
   }
 ]
