@@ -210,3 +210,6 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - runner/src/token.ts: the runner keeps the Drive token up to about 59 min after the DO's copy is cleared (sign-out). Before, it refused at the next batch. Lead to rate.
   - drive-http.ts listAll: no test pages the checksum listing past 1000 files.
   - read.ts admissionRead: on a Drive 401, up to 8 reads in flight each mint a fresh token.
+- (P4-4 fix-round check, PASS at d4b4677) Minors:
+  - person.ts:587: the early-null look-up re-arms the flag with the current phaseAt, not lookup.run's. A report during that look-up, then found:false 60 s later, redispatches attempt 2. Needs an odd GitHub answer; fix by comparing attempt and phaseAt before re-arming.
+  - github.ts:94: a 429 or rate-limit 403 counts as refused and keeps the 17 min window (the honest outcome).
