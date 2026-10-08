@@ -645,6 +645,8 @@ export class Person extends DurableObject<Env> {
   private admitSync(input: AdmitInput, takesWaiting: boolean): AdmitResult {
     const sql = this.ctx.storage.sql;
     const kv = this.ctx.storage.kv;
+    // The account admission started for is gone, or signed in again since (Delete me during the reads): nothing is written.
+    if (this.account()?.generation !== input.generation) return { admitted: false, refused: 'gone' };
     this.expire(input.now);
     const repeat = sql
       .exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE request_id = ?`, input.requestId)
@@ -831,15 +833,16 @@ export class Person extends DurableObject<Env> {
    * the next tidy-up whatever happens here.
    */
   private async startWaiting(now: number, github: GitHubAccess, spent: () => number): Promise<void> {
-    const due = this.ctx.storage.transactionSync((): { waiting: AnswersWaiting; requestId: string } | null => {
+    const due = this.ctx.storage.transactionSync((): { waiting: AnswersWaiting; requestId: string; generation: number } | null => {
       const waiting = this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING);
       const current = this.currentRunRow();
+      const generation = this.account()?.generation;
       // A run going takes them at its own end.
-      if (waiting === undefined || (current !== undefined && ACTIVE_PHASES.includes(current.phase))) return null;
-      return { waiting, requestId: `answers-after-${current?.id ?? 'none'}` };
+      if (waiting === undefined || generation === undefined || (current !== undefined && ACTIVE_PHASES.includes(current.phase))) return null;
+      return { waiting, requestId: `answers-after-${current?.id ?? 'none'}`, generation };
     });
     if (due === null) return;
-    const { waiting, requestId } = due;
+    const { waiting, requestId, generation } = due;
     const scope: RunScope = waiting.subjects.length > 0 ? 'all' : 'instructions';
     let manifest: AdmissionManifest;
     try {
@@ -850,8 +853,12 @@ export class Person extends DurableObject<Env> {
       this.ctx.storage.transactionSync(() => this.waitingFailed(requestId, final, now));
       return;
     }
-    const input: AdmitInput = { scope, allowWeb: waiting.allowWeb, requestId, now, dailyLimit: Number(this.env.DAILY_RUN_LIMIT), manifest };
+    const input: AdmitInput = { scope, allowWeb: waiting.allowWeb, requestId, now, generation, dailyLimit: Number(this.env.DAILY_RUN_LIMIT), manifest };
     const result = this.ctx.storage.transactionSync((): AdmitResult => this.admitSync(input, true));
+    if (!result.admitted && result.refused === 'gone') {
+      console.error('the answers that waited were not started: the account is gone');
+      return;
+    }
     if (!result.admitted) {
       console.error(`the answers that waited keep waiting: ${result.refused}`);
       return;
@@ -980,6 +987,12 @@ export class Person extends DurableObject<Env> {
       this.disarm('run');
       return null;
     }
+    // A dispatch still pending is the alarm's to send (`dispatchDue`): recovery keeps its deadline and looks at nothing.
+    const pending = this.pendingDispatch(run.id);
+    if (pending !== null) {
+      this.arm('run', run.id, pending);
+      return null;
+    }
     const wire = toWire(run);
     const attempt = this.attemptOf(run.id);
     const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
@@ -1021,7 +1034,8 @@ export class Person extends DurableObject<Env> {
       JSON.stringify(watch ?? null) !== seen.watch;
     if (moved) {
       if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) this.disarm('run');
-      else this.arm('run', run.id, Math.max(staleDeadline(toWire(run), this.attemptOf(run.id), watch), now + RECHECK_MS));
+      // A run admitted meanwhile keeps its dispatch deadline: recovery moves only the deadline of a run it looked at.
+      else this.arm('run', run.id, this.pendingDispatch(run.id) ?? Math.max(staleDeadline(toWire(run), this.attemptOf(run.id), watch), now + RECHECK_MS));
       return false;
     }
     if (outcome.kind === 'fail') {
@@ -1035,6 +1049,11 @@ export class Person extends DurableObject<Env> {
     this.watch({ runId: run.id, attempt: this.nextAttempt(run.id), phaseAt: run.phase_at, until: now + QUEUED_STALE_MS, graced: false });
     this.ctx.storage.sql.exec('UPDATE runs SET deadline_at = ? WHERE id = ?', now, run.id);
     return true;
+  }
+
+  /** When run `runId`'s next dispatch is due (`runs.deadline_at`, set by admission or a redispatch), or null when none is pending. */
+  private pendingDispatch(runId: string): number | null {
+    return this.ctx.storage.sql.exec<{ deadline_at: number | null }>('SELECT deadline_at FROM runs WHERE id = ?', runId).toArray()[0]?.deadline_at ?? null;
   }
 
   /** Keeps the extra time the alarm gave a run's attempt, and sets the run's deadline for its end. */

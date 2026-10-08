@@ -83,6 +83,8 @@ const ask = (requestId: string, now: number, more: Partial<AdmitInput> = {}): Ad
   allowWeb: false,
   requestId,
   now,
+  // Each test signs in a new person: the first generation.
+  generation: 0,
   dailyLimit: 100,
   manifest: MANIFEST,
   ...more,

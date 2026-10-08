@@ -81,7 +81,7 @@ async function aRun(): Promise<{ sub: string; runId: string; ticket: string; t0:
   await p.setFolderId('FOLDER_ID');
   await p.cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + 120 * MINUTE });
   const t0 = Date.now();
-  const admitted = await p.admit({ scope: 'instructions', allowWeb: true, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+  const admitted = await p.admit({ generation: (await p.account())?.generation ?? -1, scope: 'instructions', allowWeb: true, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
   if (!admitted.admitted) throw new Error('not admitted');
   const { ticket } = await dispatchOf(alarmGitHub, admitted.run.id);
   return { sub, runId: admitted.run.id, ticket, t0 };

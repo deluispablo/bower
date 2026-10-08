@@ -209,7 +209,7 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
       const p = person(sub);
       await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
       const t0 = farAhead();
-      const admitted = await p.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+      const admitted = await p.admit({ generation: (await p.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
       if (!admitted.admitted) throw new Error('not admitted');
       await runInDurableObject(p, async (instance: Person) => {
         await instance.wake(t0, { ...gh.access, token: undefined });
@@ -227,7 +227,7 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
     const p = person(sub);
     await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
     const t0 = farAhead();
-    const first = await p.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    const first = await p.admit({ generation: (await p.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     if (!first.admitted) throw new Error('not admitted');
     await runInDurableObject(p, async (instance: Person) => {
       await instance.wake(t0, gh.access);
@@ -251,7 +251,7 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
       await looking;
       // Meanwhile R0 reports done, and a press admits R1, its dispatch due now.
       expect(instance.runnerReport(first.run.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'done' }, t1)).toMatchObject({ accepted: true });
-      const admitted = instance.admit({ scope: 'all', allowWeb: false, requestId: 'press-2', now: t1, dailyLimit: 100, manifest: MANIFEST });
+      const admitted = instance.admit({ generation: instance.account()?.generation ?? -1, scope: 'all', allowWeb: false, requestId: 'press-2', now: t1, dailyLimit: 100, manifest: MANIFEST });
       release();
       await woken;
       return admitted;
