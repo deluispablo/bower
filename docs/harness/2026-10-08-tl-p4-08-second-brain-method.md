@@ -103,3 +103,14 @@ Next, two workers in parallel:
      It is proven with scripted proposals in which the person's answer is given in the fixture.
    - **`ask-answer-loop` comes forward from C11,** because C05 needs it. It waits for the owner's decision on its trigger (TL-P4-09 note): either a small tidy-up for that item at once, or the next tidy-up the person starts.
    - C05 closes when both pass.
+
+**Addendum 8, 2026-10-08: the owner chose (A), the answer applies at once.** When the person answers a question, Bower starts a small tidy-up scoped to that question's subject. The person sees it resolved without pressing Tidy up. `ask-answer-loop` (`bower-escalated`) builds it on the existing admission:
+- **The answer is stored with its question,** idempotently: answering twice changes nothing. Admission then takes a run scoped to the subject (its thing, pile or notes), with the answer in the manifest, so the model sees the question and the answer.
+- **It counts in the daily quota,** like any run.
+- **When a run is already active,** the answer waits in the question and the next run applies it, so there is still one active run per person. The answer is never lost.
+- **A "no", or a choice that changes nothing,** closes the question without a run.
+- **Tests:**
+  - a yes to "keep one note" starts a scoped run that merges (scripted);
+  - answering twice starts one run;
+  - an answer given during a run is applied by the next one;
+  - a no starts no run.
