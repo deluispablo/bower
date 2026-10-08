@@ -61,11 +61,18 @@ const WAITS = [500, 1000, 2000];
 /** What a create's answer is asked to carry besides its metadata, to confirm the bytes Drive stored. */
 const CHECKSUMS = 'md5Checksum,sha256Checksum';
 /** A run's records (`checkpointName`, `reportName`, `dispositionName`) and its `dispositions.json`: written once, never changed. */
-const RECORD = /^(?:(?:checkpoint-\d+|report|disposition)-[0-9a-f]{64}\.json|dispositions\.json)$/;
+const RECORD = /^(?:(?:checkpoint-\d+|manifest|report|disposition)-[0-9a-f]{64}\.json|dispositions\.json)$/;
 /** The report files the barrier brings up to date: confirmed by the md5 of their write's answer, never by kept text. */
 const REPORT_FILE = /^(?:questions|suggestions|requests|hashes)\.json$/;
 /** How long a plan read is answered again from the first (`planReads`). */
 const PLAN_KEEP_MS = 5000;
+/**
+ * How long a file read for an effect's check stands for the read the fence would make right before that effect's write
+ * (`heldNow`): one read serves both. The same for a folder this run made, which a write into it need not read again
+ * (a create into a folder only needs it to be where it was, out of the Bin). A file's own write answer never does:
+ * the next write to it is always fenced by a read of its own. The window grows from about one request to this.
+ */
+const HOLD_MS = 3000;
 
 /** What one of this run's own writes did to a folder listing: the file as Drive answered, or the file put in the Bin. */
 export type Change = { file: DriveFile } | { gone: string };
@@ -104,6 +111,14 @@ export class RunnerDrive {
   private readonly answered = new Map<string, string>();
   /** Whether a fenced write's request is out now. */
   private writing = false;
+  /** Files read for an effect's check (`recheck`, `evidence`), and folders this run made, by id, for `HOLD_MS`. */
+  private readonly held = new Map<string, { file: DriveFile; trashed: boolean; at: number; own: boolean }>();
+  /** The file each fenced write answered, by id, for `fromAnswer` and `answeredFile`: the effect read from its answer. */
+  private readonly answers = new Map<string, { file: DriveFile; trashed: boolean }>();
+  /** The target of the fenced write in flight, as its fence saw it: a content write compares it instead of reading again. */
+  private peeked: DriveFile | null = null;
+  /** What each write's answer said of the stored bytes, by id (checksums asked of every fenced write). */
+  private readonly sums = new Map<string, { size?: number; md5?: string; sha256?: string }>();
   /** Each fenced write that ended, with the generation it ended at: what it did (null: not known, e.g. a lost answer). */
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
 
@@ -118,7 +133,7 @@ export class RunnerDrive {
       update: (id: string, patch: DrivePatch) => this.fenced({ op: 'update', id, patch }, () => this.http.update(id, patch)),
       trash: (id, appProperties) => this.fenced({ op: 'trash', id, ...(appProperties ? { appProperties } : {}) }, () => this.http.trash(id, appProperties)),
       writeText: (id, text, ifModified, appProperties) =>
-        this.fenced({ op: 'write-text', id, text, ifModified, ...(appProperties ? { appProperties } : {}) }, () => this.http.writeText(id, text, ifModified, appProperties)),
+        this.fenced({ op: 'write-text', id, text, ifModified, ...(appProperties ? { appProperties } : {}) }, () => this.http.writeText(id, text, ifModified, appProperties, this.peeked?.id === id ? this.peeked : undefined)),
     };
   }
 
@@ -168,6 +183,60 @@ export class RunnerDrive {
   }
 
   // --- Evidence reads: each file read is what later writes are checked against. ---
+
+  private hold(file: DriveFile, trashed: boolean, own: boolean): void {
+    this.held.set(file.id, { file, trashed, at: Date.now(), own });
+  }
+
+  /** A read kept for this file, or a folder this run made when `parent` (a create's target is its folder). */
+  private heldNow(id: string, parent: boolean): (StoredNow & { own: boolean }) | null {
+    const h = this.held.get(id);
+    return h && Date.now() - h.at < HOLD_MS && (!h.own || parent) ? { file: h.file, trashed: h.trashed, own: h.own } : null;
+  }
+
+  /**
+   * A file as it is now for an effect's check: read now, or for the folder an effect goes into (`parent`) the one this
+   * run made or read for another effect within the last `HOLD_MS`. Null when it is gone or in the Bin. The fence then does not read it a second time (`fenced`).
+   */
+  async recheck(id: string, parent = false): Promise<DriveFile | null> {
+    const h = parent ? this.heldNow(id, true) : null;
+    if (h) return h.trashed ? null : this.seen.note(h.file);
+    try {
+      const file = await this.get(id);
+      this.hold(file, false, false);
+      return file;
+    } catch (e) {
+      if (e instanceof BowerError && e.code === 'not-found') return null;
+      throw e;
+    }
+  }
+
+  /**
+   * What the answer to this run's own write to `id` shows as stored evidence, or null when the answer cannot confirm it
+   * (no checksum asked back): the caller then reads it from Drive. A folder has no content; a file's is the answer's.
+   */
+  fromAnswer(id: string): StoredEvidence | null {
+    const a = this.answers.get(id);
+    if (!a) return null;
+    if (a.file.folder) return { file: a.file, trashed: a.trashed, content: null };
+    const sum = this.sums.get(id);
+    if (sum?.sha256 === undefined || a.file.size === undefined) return null;
+    return { file: a.file, trashed: a.trashed, content: { size: a.file.size, sha256: sum.sha256 } };
+  }
+
+  /** Whether the answer to this run's own write to `id` confirms exactly these bytes (the md5 or sha-256 Drive stored). */
+  confirmsBytes(id: string, bytes: Uint8Array): boolean {
+    const sum = this.sums.get(id);
+    if (!sum) return false;
+    if (sum.size !== undefined && sum.size !== bytes.byteLength) return false;
+    if (sum.sha256 !== undefined) return sum.sha256 === createHash('sha256').update(bytes).digest('hex');
+    return sum.md5 !== undefined && sum.md5 === createHash('md5').update(bytes).digest('hex');
+  }
+
+  /** The file this run's own write answered, as it was then. */
+  answeredFile(id: string): DriveFile | null {
+    return this.answers.get(id)?.file ?? null;
+  }
 
   async get(id: string): Promise<DriveFile> {
     return this.seen.note(await this.http.get(id));
@@ -283,6 +352,7 @@ export class RunnerDrive {
       throw e;
     }
     const file = toFile(w);
+    this.hold(this.seen.note(file), w.trashed === true, false);
     if (file.folder) return { file, trashed: w.trashed === true, content: null };
     if (w.sha256Checksum !== undefined && file.size !== undefined) return { file, trashed: w.trashed === true, content: { size: file.size, sha256: w.sha256Checksum } };
     const bytes = await this.http.readBytes(id);
@@ -319,8 +389,15 @@ export class RunnerDrive {
         this.confirmed.delete(call.id);
         this.answered.delete(call.id);
       }
-      const [, now] = await Promise.all([this.stillCurrent(), this.peek(target.id)]);
+      // The check's own read, or this run's own answer, within `HOLD_MS`, is the read; otherwise it is read now.
+      const held = this.heldNow(target.id, target.part === 'parent');
+      const [, now] = await Promise.all([this.stillCurrent(), held ?? this.peek(target.id)]);
       this.seen.assert(target, now);
+      this.peeked = now?.file ?? null;
+      if ('id' in call) {
+        this.held.delete(call.id);
+        this.answers.delete(call.id);
+      }
       this.current = { call, action: null };
       this.generation++;
       this.writing = true;
@@ -328,12 +405,21 @@ export class RunnerDrive {
       try {
         const answer = await write();
         change = call.op === 'trash' ? { gone: call.id } : { file: answer as DriveFile };
+        if (call.op === 'trash') {
+          if (this.peeked) this.answers.set(call.id, { file: this.peeked, trashed: true });
+        } else {
+          // Noted here too, before the next queued write asks: the wrap notes it only after this promise has resolved.
+          const file = this.seen.note(answer as DriveFile);
+          this.answers.set(file.id, { file, trashed: false });
+          if (file.folder) this.hold(file, false, true);
+        }
         return answer;
       } finally {
         this.writing = false;
         this.generation++;
         this.ended.push({ end: this.generation, change });
         this.current = null;
+        this.peeked = null;
       }
     });
     this.queue = run.catch(() => undefined);
@@ -359,8 +445,8 @@ export class RunnerDrive {
     // A TypeError is how fetch fails with no network; DriveHttp reads it as offline.
     if (now.action === 'refuse') throw new TypeError('A fault refused this write.');
     // A record's or report file's create, and any text write, asks its answer for the stored checksums too.
-    const asks = now.call.op === 'write-text' || (now.call.op === 'create-text' && (RECORD.test(now.call.name) || REPORT_FILE.test(now.call.name)));
-    const res = await this.fetchFn(asks ? withChecksums(input) : input, init);
+    // Every fenced write asks its answer for the stored checksums too: the answer then shows the effect, with no read-back.
+    const res = await this.fetchFn(withChecksums(input), init);
     // A write Google failed on may still have landed: read as a lost answer, so it is read back, never sent again.
     if (res.status >= 500) {
       console.error(`Drive answered ${res.status} to a write`);
@@ -370,7 +456,7 @@ export class RunnerDrive {
     this.current = null;
     this.fault?.applied?.(now.call);
     if (now.action === 'lose-reply') throw new TypeError('A fault lost the answer to this write.');
-    if (asks) await this.confirm(now.call.op === 'create-text' ? now.call.text : null, res.clone());
+    await this.confirm(now.call.op === 'create-text' ? now.call.text : null, res.clone());
     return res;
   }
 
@@ -380,8 +466,13 @@ export class RunnerDrive {
    * with no checksum confirms nothing, and `last-run.json` is never confirmed: it is read back from Drive.
    */
   private async confirm(text: string | null, res: Response): Promise<void> {
-    const body = (await res.json().catch(() => null)) as { id?: string; name?: string; md5Checksum?: string; sha256Checksum?: string } | null;
+    const body = (await res.json().catch(() => null)) as { id?: string; name?: string; size?: string; md5Checksum?: string; sha256Checksum?: string } | null;
     if (!body?.id || body.name === undefined) return;
+    this.sums.set(body.id, {
+      ...(body.size !== undefined ? { size: Number(body.size) } : {}),
+      ...(body.md5Checksum !== undefined ? { md5: body.md5Checksum } : {}),
+      ...(body.sha256Checksum !== undefined ? { sha256: body.sha256Checksum } : {}),
+    });
     const record = RECORD.test(body.name);
     if (!record && !REPORT_FILE.test(body.name)) return;
     if (!record) {

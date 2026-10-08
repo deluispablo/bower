@@ -86,15 +86,11 @@ function parentOf(head: Checkpoint, e: Effect): string | null {
   return made?.state === 'applied' ? made.evidence.file.fileId : null;
 }
 
-/** A file read again now; null when it is gone or in the Bin. */
-async function now(drive: RunnerDrive, id: string): Promise<DriveFile | null> {
-  try {
-    return await drive.get(id);
-  } catch (e) {
-    if (e instanceof BowerError && e.code === 'not-found') return null;
-    throw e;
-  }
-}
+/**
+ * A file as it is now, for a check; null when it is gone or in the Bin. A read made moments ago for this run, or the
+ * answer of its own write, stands for a new read (`RunnerDrive.recheck`), and the fence then does not read it again.
+ */
+const now = (drive: RunnerDrive, id: string, parent = false): Promise<DriveFile | null> => drive.recheck(id, parent);
 
 /** Whether `from` waits on `to`, through `dependsOn`. */
 function waitsOn(manifest: RunManifest, from: string, to: string): boolean {
@@ -162,7 +158,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
     const e = op.effect;
     const parentId = parentOf(head, e) ?? '';
     if (e.kind === 'create-folder' || e.kind === 'create-text' || e.kind === 'move') {
-      const parent = parentId ? await now(drive, parentId) : null;
+      const parent = parentId ? await now(drive, parentId, true) : null;
       if (!parent?.folder) return { refused: refused('not-found', NO_FOLDER) };
       if (e.kind === 'create-folder') return { parentId, modifiedTime: null };
       if (e.kind === 'create-text') {
@@ -178,18 +174,26 @@ export function driveEffects(drive: RunnerDrive): Effects {
       }
     }
     if (e.kind === 'edit-text') {
+      // The bytes first, then the stored version: the stored size and hash must be the planned ones, and so must the
+      // bytes read before it, so both are one version, whose modifiedTime the write carries (the fence reuses this read).
+      let bytes: Uint8Array;
+      try {
+        bytes = await drive.readBytes(e.before.fileId);
+      } catch (err) {
+        if (err instanceof BowerError && err.code === 'not-found') return { refused: refused('conflict', NOT_AS_SEEN) };
+        throw err;
+      }
       const ev = await drive.evidence(e.before.fileId);
       if (!ev || ev.trashed || !samePlace(ev.file, e.before)) return { refused: refused('conflict', NOT_AS_SEEN) };
       if (ev.content?.size !== e.beforeContent.size || ev.content.sha256 !== e.beforeContent.sha256) return { refused: refused('conflict', NOTE_CHANGED) };
-      if ((await recheckEdit(e, await drive.readBytes(e.before.fileId))) !== 'ok') return { refused: refused('conflict', NOTE_CHANGED) };
-      // The fence then checks this very modifiedTime again right before the write.
-      return (await now(drive, e.before.fileId))?.modifiedTime === ev.file.modifiedTime ? { parentId, modifiedTime: ev.file.modifiedTime } : { refused: refused('conflict', NOTE_CHANGED) };
+      if (createHash('sha256').update(bytes).digest('hex') !== e.beforeContent.sha256) return { refused: refused('conflict', NOTE_CHANGED) };
+      if ((await recheckEdit(e, bytes)) !== 'ok') return { refused: refused('conflict', NOTE_CHANGED) };
+      return { parentId, modifiedTime: ev.file.modifiedTime };
     }
     if (e.kind === 'write-runner-json') {
       const ev = await drive.evidence(e.before.fileId);
       if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { refused: refused('conflict', LIST_CHANGED) };
-      const file = await now(drive, e.before.fileId);
-      return file && samePlace(file, e.before) && file.modifiedTime === ev.file.modifiedTime ? { parentId, modifiedTime: file.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
+      return samePlace(ev.file, e.before) ? { parentId, modifiedTime: ev.file.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
     }
     // A move or a Bin: the source by the name and place the plan saw.
     const source = await now(drive, e.before.fileId);
@@ -199,35 +203,59 @@ export function driveEffects(drive: RunnerDrive): Effects {
   };
 
   /** Sends the effect once through the fenced writes. */
-  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null, stamp: string): Promise<void> => {
+  const send = async (e: Effect, w: FencedDrive, parentId: string, modifiedTime: string | null, stamp: string): Promise<DriveFile | null> => {
     const op = { [STAMP]: stamp };
     switch (e.kind) {
       case 'move': {
         const from = e.before.parents[0];
-        await w.update(e.before.fileId, {
+        return w.update(e.before.fileId, {
           ...(e.name !== e.before.name ? { name: e.name } : {}),
           ...(parentId !== from ? { addParent: parentId, ...(from ? { removeParent: from } : {}) } : {}),
           appProperties: { ...e.properties, ...op },
         });
-        return;
       }
       case 'create-folder':
-        await w.createFolder(parentId, e.name, { bowerItem: e.createKey, ...op });
-        return;
+        return w.createFolder(parentId, e.name, { bowerItem: e.createKey, ...op });
       case 'bin':
         await w.trash(e.before.fileId, op);
-        return;
+        return null;
       case 'write-runner-json':
       case 'edit-text':
         if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
-        await w.writeText(e.before.fileId, e.text, modifiedTime, op);
-        return;
+        return w.writeText(e.before.fileId, e.text, modifiedTime, op);
       case 'create-text':
         // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17); a runner file
         // made again only with its create key. Either way a lost reply is found again by that key.
-        await w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...op } : { bowerItem: e.createKey, ...op });
-        return;
+        return w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...op } : { bowerItem: e.createKey, ...op });
     }
+  };
+
+  /**
+   * The effect read from the answer of its own write, which Drive gave with the stored checksums: the file as stored
+   * (name, place, properties) and, for text, the very bytes sent. Null when the answer cannot show it; the caller then
+   * reads it from Drive as before (`observe`).
+   */
+  const shownByAnswer = async (op: OperationV2, parentId: string, answer: DriveFile | null): Promise<EffectEvidence | null> => {
+    const e = op.effect;
+    if (e.kind === 'bin') {
+      const ev = drive.fromAnswer(e.before.fileId);
+      return ev && shows(e, ev, null) ? toEvidence(ev, 'blob') : null;
+    }
+    if (!answer) return null;
+    if (e.kind === 'create-folder' || e.kind === 'move') {
+      const ev = drive.fromAnswer(answer.id);
+      return ev && shows(e, ev, parentId) ? toEvidence(ev, 'blob') : null;
+    }
+    const bytes = new TextEncoder().encode(e.text);
+    if (!drive.confirmsBytes(answer.id, bytes)) return null;
+    const stored = drive.answeredFile(answer.id);
+    if (!stored) return null;
+    const ev: StoredEvidence = { file: stored, trashed: false, content: { size: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') } };
+    if (e.kind === 'edit-text') {
+      const read = await readBackEdit(e, { fileId: stored.id, name: stored.name, parents: stored.parents, trashed: false, bytes });
+      return read === 'applied' && ev.content?.size === e.content.size && ev.content.sha256 === e.content.sha256 ? toEvidence(ev, 'utf8') : null;
+    }
+    return shows(e, ev, e.kind === 'create-text' ? parentId : null) ? toEvidence(ev, 'utf8') : null;
   };
 
   /**
@@ -285,8 +313,9 @@ export function driveEffects(drive: RunnerDrive): Effects {
       if ('refused' in ok) return ok.refused;
       // Possibly sent from here on: everything before it only read.
       await sending();
+      let answer: DriveFile | null;
       try {
-        await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
+        answer = await send(op.effect, w, ok.parentId, ok.modifiedTime, stamp);
       } catch (e) {
         // Refused by the fence's own read before anything was sent: an honest rejection.
         if (e instanceof BowerError && e.code === 'conflict' && (e.message === notAsSeen().message || op.effect.kind === 'write-runner-json' || op.effect.kind === 'edit-text')) {
@@ -303,7 +332,8 @@ export function driveEffects(drive: RunnerDrive): Effects {
         }
         throw e;
       }
-      const seen = await observe(op, head);
+      // The answer to the write shows the effect; read from Drive only when it cannot (no checksum, or another one).
+      const seen = (await shownByAnswer(op, ok.parentId, answer)) ?? (await observe(op, head));
       if (!seen) {
         console.error(`Operation ${op.ordinal} was sent and shows no effect`);
         throw new BowerError('unknown', UNRESOLVED);
