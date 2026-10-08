@@ -2,7 +2,7 @@
  * The real doors: the Bower folder in Google Drive, and the Worker for the
  * session and tidy-ups. The same screens run on these as on the demo.
  */
-import type { DriveApi, ResumableDrive } from '../drive/drive-api';
+import { isKnownDriveWrite, type DriveApi, type ResumableDrive } from '../drive/drive-api';
 import type { Sources } from '../sources';
 import { DriveVault } from '../vault/drive-vault';
 import { outboxKey } from '../vault/journal';
@@ -305,7 +305,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     };
     const policy = guard ? drivePolicy(guard, outboxWaiting) : null;
     const boundWorker = guardWorker(at, boundRoot, () => resolved);
-    function bound<T extends object>(api: T, mutations: readonly PropertyKey[] = []): T {
+    function bound<T extends object>(api: T): T {
       return new Proxy(api, {
         get(target, key, receiver) {
           const value: unknown = Reflect.get(target, key, receiver);
@@ -323,7 +323,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
             const result: unknown = await Reflect.apply(value, target, args);
             policy?.after(key, result);
             // Successful issued mutations can still reach their original owner's bookkeeping.
-            if (!mutations.includes(key)) check(at);
+            if (!isKnownDriveWrite(key)) check(at);
             return result;
           };
         },
@@ -332,7 +332,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
     v = new DriveVault({
       driveLinks: opts.driveLinks ?? false,
       declarePiles: opts.declarePiles ?? false,
-      drive: bound(drive, ['createFolder', 'createText', 'upload', 'update', 'writeText', 'trash', 'untrash']),
+      drive: bound(drive),
       rootId: boundRoot,
       ...(vaultQueue ? { uploads: { queue: vaultQueue, account } } : {}),
       runningPiles: () => {
