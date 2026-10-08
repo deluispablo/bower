@@ -115,3 +115,6 @@ export function noAnswer(context: Context, words: { offline: string; elsewhere: 
 
 /** A request that may have been sent and got no answer, in any context: a lost answer, to be read back. */
 export const isNoAnswer = (e: unknown): boolean => e instanceof BowerError && (e.code === 'offline' || e.cause === NO_ANSWER);
+
+/** Stub for the red commit: the marker on a write whose outcome is unknown. */
+export const isUnconfirmedWrite = (_e: unknown): boolean => false;

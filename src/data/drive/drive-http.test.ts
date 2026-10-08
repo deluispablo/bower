@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DriveHttp } from './drive-http';
+import { isUnconfirmedWrite } from './transport';
 
 interface Call {
   method: string;
@@ -214,6 +215,55 @@ describe('DriveHttp', () => {
     const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
     await expect(d.createText('ROOT', 'a.md', 'x')).rejects.toMatchObject({ code: 'unknown' });
     expect(s.calls).toHaveLength(1);
+  });
+
+  describe('what the person is told when Drive does not answer well', () => {
+    const READ = "Google Drive didn't answer. Try again.";
+    const WRITE = "Bower couldn't confirm that change. Refresh to check.";
+    const writes: [string, (d: DriveHttp) => Promise<unknown>][] = [
+      ['writeText', (d) => d.writeText('f1', 'x', '2026-10-04T10:00:00.000Z')],
+      ['update', (d) => d.update('f1', { name: 'b.md' })],
+      ['trash', (d) => d.trash('f1')],
+      ['untrash', (d) => d.untrash('f1')],
+      ['createText', (d) => d.createText('ROOT', 'a.md', 'x')],
+    ];
+    const drive = (status: number): { d: DriveHttp; s: ReturnType<typeof stub> } => {
+      // A GET (the write's own read of the file) answers; the write itself gets `status`.
+      const s = stub((c) => (c.method === 'GET' ? json(file('f1', 'a.md', 'ROOT')) : new Response('', { status })));
+      return { d: new DriveHttp({ token: tokens().token, fetch: s.fetch }), s };
+    };
+
+    it.each(writes)('a write whose outcome is unknown says Bower could not confirm it (%s answered 503)', async (_name, run) => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { d, s } = drive(503);
+      const e = await run(d).catch((x: unknown) => x);
+      expect(e).toMatchObject({ code: 'unknown', message: WRITE });
+      expect(isUnconfirmedWrite(e)).toBe(true);
+      expect(s.calls.filter((c) => c.method !== 'GET')).toHaveLength(1);
+    });
+
+    it('a write refused with a client error, or by its fence, never says it could not confirm', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      for (const [, run] of writes) {
+        const e = await run(drive(400).d).catch((x: unknown) => x);
+        expect(e).toMatchObject({ code: 'unknown', message: READ });
+        expect(isUnconfirmedWrite(e)).toBe(false);
+      }
+      const stale = await drive(503).d.writeText('f1', 'x', '2020-01-01T00:00:00.000Z').catch((x: unknown) => x);
+      expect(stale).toMatchObject({ code: 'conflict' });
+      expect(isUnconfirmedWrite(stale)).toBe(false);
+    });
+
+    it('a read with no answer still says Google Drive did not answer', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers();
+      const s = stub(() => new Response('', { status: 503 }));
+      const p = new DriveHttp({ token: tokens().token, fetch: s.fetch }).get('f1').catch((x: unknown) => x);
+      await vi.advanceTimersByTimeAsync(4000);
+      const e = await p;
+      expect(e).toMatchObject({ code: 'unknown', message: READ });
+      expect(isUnconfirmedWrite(e)).toBe(false);
+    });
   });
 
   it('full-text search reads at most two pages', async () => {
