@@ -247,3 +247,5 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - runner/src/still-as-seen.ts:49: under the pool of 4, another op's list() of the source folder overwrites expectSeen before the fence.
   - runner/src/spine/schedule.ts:27: createdBy parent claims the op id, not the folder id, and the file:F vs dir:F clash has no unit test.
   - overhead.test.ts:39 does not check that the read is of the target.
+- P4-14 (process-error-honest, minor): the `start-fails` fake scenario shows in the demo panel but the demo ignores it (src/data/demo/scenario.ts:14).
+- P4-14 (admission, minor): the needs-manifest re-admission in api/src/process.ts:289 builds fresh caches and reads texts and bytes twice.
