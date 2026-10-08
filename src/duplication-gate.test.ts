@@ -35,4 +35,21 @@ describe('duplication gate', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   }, 60_000);
+
+  it('a lower count asks to lower the baseline', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dup-gate-'));
+    try {
+      fs.mkdirSync(path.join(root, 'src'));
+      fs.writeFileSync(path.join(root, 'src', 'one.ts'), block('alpha'));
+      fs.writeFileSync(path.join(root, 'src', 'two.ts'), 'export const two = 2;\n');
+      const baseline = path.join(root, 'baseline.json');
+      fs.writeFileSync(baseline, JSON.stringify({ clones: 25, duplicatedLines: 0, duplicatedTokens: 0 }));
+
+      const result = runGate(root, baseline);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('lower the baseline to 0');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
