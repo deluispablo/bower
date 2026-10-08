@@ -331,3 +331,4 @@ P3-9 is closed.
 - c1-worker-schema-v11 closed (06b11309; escalated rework). 401/415. c1-worker-deadlines (escalated) dispatched; c1-digest-library running.
 - c1-digest-library closed (983b360c; one commit, red by hand; row added by me). 402/415. c1-still-as-seen (escalated) dispatched; c1-worker-deadlines running.
 - c1-worker-deadlines closed (7ef5a810; schema v12; removed 43). P4-22 review (escalated) running; c1-still-as-seen running. 403/415.
+- P4-22 PASS (c1-worker-deadlines; minors to polish, one: a throwing handler retries forever). c1-admit-once (implementer) dispatched.
