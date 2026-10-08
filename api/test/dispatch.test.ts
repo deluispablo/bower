@@ -5,64 +5,40 @@ import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
 import { dispatchTidy } from '../src/github.js';
+import type { Person } from '../src/person.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import type { RunReply } from '../src/process.js';
 import { hashTicket, personIdOf } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
-import { driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
+import { MANIFEST, driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
+import { WAIT, dispatchOf, pretendGitHubForFile } from './github-support.js';
+import type { PretendGitHub } from './github-support.js';
+import { farAhead } from './time.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
 const APP = 'https://app.example.com';
 const API = 'https://api.example.com';
 
+/** The GitHub every alarm of this file reaches: presses admit at the wall clock, and the runtime fires the alarm. */
+const gh = pretendGitHubForFile(env);
+
 beforeEach(async () => {
   for (const { name } of (await kv.list()).keys) await kv.delete(name);
+  gh.script = {};
 });
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
 
-interface Sent {
-  url: string;
-  init: RequestInit;
-  body: {
-    event_type: string;
-    client_payload: { run_id: string; attempt: number; ticket: string; scope: string; allow_web: boolean };
-  };
-}
-
-/** A pretend GitHub: records each call and answers `status` (or fails the network when `status` is null). */
-function github(status: number | null = 204) {
-  const sent: Sent[] = [];
-  const fetchImpl = (url: string, init: RequestInit = {}): Promise<Response> => {
-    sent.push({ url, init, body: JSON.parse(String(init.body)) as Sent['body'] });
-    if (status === null) return Promise.reject(new Error('network down, ticket-secret'));
-    return Promise.resolve(new Response(null, { status }));
+/** What the press itself reaches besides Drive: it must never be GitHub. */
+function pressSide() {
+  const sent: string[] = [];
+  const fetchImpl = (url: string): Promise<Response> => {
+    sent.push(url);
+    return Promise.reject(new Error('the press called GitHub'));
   };
   return { sent, fetchImpl };
-}
-
-/**
- * Runs `work` with the backoff waits on fake timers: they are moved on at once, while the real clock keeps
- * the rest of the request (Drive, the person object) going.
- */
-async function withFastBackoff<T>(work: () => Promise<T>): Promise<T> {
-  const realSetTimeout = globalThis.setTimeout;
-  vi.useFakeTimers({ toFake: ['setTimeout'] });
-  try {
-    let settled = false;
-    const running = work().finally(() => {
-      settled = true;
-    });
-    for (let i = 0; i < 2000 && !settled; i += 1) {
-      await vi.advanceTimersByTimeAsync(500);
-      await new Promise((done) => realSetTimeout(done, 2));
-    }
-    return await running;
-  } finally {
-    vi.useRealTimers();
-  }
 }
 
 async function holder(): Promise<{ sub: string; cookie: string; fence: Record<string, string>; folder: DriveFolder }> {
@@ -88,9 +64,8 @@ async function process(
   who: { cookie: string; fence: Record<string, string>; folder: DriveFolder },
   github: (url: string, init?: RequestInit) => Promise<Response>,
   requestId: string,
-  bindings: Env = env,
 ): Promise<RunReply> {
-  // Drive is the person's pretend folder; everything else goes to the pretend GitHub.
+  // Drive is the person's pretend folder; everything else goes to `github`.
   const fetchImpl = (url: string, init?: RequestInit): Promise<Response> =>
     url.startsWith('https://www.googleapis.com/') ? who.folder.fetchImpl(url, init) : github(url, init);
   const r = await createApp({ fetchImpl }).request(
@@ -100,85 +75,126 @@ async function process(
       headers: { cookie: who.cookie, origin: APP, 'content-type': 'application/json', ...who.fence },
       body: JSON.stringify({ scope: 'instructions', allowWeb: true, requestId }),
     },
-    bindings,
+    env,
   );
   expect(r.status).toBe(200);
   return (await r.json()) as RunReply;
 }
 
-describe('dispatch on admission', () => {
+/** The dispatches GitHub received for `runId`, each try counted. */
+const triesOf = (g: PretendGitHub, runId: string | undefined): number => g.dispatched.filter((d) => d.run_id === runId).length;
+
+async function alarmOf(sub: string): Promise<number | null> {
+  return await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm());
+}
+
+/** Waits until the dispatch of the run admitted for `sub` gave up (lost): the alarm is set for the early look. */
+async function lostArmed(sub: string, after: number): Promise<number> {
+  return await vi.waitFor(async () => {
+    const alarm = (await alarmOf(sub)) ?? 0;
+    // Claimed, the alarm is at the stale deadline first; lost, a minute after the last try.
+    if (alarm < after + 60_000 || alarm > Date.now() + 60_000) throw new Error('not armed yet');
+    return alarm;
+  }, WAIT);
+}
+
+describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
+  it('only the alarm dispatches', async () => {
+    const who = await holder();
+    const press = pressSide();
+    const { run } = await process(who, press.fetchImpl, 'press-1');
+    // The press admits and schedules the dispatch for now: it sends nothing to GitHub itself.
+    expect(press.sent).toHaveLength(0);
+    expect(run?.phase).toBe('queued');
+    // Three alarms at once, with the runtime's own: the run row is compared and set, so one dispatch.
+    const p = person(who.sub);
+    await runInDurableObject(p, async (instance: Person) => {
+      const now = Date.now();
+      await Promise.all([instance.wake(now, gh.access), instance.wake(now, gh.access), instance.wake(now, gh.access)]);
+    });
+    const sent = await dispatchOf(gh, run?.id ?? '');
+    // A repeat, a second press and another alarm while it goes: nothing more is sent, by the press or the alarm.
+    await process(who, press.fetchImpl, 'press-1');
+    await process(who, press.fetchImpl, 'press-2');
+    await runInDurableObject(p, async (instance: Person) => {
+      await instance.wake(Date.now(), gh.access);
+    });
+    expect(press.sent).toHaveLength(0);
+    expect(triesOf(gh, run?.id)).toBe(1);
+    expect(sent).toMatchObject({ run_id: run?.id, attempt: 1, scope: 'instructions', allow_web: true });
+    const row = await runInDurableObject(p, (_i, state) => state.storage.sql.exec<{ deadline_at: number | null; version: number }>('SELECT deadline_at, version FROM runs').one());
+    expect(row).toEqual({ deadline_at: null, version: 1 });
+    // The ticket the alarm minted opens the token route; the stale deadline is set as before.
+    const token = await createApp().request(`${API}/runner/runs/${run?.id ?? ''}/token`, { headers: { authorization: `Bearer ${sent.ticket}` } }, env);
+    expect(token.status).toBe(200);
+    expect(await alarmOf(who.sub)).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
+  });
+
   it('a new run is dispatched once with its ticket', async () => {
     const who = await holder();
-    const gh = github();
-    const { run } = await process(who, gh.fetchImpl, 'press-1');
-    expect(gh.sent).toHaveLength(1);
-    const call = gh.sent[0];
-    if (call === undefined) throw new Error('nothing sent');
-    expect(call.url).toBe(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`);
-    expect(call.init.method).toBe('POST');
-    const headers = call.init.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer test-github-token');
-    expect(headers.Accept).toBe('application/vnd.github+json');
-    expect(headers['X-GitHub-Api-Version']).toBe('2022-11-28');
-    const payload = call.body.client_payload;
-    expect(call.body.event_type).toBe('bower-tidy');
+    const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+    const payload = await dispatchOf(gh, run?.id ?? '');
+    const call = gh.requests[gh.dispatched.indexOf(payload)];
+    expect(call?.url).toBe(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`);
+    expect(call?.method).toBe('POST');
+    expect(call?.headers.Authorization).toBe('Bearer test-github-token');
+    expect(call?.headers.Accept).toBe('application/vnd.github+json');
+    expect(call?.headers['X-GitHub-Api-Version']).toBe('2022-11-28');
     expect(Object.keys(payload).sort()).toEqual(['allow_web', 'attempt', 'run_id', 'scope', 'ticket']);
-    expect(payload).toMatchObject({ run_id: run?.id, attempt: 1, scope: 'instructions', allow_web: true });
     expect(personIdOf(payload.run_id)).toBe(env.PERSON.idFromName(who.sub).toString());
     // The ticket opens the token route, with the folder.
-    const token = await createApp().request(
-      `${API}/runner/runs/${payload.run_id}/token`,
-      { headers: { authorization: `Bearer ${payload.ticket}` } },
-      env,
-    );
+    const token = await createApp().request(`${API}/runner/runs/${payload.run_id}/token`, { headers: { authorization: `Bearer ${payload.ticket}` } }, env);
     expect(token.status).toBe(200);
     expect(await token.json()).toMatchObject({ folderId: who.folder.root, attempt: 1 });
   });
 
   it('admission timing is logged in parts', async () => {
     const who = await holder();
-    const gh = github();
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const { run } = await process(who, gh.fetchImpl, 'press-1');
-    await process(who, gh.fetchImpl, 'press-1');
+    const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+    await process(who, pressSide().fetchImpl, 'press-1');
     const lines = log.mock.calls.map((args) => args.map(String).join(' ')).filter((line) => line.startsWith('admission timing'));
     log.mockRestore();
-    // One line per press, in milliseconds: session and lease, the would-admit check, the Drive reads, the admit, the
-    // ticket and dispatch to GitHub, and the whole; a repeat reads nothing and dispatches nothing.
+    // One line per press, in milliseconds: session and lease, the would-admit check, the Drive reads, the admit, and
+    // the whole; a repeat reads nothing.
     const part = (name: string): string => `${name}=(\\d+)ms`;
-    const shape = new RegExp(`^admission timing: ${['session', 'check', 'reads', 'admit', 'dispatch', 'total'].map(part).join(' ')}$`);
+    const shape = new RegExp(`^admission timing: ${['session', 'check', 'reads', 'admit', 'total'].map(part).join(' ')}$`);
     expect(lines).toHaveLength(2);
     for (const line of lines) expect(line).toMatch(shape);
-    const [, , , readsRepeat, , dispatchRepeat] = shape.exec(lines[1] ?? '') ?? [];
-    expect([readsRepeat, dispatchRepeat]).toEqual(['0', '0']);
+    expect(shape.exec(lines[1] ?? '')?.[3]).toBe('0');
     // Numbers only: no run id, folder or ticket.
-    const ticket = gh.sent[0]?.body.client_payload.ticket ?? '';
+    const { ticket } = await dispatchOf(gh, run?.id ?? '');
     for (const line of lines) for (const secret of [run?.id ?? '', who.folder.root, ticket]) expect(line).not.toContain(secret);
   });
 
   it('a repeat or an active run dispatches nothing', async () => {
     const who = await holder();
-    const gh = github();
-    const first = await process(who, gh.fetchImpl, 'press-1');
-    expect(await process(who, gh.fetchImpl, 'press-1')).toEqual(first);
-    expect((await process(who, gh.fetchImpl, 'press-2')).run?.id).toBe(first.run?.id);
-    expect(gh.sent).toHaveLength(1);
+    const first = await process(who, pressSide().fetchImpl, 'press-1');
+    await dispatchOf(gh, first.run?.id ?? '');
+    expect(await process(who, pressSide().fetchImpl, 'press-1')).toEqual(first);
+    expect((await process(who, pressSide().fetchImpl, 'press-2')).run?.id).toBe(first.run?.id);
+    await runInDurableObject(person(who.sub), async (instance: Person) => {
+      await instance.wake(Date.now(), gh.access);
+    });
+    expect(triesOf(gh, first.run?.id)).toBe(1);
   });
 
   it('a failed dispatch leaves the run queued', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       for (const status of [500, null]) {
+        gh.script = { dispatch: status };
         const who = await holder();
-        const gh = github(status);
-        const reply = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
-        expect(gh.sent).toHaveLength(3);
+        const before = Date.now();
+        const reply = await process(who, pressSide().fetchImpl, 'press-1');
+        await lostArmed(who.sub, before);
+        expect(triesOf(gh, reply.run?.id)).toBe(3);
         expect(reply.run?.phase).toBe('queued');
         expect(reply.revision).toBe(1);
+        expect((await person(who.sub).runStatus(Date.now())).run?.phase).toBe('queued');
         const lines = log.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
-        expect(lines).not.toContain(gh.sent[0]?.body.client_payload.ticket ?? 'missing');
+        expect(lines).not.toContain((await dispatchOf(gh, reply.run?.id ?? '')).ticket);
         expect(lines).not.toContain('test-github-token');
-        expect(lines).not.toContain('ticket-secret');
         expect(lines).toContain(status === null ? 'network' : String(status));
       }
     } finally {
@@ -189,12 +205,17 @@ describe('dispatch on admission', () => {
   it('no GitHub token sends nothing', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      const who = await holder();
-      const gh = github();
-      const bare = { ...env, GITHUB_TOKEN: undefined } as unknown as Env;
-      const reply = await process(who, gh.fetchImpl, 'press-1', bare);
-      expect(reply.run?.phase).toBe('queued');
-      expect(gh.sent).toHaveLength(0);
+      const sub = `dispatch-sub-${crypto.randomUUID()}`;
+      const p = person(sub);
+      await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+      const t0 = farAhead();
+      const admitted = await p.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+      if (!admitted.admitted) throw new Error('not admitted');
+      await runInDurableObject(p, async (instance: Person) => {
+        await instance.wake(t0, { ...gh.access, token: undefined });
+      });
+      expect(triesOf(gh, admitted.run.id)).toBe(0);
+      expect((await p.runStatus(t0)).run?.phase).toBe('queued');
       expect(log.mock.calls.map((c) => c.map(String).join(' ')).join('\n')).toContain('not configured');
     } finally {
       log.mockRestore();
@@ -203,11 +224,10 @@ describe('dispatch on admission', () => {
 
   it('admission sets the stale alarm', async () => {
     const who = await holder();
-    const gh = github();
-    const { run } = await process(who, gh.fetchImpl, 'press-1');
+    const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+    await dispatchOf(gh, run?.id ?? '');
     const p = person(who.sub);
-    const alarm = await runInDurableObject(p, (_i, state) => state.storage.getAlarm());
-    expect(alarm).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
+    expect(await alarmOf(who.sub)).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
     // The deadline passes with no progress: the alarm looks the run up with this object's env and the
     // Workers fetch (answered here, never sent), and a failed lookup writes the stale expiry.
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -277,44 +297,41 @@ describe('dispatch retries', () => {
   it('a dispatch that keeps failing arms the alarm at 60 seconds', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
+      gh.script = { dispatch: null };
       const who = await holder();
-      const gh = github(null);
       const before = Date.now();
-      const { run } = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
-      const after = Date.now();
-      expect(gh.sent).toHaveLength(3);
-      const alarm = await runInDurableObject(person(who.sub), (_i, state) => state.storage.getAlarm());
-      expect(alarm).toBeGreaterThanOrEqual(before + 60_000);
-      expect(alarm).toBeLessThanOrEqual(after + 60_000);
+      const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+      const alarm = await lostArmed(who.sub, before);
+      expect(alarm).toBeLessThanOrEqual(Date.now() + 60_000);
+      expect(triesOf(gh, run?.id)).toBe(3);
       // At that alarm the run is looked up, and attempt 1 with no job is redispatched once, as attempt 2.
-      const sent: string[] = [];
-      const fetchImpl = (url: string, init?: RequestInit): Promise<Response> => {
-        sent.push(`${init?.method ?? 'GET'} ${url}`);
-        return Promise.resolve(init?.method === 'POST' ? new Response(null, { status: 204 }) : Response.json({ workflow_runs: [] }));
-      };
-      await runInDurableObject(person(who.sub), async (instance) => {
-        await instance.recover((alarm ?? 0) + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl });
+      gh.script = {};
+      await runInDurableObject(person(who.sub), async (instance: Person) => {
+        await instance.recover(alarm + 1, gh.access);
       });
-      expect(sent.filter((c) => c.startsWith('POST'))).toHaveLength(1);
-      expect((await person(who.sub).runStatus((alarm ?? 0) + 1)).run?.id).toBe(run?.id);
+      expect((await dispatchOf(gh, run?.id ?? '', 2)).attempt).toBe(2);
+      expect(triesOf(gh, run?.id)).toBe(4);
+      expect((await person(who.sub).runStatus(alarm + 1)).run?.id).toBe(run?.id);
     } finally {
       log.mockRestore();
     }
   });
+
   it("a lost dispatch's early look-up leaves a run that has reported alone", async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
+      gh.script = { dispatch: null };
       const who = await holder();
-      const gh = github(null);
-      const { run } = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
-      const ticket = gh.sent[0]?.body.client_payload.ticket ?? '';
+      const before = Date.now();
+      const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+      const alarm = await lostArmed(who.sub, before);
+      const { ticket } = await dispatchOf(gh, run?.id ?? '');
       const p = person(who.sub);
-      const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
       // GitHub took one of the tries after all: the runner starts and reports.
       const reported = await p.runnerReport(run?.id ?? '', await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'reading', total: 2 }, alarm - 40_000);
       if (!reported.accepted) throw new Error('report refused');
       const down = vi.fn((): Promise<Response> => Promise.resolve(new Response(null, { status: 502 })));
-      await runInDurableObject(p, async (instance) => {
+      await runInDurableObject(p, async (instance: Person) => {
         await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
       });
       expect((await p.runStatus(alarm + 1)).run?.phase).toBe('reading');
@@ -327,16 +344,18 @@ describe('dispatch retries', () => {
   it('an early look-up that GitHub cannot answer waits and rechecks', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
+      gh.script = { dispatch: null };
       const who = await holder();
-      const { run } = await withFastBackoff(() => process(who, github(null).fetchImpl, 'press-1'));
+      const before = Date.now();
+      const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+      const alarm = await lostArmed(who.sub, before);
       const p = person(who.sub);
-      const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
       const down = (): Promise<Response> => Promise.resolve(new Response(null, { status: 502 }));
-      await runInDurableObject(p, async (instance) => {
+      await runInDurableObject(p, async (instance: Person) => {
         await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
       });
       expect((await p.runStatus(alarm + 1)).run?.phase).toBe('queued');
-      expect(await runInDurableObject(p, (_i, state) => state.storage.getAlarm())).toBe(alarm + 1 + 60_000);
+      expect(await alarmOf(who.sub)).toBe(alarm + 1 + 60_000);
       expect(run?.id).toBeDefined();
     } finally {
       log.mockRestore();
@@ -346,11 +365,12 @@ describe('dispatch retries', () => {
   it('a refused dispatch keeps the normal stale window', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
+      gh.script = { dispatch: 404 };
       const who = await holder();
-      const gh = github(404);
-      const { run } = await process(who, gh.fetchImpl, 'press-1');
-      expect(gh.sent).toHaveLength(1);
-      expect(await runInDurableObject(person(who.sub), (_i, state) => state.storage.getAlarm())).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
+      const { run } = await process(who, pressSide().fetchImpl, 'press-1');
+      await dispatchOf(gh, run?.id ?? '');
+      await vi.waitFor(async () => expect(await alarmOf(who.sub)).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS), WAIT);
+      expect(triesOf(gh, run?.id)).toBe(1);
     } finally {
       log.mockRestore();
     }

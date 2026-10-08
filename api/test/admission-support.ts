@@ -11,11 +11,15 @@ import type { Declaration } from '../../src/data/contracts/pile-declaration.js';
 import { declarationRecord } from '../../src/data/pile-readiness.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import type { DriveFolder } from './drive-v3.js';
+import { dispatchOf, pretendGitHubForFile } from './github-support.js';
 
 const env = testEnv as unknown as Env;
 const APP = 'https://app.example.com';
 const EMAIL = 'you@example.com';
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
+
+/** The GitHub the runtime's own alarm reaches in a file that presses (the dispatch is due at the press). */
+export const pressGitHub = (): ReturnType<typeof pretendGitHubForFile> => pretendGitHubForFile(env);
 
 /** A pile as the app adds it: its declaration in `.bower/piles`, then its folder, its note and its two things. */
 export async function declaredPile(folder: DriveFolder, piles: string, n: number): Promise<void> {
@@ -55,9 +59,12 @@ export async function holderOf(folder: DriveFolder): Promise<{ sub: string; head
   return { sub, headers: { cookie, origin: APP, 'content-type': 'application/json', 'x-bower-place': 'laptop', 'x-bower-epoch': String(epoch) } };
 }
 
-export async function press(fetchImpl: DriveFolder['fetchImpl'], headers: Record<string, string>): Promise<Response> {
+/** One press; a run it admits is dispatched by the alarm before it returns, so nothing is left in flight. */
+export async function press(fetchImpl: DriveFolder['fetchImpl'], headers: Record<string, string>, gh: ReturnType<typeof pretendGitHubForFile>): Promise<Response> {
   const body = JSON.stringify({ scope: 'all', allowWeb: false, requestId: 'press-1' });
-  return await createApp({ fetchImpl }).request(`${APP}/process`, { method: 'POST', headers, body }, env);
+  const r = await createApp({ fetchImpl }).request(`${APP}/process`, { method: 'POST', headers, body }, env);
+  if (r.status === 200) await dispatchOf(gh, ((await r.clone().json()) as { run: { id: string } }).run.id);
+  return r;
 }
 
 export async function storedManifest(sub: string): Promise<AdmissionManifest> {

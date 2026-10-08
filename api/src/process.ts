@@ -15,9 +15,9 @@
  * the daily quota, then admission, keeping the manifest with the run.
  *
  * Admission is timed in parts and logged as one line of numbers (`admission timing`): session and lease, the
- * would-admit check, the Drive reads, the admit, the ticket and dispatch, and the whole, in milliseconds. A Worker's
+ * would-admit check, the Drive reads, the admit, and the whole, in milliseconds. A Worker's
  * clock moves only across I/O (https://developers.cloudflare.com/workers/reference/security-model/#step-1-disallow-timers-and-multi-threading),
- * which is all these parts are. What follows the dispatch, until the job starts, is GitHub's queue.
+ * which is all these parts are. The dispatch follows from the person object's alarm (TL-P4-14 stage 2), then GitHub's queue.
  *
  * An answer's run (TL-P4-08 addendum 8) is a press like any other, with the answer's own requestId and, for a thing or
  * pile asked about, its `subject`: admission then reads and takes only the pile that holds it, with your changes.
@@ -49,7 +49,6 @@ import { jsonBody, personFor, signedInSub, unreadable } from './route-helpers.js
 import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
 import type { AuthDeps } from './auth.js';
-import { dispatchOutcome } from './github.js';
 
 /** What `POST /process` and `GET /status` answer: the run, and the person's status revision. */
 export interface RunReply {
@@ -129,36 +128,11 @@ function parseBody(value: unknown): ProcessBody {
 }
 
 /**
- * Sends a new run to GitHub with attempt 1's ticket. A failure never changes the answer: the run stays
- * `queued` and the alarm recovers it. Nothing here logs the ticket.
- */
-export async function dispatchNew(env: Env, person: PersonHandle, run: RunWire, allowWeb: boolean, now: number, fetchImpl: FetchLike): Promise<void> {
-  if (env.GITHUB_TOKEN === undefined) {
-    console.error('tidy dispatch is not configured: no GitHub token');
-    return;
-  }
-  const ticket = await person.mintTicket(run.id, 1, now);
-  if (ticket === null) return;
-  const outcome = await dispatchOutcome(
-    { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, runId: run.id, attempt: 1, ticket, scope: run.scope, allowWeb },
-    fetchImpl,
-  );
-  // Lost to the network or a 5xx after its retries: the alarm looks at the run in a minute. A 4xx would fail again, so it keeps the normal window.
-  if (outcome === 'lost') {
-    await person
-      .dispatchLost(run.id, Date.now())
-      .catch((err: unknown) => console.error('tidy dispatch: the retry alarm was not armed', err));
-  }
-}
-
-/**
- * What admission and its dispatch ask of the person object: the route's stub, or the object itself when it starts the
- * run its waiting answers asked for (`Person.wake`).
+ * What admission asks of the person object: the route's stub, or the object itself when it starts the run its waiting
+ * answers asked for (`Person.wake`). It never dispatches: only the object's alarm does (TL-P4-14 stage 2).
  */
 export interface PersonHandle extends DriveTokenKeeper {
   folderId(): string | null | Promise<string | null>;
-  mintTicket(runId: string, attempt: number, now: number): Promise<string | null>;
-  dispatchLost(runId: string, now: number): Promise<void>;
 }
 
 /** What an admission reads: its scope, and for answers' runs the subjects whose piles it takes. */
@@ -205,14 +179,14 @@ export async function admission(env: Env, person: PersonHandle, ask: AdmissionAs
 }
 
 /** The parts of an admission, in the order they happen; each one's milliseconds are added up. */
-const PARTS = ['session', 'check', 'reads', 'admit', 'dispatch'] as const;
+const PARTS = ['session', 'check', 'reads', 'admit'] as const;
 type Part = (typeof PARTS)[number];
 
 /** Times the parts of one admission and logs them as one line of numbers. */
 class AdmissionTiming {
   private readonly start = Date.now();
   private at = this.start;
-  private readonly ms: Record<Part, number> = { session: 0, check: 0, reads: 0, admit: 0, dispatch: 0 };
+  private readonly ms: Record<Part, number> = { session: 0, check: 0, reads: 0, admit: 0 };
 
   /** Ends `part` now: the time since the last part ended is its. */
   lap(part: Part): void {
@@ -282,10 +256,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     }
     if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
     if (!result.admitted) throw new HttpError(429, 'rate-limited');
-    if (result.created === true) {
-      const run = result.run;
-      await timing.time('dispatch', () => dispatchNew(env, person, run, body.allowWeb, now, counted));
-    }
+    // A new run's dispatch is due now: the person object's alarm sends it (`Person.dispatchDue`), never the press.
     timing.log();
     const reply: RunReply = { run: result.run, revision: result.revision, ...(result.waits === true ? { waits: true } : {}) };
     return c.json(reply);

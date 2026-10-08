@@ -13,7 +13,7 @@ import { RUN_PHASES } from '../../src/data/contracts/run-phases.js';
 const PHASES_SQL = RUN_PHASES.map((p) => `'${p}'`).join(', ');
 
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -27,6 +27,23 @@ export const PERSON_TABLES = [
   'runs',
   'deadlines',
 ] as const;
+
+/**
+ * What Delete me (`Person.forget`) does with each table: a `personal` one is emptied; a `kept` one keeps only what
+ * outlives the person, nothing personal: the schema version, and the run tickets live at Delete me (hash, attempt and
+ * expiry, with no run id or report) and their `gone` deadlines, until they expire. A new table must be classed here.
+ */
+export const TABLES_AT_DELETE = {
+  schema_version: 'kept',
+  session_lease: 'personal',
+  session_leave: 'personal',
+  quota: 'personal',
+  control: 'personal',
+  run_ticket: 'kept',
+  account: 'personal',
+  runs: 'personal',
+  deadlines: 'kept',
+} as const satisfies Record<(typeof PERSON_TABLES)[number], 'personal' | 'kept'>;
 
 /** Step n brings the schema from version n - 1 to n. One statement per string. */
 const STEPS: readonly (readonly string[])[] = [
@@ -182,6 +199,13 @@ const STEPS: readonly (readonly string[])[] = [
     // last attempt, the deadline fails (`Person.wake`). Rows kept from v12 start at 0; setting a deadline again
     // starts it over.
     'ALTER TABLE deadlines ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0)',
+  ],
+  [
+    // Only the alarm dispatches (TL-P4-14 stage 2): admission sets `deadline_at` (when the alarm sends the run's next
+    // attempt; null when none is due) and the alarm claims it by compare-and-set on `version`, so a dispatch is sent
+    // once however many alarms run. Runs kept from v13 have none due (their dispatch was sent by the press).
+    'ALTER TABLE runs ADD COLUMN deadline_at INTEGER',
+    'ALTER TABLE runs ADD COLUMN version INTEGER NOT NULL DEFAULT 0 CHECK (version >= 0)',
   ],
 ];
 

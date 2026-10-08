@@ -8,11 +8,11 @@ import type { GitHubAccess } from './github.js';
 import { applyingWatch, decide, staleDeadline, staleFailure, unrecoveredCeiling } from './recovery.js';
 import type { Recovery, RecoveryWatch } from './recovery.js';
 import { timingSafeEqual } from './crypto.js';
-import { migrate, readSchemaVersion } from './person-schema.js';
+import { TABLES_AT_DELETE, migrate, readSchemaVersion } from './person-schema.js';
 import { ACTIVE_PHASES, PHASE_RANK } from '../../src/data/contracts/run-phases.js';
 import type { RunPhase } from '../../src/data/contracts/run-phases.js';
 import type { RunScope, RunWire } from '../../src/data/contracts/run-wire.js';
-import { QUEUED_STALE_MS, admission, dispatchNew, utcDay } from './process.js';
+import { QUEUED_STALE_MS, admission, utcDay } from './process.js';
 import type { AdmitInput, AdmitResult, RunReply } from './process.js';
 import type { FetchLike } from './google.js';
 import { HttpError } from './errors.js';
@@ -66,19 +66,24 @@ export interface SignInResult {
 /** Durable Object key-value entry that outlives `forget()`: the lowest session generation a new account may start at. */
 const GENERATION_FLOOR = 'generationFloor';
 /**
- * Durable Object key-value entry that outlives `forget()` for at most a ticket's hour: the run tickets that were live at
- * Delete me (their SHA-256, expiry and attempt; random values, nothing personal: no run id), so a runner still holding
- * one is told the person is gone, while any other bearer stays signed out. Each row's expiry is a `gone` deadline, so
- * the alarm (and any later access) prunes expired rows, and after the last expiry nothing is kept.
+ * Key-value entry of v13 and before: the run tickets live at Delete me. From v14 they are `run_ticket` rows with no run
+ * id (`forget`), so the entry moves there as the object starts (`moveGoneTickets`).
  */
-const GONE_TICKETS = 'goneTickets';
+const GONE_TICKETS_V13 = 'goneTickets';
 
-/** A run ticket live at Delete me (`GONE_TICKETS`). */
-interface GoneTicket {
+/** A run ticket live at Delete me, as v13 kept it (`GONE_TICKETS_V13`). */
+interface GoneTicketV13 {
   hash: string;
   expiresAt: number;
   attempt: number;
 }
+
+/**
+ * A run ticket live at Delete me is kept as its `run_ticket` row with this run id (none): its SHA-256, attempt and
+ * expiry, random values and nothing personal, so a runner still holding it is told the person is gone, while any other
+ * bearer stays signed out. Its expiry is a `gone` deadline: the alarm (and any later access) prunes it.
+ */
+const GONE_RUN = '';
 /** Durable Object key-value entry: the extra time the alarm gave the current run's attempt (`RecoveryWatch`). */
 const RECOVERY_WATCH = 'recoveryWatch';
 /** When a run moved during the alarm's lookup and is somehow still due, the alarm looks again this much later. */
@@ -109,6 +114,8 @@ const ANSWERS_TAKEN = 'answersTaken';
 const ANSWERS_TAKEN_KEPT = 50;
 /** How many times in a row the alarm tries to start the waiting answers' run through Drive or GitHub trouble. */
 const WAITING_TRIES = 3;
+/** The key-value entries about the person, which Delete me deletes (`forget`); only `GENERATION_FLOOR` is kept. */
+const PERSONAL_KEYS = [RECOVERY_WATCH, DISPATCH_LOST, ANSWERS_WAITING, ANSWERS_TAKEN] as const;
 
 /** The answers waiting for the run going to end (`ANSWERS_WAITING`). */
 interface AnswersWaiting {
@@ -126,9 +133,10 @@ interface AnswersWaiting {
  * replaces the one set (https://developers.cloudflare.com/durable-objects/api/alarms/), so every deadline is a row
  * and the alarm is set to the earliest (`rearm`), as the Agents SDK keeps its schedules
  * (https://developers.cloudflare.com/agents/api-reference/schedule-tasks/):
- * - `run`: the current run's stale deadline, or an earlier recheck (a lost dispatch, a run that moved); one row;
+ * - `run`: the current run's dispatch (now, after admission or a redispatch: `runs.deadline_at`), its stale deadline,
+ *   or an earlier recheck (a lost dispatch, a run that moved); one row;
  * - `answers`: the waiting answers' wake once the run they waited for ended; one row;
- * - `gone`: a ticket kept after Delete me, keyed by its SHA-256, at its expiry; one row each.
+ * - `gone`: a ticket kept after Delete me (`GONE_RUN`), keyed by its SHA-256, at its expiry; one row each.
  */
 type DeadlineKind = 'run' | 'answers' | 'gone';
 
@@ -180,8 +188,10 @@ export class Person extends DurableObject<Env> {
       try {
         ctx.storage.transactionSync(() => {
           const from = migrate(ctx.storage.sql);
-          // Storage from before v12 moves its deadlines into the table; a new one (0) has none.
+          // Storage from before v12 moves its deadlines into the table, and before v14 its gone tickets into their
+          // table; a new one (0) has neither.
           if (from > 0 && from < 12) this.moveDeadlines(Date.now());
+          if (from > 0 && from < 14) this.moveGoneTickets();
         });
       } catch (error) {
         console.error('person storage migration failed', error);
@@ -530,43 +540,54 @@ export class Person extends DurableObject<Env> {
   }
 
   /**
-   * `DELETE /me`: empties the person object (account, tokens, folder pointer, claim, reserved ids, lease and
-   * leave rows) with `storage.deleteAll()`, then sets the schema up again, since this live instance will not
-   * run its constructor again: a later sign-in for the same sub starts fresh at the folder step.
+   * `DELETE /me` (TL-P4-14 stage 2): deletes every personal table and key-value entry by name (`TABLES_AT_DELETE`,
+   * `PERSONAL_KEYS`), in one transaction, so a later sign-in for the same sub starts fresh at the folder step. Kept,
+   * nothing personal: the generation floor (a new account starts at the old generation + 1, so every cookie signed
+   * before stays refused), and the run tickets live now as `GONE_RUN` rows with their expiry deadlines, so their
+   * runners stop as gone (`runnerAccess`) until they expire.
    */
-  async forget(): Promise<void> {
-    // One integer survives, nothing personal: a new account starts at the old generation + 1, so every
-    // cookie signed before the deletion stays refused after the person signs in again. The live run tickets'
-    // hashes survive until they expire, so their runners stop as gone (`runnerAccess`).
-    const kv = this.ctx.storage.kv;
-    const now = this.account()?.generation;
-    const floor = Math.max(kv.get<number>(GENERATION_FLOOR) ?? 0, now === undefined ? 0 : now + 1);
-    const at = Date.now();
-    const live = this.ctx.storage.sql
-      .exec<{ hash: string; expires_at: number; attempt: number }>('SELECT hash, expires_at, attempt FROM run_ticket WHERE retired = 0 AND expires_at > ?', at)
-      .toArray()
-      .map((t): GoneTicket => ({ hash: t.hash, expiresAt: t.expires_at, attempt: t.attempt }));
-    const kept = [...(kv.get<GoneTicket[]>(GONE_TICKETS) ?? []).filter((t) => t.expiresAt > at), ...live];
-    // Every deadline goes with the rest (the run's and the answers'); only the gone tickets' expiries are set again.
-    await this.ctx.storage.deleteAll();
-    kv.put(GENERATION_FLOOR, floor);
+  forget(): void {
     this.ctx.storage.transactionSync(() => {
-      migrate(this.ctx.storage.sql);
-      if (kept.length > 0) kv.put(GONE_TICKETS, kept);
-      for (const t of kept) this.arm('gone', t.hash, t.expiresAt);
+      const sql = this.ctx.storage.sql;
+      const kv = this.ctx.storage.kv;
+      const generation = this.account()?.generation;
+      const floor = Math.max(kv.get<number>(GENERATION_FLOOR) ?? 0, generation === undefined ? 0 : generation + 1);
+      // A ticket live now, or kept from an earlier Delete me, stays with no run id or report; every other one goes.
+      sql.exec(`DELETE FROM run_ticket WHERE expires_at <= ? OR (retired = 1 AND run_id <> ?)`, Date.now(), GONE_RUN);
+      sql.exec('UPDATE run_ticket SET run_id = ?, retired = 1, report_seq = NULL, report_phase = NULL', GONE_RUN);
+      sql.exec(`DELETE FROM deadlines WHERE kind <> 'gone'`);
+      for (const [table, kind] of Object.entries(TABLES_AT_DELETE)) if (kind === 'personal') sql.exec(`DELETE FROM ${table}`);
+      for (const key of PERSONAL_KEYS) kv.delete(key);
+      kv.put(GENERATION_FLOOR, floor);
+      for (const t of sql.exec<{ hash: string; expires_at: number }>('SELECT hash, expires_at FROM run_ticket').toArray()) this.arm('gone', t.hash, t.expires_at);
       this.rearm();
     });
   }
 
+  /** Schema v14: the tickets v13 kept after Delete me in a key-value entry become `GONE_RUN` rows, with their deadlines. */
+  private moveGoneTickets(): void {
+    const kv = this.ctx.storage.kv;
+    for (const t of kv.get<GoneTicketV13[]>(GONE_TICKETS_V13) ?? []) {
+      this.ctx.storage.sql.exec(
+        'INSERT INTO run_ticket (hash, run_id, attempt, retired, expires_at) VALUES (?, ?, ?, 1, ?) ON CONFLICT (hash) DO NOTHING',
+        t.hash,
+        GONE_RUN,
+        t.attempt,
+        t.expiresAt,
+      );
+      this.arm('gone', t.hash, t.expiresAt);
+    }
+    kv.delete(GONE_TICKETS_V13);
+  }
+
   /**
    * Schema v12 (TL-P4-14): the deadlines kept before the `deadlines` table move into it as the object starts, so
-   * the deploy loses none. The gone tickets keep their expiries. The alarm set for a run or the waiting answers
+   * the deploy loses none (the gone tickets' expiries move with them, `moveGoneTickets`). The alarm set for a run or the waiting answers
    * cannot be read here (`getAlarm` is not synchronous), so their deadline is now: the alarm looks at once, as the
    * old alarm would have, and recovery arms the run's own deadline again.
    */
   private moveDeadlines(now: number): void {
     const kv = this.ctx.storage.kv;
-    for (const t of kv.get<GoneTicket[]>(GONE_TICKETS) ?? []) this.arm('gone', t.hash, t.expiresAt);
     const current = this.currentRunRow();
     if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) this.arm('run', current.id, now);
     else if (kv.get<AnswersWaiting>(ANSWERS_WAITING) !== undefined) this.arm('answers', 'waiting', now);
@@ -634,7 +655,10 @@ export class Person extends DurableObject<Env> {
     if (taken !== undefined) return { admitted: true, run: toWire(taken), revision: this.revision() };
     const current = this.currentRunRow();
     const waiting = kv.get<AnswersWaiting>(ANSWERS_WAITING);
-    if (current !== undefined && waiting?.requestIds.includes(input.requestId) === true) {
+    const waitingHere = waiting?.requestIds.includes(input.requestId) === true;
+    // It waits while something will start it: the run going (at its end) or the alarm (`startWaiting`). After a start
+    // that failed for good, a retry is a press like any other, and hears why it cannot start.
+    if (current !== undefined && waitingHere && (ACTIVE_PHASES.includes(current.phase) || this.answersArmed())) {
       return { admitted: true, run: toWire(current), revision: this.revision(), waits: true };
     }
     const day = utcDay(input.now);
@@ -659,8 +683,8 @@ export class Person extends DurableObject<Env> {
     const seq = (current?.seq ?? 0) + 1;
     const row = sql
       .exec<RunRow>(
-        `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at, manifest)
-         VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)
+        `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at, manifest, deadline_at)
+         VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)
          RETURNING ${RUN_COLUMNS}`,
         makeRunId(this.ctx.id.toString()),
         seq,
@@ -670,6 +694,7 @@ export class Person extends DurableObject<Env> {
         input.now,
         input.now,
         JSON.stringify(input.manifest),
+        input.now,
       )
       .one();
     // The history is bounded: older runs go, and with them their requestIds (a repeat that late is new).
@@ -677,8 +702,9 @@ export class Person extends DurableObject<Env> {
     // A press on the whole inbox takes your changes and every pile, so it takes the answers that waited too.
     const whole = input.scope === 'all' && input.subject === undefined;
     if (waiting !== undefined && (takesWaiting || (whole && input.answer !== true))) this.takeWaiting(waiting, row.id);
-    // Recovery: if nobody has started the run by its stale deadline, the alarm writes the expiry.
-    this.arm('run', row.id, input.now + QUEUED_STALE_MS);
+    else if (waiting !== undefined && waitingHere) this.leaveWaiting(waiting, input.requestId);
+    // Only the alarm dispatches (TL-P4-14 stage 2): it is due now, and the alarm then sets the stale deadline.
+    this.arm('run', row.id, input.now);
     return { admitted: true, run: toWire(row), revision: this.raiseRevision(), created: true };
   }
 
@@ -689,6 +715,18 @@ export class Person extends DurableObject<Env> {
     const taken = [...kept, ...waiting.requestIds.map((id): [string, string] => [id, runId])].slice(-ANSWERS_TAKEN_KEPT);
     kv.put(ANSWERS_TAKEN, Object.fromEntries(taken));
     kv.delete(ANSWERS_WAITING);
+  }
+
+  /** An answer that waited became a run of its own (`admitSync`): the others wait on. */
+  private leaveWaiting(waiting: AnswersWaiting, requestId: string): void {
+    const requestIds = waiting.requestIds.filter((id) => id !== requestId);
+    if (requestIds.length === 0) this.ctx.storage.kv.delete(ANSWERS_WAITING);
+    else this.ctx.storage.kv.put(ANSWERS_WAITING, { ...waiting, requestIds } satisfies AnswersWaiting);
+  }
+
+  /** Whether the alarm is set to start the waiting answers' run (`startWaiting`). */
+  private answersArmed(): boolean {
+    return this.ctx.storage.sql.exec(`SELECT key FROM deadlines WHERE kind = 'answers'`).toArray().length > 0;
   }
 
   /** A run ended at `now`: when answers wait for it, the alarm wakes at once to start their run (`wake`). */
@@ -706,8 +744,8 @@ export class Person extends DurableObject<Env> {
 
   /**
    * What the alarm does at `now`, through `github.fetchImpl` for every request: each kind of deadline due by `now` is
-   * handled, in this order: expired gone rows go, recovery looks at the run (`recover`), and the run the waiting
-   * answers asked for starts (`startWaiting`). A handled deadline goes unless its handler set it again (compare and
+   * handled, in this order: expired gone rows go, the run is dispatched or looked at (`runDue`), and the run the
+   * waiting answers asked for starts (`startWaiting`). A handled deadline goes unless its handler set it again (compare and
    * delete); then the alarm is set to the earliest one kept. A handler that throws is logged and its deadlines, as
    * they were read, are tried again with Cloudflare's alarm backoff (2 seconds, doubling, 6 attempts:
    * https://developers.cloudflare.com/durable-objects/api/alarms/#alarm); after the last the deadline fails
@@ -727,8 +765,8 @@ export class Person extends DurableObject<Env> {
         this.pruneGone(now);
         return Promise.resolve();
       },
-      run: () => this.recover(now, { ...github, fetchImpl: counted }),
-      answers: () => this.startWaiting(now, counted, () => fetches),
+      run: () => this.runDue(now, { ...github, fetchImpl: counted }),
+      answers: () => this.startWaiting(now, { ...github, fetchImpl: counted }, () => fetches),
     };
     try {
       for (const kind of DEADLINE_KINDS) {
@@ -777,10 +815,7 @@ export class Person extends DurableObject<Env> {
       const waiting = this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING);
       if (waiting !== undefined) this.ctx.storage.kv.put(ANSWERS_WAITING, { ...waiting, tries: WAITING_TRIES } satisfies AnswersWaiting);
     } else {
-      const kv = this.ctx.storage.kv;
-      const live = (kv.get<GoneTicket[]>(GONE_TICKETS) ?? []).filter((t) => t.hash !== d.key);
-      if (live.length === 0) kv.delete(GONE_TICKETS);
-      else kv.put(GONE_TICKETS, live);
+      this.ctx.storage.sql.exec('DELETE FROM run_ticket WHERE hash = ? AND run_id = ?', d.key, GONE_RUN);
     }
   }
 
@@ -795,7 +830,7 @@ export class Person extends DurableObject<Env> {
    * Google access gone, or nothing left to take, is logged and not tried again. The answers stay in your changes for
    * the next tidy-up whatever happens here.
    */
-  private async startWaiting(now: number, fetchImpl: FetchLike, spent: () => number): Promise<void> {
+  private async startWaiting(now: number, github: GitHubAccess, spent: () => number): Promise<void> {
     const due = this.ctx.storage.transactionSync((): { waiting: AnswersWaiting; requestId: string } | null => {
       const waiting = this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING);
       const current = this.currentRunRow();
@@ -808,7 +843,7 @@ export class Person extends DurableObject<Env> {
     const scope: RunScope = waiting.subjects.length > 0 ? 'all' : 'instructions';
     let manifest: AdmissionManifest;
     try {
-      manifest = await admission(this.env, this, { scope, subjects: waiting.subjects, now }, fetchImpl, spent);
+      manifest = await admission(this.env, this, { scope, subjects: waiting.subjects, now }, github.fetchImpl, spent);
     } catch (err) {
       console.error('the answers that waited could not start their tidy-up', err);
       const final = err instanceof HttpError && (err.code === 'signed-out' || err.code === 'no-folder' || err.code === 'nothing');
@@ -821,7 +856,8 @@ export class Person extends DurableObject<Env> {
       console.error(`the answers that waited keep waiting: ${result.refused}`);
       return;
     }
-    if (result.created === true) await dispatchNew(this.env, this, result.run, waiting.allowWeb, now, fetchImpl);
+    // Its dispatch is due now: this same alarm sends it.
+    if (result.created === true) await this.dispatchDue(now, github);
   }
 
   /** A start of the waiting answers' run failed: another in a minute, unless `final` or tried enough; they keep waiting. */
@@ -838,19 +874,69 @@ export class Person extends DurableObject<Env> {
     this.arm('answers', 'waiting', now + RECHECK_MS);
   }
 
-  /**
-   * Drops the gone rows (`GONE_TICKETS`) expired at `now`, with their deadlines; the entry goes with the last one.
-   * Returns the rows still live.
-   */
-  private pruneGone(now: number): GoneTicket[] {
-    const kv = this.ctx.storage.kv;
+  /** Drops the tickets kept after Delete me (`GONE_RUN`) expired at `now`, with their deadlines. */
+  private pruneGone(now: number): void {
     this.disarm('gone', now);
-    const kept = kv.get<GoneTicket[]>(GONE_TICKETS);
-    if (kept === undefined) return [];
-    const live = kept.filter((t) => t.expiresAt > now);
-    if (live.length === 0) kv.delete(GONE_TICKETS);
-    else if (live.length < kept.length) kv.put(GONE_TICKETS, live);
-    return live;
+    this.ctx.storage.sql.exec('DELETE FROM run_ticket WHERE run_id = ? AND expires_at <= ?', GONE_RUN, now);
+  }
+
+  /** The `run` deadline: a dispatch due is sent (`dispatchDue`); otherwise recovery looks at the run (`recover`). */
+  private async runDue(now: number, github: GitHubAccess): Promise<void> {
+    if (!(await this.dispatchDue(now, github))) await this.recover(now, github);
+  }
+
+  /**
+   * The one dispatch path (TL-P4-14 stage 2): the current run's next attempt, when `runs.deadline_at` is due at `now`
+   * (admission and a redispatch set it). Only the alarm calls it. Two synchronous sections around the ticket's hashing:
+   * the first reads the run's `version`; the second claims the dispatch by compare-and-set on it (`UPDATE ... WHERE
+   * version = ?`, a conditional write in one transaction: https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/),
+   * mints the ticket and sets the stale deadline. So however many alarms run at once, one sends; the others find it
+   * claimed. Lost after its retries, the alarm looks at the run a minute later (`dispatchLostSync`); a 4xx keeps the
+   * normal window. True when a dispatch was due. Nothing here logs the ticket.
+   */
+  private async dispatchDue(now: number, github: GitHubAccess): Promise<boolean> {
+    const seen = this.ctx.storage.transactionSync(() => {
+      const run = this.currentRunRow();
+      if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) return null;
+      const row = this.ctx.storage.sql.exec<{ version: number; deadline_at: number | null }>('SELECT version, deadline_at FROM runs WHERE id = ?', run.id).one();
+      return row.deadline_at !== null && row.deadline_at <= now ? { id: run.id, version: row.version } : null;
+    });
+    if (seen === null) return false;
+    const { token } = github;
+    const ticket = newTicket();
+    const hash = await hashTicket(ticket);
+    const claimed = this.ctx.storage.transactionSync(() => this.claimDispatch(seen.id, seen.version, token === undefined ? null : hash, now));
+    if (claimed === null) return true;
+    if (token === undefined) {
+      console.error('tidy dispatch is not configured: no GitHub token');
+      return true;
+    }
+    const sent = await dispatchOutcome({ repo: github.repo, token, runId: seen.id, ticket, ...claimed }, github.fetchImpl);
+    if (sent === 'lost') this.ctx.storage.transactionSync(() => this.dispatchLostSync(seen.id, now + RECHECK_MS));
+    return true;
+  }
+
+  /**
+   * `dispatchDue`'s claim: compare-and-set on the run's `version`, then attempt `nextAttempt`'s ticket kept as `hash`
+   * (none when dispatch is not configured), and the run's stale deadline set. Null when another alarm claimed it first
+   * or the run ended.
+   */
+  private claimDispatch(runId: string, version: number, hash: string | null, now: number): { attempt: number; scope: RunScope; allowWeb: boolean } | null {
+    const row = this.ctx.storage.sql
+      .exec<{ scope: RunScope; allow_web: number }>(
+        'UPDATE runs SET deadline_at = NULL, version = version + 1 WHERE id = ? AND version = ? AND deadline_at IS NOT NULL RETURNING scope, allow_web',
+        runId,
+        version,
+      )
+      .toArray()[0];
+    if (row === undefined) return null;
+    const attempt = this.nextAttempt(runId);
+    if (hash !== null && !this.keepTicket(runId, attempt, hash, now)) return null;
+    const run = this.currentRunRow();
+    if (run !== undefined && ACTIVE_PHASES.includes(run.phase)) {
+      this.arm('run', run.id, staleDeadline(toWire(run), this.attemptOf(run.id), this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH)));
+    }
+    return { attempt, scope: row.scope, allowWeb: row.allow_web === 1 };
   }
 
   /**
@@ -860,9 +946,10 @@ export class Person extends DurableObject<Env> {
    *    gets the alarm for it, and nothing changes; a stale run with no token, or past its one wait, is
    *    failed `stale`; any other stale run is looked up;
    * 2. if the run moved during the lookup, only the alarm is set again; else the lookup's outcome: a
-   *    redispatch as attempt + 1 with a new ticket (fencing the older one) when attempt 1 has no live job
-   *    (none found, or every job completed), a wait until the live job's deadline, or failed `stale`.
-   * The redispatch is sent after the second section; if it is lost, the next deadline fails the run.
+   *    redispatch as attempt + 1 (its dispatch due now), when attempt 1 has no live job (none found, or every job
+   *    completed), a wait until the live job's deadline, or failed `stale`.
+   * The redispatch is sent by this same alarm through the one dispatch path (`dispatchDue`), with a new ticket that
+   * fences the older one; if it is lost, the alarm looks again a minute later.
    */
   async recover(now: number, github: GitHubAccess): Promise<void> {
     const token = github.token;
@@ -875,23 +962,10 @@ export class Person extends DurableObject<Env> {
       return;
     }
     const outcome = decide(found, lookup.attempt, now);
-    // A new ticket is hashed before the section, so nothing awaits inside it.
-    const ticket = outcome.kind === 'redispatch' ? newTicket() : null;
-    const hash = ticket === null ? null : await hashTicket(ticket);
-    const send = this.ctx.storage.transactionSync(() => this.applyRecovery(lookup, outcome, hash, now));
-    if (send === null || ticket === null) return;
-    const sent = await dispatchOutcome(
-      { repo: github.repo, token, runId: lookup.run.id, attempt: send.attempt, ticket, scope: lookup.run.scope, allowWeb: send.allowWeb },
-      github.fetchImpl,
-    );
-    if (sent === 'lost') this.dispatchLostSync(lookup.run.id, now + RECHECK_MS);
+    if (this.ctx.storage.transactionSync(() => this.applyRecovery(lookup, outcome, now))) await this.dispatchDue(now, github);
   }
 
-  /** A dispatch failed after its retries: the alarm looks at the going run `RECHECK_MS` from `now`, not at its stale deadline. */
-  async dispatchLost(runId: string, now: number): Promise<void> {
-    this.dispatchLostSync(runId, now + RECHECK_MS);
-  }
-
+  /** A dispatch failed after its retries: the alarm looks at the going run at `at`, not at its stale deadline. */
   private dispatchLostSync(runId: string, at: number): void {
     const run = this.currentRunRow();
     if (run === undefined || run.id !== runId || !ACTIVE_PHASES.includes(run.phase)) return;
@@ -934,8 +1008,8 @@ export class Person extends DurableObject<Env> {
     return { run: wire, attempt, watch: JSON.stringify(watch ?? null), early };
   }
 
-  /** Section 2 of `recover`: applies the outcome; the attempt to send when it is a redispatch, else null. */
-  private applyRecovery(seen: RecoveryLookup, outcome: Recovery, hash: string | null, now: number): { attempt: number; allowWeb: boolean } | null {
+  /** Section 2 of `recover`: applies the outcome; true when it is a redispatch, due now. */
+  private applyRecovery(seen: RecoveryLookup, outcome: Recovery, now: number): boolean {
     const run = this.currentRunRow();
     const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
     const moved =
@@ -948,24 +1022,19 @@ export class Person extends DurableObject<Env> {
     if (moved) {
       if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) this.disarm('run');
       else this.arm('run', run.id, Math.max(staleDeadline(toWire(run), this.attemptOf(run.id), watch), now + RECHECK_MS));
-      return null;
+      return false;
     }
     if (outcome.kind === 'fail') {
       this.failStale(run, now);
-      return null;
+      return false;
     }
     if (outcome.kind === 'wait') {
       this.watch({ runId: run.id, attempt: seen.attempt, phaseAt: run.phase_at, until: outcome.until, graced: true });
-      return null;
+      return false;
     }
-    const attempt = seen.attempt + 1;
-    if (hash === null || !this.keepTicket(run.id, attempt, hash, now)) {
-      this.failStale(run, now);
-      return null;
-    }
-    this.watch({ runId: run.id, attempt, phaseAt: run.phase_at, until: now + QUEUED_STALE_MS, graced: false });
-    const allowWeb = this.ctx.storage.sql.exec<{ allow_web: number }>('SELECT allow_web FROM runs WHERE id = ?', run.id).one().allow_web === 1;
-    return { attempt, allowWeb };
+    this.watch({ runId: run.id, attempt: this.nextAttempt(run.id), phaseAt: run.phase_at, until: now + QUEUED_STALE_MS, graced: false });
+    this.ctx.storage.sql.exec('UPDATE runs SET deadline_at = ? WHERE id = ?', now, run.id);
+    return true;
   }
 
   /** Keeps the extra time the alarm gave a run's attempt, and sets the run's deadline for its end. */
@@ -979,22 +1048,18 @@ export class Person extends DurableObject<Env> {
     return this.ctx.storage.sql.exec<{ attempt: number | null }>('SELECT MAX(attempt) AS attempt FROM run_ticket WHERE run_id = ?', runId).toArray()[0]?.attempt ?? 1;
   }
 
-  /**
-   * Mints the ticket of `attempt` of the going run `runId` (worker contract, "Runner wire"; TL-P3-18), for
-   * `worker-dispatch` to send in the payload. Only its SHA-256 is kept, with the attempt and an expiry at
-   * `now` + 60 min; it retires the run's earlier tickets (kept, never deleted), so an older attempt's ticket answers `stale-attempt`. Null,
-   * with nothing written, for an attempt not newer than the kept one or a run unknown or ended. The ticket
-   * is never logged.
-   */
-  async mintTicket(runId: string, attempt: number, now: number): Promise<string | null> {
-    if (!Number.isSafeInteger(attempt) || attempt < 1) return null;
-    const ticket = newTicket();
-    // Hashed before the transaction: nothing is read before this await, so no call can slip in between.
-    const hash = await hashTicket(ticket);
-    return this.ctx.storage.transactionSync((): string | null => (this.keepTicket(runId, attempt, hash, now) ? ticket : null));
+  /** The attempt the run's next dispatch sends: one past its newest ticket's, or 1. */
+  private nextAttempt(runId: string): number {
+    return (this.ctx.storage.sql.exec<{ attempt: number | null }>('SELECT MAX(attempt) AS attempt FROM run_ticket WHERE run_id = ?', runId).one().attempt ?? 0) + 1;
   }
 
-  /** `mintTicket`'s synchronous part: keeps `hash` as `attempt`'s ticket, or false with nothing written. */
+  /**
+   * Keeps the ticket hashed to `hash` as `attempt`'s of the going run `runId` (worker contract, "Runner wire"; TL-P3-18),
+   * minted by the alarm's dispatch (`claimDispatch`) and sent in the payload. Only its SHA-256 is kept, with the attempt
+   * and an expiry at `now` + 60 min; it retires the run's earlier tickets (kept, never deleted), so an older attempt's
+   * ticket answers `stale-attempt`. False, with nothing written, for an attempt not newer than the kept one or a run
+   * unknown or ended.
+   */
   private keepTicket(runId: string, attempt: number, hash: string, now: number): boolean {
     const sql = this.ctx.storage.sql;
     const run = sql.exec<{ phase: RunPhase }>('SELECT phase FROM runs WHERE id = ?', runId).toArray()[0];
@@ -1021,7 +1086,7 @@ export class Person extends DurableObject<Env> {
    * retired or expired at `now`. A stale run is ended first, as `runStatus` does, so its ticket no longer works.
    *
    * `gone` when the person can no longer be acted for, so the runner drops the Drive token it keeps:
-   * after Delete me (no account, for a ticket live then: `GONE_TICKETS`), or once Google access was forgotten
+   * after Delete me (no account, for a ticket live then: `GONE_RUN`), or once Google access was forgotten
    * (`forgetGoogleAccess`: revoked, or the refresh token unreadable) for a live ticket. A plain sign-out keeps the
    * refresh token, so its runs go on: a run never depends on a browser.
    */
@@ -1039,9 +1104,11 @@ export class Person extends DurableObject<Env> {
     });
   }
 
-  /** Whether `hash` is a ticket that was live at Delete me and has not expired at `now` (`GONE_TICKETS`); expired rows go. */
+  /** Whether `hash` is a ticket that was live at Delete me and has not expired at `now` (`GONE_RUN`); expired rows go. */
   private goneTicket(hash: string, now: number): boolean {
-    return this.pruneGone(now).some((t) => timingSafeEqual(t.hash, hash));
+    this.pruneGone(now);
+    const row = this.ctx.storage.sql.exec<{ hash: string }>('SELECT hash FROM run_ticket WHERE run_id = ? AND hash = ?', GONE_RUN, hash).toArray()[0];
+    return row !== undefined && timingSafeEqual(row.hash, hash);
   }
 
   /**

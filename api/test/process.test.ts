@@ -9,10 +9,11 @@ import type { RunWire } from '../../src/data/contracts/run-wire.js';
 import type { AdmitInput, RunReply } from '../src/process.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
-import { hashTicket, makeRunId } from '../src/run-ticket.js';
+import { hashTicket } from '../src/run-ticket.js';
 import type { Person } from '../src/person.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import { MANIFEST, driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
+import { dispatchOf, pretendGitHubForFile } from './github-support.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -24,6 +25,9 @@ beforeEach(async () => {
 });
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
+
+/** The GitHub every alarm of this file reaches: presses admit at the wall clock, and the runtime fires the alarm. */
+const gh = pretendGitHubForFile(env);
 
 async function someone(): Promise<{ sub: string; cookie: string }> {
   const sub = `process-sub-${crypto.randomUUID()}`;
@@ -473,13 +477,11 @@ describe('the admission manifest', () => {
     const sent = who.folder.sent.length;
     expect((await press(who, { scope: 'all', allowWeb: false, requestId: 'press-1' })).status).toBe(200);
     expect(who.folder.sent.length).toBe(sent);
-    // The runner's token route hands it the same manifest.
-    const runId = makeRunId(env.PERSON.idFromName(who.sub).toString());
-    await runInDurableObject(person(who.sub), (_instance, state) => {
-      state.storage.sql.exec('UPDATE runs SET id = ? WHERE id = ?', runId, run?.id ?? '');
-    });
-    const ticket = await person(who.sub).mintTicket(runId, 1, Date.now());
-    const token = await createApp().request(`https://api.example.com/runner/runs/${runId}/token`, { headers: { authorization: `Bearer ${ticket ?? ''}` } }, env);
+    // The runner's token route hands it the same manifest, with the ticket the alarm dispatched.
+    const runId = run?.id ?? '';
+    expect(runId.startsWith(`${env.PERSON.idFromName(who.sub).toString()}-`)).toBe(true);
+    const { ticket } = await dispatchOf(gh, runId);
+    const token = await createApp().request(`https://api.example.com/runner/runs/${runId}/token`, { headers: { authorization: `Bearer ${ticket}` } }, env);
     expect(token.status).toBe(200);
     expect(((await token.json()) as { manifest?: unknown }).manifest).toEqual(manifest);
   });
@@ -520,7 +522,10 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     }
     expect(await quota(sub)).toEqual([{ counter: 1 }]);
     // The run ends: the person object sets its alarm for then, to wake with no press.
-    const ticket = (await person(sub).mintTicket(going.id, 1, T0)) ?? '';
+    await runInDurableObject(person(sub), async (instance: Person) => {
+      await instance.wake(T0, gh.access);
+    });
+    const { ticket } = await dispatchOf(gh, going.id);
     const ended = await person(sub).runnerReport(going.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'done' }, T0 + 1000);
     expect(ended).toMatchObject({ accepted: true });
     expect(await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm())).toBe(T0 + 1000);
@@ -551,9 +556,29 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     expect(await quota(sub)).toEqual([{ counter: 2 }]);
   });
 
+  it('a failed run-end start says so, and a retry does not claim it waits', async () => {
+    const { sub, cookie, fence } = await withThings();
+    await person(sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: T0 + 3600_000 });
+    const { run: going } = await admitted(sub, ask('press-1', T0, { scope: 'instructions' }));
+    const waits = (await (await post(cookie, answer('answer-a', 'p-receipt'), fence)).json()) as Reply;
+    expect(waits.waits).toBe(true);
+    // The folder is unpointed while the run goes; the run ends, and the start of the answer's run fails for good.
+    await person(sub).setFolderId(null);
+    const late = T0 + 10 * 3600_000;
+    expect((await person(sub).runStatus(late)).run).toMatchObject({ id: going.id, phase: 'failed' });
+    await runInDurableObject(person(sub), async (instance: Person) => {
+      await instance.wake(late, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
+    });
+    // Nothing will start it now: a retry is a press like any other and hears why it cannot start.
+    expect(await person(sub).admit({ ...ask('answer-a', late, { manifest: null }), answer: true, subject: 'p-receipt' })).toEqual({ admitted: false, refused: 'needs-manifest' });
+    const retry = await post(cookie, answer('answer-a', 'p-receipt'), fence);
+    expect(retry.status).toBe(409);
+    expect(((await retry.json()) as { error: { code: string } }).error.code).toBe('no-folder');
+  });
+
   it('an answer during a run with the day used up is refused, so the app says so', async () => {
     const { sub } = await holder();
-    const day = Date.now();
+    const day = T0;
     await admitted(sub, ask('press-1', day, { dailyLimit: 1 }));
     const refused = await person(sub).admit({ ...ask('answer-a', day, { dailyLimit: 1, manifest: null }), answer: true, subject: 'p-receipt' } as AdmitInput);
     expect(refused).toEqual({ admitted: false, refused: 'rate-limited' });

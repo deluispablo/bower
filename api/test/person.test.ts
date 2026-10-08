@@ -3,7 +3,11 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
+import type { Person } from '../src/person.js';
+import * as schema from '../src/person-schema.js';
 import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
+import { hashTicket } from '../src/run-ticket.js';
+import { pretendGitHub } from './github-support.js';
 import { QUEUED_STALE_MS } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
 import { farAhead, inWindow } from './time.js';
@@ -29,8 +33,18 @@ async function expectRunDeadlineInWindow(alex: ReturnType<typeof personFor>, bef
 /** The tables of a person from before v12, which added `deadlines` (its moved rows: test/deadlines.test.ts). */
 const TABLES_BEFORE_V12 = PERSON_TABLES.filter((t) => t !== 'deadlines');
 
-/** Takes back schema step 12 (the deadlines table), for the tests that rewind further. */
+/** Takes back schema step 14 (the run's dispatch deadline and version), for the tests that rewind further. */
+function undoV14(sql: SqlStorage): void {
+  sql.exec('ALTER TABLE runs DROP COLUMN deadline_at');
+  sql.exec('ALTER TABLE runs DROP COLUMN version');
+}
+
+/** What step 14 gives a run kept from before it: no dispatch due, version 0. */
+const keptRun = (r: Record<string, SqlStorageValue>): Record<string, SqlStorageValue> => ({ ...r, deadline_at: null, version: 0 });
+
+/** Takes back schema steps 14 to 12 (the deadlines table), for the tests that rewind further. */
 function undoV12(sql: SqlStorage): void {
+  undoV14(sql);
   sql.exec('DROP TABLE deadlines');
 }
 
@@ -237,6 +251,53 @@ describe('person object', () => {
   });
 });
 
+describe('Delete me', () => {
+  it('Delete me classes every table', async () => {
+    const classes = (schema as unknown as Record<string, unknown>).TABLES_AT_DELETE as Record<string, 'personal' | 'kept'> | undefined;
+    expect(classes, 'person-schema.ts says what Delete me does with each table').toBeDefined();
+    const alex = personFor(`sub-alex-delete-${crypto.randomUUID()}`);
+    const t0 = farAhead();
+    // A row in every table: account and folder, the lease and a leave, a run (quota, revision, deadlines), a ticket
+    // the alarm minted and its report, an answer waiting.
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    await alex.setFolderId('FOLDER_ID');
+    await alex.session('laptop', 'check', 0, t0);
+    await alex.session('laptop', 'leave', 0, t0);
+    await alex.session('phone', 'check', 0, t0);
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    if (!admitted.admitted) throw new Error('not admitted');
+    const gh = pretendGitHub(env as Env);
+    await runInDurableObject(alex, async (instance: Person) => {
+      await instance.wake(t0, gh.access);
+    });
+    gh.restore();
+    const ticket = gh.dispatched[0]?.ticket ?? '';
+    expect(await alex.runnerReport(admitted.run.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'reading', total: 1 }, t0)).toMatchObject({ accepted: true });
+    await alex.admit({ scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 'p-receipt', answer: true, now: t0, dailyLimit: 100, manifest: null });
+    const tables = async (): Promise<Record<string, Record<string, SqlStorageValue>[]>> =>
+      await runInDurableObject(alex, (_i, state) => {
+        const sql = state.storage.sql;
+        const names = sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").toArray();
+        return Object.fromEntries(names.map(({ name }) => [name, sql.exec(`SELECT * FROM ${name}`).toArray()]));
+      });
+    const before = await tables();
+    // Every table is classed, so a new one cannot be forgotten.
+    expect(Object.keys(before).sort()).toEqual(Object.keys(classes ?? {}).sort());
+    for (const [name, rows] of Object.entries(before)) expect(rows.length, `${name} has a row before Delete me`).toBeGreaterThan(0);
+
+    await alex.forget();
+    const after = await tables();
+    for (const [name, kind] of Object.entries(classes ?? {})) if (kind === 'personal') expect(after[name], name).toEqual([]);
+    expect(after.schema_version).toEqual(before.schema_version);
+    // The ticket live at Delete me is kept until it expires, with nothing personal: no run id, no report.
+    expect(after.run_ticket).toEqual([{ hash: await hashTicket(ticket), run_id: '', attempt: 1, retired: 1, expires_at: before.run_ticket?.[0]?.expires_at, report_seq: null, report_phase: null }]);
+    expect(after.deadlines).toEqual([expect.objectContaining({ kind: 'gone', key: await hashTicket(ticket), at: before.run_ticket?.[0]?.expires_at })]);
+    // The generation floor is the one value kept besides.
+    const kv = await runInDurableObject(alex, (_i, state) => Array.from(state.storage.kv.list(), ([k]) => k));
+    expect(kv).toEqual(['generationFloor']);
+  });
+});
+
 describe('person storage migration', () => {
   it('a version 1 person migrates to the current version on start, keeps its rows and gains the account table', async () => {
     const alex = personFor('sub-alex-v1');
@@ -407,7 +468,7 @@ describe('person storage migration', () => {
       run_ticket: undefined,
       runs: undefined,
     });
-    expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
+    expect(after.runs).toEqual((before.runs ?? []).map((r) => keptRun({ ...r, manifest: null })));
     expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
     expect(after.run_ticket).toEqual([{ hash: 'hash-1', run_id: 'run-1', attempt: 2, retired: 0, expires_at: 0, report_seq: null, report_phase: null }]);
     expect((await alex.runStatus(2_000)).revision).toBe(1);
@@ -443,7 +504,7 @@ describe('person storage migration', () => {
       runs: undefined,
     });
     expect(after.schema_version).toEqual([{ id: 1, version: SCHEMA_VERSION }]);
-    expect(after.runs).toEqual((before.runs ?? []).map((r) => ({ ...r, manifest: null })));
+    expect(after.runs).toEqual((before.runs ?? []).map((r) => keptRun({ ...r, manifest: null })));
   });
 
   it('person storage migrates from v9 to v10 keeping every ticket', async () => {
@@ -474,11 +535,11 @@ describe('person storage migration', () => {
     const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
     if (!('run' in admitted)) throw new Error('not admitted');
     const runId = admitted.run.id;
-    expect(await alex.mintTicket(runId, 2, Date.now())).not.toBeNull();
-    // Put the database back as P3-12 left it (a version row of 10, the ticket's attempt named epoch, the v1
-    // admission table and control columns), with values in the dead schema too.
+    // Put the database back as P3-12 left it (a version row of 10, attempt 2's ticket with its attempt named epoch,
+    // the v1 admission table and control columns), with values in the dead schema too.
     const before = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
+      sql.exec('INSERT INTO run_ticket (hash, run_id, attempt, retired, expires_at) VALUES (?, ?, 2, 0, ?)', 'hash-2', runId, t0 + 3_600_000);
       undoV11(sql);
       sql.exec('UPDATE run_ticket SET report_seq = 3, report_phase = ?', 'reading');
       sql.exec('INSERT INTO admission (id, active_run_id, request_id) VALUES (1, ?, ?)', 'run-old', 'req-old');
@@ -506,12 +567,21 @@ describe('person storage migration', () => {
       // v12 moves the going run's deadline into its table (TL-P4-14).
       deadlines: [expect.objectContaining({ kind: 'run', key: runId })],
       control: keptControl(before.control),
+      runs: (before.runs ?? []).map(keptRun),
       run_ticket: (before.run_ticket ?? []).map(({ epoch, ...t }) => ({ ...t, attempt: epoch })),
     });
     expect(after.rows.run_ticket).toMatchObject([{ run_id: runId, attempt: 2, retired: 0, report_seq: 3, report_phase: 'reading' }]);
-    // The kept ticket still fences the run: attempt 2 is held, so a mint for it or an earlier one is refused.
-    expect(await alex.mintTicket(runId, 2, Date.now())).toBeNull();
-    expect(await alex.mintTicket(runId, 3, Date.now())).not.toBeNull();
+    // The kept ticket still fences the run: attempt 2 is held, so the next dispatch is attempt 3.
+    const gh = pretendGitHub(env as Env);
+    try {
+      await runInDurableObject(alex, async (instance: Person, state) => {
+        state.storage.sql.exec('UPDATE runs SET deadline_at = ? WHERE id = ?', t0, runId);
+        await instance.wake(t0 + QUEUED_STALE_MS, gh.access);
+      });
+      expect(gh.dispatched.map((d) => d.attempt)).toEqual([3]);
+    } finally {
+      gh.restore();
+    }
     expect((await alex.runStatus(Date.now())).revision).toBe(before.control?.[0]?.status_revision);
   });
 });

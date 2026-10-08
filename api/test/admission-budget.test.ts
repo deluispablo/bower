@@ -12,8 +12,11 @@ import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import { capturePiles, listedPiles, pileShape, planAdmission } from '../../src/data/spine/plan.js';
 import { admissionRead, driveRead } from '../../src/data/spine/read.js';
 import { DISPATCH_SUBREQUESTS, SUBREQUEST_BUDGET } from '../../src/data/spine/budget.js';
-import { declaredPile, holderOf, press, storedManifest } from './admission-support.js';
+import { declaredPile, holderOf, press, pressGitHub, storedManifest } from './admission-support.js';
 import { driveFolder, type DriveFolder } from './drive-v3.js';
+
+/** The GitHub the alarm reaches: each press dispatches its run from the alarm. */
+const gh = pressGitHub();
 
 const OPTS = { scope: 'all' as const, clock: () => 0, newId: () => 'same' };
 
@@ -64,7 +67,7 @@ async function pressCounted(folder: DriveFolder): Promise<{ status: number; fetc
   const r = await press(async (url, init) => {
     fetches += 1;
     return await folder.fetchImpl(url, init);
-  }, who.headers);
+  }, who.headers, gh);
   console.info(`subrequests in /process: ${fetches}`);
   return { status: r.status, fetches, manifest: r.status === 200 ? await storedManifest(who.sub) : ({} as AdmissionManifest) };
 }

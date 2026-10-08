@@ -6,8 +6,10 @@ import type { Env } from '../src/env.js';
 import { createApp } from '../src/index.js';
 import type { RunPhase } from '../../src/data/contracts/run-phases.js';
 import type { RunReply } from '../src/process.js';
-import { makeRunId } from '../src/run-ticket.js';
+import type { Person } from '../src/person.js';
+import { hashTicket } from '../src/run-ticket.js';
 import { MANIFEST } from './drive-v3.js';
+import { dispatchOf, pretendGitHubForFile } from './github-support.js';
 import { SEQUENCES } from '../../src/data/fake/ordered-reports.fixture';
 
 const env = testEnv as unknown as Env;
@@ -20,6 +22,9 @@ beforeEach(async () => {
 });
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
+
+/** The GitHub every alarm of this file reaches: runs are admitted at the wall clock, and the runtime fires the alarm. */
+const gh = pretendGitHubForFile(env);
 
 interface Report {
   attempt: number;
@@ -53,10 +58,10 @@ class FakeRunner {
 }
 
 /**
- * A signed-in person with a folder and a cached Drive token, one queued run whose id carries the
- * person object's id (as dispatch will make it), and a runner holding attempt 1's ticket.
+ * A signed-in person with a folder and a cached Drive token, one queued run (its id carries the person object's id),
+ * and a runner holding attempt 1's ticket, as the alarm dispatched it; it expires at `expiresAt` when given.
  */
-async function aRun(minted = Date.now()): Promise<{ sub: string; runner: FakeRunner }> {
+async function aRun(expiresAt?: number): Promise<{ sub: string; runner: FakeRunner }> {
   const sub = `runner-sub-${crypto.randomUUID()}`;
   const p = person(sub);
   await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
@@ -64,13 +69,24 @@ async function aRun(minted = Date.now()): Promise<{ sub: string; runner: FakeRun
   await p.cacheDriveToken({ accessToken: 'access-cached', expiresAt: Date.now() + HOUR });
   const admitted = await p.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: Date.now(), dailyLimit: 100, manifest: MANIFEST });
   if (!admitted.admitted) throw new Error('not admitted');
-  const runId = makeRunId(env.PERSON.idFromName(sub).toString());
-  await runInDurableObject(p, (_instance, state) => {
-    state.storage.sql.exec('UPDATE runs SET id = ? WHERE id = ?', runId, admitted.run.id);
+  const { ticket } = await dispatchOf(gh, admitted.run.id);
+  if (expiresAt !== undefined) {
+    await runInDurableObject(p, (_instance, state) => {
+      state.storage.sql.exec('UPDATE run_ticket SET expires_at = ?', expiresAt);
+    });
+  }
+  return { sub, runner: new FakeRunner(admitted.run.id, ticket) };
+}
+
+/**
+ * Attempt 2 takes over: recovery finds attempt 1's run past its deadline with no job on GitHub, and the alarm
+ * redispatches it with a new ticket (the only way a ticket is minted).
+ */
+async function takeOver(sub: string, runId: string): Promise<string> {
+  await runInDurableObject(person(sub), async (instance: Person) => {
+    await instance.recover(Date.now() + 2 * HOUR, gh.access);
   });
-  const ticket = await p.mintTicket(runId, 1, minted);
-  if (ticket === null) throw new Error('no ticket');
-  return { sub, runner: new FakeRunner(runId, ticket) };
+  return (await dispatchOf(gh, runId, 2)).ticket;
 }
 
 async function code(r: Response): Promise<string> {
@@ -160,11 +176,11 @@ describe('runner wire', () => {
   });
 
   it('after the last ticket expires no gone row is kept', async () => {
-    // A ticket minted 59 min 57 s ago: it lives about 3 s more.
-    const { sub, runner } = await aRun(Date.now() - HOUR + 3000);
+    // A ticket that lives about 3 s more.
+    const { sub, runner } = await aRun(Date.now() + 3000);
     const p = person(sub);
     await p.forget();
-    const kept = (): Promise<unknown> => runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'));
+    const kept = (): Promise<unknown> => runInDurableObject(p, (_i, state) => state.storage.sql.exec('SELECT hash FROM run_ticket').toArray()[0]);
     expect(await kept()).toBeDefined();
     // The alarm is set at the earliest expiry.
     const alarm = await runInDurableObject(p, (_i, state) => state.storage.getAlarm());
@@ -175,25 +191,23 @@ describe('runner wire', () => {
     expect((await runner.token()).status).toBe(401);
 
     // The next access prunes too, with no alarm run.
-    const next = await aRun(Date.now() - HOUR + 3000);
+    const next = await aRun(Date.now() + 3000);
     const q = person(next.sub);
     await q.forget();
     await new Promise((resolve) => setTimeout(resolve, 3200));
     expect((await next.runner.token()).status).toBe(401);
-    expect(await runInDurableObject(q, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
+    expect(await runInDurableObject(q, (_i, state) => state.storage.sql.exec('SELECT hash FROM run_ticket').toArray())).toEqual([]);
   }, 20_000);
 
   it('a gone row holds only the hash, expiry and attempt', async () => {
     const { sub, runner } = await aRun();
     const p = person(sub);
     await p.forget();
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(runner.ticket)));
-    const hex = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
-    const rows = await runInDurableObject(p, (_i, state) => state.storage.kv.get<Record<string, unknown>[]>('goneTickets'));
-    expect(rows).toHaveLength(1);
-    expect(Object.keys(rows?.[0] ?? {}).sort()).toEqual(['attempt', 'expiresAt', 'hash']);
-    expect(rows?.[0]).toMatchObject({ hash: hex, attempt: 1 });
-    const all = await runInDurableObject(p, (_i, state) => Array.from(state.storage.kv.list(), ([k, v]) => `${k}=${JSON.stringify(v)}`).join('\n'));
+    const rows = await runInDurableObject(p, (_i, state) => state.storage.sql.exec('SELECT * FROM run_ticket').toArray());
+    expect(rows).toEqual([{ hash: await hashTicket(runner.ticket), run_id: '', attempt: 1, retired: 1, expires_at: expect.any(Number), report_seq: null, report_phase: null }]);
+    const all = await runInDurableObject(p, (_i, state) =>
+      [JSON.stringify(state.storage.sql.exec('SELECT * FROM run_ticket').toArray()), ...Array.from(state.storage.kv.list(), ([k, v]) => `${k}=${JSON.stringify(v)}`)].join('\n'),
+    );
     for (const secret of [runner.runId, runner.ticket, 'FOLDER_ID', 'Alex', 'you@example.com']) expect(all).not.toContain(secret);
   });
 
@@ -235,8 +249,7 @@ describe('runner wire', () => {
     const { sub, runner } = await aRun();
     const first = runner.ticket;
     await reply(await runner.report({ attempt: 1, seq: 5, phase: 'reading', total: 2 }));
-    const second = await person(sub).mintTicket(runner.runId, 2, Date.now());
-    if (second === null) throw new Error('no ticket');
+    const second = await takeOver(sub, runner.runId);
     expect(second).not.toBe(first);
     // The older attempt's ticket stops working.
     expect((await runner.token(first)).status).toBe(409);
@@ -249,18 +262,13 @@ describe('runner wire', () => {
     // The new attempt counts its own reports from the start.
     const ok = await reply(await runner.report({ attempt: 2, seq: 1, phase: 'reading', total: 2 }, second));
     expect(ok.run?.phase).toBe('reading');
-    // An attempt not newer than the current one is never minted, and neither is one for an unknown run.
-    expect(await person(sub).mintTicket(runner.runId, 1, Date.now())).toBeNull();
-    expect(await person(sub).mintTicket(runner.runId, 2, Date.now())).toBeNull();
-    expect(await person(sub).mintTicket(`${runner.runId}x`, 3, Date.now())).toBeNull();
     expect((await runner.token(second)).status).toBe(200);
   });
 
   it('a superseded attempt\'s ticket answers stale-attempt', async () => {
     const { sub, runner } = await aRun();
     const first = runner.ticket;
-    const second = await person(sub).mintTicket(runner.runId, 2, Date.now());
-    if (second === null) throw new Error('no ticket');
+    const second = await takeOver(sub, runner.runId);
     const token = await runner.token(first);
     expect(token.status).toBe(409);
     expect(await code(token)).toBe('stale-attempt');
@@ -312,8 +320,7 @@ describe('runner wire', () => {
       expect(await code(refused)).toBe('signed-out');
     }
     // A newer attempt: the older ticket answers 409 stale-attempt, the new one names its attempt.
-    const second = await person(sub).mintTicket(runner.runId, 2, Date.now());
-    if (second === null) throw new Error('no ticket');
+    const second = await takeOver(sub, runner.runId);
     const stale = await attempt(first);
     expect(stale.status).toBe(409);
     expect(await code(stale)).toBe('stale-attempt');
@@ -471,9 +478,8 @@ describe('runner wire', () => {
       for (const [i, step] of sequence.steps.entries()) {
         const where = `${sequence.name}, step ${i + 1}`;
         if ('takeover' in step) {
-          const minted = await person(sub).mintTicket(runner.runId, step.takeover, Date.now());
-          if (minted === null) throw new Error(`no ticket for ${where}`);
-          tickets.set(step.takeover, minted);
+          if (step.takeover !== 2) throw new Error(`only attempt 2 takes over, at ${where}`);
+          tickets.set(step.takeover, await takeOver(sub, runner.runId));
           continue;
         }
         const res = await runner.report(step.send, tickets.get(step.send.attempt));
