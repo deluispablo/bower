@@ -407,3 +407,4 @@ ask-one-per-thing	da65c6cff67455d6	2026-10-08	red (fixed in c0c8dec)
 admission-subrequest-budget	77b9bc2dc5ab223c	2026-10-08	red (fixed in 3b3783b)
 ask-one-per-thing	f361a3c4038cd5e5	2026-10-08	red (fixed in e28ce48)
 ask-one-per-thing	e835d54eb529fea2	2026-10-08	red (fixed in e28ce48)
+state-rewrite-change	84bd0570b45b5165	2026-10-08	known-green: the four tests are a subset of the verify proved red by hand at bbc1d0e and aea3176; state-no-adoption (208ea5c) removed md5 adoption and owns the unmarked test
