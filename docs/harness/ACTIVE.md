@@ -313,3 +313,4 @@ P3-9 is closed.
 - ask-answer-loop re-closed (749dd30; red by hand at 51730dd; compat row added by me): waiting answers start a scoped run at run end. 394/401. P4-20c check and home-cache-stable running; state-yes-writes next.
 - P4-20c check PASS (ask-answer-loop; minors to polish; Worker ships first). state-yes-writes (escalated) dispatched; home-cache-stable running.
 - home-cache-stable delivered but misses 2 s (3.7-4.3 s, 46 calls, floor 3.45 s); test renamed bound to the call floor; not merged; ruling asked. corpus-grounded-scorer (implementer) dispatched.
+- TL-P4-13 addendum 2 (e317fc7): about 4 s accepted; home-cache-stable closed (15586a1; test renamed to its bound; compat row added by me). home-reads-bounded registered (queued). 395/402. state-yes-writes and corpus-grounded-scorer running.
