@@ -228,3 +228,4 @@ P3-9 is closed.
 - document-note-required closed (90d5d64): .url and .md things exempt; c11 Leek soup.txt now gets a note. 373/378. fingerprint-normalised round 3 running.
 - fingerprint-normalised round 3 closed (06ed7c8, test only): the fake gives equal input=; live still differs. Proposed per-section hashes to the lead. 374/378. Short Opus check of note-required next.
 - TL-P4-08 addendum 3 (e35644e): input-sections (mechanical) before the SHA. 374/379.
+- note-required delta check PASS (minors to polish; the fingerprint test's log write and missing main() go to the input-sections worker).
