@@ -274,3 +274,4 @@ P3-9 is closed.
 - P4-14 fix-round check PASS (dispositions 65 -> 33, changes 54 -> 33; runner re-holds unread piles). Lead to accept: over budget with only held piles, a run ends 'nothing ready' instead of a 409. ask-one-per-thing fix round running.
 - P4-15 fix-round check PASS (I1-I3 pinned; reader hide safe on failed listings; additive). Suites at 8821e84 running.
 - Suites at 8821e84: check 3622/194/160 (failed only on the verify naming a src test from runner; fixed, re-proved at 96e7460, check green), e2e 226, e2e:fake 251 + qa10:165 phone flake (3/3 alone), e2e:pwa 4. Main moves.
+- Main and backup at 2b08fc1 (merged main 516adc6, the tracked style). SHA sent to the lead: app + Worker deploy together; live offer-and-flat x3, garden x1, c05-hub-lines x2; close stale IMG_2301 questions through the app.
