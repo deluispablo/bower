@@ -69,3 +69,21 @@ The C04 median is 1:28 from the press to `done` with the quality check passing, 
 | 2026-10-08 | c6ddb96 | claude (Sonnet 5.5), `c04-garden-newsletter` ×5 (runs `37764001648`, `37764218469`, `37764418263`, `37764624158`, `37764894630`) | 0:53, 0:47, 0:49, 1:08, 0:49 | — | 1 each | out 672 / 439 / 378 / 663 / 355 | Fresh folders, PDF in Resources every time. PASS 2/5: runs 2, 3 and 5 made no note (report created=[]). input= differed on every run |
 | 2026-10-08 | 80ae66d | claude (Sonnet 5.5), `c04-garden-newsletter` ×5 (runs `37767147353`, `37767403211`, `37767650172`, `37767888067`, `37768128729`) | 1:03, 1:03, 0:52, 1:02, 1:01 | — | 1 each | out 883 / 787 / 846 / 811 / 743 | PASS 5/5 (Resources, a note with all 4 dates). Section hashes: only `things` varies between runs |
 | 2026-10-08 | 80ae66d | claude (Sonnet 5.5), `c04-offer-and-flat` (run `bZImxv2M…`) | 0:40 (failed) | 15.2 s | 1 | 6621 in / 1679 out | Refused: "a question about a pile it also files"; nothing changed. Ruling asked |
+
+## C04 garden on `80ae66d`, the second-brain method (2026-10-08)
+
+Five live runs, all PASS. Press → done took 0:52–1:03. The runner's steps, in ms:
+
+| Step | Median | Range |
+| --- | ---: | ---: |
+| total | 52,794 | 43,018–55,795 |
+| reads | 14,618 | 13,385–19,389 |
+| apply | 10,569 | 6,964–12,212 |
+| report | 9,195 | 6,580–9,324 |
+| checkpoints (4) | 7,311 | 6,914–8,381 |
+| model | 7,117 | 6,549–7,876 |
+
+**Reading.**
+- **The model step doubled,** from 3–4 s to about 7 s, because the method's note is now always written (about 670 output tokens).
+- **Reads (14.6 s) are the biggest step.** With 134 Drive calls per run, they are the next speed lever after the C04 slice passes.
+- **Against the original:** 6:38 before its speed work, and its goal of 1.5–2 min after it. The new app takes about 1 min from press to done, with every note required.
