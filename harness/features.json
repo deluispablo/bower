@@ -5393,7 +5393,7 @@
     "id": "c1-admit-once",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Drop wouldAdmit; admit(null) first; quota checked before any Drive read.",
     "steps": [
       "Red from today's drift: a press over the daily limit spending up to 35 subrequests",
