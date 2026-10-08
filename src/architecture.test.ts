@@ -167,7 +167,8 @@ describe('the shape of the code', () => {
       }
       if (!exists) return;
       const bad: string[] = [];
-      for (const f of files(API)) {
+      // A test helper builds piles the way the app does (`declarationRecord`); it is not the Worker's code.
+      for (const f of files(API).filter((x) => !x.endsWith('/test/admission-support.ts'))) {
         for (const spec of specs(readFileSync(f, 'utf8'))) {
           // Only the app's src counts: the Worker's own (`api/src`, as its test host imports it) is not the shared core.
           if (/(^|\/)src\//.test(spec) && join(dirname(f), spec).startsWith(`${SRC}/`) && !/src\/data\/(contracts|spine)(\/|$)|src\/data\/(types|drive\/drive-http|drive\/drive-api|drive\/fake-drive)(\.js)?$/.test(spec)) bad.push(`${relative(API, f)} imports '${spec}'`);

@@ -4,3 +4,6 @@
  * the retries it cannot foresee (a refreshed token, a Drive answer that is tried again).
  */
 export const SUBREQUEST_BUDGET = 35;
+
+/** What the dispatch after admission may need: its one request and its two retries (`dispatchOutcome`). */
+export const DISPATCH_SUBREQUESTS = 3;

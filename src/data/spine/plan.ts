@@ -18,6 +18,17 @@ import { noteRefusal, parseNote } from '../vault/note-format';
 import { VaultIndex } from '../vault/vault-index';
 import type { Admission, AdmissionManifest, AdmissionScope, AdmittedFile, AdmittedPile } from './admission';
 
+/**
+ * A read the reader chose not to make (admission is out of subrequests, TL-P4-11): not a failure of the file. The plan
+ * goes on without that file's text, and the runner, which reads every file itself, checks it.
+ */
+export class NotReadHere extends Error {
+  constructor() {
+    super('This file was not read at admission');
+    this.name = 'NotReadHere';
+  }
+}
+
 /** What the plan reads: metadata, Bower's own control files, and stored digests. */
 export interface SpineRead {
   /** Every file and folder under `rootId`, not in the Bin. */
@@ -145,24 +156,29 @@ export async function capturePiles(read: SpineRead, rootId: string, piles: reado
       // text (front matter included) of the one note the run records. Another pile note is never read here.
       const contextKey = found.state === 'found' && found.declaration.context.kind === 'text' ? found.declaration.context.memberKey : null;
       const recorded = recordedNote(children, contextKey);
-      let raw: string;
+      let raw: string | null;
       try {
         raw = recorded ? await read.readText(recorded.id) : '';
       } catch (e) {
-        // A note Drive cannot give back now holds only this pile, as in the Inbox (TL-P2-08 (a)); a sign-out stops all.
-        if (!(e instanceof BowerError) || e.code === 'auth') throw e;
-        console.error(e);
-        out.set(pile.id, { blocked: SET_ASIDE.notChecked });
-        continue;
+        // Not read at admission (out of subrequests): the runner checks the note when it reads it.
+        if (e instanceof NotReadHere) {
+          raw = null;
+        } else {
+          // A note Drive cannot give back now holds only this pile, as in the Inbox (TL-P2-08 (a)); a sign-out stops all.
+          if (!(e instanceof BowerError) || e.code === 'auth') throw e;
+          console.error(e);
+          out.set(pile.id, { blocked: SET_ASIDE.notChecked });
+          continue;
+        }
       }
       // A note with text no record can carry is a damaged note, as in the Inbox (TL-P2-36 (9)).
-      if (!writable([raw])) {
+      if (raw !== null && !writable([raw])) {
         console.error(new BowerError('unknown', SET_ASIDE.noteDamaged), 'A pile note has text no run record can carry');
         out.set(pile.id, { blocked: SET_ASIDE.noteDamaged });
         continue;
       }
       // The note a run records is refused by its format or its damage as in the Inbox; nothing else of the pile is read.
-      if (recorded) {
+      if (recorded && raw !== null) {
         let refusal: ReturnType<typeof noteRefusal> = null;
         try {
           parseNote(join(pile.path, PILE_NOTE), raw);
@@ -337,7 +353,12 @@ export async function planAdmission(source: SpineRead, rootId: string, opts: Adm
   };
   if (opts.scope === 'instructions') return journal.length ? manifest([]) : { kind: 'nothing', cause: 'new' };
   if (!inboxPiles(ix).some((p) => p.itemIds.length || p.hasWords)) return { kind: 'nothing', cause: 'waiting' };
-  const piles = (await listedPiles(read, rootId)).map(pileShape);
+  const unread = new Set<string>();
+  // A pile whose note was not read has words when the note is not empty (its size is in the listing), as `inboxPiles` says.
+  const piles = (await listedPiles(read, rootId, unread)).map((p) => {
+    const shape = pileShape(p);
+    return unread.has(p.id) ? { ...shape, hasWords: ix.filesIn(p.path ?? '').some((k) => !k.folder && k.name === PILE_NOTE && k.size !== 0) } : shape;
+  });
   const capture = await capturePiles(read, rootId, piles, { notes: true });
   const taken: AdmittedPile[] = [];
   for (const pile of piles) {
@@ -373,7 +394,7 @@ function listedItem(f: DriveFile): PileItem {
  * the words of its first note, and each loose thing. A note Bower will not parse, or cannot read now, holds its pile
  * with the Inbox's reason; a sign-out stops the run. What a run takes of each is decided by `capturePiles`, as in the fake.
  */
-export async function listedPiles(read: SpineRead, rootId: string): Promise<Pile[]> {
+export async function listedPiles(read: SpineRead, rootId: string, unread?: Set<string>): Promise<Pile[]> {
   const ix = VaultIndex.build(rootId, await read.listAll(rootId));
   const out: Pile[] = [];
   for (const f of ix.filesIn('Inbox')) {
@@ -393,10 +414,14 @@ export async function listedPiles(read: SpineRead, rootId: string): Promise<Pile
       try {
         text = parseNote(join(path, PILE_NOTE), await read.readText(note.id)).body.trim();
       } catch (e) {
-        if (!(e instanceof BowerError) || e.code === 'auth') throw e;
-        console.error(e);
-        const refusal = noteRefusal(e);
-        setAside = refusal === 'newer' ? 'note-format' : refusal ? 'note-damaged' : 'not-checked';
+        if (e instanceof NotReadHere && unread) {
+          unread.add(id);
+        } else {
+          if (!(e instanceof BowerError) || e.code === 'auth') throw e;
+          console.error(e);
+          const refusal = noteRefusal(e);
+          setAside = refusal === 'newer' ? 'note-format' : refusal ? 'note-damaged' : 'not-checked';
+        }
       }
     }
     out.push({ id, path, text, createdAt, items: kids.filter((k) => k !== note).map(listedItem), ...(setAside ? { setAside } : {}) });
