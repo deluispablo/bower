@@ -4804,5 +4804,19 @@
     "verify": "pnpm -C api exec vitest run -t \"after delete me a valid ticket gets gone and a wrong one 401|after the last ticket expires no gone row is kept|a gone row holds only the hash, expiry and attempt\"",
     "passes": false,
     "note": "TL-P4-04 addendum 2 (a5aba50); e51d469 keeps {runId, hash, expiresAt} in KV and prunes only on the next write."
+  },
+  {
+    "id": "report-kept-your-change",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "When reconcile finds a landed effect that the person changed afterwards (a rename or an undo of a stamped op), the run keeps the person's change and the report says so in one plain line (C12 slice).",
+    "steps": [
+      "Reconcile marks a landed op whose target no longer matches the plan as kept-your-change.",
+      "The report shows one plain line per such change, naming the thing as the person sees it.",
+      "Tests: a rename inside a batch then a kill reports the kept change; an untouched run reports none."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a change the person made after a landed op is reported as kept|a run with no later change reports no kept line\"",
+    "passes": false,
+    "note": "TL-P4-05 addendum 2 (ce36da1): left out of checkpoint-per-batch; scheduled with the C12 slice, not the P4-6 close."
   }
 ]
