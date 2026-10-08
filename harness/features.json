@@ -4988,7 +4988,7 @@
     "id": "input-sections",
     "task": "p4-c",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "what": "The timing line carries a short hash per section of the normalised model input (prompt, tree, things, notes, rules), never content, so a live run shows which part varies.",
     "steps": [
       "Split the normalised model input into its sections at the point it is built.",

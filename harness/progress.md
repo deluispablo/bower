@@ -145,3 +145,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: fingerprint-normalised passes — P4-8 fix round: fileId and admission id normalised, so fresh folders match; ids written inside a note still change the hash
 - 2026-10-08: document-note-required passes — a thing with text gets its note unless a Timeline line on an existing note cites it; refused once with the reason and retried, then the run ends as C12 does; photos, links and notes need none
 - 2026-10-08: fingerprint-normalised passes — round 3: two fresh fake folders through main() give the same input=; no further per-run value found on the fake
+- 2026-10-08: input-sections passes — timing line carries sections=prompt,tree,things,notes,rules (6 hex each of the normalised section), hashes only; fingerprint test now runs through main() and writes no logs
