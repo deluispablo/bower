@@ -150,7 +150,19 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const { person, access } = await granted(c);
     const options: DriveTokenOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
-    const { accessToken, expiresAt } = await accessTokenOf(env, person, options);
+    let minted: { accessToken: string; expiresAt: number };
+    try {
+      minted = await accessTokenOf(env, person, options);
+    } catch (err) {
+      // This very request found the refresh token refused or unreadable, and access was forgotten: asked again, the
+      // person object says gone (410), so the runner ends the run failed now rather than waiting for the alarm.
+      if (err instanceof HttpError && err.code === 'signed-out') {
+        console.error(err);
+        await granted(c);
+      }
+      throw err;
+    }
+    const { accessToken, expiresAt } = minted;
     const reply: RunnerToken = { accessToken, expiresAt, folderId: access.folderId, attempt: access.attempt, manifest: access.manifest };
     return c.json(reply);
   });

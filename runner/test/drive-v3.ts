@@ -45,6 +45,11 @@ export interface DriveV3 {
   refuseDone: boolean;
   /** Whether a create's answer carries the checksums its `fields` ask for, as Drive's does; off, it carries none. */
   checksums: boolean;
+  /**
+   * Google access revoked: Drive refuses every token handed out (401), and the Worker's token route, finding the refresh
+   * token refused, answers 410 `gone`; from then on the attempt route does too, as the Worker's person object does.
+   */
+  revoked: boolean;
 }
 
 export interface StatusPost {
@@ -78,6 +83,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     statuses: [],
     dropDone: null,
     refuseDone: false,
+    revoked: false,
     checksums: true,
     fetch: async (input, init = {}) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -93,6 +99,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
         else wire.tokenCalls++;
         if (route?.[1] !== RUN_ID) return json(404, { error: { code: 'not-found', message: 'Not found.' } });
         if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
+        if (wire.revoked && route[2] === 'token') wire.tokenRefusal = { status: 410, error: 'gone' };
         if (wire.tokenRefusal) return json(wire.tokenRefusal.status, { error: { code: wire.tokenRefusal.error, message: 'This tidy-up was taken over.' } });
         // The attempt route answers from the person object alone: the attempt, no token.
         if (route[2] === 'attempt') return json(200, { attempt: wire.attempt });
@@ -102,7 +109,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
       }
       wire.requests.push({ method, url });
       if (url.origin !== 'https://www.googleapis.com') return json(404, driveFailure(404, 'notFound'));
-      if (!live.has(auth.replace(/^Bearer /, ''))) return json(401, driveFailure(401, 'authError'));
+      if (wire.revoked || !live.has(auth.replace(/^Bearer /, ''))) return json(401, driveFailure(401, 'authError'));
       try {
         return await answer(wire, method, url, init.body ?? null);
       } catch (e) {
