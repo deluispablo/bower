@@ -14,6 +14,7 @@ import { serializeNote } from '../../src/data/vault/note-format';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
 import { claudeProvider } from '../src/claude';
+import { normalizeModelInput } from '../src/model-input';
 import { RunTiming } from '../src/timing';
 import { loadCorpus } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
@@ -68,12 +69,9 @@ describe('model input fingerprint', () => {
     await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
     expect(calls).toHaveLength(1);
 
-    // Only run-dependent ids and times are normalised.
-    const normalized = (calls[0]?.input ?? '')
-      .replaceAll(RUN_ID, 'RUN_ID')
-      .replace(/"at":\d+/g, '"at":0')
-      .replace(/"runId":"[^"]+"/g, '"runId":"RUN_ID"')
-      .replace(/"id":"[^"]+"/g, '"id":"ID"');
+    // Normalize the input using the shared function
+    const input = calls[0]?.input ?? '';
+    const normalized = normalizeModelInput(input);
 
     // Verify against golden file (must exist; golden files are not created by tests)
     const goldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.golden.txt');
@@ -91,11 +89,55 @@ describe('model input fingerprint', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
 
-    // The timing line should have the model input fingerprint
+    // The timing line should have the model input fingerprint (calculated on the normalized input)
     const modelInput = calls[0]?.input ?? '';
-    const expectedHash = createHash('sha256').update(modelInput).digest('hex').slice(0, 12);
+    const normalized = normalizeModelInput(modelInput);
+    const expectedHash = createHash('sha256').update(normalized).digest('hex').slice(0, 12);
     const line = timing.line('done');
 
     expect(line).toContain(`input=${expectedHash}`);
+  });
+
+  it('two runs of the same case on fresh ids give the same input fingerprint', async () => {
+    const g = await gardenFolder();
+    const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+    if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
+
+    const calls1: ClaudeCall[] = [];
+    const timing1 = new RunTiming();
+    const spawn: ClaudeSpawn = async (call) => (calls1.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // First run with RUN_ID
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing: timing1 }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    const input1 = calls1[0]?.input ?? '';
+    const line1 = timing1.line('done');
+
+    // Second run with a different run ID on the same folder structure
+    const calls2: ClaudeCall[] = [];
+    const timing2 = new RunTiming();
+    const spawn2: ClaudeSpawn = async (call) => (calls2.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+
+    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn: spawn2, timing: timing2 }, { rootId: g.root, runId: 'different-run-id-2', allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    const input2 = calls2[0]?.input ?? '';
+    const line2 = timing2.line('done');
+
+    // The raw inputs differ due to different run IDs
+    expect(input1).not.toBe(input2);
+
+    // Extract the input fingerprints from the timing lines
+    const extractInput = (line: string): string => {
+      const match = line.match(/input=([0-9a-f]+)/);
+      return match?.[1] ?? '';
+    };
+    const fingerprint1 = extractInput(line1);
+    const fingerprint2 = extractInput(line2);
+
+    // Both fingerprints should be present
+    expect(fingerprint1).toMatch(/^[0-9a-f]{12}$/);
+    expect(fingerprint2).toMatch(/^[0-9a-f]{12}$/);
+
+    // The fingerprints should be the same when inputs are normalized
+    expect(fingerprint1).toBe(fingerprint2);
   });
 });

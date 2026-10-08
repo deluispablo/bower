@@ -36,6 +36,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalizeModelInput } from './model-input';
 import { MANIFEST_V2_LIMIT, parseRunManifestV2, recordableName } from '../../src/data/contracts/run-manifest';
 import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
@@ -582,9 +583,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const { model, maxTurns } = claudeLimits(setup.env);
     const shown = await shownOf(read, run, took);
     const input = prepared(run, took, shown);
-    // Calculate and set the input fingerprint for the timing line
+    // Calculate and set the input fingerprint for the timing line, using normalized input
+    // so that the same case run twice with different IDs produces the same fingerprint
     if (setup.timing) {
-      const fingerprint = createHash('sha256').update(input).digest('hex').slice(0, 12);
+      const normalized = normalizeModelInput(input);
+      const fingerprint = createHash('sha256').update(normalized).digest('hex').slice(0, 12);
       setup.timing.setInputFingerprint(fingerprint);
     }
     // Its own empty folder, with an empty home in it: no checkout's or person's settings or CLAUDE.md to find.
