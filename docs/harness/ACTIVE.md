@@ -375,3 +375,5 @@ P3-9 is closed.
 - c2-worker-dispatch sign-out fix round merged (red 59e3456b, fix 06871745; admission compares the kept generation floor, raised only by forget; check green on merged tree). P4-30 short check dispatched.
 - c2-worker-dispatch closed again (93f6d3d4, P4-30 PASS; sign-out-refuses-answers fixed). 416/425. Running: c2-fake-parity. Next: c2-transport-options.
 - c2-pile-records (implementer, home-empty-48s) dispatched in the free slot; c2-transport-options waits for c2-fake-parity (both touch the transport/fake).
+- c2-fake-parity merged (red 47235356, fix 1c476094; removed 66; check green on merged tree; e2e:fake 255 + 1 flake qa10:149 passes alone). Real Drive change: binnedByItem now queries the Bin for a missing pile member (before: none); lead asked. P4-31 review queued. c2-transport-options dispatched.
+- c2-fake-parity real changes accepted (main 7c9c8e8); close after P4-31. Binned-in-binned-folder test added to c2-pile-records (running worker told).

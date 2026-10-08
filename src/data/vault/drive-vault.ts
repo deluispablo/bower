@@ -5,7 +5,7 @@
  * writes one journal line for each change you make, so the next tidy-up
  * knows what happened. It never writes Bower's own sections of a note.
  */
-import { hasBinLookup, type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
+import { type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import type { Unsubscribe, VaultSource } from '../sources';
@@ -30,7 +30,7 @@ import {
 } from '../types';
 import type { Content, Declaration, DeclarationResult } from '../contracts/pile-declaration';
 import type { DispositionResult } from '../contracts/pile-disposition';
-import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, hasStoredDigests, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
+import { SET_ASIDE_TEXT, accountLoose, accountPile, contextRemoved, declarationCopies, declarationRecord, declaredName, findDeclaration, findLooseDeclarations, journalValues, looseSetAside, checkable, memberAsNote, recordablePile, recordedNote, sameText, setAsideOf, shownName, writable, type Blocked, type DeclarationLookup, type Digest } from '../pile-readiness';
 import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
@@ -716,13 +716,11 @@ export class DriveVault implements VaultSource {
       if (!member || listed.has(declaration.pileId)) continue;
       // The accounting's one Bin lookup, kept: a copy Binned from the inbox is the person removing it.
       let inBin = false;
-      const binned = hasBinLookup(drive)
-        ? async (keys: readonly string[]) => {
-          const hits = await drive.binnedByItem(root, keys);
-          inBin = hits.length > 0;
-          return hits;
-        }
-        : undefined;
+      const binned = async (keys: readonly string[]) => {
+        const hits = await drive.binnedByItem(root, keys);
+        inBin = hits.length > 0;
+        return hits;
+      };
       // A consumed disposition retires it first: no digest and no lookup of its member.
       const readiness = await accountPile(declaration, hash, inbox, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
       this.checkCurrent();
@@ -748,7 +746,7 @@ export class DriveVault implements VaultSource {
     const drive = this.drive;
     const root = await this.rootId();
     // Only when a member is missing everywhere live: one Bin lookup for all of them.
-    const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
+    const binned = (keys: readonly string[]) => drive.binnedByItem(root, keys);
     // The tidy-up's own accounting: a member a consumed disposition records is filed, the rest looked up.
     const readiness = await accountPile(found.declaration, found.sha256, folder, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
     this.checkCurrent();
@@ -784,7 +782,7 @@ export class DriveVault implements VaultSource {
     const files = this.known(ix);
     const drive = this.drive;
     const root = await this.rootId();
-    const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
+    const binned = (keys: readonly string[]) => drive.binnedByItem(root, keys);
     const loose = await accountLoose(await this.declarationOf(file, files), ix.file('Inbox'), files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
     this.checkCurrent();
     const changed = loose.found?.accounting.members.some((m) => m.state === 'changed' && m.fileIds.includes(file.id)) ?? false;
@@ -857,17 +855,11 @@ export class DriveVault implements VaultSource {
   }
 
   private async digestFresh(f: DriveFile): Promise<Digest> {
-    // The pretend Drive says what it stored (fake-stored); any other Drive is read.
-    const drive = this.drive;
-    if (hasStoredDigests(drive)) {
-      const d = await drive.storedDigest(f.id);
-      // None stored: not kept, so the next listing asks again.
-      if (d) return d;
-      throw new NoDigest();
-    }
-    // Uncached: the digest is what is kept; the bytes behind it are not.
-    const bytes = (await this.bytesFromText(f)) ?? (await this.drive.readBytes(f.id));
-    return { size: bytes.byteLength, sha256: await sha256(new Blob([new Uint8Array(bytes).buffer])) };
+    // The Drive says what it stored; one that must read the file is given the bytes the text read already holds.
+    // None stored: not kept, so the next listing asks again. The digest is what is kept; the bytes behind it are not.
+    const d = await this.drive.storedDigest(f.id, (await this.bytesFromText(f)) ?? undefined);
+    if (d) return d;
+    throw new NoDigest();
   }
 
   /** A declared pile's note, missing though you never removed it, written again from its first words. */
