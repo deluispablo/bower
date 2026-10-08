@@ -427,3 +427,4 @@ home-errors-shown	a12849094639de74	2026-10-08	red (fixed in 0deaaea)
 ask-answer-loop	971e3836b48007cd	2026-10-08	known-green: red by hand at tests-only 51730dd: the 3 new tests (runner, api, src) fail on assertions; done.sh's revert of f8ec5ed ran no test (reason: the chained verify stops at its first command, whose names pass without the change); green at f8ec5ed
 home-cache-stable	07beffdee3d2ae9e	2026-10-08	red (fixed in aba0070)
 state-yes-writes	3e6568e5462ec393	2026-10-08	red (fixed in a38c0cb)
+ask-answer-loop	abacc70d1244610c	2026-10-08	known-green: reason: a test was renamed by state-yes-writes; the new name 'a yes to Write it writes the update in a scoped run' was proved red at 51fe499 (state-yes-writes); the other names were proved red at adc533f and 51730dd
