@@ -1,4 +1,4 @@
-import { env as testEnv, runInDurableObject } from 'cloudflare:test';
+import { env as testEnv, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
@@ -143,6 +143,57 @@ describe('runner wire', () => {
     }
     // The run's own ticket is still told the person is gone.
     expect((await runner.token()).status).toBe(410);
+  });
+
+  it('after delete me a valid ticket gets gone and a wrong one 401', async () => {
+    const { sub, runner } = await aRun();
+    await person(sub).forget();
+    const gone = await runner.token();
+    expect(gone.status).toBe(410);
+    expect(await code(gone)).toBe('gone');
+    for (const ticket of [null, 'not-the-ticket', 'A'.repeat(43)]) {
+      const t = await runner.token(ticket);
+      expect(t.status, String(ticket)).toBe(401);
+      expect(await code(t)).toBe('signed-out');
+    }
+  });
+
+  it('after the last ticket expires no gone row is kept', async () => {
+    // A ticket minted 59 min 59.7 s ago: it lives about 300 ms more.
+    const { sub, runner } = await aRun(Date.now() - HOUR + 300);
+    const p = person(sub);
+    await p.forget();
+    const kept = (): Promise<unknown> => runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'));
+    expect(await kept()).toBeDefined();
+    // The alarm is set at the earliest expiry.
+    const alarm = await runInDurableObject(p, (_i, state) => state.storage.getAlarm());
+    expect(alarm).not.toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(await runDurableObjectAlarm(p)).toBe(true);
+    expect(await kept()).toBeUndefined();
+    expect((await runner.token()).status).toBe(401);
+
+    // The next access prunes too, with no alarm run.
+    const next = await aRun(Date.now() - HOUR + 300);
+    const q = person(next.sub);
+    await q.forget();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect((await next.runner.token()).status).toBe(401);
+    expect(await runInDurableObject(q, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
+  });
+
+  it('a gone row holds only the hash, expiry and attempt', async () => {
+    const { sub, runner } = await aRun();
+    const p = person(sub);
+    await p.forget();
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(runner.ticket)));
+    const hex = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+    const rows = await runInDurableObject(p, (_i, state) => state.storage.kv.get<Record<string, unknown>[]>('goneTickets'));
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows?.[0] ?? {}).sort()).toEqual(['attempt', 'expiresAt', 'hash']);
+    expect(rows?.[0]).toMatchObject({ hash: hex, attempt: 1 });
+    const all = await runInDurableObject(p, (_i, state) => Array.from(state.storage.kv.list(), ([k, v]) => `${k}=${JSON.stringify(v)}`).join('\n'));
+    for (const secret of [runner.runId, runner.ticket, 'FOLDER_ID', 'Alex', 'you@example.com']) expect(all).not.toContain(secret);
   });
 
   it('a wrong or expired ticket is signed out', async () => {
