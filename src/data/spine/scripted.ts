@@ -93,10 +93,30 @@ export interface Placement {
   name: string;
 }
 
-/** A model's intent, by what it was admitted to take: a thing by its file id, a pile of words by its pile id. */
+/** A note a model wrote for a thing it files (P4-3): beside the thing, its name, summary and body. */
+export interface AuthoredNote {
+  name: string;
+  summary: string;
+  body: string;
+}
+
+/** A Timeline line a model wrote for a note it was shown (P4-3), citing a thing this run files, or none. */
+export interface AuthoredLine {
+  path: string;
+  text: string;
+  cites: string | null;
+}
+
+/**
+ * A model's intent, by what it was admitted to take: a thing by its file id, a pile of words by its pile id; and
+ * (P4-3) a thing's own note and Timeline lines. The plan authors every note's front matter and Bower's sections, and
+ * `applyChanges` alone adds a line, on Bower's notes only.
+ */
 export interface Filing {
   thing(fileId: string): Placement | null;
   words(pileId: string): Placement | null;
+  note?(fileId: string): AuthoredNote | null;
+  lines?: readonly AuthoredLine[];
 }
 
 export type { HubUpdate };
@@ -422,6 +442,18 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const made = want(f, u.path);
     made.lines.push({ entry: { date: date ?? '', text: u.what, source: cite?.source ?? null }, record: null, what: u.what, after: cite?.fileId ?? null });
   }
+  // A model's Timeline lines (P4-3): each cites the note its thing gets, or the thing as filed, and waits for its move.
+  const modelCite = (fileId: string): string | null => {
+    const name = opts.filing?.note?.(fileId)?.name ?? opts.filing?.thing(fileId)?.name;
+    return name === undefined ? null : name.replace(/\.md$/i, '');
+  };
+  for (const l of all && date ? (opts.filing?.lines ?? []) : []) {
+    const f = ix.file(l.path);
+    if (!f || f.folder) continue;
+    const thing = l.cites === null ? undefined : things.find((t) => t.file.id === l.cites && !t.merge);
+    const source = thing ? modelCite(thing.file.id) : null;
+    want(f, l.path).lines.push({ entry: { date: date ?? '', text: l.text, source }, record: null, what: l.text, after: source === null ? null : (thing?.file.id ?? null) });
+  }
   // A merge's line, by its answer (R3-4): only into a note in a main folder, never the inbox or Bower's own files.
   for (const thing of things) {
     const m = thing.merge;
@@ -706,6 +738,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const what = `A note for ${displayName(name)}.`;
     const text = serializeNote({ summary: what, properties: [], tags: [], currentState: [], body: '', timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
     generated.push({ to: parentOf(own), name: nameOf(own), text, what, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
+  }
+  // A note a model wrote for a thing (P4-3): beside it, its words as the body, Bower's summary and Timeline around them.
+  for (const { thing, to, name, note, merge } of filing) {
+    const authored = note || merge ? null : (opts.filing?.note?.(thing.file.id) ?? null);
+    if (!authored) continue;
+    const noteName = freeName(planned, to, authored.name);
+    plannedFile(join(to, noteName));
+    const text = serializeNote({ summary: authored.summary, properties: [], tags: [], currentState: [], body: authored.body, timeline: [{ date: noteDate, text: 'Filed by Bower.', source: name }], byBower: true });
+    generated.push({ to, name: noteName, text, what: authored.summary, after: thing.file.id, pileId: null, aside: thing.file.name, context: null });
   }
   for (const { pileId, folder, words, context } of fromWords) {
     const { to, name: title } = wordsPlace(pileId, words);

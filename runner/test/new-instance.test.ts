@@ -50,7 +50,7 @@ const gitEnv = (): NodeJS.ProcessEnv => ({
   GIT_COMMITTER_EMAIL: 'you@example.com',
 });
 
-const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, env: gitEnv(), encoding: 'utf8' });
+const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, env: gitEnv(), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 /** The temporary folders made here, removed after each test. */
 const made: string[] = [];
