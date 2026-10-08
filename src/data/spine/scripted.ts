@@ -738,7 +738,12 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       } else {
         // Never silently dropped: what Bower would write becomes one Timeline line (a person's note takes none).
         // Only what the section lacks; nothing new, no line.
-        const text = stateNewsLine(w.state.lines, now?.lines ?? [], stateMarkOf(bytes));
+        // Same news twice in one run: a line this run adds to the note citing the same thing already says it.
+        const cited = w.state.thing === null ? undefined : w.lines.find((l) => l.after === w.state?.thing && l.entry.source !== null);
+        // The person is still asked, once that line is there.
+        if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path });
+        if (cited && now?.owner === 'unmarked') unmarkedStates.push(cited);
+        const text = cited ? null : stateNewsLine(w.state.lines, now?.lines ?? [], stateMarkOf(bytes));
         if (text !== null) {
           const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
           w.lines.push(line);
