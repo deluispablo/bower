@@ -566,3 +566,12 @@ export async function readBackEdit(effect: EditText, observed: Observed): Promis
 export function savedLinkKey(fileId: string): Promise<string> {
   return digest(encoder.encode(`${fileId}:saved-link-note`));
 }
+
+/** Red stub (state-rewrite-change): replaced by the implementation. */
+export function stateMark(lines: readonly string[]): string {
+  return lines.length ? 'stub' : '';
+}
+/** Red stub (state-rewrite-change): replaced by the implementation. */
+export function undoChanges(changes: readonly Change[]): Change[] {
+  return [...changes];
+}
