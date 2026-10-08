@@ -408,3 +408,4 @@ admission-subrequest-budget	77b9bc2dc5ab223c	2026-10-08	red (fixed in 3b3783b)
 ask-one-per-thing	f361a3c4038cd5e5	2026-10-08	red (fixed in e28ce48)
 ask-one-per-thing	e835d54eb529fea2	2026-10-08	red (fixed in e28ce48)
 state-rewrite-change	84bd0570b45b5165	2026-10-08	known-green: the four tests are a subset of the verify proved red by hand at bbc1d0e and aea3176; state-no-adoption (208ea5c) removed md5 adoption and owns the unmarked test
+state-no-adoption	118aec58befb12dd	2026-10-08	known-green: red by hand at tests-only b485b75: all 3 verify tests fail on assertions (old fallback wording; a second Current state line after a Bower append; md5 adoption); green at 208ea5c

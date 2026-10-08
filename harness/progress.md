@@ -163,3 +163,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: ask-one-per-thing passes — One question per thing: closes on whole-inbox runs, hidden once its thing is gone; a pile and its things are one subject (P4-15 fix)
 - 2026-10-08: ask-one-per-thing passes — One question per thing: closes on whole-inbox runs, hidden once its thing is gone; a pile and its things are one subject (P4-15 fix)
 - 2026-10-08: state-rewrite-change passes — Verify narrowed to the four surviving tests (TL-P4-10 addendum)
+- 2026-10-08: state-no-adoption passes — An unmarked Current state stays the person's unless a rule grants it; bowerMd5 removed; plain fallback line (TL-P4-10 addendum)
