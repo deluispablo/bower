@@ -5619,7 +5619,7 @@
       "Compare-and-set run row.",
       "Table classification test for Delete me."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"only the alarm dispatches|Delete me classes every table\"",
+    "verify": "pnpm -C api exec vitest run -t \"only the alarm dispatches|Delete me classes every table|a failed run-end start says so, and a retry does not claim it waits\"",
     "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a failed run-end start says so, and a retry does not claim it waits (safety-polish #4)."
   }
 ]
