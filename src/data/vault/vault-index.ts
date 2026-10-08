@@ -31,6 +31,11 @@ export class VaultIndex {
     return id === this.rootId ? '' : this.paths.get(id);
   }
 
+  /** A listed file by its id, wherever it is. */
+  byId(id: string): DriveFile | undefined {
+    return this.files.get(id);
+  }
+
   file(path: string): DriveFile | undefined {
     const id = this.ids.get(path);
     return id ? this.files.get(id) : undefined;

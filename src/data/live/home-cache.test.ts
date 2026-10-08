@@ -7,6 +7,8 @@ import { liveShape } from '../fake/live-shape';
 import { makeLiveSources, type LiveSources } from './index';
 
 let live: LiveSources | null = null;
+/** Each file's modifiedTime when a cold load began. */
+let versions = new Map<string, string>();
 afterEach(() => {
   live?.dispose();
   live = null;
@@ -17,7 +19,7 @@ afterEach(() => {
  * The live-shaped folder (a declared pile, 20 leftovers, 12 changes, questions, an unseen finished tidy-up) on a
  * pretend Drive at 300 ms a call, four at once, read as Home reads it (TL-P4-13 home-cache-stable).
  */
-async function slowReport() {
+async function slowReport(opts: { cold?: boolean } = {}) {
   localStorage.clear();
   sessionStorage.clear();
   // The made-up leftovers are not real dispositions: their refusal is logged and expected.
@@ -27,6 +29,17 @@ async function slowReport() {
   await liveShape(drive, rootId);
   const runs = new FakeRunService({ drive, scale: 'instant' });
   const worker = new FakeWorker({ drive, scenario: 'slow-report', rootId, fresh: true, runs });
+  if (opts.cold) {
+    // As a page opens: nothing listed or read yet when Home asks. Each file's version, to show none changed.
+    versions = new Map((await drive.listAll('root')).map((f) => [f.id, f.modifiedTime]));
+    // The pretend Worker has read the folder's last run for itself, as the real one does on its own side.
+    await worker.status();
+    drive.latency = 300;
+    drive.concurrency = 4;
+    drive.calls = 0;
+    live = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true });
+    return { drive, s: live };
+  }
   live = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true });
   const s = live;
   await s.session.current();
@@ -111,3 +124,57 @@ describe('Home on the latency fake', () => {
     expect((await s.vault.piles()).some((p) => p.text.includes('Papers from Sam'))).toBe(true);
   }, 60_000);
 });
+
+/** Counts each Drive read of `drive` by what it asks for, keyed by the file's path. */
+function countReads(drive: FakeDrive): Record<string, number> {
+  const calls: Record<string, number> = {};
+  for (const k of ['listAll', 'readText', 'readBytes', 'storedDigest'] as const) {
+    const real = drive[k].bind(drive) as (...a: unknown[]) => Promise<unknown>;
+    (drive as unknown as Record<string, unknown>)[k] = (...a: unknown[]) => {
+      const key = `${k} ${typeof a[0] === 'string' ? drive.pathOf(a[0], 'root') : ''}`;
+      calls[key] = (calls[key] ?? 0) + 1;
+      return real(...a);
+    };
+  }
+  return calls;
+}
+
+describe('one read cache serves app and runner', () => {
+  it('a refresh during a read in flight never reads one file at one modifiedTime twice (C05 findings 4)', async () => {
+    // Live: Home's full read took about 6 s on the latency fake, since the report's refresh landed mid-read and its
+    // files were read again. Here the report's refresh and a second one land while the piles are being read, and the
+    // screens read again when told, as Home's do. Nothing in the folder changes, so every file keeps its version.
+    const { drive, s } = await slowReport({ cold: true });
+    const calls = countReads(drive);
+    const again: Promise<unknown>[] = [];
+    s.vault.subscribe(() => { again.push(s.vault.piles(), s.vault.questions(), s.vault.changes()); });
+    const mid = new Promise((r) => setTimeout(r, 900)).then(() => s.vault.refresh());
+    const [run, piles] = await Promise.all([s.runs.current(), s.vault.piles(), s.vault.questions(), s.vault.changes(), s.vault.pilesListed(), mid]);
+    await Promise.all(again);
+    expect(run?.report, 'the last tidy-up report').toBeTruthy();
+    expect(piles.length).toBeGreaterThan(0);
+    const after = drive.calls;
+    drive.latency = 0;
+    expect((await drive.listAll('root')).every((f) => versions.get(f.id) === f.modifiedTime), 'no file changed').toBe(true);
+    // Only the listing is read again; each file is read once at its one version.
+    const twice = Object.entries(calls).filter(([k, n]) => n > 1 && !k.startsWith('listAll')).map(([k, n]) => `${k} x${n}`);
+    expect(twice.join(', '), `read twice at one version, ${after} calls`).toBe('');
+    expect(calls['listAll Bower']).toBe(3);
+    // Before: 49 calls (questions.json x2).
+    expect(after).toBe(48);
+  }, 60_000);
+
+  it('a pile note changed elsewhere after Home read it is never written over from the kept read', async () => {
+    const { drive, s } = await slowReport();
+    drive.latency = 0;
+    const pile = (await s.vault.piles()).find((p) => p.text === 'Papers from Alex');
+    const note = (await drive.listAll('root')).find((f) => !f.folder && f.name === 'Pile note.md' && drive.pathOf(f.id, 'root').includes('Papers from Alex'));
+    if (!pile || !note) throw new Error('the seeded pile and its note');
+    // Another device changes the words between this page's read and its save; the listing is not read again.
+    const theirs = (await drive.readText(note.id)).replace('Papers from Alex', 'Papers from Sam');
+    await drive.writeText(note.id, theirs, note.modifiedTime);
+    await expect(s.vault.updatePile(pile.id, 'Papers from Alex, sorted', pile.text)).rejects.toMatchObject({ code: 'conflict' });
+    expect(await drive.readText(note.id)).toBe(theirs);
+  }, 60_000);
+});
+

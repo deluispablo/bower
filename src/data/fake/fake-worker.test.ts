@@ -282,6 +282,8 @@ describe('persisted v1 run fixtures agree across current recovery consumers', ()
     const seen = await drive.get(file?.id ?? '');
     await drive.writeText(seen.id, validRuns[0][1], seen.modifiedTime);
     const repaired = await drive.snapshot();
+    // The page lists the folder again to see a change made elsewhere (c2-read-cache: reads are kept by version).
+    await vault.refresh();
     expect(await vault.lastRun()).toEqual(JSON.parse(validRuns[0][1]));
     expect((await reopen().status()).run).toMatchObject({ id: 'RUN_A', phase: 'done' });
     expect(await drive.snapshot()).toBe(repaired);
@@ -324,6 +326,8 @@ describe('persisted v1 run fixtures agree across current recovery consumers', ()
       expect(run?.failure).toMatch(/Some things may be in their new places already/);
       expect(run?.failure).not.toMatch(/Nothing was moved/);
     } else expect(run?.failure).toMatch(/Nothing was moved/);
+    // The page lists the folder again to see the repair (c2-read-cache: reads are kept by version).
+    await vault.refresh();
     expect((await vault.lastRun())?.run).toEqual(run);
   });
 

@@ -3,10 +3,11 @@
  * `.bower/changes/` for each thing you did in the app, so the next tidy-up
  * knows what happened and where to look. One file per change, so two
  * devices never write the same file; Drive cannot append. Files never
- * change once written, so normal reads are kept; acknowledging a waiting
- * copy always checks Drive afresh.
+ * change once written, so normal reads are kept (the one read cache, by
+ * id and modifiedTime); acknowledging a waiting copy always checks Drive afresh.
  */
 import type { DriveApi, DriveFile } from '../drive/drive-api';
+import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
 
@@ -24,9 +25,9 @@ export interface JournalPlace {
    * listing with archives also acknowledges a write processed elsewhere.
    */
   files: (fresh?: boolean, archived?: boolean) => Promise<DriveFile[]>;
+  /** The vault's read cache, so a Home load reads each change once; a journal of its own when not given. */
+  reads?: ReadCache;
   /** Told about each file the journal writes or bins, so a listing cache stays true. */
-  /** Reads a change's file; the vault's shared read, so a Home load reads each change once. A change never changes. */
-  readText?: (id: string) => Promise<string>;
   wrote?: (f: DriveFile) => void;
   removed?: (id: string) => void;
   /** A change is kept only on this page; refresh the screen before reporting it. */
@@ -65,7 +66,7 @@ const volatile = new WeakMap<DriveApi, Map<string, JournalRecord[]>>();
 
 export class Journal {
   private readonly volatile: Map<string, JournalRecord[]>;
-  private read = new Map<string, JournalRecord | null>();
+  private readonly reads: ReadCache;
   /** Drive file ids per record id (a line written twice has two), for remove. */
   private filesOf = new Map<string, string[]>();
   /** Two changes in one millisecond still keep their order. */
@@ -88,6 +89,7 @@ export class Journal {
     private readonly current: () => boolean = () => true,
     memoryDrive: DriveApi = drive,
   ) {
+    this.reads = place.reads ?? new ReadCache();
     this.volatile = volatile.get(memoryDrive) ?? new Map();
     volatile.set(memoryDrive, this.volatile);
   }
@@ -97,7 +99,6 @@ export class Journal {
   }
 
   dispose(): void {
-    this.read.clear();
     this.filesOf.clear();
     // Folder-keyed waiting records survive every session, including storage failures.
   }
@@ -233,9 +234,10 @@ export class Journal {
       this.checkCurrent();
       const folder = await this.place.folder();
       this.checkCurrent();
-      const f = await this.drive.createText(folder, `${rec.id}.json`, `${JSON.stringify(rec)}\n`);
+      const text = `${JSON.stringify(rec)}\n`;
+      const f = await this.drive.createText(folder, `${rec.id}.json`, text);
       if (this.current()) {
-        this.read.set(f.id, rec);
+        this.reads.wrote(f, text);
         this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f.id]);
         this.place.wrote?.(f);
       }
@@ -253,28 +255,25 @@ export class Journal {
     const files = (await this.place.files()).filter((f) => !f.folder && f.name.endsWith('.json'));
     const byId = new Map<string, JournalRecord>();
     const seenFiles = new Map<string, string[]>();
-    // The lines not read yet are asked for together: a dozen of them at 300 ms each are one wait, not a dozen.
-    await Promise.all(files.filter((f) => !this.read.has(f.id)).map(async (f) => {
-      let rec: JournalRecord;
+    // The lines are asked for together (a dozen at 300 ms each are one wait, not a dozen); each version is read once.
+    const records = await Promise.all(files.map(async (f) => {
       try {
-        const v: unknown = JSON.parse(await (this.place.readText ?? ((id: string) => this.drive.readText(id)))(f.id));
+        const v: unknown = JSON.parse(await this.reads.text(f, () => this.drive.readText(f.id)));
         if (!isJournalRecord(v)) throw new BowerError('unknown', 'Bower could not read your changes.');
-        rec = v;
+        return v;
       } catch (e) {
         console.error(e);
         if (e instanceof SyntaxError) throw new BowerError('unknown', 'Bower could not read your changes.');
         throw e;
       }
-      this.checkCurrent();
-      this.read.set(f.id, rec);
     }));
-    for (const f of files) {
-      const rec = this.read.get(f.id);
-      if (rec) {
-        byId.set(rec.id, rec);
-        seenFiles.set(rec.id, [...(seenFiles.get(rec.id) ?? []), f.id]);
-      }
-    }
+    this.checkCurrent();
+    files.forEach((f, i) => {
+      const rec = records[i];
+      if (!rec) return;
+      byId.set(rec.id, rec);
+      seenFiles.set(rec.id, [...(seenFiles.get(rec.id) ?? []), f.id]);
+    });
     this.checkCurrent();
     for (const [rid, ids] of seenFiles) this.filesOf.set(rid, ids);
     for (const r of this.waiting(key)) if (!byId.has(r.id)) byId.set(r.id, r);
@@ -299,7 +298,6 @@ export class Journal {
       this.checkCurrent();
       await this.drive.trash(fileId);
       this.place.removed?.(fileId);
-      this.read.delete(fileId);
     }
     this.filesOf.delete(id);
   }
