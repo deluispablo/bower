@@ -369,13 +369,15 @@ export class DriveHttp implements DriveApi, ResumableDrive {
   }
 
   /**
-   * One request with the token, the one refresh and the retries (`transport.ts`): a read is sent again after a stall.
+   * One request with the token, the one refresh and the retries (`transport.ts`): a read is sent again after a stall
+   * or a 5xx; a write only after a rate limit, which says it did not land.
    * Answers ok or 308 (resumable), or a status in `pass` for the caller to read; anything else is a `BowerError`.
    */
   async call(url: string, init: RequestInit = {}, pass: readonly number[] = []): Promise<Response> {
     const method = (init.method ?? 'GET').toUpperCase();
-    // A create that failed on Google's side may still have made the file: never send it twice.
-    const again = async (res: Response): Promise<boolean> => res.status === 429 || (await isRateLimit(res)) || (res.status >= 500 && method !== 'POST');
+    // A rate limit says the request did not land: ask again. A 5xx on a write may have landed (a create made the
+    // file, an update overwrote a newer edit): only a read is asked again; a write is read back by its caller.
+    const again = async (res: Response): Promise<boolean> => res.status === 429 || (await isRateLimit(res)) || (res.status >= 500 && method === 'GET');
     const res = await this.authorized(url, init, { idempotent: method === 'GET', again });
     if (res.ok || res.status === 308 || pass.includes(res.status)) return res;
     if (res.status === 404) throw driveError('not-found');

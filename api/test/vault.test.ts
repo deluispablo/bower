@@ -584,6 +584,36 @@ describe('POST /vault after a lapsed claim', () => {
   });
 });
 
+describe('POST /vault repairs Rules without a blind resend', () => {
+  it('a repair PATCH that landed and answered 503 is not sent again', async () => {
+    const { cookie } = await someone();
+    const g = new FakeGoogle();
+    const { folderId } = await body(await post(g, cookie));
+    const rules = [...g.items.values()].find((i) => i.name === 'Rules.md' && i.parents.includes(folderId));
+    if (rules === undefined) throw new Error('Rules.md missing');
+    rules.content = OLD_RULES_TEMPLATE;
+    rules.appProperties = {};
+    const inner = g.fetchImpl;
+    let patches = 0;
+    (g as unknown as { fetchImpl: typeof inner }).fetchImpl = async (input, init) => {
+      const res = await inner(input, init);
+      if ((init?.method ?? 'GET') === 'PATCH') {
+        patches += 1;
+        if (patches === 1) {
+          // Landed; the person types a rule on another device; Google answers 503.
+          rules.content = `${RULES_TEMPLATE.text}\n- Typed on another device.\n`;
+          rules.modifiedTime = g.tick();
+          return Response.json({ error: { code: 503 } }, { status: 503 });
+        }
+      }
+      return res;
+    };
+    await post(g, cookie);
+    expect(rules.content).toBe(`${RULES_TEMPLATE.text}\n- Typed on another device.\n`);
+    expect(patches).toBe(1);
+  });
+});
+
 describe('POST /vault against delete me and sign-out', () => {
   /** A Drive fetch that holds the first folder-id request until `release` is called. */
   function held(g: FakeGoogle): { release: () => void; reached: () => boolean } {
