@@ -4759,5 +4759,34 @@
     "verify": "pnpm -C api exec vitest run -t \"the attempt route answers gone after delete me or revoked access|a plain sign-out leaves the attempt route answering\" && pnpm -C runner exec vitest run -t \"the runner drops its token and stops before the next write when the person is gone\"",
     "passes": true,
     "note": "Lead 3ce00dd (P4-4 review minor rated Important for delete me and revocation)."
+  },
+  {
+    "id": "checkpoint-per-batch",
+    "task": "p4-b",
+    "category": "perf",
+    "what": "Checkpoints per batch instead of per operation: one checkpoint names a batch of operations, the effects run, then one closing checkpoint; a crash mid-batch reconciles every named operation by read-back (TL-P3-23). Checkpoints stay in Drive. Target: about 15 checkpoints per run down to 2–4. The bar is kill-after-every-step, mid-batch included, ending equal to an uninterrupted run.",
+    "steps": [
+      "An opening checkpoint names the batch operations; a closing checkpoint marks them done.",
+      "Recovery reconciles every named-but-unclosed operation by read-back, never re-applying a landed one.",
+      "Kill after every step, including mid-batch, ends equal to an uninterrupted run.",
+      "A modelled C04 run writes 2–4 checkpoints."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a run writes one opening and one closing checkpoint per batch|a kill at every step including mid-batch ends equal to an uninterrupted run\"",
+    "passes": false,
+    "note": "TL-P4-05 (tail: attempt check median 127 ms; the checkpoint cost is its two Drive writes; checkpoints in the DO declined)."
+  },
+  {
+    "id": "runner-reads-and-report",
+    "task": "p4-b",
+    "category": "perf",
+    "what": "Profile and cut the runner plan reads (15–17 s) and the report (9–10 s) the same way: count Drive round trips per phase, batch or parallelise reads with bounded concurrency, and write the report and its barrier files with the fewest safe calls; the report barrier order (dispositions before last-run, read back last) stays.",
+    "steps": [
+      "Per-phase call counts and modelled time for reads and report.",
+      "Reads batched or parallel with bounded concurrency, same plan.",
+      "Report barrier order unchanged; fewer calls."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"plan reads finish under the budget with modelled Drive latency|the report keeps its barrier order in fewer calls\"",
+    "passes": false,
+    "note": "TL-P4-05, after checkpoint-per-batch."
   }
 ]
