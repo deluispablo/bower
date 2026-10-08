@@ -249,3 +249,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - overhead.test.ts:39 does not check that the read is of the target.
 - P4-14 (process-error-honest, minor): the `start-fails` fake scenario shows in the demo panel but the demo ignores it (src/data/demo/scenario.ts:14).
 - P4-14 (admission, minor): the needs-manifest re-admission in api/src/process.ts:289 builds fresh caches and reads texts and bytes twice.
+- P4-15 (ask-one-per-thing, minor): scripted.ts:476 `mayHold` size > 40 threshold is uncommented.
