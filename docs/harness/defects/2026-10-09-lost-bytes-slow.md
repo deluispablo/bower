@@ -57,3 +57,9 @@ Not this class: the reload and expired-session tests (`:176`, `:211`) take 550-6
 1. **A guard on the backoff,** in the app's setup and in the api's: an `afterEach` that fails any test whose transport slept a non-zero backoff with real timers. It catches items 1, 2 and 5 and every future one.
 2. **For the person (a2 or b):** with `navigator.onLine = false`, adding two files reaches `waiting/offline` with exactly one `generateIds` each.
 3. **For items 3 and 4:** `stop()` during an offline `generateIds` settles at once.
+
+## Ruling (lead, DECISIONS main 1968a8c): (b) plus (a2)
+- The root is a mutable global that every test setup must remember to zero. New entry c2-transport-options (implementer): backoff, sleep and the abort signal become send options that each client injects; no global.
+- While the browser is known offline, a network error is not resent and the upload shows offline at once.
+- The 5 same-class sites in this note become named tests.
+- Slot: after c2-fake-parity (it touches the transport; c2-one-engine builds on it).

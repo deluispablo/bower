@@ -5571,6 +5571,19 @@
     "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer. Before c2-one-engine."
   },
   {
+    "id": "c2-transport-options",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Backoff, sleep and the abort signal become send options each Drive client (app, runner, Worker) injects; no mutable global for tests to zero. While the browser is known offline, a network error is not resent and an upload shows offline at once.",
+    "steps": [
+      "Add a file while the browser is offline: it shows offline at once, not uploading.",
+      "Lost bytes still ask to choose the file again."
+    ],
+    "verify": "pnpm vitest run -t \"a send takes its backoff, sleep and signal as options, with no global|an upload added while known offline shows offline at once|lost bytes ask to choose the file again\"",
+    "note": "Defect lost-bytes-slow, ruling (b)+(a2) (main 1968a8c); docs/harness/defects/2026-10-09-lost-bytes-slow.md. The note's 5 same-class sites become named tests (added to this verify at close). Starting model: bower-implementer. After c2-fake-parity, before c2-one-engine."
+  },
+  {
     "id": "c2-one-engine",
     "task": "p4-consolidation",
     "category": "refactor",
