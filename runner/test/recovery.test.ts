@@ -126,6 +126,7 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
     ticket: TICKET,
     attempt,
     fetch: fetchFn,
+    pacing: { baseMs: 0 },
     provider: (drive, rootId) => providerFor('scripted', drive, { rootId, runId: RUN_ID, allowWeb: false }),
     effects,
     clock: () => AT,

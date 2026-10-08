@@ -116,7 +116,7 @@ export type SessionStatus =
  */
 export interface ResumableDrive {
   /** Ids reserved for files not created yet (`files.generateIds`). */
-  generateIds(count: number): Promise<string[]>;
+  generateIds(count: number, signal?: AbortSignal): Promise<string[]>;
   /** Opens a session that will create `target.id`; answers the session address. */
   openResumable(target: ResumableTarget): Promise<string>;
   /** Sends `chunk`, the bytes from `start` of a file of `size` bytes. */
@@ -124,7 +124,7 @@ export interface ResumableDrive {
   /** Asks how many bytes of a file of `size` bytes the session holds. */
   sessionStatus(session: string, size: number): Promise<SessionStatus>;
   /** A file with its content's SHA-256, to check one read back under a reserved id. */
-  getUploaded(id: string): Promise<DriveFile>;
+  getUploaded(id: string, signal?: AbortSignal): Promise<DriveFile>;
 }
 
 /** Drive takes resumable chunks in multiples of 256 KiB, except the last. */

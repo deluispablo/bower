@@ -132,6 +132,7 @@ function tidy(wire: DriveV3, root: string, attempt: number, effects: Effects, wr
     ticket: TICKET,
     attempt,
     fetch: wire.fetch,
+    pacing: { baseMs: 0 },
     provider: () => provider(wire, root),
     effects: () => effects,
     clock: () => AT + attempt * 1000,

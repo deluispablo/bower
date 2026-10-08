@@ -70,8 +70,8 @@ function check(target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>, file: Driv
 }
 
 /** Drive refused the reserved id: a file has it. Read it back instead of making another. */
-async function readBack(drive: ResumableClient, target: CheckedTarget): Promise<DriveFile> {
-  return check(target, await drive.getUploaded(target.id));
+async function readBack(drive: ResumableClient, target: CheckedTarget, signal?: AbortSignal): Promise<DriveFile> {
+  return check(target, await drive.getUploaded(target.id, signal));
 }
 
 /**
@@ -80,10 +80,10 @@ async function readBack(drive: ResumableClient, target: CheckedTarget): Promise<
  * upload whose bytes this device lost: one Drive made before its reply was
  * lost is sent, not one to choose again.
  */
-export async function arrivedFile(drive: ResumableClient, target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>): Promise<DriveFile | null> {
+export async function arrivedFile(drive: ResumableClient, target: Pick<CheckedTarget, 'id' | 'size' | 'sha256'>, signal?: AbortSignal): Promise<DriveFile | null> {
   let file: DriveFile;
   try {
-    file = await drive.getUploaded(target.id);
+    file = await drive.getUploaded(target.id, signal);
   } catch (e) {
     if (e instanceof BowerError && e.code === 'not-found') return null;
     throw e;
@@ -125,7 +125,7 @@ export async function sendResumable(
       if (status?.kind === 'done') {
         hooks.onProgress(size);
         // An answer without the content's checksum is checked by reading the file back.
-        return status.file.sha256 === undefined ? await readBack(drive, target) : check(target, status.file);
+        return status.file.sha256 === undefined ? await readBack(drive, target, hooks.signal) : check(target, status.file);
       }
       if (status === null || session === null || status.kind === 'expired') {
         if (status !== null) {
@@ -153,7 +153,7 @@ export async function sendResumable(
     }
   } catch (e) {
     if (isConflict(e)) {
-      const file = await readBack(drive, target);
+      const file = await readBack(drive, target, hooks.signal);
       hooks.onProgress(size);
       return file;
     }

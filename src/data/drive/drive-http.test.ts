@@ -131,12 +131,16 @@ describe('DriveHttp', () => {
     expect(e.calls).toHaveLength(4);
   });
 
-  it('a network TypeError rejects offline', async () => {
+  it('a network TypeError rejects offline with no real wait', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const s = stub(() => {
       throw new TypeError('Failed to fetch');
     });
-    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch });
+    const d = new DriveHttp({ token: tokens().token, fetch: s.fetch, pacing: { baseMs: 0 } });
+    const t0 = Date.now();
     await expect(d.listAll('ROOT')).rejects.toMatchObject({ code: 'offline' });
+    // The backoff is the client's option: a zero base waits nothing (measured, not the 1.3 s of the real one).
+    expect(Date.now() - t0).toBeLessThan(250);
   });
 
   it('404 rejects not-found', async () => {

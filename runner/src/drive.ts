@@ -37,6 +37,7 @@
  */
 import { BowerError } from '../../src/data/types';
 import type { DriveFile, DrivePatch, FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from '../../src/data/drive/drive-api';
+import type { Pacing } from '../../src/data/drive/transport';
 import { DriveHttp, FIELDS, quote, toFile, type WireFile } from '../../src/data/drive/drive-http';
 import type { SpineRead } from '../../src/data/spine/plan';
 import type { AdmissionScope } from '../../src/data/spine/admission';
@@ -51,6 +52,8 @@ export interface RunnerDriveOptions {
   /** This runner's attempt, from its dispatch. */
   attempt: number;
   fetch?: typeof fetch;
+  /** The transport's waits between tries; the real backoff when absent. */
+  pacing?: Partial<Pacing>;
 }
 
 const API = 'https://www.googleapis.com/drive/v3';
@@ -108,7 +111,7 @@ export class RunnerDrive {
     this.attempt = opts.attempt;
     this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
     // Headless: a request with no answer is never worded as offline; a lost write's answer is still read back (`isNoAnswer`).
-    this.http = new DriveHttp({ token: (fresh) => this.token.token(fresh), fetch: (url, init) => this.hooked(url, init), context: 'headless' });
+    this.http = new DriveHttp({ token: (fresh) => this.token.token(fresh), fetch: (url, init) => this.hooked(url, init), context: 'headless', ...(opts.pacing ? { pacing: opts.pacing } : {}) });
     this.writes = {
       createFolder: (parentId, name, appProperties) => this.fenced({ op: 'create-folder', parentId, name, ...(appProperties ? { appProperties } : {}) }, () => this.http.createFolder(parentId, name, appProperties)),
       createText: (parentId, name, text, appProperties) => this.fenced({ op: 'create-text', parentId, name, text, ...(appProperties ? { appProperties } : {}) }, () => this.http.createText(parentId, name, text, appProperties)),

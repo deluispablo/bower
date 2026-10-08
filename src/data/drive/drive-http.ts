@@ -8,7 +8,7 @@
 import { BowerError } from '../types';
 import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
-import { noAnswer, send, type Context, type Fetch } from './transport';
+import { noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
 import { DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableDrive, type ResumableTarget, type SessionStatus } from './drive-api';
 
@@ -45,12 +45,17 @@ export interface WireFile {
   md5Checksum?: string;
 }
 
+/** The waits between tries, as a client takes them (`transport.ts`). */
+export type { Pacing };
+
 export interface DriveHttpOptions {
   /** The access token; `fresh` asks the Worker for a new one. */
   token: (fresh: boolean) => Promise<string>;
   fetch?: Fetch;
   /** Where it runs: `browser` (the default) words a request with no answer as offline; `headless` never does. */
   context?: Context;
+  /** The waits between tries (`transport.ts`); the real backoff when absent. A test passes `{ baseMs: 0 }`. */
+  pacing?: Partial<Pacing>;
 }
 
 export const toFile = (w: WireFile): DriveFile => ({
@@ -84,6 +89,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
   private readonly token: (fresh: boolean) => Promise<string>;
   private readonly fetchFn: Fetch;
   private readonly context: Context;
+  private readonly pacing: Partial<Pacing> | undefined;
   /** Ids known under each root from the last listing, so full-text hits stay inside it. */
   private known = new Map<string, Set<string>>();
   /** Root and descendant folders from the same listing, for parent-scoped searches. */
@@ -93,6 +99,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     this.token = opts.token;
     this.fetchFn = opts.fetch ?? ((url, init) => fetch(url, init));
     this.context = opts.context ?? 'browser';
+    this.pacing = opts.pacing;
   }
 
   /** No answer, worded for where this runs. */
@@ -278,9 +285,9 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     return [...hits.values()];
   }
 
-  async generateIds(count: number): Promise<string[]> {
+  async generateIds(count: number, signal?: AbortSignal): Promise<string[]> {
     const q = new URLSearchParams({ count: String(count), space: 'drive', type: 'files' });
-    const body = (await (await this.call(`${API}/files/generateIds?${q}`)).json()) as { ids?: unknown };
+    const body = (await (await this.call(`${API}/files/generateIds?${q}`, signal ? { signal } : {})).json()) as { ids?: unknown };
     const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === 'string') : [];
     if (ids.length !== count) {
       console.error(`Drive generated ${ids.length} of ${count} ids`);
@@ -318,8 +325,8 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     return this.sessionAnswer(res, 'an upload status');
   }
 
-  async getUploaded(id: string): Promise<DriveFile> {
-    const w = (await (await this.call(`${API}/files/${id}?fields=${UPLOADED_FIELDS}`)).json()) as WireFile;
+  async getUploaded(id: string, signal?: AbortSignal): Promise<DriveFile> {
+    const w = (await (await this.call(`${API}/files/${id}?fields=${UPLOADED_FIELDS}`, signal ? { signal } : {})).json()) as WireFile;
     if (w.trashed) throw driveError('not-found');
     return toFile(w);
   }
@@ -364,7 +371,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     for (let refreshed = false; ; refreshed = true) {
       let res: Response;
       try {
-        res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, opts);
+        res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, { ...opts, knownOffline, pacing: this.pacing });
       } catch (e) {
         if (e instanceof BowerError) throw e;
         // Stopped on purpose: the queue tells this from a failure.
