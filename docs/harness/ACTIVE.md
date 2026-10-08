@@ -289,3 +289,4 @@ P3-9 is closed.
 - 924e6d6 on staging. qa10-phone-flake registered (implementer, running). Live c05-hub-lines x3 + Home calls next. 386/390.
 - 924e6d6 live: c05 clean pass, after-edit keeps the edit (+ duplicate offer line), third run no adoption. Home ~108 Drive calls (was 221). qa10-phone-flake closed (known-green). 387/390.
 - TL-P4-10 addendum 2 (59c86ab): fallback-no-duplicate, duplicate-by-hash, home-inbox-first, c05-incorporation registered. duplicate-by-hash (escalated) and home-inbox-first (implementer) running. 387/394.
+- duplicate-by-hash closed (a6ee70d; escalated; red by hand at 6488613): content-hash duplicate goes to the Bin, 'already saved as'; app + runner deploy together. 388/394. fallback-no-duplicate (implementer) dispatched; P4-17 review of duplicate-by-hash after a slot frees.
