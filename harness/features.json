@@ -5318,5 +5318,159 @@
     ],
     "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs|an empty inbox reads no old pile records\"",
     "note": "TL-P4-16 (b), defect home-empty-48s; replaces home-reads-bounded (TL-P4-13 addendum 2). Stage 2, after c2-read-cache."
+  },
+  {
+    "id": "c1-digest",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One digest module (size, SHA-256, MD5, empty-file constants) used by app, runner and Worker.",
+    "steps": [
+      "Red from today's drift: seven or more inline hashers; MD5 in the runner against SHA-256 in the fake for the same report check",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm vitest run -t \"one digest module serves app, runner and Worker\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
+  },
+  {
+    "id": "c1-still-as-seen",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One expectation type (id, name, parents, optional modifiedTime, sha256, children), one check at the write boundary, one typed error with a reason code.",
+    "steps": [
+      "Red from today's drift: five or more versions with different parent-order rules; a refusal recognised by its message text",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm vitest run -t \"every write checks one still-as-seen expectation\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
+  },
+  {
+    "id": "c1-drive-ops-table",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Every DriveApi method classed read or write in one typed table.",
+    "steps": [
+      "Red from today's drift: the fake-only digest read going through the lease guard",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm vitest run -t \"every Drive method is classed read or write\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-mechanical."
+  },
+  {
+    "id": "c1-worker-routes",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "A person middleware that maps RPC errors once (503 on version skew), jsonBody, HttpError with details, one authorize RPC, one refreshToken(env, person).",
+    "steps": [
+      "Red from today's drift: requireSession answering 500 during a deploy; three copies of each helper",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a version skew answers 503 on every person route\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
+  },
+  {
+    "id": "c1-worker-deadlines",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One deadlines(kind, key, at) table and a single rearm(); alarm() handles whatever is due.",
+    "steps": [
+      "Red from today's drift: gone-ticket rows outliving the hour after Delete me; four kinds of deadline setting and clearing one alarm",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"one deadline table rearms the alarm\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated."
+  },
+  {
+    "id": "c1-admit-once",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Drop wouldAdmit; admit(null) first; quota checked before any Drive read.",
+    "steps": [
+      "Red from today's drift: a press over the daily limit spending up to 35 subrequests",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"a press over the daily limit reads nothing from Drive\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
+  },
+  {
+    "id": "c1-shared-contracts",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "The Worker imports RunWire, phases, lease types and the folder template from src/data/contracts; one pure decideLease() for the Durable Object and the fake.",
+    "steps": [
+      "Red from today's drift: four phase lists, two lease state machines that differ on old leaves, three folder templates that differ",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm vitest run -t \"the Worker and the fake decide leases alike\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
+  },
+  {
+    "id": "c1-worker-schema-v11",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Drop the unused admission table and control columns, rename run_ticket.epoch to attempt, delete dead exports.",
+    "steps": [
+      "Red from today's drift: dead schema",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"schema v11 has no unused tables\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-mechanical."
+  },
+  {
+    "id": "c1-small-fixes",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "BirdLab only in development builds; Settings plural; markSeen errors reported.",
+    "steps": [
+      "Red from today's drift: visible defects",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm vitest run -t \"BirdLab ships only in development|markSeen reports its errors\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-mechanical."
+  },
+  {
+    "id": "c1-duplication-gate",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "jscpd in pnpm check with a committed baseline from today's count that may only fall; a new clone fails the check (TL-P4-15).",
+    "steps": [
+      "Red from today's drift: new copy-paste goes unnoticed",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm vitest run -t \"a new clone fails the duplication gate\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-mechanical."
+  },
+  {
+    "id": "c1-dependency-rules",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "dependency-cruiser in pnpm check: production code never imports fake/ or demo/; screens import only sources, provider and types; today's breaks listed as exceptions, each with the entry that removes it (TL-P4-15).",
+    "steps": [
+      "Red from today's drift: production code importing fake/ (FencedDrive, StoredEvidence)",
+      "One mechanism; remove the copies it replaces in the same entry.",
+      "Card: removed: <lines>; goldens equal or lower."
+    ],
+    "verify": "pnpm vitest run -t \"production code imports no fake or demo module\"",
+    "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
   }
 ]
