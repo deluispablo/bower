@@ -5086,7 +5086,7 @@
     "id": "ask-one-per-thing",
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "An open question is keyed by its subject (fileId, pileId, plus the content hash for a re-upload), never by its text: a later ask about the same subject adds nothing; when the thing leaves the inbox its question closes on its own.",
     "steps": [
       "Key open questions by subject (fileId or pileId, plus content hash for a re-upload).",

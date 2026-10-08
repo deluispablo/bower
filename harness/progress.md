@@ -158,3 +158,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: drive-calls-cut passes — fix round: the fence reads fresh before every send (only a run-made folder is held 3 s for creates into it); person changes between check and send refused; 134 -> 80 calls (-40.3%); modelled apply 13.4 -> 4.7 s
 - 2026-10-08: process-error-honest passes — A failed start keeps the Worker's sentence and offers Try again (TL-P4-11)
 - 2026-10-08: admission-subrequest-budget passes — Admission keeps 3 subrequests in reserve: pile notes are skipped, not failed (TL-P4-11)
+- 2026-10-08: ask-one-per-thing passes — One open question per thing: keyed by subject and content hash; closes when the thing leaves the inbox (TL-P4-11 addendum)
