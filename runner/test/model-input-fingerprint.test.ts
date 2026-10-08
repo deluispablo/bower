@@ -167,4 +167,102 @@ describe('model input fingerprint', () => {
     expect(normalizeModelInput(input('"id":"x"'))).not.toBe(normalizeModelInput(input('"id":"y"')));
     expect(normalizeModelInput(input('"fileId":"x"'))).not.toBe(normalizeModelInput(input('"fileId":"y"')));
   });
+
+  it('two fresh fake folders on the same case give the same input fingerprint through main', async () => {
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    if (!c) throw new Error('the C04 garden newsletter case is missing');
+
+    // Capture model inputs from two runs with different Drive IDs
+    const captureInputFromFreshFolder = async (spare: number): Promise<{ input: string; normalized: string }> => {
+      const drive = fixedDrive();
+      // Create throwaway folders to get different Drive IDs
+      for (let i = 0; i < spare; i++) await drive.createFolder('root', `spare ${i}`);
+
+      const root = (await drive.createFolder('root', 'Bower')).id;
+      const folders = new Map<string, string>();
+      const ensureFolder = async (parent: string, path: string): Promise<string> => {
+        let id: string;
+        let at = '';
+        for (const part of path.split('/').filter(Boolean)) {
+          at = at ? `${at}/${part}` : part;
+          id = folders.get(at) ?? (await drive.createFolder(parent, part)).id;
+          folders.set(at, id);
+          parent = id;
+        }
+        return parent;
+      };
+
+      const inbox = await ensureFolder(root, 'Inbox');
+      for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) await ensureFolder(root, name);
+      const sys = await ensureFolder(root, 'System');
+      const changes = await ensureFolder(root, 'System/changes');
+      await drive.createText(sys, 'questions.json', `${JSON.stringify({ v: 1, questions: c.questions })}\n`);
+
+      for (const [path, text] of Object.entries(c.folder)) {
+        const parts = path.split('/');
+        const name = parts.pop() ?? path;
+        const parent = await ensureFolder(root, parts.join('/'));
+        await drive.createText(parent, name, text, c.bowerOwned.includes(path) || /^by: bower$/m.test(text) ? { by: 'bower' } : undefined);
+      }
+      for (const [path, bytes] of Object.entries(c.folderBinary)) {
+        const parts = path.split('/');
+        const name = parts.pop() ?? path;
+        const parent = await ensureFolder(root, parts.join('/'));
+        await drive.upload(parent, name, new Blob([bytes.slice()]));
+      }
+      for (const [i, line] of c.journal.entries()) {
+        const rec = { v: 1, id: `change-${i + 1}`, device: 'device-1', at: AT - 60_000 + i, kind: line.kind, what: line.kind === 'answer' ? 'Answered a question' : line.kind === 'rule' ? 'A rule' : `Asked Bower: "${line.text}"`, text: line.text, ...(line.questionId ? { questionId: line.questionId } : {}) };
+        await drive.createText(changes, `change-${i + 1}.json`, `${JSON.stringify(rec)}\n`);
+      }
+      for (const [i, pile] of c.inbox.entries()) {
+        const props = { pile: `p-${i + 1}` };
+        const add = async (parent: string, name: string, extra: Record<string, string>): Promise<void> => {
+          const bytes = c.inboxBinary[name];
+          if (bytes) await drive.upload(parent, name, new Blob([bytes.slice()]), undefined, { ...extra, asAdded: name });
+          else await drive.createText(parent, name, c.inboxFiles[name] ?? `made-up content of ${name}`, { ...extra, asAdded: name });
+        };
+        if (!pile.line && pile.files.length === 1) {
+          await add(inbox, pile.files[0] ?? '', props);
+          continue;
+        }
+        const folder = (await drive.createFolder(inbox, pile.line.slice(0, 40) || `Pile ${i + 1}`, props)).id;
+        if (pile.line) await drive.createText(folder, 'Pile note.md', `${pile.line}\n`);
+        for (const f of pile.files) await add(folder, f, {});
+      }
+
+      const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope, clock: () => AT, newId: () => `admission-${spare}` });
+      if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
+
+      const calls: ClaudeCall[] = [];
+      const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('{"kind":"tidy-intent","v":1,"things":[],"notes":[],"lines":[],"asks":[]}') } satisfies ClaudeExit);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: root, runId: `run-${spare}`, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+
+      const input = calls[0]?.input ?? '';
+      const normalized = normalizeModelInput(input);
+      return { input, normalized };
+    };
+
+    const run1 = await captureInputFromFreshFolder(0);
+    const run2 = await captureInputFromFreshFolder(7);
+
+    expect(run1.input).not.toBe(run2.input);
+
+    // Write normalized inputs to files for debugging
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const logDir = '/private/tmp/bower-p4-fpnorm2-logs';
+    await fs.mkdir(logDir, { recursive: true });
+    await fs.writeFile(path.join(logDir, 'input-run1-normalized.json'), run1.normalized);
+    await fs.writeFile(path.join(logDir, 'input-run2-normalized.json'), run2.normalized);
+
+    // After normalization, they should be identical
+    expect(run1.normalized).toBe(run2.normalized);
+
+    // Fingerprints should also be identical
+    const fingerprint1 = createHash('sha256').update(run1.normalized).digest('hex').slice(0, 12);
+    const fingerprint2 = createHash('sha256').update(run2.normalized).digest('hex').slice(0, 12);
+    expect(fingerprint1).toBe(fingerprint2);
+  });
 });
