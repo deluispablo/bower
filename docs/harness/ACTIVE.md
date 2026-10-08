@@ -338,3 +338,4 @@ P3-9 is closed.
 - P4-23 PASS (c1-still-as-seen; minors to polish). c1-duplication-gate (mechanical) dispatched; c1-worker-routes running.
 - c1-worker-routes closed (047d6ad0; removed 137). 405/415. c1-worker-deadlines fix round (escalated, fresh) dispatched; c1-duplication-gate running.
 - c1-duplication-gate merged (cf11d037) but not closed: its test checks jscpd, not the gate script, copies whole packages (node_modules) to tmp, and has no red. Fresh fix round (implementer).
+- My error: the first c1-duplication-gate delivery was merged before pnpm check ran; its test fails typecheck (duplication-gate.test.ts:84), so check is red on claude/p3 until the gate fix round lands. c1-worker-deadlines fix round merged (63815f71, schema v13), closes after that.
