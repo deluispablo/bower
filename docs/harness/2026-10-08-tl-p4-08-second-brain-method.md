@@ -1,6 +1,6 @@
 # Technical-lead decision TL-P4-08: the owner's local second brain is the semantic reference
 
-**Owner direction, 2026-10-08.** Bower should behave like the owner's local second brain, which "works perfectly", rather than like the original app's prompts. The lead recommended adopting the local method and keeping Bower's folder layout, and the owner agreed. Only the method is copied: rules, note shapes and workflow. No content, names, tags or files from the owner's vault enter the repo, and every example stays made up.
+**Owner direction, 2026-10-08.** Bower should behave like the owner's local second brain, which "works perfectly", rather than like the original app's prompts. Asked whether to keep the current layout and change it later, the owner left the call to the lead: adopt the local method now and keep Bower's folder layout for good (reasons below). The owner can overrule. Only the method is copied: rules, note shapes and workflow. No content, names, tags or files from the owner's vault enter the repo, and every example stays made up.
 
 **What changes.** The local second brain's method becomes the reference for every P4-C slice: how Bower classifies, writes, updates and connects. The original app stays the reference for the wire, the permission policy, `CLAUDE_CODE_OAUTH_TOKEN` handling and the benchmark. Where the two differ in behaviour, the local method wins.
 
