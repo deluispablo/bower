@@ -54,11 +54,11 @@ const NOT_REACHED = "Bower couldn't reach Google Drive, so it stayed as it was."
 export const STAMP = 'bowerOp';
 
 /**
- * The stamp of one operation of one run: `<run_id>:<operation id>`, by its SHA-256 (base64url, 192 bits). Written
- * out, a run id (87 characters) and an operation id (64) are more than the 124 bytes Drive keeps for one property's
+ * The stamp of one operation of one run: the first 32 hex characters of SHA-256(`<run_id>:<operation id>`), 128 bits
+ * (TL-P4-05 addendum 2). Written out, a run id (87 characters) and an operation id (64) are more than the 124 bytes Drive keeps for one property's
  * key and value (https://developers.google.com/workspace/drive/api/guides/properties).
  */
-export const stampOf = (runId: string, operationId: string): string => createHash('sha256').update(`${runId}:${operationId}`).digest('base64url').slice(0, 32);
+export const stampOf = (runId: string, operationId: string): string => createHash('sha256').update(`${runId}:${operationId}`).digest('hex').slice(0, 32);
 
 type Effect = OperationV2['effect'];
 
@@ -236,7 +236,8 @@ export function driveEffects(drive: RunnerDrive): Effects {
    *   evidence is what Drive stores now;
    * - no stamp: it never landed. The caller sends it only if its checks still pass, so a thing the person changed
    *   meanwhile is set aside with the same words an uninterrupted run would use;
-   * - a read fails, the thing is gone, or a made thing has a lookalike with its create key and no stamp (made before
+   * - a thing it changes is gone from Drive: not landed, so it is set aside, as an uninterrupted run would;
+   * - a read fails, or a made thing has a lookalike with its create key and no stamp (made before
    *   stamps, or by something else): unreadable, since making it again could make it twice.
    */
   const reconcile = async (op: OperationV2, head: Checkpoint, manifest: RunManifest): Promise<ReadBack> => {
@@ -249,21 +250,23 @@ export function driveEffects(drive: RunnerDrive): Effects {
     const other = (): ReadBack => ({ state: 'unreadable', why: `Operation ${op.ordinal} shows another operation's stamp` });
     try {
       if (e.kind === 'create-folder' || e.kind === 'create-text') {
-        const parentId = parentOf(head, e);
-        if (!parentId) return { state: 'unreadable', why: `Operation ${op.ordinal} has no folder to look in` };
-        // Its own stamp, in the Bin or not: whatever the person did with it since is kept.
-        const mine = await drive.stamped(parentId, STAMP, stampOf(head.runId, op.operationId));
+        // Its own stamp, wherever the person put it since and in the Bin or not: what they did with it is kept.
+        const mine = await drive.stamped(STAMP, stampOf(head.runId, op.operationId));
         const [only, ...more] = mine;
         if (more.length) return { state: 'unreadable', why: `Operation ${op.ordinal} shows its stamp more than once` };
         if (only) return landed(only.file.id);
+        const parentId = parentOf(head, e);
+        if (!parentId) return { state: 'unreadable', why: `Operation ${op.ordinal} has no folder to look in` };
         // A thing with its create key and no stamp of its own: made by an operation waiting on it, or it cannot be told.
         const alike = (await drive.list(parentId)).filter((f) => f.appProperties?.bowerItem === e.createKey);
         const [one, ...others] = alike;
         if (!one) return { state: 'not-landed' };
         return !others.length && stampSays(one.appProperties?.[STAMP], head.runId, op, manifest) === 'landed' ? landed(one.id) : other();
       }
+      // Gone from Drive (the person emptied the Bin): no stamp to read, and nothing left to send to. Not landed, so its
+      // checks refuse it and it is set aside with the words an uninterrupted run would use.
       const ev = await drive.evidence(e.before.fileId);
-      if (!ev) return { state: 'unreadable', why: `Operation ${op.ordinal} changes a thing that is gone` };
+      if (!ev) return { state: 'not-landed' };
       const says = stampSays(ev.file.appProperties?.[STAMP], head.runId, op, manifest);
       if (says === 'landed') return { state: 'landed', evidence: toEvidence(ev, encoding) };
       return says === 'unknown' ? other() : { state: 'not-landed' };
