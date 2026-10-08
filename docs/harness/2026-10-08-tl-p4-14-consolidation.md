@@ -64,6 +64,7 @@
 | `c3-subject` | One `Subject` type (pile, thing, note state or folder, with id and content hash), one key function and one open-questions function shared by the reader and the planner. One question type replaces `Question`, `ReportQuestion` and `CorpusQuestion`. |
 | `c3-planner-split` (escalated) | `planScripted` is split into three steps: capture, decisions (from the script or the model) and building operations. The live path imports no demo fixture, and answers reach the model's path, so check the ask-answer-loop wiring. One "record to the operations it needs" map replaces the five "waits for the next run" sets. Report rows are generated from operation metadata, so `grounded()` keeps only a structural check. |
 | `c3-note-sections` | One section parser (`ownership-format`) gives every section's position, old notes included. The Timeline-line pattern exists once. |
+| `c3-pair-ask` (escalated) | A pair ask with a typed two-note subject; Timeline lines may cite a words-only pile; the merge on a yes reuses `keep-one-note-merge` ([TL-P4-16](2026-10-08-tl-p4-16-baseline-defects.md)) |
 | `c3-state-mark` | Bower's last-written Current state is read from the previous state change in the manifest, or each line is marked, so the 2^12 subset search goes. |
 | `c3-fingerprint` (mechanical) | The input fingerprint hashes a normalized object, not regex-edited JSON. |
 
