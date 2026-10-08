@@ -64,13 +64,18 @@ export interface RunReply {
  */
 export type AdmitResult =
   | { admitted: true; run: RunWire; revision: number; created?: true; waits?: true }
-  | { admitted: false; refused: 'rate-limited' | 'needs-manifest' };
+  | { admitted: false; refused: 'rate-limited' | 'needs-manifest' | 'gone' };
 
 export interface AdmitInput {
   scope: RunScope;
   allowWeb: boolean;
   requestId: string;
   now: number;
+  /**
+   * The person's session generation when admission started (before its Drive reads): a Delete me or a sign-out in
+   * between moves it, and admission refuses as `gone` with nothing written.
+   */
+  generation: number;
   /** `DAILY_RUN_LIMIT`: new runs a person may start per UTC day. */
   dailyLimit: number;
   /** What a new run takes (TL-P3-21); null when none was built, because the press looked like a repeat or a run going. */
@@ -233,6 +238,9 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       return fetchImpl(input, init);
     };
     const requestId = body.requestId ?? crypto.randomUUID();
+    // The generation the session was checked at: a Delete me during the reads below moves it, and admission refuses.
+    const generation = c.get('account')?.generation;
+    if (generation === undefined) throw new HttpError(401, 'signed-out');
     const person = personFor(env, sub);
     const ask: AdmissionAsk = { scope: body.scope, subjects: body.subject !== undefined ? [body.subject] : [], now };
     let manifest: AdmissionManifest | null = null;
@@ -241,6 +249,7 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       allowWeb: body.allowWeb,
       requestId,
       now,
+      generation,
       dailyLimit: Number(env.DAILY_RUN_LIMIT),
       manifest,
       ...(body.answer ? { answer: true } : {}),
@@ -255,6 +264,8 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       result = await admit('admit');
     }
     if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
+    // The account went during the reads (Delete me): nothing was admitted, and the person signs in again.
+    if (!result.admitted && result.refused === 'gone') throw new HttpError(401, 'signed-out');
     if (!result.admitted) throw new HttpError(429, 'rate-limited');
     // A new run's dispatch is due now: the person object's alarm sends it (`Person.dispatchDue`), never the press.
     timing.log();
