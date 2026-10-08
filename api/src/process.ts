@@ -38,7 +38,7 @@ import { HttpError } from './errors.js';
 import { limitBody, requireJsonBody, requireSameOrigin } from './security.js';
 import { requireLease } from './session-lease.js';
 import type { AuthDeps } from './auth.js';
-import { dispatchTidy } from './github.js';
+import { dispatchOutcome } from './github.js';
 
 export type RunScope = 'all' | 'instructions';
 export type RunPhase = 'queued' | 'reading' | 'writing' | 'saving' | 'done' | 'failed';
@@ -161,12 +161,12 @@ async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolea
   }
   const ticket = await reach('mint ticket', async () => await personFor(env, sub).mintTicket(run.id, 1, now));
   if (ticket === null) return;
-  const sent = await dispatchTidy(
+  const outcome = await dispatchOutcome(
     { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, runId: run.id, attempt: 1, ticket, scope: run.scope, allowWeb },
     fetchImpl,
   );
-  // Lost after its retries: the alarm looks at the run in a minute, not when it would go stale.
-  if (!sent) {
+  // Lost to the network or a 5xx after its retries: the alarm looks at the run in a minute. A 4xx would fail again, so it keeps the normal window.
+  if (outcome === 'lost') {
     await personFor(env, sub)
       .dispatchLost(run.id, Date.now())
       .catch((err: unknown) => console.error('tidy dispatch: the retry alarm was not armed', err));

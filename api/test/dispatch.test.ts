@@ -7,7 +7,7 @@ import { createApp } from '../src/index.js';
 import { dispatchTidy } from '../src/github.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import type { RunReply } from '../src/process.js';
-import { personIdOf } from '../src/run-ticket.js';
+import { hashTicket, personIdOf } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
 import { driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
@@ -41,6 +41,28 @@ function github(status: number | null = 204) {
     return Promise.resolve(new Response(null, { status }));
   };
   return { sent, fetchImpl };
+}
+
+/**
+ * Runs `work` with the backoff waits on fake timers: they are moved on at once, while the real clock keeps
+ * the rest of the request (Drive, the person object) going.
+ */
+async function withFastBackoff<T>(work: () => Promise<T>): Promise<T> {
+  const realSetTimeout = globalThis.setTimeout;
+  vi.useFakeTimers({ toFake: ['setTimeout'] });
+  try {
+    let settled = false;
+    const running = work().finally(() => {
+      settled = true;
+    });
+    for (let i = 0; i < 2000 && !settled; i += 1) {
+      await vi.advanceTimersByTimeAsync(500);
+      await new Promise((done) => realSetTimeout(done, 2));
+    }
+    return await running;
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 async function holder(): Promise<{ sub: string; cookie: string; fence: Record<string, string>; folder: DriveFolder }> {
@@ -149,7 +171,7 @@ describe('dispatch on admission', () => {
       for (const status of [500, null]) {
         const who = await holder();
         const gh = github(status);
-        const reply = await process(who, gh.fetchImpl, 'press-1');
+        const reply = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
         expect(gh.sent).toHaveLength(3);
         expect(reply.run?.phase).toBe('queued');
         expect(reply.revision).toBe(1);
@@ -256,7 +278,7 @@ describe('dispatch retries', () => {
       const who = await holder();
       const gh = github(null);
       const before = Date.now();
-      const { run } = await process(who, gh.fetchImpl, 'press-1');
+      const { run } = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
       const after = Date.now();
       expect(gh.sent).toHaveLength(3);
       const alarm = await runInDurableObject(person(who.sub), (_i, state) => state.storage.getAlarm());
@@ -273,6 +295,60 @@ describe('dispatch retries', () => {
       });
       expect(sent.filter((c) => c.startsWith('POST'))).toHaveLength(1);
       expect((await person(who.sub).runStatus((alarm ?? 0) + 1)).run?.id).toBe(run?.id);
+    } finally {
+      log.mockRestore();
+    }
+  });
+  it("a lost dispatch's early look-up leaves a run that has reported alone", async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const who = await holder();
+      const gh = github(null);
+      const { run } = await withFastBackoff(() => process(who, gh.fetchImpl, 'press-1'));
+      const ticket = gh.sent[0]?.body.client_payload.ticket ?? '';
+      const p = person(who.sub);
+      const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
+      // GitHub took one of the tries after all: the runner starts and reports.
+      const reported = await p.runnerReport(run?.id ?? '', await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'reading', total: 2 }, alarm - 40_000);
+      if (!reported.accepted) throw new Error('report refused');
+      const down = vi.fn((): Promise<Response> => Promise.resolve(new Response(null, { status: 502 })));
+      await runInDurableObject(p, async (instance) => {
+        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
+      });
+      expect((await p.runStatus(alarm + 1)).run?.phase).toBe('reading');
+      expect(down).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('an early look-up that GitHub cannot answer waits and rechecks', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const who = await holder();
+      const { run } = await withFastBackoff(() => process(who, github(null).fetchImpl, 'press-1'));
+      const p = person(who.sub);
+      const alarm = (await runInDurableObject(p, (_i, state) => state.storage.getAlarm())) ?? 0;
+      const down = (): Promise<Response> => Promise.resolve(new Response(null, { status: 502 }));
+      await runInDurableObject(p, async (instance) => {
+        await instance.recover(alarm + 1, { repo: env.GITHUB_REPO, token: 'test-github-token', fetchImpl: down });
+      });
+      expect((await p.runStatus(alarm + 1)).run?.phase).toBe('queued');
+      expect(await runInDurableObject(p, (_i, state) => state.storage.getAlarm())).toBe(alarm + 1 + 60_000);
+      expect(run?.id).toBeDefined();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a refused dispatch keeps the normal stale window', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const who = await holder();
+      const gh = github(404);
+      const { run } = await process(who, gh.fetchImpl, 'press-1');
+      expect(gh.sent).toHaveLength(1);
+      expect(await runInDurableObject(person(who.sub), (_i, state) => state.storage.getAlarm())).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
     } finally {
       log.mockRestore();
     }

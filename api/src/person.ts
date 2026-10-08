@@ -3,7 +3,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { isAdmissionManifest } from '../../src/data/spine/admission.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import type { Env } from './env.js';
-import { dispatchTidy, findTidyRun } from './github.js';
+import { dispatchOutcome, findTidyRun } from './github.js';
 import type { GitHubAccess } from './github.js';
 import { applyingWatch, decide, staleDeadline, staleFailure, unrecoveredCeiling } from './recovery.js';
 import type { Recovery, RecoveryWatch } from './recovery.js';
@@ -73,6 +73,9 @@ const DISPATCH_LOST = 'dispatchLost';
 interface DispatchLost {
   runId: string;
   at: number;
+  /** The run as it was at the loss: a flag only holds while the run has not moved since. */
+  attempt: number;
+  phaseAt: number;
 }
 
 /** A stale run the alarm looks up on GitHub: what it saw, so the second section can tell whether anything moved. */
@@ -80,6 +83,8 @@ interface RecoveryLookup {
   run: RunWire;
   attempt: number;
   watch: string;
+  /** The look-up came before the stale deadline, brought forward by a lost dispatch. */
+  early: boolean;
 }
 
 /**
@@ -578,17 +583,22 @@ export class Person extends DurableObject<Env> {
     const lookup = this.ctx.storage.transactionSync(() => this.planRecovery(now, token !== undefined));
     if (lookup === null || token === undefined) return;
     const found = await findTidyRun({ repo: github.repo, token, runId: lookup.run.id, attempt: lookup.attempt }, github.fetchImpl);
+    // An early look-up that GitHub could not answer never fails the run: the alarm asks again in a minute, until the stale deadline.
+    if (found === null && lookup.early) {
+      this.ctx.storage.transactionSync(() => this.dispatchLostSync(lookup.run.id, now + RECHECK_MS));
+      return;
+    }
     const outcome = decide(found, lookup.attempt, now);
     // A new ticket is hashed before the section, so nothing awaits inside it.
     const ticket = outcome.kind === 'redispatch' ? newTicket() : null;
     const hash = ticket === null ? null : await hashTicket(ticket);
     const send = this.ctx.storage.transactionSync(() => this.applyRecovery(lookup, outcome, hash, now));
     if (send === null || ticket === null) return;
-    const sent = await dispatchTidy(
+    const sent = await dispatchOutcome(
       { repo: github.repo, token, runId: lookup.run.id, attempt: send.attempt, ticket, scope: lookup.run.scope, allowWeb: send.allowWeb },
       github.fetchImpl,
     );
-    if (!sent) this.dispatchLostSync(lookup.run.id, now + RECHECK_MS);
+    if (sent === 'lost') this.dispatchLostSync(lookup.run.id, now + RECHECK_MS);
   }
 
   /** A dispatch failed after its retries: the alarm looks at the going run `RECHECK_MS` from `now`, not at its stale deadline. */
@@ -599,7 +609,7 @@ export class Person extends DurableObject<Env> {
   private dispatchLostSync(runId: string, at: number): void {
     const run = this.currentRunRow();
     if (run === undefined || run.id !== runId || !ACTIVE_PHASES.includes(run.phase)) return;
-    this.ctx.storage.kv.put(DISPATCH_LOST, { runId, at } satisfies DispatchLost);
+    this.ctx.storage.kv.put(DISPATCH_LOST, { runId, at, attempt: this.attemptOf(runId), phaseAt: run.phase_at } satisfies DispatchLost);
     void this.ctx.storage.setAlarm(at);
   }
 
@@ -615,9 +625,11 @@ export class Person extends DurableObject<Env> {
     const watch = this.ctx.storage.kv.get<RecoveryWatch>(RECOVERY_WATCH);
     const deadline = staleDeadline(wire, attempt, watch);
     const lost = this.ctx.storage.kv.get<DispatchLost>(DISPATCH_LOST);
-    const lostHere = lost?.runId === run.id ? lost : undefined;
+    // The flag holds only for the run, attempt and phase it was set for; a run that has reported is left to its own deadline.
+    const lostHere = lost?.runId === run.id && lost.attempt === attempt && lost.phaseAt === run.phase_at ? lost : undefined;
     if (lost !== undefined && lostHere === undefined) this.ctx.storage.kv.delete(DISPATCH_LOST);
     // A lost dispatch brings the look-up forward, once; the rules after it are unchanged.
+    const early = lostHere !== undefined && lostHere.at <= now && deadline > now;
     if (lostHere !== undefined && lostHere.at <= now) this.ctx.storage.kv.delete(DISPATCH_LOST);
     else if (deadline > now) {
       void this.ctx.storage.setAlarm(lostHere === undefined ? deadline : Math.min(deadline, lostHere.at));
@@ -633,7 +645,7 @@ export class Person extends DurableObject<Env> {
       this.failStale(run, now);
       return null;
     }
-    return { run: wire, attempt, watch: JSON.stringify(watch ?? null) };
+    return { run: wire, attempt, watch: JSON.stringify(watch ?? null), early };
   }
 
   /** Section 2 of `recover`: applies the outcome; the attempt to send when it is a redispatch, else null. */
