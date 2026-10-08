@@ -172,3 +172,4 @@ P3-9 is closed.
 - admission-reads-cost closed (a6a9c4a): 30 → 15 calls, modelled reads 4.7 → 0.8 s, pile notes read 8 at a time; touches src/data/drive. 359/360. dispatch-retry running (implementer, at a6a9c4a).
 - dispatch-retry closed (7efeab1). 360/360. P4-4 close: Opus delta and the four suites.
 - P4-4 review BLOCK (dispatch-retry: the 60 s look-up fails a reporting run on a GitHub 502). Reopened (c51058d); fix round running. 359/360.
+- dispatch-retry re-closed (851b5db): sent/lost/refused; the 60 s look-up leaves a reporting run alone. 360/360. A short fix-round check is running.
