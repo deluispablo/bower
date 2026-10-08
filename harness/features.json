@@ -5100,7 +5100,7 @@
     "id": "state-no-adoption",
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "An unmarked Current state is the person's unless a rule line grants it; a Bower write never adopts it (TL-P4-10 point 2 withdrawn). The fallback line reads as plain news.",
     "steps": [
       "Remove adoption by md5Checksum/bowerMd5; keep bowerMd5 only if something else uses it.",

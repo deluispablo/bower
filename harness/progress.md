@@ -165,3 +165,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: state-rewrite-change passes — Verify narrowed to the four surviving tests (TL-P4-10 addendum)
 - 2026-10-08: state-no-adoption passes — An unmarked Current state stays the person's unless a rule grants it; bowerMd5 removed; plain fallback line (TL-P4-10 addendum)
 - 2026-10-08: home-reads-once passes — Home reads each file once per load: in-flight and per-load reads shared (73 -> 40 on the live-shaped folder)
+- 2026-10-08: state-no-adoption passes — Fallback line names only what is new; rewriteState refuses an unmarked section without a rule; undo of an adoption drops the mark (P4-16 fix)
