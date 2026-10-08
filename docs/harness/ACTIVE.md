@@ -225,3 +225,4 @@ P3-9 is closed.
 - Main and backup at c6ddb96; deploy SHA sent to the lead for garden x5 and offer-and-flat x3.
 - Garden x5 on c6ddb96: 2/5 PASS (3 runs made no note; PDF in Resources every time); input= still differs per run. offer-and-flat not run; asked the lead.
 - TL-P4-08 addendum 2 (502bdc4): document-note-required (implementer) and fingerprint-normalised reopened (mechanical), in parallel; offer-and-flat waits. 372/378.
+- document-note-required closed (90d5d64): .url and .md things exempt; c11 Leek soup.txt now gets a note. 373/378. fingerprint-normalised round 3 running.
