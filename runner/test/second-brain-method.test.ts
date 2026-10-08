@@ -90,6 +90,14 @@ describe('the second-brain method (TL-P4-08)', () => {
     const open = JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string; text: string; yes: string; no: string }> };
     expect(open.questions).toEqual([expect.objectContaining({ id: 'q-ask-p-2', text: 'Is the letter of 14 October for the flat hunt?', yes: 'Yes, the flat hunt', no: 'No, the job hunt' })]);
 
+    // Asked again while its question is open (the letter alone, now pile p-1): not asked twice, and nothing changes.
+    const already = { ...c, questions: [{ id: 'q-ask-p-1', text: 'Is this for the flat hunt?', yes: 'Yes', no: 'No', askedAt: 1 }] };
+    const onlyAsk = answering((ctx) => ({ kind: 'tidy-intent', v: 1, things: [], asks: [{ pileId: ctx.piles.find((p) => /not sure/i.test(p.words))?.pileId ?? 'none', text: 'Is it for the flat hunt?', yes: 'Yes', no: 'No' }] }));
+    const again = await runWithClaude({ ...already, inbox: c.inbox.slice(1) }, onlyAsk);
+    expect(again.code).toBe(0);
+    expect(JSON.parse(again.after['.bower/questions.json'] ?? '{}')).toEqual({ v: 1, questions: already.questions });
+    expect(Object.keys(again.after).filter((p) => p.startsWith('Inbox/')).sort()).toEqual([expect.stringMatching(/\/Letter, 14 October\.txt$/), expect.stringMatching(/\/Pile note\.md$/)]);
+
     // An ask is refused when it also files the pile, names a pile not admitted, or is not one short line.
     const took = { taken: { piles: [{ pileId: 'p-1', anchor: null, items: [{ fileId: 'f1', name: 'a.txt' }] }] } } as unknown as Parameters<typeof intentOf>[1];
     const ask = (extra: Record<string, unknown>, things: unknown[] = []) => intentOf({ kind: 'tidy-intent', v: 1, things, asks: [{ pileId: 'p-1', text: 'Is this for the flat hunt?', yes: 'Yes', no: 'No', ...extra }] }, took);

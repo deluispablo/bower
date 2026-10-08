@@ -19,6 +19,7 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c04-garden-newsletter | C04 | model | bench:2-text-pdf, adapted (made-up garden and dates; the original PDF is in bench-2-text-pdf) |
 | c04-hardware-receipt | C04 | model | bench:3-receipt-pdf, adapted (made-up shop; the original PDF is in bench-3-receipt-pdf) |
 | c04-offer-and-flat | C04 | scripted | p2-journey:C04, the demo's first pile; the two hub notes it updates are in the starting folder |
+| c05-confirms-known-fact | C05 | model | new (TL-P4-08 point 2: the value gate makes no note for a known fact) |
 | c05-hub-lines | C05 | scripted | p2-journey:C05, the hub lines of the same press as C04 |
 | c05-keep-one-note | C05 | model | p2-journey:C05 (fake only today: the merge question q1) |
 | c05-line-not-repeated | C05 | scripted | p2-journey:C05 (idempotence: the same line twice is written once) |
@@ -33,6 +34,7 @@ Made-up cases for the capabilities C04 to C11, C13 and C15 (Alex, Larkspur Lane,
 | c10-lookup-fails | C10 | model | new (failed and stale lookups are not scripted) |
 | c10-web-allowed | C10 | scripted | p2-journey:C10 (allowed) |
 | c10-web-denied | C10 | scripted | p2-journey:C10 (denied) |
+| c11-ambiguous-stays | C11 | scripted | new (TL-P4-08 point 1: an unclear pile stays in the inbox with a question) |
 | c11-document-is-not-policy | C11 | scripted | p2-journey:C11 (no policy change from a document) |
 | c11-rule-worded | C11 | scripted | p2-journey:C11 (rules) |
 | c11-saltmere-question | C11 | scripted | p2-journey:C11 (question lifecycle) |

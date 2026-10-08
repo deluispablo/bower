@@ -10,10 +10,6 @@
       "Resources/*Letter*"
     ]
   },
-  "unchanged": [
-    "Projects/Flat hunt/Flat hunt.md",
-    "Projects/Job hunt/Job hunt.md"
-  ],
   "linksResolve": true,
   "report": {
     "filed": 1,
