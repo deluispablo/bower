@@ -4673,7 +4673,7 @@
       "The timing line counts cache-read input tokens; model cites link the free name actually used."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the model context carries bounded extracted text for each admitted thing|the C04 corpus cases score green with scripted proposals|a recorded Claude reply on a C04 case writes a note with its content|the timing line counts cache-read input tokens|a model cite links the note the run actually made\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-03 batch P4-3 (first P4-C slice). Reopened: P4-3 review BLOCK (cache_read_input_tokens renamed, in= undercounts)."
   }
 ]
