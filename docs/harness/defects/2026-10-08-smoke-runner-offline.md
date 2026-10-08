@@ -126,3 +126,9 @@ All of them exit with no report and wait for a deadline:
 - **Runner.** Parametrize a thrown error at each step: token, `shownDone`, `found`, plan, apply, report and status, plus the `saving` exit. Assert the Worker stub receives either a terminal phase or the ended report, except for stale-attempt and auth.
 - **Worker** (api test with the time helper). An ended report arms `run` at `now + 60 s`, and the alarm's `decide` with a completed job redispatches attempt 2 well before 17 min.
 - **Existing test.** Update `barrier.test.ts:352` to expect the ended report in place of silence.
+
+## Ruling: TL-P4-16 addendum 4 (main 053aca0)
+
+Both (b), in stage 2.
+- offline → `c2-drive-transport`: one retry policy (a timeout per attempt; idempotent GETs retried with backoff inside a total budget; errors mapped by context; outside a browser never "offline"). The note's 6 transport sites become named tests.
+- silent-stop → new `c2-runner-exit` (escalated): one exit function for all 4 runner exit paths, then the additive "attempt ended" report, Worker deadline at +60 s. No if:failure step. Test: every exit, including an uncaught error, reaches the Worker or is recovered within 60 s.
