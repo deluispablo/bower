@@ -5073,7 +5073,7 @@
     "id": "process-error-honest",
     "task": "p4-b",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "A /process failure shows the one-sentence error and a retry on the tidy-up sheet, never a sheet stuck on Starting.",
     "steps": [
       "The sheet leaves Starting on a /process error and shows the sentence and Try again.",
