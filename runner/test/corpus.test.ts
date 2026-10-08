@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CORPUS_CAPABILITIES, loadCorpus, score } from '../src/corpus';
+import { groundsOf, ungrounded } from '../src/claude';
 import { runScripted } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
@@ -163,5 +164,23 @@ describe('the capability corpus', () => {
     // The question about a filed PDF starts with that PDF filed.
     const five = bench.find((c) => c.id === 'bench-5-question-about-filed-pdf');
     expect([...Object.keys(five?.folder ?? {}), ...Object.keys(five?.folderBinary ?? {})]).toContain('2-Areas/Home/Home insurance policy 2026.pdf');
+  });
+});
+
+describe('the corpus expectations are grounded', () => {
+  it('every expected number is grounded in its case', async () => {
+    const bad: Array<{ id: string; number: string; in: string }> = [];
+    for (const c of await loadCorpus(ROOT)) {
+      const words = c.inbox.map((p) => p.line).join('\n');
+      const own = [words, c.title, ...Object.keys(c.folder), ...Object.values(c.folder), ...Object.keys(c.folderBinary), ...Object.keys(c.inboxFiles), ...Object.values(c.inboxFiles), ...Object.keys(c.inboxBinary), ...c.journal.map((j) => JSON.stringify(j)), ...c.questions.map((q) => JSON.stringify(q))].join('\n');
+      const ground = groundsOf(own);
+      // The text a run authors: Timeline lines and note content. Paths, report ids and the app's own date stamp are not facts.
+      const authored = (c.expected.notes ?? []).flatMap((n) => [...(n.timeline ?? []), ...(n.contains ?? [])]).map((t) => t.replace(/<!--[^>]*-->/g, ' '));
+      for (const s of authored) {
+        const n = ungrounded(s, ground);
+        if (n) bad.push({ id: c.id, number: n, in: s });
+      }
+    }
+    expect(bad).toEqual([]);
   });
 });
