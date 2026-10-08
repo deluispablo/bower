@@ -5002,7 +5002,7 @@
     "id": "per-thing-ask",
     "task": "p4-c",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "what": "An ask names a fileId (one thing) or a pileId (a words-only pile or the whole pile). Asked things stay in the inbox untouched with the pile words kept; the rest of the pile is filed; the report and question flow name the thing. Every validation refusal gets one retry with its reason, then ends as C12 does.",
     "steps": [
       "asks gains a fileId or pileId target; a partial ask leaves only the asked things in the inbox with the pile words.",
