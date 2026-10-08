@@ -54,6 +54,8 @@ function withTimingSafeEqual(): void {
 const EMAIL = 'you@example.com';
 const SUB = 'google-sub-alex';
 const KV_TABLE = '_kv';
+/** How many rounds of due alarms one call may fire before the harness calls it a loop. */
+const ALARM_ROUNDS = 5;
 
 class Cursor {
   constructor(
@@ -236,10 +238,10 @@ export async function startApi(opts: ApiOptions): Promise<ApiHost> {
   /**
    * The runtime fires a due alarm at once (https://developers.cloudflare.com/durable-objects/api/alarms/): after each
    * call, every person object's alarm due by the wall clock runs, as admission's dispatch and a run end's wake need.
-   * A later deadline waits for `fireAlarm`. Bounded, so an alarm set again for now cannot loop.
+   * A later deadline waits for `fireAlarm`. Bounded: an alarm set again for now, round after round, fails the test.
    */
   const fireDue = async (): Promise<void> => {
-    for (let round = 0; round < 5; round++) {
+    for (let round = 0; round < ALARM_ROUNDS; round++) {
       const due = [...instances.values()].filter((i) => i.storage.alarm !== null && i.storage.alarm <= Date.now());
       if (due.length === 0) return;
       for (const { storage, person } of due) {
@@ -247,6 +249,9 @@ export async function startApi(opts: ApiOptions): Promise<ApiHost> {
         storage.alarm = null;
         await person.wake(at, github);
       }
+    }
+    if ([...instances.values()].some((i) => i.storage.alarm !== null && i.storage.alarm <= Date.now())) {
+      throw new Error(`an alarm was still due after ${ALARM_ROUNDS} rounds: it keeps setting itself for now`);
     }
   };
   const call: Fetch = async (input, init = {}) => {

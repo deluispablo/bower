@@ -576,6 +576,82 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     expect(((await retry.json()) as { error: { code: string } }).error.code).toBe('no-folder');
   });
 
+  it("a Delete me during the alarm's admission reads admits no run", async () => {
+    const { sub, cookie, fence } = await withThings();
+    const folder = wire;
+    if (folder === null) throw new Error('no folder');
+    await person(sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: T0 + 3600_000 });
+    const { run: going } = await admitted(sub, ask('press-1', T0, { scope: 'instructions' }));
+    expect(((await (await post(cookie, answer('answer-a', 'p-receipt'), fence)).json()) as Reply).waits).toBe(true);
+    await runInDurableObject(person(sub), async (instance: Person) => {
+      await instance.wake(T0, gh.access);
+    });
+    const { ticket } = await dispatchOf(gh, going.id);
+    expect(await person(sub).runnerReport(going.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'done' }, T0 + 1000)).toMatchObject({ accepted: true });
+    // The run end's alarm reads Drive for the answers' run; Delete me lands during those reads.
+    const sent: string[] = [];
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await runInDurableObject(person(sub), async (instance: Person, state) => {
+        let forgotten = false;
+        const fetchImpl = async (input: string, init?: RequestInit): Promise<Response> => {
+          sent.push(`${init?.method ?? 'GET'} ${new URL(input).pathname}`);
+          if (!forgotten && input.startsWith('https://www.googleapis.com/')) {
+            forgotten = true;
+            instance.forget();
+          }
+          return await folder.fetchImpl(input, init);
+        };
+        await instance.wake(T0 + 1000, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl });
+        // No run row, no quota counted, no manifest kept, nothing armed to dispatch.
+        expect(state.storage.sql.exec('SELECT id FROM runs').toArray()).toEqual([]);
+        expect(state.storage.sql.exec('SELECT counter FROM quota').toArray()).toEqual([]);
+        expect(state.storage.sql.exec(`SELECT key FROM deadlines WHERE kind <> 'gone'`).toArray()).toEqual([]);
+      });
+      expect(sent.some((r) => r.startsWith('GET /drive/'))).toBe(true);
+      expect(sent.filter((r) => r.endsWith('/dispatches'))).toEqual([]);
+      // The answers' run was refused as gone, and says so in the log.
+      expect(log.mock.calls.map((c) => c.map(String).join(' ')).join('\n')).toContain('gone');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("a Delete me during a press's admission reads admits no run", async () => {
+    const { sub, cookie, fence } = await withThings();
+    const folder = wire;
+    if (folder === null) throw new Error('no folder');
+    let forgotten = false;
+    const fetchImpl = async (input: string, init?: RequestInit): Promise<Response> => {
+      if (!forgotten && input.startsWith('https://www.googleapis.com/drive/')) {
+        forgotten = true;
+        await person(sub).forget();
+      }
+      return await folder.fetchImpl(input, init);
+    };
+    const before = gh.dispatched.length;
+    const r = await createApp({ fetchImpl }).request(
+      `${APP}/process`,
+      {
+        method: 'POST',
+        headers: { cookie, origin: APP, 'content-type': 'application/json', ...fence },
+        body: JSON.stringify({ scope: 'all', allowWeb: false, requestId: 'press-1' }),
+      },
+      env,
+    );
+    expect(forgotten).toBe(true);
+    // The account is gone: the press is answered as signed out, and nothing was admitted.
+    expect(r.status).toBe(401);
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe('signed-out');
+    const left = await runInDurableObject(person(sub), (_i, state) => ({
+      runs: state.storage.sql.exec('SELECT id FROM runs').toArray(),
+      quota: state.storage.sql.exec('SELECT counter FROM quota').toArray(),
+      deadlines: state.storage.sql.exec(`SELECT key FROM deadlines WHERE kind <> 'gone'`).toArray(),
+    }));
+    expect(left).toEqual({ runs: [], quota: [], deadlines: [] });
+    expect(gh.dispatched.length).toBe(before);
+  });
+
   it('an answer during a run with the day used up is refused, so the app says so', async () => {
     const { sub } = await holder();
     const day = T0;

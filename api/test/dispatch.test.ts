@@ -222,6 +222,52 @@ describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
     }
   });
 
+  it('a press during a recovery look-up is dispatched at once', async () => {
+    const sub = `dispatch-sub-${crypto.randomUUID()}`;
+    const p = person(sub);
+    await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    const t0 = farAhead();
+    const first = await p.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    if (!first.admitted) throw new Error('not admitted');
+    await runInDurableObject(p, async (instance: Person) => {
+      await instance.wake(t0, gh.access);
+    });
+    const { ticket } = await dispatchOf(gh, first.run.id);
+    // R0's stale deadline: the alarm looks it up on GitHub, and the look-up is held there.
+    const t1 = t0 + QUEUED_STALE_MS;
+    let release = (): void => undefined;
+    const held = new Promise<void>((r) => (release = r));
+    let asked = (): void => undefined;
+    const looking = new Promise<void>((r) => (asked = r));
+    const lookup: typeof gh.access.fetchImpl = async (input, init) => {
+      if ((init?.method ?? 'GET') === 'GET' && input.includes('/actions/runs?')) {
+        asked();
+        await held;
+      }
+      return await gh.access.fetchImpl(input, init);
+    };
+    const second = await runInDurableObject(p, async (instance: Person) => {
+      const woken = instance.wake(t1, { ...gh.access, fetchImpl: lookup });
+      await looking;
+      // Meanwhile R0 reports done, and a press admits R1, its dispatch due now.
+      expect(instance.runnerReport(first.run.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'done' }, t1)).toMatchObject({ accepted: true });
+      const admitted = instance.admit({ scope: 'all', allowWeb: false, requestId: 'press-2', now: t1, dailyLimit: 100, manifest: MANIFEST });
+      release();
+      await woken;
+      return admitted;
+    });
+    if (!second.admitted) throw new Error('not admitted');
+    // R0's look-up moves no deadline it did not own: R1's dispatch is still due now.
+    expect(await alarmOf(sub)).toBeLessThanOrEqual(t1);
+    // The alarm the runtime fires next sends R1 once, and sets its stale deadline; nothing is sent again.
+    await runInDurableObject(p, async (instance: Person) => {
+      await instance.wake(t1, gh.access);
+    });
+    expect(triesOf(gh, second.run.id)).toBe(1);
+    expect(await alarmOf(sub)).toBe(second.run.requestedAt + QUEUED_STALE_MS);
+    expect(triesOf(gh, first.run.id)).toBe(1);
+  });
+
   it('admission sets the stale alarm', async () => {
     const who = await holder();
     const { run } = await process(who, pressSide().fetchImpl, 'press-1');

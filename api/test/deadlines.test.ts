@@ -132,6 +132,42 @@ describe('worker deadlines (TL-P4-14)', () => {
     expect(await runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
   });
 
+  it('a v13 object with a run going and a gone ticket moves to v14 with no second dispatch', async () => {
+    const sub = `deadlines-v13-${crypto.randomUUID()}`;
+    const p = person(sub);
+    const t0 = farAhead();
+    const runId = await admitted(sub, 'press-1', t0);
+    // A person object as v13 left it: the run going, dispatched by the press, and a gone ticket in the key-value entry.
+    const gone = { hash: 'b'.repeat(64), expiresAt: t0 + 30 * MINUTE, attempt: 1 };
+    await runInDurableObject(p, (_i, state) => {
+      undoV14(state.storage.sql);
+      state.storage.sql.exec('UPDATE schema_version SET version = 13 WHERE id = 1');
+      state.storage.sql.exec(`INSERT INTO deadlines (kind, key, at) VALUES ('gone', ?, ?)`, gone.hash, gone.expiresAt);
+      state.storage.kv.put('goneTickets', [gone]);
+    });
+    await evictDurableObject(p);
+    expect(await p.schemaVersion()).toBe(SCHEMA_VERSION);
+    // The run kept from v13 has no dispatch due: an alarm before its stale deadline sends nothing.
+    expect(await runInDurableObject(p, (_i, state) => state.storage.sql.exec('SELECT deadline_at, version FROM runs').toArray())).toEqual([
+      { deadline_at: null, version: 0 },
+    ]);
+    const gh = pretendGitHub(env);
+    try {
+      await runInDurableObject(p, async (instance: Person) => {
+        await instance.wake(t0 + MINUTE, gh.access);
+      });
+      expect(gh.dispatched.filter((d) => d.run_id === runId)).toEqual([]);
+    } finally {
+      gh.restore();
+    }
+    // The gone ticket is a row with no run id, with its expiry deadline; the key-value entry is gone.
+    expect(await runInDurableObject(p, (_i, state) => state.storage.sql.exec(`SELECT hash, attempt, expires_at FROM run_ticket WHERE run_id = ''`).toArray())).toEqual([
+      { hash: gone.hash, attempt: 1, expires_at: gone.expiresAt },
+    ]);
+    expect(await runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
+    expect((await rowsOf(sub)).filter((r) => r.kind === 'gone')).toEqual([{ kind: 'gone', key: gone.hash, at: gone.expiresAt }]);
+  });
+
   it('a handler that always throws stops after 6 attempts and its run ends failed', async () => {
     const sub = `deadlines-throws-${crypto.randomUUID()}`;
     const p = person(sub);
