@@ -35,12 +35,16 @@ describe('answering a question (TL-P4-08 addendum 8)', () => {
     expect(answerToast({ kind: 'now', run: going }, 'Yes')).toBe('You chose "Yes". Bower is doing it now.');
   });
 
-  it('a yes to Write it says honestly it is not done, and starts nothing', async () => {
+  it('a yes to Write it starts a run of your changes and says so; Keep mine starts none', async () => {
     const { vault, runs, start } = sources([state], null);
     const done = await answerQuestion(vault, runs, state.id, true, { allowWeb: false });
     expect(vault.answer).toHaveBeenCalledWith(state.id, true);
-    expect(start).not.toHaveBeenCalled();
-    expect(done?.outcome).toEqual({ kind: 'not-yet' });
-    expect(answerToast({ kind: 'not-yet' }, 'Write it')).toBe('You chose "Write it". Bower cannot write over your own summary yet, so it stays as you wrote it.');
+    // Scoped to your changes and notes (no pile): the run writes Bower's update into that note.
+    expect(start).toHaveBeenCalledWith('instructions', { allowWeb: false, requestId: expect.stringMatching(/^answer-[0-9a-f]{40}$/), answer: true });
+    expect(done?.outcome.kind).toBe('now');
+    expect(answerToast({ kind: 'now', run: going }, 'Write it')).toBe('You chose "Write it". Bower is doing it now.');
+    const no = sources([state], null);
+    expect((await answerQuestion(no.vault, no.runs, state.id, false, { allowWeb: false }))?.outcome).toEqual({ kind: 'next' });
+    expect(no.start).not.toHaveBeenCalled();
   });
 });

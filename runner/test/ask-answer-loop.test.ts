@@ -11,7 +11,10 @@
  */
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { applyChanges, currentStateOf, stateMark, undoChanges, undoEdit } from '../../src/data/contracts/note-edit';
+import type { Change, EditText, ManifestV2 } from '../../src/data/contracts/run-manifest';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
+import { parseNote } from '../../src/data/vault/note-format';
 import type { ClaudeCall, ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
 import { seedCase } from './corpus-run';
@@ -41,7 +44,7 @@ interface AppVault {
 interface StartOptions { allowWeb?: boolean; subject?: string; requestId?: string; answer?: boolean }
 interface AppRun { id: string; phase: string; waits?: true }
 interface AppRuns { start(scope: 'all' | 'instructions', opts?: StartOptions): Promise<AppRun>; current(): Promise<AppRun | null> }
-type Outcome = { kind: 'now'; run: AppRun } | { kind: 'waits' | 'next' | 'not-yet' } | { kind: 'failed'; error: unknown };
+type Outcome = { kind: 'now'; run: AppRun } | { kind: 'waits' | 'next' } | { kind: 'failed'; error: unknown };
 type AnswerQuestion = (vault: AppVault, runs: AppRuns, id: string, yes: boolean, opts: { allowWeb: boolean }) => Promise<{ outcome: Outcome } | null>;
 type VaultClass = new (opts: { drive: FakeDrive; rootId: () => Promise<string>; runningPiles: () => ReadonlySet<string>; device: string }) => AppVault;
 
@@ -95,7 +98,7 @@ function runsOf(w: RealWorld): AppRuns {
 }
 
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
-interface Shown { piles: Array<{ pileId: string; things: Array<{ fileId: string; name: string }> }>; answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string }> }
+interface Shown { piles: Array<{ pileId: string; things: Array<{ fileId: string; name: string }> }>; answers?: Array<{ question: string; answer: string; fileId?: string; pileId?: string; note?: string }> }
 const shownOf = (call: ClaudeCall): Shown => JSON.parse(call.input.split('\n').at(-1) ?? '{}') as Shown;
 
 /** The model: keeps one note only when it is shown the person's yes to that question, and files nothing else. */
@@ -138,6 +141,56 @@ async function answersWaiting(w: RealWorld, questionId: string): Promise<Array<{
   }
   return out;
 }
+
+const HUB = 'Projects/Job hunt/Job hunt.md';
+/** What Bower last wrote in the hub's Current state (its mark), and the person's own lines since. */
+const BOWER_LAST = ['One application open.'];
+const PERSON = ['Two applications open, one interview on Friday.'];
+/** Bower's update, as the model computes it in the answer's run. */
+const UPDATE = ['Two applications open.', 'An interview on Friday.'];
+const WRITE_IT = 'You changed the current state of Job hunt. Should Bower write its update there?';
+/** What the model was shown of your answers, run by run. */
+let stateSeen: Array<Shown['answers']> = [];
+
+/** The model: writes the hub's Current state only when shown a yes to Write it about that note, and files nothing. */
+const writeWhenAnswered: ClaudeSpawn = async (call) => {
+  const answers = shownOf(call).answers;
+  stateSeen.push(answers);
+  const yes = (answers ?? []).some((a) => a.answer === 'Write it' && a.note === HUB);
+  const intent = { kind: 'tidy-intent', v: 1, things: [], ...(yes ? { states: [{ note: HUB, lines: UPDATE }] } : {}) };
+  return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
+};
+
+/**
+ * The hub-lines folder, the hub's Current state edited by the person since Bower last wrote it, and the question
+ * Bower asked about it then (its `state`: the mark of PERSON, the section the person was asked about).
+ */
+async function stateWorld(lines: readonly string[]): Promise<RealWorld> {
+  const c = await corpusCase('c05-hub-lines');
+  const hub = (c.folder[HUB] ?? '').replace('by: bower\n', `by: bower\nbower_state: ${stateMark(BOWER_LAST)}\n`).replace('- One application open.', lines.map((l) => `- ${l}`).join('\n'));
+  stateSeen = [];
+  const seed = async (drive: FakeDrive): Promise<string> => {
+    const root = await seedCase(drive, { ...c, folder: { ...c.folder, [HUB]: hub }, journal: [], questions: [] });
+    const all = await drive.listAll(root);
+    const id = all.find((f) => drive.pathOf(f.id, root) === HUB)?.id ?? '';
+    const q = all.find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
+    const ask = { id: `q-state-${id}`, text: WRITE_IT, yes: 'Write it', no: 'Keep mine', about: HUB, state: stateMark(PERSON), askedAt: 1 };
+    if (q) await drive.writeText(q.id, JSON.stringify({ v: 1, questions: [ask] }), q.modifiedTime);
+    return root;
+  };
+  return await realWorld({ seed, claude: writeWhenAnswered });
+}
+
+async function hubId(w: RealWorld): Promise<string> {
+  return (await w.drive.listAll(w.rootId)).find((f) => w.drive.pathOf(f.id, w.rootId) === HUB)?.id ?? '';
+}
+/** The hub's edits in the run's manifest. */
+async function hubEdits(w: RealWorld): Promise<EditText[]> {
+  const path = (await w.drive.listAll(w.rootId)).map((f) => w.drive.pathOf(f.id, w.rootId)).find((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p));
+  const m = JSON.parse((path ? await textAt(w, path) : null) ?? '{"operations":[]}') as ManifestV2;
+  return m.operations.flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === HUB ? [o.effect] : []));
+}
+const hubChanges = async (w: RealWorld): Promise<Change[]> => (await hubEdits(w)).flatMap((e) => e.changes);
 
 describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
   it('a yes to keep one note starts a scoped run that merges', async () => {
@@ -259,24 +312,80 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await answersWaiting(w, `q-ask-${photo}`)).toEqual([]);
   });
 
-  it('a yes to Write it closes its question in the next tidy-up', async () => {
-    const c = await corpusCase('c05-keep-one-note');
-    const STATE_Q = 'q-state-note-1';
-    const writeIt = { id: STATE_Q, text: 'You changed the current state of Flat 3, 12 Larkspur Lane. Should Bower write its update there?', yes: 'Write it', no: 'Keep mine', about: KEPT, askedAt: 1 };
-    const w = await realWorld({ seed: (drive) => seedCase(drive, { ...c, journal: [], questions: [...c.questions, writeIt] as never }), claude: keepWhenAnswered });
+  it('a yes to Write it writes the update in a scoped run', async () => {
+    const w = await stateWorld(PERSON);
+    const id = await hubId(w);
+    const before = await textAt(w, HUB);
     const { vault, answerQuestion } = await vaultOf(w);
-    const runs = runsOf(w);
-    const before = await textAt(w, KEPT);
-    const done = await answerQuestion(vault, runs, STATE_Q, true, { allowWeb: false });
-    // Bower cannot write over a summary you edited yet: it says so and starts nothing.
-    expect(done?.outcome).toEqual({ kind: 'not-yet' });
-    expect(w.dispatched).toEqual([]);
-    // The next tidy-up closes the question for good and leaves your summary as you wrote it.
-    await runs.start('instructions', { allowWeb: false });
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    // A small tidy-up of your changes and notes, at once: it takes no pile of the inbox.
+    expect(done?.outcome.kind).toBe('now');
+    expect(w.dispatched).toHaveLength(1);
+    expect(w.dispatched[0]?.scope).toBe('instructions');
     expect(await w.runJob(0)).toBe(0);
-    expect(await openQuestions(w)).toEqual([KEEP_Q]);
-    expect(await answersWaiting(w, STATE_Q)).toEqual([]);
-    expect(await textAt(w, KEPT)).toBe(before);
+    // The model was shown the yes and the note it is about, and computed the update in this run.
+    expect(stateSeen[0]).toEqual([{ question: WRITE_IT, answer: 'Write it', note: HUB }]);
+    const after = await textAt(w, HUB) ?? '';
+    expect(parseNote(HUB, after).currentState).toEqual(UPDATE);
+    // Marked as Bower's; the rest of the note as it was (no "New:" line instead).
+    expect(currentStateOf(new TextEncoder().encode(after))?.owner).toBe('bower');
+    expect(parseNote(HUB, after).timeline).toEqual(parseNote(HUB, before ?? '').timeline);
+    // The person's yes is the grant for that one write, recorded in the manifest with the mark it saw.
+    const change = (await hubChanges(w)).find((c) => c.kind === 'state-rewrite');
+    const answer = change?.kind === 'state-rewrite' ? change.recordIds[0] : undefined;
+    expect(change).toEqual({ kind: 'state-rewrite', recordIds: [expect.any(String)], previous: PERSON, lines: UPDATE, granted: { answer, mark: stateMark(BOWER_LAST) } });
+    expect(await openQuestions(w)).toEqual([]);
+    expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
+    expect((await w.paths()).some((p) => p.startsWith('Inbox/') && p.endsWith('listing-88213.example.url'))).toBe(true);
+  });
+
+  it('a person edit after the question stops Write it', async () => {
+    // Asked about PERSON; the person changed the section again before saying yes.
+    const again = ['Two applications open, interview moved to Monday.'];
+    const w = await stateWorld(again);
+    const id = await hubId(w);
+    const before = await textAt(w, HUB);
+    const { vault, answerQuestion } = await vaultOf(w);
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    expect(await w.runJob(0)).toBe(0);
+    // Nothing is written: the note is byte for byte as the person left it.
+    expect(await textAt(w, HUB)).toBe(before);
+    expect((await hubChanges(w)).some((c) => c.kind === 'state-rewrite')).toBe(false);
+    // The question is asked again, honestly, about the section as it is now; the old answer is used up.
+    const asked = (JSON.parse((await textAt(w, '.bower/questions.json')) ?? '{}') as { questions: Array<{ id: string; text: string; askedAt: number; state?: string }> }).questions;
+    expect(asked).toEqual([expect.objectContaining({ id: `q-state-${id}`, text: 'You changed the current state of Job hunt again. Should Bower still write its update there?', yes: 'Write it', no: 'Keep mine', state: stateMark(again) })]);
+    expect(asked[0]?.askedAt).not.toBe(1);
+    expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
+    // The write itself checks what it read: a grant for other lines than the section's is refused.
+    const grant: Change = { kind: 'state-rewrite', recordIds: ['change-x'], previous: PERSON, lines: UPDATE, granted: { answer: 'change-x', mark: stateMark(BOWER_LAST) } };
+    expect(applyChanges(new TextEncoder().encode(before ?? ''), [grant])).toEqual({ ok: false, reason: 'state-changed' });
+  });
+
+  it('undo of Write it restores the person\'s section', async () => {
+    const w = await stateWorld(PERSON);
+    const id = await hubId(w);
+    const before = await textAt(w, HUB) ?? '';
+    const { vault, answerQuestion } = await vaultOf(w);
+    await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(w.dispatched).toHaveLength(1);
+    expect(await w.runJob(0)).toBe(0);
+    const after = new TextEncoder().encode(await textAt(w, HUB) ?? '');
+    const edit = (await hubEdits(w))[0];
+    expect(edit).toBeDefined();
+    if (!edit) return;
+    // The edit's before-image puts the note back byte for byte (C13).
+    const back = await undoEdit(edit, after);
+    expect(back.ok && back.text).toBe(before);
+    // The change alone gives the person's lines back with the mark they had: the section is theirs again.
+    const undone = applyChanges(after, undoChanges(edit.changes));
+    expect(undone.ok).toBe(true);
+    const state = currentStateOf(new TextEncoder().encode(undone.ok ? undone.text : ''));
+    expect(state).toEqual({ owner: 'person', lines: PERSON });
+    expect(undone.ok && undone.text).toBe(before);
+    // A section the person changed after Bower's write is never taken back over them.
+    const edited = new TextEncoder().encode(new TextDecoder().decode(after).replace(`- ${UPDATE[1]}`, '- Interview went well.'));
+    expect(await undoEdit(edit, edited)).toEqual({ ok: false, reason: 'person-edited' });
   });
 
   it('of two answers to one question, the later one counts', async () => {
