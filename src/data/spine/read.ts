@@ -7,7 +7,7 @@ import type { BinLookup, DriveApi, DriveFile, ResumableDrive } from '../drive/dr
 import { declarationCopies, pileRecords, type StoredDigests } from '../pile-readiness';
 import { PILE_NOTE } from '../piles';
 import type { Pile } from '../types';
-import { PROP, SYSTEM } from '../vault/layout';
+import { PROP } from '../vault/layout';
 import { VaultIndex } from '../vault/vault-index';
 import type { AdmissionScope } from './admission';
 import { NotReadHere } from './budget';
