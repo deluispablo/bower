@@ -42,3 +42,6 @@ With no model at all, the new runner's overhead (the job, Node, the token, the D
 
 | Date | SHA | Case | Press → done | Model step | Turns | Tokens | Notes |
 | --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| 2026-10-08 | 58897f5 | scripted, words-only pile (run `37734385418`) | 1 min 59 s | — | — | — | Dispatch 28 s; runner 82.1 s: reads 13.7, apply 11.7, checkpoints 46.6 (19), report 8.7, status 0.7; 1 journal line too |
+| 2026-10-08 | 58897f5 | scripted, words-only pile (run `37734625824`) | 1 min 30 s | — | — | — | Dispatch 25 s; runner 54.3 s: reads 10.6, apply 6.2, checkpoints 27.6 (13), report 8.4, status 0.7 |
+| 2026-10-08 | 58897f5 | scripted, words-only pile (run `37734833636`) | 1 min 21 s | — | — | — | Dispatch 25 s; runner 46.8 s: reads 9.3, apply 4.7, checkpoints 24.0 (13), report 7.7, status 0.7 |
