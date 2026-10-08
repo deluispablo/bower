@@ -242,6 +242,35 @@ describe('runner wire', () => {
     expect(google).toBe(0);
   });
 
+  it('the attempt route answers gone after delete me or revoked access', async () => {
+    const attempt = async (runner: FakeRunner): Promise<Response> =>
+      await createApp().request(`${API}/runner/runs/${runner.runId}/attempt`, { headers: { authorization: `Bearer ${runner.ticket}` } }, env);
+    // Revoked, or the kept refresh token unreadable: `forgetGoogleAccess` clears it, and the run's ticket opens nothing more.
+    const revoked = await aRun();
+    expect((await attempt(revoked.runner)).status).toBe(200);
+    expect(await person(revoked.sub).forgetGoogleAccess('enc-token')).toBe(true);
+    for (const r of [await attempt(revoked.runner), await revoked.runner.token()]) {
+      expect(r.status).toBe(410);
+      expect(await code(r)).toBe('gone');
+    }
+    // Delete me: the person object is emptied, tickets and all.
+    const deleted = await aRun();
+    await person(deleted.sub).forget();
+    for (const r of [await attempt(deleted.runner), await deleted.runner.token()]) {
+      expect(r.status).toBe(410);
+      expect(await code(r)).toBe('gone');
+    }
+  });
+
+  it('a plain sign-out leaves the attempt route answering', async () => {
+    const { sub, runner } = await aRun();
+    expect(await person(sub).retireSessions()).not.toBeNull();
+    const r = await createApp().request(`${API}/runner/runs/${runner.runId}/attempt`, { headers: { authorization: `Bearer ${runner.ticket}` } }, env);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ attempt: 1 });
+    expect((await runner.token()).status).toBe(200);
+  });
+
   it('a resent final report answers the current state', async () => {
     const { runner } = await aRun();
     await reply(await runner.report({ attempt: 1, seq: 1, phase: 'reading', total: 1 }));

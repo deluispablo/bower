@@ -22,7 +22,7 @@ export const GENERAL_ERRORS = {
 export type GeneralErrorCode = keyof typeof GENERAL_ERRORS;
 
 /** The codes of single calls in the contract (`POST /process`, `GET /drive/token`, `POST /session`, the runner wire). */
-const ROUTE_CODES = ['no-folder', 'nothing', 'stale-session', 'stale-attempt', 'stale-report'] as const;
+const ROUTE_CODES = ['no-folder', 'nothing', 'stale-session', 'stale-attempt', 'stale-report', 'gone'] as const;
 
 /** Every code the Worker sends in `error.code`: kebab-case, all in the contract. */
 export const ERROR_CODES = [

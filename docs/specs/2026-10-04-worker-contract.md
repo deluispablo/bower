@@ -112,6 +112,7 @@ This adapts the original's run tickets and runner routes (`run-ticket.ts`, `runn
 - **Runner errors** use the same JSON shape:
   - 401 `signed-out` for a missing, wrong or expired ticket;
   - 409 `stale-attempt` "This tidy-up was taken over." for an attempt that is no longer current;
+  - 410 `gone` "This tidy-up is no longer allowed to change your folder." on the token and attempt routes once the person is gone: after Delete me, or once Google access was revoked or the kept refresh token is unreadable. A plain sign-out leaves them answering, since a run never depends on a browser. The runner drops the Drive token it keeps, writes nothing more, and ends the run `failed` with that sentence;
   - 409 `stale-report` "That update arrived late." for a lower `seq`, a phase behind the same attempt's own last one, or a run already ended. Its body also carries `current: { seq, phase }`: the last `seq` the Worker took from this attempt (0 before any) and the run's phase. The runner resends once from `seq + 1`; when that phase is `done` or `failed` the run is finished and it sends nothing more, and a `done` refused again is a failed job, never swallowed.
 - **Recovery without the browser.** At dispatch, the person object sets a [Durable Object alarm](https://developers.cloudflare.com/durable-objects/api/alarms/) for the stale deadline. When the alarm finds no progress, it looks up the run by `run-name` in GitHub Actions and reads the job's `started_at` and `completed_at`.
   - It redispatches once, as attempt + 1 with a new ticket, if no live job holds the run.

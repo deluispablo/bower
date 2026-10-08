@@ -43,7 +43,7 @@ import type { ItemDisposition } from '../../src/data/spine/report';
 import { shownDone, type Checksum } from '../../src/data/spine/barrier';
 import { RunnerDrive } from './drive';
 import { RunnerStatus } from './status';
-import { RunnerToken, isStaleAttempt } from './token';
+import { NO_LONGER_ALLOWED, RunnerToken, isGone, isStaleAttempt } from './token';
 import { admittedPlan, runOperations, type Effects } from './spine/run';
 import { driveEffects } from './effects';
 import type { ClaudeSpawn } from './claude';
@@ -118,6 +118,13 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming): Promise<TidyEnd> {
   try {
     end = await tidy(opts, token, status, seen, timing);
   } catch (e) {
+    // The person is gone (Delete me, or Google access revoked): nothing more is written, and the run ends failed with
+    // the signed-out sentence, which is true whatever it changed before. After Delete me the Worker refuses the report too.
+    if (isGone(e)) {
+      console.error(e);
+      if (!status.finished) await status.post('failed', { failure: NO_LONGER_ALLOWED }).catch((err: unknown) => console.error(err));
+      return { phase: 'failed', why: NO_LONGER_ALLOWED };
+    }
     if (mayNotReport(e) || status.finished) throw e;
     end = { phase: 'stopped', why: e instanceof Error ? e.message : String(e), error: e };
   }
