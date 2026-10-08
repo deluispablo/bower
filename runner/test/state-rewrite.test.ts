@@ -113,7 +113,8 @@ describe('a change kind of its own for Current state (C05)', () => {
     const note = parseNote(HUB, run.after[HUB] ?? '');
     expect(note.currentState).toEqual(['Two applications open, one interview on Friday.']);
     // What Bower would have written goes on the Timeline, citing the thing, and the person is asked.
-    const line = note.timeline.find((t) => t.text === 'New: an offer from Ferrowick to answer.');
+    // Nothing of the person's section is in it, so both lines are new against it.
+    const line = note.timeline.find((t) => t.text === 'New: one application open, an offer from Ferrowick to answer.');
     expect(line?.source).toBe('Industrial Designer, Ferrowick');
     const questions = JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string; about?: string }> };
     const asked = questions.questions.find((q) => q.id.startsWith('q-state-'));
@@ -125,7 +126,7 @@ describe('a change kind of its own for Current state (C05)', () => {
 
   it('the fallback line reads as plain news', () => {
     expect(stateNewsLine(['One open.', 'An offer · to [[answer]].'], [])).toBe('New: One open, an offer, to answer.');
-    for (const line of [stateNewsLine(['One open.', 'An offer · to [[answer]].']), stateNewsLine(['Done.'])]) expect(line).not.toMatch(/;|Where things stand|Bower|would|\.,/);
+    for (const line of [stateNewsLine(['One open.', 'An offer · to [[answer]].'], []), stateNewsLine(['Done.'], [])]) expect(line).not.toMatch(/;|Where things stand|Bower|would|\.,/);
   });
 
   it('the fallback line names only what the section lacks', async () => {
@@ -175,7 +176,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     // The news goes on each Timeline as one line, within an authored line's limits.
     const hubLine = hub.timeline.find((t) => t.text === 'New: an offer from Ferrowick to answer.');
     expect(hubLine?.source).toBe('Industrial Designer, Ferrowick');
-    const flatLine = flat.timeline.find((t) => t.text.includes('Flat a on the shortlist'));
+    const flatLine = flat.timeline.find((t) => t.text.includes('lat a on the shortlist'));
     expect(flatLine).toBeDefined();
     expect(flatLine?.text.length).toBeLessThanOrEqual(200);
     // One question for the folder, word for word; none per note.
@@ -197,7 +198,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     const after = run.after[HUB] ?? '';
     expect(parseNote(HUB, after).currentState).toEqual(NEW_STATE);
     expect(after).toContain(`bower_state: ${stateMark(NEW_STATE)}\n`);
-    expect(hubEdit(manifestOf(run.after)).find((x) => x.kind === 'state-rewrite')).toEqual({ kind: 'state-rewrite', recordIds: [], previous: ['One application open.'], lines: NEW_STATE });
+    expect(hubEdit(manifestOf(run.after)).find((x) => x.kind === 'state-rewrite')).toEqual({ kind: 'state-rewrite', recordIds: [], previous: ['One application open.'], lines: NEW_STATE, adopted: true });
     expect(questionsOf(run.after)).toEqual([]);
   });
 

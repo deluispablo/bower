@@ -696,20 +696,23 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       const adopt = now?.owner === 'unmarked' && (await adopting());
       if (now && (now.owner === 'bower' || now.owner === 'missing' || adopt)) {
         if (now.lines.join('\n') !== w.state.lines.join('\n')) {
-          const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines };
+          const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines, ...(adopt ? { adopted: true as const } : {}) };
           const result = applyChanges(bytes, [change]);
           if (result.ok) state = change;
           else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
         }
       } else {
         // Never silently dropped: what Bower would write becomes one Timeline line (a person's note takes none).
-        const text = stateNewsLine(w.state.lines);
-        const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
-        w.lines.push(line);
-        lineState.set(line, 'refused');
-        if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path });
-        if (now?.owner === 'unmarked') unmarkedStates.push(line);
-        if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
+        // Only what the section lacks; nothing new, no line.
+        const text = stateNewsLine(w.state.lines, now?.lines ?? []);
+        if (text !== null) {
+          const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
+          w.lines.push(line);
+          lineState.set(line, 'refused');
+          if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path });
+          if (now?.owner === 'unmarked') unmarkedStates.push(line);
+          if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
+        }
       }
     }
     // Each line on its own: one already there (from any day) is dropped; a person's note takes none.

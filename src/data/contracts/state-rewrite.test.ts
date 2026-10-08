@@ -65,7 +65,7 @@ describe('the state-rewrite change (C05)', () => {
 
   it('is undone from what the manifest kept, to the very bytes Bower last wrote', () => {
     const marked = HUB.replace('by: bower\n', `by: bower\n${STATE_KEY}: ${stateMark(['One application open.'])}\n`);
-    const changes = [rewrite(['One application open.'], ['Two applications open.'])];
+    const changes = [plain(['One application open.'], ['Two applications open.'])];
     const after = applyChanges(enc(marked), changes);
     const back = applyChanges(after.ok ? after.bytes : enc(''), undoChanges(changes));
     expect(text(back)).toBe(marked);
@@ -103,34 +103,36 @@ describe('TL-P4-10: MD5, a missing section, an empty one, the news line', () => 
 
   it('adds a missing section, with its mark, only in a Bower note', () => {
     const none = '---\nsummary: Applications and offers.\nby: bower\n---\n\nYour own words.\n\n## Timeline\n- 2026-09-28 · Started the job hunt.\n';
-    const result = applyChanges(enc(none), [rewrite([], ['Two applications open.'])]);
+    const result = applyChanges(enc(none), [plain([], ['Two applications open.'])]);
     expect(text(result)).toBe(`---\nsummary: Applications and offers.\nby: bower\n${STATE_KEY}: ${stateMark(['Two applications open.'])}\n---\n\n## Current state\n- Two applications open.\n\nYour own words.\n\n## Timeline\n- 2026-09-28 · Started the job hunt.\n`);
-    expect(text(applyChanges(enc('---\nby: bower\n---'), [rewrite([], ['New.'])]))).toBe(`---\nby: bower\n${STATE_KEY}: ${stateMark(['New.'])}\n---\n## Current state\n- New.\n`);
+    expect(text(applyChanges(enc('---\nby: bower\n---'), [plain([], ['New.'])]))).toBe(`---\nby: bower\n${STATE_KEY}: ${stateMark(['New.'])}\n---\n## Current state\n- New.\n`);
     expect(applyChanges(enc(none.replace('by: bower\n', '')), [rewrite([], ['New.'])])).toEqual({ ok: false, reason: 'not-bower' });
     // Taken back, the section stays, empty.
-    const back = applyChanges(result.ok ? result.bytes : enc(''), undoChanges([rewrite([], ['Two applications open.'])]));
+    const back = applyChanges(result.ok ? result.bytes : enc(''), undoChanges([plain([], ['Two applications open.'])]));
     expect(currentStateOf(back.ok ? back.bytes : enc(''))).toEqual({ owner: 'bower', lines: [] });
   });
 
   it('takes back a rewrite of an empty section to the very bytes, legacy and ownership/2', () => {
     const empty = HUB.replace('by: bower\n', `by: bower\n${STATE_KEY}: ${stateMark([])}\n`).replace('- One application open.\n', '');
-    const changes = [rewrite([], ['Two applications open.'])];
+    const changes = [plain([], ['Two applications open.'])];
     const after = applyChanges(enc(empty), changes);
     expect(text(applyChanges(after.ok ? after.bytes : enc(''), undoChanges(changes)))).toBe(empty);
     const v2 = ['---', 'bower_format: ownership/2', 'by: bower', '---', '<!-- bower:ownership/2 begin current -->', '<!-- bower:ownership/2 end current -->',
       '<!-- bower:ownership/2 begin personal -->', '<!-- bower:ownership/2 end personal -->', '<!-- bower:ownership/2 begin timeline -->',
       '<!-- bower:ownership/2 end timeline -->', '<!-- bower:ownership/2 begin bower-note -->', '<!-- bower:ownership/2 end bower-note -->', ''].join('\n');
-    const v2After = applyChanges(enc(v2), changes);
-    const v2Back = applyChanges(v2After.ok ? v2After.bytes : enc(''), undoChanges(changes));
-    expect(text(v2Back)).toBe(v2.replace('by: bower\n', `by: bower\n${STATE_KEY}: ${stateMark([])}\n`));
+    // The v2 note is unmarked, so a rule adopted it; taken back, it is the person's again, with no mark.
+    const adopted = [rewrite([], ['Two applications open.'])];
+    const v2After = applyChanges(enc(v2), adopted);
+    const v2Back = applyChanges(v2After.ok ? v2After.bytes : enc(''), undoChanges(adopted));
+    expect(text(v2Back)).toBe(v2);
   });
 
   it('keeps the fallback line within an authored line\'s limits', () => {
     const long = Array.from({ length: 8 }, () => 'A long line about the flats on the shortlist and the walk to the station every morning.');
-    expect(stateNewsLine(long).length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
-    const one = stateNewsLine(['word '.repeat(80).trim()]);
-    expect(one.length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
-    expect(one.endsWith('word…')).toBe(true);
+    expect(stateNewsLine(long, [])?.length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
+    const one = stateNewsLine(['word '.repeat(80).trim()], []);
+    expect(one?.length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
+    expect(one?.endsWith('word…')).toBe(true);
   });
 });
 
