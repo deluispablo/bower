@@ -466,11 +466,18 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const inInbox = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
   const hashesIn = new Set(listing.filter((f) => inInbox.has(f.id) && f.md5Checksum).map((f) => f.md5Checksum));
   const subjectOf = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
+  // Only a run that saw the whole inbox can say a thing is gone: an instructions run reads none (TL-P4-11 I2).
   const gone = (q: Question): boolean => {
     const s = subjectOf(q);
-    return s !== undefined && !inInbox.has(s) && !(q.hash && hashesIn.has(q.hash));
+    return all && s !== undefined && !inInbox.has(s) && !(q.hash && hashesIn.has(q.hash));
   };
-  const sameThing = (a: Question, b: Question): boolean => a.id === b.id || (subjectOf(a) !== undefined && subjectOf(a) === subjectOf(b)) || (!!a.hash && a.hash === b.hash);
+  /** A pile and a thing in it are one subject (a pile ask then a thing ask about its photo adds nothing). */
+  const pileOf = new Map(inbox.flatMap((p) => p.items.map((i) => [i.id, p.id] as const)));
+  const related = (x: string | undefined, y: string | undefined): boolean => x !== undefined && y !== undefined && (x === y || pileOf.get(x) === y || pileOf.get(y) === x);
+  /** Equal content is the same subject only for the same thing uploaded again: not the empty file, and not while both are in the inbox. */
+  const EMPTY_MD5 = 'd41d8cd98f00b204e9800998ecf8427e';
+  const sameContent = (a: Question, b: Question): boolean => !!a.hash && a.hash === b.hash && a.hash !== EMPTY_MD5 && !inInbox.has(subjectOf(a) ?? '');
+  const sameThing = (a: Question, b: Question): boolean => a.id === b.id || related(subjectOf(a), subjectOf(b)) || sameContent(a, b) || sameContent(b, a);
   /** A list too small to hold a question (`{"v":1,"questions":[]}` is 24 bytes, one question over 100) is not read. */
   const mayHold = (f: DriveFile): boolean => f.size === undefined || f.size > 40;
   /** Whether a question of the list now open has lost its thing (read only when a run has nothing else to do). */
@@ -982,8 +989,13 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
     const all = readable ? value.questions : [];
     fresh = toAsk.filter((q) => !all.some((x) => sameThing(x, q)));
-    const left = [...all.filter((q) => !answered.has(q.id) && !gone(q)), ...fresh];
-    if (!readable || left.length !== all.length || fresh.length) questionsText = questionsJson(left);
+    // The same content uploaded again keeps its one question, now about the new file (so the reader still shows it).
+    const retarget = (x: Question): Question => {
+      const again = toAsk.find((q) => q.subject !== undefined && related(subjectOf(x), q.subject) === false && sameContent(x, q));
+      return again ? { ...x, subject: again.subject, ...(again.about !== undefined ? { about: again.about } : {}) } : x;
+    };
+    const left = [...all.filter((q) => !answered.has(q.id) && !gone(q)).map(retarget), ...fresh];
+    if (!readable || left.length !== all.length || fresh.length || left.some((q, i) => q.subject !== all[i]?.subject)) questionsText = questionsJson(left);
   } else if (toAsk.length && sys?.folder) {
     // A missing list is made again in `.bower` with the question (TL-P2-33 §2a).
     fresh = toAsk;

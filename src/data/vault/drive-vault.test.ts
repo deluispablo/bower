@@ -2562,3 +2562,22 @@ describe('the inbox accounts for filed members like the tidy-up', () => {
     errors.mockRestore();
   });
 });
+
+describe('a question about a thing that is gone (TL-P4-11 addendum)', () => {
+  it('binning the only thing left in the inbox closes its question', async () => {
+    for (const p of await vault.piles()) await vault.removePile(p.id);
+    const pile = await vault.addPile({ text: '', items: [{ name: 'kitchen.jpg', kind: 'image', origin: 'x', body: new Blob(['kitchen']) }] });
+    expect(pile.items).toHaveLength(1);
+    await vault.settled();
+    const thing = (await vault.piles())[0]?.items[0]?.id ?? '';
+    const file = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
+    if (!file) throw new Error('no questions.json');
+    const ask = { id: `q-ask-${thing}`, text: 'Is it from the viewing?', yes: 'Yes', no: 'No', subject: thing, askedAt: 1 };
+    await drive.writeText(file.id, JSON.stringify({ v: 1, questions: [ask] }), (await drive.get(file.id)).modifiedTime);
+    await vault.refresh();
+    expect((await vault.questions()).map((q) => q.id)).toEqual([ask.id]);
+    await vault.removePile((await vault.piles())[0]?.id ?? '');
+    expect(await vault.piles()).toEqual([]);
+    expect(await vault.questions()).toEqual([]);
+  });
+});

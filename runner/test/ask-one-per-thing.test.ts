@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeSpawn } from '../src/claude';
 import { loadCorpus, type LoadedCase } from '../src/corpus';
-import { runWithClaude } from './corpus-run';
+import { runScripted, runWithClaude } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 afterEach(() => vi.restoreAllMocks());
@@ -62,12 +62,43 @@ describe('one open question per thing (TL-P4-11 addendum)', () => {
   it('a re-upload of the same thing adds no question', async () => {
     const c = await offerAndFlat();
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const first = await runWithClaude({ ...c, inbox: [photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
+    const first = await runWithClaude({ ...c, inbox: [...Array.from({ length: 6 }, (_, n) => ({ ...otherPile, line: `A listing ${n}.` })), photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
     const before = openOf(first.after);
     expect(before).toHaveLength(1);
     // After a reset the same bytes come back under a new fileId (another file is added first, so the ids shift).
     const second = await runWithClaude({ ...c, inbox: [otherPile, photoPile], questions: before as never }, asking('Was this taken at the viewing?'));
     expect(second.code).toBe(0);
-    expect(openOf(second.after)).toEqual(before);
+    // The one question stays, now about the new file.
+    expect(openOf(second.after)).toEqual([expect.objectContaining({ id: before[0]?.id, text: before[0]?.text, hash: before[0]?.hash })]);
+    expect(openOf(second.after)[0]?.subject).not.toBe(before[0]?.subject);
+  });
+
+  it('an instructions run keeps an open thing question', async () => {
+    const c = await offerAndFlat();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const first = await runWithClaude({ ...c, inbox: [photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
+    const before = openOf(first.after);
+    expect(before).toHaveLength(1);
+    const other = { id: 'q-other', text: 'Other?', yes: 'Yes', no: 'No', askedAt: 1 };
+    const second = await runScripted({ ...c, scope: 'instructions', inbox: [{ line: '', files: ['IMG_2301.jpg'] }], journal: [{ kind: 'answer', text: 'no', questionId: 'q-other' }], questions: [...before, other] as never });
+    expect(openOf(second.after).map((q) => q.id)).toEqual(before.map((q) => q.id));
+  });
+
+  it('a pile ask then a thing ask leave one question', async () => {
+    const c = await offerAndFlat();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pileAsk: ClaudeSpawn = async (call) => {
+      const p = contextOf(call.input).piles.find((x) => x.things.some((t) => t.name === 'IMG_2301.jpg'));
+      return { code: 0, stderr: '', cut: null, stdout: envelope(JSON.stringify({ kind: 'tidy-intent', v: 1, things: [], asks: [{ pileId: p?.pileId ?? 'none', text: 'Is this pile about the viewing?', yes: 'Yes', no: 'No' }] })) };
+    };
+    const first = await runWithClaude({ ...c, inbox: [photoPile] }, pileAsk);
+    const before = openOf(first.after);
+    expect(before).toHaveLength(1);
+    const second = await runWithClaude({ ...c, inbox: [photoPile], questions: before as never }, asking('Was this kitchen picture taken at the flat viewing?'));
+    expect(openOf(second.after)).toHaveLength(1);
+    // And the other way round: a thing ask, then a pile ask.
+    const third = await runWithClaude({ ...c, inbox: [photoPile] }, asking('Is the kitchen photo from the viewing?'));
+    const fourth = await runWithClaude({ ...c, inbox: [photoPile], questions: openOf(third.after) as never }, pileAsk);
+    expect(openOf(fourth.after)).toHaveLength(1);
   });
 });
