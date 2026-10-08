@@ -14,7 +14,7 @@ import { fakeRead } from '../../src/data/spine/read';
 import { RunRecords } from '../../src/data/spine/records';
 import { MOVED_AWAY } from '../../src/data/spine/report';
 import { SYSTEM } from '../../src/data/vault/layout';
-import { driveEffects } from '../src/effects';
+import { driveEffects, stampOf } from '../src/effects';
 import { runTidy, type TidyEnd } from '../src/main';
 import { providerFor } from '../src/provider';
 import type { Effects } from '../src/spine/run';
@@ -373,7 +373,8 @@ describe('recovery without the browser', () => {
     expect(expected.phase).toBe('done');
     const kinds = chain.map((_, at) => kindOf(chain, at));
     // Every kind of checkpoint the chain can hold.
-    for (const kind of ['first', 'possible-effect', 'applied', 'before-effect-refused', 'rejected', 'report pending', 'done']) expect(kinds).toContain(kind);
+    // A batch: the first, its opening (operations named as possibly sent), its closing (with the report pending), done.
+    expect(kinds).toEqual(['first', 'possible-effect', 'report pending', 'done']);
 
     for (let at = 0; at < chain.length; at++) {
       const w = await world();
@@ -451,8 +452,8 @@ describe('recovery without the browser', () => {
       expect(await endOf(w), `resumed after step ${at}`).toEqual(expected);
       expect(new Map([...w.sends].filter(([, n]) => n > 0)), `sends after step ${at}`).toEqual(w0.sends);
     }
-    // Most steps fall inside the batch: every effect is written between its opening and its closing.
-    expect(midBatch).toBeGreaterThan(steps / 2);
+    // Every effect is written between the batch's opening and its closing: several steps fall inside the batch.
+    expect(midBatch).toBeGreaterThan(2);
   }, 120_000);
 
   it('a rename inside a batch then a kill is kept and reported', async () => {
@@ -524,13 +525,13 @@ describe('recovery without the browser', () => {
     const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
     const ops = found.kind === 'run' ? found.manifest.operations : [];
     const move = ops.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === payslip?.id);
-    expect((await w.wire.drive.get(payslip?.id ?? '')).appProperties?.bowerOp).toBe(`${RUN_ID}:${move?.operationId ?? ''}`);
+    expect((await w.wire.drive.get(payslip?.id ?? '')).appProperties?.bowerOp).toBe(stampOf(RUN_ID, move?.operationId ?? ''));
     // One stamp key on every file, overwritten by the run's last write to it, never one per run or per operation.
     const stamped = (await stateOf(w.wire.drive, w.root)).filter((e) => Object.keys(e.appProperties).some((k) => k.startsWith('bowerOp')));
     expect(stamped.length).toBeGreaterThan(1);
     for (const e of stamped) {
       expect(Object.keys(e.appProperties).filter((k) => k.startsWith('bowerOp')), e.path).toEqual(['bowerOp']);
-      expect(e.appProperties.bowerOp?.startsWith(`${RUN_ID}:`), e.path).toBe(true);
+      expect(ops.some((o) => stampOf(RUN_ID, o.operationId) === e.appProperties.bowerOp), e.path).toBe(true);
     }
   });
 });

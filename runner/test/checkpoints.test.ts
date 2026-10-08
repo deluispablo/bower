@@ -50,10 +50,14 @@ async function seeded(): Promise<{ wire: DriveV3; root: string; manifest: RunMan
   return { wire: driveV3(drive), root, manifest: await plan(root, RUN_ID) };
 }
 
-/** Effects that count each sending, and keep what landed as the evidence they find again. */
+/**
+ * Effects that count each sending, and keep what landed as the evidence they find again. Read back, an operation
+ * never attempted did not land (no stamp, as real Drive answers); one attempted that shows nothing cannot be told.
+ */
 class CountedEffects implements Effects {
   readonly sent = new Map<string, number>();
   readonly landed = new Set<string>();
+  readonly attempted = new Set<string>();
   /** The operation (by ordinal) whose reply is lost after it lands, once. */
   loseReplyAt: number | null = null;
   /** The operation (by ordinal) whose send is attempted and fails with no answer, nothing landing, once. */
@@ -61,6 +65,7 @@ class CountedEffects implements Effects {
 
   async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<{ state: 'applied'; evidence: EffectEvidence }> {
     await sending();
+    this.attempted.add(op.operationId);
     if (this.refuseAt === op.ordinal) {
       this.refuseAt = null;
       throw driveError('offline');
@@ -80,7 +85,8 @@ class CountedEffects implements Effects {
 
   async readBack(op: OperationV2): Promise<ReadBack> {
     const evidence = await this.observe(op);
-    return evidence ? { state: 'landed', evidence } : { state: 'unreadable', why: 'no evidence' };
+    if (evidence) return { state: 'landed', evidence };
+    return this.attempted.has(op.operationId) ? { state: 'unreadable', why: 'no evidence' } : { state: 'not-landed' };
   }
 }
 
@@ -139,13 +145,15 @@ describe('runner checkpoints', () => {
     expect(ops).toBeGreaterThan(2);
     const effects = new CountedEffects();
 
-    // Batches: the manifest, the first checkpoint, the saving phase, then an intent, the effect and its outcome per
-    // operation. Stopped at the third operation's intent: two operations are applied.
-    const first = start(wire, root, manifest, 1, effects, 3 + 3 * 2 + 1);
+    // Batches: the manifest, the first checkpoint, the first effect, the opening right before its send, then one
+    // effect per operation. Stopped at the third operation's effect, mid-batch: two operations landed.
+    const first = start(wire, root, manifest, 1, effects, 3 + 1 + 2);
     await expect(first.end).rejects.toThrow('The runner was stopped.');
     const before = await chainOf(wire, root);
     expect(before[0]?.phase).toBe('queued');
-    expect(appliedIn(before.at(-1))).toBe(2);
+    expect(before).toHaveLength(2);
+    expect(before.at(-1)?.outcomes.every((o) => o.state === 'possible-effect')).toBe(true);
+    expect(effects.landed.size).toBe(2);
 
     // A new attempt reads only its run's folder, never plans again, and goes on after the last checkpoint.
     const folder = await runFolder(wire, root);

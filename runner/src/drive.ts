@@ -101,8 +101,9 @@ export class RunnerDrive {
       createFolder: (parentId, name, appProperties) => this.fenced({ op: 'create-folder', parentId, name, ...(appProperties ? { appProperties } : {}) }, () => this.http.createFolder(parentId, name, appProperties)),
       createText: (parentId, name, text, appProperties) => this.fenced({ op: 'create-text', parentId, name, text, ...(appProperties ? { appProperties } : {}) }, () => this.http.createText(parentId, name, text, appProperties)),
       update: (id: string, patch: DrivePatch) => this.fenced({ op: 'update', id, patch }, () => this.http.update(id, patch)),
-      trash: (id) => this.fenced({ op: 'trash', id }, () => this.http.trash(id)),
-      writeText: (id, text, ifModified) => this.fenced({ op: 'write-text', id, text, ifModified }, () => this.http.writeText(id, text, ifModified)),
+      trash: (id, appProperties) => this.fenced({ op: 'trash', id, ...(appProperties ? { appProperties } : {}) }, () => this.http.trash(id, appProperties)),
+      writeText: (id, text, ifModified, appProperties) =>
+        this.fenced({ op: 'write-text', id, text, ifModified, ...(appProperties ? { appProperties } : {}) }, () => this.http.writeText(id, text, ifModified, appProperties)),
     };
   }
 
@@ -150,6 +151,25 @@ export class RunnerDrive {
       if (pageToken) params.set('pageToken', pageToken);
       const body = (await this.read(`${API}/files?${params}`)) as { files?: WireFile[]; nextPageToken?: string };
       for (const w of body.files ?? []) out.push(this.seen.note(toFile(w)));
+      pageToken = body.nextPageToken ?? '';
+    } while (pageToken);
+    return out;
+  }
+
+  /**
+   * The children of a folder that carry `key` = `value` in their appProperties, in the Bin or not: Drive's
+   * `appProperties has { key=... and value=... }` query (https://developers.google.com/workspace/drive/api/guides/search-files).
+   * A run's own stamp is found this way even after the person put the thing it made in the Bin.
+   */
+  async stamped(parentId: string, key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
+    const out: Array<{ file: DriveFile; trashed: boolean }> = [];
+    let pageToken = '';
+    do {
+      const q = `${quote(parentId)} in parents and appProperties has { key=${quote(key)} and value=${quote(value)} }`;
+      const params = new URLSearchParams({ q, fields: `nextPageToken,files(${FIELDS})`, pageSize: '1000' });
+      if (pageToken) params.set('pageToken', pageToken);
+      const body = (await this.read(`${API}/files?${params}`)) as { files?: Array<WireFile & { trashed?: boolean }>; nextPageToken?: string };
+      for (const w of body.files ?? []) out.push({ file: w.trashed === true ? toFile(w) : this.seen.note(toFile(w)), trashed: w.trashed === true });
       pageToken = body.nextPageToken ?? '';
     } while (pageToken);
     return out;

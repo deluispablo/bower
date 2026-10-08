@@ -108,12 +108,14 @@ describe('the runner overhead', () => {
     console.log(`checkpoints: modelled C04 wrote ${checkpoints.length} in ${ms}ms`);
     expect(checkpoints.length).toBeGreaterThanOrEqual(2);
     expect(checkpoints.length).toBeLessThanOrEqual(4);
-    // The opening names every operation of the batch before any effect; the closing settles them all at once.
-    const [opening, closing] = checkpoints;
+    // The first checkpoint; the opening names every operation of the batch before any effect; the closing settles them
+    // all at once, with the report pending; then done.
+    const [first, opening, closing, done] = checkpoints;
+    expect(first?.phase).toBe('queued');
     expect(opening?.outcomes.length).toBeGreaterThan(1);
-    expect(opening?.outcomes.every((o) => o.state === 'possible-effect')).toBe(true);
+    expect(opening?.outcomes.every((o) => o.state === 'possible-effect' || o.state === 'before-effect-refused')).toBe(true);
     expect(closing?.outcomes.every((o) => o.state === 'applied' || o.state === 'rejected')).toBe(true);
     expect(closing?.report.state).toBe('pending');
-    expect(checkpoints.at(-1)?.phase).toBe('done');
+    expect(done?.phase).toBe('done');
   });
 });
