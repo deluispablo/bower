@@ -6,7 +6,8 @@
  * run going). Only then, outside the object's synchronous section, it reads the inbox with the person's
  * Drive token and builds the admission manifest with the shared plan (`src/data/spine/plan.ts`, TL-P3-21):
  * metadata, Bower's own files and each pile's note, read by the runner's own readiness rules so a pile it would
- * hold is not admitted (TL-P3-25 point 2). A note is read transiently: the manifest keeps its id and modifiedTime,
+ * hold is not admitted (TL-P3-25 point 2), through the Worker's reader (`admissionRead` in `src/data/spine/read.ts`: a listing with checksums,
+ * the files the plan reads read ahead together, TL-P4-04). A note is read transiently: the manifest keeps its id and modifiedTime,
  * never its text, and nothing here logs it. An empty one answers 409 `nothing` with its cause, before
  * any quota count. Otherwise the person object (`Person.admit`) decides in one synchronous section:
  * expiry, idempotency by `requestId` (the Idempotency-Key pattern,
@@ -27,7 +28,7 @@ import { DriveHttp } from '../../src/data/drive/drive-http.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import { NOTHING } from '../../src/data/spine/admission.js';
 import { planAdmission } from '../../src/data/spine/plan.js';
-import { driveRead } from '../../src/data/spine/read.js';
+import { admissionRead } from '../../src/data/spine/read.js';
 import { BowerError } from '../../src/data/types.js';
 import { requireSession } from './auth.js';
 import { accessTokenFor } from './drive-token.js';
@@ -173,13 +174,24 @@ async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolea
 async function admission(env: Env, sub: string, scope: RunScope, now: number, fetchImpl: FetchLike): Promise<AdmissionManifest> {
   const folderId = await reach('folder', async () => await personFor(env, sub).folderId());
   if (folderId === null) throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
+  // The token is asked of the person object once per press, not once per Drive call; a 401 asks for a fresh one.
+  let token: Promise<string> | null = null;
   const drive = new DriveHttp({
-    token: async (fresh) => (await accessTokenFor(env, sub, { fresh, fetchImpl })).accessToken,
+    token: async (fresh) => {
+      if (fresh || token === null) {
+        const asked = accessTokenFor(env, sub, { fresh, fetchImpl }).then((t) => t.accessToken);
+        token = asked;
+        asked.catch(() => {
+          if (token === asked) token = null;
+        });
+      }
+      return await token;
+    },
     fetch: async (input, init) => await fetchImpl(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init),
   });
   let planned;
   try {
-    planned = await planAdmission(driveRead(drive), folderId, { scope, clock: () => now, newId: () => crypto.randomUUID() });
+    planned = await planAdmission(admissionRead(drive, scope), folderId, { scope, clock: () => now, newId: () => crypto.randomUUID() });
   } catch (err) {
     if (err instanceof HttpError) throw err;
     if (err instanceof BowerError && err.code === 'auth') throw new HttpError(401, 'signed-out', undefined, { cause: err });
