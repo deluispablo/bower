@@ -50,3 +50,7 @@ Staging, real Drive, account A (log line in `DEFECT_LOG.md`). `Projects/Flat hun
 4. A note is shown if and only if a line on it is accepted.
 
 Repeat 1 for every question kind that `answerRun` maps: thing, pile, state and pair.
+
+## Ruling: TL-P4-16 addendum
+
+Option (b), per [TL-P4-16](../2026-10-08-tl-p4-16-baseline-defects.md) addendum: `c3-pair-ask` (escalated), a new stage 3 entry after `c3-subject` and `c3-reply-schema`: a typed two-note ask, lines that may cite a words-only pile (so the value gate covers words), and the merge reusing `keep-one-note-merge`. Live proof: the real path.

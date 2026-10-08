@@ -5472,5 +5472,20 @@
     ],
     "verify": "pnpm vitest run -t \"production code imports no fake or demo module\"",
     "note": "TL-P4-14 stage 1 (main 2b7a6bb); rules: behaviour unchanged, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-pair-ask",
+    "task": "p4-consolidation",
+    "category": "feature",
+    "passes": false,
+    "what": "A typed two-note ask (keep one note), lines that may cite a words-only pile so the value gate covers words, and the merge reusing keep-one-note-merge. Live proof on the real path.",
+    "steps": [
+      "After c3-subject and c3-reply-schema.",
+      "Typed pair ask validated by the reply schema.",
+      "Words-only piles may be cited by a Timeline line.",
+      "Yes reuses keep-one-note-merge through the answer loop."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"two notes for one thing are asked as a pair|a words-only pile can become a Timeline line\"",
+    "note": "TL-P4-16 addendum (main e44eeed), defect keep-one-not-asked. Escalated. Stage 3."
   }
 ]
