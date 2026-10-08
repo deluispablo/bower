@@ -1,6 +1,6 @@
 /** Immutable run manifest validation only; no claim, dispatch, readiness or permission authority. */
 import { sha256 } from './hashes';
-import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, timelineDate } from './note-edit';
+import { EDIT_FILE_LIMIT, entryOk, renameOk, ruleAddOk, ruleRemoveOk, stateLinesOk, timelineDate } from './note-edit';
 import { hashRecordJson, parseRecordJson, type RecordJsonFailure } from './record-json';
 
 export type Scope = { rootId: string };
@@ -42,8 +42,13 @@ export type EditEntry = { date: string; text: string; source: string | null };
 export type Rename = { from: string; to: string };
 export type RuleAdd = { recordId: string; text: string; yourWords: string; since: number };
 export type RuleRemove = { recordId: string; text: string };
-/** The closed change union of manifest v2; an edit holds at most one of each, in this order. */
+/**
+ * The closed change union of manifest v2; an edit holds at most one of each, in this order. `state-rewrite`
+ * (TL-P4-08 addendum 1 point 1) replaces the lines of Bower's own `## Current state`, which must read `previous`,
+ * with `lines`: the manifest keeps the previous text, so an undo (C13) restores it (`undoChanges`).
+ */
 export type Change =
+  | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[] }
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
   | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[] }
   | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] };
@@ -272,7 +277,7 @@ function operation(value: unknown): value is Operation {
 }
 
 // Manifest v2 (TL-P2-20): v1 plus edit-text. Field rules shared with the author live in note-edit.ts.
-const CHANGE_ORDER: readonly Change['kind'][] = ['link-rewrite', 'timeline-append', 'rules-wording'];
+const CHANGE_ORDER: readonly Change['kind'][] = ['state-rewrite', 'link-rewrite', 'timeline-append', 'rules-wording'];
 const recordIds = (value: unknown): value is string[] => list(value, recordId) && unique(value);
 function editEntry(value: unknown): value is EditEntry {
   return closed(value, ['date', 'text', 'source']) && text(value.date) && text(value.text)
@@ -291,6 +296,8 @@ function ruleRemove(value: unknown): value is RuleRemove {
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
+    case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines']) && recordIds(value.recordIds)
+      && list(value.previous, text) && list(value.lines, text) && stateLinesOk(value.previous as string[], value.lines as string[]);
     case 'link-rewrite': return closed(value, ['kind', 'recordIds', 'renames']) && recordIds(value.recordIds)
       && list(value.renames, rename) && value.renames.length > 0 && unique((value.renames as Rename[]).map((item) => item.from.toLowerCase()));
     case 'timeline-append': return closed(value, ['kind', 'recordIds', 'entries']) && recordIds(value.recordIds)
@@ -300,7 +307,7 @@ function change(value: unknown): value is Change {
     default: return false;
   }
 }
-/** 1+ changes, at most one of each kind, in the order link-rewrite, timeline-append, rules-wording (R3-7 m4). */
+/** 1+ changes, at most one of each kind, in the order state-rewrite, link-rewrite, timeline-append, rules-wording (R3-7 m4). */
 const canonical = (changes: Change[]): boolean => changes.length > 0
   && changes.every((item, i) => i === 0 || CHANGE_ORDER.indexOf(changes[i - 1]?.kind ?? item.kind) < CHANGE_ORDER.indexOf(item.kind));
 function editText(value: unknown): value is EditText {
@@ -453,6 +460,7 @@ function edits(value: ManifestV2): EditGuardRule | null {
     if (e.content.sha256 === e.beforeContent.sha256) return 'unchanged';
     for (const entry of e.changes) {
       if (entry.kind === 'rules-wording' && e.path !== 'Rules.md') return 'rules-path';
+      if (entry.kind === 'state-rewrite' && e.path === 'Rules.md') return 'rules-path';
       if (entry.kind === 'timeline-append' && !entry.entries.every((line) => line.date === date)) return 'date';
       if (!recordsOf(entry).every((id) => journal.has(id))) return 'record';
     }

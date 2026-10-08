@@ -100,6 +100,7 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
     const without = (i: Intent, id: Id, name: string): Intent => ({ ...i, things: i.things.filter((t) => t.fileId !== id(name)) });
     const ask = (fileId: string, extra: Record<string, unknown> = {}) => ({ fileId, text: 'Is the photo from the viewing?', yes: 'Yes', no: 'No', ...extra });
     const line = (id: Id, extra: Record<string, unknown> = {}) => ({ note: 'Projects/Job hunt/Job hunt.md', text: 'A new offer from Ferrowick.', cites: id('Offer_letter_final(2).pdf'), ...extra });
+    const state = (id: Id) => ({ note: 'Projects/Job hunt/Job hunt.md', lines: ['An offer from Ferrowick to answer.'], cites: id('Offer_letter_final(2).pdf') });
     const noted = (i: Intent, note: Record<string, unknown>): Intent => {
       offer(i).note = { ...(offer(i).note ?? {}), ...note };
       return i;
@@ -135,6 +136,11 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
       lineText: edit((i, id) => ({ ...i, lines: [line(id, { text: 'one\ntwo' })] })),
       lineCites: edit((i, id) => ({ ...i, lines: [line(id, { cites: 'f-none' })] })),
       noNote: edit((i) => (delete offer(i).note, i)),
+      stateKeys: edit((i, id) => ({ ...i, states: [{ ...state(id), extra: 1 }] })),
+      stateNote: edit((i, id) => ({ ...i, states: [{ ...state(id), note: 'Projects/None.md' }] })),
+      stateTwice: edit((i, id) => ({ ...i, states: [state(id), state(id)] })),
+      stateText: edit((i, id) => ({ ...i, states: [{ ...state(id), lines: ['one\ntwo'] }] })),
+      stateCites: edit((i, id) => ({ ...i, states: [{ ...state(id), cites: 'f-none' }] })),
       askKeys: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg'), { pileId: 'p-1' })] })),
       askNotAdmitted: edit((i) => ({ ...i, asks: [ask('f-none')] })),
       askTwice: edit((i, id) => ({ ...without(i, id, 'IMG_2301.jpg'), asks: [ask(id('IMG_2301.jpg')), ask(id('IMG_2301.jpg'))] })),
