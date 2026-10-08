@@ -75,7 +75,7 @@ test('C06: a project note cites what it is about', async ({ page, isMobile }) =>
 
   // Across projects: the job hunt's note cites the offer, and the flat that came in the same pile.
   await goNote(page, 'Projects/Job hunt/Job hunt.md');
-  await expect(lineOf(page, 'New offer from Ferrowick, scored 7 out of 10 against your CV.').getByRole('link', { name: 'Industrial Designer, Ferrowick' })).toBeVisible();
+  await expect(lineOf(page, 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.').getByRole('link', { name: 'Industrial Designer, Ferrowick' })).toBeVisible();
   const crossLine = lineOf(page, 'A flat from the same pile went to the flat hunt.');
   await crossLine.getByRole('link', { name: 'Flat 9, Wrenfield Road' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Flat 9, Wrenfield Road' })).toBeVisible();
