@@ -5197,7 +5197,7 @@
   {
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "id": "c05-incorporation",
     "what": "The C05 slice (updates of existing knowledge, the keep-one-note question) passes its corpus cases with scripted proposals through the Claude provider, then live.",
     "steps": [
