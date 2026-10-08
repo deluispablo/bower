@@ -225,3 +225,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - Untested: a declared pile partly asked; a run with a partly asked pile killed and resumed; the sent input keeping the real pileId.
   - Template `pileId` placeholders are normalised too.
   - A loose thing asked by fileId becomes a pile question with no `about`.
+- Recurring e2e flake: `e2e/qa10.spec.ts:149` on desktop (the "Main folders stay" status toast is not found within 5 s under full-suite load). Seen at a2dafd9 and 222f9c0; 10 of 10 pass when run alone. Wait for the status before the second key press.

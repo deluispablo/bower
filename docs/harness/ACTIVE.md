@@ -236,3 +236,4 @@ P3-9 is closed.
 - per-thing-ask (escalated, bower-p4-thingask) and things-normalised (mechanical, bower-p4-thingsnorm) running. Garden step timings sent to the lead (median 52.8 s: reads 14.6, apply 10.6, report 9.2, model 7.1, checkpoints 7.3).
 - per-thing-ask closed (905b646; golden merge resolved with PILE_ID) and things-normalised closed (bd9c6b0; the per-run value was the pileId). 377/381. Opus check and suites running.
 - P4-10 delta check PASS (minors to polish; manifest/outsideAdmitted are invariant guards the reply can't reach). Waiting for the suites.
+- P4-10 suites at 222f9c0: check 3609/190/138, e2e 225/226 (qa10:149 desktop flake again; 10/10 alone; logged in P2_POLISH), e2e:fake 250, e2e:pwa pass. Main moves.
