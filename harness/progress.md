@@ -172,3 +172,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: duplicate-by-hash passes — A thing whose content is already filed goes to the Bin, reported already saved as <name>, with no note or line (TL-P4-10 addendum 2)
 - 2026-10-08: fallback-no-duplicate passes — No Current-state fallback line when the run already cites the same thing on that note (TL-P4-10 addendum 2)
 - 2026-10-08: duplicate-by-hash passes — Copies are binned only while their filed twin still holds and the copy is as read; pile words kept (P4-17 fix)
+- 2026-10-08: home-inbox-first passes — Home draws the Inbox from the listing first; digests asked once and dispositions read together (17 s -> 0.6 s on the latency scenario)

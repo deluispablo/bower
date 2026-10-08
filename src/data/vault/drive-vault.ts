@@ -116,6 +116,8 @@ export class DriveVault implements VaultSource {
   private refusalsLogged = new Set<string>();
   /** Sizes and hashes of files already checked, by file id and modified time. */
   private digests = new Map<string, Digest>();
+  /** A digest being worked out, shared by every listing that asks for it meanwhile. */
+  private digesting = new Map<string, Promise<Digest | null>>();
   private ix: Promise<VaultIndex> | null = null;
   private listeners = new Set<() => void>();
   /** Parsed notes by file id, with the raw text they were parsed from (front matter included). */
@@ -503,6 +505,30 @@ export class DriveVault implements VaultSource {
 
   // ---------- the inbox
 
+  /**
+   * The piles as the folder listing alone shows them, with no file read: what Home draws first while `piles()` reads
+   * each pile's note and what was filed of it. A pile's words are its folder's name; whether a pile is ready, held or
+   * has things on their way is for `piles()` to say.
+   */
+  async pilesListed(): Promise<Pile[]> {
+    const ix = await this.index();
+    const out: Pile[] = [];
+    for (const f of ix.filesIn('Inbox')) {
+      const path = ix.pathOf(f.id);
+      if (!path) continue;
+      const id = f.appProperties?.[PROP.pile] ?? f.id;
+      const createdAt = Date.parse(f.createdTime);
+      if (!f.folder) {
+        out.push({ id, path, text: '', createdAt, items: [itemOf(f)] });
+        continue;
+      }
+      const items = ix.filesIn(path).filter((k) => !k.folder && k.name !== PILE_NOTE).map(itemOf);
+      const words = f.name.replace(/^\d{4}-\d{2}-\d{2} /, '');
+      out.push({ id, path, text: words === 'Pile' ? '' : words, createdAt, items });
+    }
+    return out.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   async piles(): Promise<Pile[]> {
     // What a reload left on its way goes on, from where Drive stopped.
     this.startQueue().catch((e: unknown) => {
@@ -815,6 +841,14 @@ export class DriveVault implements VaultSource {
     const key = `${f.id}@${f.modifiedTime}`;
     const known = this.digests.get(key);
     if (known) return known;
+    const going = this.digesting.get(key);
+    if (going) return going;
+    const work = this.digestFresh(f, key).finally(() => this.digesting.delete(key));
+    this.digesting.set(key, work);
+    return work;
+  }
+
+  private async digestFresh(f: DriveFile, key: string): Promise<Digest | null> {
     let d: Digest | null;
     try {
       // The pretend Drive says what it stored (fake-stored); any other Drive is read.
