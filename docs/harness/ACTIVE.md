@@ -202,3 +202,4 @@ P3-9 is closed.
 - model-input-fingerprint merged (1289d2e) but not closed: the timing test passes at the red commit and the golden test writes its own file when missing. Back to the worker. 367/369.
 - model-input-fingerprint closed (dd2f5f7). 368/369 (open: report-kept-your-change, C12). P4-7 Opus delta a566241..HEAD running.
 - P4-7 review BLOCK: the fingerprint golden bypasses the real read path (provider aimed reads, planReads) and uses a made-up plot note. model-input-fingerprint reopened; fix round (implementer) with the minors: the citation, the [[Garden plot prefix match, putNew counting a checkpoint twice on resume, prompt wording that refers to rules the model never sees. 367/369.
+- model-input-fingerprint re-closed (00d4316). 368/369. Short Opus fix-round check running.
