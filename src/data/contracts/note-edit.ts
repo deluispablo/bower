@@ -91,6 +91,8 @@ export const STATE_LINES_MAX = 20;
 export const STATE_LINE_MAX = 400;
 /** The report's row for a note whose Current state a run brought up to date. */
 export const STATE_UPDATED = 'Current state brought up to date.';
+/** The report's line on a note kept as one with another (`keep-one-note-merge`), which went to the Bin. */
+export const keptLine = (other: string): string => `Kept as one note with ${other}, which went to the Bin.`;
 /**
  * Current state lines: `lines` each one trimmed line, none only to take back a rewrite of an empty section (TL-P4-10
  * point 4; a model always writes 1+); `previous` as read (one line each, no control character).
@@ -829,6 +831,18 @@ export async function readBackEdit(effect: EditText, observed: Observed): Promis
   if (observed.bytes.length === text.length && observed.bytes.every((byte, i) => byte === text[i])) return 'applied';
   if (observed.bytes.byteLength === effect.beforeContent.size && await digest(observed.bytes) === effect.beforeContent.sha256) return 'possible-effect';
   return 'unresolved';
+}
+
+/**
+ * The undo of one edit (C13, `keep-one-note-merge`) from its before-image: the note's text as the run read it, kept in
+ * the manifest as `beforeText` (an undo log's before-image, as ARIES keeps one: Mohan et al., "ARIES", ACM TODS 17(1),
+ * 1992, https://dl.acm.org/doi/10.1145/128765.128770). Only a note still as the edit left it is put back; a later edit
+ * of the person's refuses it as `person-edited`, and an edit with no before-image as `unsupported`.
+ */
+export async function undoEdit(effect: EditText, now: Uint8Array): Promise<EditResult> {
+  if (effect.beforeText === undefined) return { ok: false, reason: 'unsupported' };
+  if (now.byteLength !== effect.content.size || await digest(now) !== effect.content.sha256) return { ok: false, reason: 'person-edited' };
+  return { ok: true, text: effect.beforeText, bytes: encoder.encode(effect.beforeText) };
 }
 
 /** R3-6 / R4-3 m-f: a saved link's note key, SHA-256 in lowercase hex of the UTF-8 bytes of `<fileId>:saved-link-note`. */

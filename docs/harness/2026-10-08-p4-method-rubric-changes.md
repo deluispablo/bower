@@ -67,3 +67,11 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
 - **bench-4-scanned-pdf** expects the unread scan filed (`report.filed: 1`), as c15-scanned-letter did. It is the
   original's benchmark case, kept unchanged as a speed baseline (`docs/harness/p4-speed-baseline.md`), so it is left
   as it is; under the method a live run asks instead, which changes that baseline's work. The lead rules.
+
+## Addendum 7 changes (`c05-incorporation`)
+
+4. **c05-hub-lines, c05-line-not-repeated, c06-offer-and-listing-linked and c07-rent-disagrees, `expected.json`** (and the
+   seed line of c05-line-not-repeated, the scripted fixture and the tests that name it). Reason: TL-P4-08 addendum 7
+   (the CV score was invented) with addendum 5 (numbers grounded: a figure must be in the cited thing's text, the pile's
+   words or a note shown). Was: "New offer from Ferrowick, scored 7 out of 10 against your CV." Now: "New offer from
+   Ferrowick: fully remote, 42,000 a year, start 2 November." (all three facts are in the offer letter).

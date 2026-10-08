@@ -3858,7 +3858,7 @@ describe('report save failure cannot publish done or repeat effects on the B pat
     const FLAT = 'Projects/Flat hunt/Flat hunt.md';
     const JOB = 'Projects/Job hunt/Job hunt.md';
     const FLAT_WHAT = 'A fourth flat added; the shortlist compared by commute.';
-    const JOB_WHAT = 'New offer from Ferrowick, scored 7 out of 10 against your CV.';
+    const JOB_WHAT = 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.';
     type Where = { drive: FakeDrive; rootId: string };
     type Edit = OperationV2 & { effect: EditText };
 

@@ -13,7 +13,7 @@ import type { DriveFile } from '../drive/drive-api';
 import type { StoredEvidence } from '../drive/fake-drive';
 import type { EffectEvidence } from '../contracts/run-checkpoint';
 import type { Effect, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
-import { STATE_UPDATED, savedLinkKey } from '../contracts/note-edit';
+import { STATE_UPDATED, keptLine, savedLinkKey } from '../contracts/note-edit';
 import { displayName, join, nameOf, parentOf, thingName } from '../tree';
 import { PARA_ROOTS, type Question } from '../types';
 import { sha256 } from '../vault/hashes';
@@ -208,7 +208,15 @@ export function grounded(manifest: RunManifest): boolean {
     const [row, ...rest] = v.updated;
     const [id, ...more] = c.requires;
     const edit = id === undefined ? undefined : ops.get(id)?.effect;
-    if (!row || rest.length || more.length || id === undefined || edit?.kind !== 'edit-text' || edit.path !== row.path || updated.has(id)) return false;
+    if (!row || rest.length || id === undefined || edit?.kind !== 'edit-text' || edit.path !== row.path) return false;
+    // A note kept as one with another (C05): its edit, the link rewrites it needs, and the other note's Bin, last.
+    const bin = more.length ? ops.get(more.at(-1) ?? '')?.effect : undefined;
+    if (bin?.kind === 'bin') {
+      const other = places.get(bin.before.fileId);
+      const between = more.slice(0, -1).every((x) => ops.get(x)?.effect.kind === 'edit-text');
+      return other !== undefined && other.endsWith('.md') && between && row.what === keptLine(displayName(nameOf(other)));
+    }
+    if (more.length || updated.has(id)) return false;
     // Its row says one of its Timeline lines, or (C05) that its Current state was brought up to date.
     const says = edit.changes.some((change) => (change.kind === 'timeline-append' && change.entries.some((entry) => entry.text === row.what))
       || (change.kind === 'state-rewrite' && row.what === STATE_UPDATED));

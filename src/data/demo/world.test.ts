@@ -412,7 +412,7 @@ describe('what a tidy-up reports, as the run over Drive does', () => {
       expect(first.updated).toEqual([
         { path: 'Projects/Flat hunt/Flat 3, 12 Larkspur Lane.md', what: 'The Wrenfield Road listing is the same building; kept here, as you asked.' },
         { path: 'Projects/Flat hunt/Flat hunt.md', what: 'A fourth flat added; the shortlist compared by commute.' },
-        { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick, scored 7 out of 10 against your CV.' },
+        { path: 'Projects/Job hunt/Job hunt.md', what: 'New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.' },
       ]);
       await vault.addPile({ text: 'Ask the landlord about the heating', items: [] });
       const second = await run(w);
