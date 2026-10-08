@@ -50,7 +50,8 @@ export function TidySheet() {
 }
 
 function Confirm() {
-  const { data: piles } = usePiles();
+  const pilesState = usePiles();
+  const { data: piles } = pilesState;
   const { runs } = useSources();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +68,8 @@ function Confirm() {
       setBusy(false);
     }
   };
+  // A failed read says why and can be asked again; the sheet is never left busy on it.
+  if (pilesState.error) return <LoadError state={pilesState} />;
   if (!piles) return <div className={s.stage} aria-busy="true" />;
   return (
     <div>

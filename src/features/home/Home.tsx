@@ -8,7 +8,7 @@ import { usePrefs } from '@/app/prefs';
 import { startRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
-import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
+import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser, type Loaded } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
 import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
@@ -37,9 +37,12 @@ export function Home() {
   const runState = useRun();
   const { data: run } = runState;
   // The Inbox draws from the folder listing at once; what each pile's note and filed things add fills in after it.
-  const { data: read } = usePiles();
+  // When the full read fails, the listing and any earlier read cannot be vouched for (which are ready, held or on
+  // their way), so the Inbox lists nothing and says why (React: an error state of its own for each independent read).
+  const pilesState = usePiles();
+  const { data: read } = pilesState;
   const { data: listed } = usePilesListed();
-  const piles = read ?? listed ?? undefined;
+  const piles = pilesState.error ? undefined : read ?? listed ?? undefined;
   const waiting = waitingIn(piles);
   const away = replayWaiting(run);
   const stopped = stoppedUnseen(run);
@@ -58,7 +61,7 @@ export function Home() {
         <div className={s.colMain}>
           <LoadError state={runState} />
           {running && run && <RunningCard run={run} />}
-          <Inbox piles={piles} waiting={waiting} bird={birdOn === 'inbox'} running={running} />
+          <Inbox piles={piles} error={pilesState} waiting={waiting} bird={birdOn === 'inbox'} running={running} />
           {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
               under the person's finger moves when it lands (progressive rendering: each part shows when its data is there). */}
           {stopped && run && <StoppedCard run={run} />}
@@ -145,7 +148,7 @@ function RunningCard({ run }: { run: RunState }) {
   );
 }
 
-function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; waiting: number; bird: boolean; running: boolean }) {
+function Inbox({ piles, error, waiting, bird, running }: { piles: Pile[] | undefined; error: Pick<Loaded<unknown>, 'error' | 'reload'>; waiting: number; bird: boolean; running: boolean }) {
   const { setTidy } = useUi();
   const nav = useNavigate();
   const notice = useUploadNotice();
@@ -158,13 +161,15 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
             Inbox
           </h2>
           <p className="muted">
-            {piles === undefined ? 'Looking…' : waiting ? `${plural(waiting, 'thing')} waiting${running ? '' : '. Tidy up when you have added everything.'}` : 'Nothing waiting. Add something and it stays here until the next tidy-up.'}
+            {error.error ? 'Your inbox is not showing.' : piles === undefined ? 'Looking…' : waiting ? `${plural(waiting, 'thing')} waiting${running ? '' : '. Tidy up when you have added everything.'}` : 'Nothing waiting. Add something and it stays here until the next tidy-up.'}
           </p>
         </div>
       </div>
       {/* Always there, so a notice that comes later is heard. */}
       <div role="status">{notice && <p className={s.notice}>{notice}</p>}</div>
-      {piles === undefined ? (
+      {error.error ? (
+        <LoadError state={error} />
+      ) : piles === undefined ? (
         <div className={s.skel} aria-hidden="true">
           <span />
           <span />
@@ -193,7 +198,7 @@ function Inbox({ piles, waiting, bird, running }: { piles: Pile[] | undefined; w
         </ul>
       )}
       <div className={s.row2}>
-        {waiting > 0 && !running && (
+        {waiting > 0 && !running && !error.error && (
           <Button block onClick={() => setTidy(true)}>
             Tidy up {plural(waiting, 'thing')}
           </Button>
