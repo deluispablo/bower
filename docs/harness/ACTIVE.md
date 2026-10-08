@@ -292,3 +292,4 @@ P3-9 is closed.
 - duplicate-by-hash closed (a6ee70d; escalated; red by hand at 6488613): content-hash duplicate goes to the Bin, 'already saved as'; app + runner deploy together. 388/394. fallback-no-duplicate (implementer) dispatched; P4-17 review of duplicate-by-hash after a slot frees.
 - fallback-no-duplicate closed (926e725). 389/394. P4-17 Opus check (duplicate-by-hash + fallback) running; home-inbox-first back to reproduce the live delay.
 - P4-17 check BLOCK (duplicate-by-hash): twin binned mid-run, changed inbox copy binned without check, pile words binned unreported. Reopened; fix round with the same escalated worker. fallback-no-duplicate passes. 388/394.
+- duplicate-by-hash re-closed (28f3ee3): twin rechecked before the bin, copy bin passes md5/modifiedTime, pile words kept. 389/394. P4-17b check and home-inbox-first running.
