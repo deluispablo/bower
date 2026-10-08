@@ -360,3 +360,4 @@ p4-corpus	d621cfe80647e09d	2026-10-07	known-green: Red proven by hand at 1e33a4a
 runner-overhead	1a55b810d33fdddf	2026-10-07	known-green: Red proven by hand at dcc7005 (tests only): budget test failed on an assertion (61370 not < 60000). The cut spans ba4593e+19da741, so reverting 19da741 alone stays under budget.
 provider-contract	4e6abc8dd75c6526	2026-10-08	red (fixed in f9d2c90)
 provider-contract	2dd9d85222924f03	2026-10-08	red (fixed in 37ed7d8)
+runner-checkpoint-cost	8671a6d09468572d	2026-10-08	red (fixed in b681161)
