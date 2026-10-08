@@ -5521,7 +5521,7 @@
     "id": "c2-runner-exit",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One exit function for the runner's exit paths; an additive \"attempt ended\" report on the status wire; the Worker arms the run deadline at +60 s and redispatches. No if:failure step.",
     "steps": [
       "One exit function for main.ts:156, :340, main's catch; :146 excepted.",
