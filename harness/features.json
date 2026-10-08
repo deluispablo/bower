@@ -4983,5 +4983,19 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a thing with text and no note or citing line is refused and retried once|a thing cited by a Timeline line on an existing note needs no note|a photo with no text needs no note\"",
     "note": "TL-P4-08 addendum 2 (main 502bdc4). Live garden on c6ddb96 2/5: three runs made no note."
+  },
+  {
+    "id": "input-sections",
+    "task": "p4-c",
+    "category": "feature",
+    "passes": false,
+    "what": "The timing line carries a short hash per section of the normalised model input (prompt, tree, things, notes, rules), never content, so a live run shows which part varies.",
+    "steps": [
+      "Split the normalised model input into its sections at the point it is built.",
+      "Add sections=prompt:<6 hex>,tree:<6 hex>,things:<6 hex>,notes:<6 hex>,rules:<6 hex> to the timing line.",
+      "Test: a change in one section moves only its hash; no content appears on the line."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a change in one input section moves only that section hash\"",
+    "note": "TL-P4-08 addendum 3 (main e35644e): before the next deploy SHA."
   }
 ]
