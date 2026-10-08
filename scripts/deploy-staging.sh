@@ -36,7 +36,7 @@ PRODUCTION_NAME='bower-api'
 STAGING_KV='6969d46bffdb4b1e90d068f84235fbec'
 PRODUCTION_KV='dedd167004be415cbd90c4b154b1f4e2'
 ALLOWED_ADDRESS='you@example.com'
-ALLOWED_UNPDF_LITERAL='jm@kbswfq.pkbglt'  # obfuscated literal inside the unpdf library
+ALLOWED_UNPDF_LITERAL='jm@kbswfq.pkbgltMlwbaof'  # obfuscated literal inside unpdf
 ADDRESS_RE='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
 # Each wait is 10 seconds and each check at most 10 more (curl --max-time): one rerun of /health, and up to
 # 15 checks of /status, 15*10 + 14*10 = 290 seconds in the worst case, under 5 minutes.
