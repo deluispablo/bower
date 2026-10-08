@@ -255,3 +255,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - P4-15b (questions, minor): DriveVault.questions() runs a full piles() pass, so a failed pile-note read fails the questions list too (drive-vault.ts:1235).
 - P4-15b (questions, minor): a re-upload not asked again leaves a stale hidden row in questions.json; a thing moved to another pile can show pile and thing questions (scripted.ts:474-476).
 - P4-15b (questions, minor): an answer line for a question whose thing left stays pending in the journal.
+- P4 (recurring): e2e/qa10.spec.ts:165 phone flake on e2e:fake (sheet list read before it fills); passes alone 3/3.

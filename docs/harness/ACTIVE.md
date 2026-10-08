@@ -273,3 +273,4 @@ P3-9 is closed.
 - admission-subrequest-budget re-closed (bce294b; verify widened to the fix round's red tests). P4-15 check BLOCK (ask-one-per-thing): last-thing bin leaves its question; instructions run drops all asks; pile then thing ask = 2. Reopened; fix round (implementer) and the admission fix-round check running. TL-P4-12 merged (83c6b47); style file copied (gitignored). 382/386.
 - P4-14 fix-round check PASS (dispositions 65 -> 33, changes 54 -> 33; runner re-holds unread piles). Lead to accept: over budget with only held piles, a run ends 'nothing ready' instead of a 409. ask-one-per-thing fix round running.
 - P4-15 fix-round check PASS (I1-I3 pinned; reader hide safe on failed listings; additive). Suites at 8821e84 running.
+- Suites at 8821e84: check 3622/194/160 (failed only on the verify naming a src test from runner; fixed, re-proved at 96e7460, check green), e2e 226, e2e:fake 251 + qa10:165 phone flake (3/3 alone), e2e:pwa 4. Main moves.
