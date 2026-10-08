@@ -169,7 +169,10 @@ test('one thing, one name: Home, the tree and the tidy-up sheet name things alik
   const onHome = (await homePiles.allTextContents()).map((t) => t.trim());
   for (const t of await page.locator('section[aria-labelledby="recent"] [class*="pileText"]').allTextContents()) expect(t).not.toMatch(/\.[A-Za-z0-9]{2,4}$/);
   await page.getByRole('button', { name: /^Tidy up 15 things$/ }).first().click();
-  const inSheet = (await page.getByRole('dialog').locator('li > span:not(.muted)').allTextContents()).map((t) => t.trim());
+  const sheetNames = page.getByRole('dialog').locator('li > span:not(.muted)');
+  // Web-first: allTextContents() does not wait, so wait for the sheet's list before reading it.
+  await expect(sheetNames).toHaveCount(onHome.length);
+  const inSheet = (await sheetNames.allTextContents()).map((t) => t.trim());
   expect(inSheet.sort()).toEqual([...onHome].sort());
 });
 
