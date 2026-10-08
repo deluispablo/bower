@@ -135,3 +135,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: placement-guidance passes — prompt adopts the original's PARA placement wording (no fitting folder → Resources; new Area/Project only for an ongoing responsibility); C04 rubric allows Resources or Areas/Home linking the plot note
 - 2026-10-08: model-input-fingerprint passes — timing line carries input=<12 hex of sha256 of the model input>, tested through the provider; golden C04 fixture input pinned
 - 2026-10-08: model-input-fingerprint passes — fix round: the golden runs the C04 corpus case through main() on the Drive v3 fake; exact link match, checkpoints counted once, wording only from what the model sees
+- 2026-10-08: placement-check passes — a new Area/Project folder needs a cited rule line or shown note (basis); refused once with the reason and retried, a second refusal ends the run as C12 does

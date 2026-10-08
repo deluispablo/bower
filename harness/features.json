@@ -4872,7 +4872,7 @@
       "Scripted tests for both paths; live proof 5/5 C04 (coordinator)."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a new Area with no cited rule or note is refused and retried once|a second refusal ends the run honestly\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 addendum 2 (main c924560). Live C04 on cd3af43 was 4/5 (run 2 Areas)."
   },
   {
