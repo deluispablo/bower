@@ -5507,7 +5507,7 @@
     "id": "c2-drive-transport",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": true,
+    "passes": false,
     "what": "One Drive transport for app, runner and Worker: token refresh, one retry policy (a timeout per attempt, idempotent GETs retried with backoff inside a total budget, errors mapped by context; outside a browser never offline), error mapping, one wire type and field list. DriveHttp builds on it; RunnerDrive keeps only the fence and the attempt check; the Worker's vault.ts client goes. FencedDrive and StoredEvidence move into drive-api.ts.",
     "steps": [
       "One transport; retry policy per TL-P4-16 addendum 4.",
@@ -5515,7 +5515,7 @@
       "Remove the dependency-rules exceptions it owns."
     ],
     "verify": "pnpm vitest run -t \"one Drive transport retries a stalled read inside its budget|a runner Drive error is never called offline\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-offline (TL-P4-16 addendum 4)."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-offline (TL-P4-16 addendum 4). Reopened by P4-25 (BLOCK): the 60 s total budget cuts slow uploads (a 4 MiB upload answered at 90 s gives offline); the Worker Rules repair PATCH is resent on 5xx without a modifiedTime check and can overwrite a newer edit."
   },
   {
     "id": "c2-runner-exit",

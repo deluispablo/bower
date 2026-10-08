@@ -351,3 +351,4 @@ P3-9 is closed.
 - c2-runner-exit closed (8c6c1343; compat row added by me on the branch before merge; smoke-runner-silent-stop fixed). P4-24 review running; c2-drive-transport running. 412/423.
 - P4-24 PASS (c2-runner-exit; minors to polish). c2-worker-dispatch (escalated) dispatched; c2-drive-transport running.
 - c2-drive-transport closed (13a6ecad; removed 450; dup baseline 23; smoke-runner-offline fixed). P4-25 review and c2-worker-dispatch (escalated) dispatched. 413/423.
+- P4-25 BLOCK (c2-drive-transport): budget cuts slow uploads; Worker repair PATCH resent on 5xx without a fence. Reopened; fresh escalated fix round. c2-worker-dispatch running. 412/423.
