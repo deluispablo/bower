@@ -33,3 +33,15 @@ After its only thing was binned as a duplicate, a words-only pile briefly said i
 ## keep-one-not-asked (Important)
 
 The ruling waits for its diagnosis note.
+
+## Addendum: keep-one-not-asked (Important): option (b), in stage 3
+
+- **Cause:** the model's reply has no way to ask about two notes, because asks ban `[[links]]` and keeping one note needs both named. A words-only pile always becomes a new note: the value gate does not apply to the pile's own words.
+- **Ruling:** after `c3-subject` and `c3-reply-schema`, a new stage 3 entry `c3-pair-ask` (`bower-escalated`) builds three things:
+  - a pair ask whose subject is a typed pair of notes;
+  - Timeline lines that may cite a words-only pile, so news in a pile's words updates the existing note instead of becoming a new one (the value gate applies to words too);
+  - the merge on a yes, reusing `keep-one-note-merge`.
+- **Option (c) is rejected,** since it would be a second way to decide fit. The live proof is the real path: seeded notes and a pile, Bower asks, the answer is given in the app, and the notes merge.
+
+**Write it, live.** At most 2 more hub runs, to get a run that proposes a state change. If neither does, the live check of Write it and its Undo moves to after `c3-subject`, and the scripted e2e covers it until then.
+- **A C05 quality note, for when C05 resumes:** in about half the hub runs the model proposed no Current-state update even though the facts changed. The prompt and the corpus check address it then; no fix now.
