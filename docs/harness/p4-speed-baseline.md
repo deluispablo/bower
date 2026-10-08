@@ -104,3 +104,19 @@ All four runs pass against the updated rubric, with no retries and 4 checkpoints
 | garden | 0:54 | 13.0 | 6.5 | 12.2 | 7.0 |
 
 **Reading.** On a 4-thing pile, apply is the biggest step: 26–37 s for 3 moves and 4 notes, about 5 s per effect. `drive-calls-cut` covers reads and apply.
+
+## TL-P4-11 batch on `2b08fc1` (2026-10-08)
+
+Admission budget, honest start error, one question per thing, drive-calls-cut and state-rewrite live. No retries; 4 checkpoints each.
+
+| Case | Press → done | reads | model | apply | report (s) | Result |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| offer-and-flat 1 | 1:32 | 24.2 | 17.8 | 24.2 | 9.3 | pass; photo asked once (6 stale questions closed) |
+| offer-and-flat 2 | 1:34 | 26.7 | 16.6 | 23.9 | 10.9 | pass; re-upload kept the one question |
+| offer-and-flat 3 | 1:46 | 35.7 | 20.4 | 21.0 | 9.7 | pass; no new question |
+| garden | 1:20 | 31.1 | 11.1 | 15.6 | 9.1 | pass; 4 dates; waiting photo not asked again |
+| c05-hub-lines (corpus offer) | 1:23 | 25.5 | 8.6 | 20.6 | 9.0 | not valid: the corpus offer is text with a PDF header, unreadable live |
+| c05-hub-lines 1 | 1:13 | 20.6 | 11.2 | 18.5 | 9.0 | pass; both hubs cited lines, Job hunt state rewritten |
+| c05-hub-lines 2 (hand edit) | 1:48 | 49.4 | 10.0 | 22.5 | 13.3 | edit kept, line + one folder question; no listing line in Flat hunt |
+
+**Reading.** Apply is 21–24 s on offer-and-flat (was 26–37 s), far from the modelled 4.7 s; reads grew to 24–49 s. Home took about 24 s to show the Inbox, with 221 Drive calls (189 media reads of 42 files, one file up to 10 times).
