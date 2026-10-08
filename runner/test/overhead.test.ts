@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { setTimeout as realSleep } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
 import { loadCorpus } from '../src/corpus';
 import { runScripted } from './corpus-run';
 import { API, paging } from './drive-v3';
@@ -25,12 +26,13 @@ interface Call {
  * has nothing else to do, then the clock jumps to the earliest due call. Calls the runner makes at the same time
  * overlap as they would on the wire, and the run's time is the clock's. No real waiting beyond a few milliseconds.
  */
-async function modelled(): Promise<{ calls: Call[]; ms: number; code: number }> {
+async function modelled(): Promise<{ calls: Call[]; ms: number; code: number; checkpoints: Checkpoint[] }> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-offer-and-flat');
   if (!c) throw new Error('the C04 case is missing');
   // Drive's own page size, so a listing is the one call it is on Drive.
   paging.size = 1000;
   const calls: Call[] = [];
+  const checkpoints: Checkpoint[] = [];
   const due: Array<{ at: number; wake: () => void }> = [];
   let clock = 0;
   let settled = false;
@@ -40,6 +42,11 @@ async function modelled(): Promise<{ calls: Call[]; ms: number; code: number }> 
     const worker = url.origin === API;
     const kind = worker ? (url.pathname.endsWith('/token') ? 'token' : url.pathname.endsWith('/attempt') ? 'attempt' : 'status') : method === 'GET' ? 'read' : 'write';
     calls.push({ kind, method, path: `${url.pathname}${url.search}`, at: clock });
+    // A checkpoint's create: its record is the second part of the multipart body.
+    if (method === 'POST' && url.searchParams.get('uploadType') === 'multipart') {
+      const text = await new Response(init?.body).text();
+      if (/"name":"checkpoint-\d+-/.test(text)) checkpoints.push(JSON.parse(text.split(/\r\n--[^\r\n]+/)[1]?.split('\r\n\r\n')[1] ?? '{}') as Checkpoint);
+    }
     await new Promise<void>((wake) => due.push({ at: clock + (worker ? WORKER_MS : DRIVE_MS), wake }));
     return inner(input, init);
   }, true).finally(() => {
@@ -61,7 +68,7 @@ async function modelled(): Promise<{ calls: Call[]; ms: number; code: number }> 
     next.wake();
   }
   const run = await running;
-  return { calls, ms: clock, code: run.code };
+  return { calls, ms: clock, code: run.code, checkpoints };
 }
 
 afterEach(() => {
@@ -93,5 +100,20 @@ describe('the runner overhead', () => {
     // Ordered status: reading, writing, saving, then done, and nothing after done.
     const phases = calls.filter((x) => x.kind === 'status').length;
     expect(phases).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a run writes one opening and one closing checkpoint per batch', async () => {
+    const { checkpoints, ms, code } = await modelled();
+    expect(code).toBe(0);
+    console.log(`checkpoints: modelled C04 wrote ${checkpoints.length} in ${ms}ms`);
+    expect(checkpoints.length).toBeGreaterThanOrEqual(2);
+    expect(checkpoints.length).toBeLessThanOrEqual(4);
+    // The opening names every operation of the batch before any effect; the closing settles them all at once.
+    const [opening, closing] = checkpoints;
+    expect(opening?.outcomes.length).toBeGreaterThan(1);
+    expect(opening?.outcomes.every((o) => o.state === 'possible-effect')).toBe(true);
+    expect(closing?.outcomes.every((o) => o.state === 'applied' || o.state === 'rejected')).toBe(true);
+    expect(closing?.report.state).toBe('pending');
+    expect(checkpoints.at(-1)?.phase).toBe('done');
   });
 });

@@ -12,6 +12,7 @@ import { PILE_NOTE } from '../../src/data/piles';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { RunRecords } from '../../src/data/spine/records';
+import { MOVED_AWAY } from '../../src/data/spine/report';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { driveEffects } from '../src/effects';
 import { runTidy, type TidyEnd } from '../src/main';
@@ -29,7 +30,7 @@ const GONE_SENTENCE = 'This tidy-up is no longer allowed to change your folder.'
 afterEach(() => vi.restoreAllMocks());
 
 /** Alex's folder on a pretend Drive v3, with one of Alex's changes in the journal, admitted by the Worker's rules. */
-async function seeded(): Promise<{ wire: DriveV3; root: string }> {
+async function seeded(payslip: Record<string, string> = {}): Promise<{ wire: DriveV3; root: string }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const inbox = (await drive.createFolder(root, 'Inbox')).id;
@@ -38,7 +39,7 @@ async function seeded(): Promise<{ wire: DriveV3; root: string }> {
   const changes = (await drive.createFolder(sys, 'changes')).id;
   await drive.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
   await drive.createText(changes, 'change-1.json', `${JSON.stringify({ v: 1, id: 'change-1', device: 'device-1', at: AT - 60_000, kind: 'create', what: 'Made Ideas.md', path: 'Projects/Ideas.md' })}\n`);
-  await drive.createText(inbox, 'Payslip_Aug.pdf', '%PDF payslip', { pile: 'p-payslip' });
+  await drive.createText(inbox, 'Payslip_Aug.pdf', '%PDF payslip', { pile: 'p-payslip', ...payslip });
   await drive.createText(inbox, RENAMED, '%PDF dentist', { pile: 'p-dentist' });
   const pile = (await drive.createFolder(inbox, 'Flat photos', { pile: 'p-photos' })).id;
   await drive.createText(pile, PILE_NOTE, 'The kitchen at the Wrenfield Road viewing.\n');
@@ -64,8 +65,8 @@ interface World {
   sends: Map<string, number>;
 }
 
-async function world(): Promise<World> {
-  return { ...(await seeded()), sends: new Map() };
+async function world(payslip: Record<string, string> = {}): Promise<World> {
+  return { ...(await seeded(payslip)), sends: new Map() };
 }
 
 interface Attempt {
@@ -77,6 +78,8 @@ interface Attempt {
   afterIntent?: (op: OperationV2) => Promise<void>;
   /** Drive reads that fail as with no network. */
   failRead?: (url: URL) => boolean;
+  /** Told right after someone renamed `RENAMED`. */
+  onRename?: () => void;
 }
 
 /**
@@ -103,7 +106,10 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
         const e = op.effect;
         if (e.kind === 'move' && e.before.name === RENAMED) {
           const now = await wire.drive.get(e.before.fileId);
-          if (now.name === RENAMED) await wire.drive.update(e.before.fileId, { name: 'Dentist reminder (old).pdf' });
+          if (now.name === RENAMED) {
+            await wire.drive.update(e.before.fileId, { name: 'Dentist reminder (old).pdf' });
+            opts.onRename?.();
+          }
         }
         return real.apply(op, head, fenced, manifest, async () => {
           await sending();
@@ -418,4 +424,113 @@ describe('recovery without the browser', () => {
       expect(new Map([...w.sends].filter(([, n]) => n > 0)), `sends after step ${at}`).toEqual(w0.sends);
     }
   }, 120_000);
+
+  it('a kill at every step including mid-batch ends equal to an uninterrupted run', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w0 = await world();
+    let steps = 0;
+    expect((await tidy(w0, 1, { applied: () => void steps++ })).phase).toBe('done');
+    const expected = await endOf(w0);
+
+    // Killed right after every write that landed: a checkpoint, a record, or an effect inside an open batch.
+    let midBatch = 0;
+    for (let at = 0; at < steps; at++) {
+      const w = await world();
+      let written = 0;
+      await tidy(w, 1, {
+        applied: (_call, process) => {
+          if (written++ === at) process.killed = true;
+        },
+      }).catch((e: unknown) => e);
+      // Mid-batch: the head names more than one operation not yet closed.
+      const head = (await chainOf(w.wire, w.root)).at(-1);
+      if ((head?.outcomes.filter((o) => o.state === 'possible-effect').length ?? 0) > 1) midBatch++;
+      expect(w.wire.statuses.map((s) => s.phase), `step ${at}`).not.toContain('done');
+      const second = await tidy(w, 2);
+      expect(second.phase, `resumed after step ${at}`).toBe('done');
+      expect(await endOf(w), `resumed after step ${at}`).toEqual(expected);
+      expect(new Map([...w.sends].filter(([, n]) => n > 0)), `sends after step ${at}`).toEqual(w0.sends);
+    }
+    // Most steps fall inside the batch: every effect is written between its opening and its closing.
+    expect(midBatch).toBeGreaterThan(steps / 2);
+  }, 120_000);
+
+  it('a rename inside a batch then a kill is kept and reported', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { end: expected } = await uninterrupted();
+    const w = await world();
+    const dentist = (await w.wire.drive.listAll(w.root)).find((f) => f.name === RENAMED);
+    // Killed at the first write after the person renamed the thing (inside the batch, before its move is checked).
+    let renamed = false;
+    await tidy(w, 1, {
+      onRename: () => {
+        renamed = true;
+      },
+      applied: (_call, process) => {
+        if (renamed) process.killed = true;
+      },
+    }).catch((e: unknown) => e);
+    expect(renamed).toBe(true);
+    const head = (await chainOf(w.wire, w.root)).at(-1);
+    const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+    const move = found.kind === 'run' ? found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === dentist?.id) : undefined;
+    // Its move was named by the open batch when the run was killed.
+    expect(head?.outcomes.find((o) => o.operationId === move?.operationId)?.state).toBe('possible-effect');
+
+    expect((await tidy(w, 2)).phase).toBe('done');
+    // The person's rename is kept, the move never sent, and the report sets it aside as moved away.
+    expect(await endOf(w)).toEqual(expected);
+    expect(w.sends.get(move?.operationId ?? '') ?? 0).toBe(0);
+    expect((await w.wire.drive.get(dentist?.id ?? '')).name).toBe('Dentist reminder (old).pdf');
+    expect(JSON.stringify(expected.view)).toContain(MOVED_AWAY);
+  });
+
+  it('an undo of a landed effect then a kill is kept and reported', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    const files = await w.wire.drive.listAll(w.root);
+    const payslip = files.find((f) => f.name === 'Payslip_Aug.pdf');
+    const inbox = files.find((f) => f.folder && f.name === 'Inbox');
+    // Killed right after Bower filed the payslip.
+    await tidy(w, 1, {
+      applied: (call, process) => {
+        if (call.op === 'update' && call.id === payslip?.id) process.killed = true;
+      },
+    }).catch((e: unknown) => e);
+    const filed = await w.wire.drive.get(payslip?.id ?? '');
+    expect(filed.parents).not.toEqual([inbox?.id]);
+    // The person puts it back in the inbox before the run is taken over.
+    await w.wire.drive.update(filed.id, { addParent: inbox?.id ?? '', removeParent: filed.parents[0] ?? '' });
+
+    expect((await tidy(w, 2)).phase).toBe('done');
+    const chain = await chainOf(w.wire, w.root);
+    const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+    const move = found.kind === 'run' ? found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === payslip?.id) : undefined;
+    // Sent once and never again: the person's undo is kept.
+    expect(w.sends.get(move?.operationId ?? '')).toBe(1);
+    expect((await w.wire.drive.get(payslip?.id ?? '')).parents).toEqual([inbox?.id]);
+    // Reported as it is: applied, with the evidence of where the person put it.
+    const outcome = chain.at(-1)?.outcomes.find((o) => o.operationId === move?.operationId);
+    expect(outcome?.state).toBe('applied');
+    expect(outcome?.state === 'applied' ? outcome.evidence.file.parents : null).toEqual([inbox?.id]);
+  });
+
+  it('the bowerOp stamp is never accumulated', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // An earlier run's stamp is already on the payslip.
+    const w = await world({ bowerOp: 'older-run:0000' });
+    const payslip = (await w.wire.drive.listAll(w.root)).find((f) => f.name === 'Payslip_Aug.pdf');
+    expect((await tidy(w, 1)).phase).toBe('done');
+    const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+    const ops = found.kind === 'run' ? found.manifest.operations : [];
+    const move = ops.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === payslip?.id);
+    expect((await w.wire.drive.get(payslip?.id ?? '')).appProperties?.bowerOp).toBe(`${RUN_ID}:${move?.operationId ?? ''}`);
+    // One stamp key on every file, overwritten by the run's last write to it, never one per run or per operation.
+    const stamped = (await stateOf(w.wire.drive, w.root)).filter((e) => Object.keys(e.appProperties).some((k) => k.startsWith('bowerOp')));
+    expect(stamped.length).toBeGreaterThan(1);
+    for (const e of stamped) {
+      expect(Object.keys(e.appProperties).filter((k) => k.startsWith('bowerOp')), e.path).toEqual(['bowerOp']);
+      expect(e.appProperties.bowerOp?.startsWith(`${RUN_ID}:`), e.path).toBe(true);
+    }
+  });
 });
