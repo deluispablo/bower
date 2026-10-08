@@ -4,7 +4,7 @@
 // Tests: --tests <json> gives {unit, api, runner, e2e} instead of listing them (the harness test does).
 // done.sh runs it before the red. The rules (names, files, packages) are harness-rules.mjs's `problems`, as in check-harness.
 import { readFileSync } from 'node:fs';
-import { problems } from './harness-rules.mjs';
+import { patterns, problems } from './harness-rules.mjs';
 import { e2eTitles, unitTitles } from './harness-tests.mjs';
 
 const argv = process.argv.slice(2);
@@ -22,9 +22,11 @@ if (unknown.length) {
 }
 const open = features.filter((f) => !f.passes && (argv.length ? argv.includes(f.id) : true));
 
-const kinds = new Set(open.flatMap((f) => [...f.verify.matchAll(/pnpm\s+(?:(?:-C|--dir)\s+(api|runner)\b|e2e)|playwright test|e2e-both/g)].map((m) => m[1] ?? 'e2e')));
-if (open.some((f) => /\bvitest run/.test(f.verify) && !/\bpnpm\s+(?:-C|--dir)\s+(?:api|runner)\b[^&]*vitest run/.test(f.verify))) kinds.add('unit');
-const lists = testsPath ? JSON.parse(readFileSync(testsPath, 'utf8')) : {
+// Each `&&` part runs one package's tests, read as harness-rules reads it.
+const kinds = new Set(open.flatMap((f) => f.verify.split('&&').map((p) => patterns(p.trim())?.kind).filter(Boolean)));
+// Given lists stand in for the listing, so only the kinds the verifies run are kept, as the listing would.
+const given = testsPath ? JSON.parse(readFileSync(testsPath, 'utf8')) : null;
+const lists = given ? Object.fromEntries(Object.entries(given).map(([k, v]) => [k, kinds.has(k) ? v : []])) : {
   unit: kinds.has('unit') ? unitTitles('.') : [],
   api: kinds.has('api') ? unitTitles('api') : [],
   runner: kinds.has('runner') ? unitTitles('runner') : [],

@@ -221,4 +221,24 @@ describe('the harness', () => {
     expect(run('good-entry').status).toBe(0);
     expect(run('missing-entry').status).toBe(1);
   });
+  it('a verify with a src part and an api part looks for each name in its own package', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-precheck-'));
+    const t = (name: string, file: string, config: string) => ({ name, file, config, project: '' });
+    const tests = { unit: [t('a src test that exists', 'src/a.test.ts', 'vite.config.ts')], api: [t('an api test that exists', 'api/test/a.test.ts', 'api/vitest.config.ts')], runner: [], e2e: [] };
+    const entry = (id: string, verify: string): Entry => ({ id, task: 'p4-a', steps: S, verify, passes: false });
+    const features = [
+      entry('mixed-entry', 'pnpm vitest run -t "a src test that exists" && pnpm -C api exec vitest run -t "an api test that exists"'),
+      entry('mixed-wrong-entry', 'pnpm vitest run -t "an api test that exists" && pnpm -C api exec vitest run -t "a src test that exists"'),
+    ];
+    writeFileSync(join(dir, 'features.json'), JSON.stringify(features));
+    writeFileSync(join(dir, 'tests.json'), JSON.stringify(tests));
+    const run = (id: string) => spawnSync('node', ['scripts/precheck-verify.mjs', '--features', join(dir, 'features.json'), '--tests', join(dir, 'tests.json'), id], { encoding: 'utf8' });
+    const mixed = run('mixed-entry');
+    expect(mixed.stderr).toBe('');
+    expect(mixed.status).toBe(0);
+    const wrong = run('mixed-wrong-entry');
+    expect(wrong.status).toBe(1);
+    expect(wrong.stderr).toContain('"an api test that exists" matches no test (unit');
+    expect(wrong.stderr).toContain('"a src test that exists" matches no test (api');
+  });
 });
