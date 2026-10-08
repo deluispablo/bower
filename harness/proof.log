@@ -455,3 +455,4 @@ c2-worker-dispatch	a7554576fb370b5e	2026-10-09	red (fixed in 7f5c22ee)
 c2-worker-dispatch	5467d88c1d89b9fd	2026-10-09	red (fixed in 06871745)
 c2-transport-options	7becba7e76b82ff1	2026-10-09	known-green: Red proved by hand at tests-only 1fc06958: 3 assertion failures (lost bytes 3798 ms not < 1000; known-offline upload 8 sends not 2; 'backoff' global present), /tmp/c2t-handred.log. b788a096 no longer reverts cleanly (5f850604 touched runner/src/status.ts). Same-class tests added with the fix.
 c2-pile-records	df60fdadbeb5982f	2026-10-09	red (fixed in 292c2618)
+c2-fake-parity	1a91d8e719b951db	2026-10-09	red (fixed in 8e176ebe)

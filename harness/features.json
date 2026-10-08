@@ -5561,7 +5561,7 @@
     "id": "c2-fake-parity",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Digests, unchecked and binnedByItem join DriveApi and are built on both fake and real Drive; runtime has-it checks go; fake search behaves like Drive's (tokens, page cap).",
     "steps": [
       "Ports on both Drives.",
