@@ -24,3 +24,15 @@
 - an unmarked section with no `bowerMd5` gets a line and at most one question per folder;
 - a "yes" rule lets Bower adopt the section (scripted, until C11 wires the answer);
 - undo restores an empty section empty.
+
+**Addendum, 2026-10-08: adoption by `bowerMd5` is withdrawn (live finding on `2b08fc1`).** The run after the coordinator's hand edit kept the edit and added a Timeline line, as ruled. But that append set `bowerMd5`, so the file now matches it while its section is still unmarked, and the next run would adopt the section and rewrite the person's text (`scripted.ts:694`). The flaw is in point 2 of this ruling:
+- every note Bower writes from now on either has the mark (born Bower's) or has a section the person owns;
+- the notes point 2 was meant for, written by earlier Bower runs, have no `bowerMd5` at all.
+
+So adoption by checksum protects nothing and opens this hole.
+- **`state-no-adoption`** (`bower-implementer`): remove adoption by `md5Checksum`/`bowerMd5`.
+  - An unmarked *Current state* is the person's unless a rule line grants it (point 3, the one question per folder).
+  - A Bower write never makes a section Bower's.
+  - Keep `bowerMd5` only if something else uses it; otherwise remove it from writes, reads and the listing fields.
+  - Test: after Bower appends to a note with an unmarked section, the next run still only adds a line.
+- **In the same entry, the fallback line is reworded.** "Bower's current state would now read: X.; Y.; …" becomes one plain sentence, under the authored-line limits.
