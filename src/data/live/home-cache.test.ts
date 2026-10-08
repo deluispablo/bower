@@ -55,7 +55,7 @@ async function homeLoad(s: LiveSources, drive: FakeDrive) {
 }
 
 describe('Home on the latency fake', () => {
-  it('Home is complete within 2 s on the latency fake', async () => {
+  it('Home is complete within 35% of the call minimum on the latency fake', async () => {
     const { drive, s } = await slowReport();
     const out = await homeLoad(s, drive);
     expect(out.run?.report, 'the last tidy-up report').toBeTruthy();
