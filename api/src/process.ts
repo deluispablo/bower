@@ -3,7 +3,7 @@
  *
  * The route checks the caller (same origin, session, the lease's epoch) and the body, then asks the
  * person object to admit with no manifest (`Person.admit(null)`): a repeat, a run going or the day's limit answer
- * with no Drive read. Only a press that would admit a new run (`needs-manifest`) goes on, outside the object's synchronous section, it reads the inbox with the person's
+ * with no Drive read. Only a press that would admit a new run (`needs-manifest`) goes on: outside the object's synchronous section it reads the inbox with the person's
  * Drive token and builds the admission manifest with the shared plan (`src/data/spine/plan.ts`, TL-P3-21):
  * metadata, Bower's own files and each pile's note, read by the runner's own readiness rules so a pile it would
  * hold is not admitted (TL-P3-25 point 2), through the Worker's reader (`admissionRead` in `src/data/spine/read.ts`: a listing with checksums,
