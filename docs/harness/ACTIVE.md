@@ -311,3 +311,4 @@ P3-9 is closed.
 - TL-P4-13 addendum (b3b3ab7): waiting answers start their scoped run when the active run ends; state-yes-writes before the C05 deploy. ask-answer-loop round 3 redirected (escalated, fresh).
 - home-errors-shown closed (84d9459). 393/401. home-cache-stable (implementer) dispatched; ask-answer-loop round 3 running.
 - ask-answer-loop re-closed (749dd30; red by hand at 51730dd; compat row added by me): waiting answers start a scoped run at run end. 394/401. P4-20c check and home-cache-stable running; state-yes-writes next.
+- P4-20c check PASS (ask-answer-loop; minors to polish; Worker ships first). state-yes-writes (escalated) dispatched; home-cache-stable running.
