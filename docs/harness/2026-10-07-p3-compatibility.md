@@ -33,4 +33,4 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `0c3f1fc` | state-no-adoption | none: red tests only; no check or file shape changed |
 
 | `50f026d` | state-no-adoption | none: red tests only; no check or file shape changed |
-| `FIX_SHA` | state-no-adoption | tightening: a `release` change is refused on a section without Bower's mark (validator: not with `adopted`); the fallback line skips lines Bower last wrote (by the section's mark) and keeps a first line's capitals; no new field, older files and bundles read the same; app and runner need not deploy together |
+| `af231e1` | state-no-adoption | tightening: a `release` change is refused on a section without Bower's mark (validator: not with `adopted`); the fallback line skips lines Bower last wrote (by the section's mark) and keeps a first line's capitals; no new field, older files and bundles read the same; app and runner need not deploy together |
