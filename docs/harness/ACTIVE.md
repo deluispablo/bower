@@ -191,3 +191,4 @@ P3-9 is closed.
 - gone-ticket-rows-expire closed (57f8fdb). 365/366 (open: report-kept-your-change, C12). P4-6 close: Opus delta 4d8191a..57f8fdb and the four suites.
 - P4-6 review BLOCK: checkpoint-per-batch makes a moved new folder twice after a mid-batch kill (stamp looked up in the planned parent only). Reopened; fix round with the same worker, plus the stamp as 32 hex (addendum 2) and a purged file set aside, not a stop. Other minors to P2_POLISH. 364/366.
 - P4-6 suites at eb6baa5: check 3609/190/102, e2e 226, e2e:fake 250, e2e:pwa 4. checkpoint-per-batch re-closed (ea94775): stamp found anywhere, 32 hex, purged never-sent thing set aside. 365/366. A short Opus fix-round check is running.
+- P4-6 fix-round check PASS (3 minors to polish). P4-6 closed; main moves.
