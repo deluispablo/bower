@@ -62,6 +62,19 @@ export interface SignInResult {
 
 /** Durable Object key-value entry that outlives `forget()`: the lowest session generation a new account may start at. */
 const GENERATION_FLOOR = 'generationFloor';
+/**
+ * Durable Object key-value entry that outlives `forget()` for at most a ticket's hour: the run tickets that were live at
+ * Delete me (their run id, SHA-256 and expiry; random values, nothing personal), so a runner still holding one is told
+ * the person is gone, while any other bearer stays signed out.
+ */
+const GONE_TICKETS = 'goneTickets';
+
+/** A run ticket live at Delete me (`GONE_TICKETS`). */
+interface GoneTicket {
+  runId: string;
+  hash: string;
+  expiresAt: number;
+}
 /** Durable Object key-value entry: the extra time the alarm gave the current run's attempt (`RecoveryWatch`). */
 const RECOVERY_WATCH = 'recoveryWatch';
 /** When a run moved during the alarm's lookup and is somehow still due, the alarm looks again this much later. */
@@ -482,12 +495,20 @@ export class Person extends DurableObject<Env> {
    */
   async forget(): Promise<void> {
     // One integer survives, nothing personal: a new account starts at the old generation + 1, so every
-    // cookie signed before the deletion stays refused after the person signs in again.
+    // cookie signed before the deletion stays refused after the person signs in again. The live run tickets'
+    // hashes survive until they expire, so their runners stop as gone (`runnerAccess`).
     const kv = this.ctx.storage.kv;
     const now = this.account()?.generation;
     const floor = Math.max(kv.get<number>(GENERATION_FLOOR) ?? 0, now === undefined ? 0 : now + 1);
+    const at = Date.now();
+    const live = this.ctx.storage.sql
+      .exec<{ run_id: string; hash: string; expires_at: number }>('SELECT run_id, hash, expires_at FROM run_ticket WHERE retired = 0 AND expires_at > ?', at)
+      .toArray()
+      .map((t): GoneTicket => ({ runId: t.run_id, hash: t.hash, expiresAt: t.expires_at }));
+    const kept = [...(kv.get<GoneTicket[]>(GONE_TICKETS) ?? []).filter((t) => t.expiresAt > at), ...live];
     await this.ctx.storage.deleteAll();
     kv.put(GENERATION_FLOOR, floor);
+    if (kept.length > 0) kv.put(GONE_TICKETS, kept);
     this.ctx.storage.transactionSync(() => migrate(this.ctx.storage.sql));
   }
 
@@ -735,13 +756,13 @@ export class Person extends DurableObject<Env> {
    * retired or expired at `now`. A stale run is ended first, as `runStatus` does, so its ticket no longer works.
    *
    * `gone` when the person can no longer be acted for, so the runner drops the Drive token it keeps:
-   * after Delete me (no account, and the generation floor `forget` leaves), or once Google access was forgotten
+   * after Delete me (no account, for a ticket live then: `GONE_TICKETS`), or once Google access was forgotten
    * (`forgetGoogleAccess`: revoked, or the refresh token unreadable) for a live ticket. A plain sign-out keeps the
    * refresh token, so its runs go on: a run never depends on a browser.
    */
   runnerAccess(runId: string, hash: string, now: number): RunnerGrant | 'stale-attempt' | 'gone' | null {
     return this.ctx.storage.transactionSync((): RunnerGrant | 'stale-attempt' | 'gone' | null => {
-      if (this.account() === null) return this.ctx.storage.kv.get<number>(GENERATION_FLOOR) === undefined ? null : 'gone';
+      if (this.account() === null) return this.goneTicket(runId, hash, now) ? 'gone' : null;
       this.expire(now);
       const found = this.findTicket(runId, hash, now);
       if (found.kind === 'superseded') return 'stale-attempt';
@@ -751,6 +772,17 @@ export class Person extends DurableObject<Env> {
       const manifest: unknown = kept === null ? null : JSON.parse(kept);
       return { attempt: found.row.epoch, folderId: this.folderId(), manifest: isAdmissionManifest(manifest) ? manifest : null };
     });
+  }
+
+  /** Whether `hash` is a ticket of `runId` that was live at Delete me and has not expired at `now` (`GONE_TICKETS`). */
+  private goneTicket(runId: string, hash: string, now: number): boolean {
+    const kv = this.ctx.storage.kv;
+    const kept = kv.get<GoneTicket[]>(GONE_TICKETS);
+    if (kept === undefined) return false;
+    const live = kept.filter((t) => t.expiresAt > now);
+    if (live.length === 0) kv.delete(GONE_TICKETS);
+    else if (live.length < kept.length) kv.put(GONE_TICKETS, live);
+    return live.some((t) => t.runId === runId && timingSafeEqual(t.hash, hash));
   }
 
   /**
