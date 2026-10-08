@@ -266,6 +266,17 @@ describe('deploy-staging.sh', { timeout: 30_000 }, () => {
     expect(readFileSync(named.calls, 'utf8')).not.toMatch(/^(npx|wrangler)/m);
   });
 
+  it('the deploy scan allows the unpdf literal and still refuses a real address', () => {
+    const at = checkout();
+    // A bundle with only the unpdf literal should pass.
+    const withLiteral = run(at, [at.sha, ORIGIN], { DIST_TEXT: 'const obfuscated = "jm@kbswfq.pkbglt";' });
+    expect(withLiteral.status).toBe(0);
+    // A bundle with the literal plus a real address should refuse.
+    const withBoth = run(at, [at.sha, ORIGIN], { DIST_TEXT: 'const obfuscated = "jm@kbswfq.pkbglt"; const contact = "alex@company.test";' });
+    expectRefused(withBoth, /address/i);
+    expect(`${withBoth.stdout}${withBoth.stderr}`).not.toContain('alex@company.test');
+  });
+
   it('deploy-staging deploys a clean main SHA and checks health', () => {
     const at = checkout();
     // The first /health still names the previous version, and /status is 500 twice during version skew.
