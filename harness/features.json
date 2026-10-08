@@ -5154,7 +5154,7 @@
   {
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "id": "fallback-no-duplicate",
     "what": "No Current-state fallback line when the same run already adds a line to that note citing the same thing.",
     "steps": [
