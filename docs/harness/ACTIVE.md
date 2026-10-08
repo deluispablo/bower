@@ -159,3 +159,4 @@ P3-9 is closed.
 - P4-2 fix-round check PASS (4 minors to polish). Next: main, backup, the lead deploys, 3 scripted runs, then BOWER_PROVIDER=claude and the C04 smoke.
 - P4-2 close on staging 58897f5: 3 scripted runs at 1:59, 1:30 and 1:21; the Claude C04 smoke done in 1:50 (model 2.1 s, 1 turn), run safe, scorer FAIL (no note; the model sees no contents). P4-3 approved: runner-checkpoint-cost, with the 25 s dispatch split first.
 - P4-3: runner-checkpoint-cost running (bower-escalated, bower-p4-ckpt at 62fbe3d). 354/355.
+- TL-P4-03 (98886fd): runner-checkpoint-cost also caches the Claude Code install; c04-incorporation (first P4-C slice) running (bower-escalated, bower-p4-c04 at 60791e9). 354/356.
