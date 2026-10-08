@@ -36,4 +36,4 @@ What makes a second brain good shows only over time: updates, contradictions, an
 - **Speed and tokens** are recorded per run.
 - **Comparison:** the same stories go through the owner's local method as a reference reading. They are judged by rubric, never by running on the owner's vault.
 
-**Pending for the owner, to discuss later:** when the person answers an ask, should Bower run a small tidy-up for that item at once, or wait for the next tidy-up the person starts? This is decided before `ask-answer-loop` (C11) is built.
+**Owner decided, 2026-10-08:** an answer starts a small tidy-up at once (TL-P4-08 addendum 8).

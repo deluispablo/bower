@@ -14,7 +14,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Codex review on 2026-10-12** (TL-P3-16): check that `codex exec` answers, then run one review of the P3 Worker and spine range. Its findings are fixed before P4 code depends on that code.
 - **Pane:** the coordinator's pane is signed in as test account A. The owner gave the coordinator standing permission for made-up piles and Tidy up presses on staging with A and B (2026-10-08).
 - **Instance repository** `deluispablo/bower-home` ([TL-P3-13](2026-10-07-tl-p3-13-instance-repository.md)): it holds the new runner, and the lead manages it with `gh`, which has the `workflow` scope. Its secret is `CLAUDE_CODE_OAUTH_TOKEN`, set by the owner. Its variables are `BOWER_API_URL` and `BOWER_ALLOW_WEB`, plus `BOWER_PROVIDER` and `BOWER_MODEL` only during live runs.
-- **To raise with the owner:** (1) before `ask-answer-loop` (C11): does answering an ask start a small tidy-up at once, or wait for the next one? (2) When P4 closes: review the scenario battery draft ([TL-P4-09](2026-10-08-tl-p4-09-scenario-battery.md)) and plan it.
+- **To raise with the owner:** when P4 closes, review the scenario battery draft ([TL-P4-09](2026-10-08-tl-p4-09-scenario-battery.md)) and plan it.
 - **Pending, owner-deferred:** a live Google revocation check with a different test account (TL-P3-28).
 - **Owner ruled:** the OAuth client is In production. P3 was accepted and P4 authorized on 2026-10-07; the production cutover needs the owner's approval of the switch moment and the rollback plan.
 - **After a compaction:** a `SessionStart` hook prints [after-compact.md](../../harness/after-compact.md) (TL-P4-06). Re-read this file first.
