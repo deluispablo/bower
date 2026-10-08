@@ -16,13 +16,13 @@ const textBytes = [239, 187, 191, 65, 13, 10, 195, 169, 240, 159, 170, 182];
 const unavailable = { code: 'unknown', message: "This device no longer has this file's contents." };
 interface Call { url: URL; method: string; headers: Headers }
 
-function http(response: () => Response | Promise<Response>) {
+function http(response: () => Response | Promise<Response>, pacing: { baseMs: number } = { baseMs: 0 }) {
   const calls: Call[] = []; const asked: boolean[] = [];
   const transport: typeof fetch = async (input, init) => {
     calls.push({ url: new URL(String(input)), method: init?.method ?? 'GET', headers: new Headers(init?.headers) });
     return response();
   };
-  const drive = new DriveHttp({ fetch: transport, token: async (fresh) => { asked.push(fresh); return fresh ? 'FRESH_SYNTHETIC_TOKEN' : 'SYNTHETIC_TOKEN'; } });
+  const drive = new DriveHttp({ fetch: transport, pacing, token: async (fresh) => { asked.push(fresh); return fresh ? 'FRESH_SYNTHETIC_TOKEN' : 'SYNTHETIC_TOKEN'; } });
   return { drive, calls, asked };
 }
 async function attempt<T>(call: () => Promise<T>) {
@@ -194,15 +194,17 @@ describe('drive raw bytes preserve source authority', () => {
     expect(calls[1]?.headers.get('authorization')).toBe('Bearer FRESH_SYNTHETIC_TOKEN');
   });
 
-  it('HTTP keeps auth, missing-file and offline transport refusals', async () => {
+  it('HTTP keeps auth, missing-file and offline transport refusals with no real wait', async () => {
     const auth = http(() => new Response(null, { status: 401 }));
     await expect(auth.drive.readBytes('FILE_A')).rejects.toMatchObject({ code: 'auth' });
     expect(auth.asked).toEqual([false, true]); expect(auth.calls).toHaveLength(2);
     const missing = http(() => new Response(null, { status: 404 }));
     await expect(missing.drive.readBytes('FILE_A')).rejects.toMatchObject({ code: 'not-found' }); expect(missing.calls).toHaveLength(1);
     const offline = http(() => { throw new TypeError('Synthetic transport offline'); });
+    const t0 = Date.now();
     // A read is sent again on the network, as every idempotent request is (`transport.ts`), then told offline.
     await expect(offline.drive.readBytes('FILE_A')).rejects.toMatchObject({ code: 'offline' }); expect(offline.calls).toHaveLength(1 + RETRIES);
+    expect(Date.now() - t0).toBeLessThan(250);
   });
 
   it.each([

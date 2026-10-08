@@ -60,12 +60,17 @@ class ResumableDrive {
   readonly sessions = new Map<string, Session>();
   readonly ops: Op[] = [];
   offline = false;
+  /** Requests sent while `offline`. */
+  attempts = 0;
   /** Called after a chunk is committed; a promise that never settles loses Drive's reply. */
   afterChunk: ((start: number, signal: AbortSignal | undefined) => Promise<void>) | null = null;
   private next = 0;
 
   readonly fetch = (async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
-    if (this.offline) throw new TypeError('Failed to fetch');
+    if (this.offline) {
+      this.attempts++;
+      throw new TypeError('Failed to fetch');
+    }
     const url = new URL(String(input));
     const method = init.method ?? 'GET';
     const headers = new Headers(init.headers);
@@ -159,8 +164,9 @@ function setup(): Env {
 }
 
 /** One page load: the real Drive client, a fresh store and queue over the device's IndexedDB. */
-function device(env: Env, store: UploadStore = indexedDbUploadStore(env.idb)): { queue: UploadQueue; store: UploadStore } {
-  const http = new DriveHttp({ token: async () => 'TOKEN', fetch: env.drive.fetch });
+function device(env: Env, store: UploadStore = indexedDbUploadStore(env.idb), pacing: { baseMs: number } = { baseMs: 0 }): { queue: UploadQueue; store: UploadStore } {
+  // The backoff is this client's option: no wait here unless a test asks for one.
+  const http = new DriveHttp({ token: async () => 'TOKEN', fetch: env.drive.fetch, pacing });
   return { queue: createUploadQueue({ drive: http, store, chunkSize: UNIT }), store };
 }
 
@@ -244,6 +250,7 @@ describe('the upload queue on the real Drive client', () => {
   });
 
   it('lost bytes ask to choose the file again', async () => {
+    const t0 = Date.now();
     const env = setup();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const lostOne = await member(1);
@@ -272,6 +279,60 @@ describe('the upload queue on the real Drive client', () => {
     expect(two).toMatchObject({ memberKey: 'member-2', state: 'done' });
     expect([...env.drive.files.values()].map((f) => f.name)).toEqual(['scan-2.pdf']);
     expect(env.drive.ops.filter((o) => o.op === 'open')).toHaveLength(1);
+    // No real backoff anywhere in it (3.5 s with the client's real one): measured, with no global set up.
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+
+  it('an upload added while known offline shows offline at once', { timeout: 20_000 }, async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const env = setup();
+    env.drive.offline = true;
+    const { queue } = device(env);
+    await queue.start(ACCOUNT, FOLDER);
+    await queue.add(await member(1));
+    await queue.add(await member(2));
+    await queue.idle();
+    // The browser said it had no network before anything was sent: one try each, no resend, "waiting for a connection".
+    expect(queue.items().map((i) => [i.state, i.error?.code])).toEqual([['waiting', 'offline'], ['waiting', 'offline']]);
+    expect(env.drive.attempts).toBe(2);
+    queue.stop();
+  });
+
+  it('stop settles at once during an offline generateIds', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const env = setup();
+    env.drive.offline = true;
+    // A backoff of a minute: only the caller's signal can end it.
+    const { queue } = device(env, undefined, { baseMs: 60_000 });
+    await queue.start(ACCOUNT, FOLDER);
+    await queue.add(await member(1));
+    await new Promise((r) => setTimeout(r, 50));
+    queue.stop();
+    const settled = await Promise.race([queue.idle().then(() => 'settled'), new Promise((r) => setTimeout(() => r('still waiting'), 500))]);
+    expect(settled).toBe('settled');
+  });
+
+  it('stop settles at once during an offline getUploaded', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const env = setup();
+    const lost = env.drive.loseReplyAt(0);
+    const first = device(env);
+    await first.queue.start(ACCOUNT, FOLDER);
+    await first.queue.add(await member(1));
+    await lost;
+    first.queue.stop();
+    await first.queue.idle();
+    env.drive.afterChunk = null;
+    // A reload that lost the bytes asks Drive for the file, with no network and a backoff of a minute.
+    env.drive.offline = true;
+    const real = indexedDbUploadStore(env.idb);
+    const second = device(env, { ...real, body: async () => null }, { baseMs: 60_000 });
+    await second.queue.start(ACCOUNT, FOLDER);
+    await new Promise((r) => setTimeout(r, 50));
+    second.queue.stop();
+    const settled = await Promise.race([second.queue.idle().then(() => 'settled'), new Promise((r) => setTimeout(() => r('still waiting'), 500))]);
+    expect(settled).toBe('settled');
   });
 
   it('lost bytes of a file Drive already made count as sent, never as one to choose again', async () => {

@@ -1,5 +1,5 @@
 import { env as testEnv, runInDurableObject } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { encrypt, importEncryptionKey } from '../src/crypto.js';
 import type { Env } from '../src/env.js';
@@ -581,6 +581,25 @@ describe('POST /vault after a lapsed claim', () => {
     expect((await b).status).toBe(200);
     const paths = g.paths(m.id);
     expect(new Set(paths).size).toBe(paths.length);
+  });
+});
+
+describe('POST /vault over the Drive transport', () => {
+  it('a Drive read that loses the network waits the options it was given, not a real backoff', async () => {
+    const { cookie } = await someone();
+    const g = new FakeGoogle();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const slept: number[] = [];
+    const pacing = { baseMs: 0, sleep: (ms: number): Promise<void> => { slept.push(ms); return Promise.resolve(); } };
+    const down: FetchLike = async (input, init) => {
+      if (input === GOOGLE_TOKEN_URL) return g.fetchImpl(input, init);
+      throw new TypeError('network lost');
+    };
+    const t0 = Date.now();
+    const res = await createApp({ fetchImpl: down, pacing }).request(`${APP}/vault`, { method: 'POST', headers: { cookie, origin: APP, 'content-type': 'application/json', ...(leases.get(cookie) ?? {}) }, body: '{}' }, env);
+    expect(res.status).toBe(500);
+    expect(slept).toHaveLength(3);
+    expect(Date.now() - t0).toBeLessThan(500);
   });
 });
 

@@ -13,6 +13,8 @@ import { RunnerDrive } from '../../../runner/src/drive';
 import { RunnerToken } from '../../../runner/src/token';
 import { RunnerStatus } from '../../../runner/src/status';
 import { WorkerHttp } from '../worker/worker-http';
+import * as transport from './transport';
+import { RETRIES, send } from './transport';
 
 const API = 'https://api.example.com';
 const RUN = 'run-1';
@@ -147,6 +149,41 @@ describe('the Drive transport', () => {
     const stalls = ((): Promise<Response> => (sends++, new Promise<Response>(() => undefined))) as unknown as typeof fetch;
     const outcome = await after(new WorkerHttp(API, stalls).process('all'), LONG);
     expect(outcome).toMatchObject({ state: 'rejected', error: { code: 'offline' } });
+    expect(sends).toBe(1);
+  });
+});
+
+describe('the send options (c2-transport-options)', () => {
+  it('a send takes its backoff, sleep and signal as options, with no global', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    // No mutable base for a test setup to zero: the backoff is a option of each send.
+    expect('backoff' in transport).toBe(false);
+
+    // The sleep and the base are the caller's: three waits, each a share of base * 2^n, none real.
+    const slept: number[] = [];
+    const pacing = { baseMs: 100, sleep: (ms: number): Promise<void> => { slept.push(ms); return Promise.resolve(); } };
+    const p = send(down, 'https://api.example.com/x', {}, { idempotent: true, pacing });
+    const seen = expect(p).rejects.toBeInstanceOf(TypeError);
+    await vi.advanceTimersByTimeAsync(10);
+    await seen;
+    expect(slept).toHaveLength(RETRIES);
+    slept.forEach((ms, n) => expect(ms).toBeLessThanOrEqual(100 * 2 ** n));
+
+    // The signal is the caller's too: aborting it ends a backoff at once, with its reason.
+    const stop = new AbortController();
+    const waiting = send(down, 'https://api.example.com/x', {}, { idempotent: true, pacing: { baseMs: 10_000 }, signal: stop.signal });
+    await vi.advanceTimersByTimeAsync(0);
+    stop.abort(new DOMException('stopped', 'AbortError'));
+    const out = await after(waiting, 50);
+    expect(out).toMatchObject({ state: 'rejected', error: { name: 'AbortError' } });
+  });
+
+  it('a send told the browser is offline does not send a network error again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let sends = 0;
+    const lost = ((): Promise<Response> => { sends++; return Promise.reject(new TypeError('fetch failed')); }) as unknown as typeof fetch;
+    await expect(send(lost, 'https://api.example.com/x', {}, { idempotent: true, knownOffline: true, pacing: { baseMs: 0 } })).rejects.toBeInstanceOf(TypeError);
     expect(sends).toBe(1);
   });
 });
