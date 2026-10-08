@@ -184,3 +184,4 @@ P3-9 is closed.
 - TL-P4-06 merged (the after-compact hook). HANDOFF updated for a compaction. Merged P4 worktrees removed; open: bower-p4-ckbatch, bower-p4-readsreport.
 - TL-P4-04 addendum 2 (a5aba50): e51d469 keeps {runId, hash, expiresAt} and prunes only on the next write. New entry gone-ticket-rows-expire (implementer) queued for the next free slot. 362/365.
 - P4-5 suites at a2dafd9: check 3608/186/92, e2e:fake 250, e2e:pwa 4; e2e 225/226 (qa10:149 desktop, a status toast timing; no src change since P4-4's green; 5 repeats green). P4-5 suites green.
+- runner-reads-and-report closed (03c0e21): modelled plan reads 4150 → 1750 ms (25 → 17 reads), report 62 → 24 calls in barrier order, plan byte-equal on all 29 corpus cases. 363/365. gone-ticket-rows-expire running (implementer, bower-p4-goneexpire at 03c0e21).
