@@ -5054,5 +5054,32 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step|the C04 run makes at least 40 percent fewer Drive calls|offer-and-flat apply takes at most half its modelled time|a person change between the check and the send is refused\"",
     "note": "TL-P4-08 addendum 6 (main cf592bf). Live apply 26-37 s on offer-and-flat at 327b987. Reopened by the P4-13 review (BLOCK): the fence reused a read up to 3 s old, so a person rename between check and send was overwritten."
+  },
+  {
+    "id": "admission-subrequest-budget",
+    "task": "p4-b",
+    "category": "fix",
+    "passes": false,
+    "what": "Admission counts every Worker subrequest (token, listing pages, read-ahead, dispatch) against a budget of 35 (the free plan allows 50 per invocation); the read-ahead takes what fits and the runner reads the rest, so a bigger folder no longer fails /process with 500.",
+    "steps": [
+      "Count every subrequest in /process admission.",
+      "Read-ahead bounded to the budget; the runner reads what was not read ahead.",
+      "Test: 300 files and 25 piles admitted within budget, same outcome as unbudgeted."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"admission of 300 files and 25 piles stays within the subrequest budget with the same outcome\"",
+    "note": "TL-P4-11 (main 70f5897). Live ba74598: Too many subrequests by single Worker invocation, then /process 500."
+  },
+  {
+    "id": "process-error-honest",
+    "task": "p4-b",
+    "category": "fix",
+    "passes": false,
+    "what": "A /process failure shows the one-sentence error and a retry on the tidy-up sheet, never a sheet stuck on Starting.",
+    "steps": [
+      "The sheet leaves Starting on a /process error and shows the sentence and Try again.",
+      "e2e test with the fake Worker answering 500."
+    ],
+    "verify": "pnpm e2e:fake --grep \"a failed start says why and offers to try again\"",
+    "note": "TL-P4-11 (main 70f5897). Live ba74598: the sheet stayed on Starting through three 500s."
   }
 ]

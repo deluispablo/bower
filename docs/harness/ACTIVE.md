@@ -264,3 +264,4 @@ P3-9 is closed.
 - Suites at 5e756a1: check 3620/190/155, e2e 226, e2e:fake 250, e2e:pwa pass. Main moves; SHA to the lead.
 - Main and backup at ba74598; SHA sent to the lead (offer-and-flat x3 + garden x1 + a C05 case suggested).
 - ba74598 live: POST /process 500 on every press (no Actions run); sheet stuck on Starting. Asked the lead for the Worker stack. Presses stopped.
+- TL-P4-11 (70f5897): /process 500 was Too many subrequests (free plan 50). admission-subrequest-budget (implementer) and process-error-honest (implementer) running. 380/385.
