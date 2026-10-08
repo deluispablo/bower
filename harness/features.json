@@ -5548,7 +5548,7 @@
     "id": "c2-read-cache",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One read cache keyed by file id plus modifiedTime, used by DriveVault, Journal and the runner; only the listing is invalidated, so a refresh never clears a read in flight; the runner's eight caches and time-based holds go.",
     "steps": [
       "One cache; listing-only invalidation.",

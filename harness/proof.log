@@ -449,3 +449,4 @@ c2-runner-exit	4ec82ebf22a1147a	2026-10-08	red (fixed in c17c3290)
 c2-drive-transport	a6512480e68ab70e	2026-10-08	known-green: reason: c2-runner-exit later touched runner/src/status.ts. Red by hand at tests-only a2094dc9: both verify tests fail on assertions (stalled GET rejected offline at 30 s; runner error called offline); green at 18f8a4da
 c2-drive-transport	6ece368322372cd0	2026-10-08	red (fixed in 56b4d7fd)
 c2-worker-dispatch	351c0ad00ab2f5dc	2026-10-09	red (fixed in d155dcab)
+c2-read-cache	1bca21f71ecd5027	2026-10-09	red (fixed in 20d1e0fa)
