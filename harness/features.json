@@ -4758,7 +4758,7 @@
       "The runner token route that finds revoked or unreadable access answers 410 gone; a wrong or missing ticket always gets 401."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the attempt route answers gone after delete me or revoked access|a plain sign-out leaves the attempt route answering|the token request that finds access revoked or unreadable answers gone|a wrong ticket after delete me still gets 401\" && pnpm -C runner exec vitest run -t \"the runner drops its token and stops before the next write when the person is gone\"",
-    "passes": false,
+    "passes": true,
     "note": "Lead 3ce00dd (P4-4 review minor rated Important for delete me and revocation). Reopened: P4-5 review BLOCK (runner.ts:149 token route answers 401 not 410)."
   },
   {
