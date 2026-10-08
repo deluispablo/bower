@@ -374,3 +374,4 @@ P3-9 is closed.
 - lost-bytes-slow ruled (b)+(a2) (main 1968a8c): c2-transport-options registered (implementer), after c2-fake-parity, before c2-one-engine. 415/425.
 - c2-worker-dispatch sign-out fix round merged (red 59e3456b, fix 06871745; admission compares the kept generation floor, raised only by forget; check green on merged tree). P4-30 short check dispatched.
 - c2-worker-dispatch closed again (93f6d3d4, P4-30 PASS; sign-out-refuses-answers fixed). 416/425. Running: c2-fake-parity. Next: c2-transport-options.
+- c2-pile-records (implementer, home-empty-48s) dispatched in the free slot; c2-transport-options waits for c2-fake-parity (both touch the transport/fake).
