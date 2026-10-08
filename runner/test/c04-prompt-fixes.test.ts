@@ -36,7 +36,7 @@ function reply(id: Id, over: Overrides = {}): unknown {
       { fileId: id('Offer_letter_final(2).pdf'), to: 'Projects/Job hunt', name: over.offerName ?? 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: over.summary ?? 'An offer from Ferrowick.', body: over.body ?? 'Industrial designer, fully remote, 42,000 a year, start 2 November.' } },
       { fileId: id('listing-88213.example.url'), to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
       { fileId: id('IMG_2301.jpg'), to: 'Projects/Flat hunt', name: 'Wrenfield Road, kitchen.jpg' },
-      { fileId: id('Payslip_Aug.pdf'), to: 'Resources/Pay', name: over.payslipName ?? 'Payslip August.pdf' },
+      { fileId: id('Payslip_Aug.pdf'), to: 'Resources/Pay', name: over.payslipName ?? 'Payslip August.pdf', note: { name: 'Payslip, August.md', summary: 'A payslip for August.', body: 'Payslip for August.' } },
     ],
     ...(over.line ? { lines: [{ note: 'Projects/Job hunt/Job hunt.md', text: over.line, cites: id('Offer_letter_final(2).pdf') }] } : {}),
   };

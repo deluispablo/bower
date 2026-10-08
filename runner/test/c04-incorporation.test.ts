@@ -163,7 +163,7 @@ const PROPOSALS: Record<string, Proposal> = {
       { thing: 'Offer_letter_final(2).pdf', to: 'Projects/Job hunt/Applications', basis: 'Projects/Job hunt/Job hunt.md', name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Salary 42,000 a year. Start 2 November.' } },
       { thing: 'listing-88213.example.url', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
       { thing: 'IMG_2301.jpg', to: 'Projects/Flat hunt/Viewing photos', basis: 'Projects/Flat hunt/Flat hunt.md', name: 'Wrenfield Road, kitchen.jpg' },
-      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', responsibility: 'pay and tax records', name: 'Payslip August.pdf' },
+      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', responsibility: 'pay and tax records', name: 'Payslip August.pdf', note: { name: 'Payslip, August.md', summary: 'A payslip for August.', body: 'Payslip for August.' } },
     ],
     lines: [
       { note: 'Projects/Flat hunt/Flat hunt.md', text: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example.url' },
@@ -210,7 +210,8 @@ describe('the C04 slice through the Claude provider (P4-3)', () => {
       // What the note says came in the context: the PDF's own text, read by the runner.
       for (const t of PROPOSALS[c.id]?.things ?? []) {
         const shown = seen[0]?.piles.flatMap((p) => p.things).find((x) => x.name === t.thing);
-        if (t.thing.endsWith('.pdf') && c.inboxFiles[t.thing]?.startsWith('%PDF-1.4\n')) expect({ id: c.id, text: shown?.text?.includes('51.91') || shown?.text?.includes('18 October') || shown?.text?.includes('Ferrowick') }).toEqual({ id: c.id, text: true });
+        const own = { 'receipt-2026-09-14.pdf': '51.91', 'Community garden newsletter, autumn.pdf': '18 October', 'Offer_letter_final(2).pdf': 'Ferrowick', 'Payslip_Aug.pdf': 'payslip, August' }[t.thing];
+        if (t.thing.endsWith('.pdf')) expect({ id: c.id, thing: t.thing, text: own !== undefined && shown?.text?.includes(own) }).toEqual({ id: c.id, thing: t.thing, text: true });
       }
     }
   });
