@@ -387,6 +387,20 @@ describe('the admission manifest', () => {
     expect(root).not.toBe('');
   });
 
+  it('a press over the daily limit reads nothing from Drive', async () => {
+    const who = await withFolder();
+    await who.folder.drive.createText(who.folder.inbox, 'receipt.pdf', '%PDF receipt', { pile: 'p-receipt' });
+    const day = new Date().toISOString().slice(0, 10);
+    await runInDurableObject(person(who.sub), (_instance, state) => {
+      state.storage.sql.exec('INSERT INTO quota (window, counter) VALUES (?, ?)', day, Number(env.DAILY_RUN_LIMIT));
+    });
+    who.folder.sent.length = 0;
+    const r = await press(who, { scope: 'all', allowWeb: false, requestId: 'press-over' });
+    expect(r.status).toBe(429);
+    expect(who.folder.sent).toEqual([]);
+    expect(await stored(who.sub)).toMatchObject({ runs: [] });
+  });
+
   /** A pile folder in the inbox with its note's text and, when given, one thing. */
   async function pileWithNote(folder: DriveFolder, name: string, pileId: string, note: string, thing?: string) {
     const made = await folder.drive.createFolder(folder.inbox, name, { pile: pileId });
