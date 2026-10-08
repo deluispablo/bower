@@ -350,3 +350,4 @@ P3-9 is closed.
 - Stage 2 registered (c2-drive-transport, c2-runner-exit, c2-read-cache, c2-fake-parity, c2-one-engine, c2-write-once, c2-upload-queue-only, c2-worker-dispatch; c2-pile-records already open). Opening with c2-drive-transport and c2-runner-exit (escalated).
 - c2-runner-exit closed (8c6c1343; compat row added by me on the branch before merge; smoke-runner-silent-stop fixed). P4-24 review running; c2-drive-transport running. 412/423.
 - P4-24 PASS (c2-runner-exit; minors to polish). c2-worker-dispatch (escalated) dispatched; c2-drive-transport running.
+- c2-drive-transport closed (13a6ecad; removed 450; dup baseline 23; smoke-runner-offline fixed). P4-25 review and c2-worker-dispatch (escalated) dispatched. 413/423.
