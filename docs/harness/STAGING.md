@@ -69,3 +69,4 @@ P3 replaces this preview with the real staging environment: Worker plus real ser
 - 2026-10-08, `main` `a566241` (P4-5/P4-6: runner stops when gone, gone ticket rows expire, checkpoint per batch, runner reads and report), version `e0b85749`, by the script, which passed its scans with the allowlist fix. `bower-home` is at `11e6ce4`.
 - 2026-10-08, `main` `cd3af43` (P4-7: checkpoint count, placement guidance, model-input fingerprint), version `2190e0a6`, by the script. `bower-home` is at `198796b`.
 - 2026-10-08, `main` `c6ddb96`, `80ae66d`, `b54392c` and `327b987` (the second-brain method, placement and note checks, per-thing asks, prompt fixes), each by the script. Last version `68d977df`; `bower-home` `bdc383b`.
+- 2026-10-08, `main` `ba74598`, `2b08fc1`, `924e6d6`, `45e9742` and `9265d860` (TL-P4-10 to TL-P4-14: state ownership, admission budget, the stage 0 baseline, stage 1), each by the script. Last version `0abd76e0`; `bower-home` `797f38b`.
