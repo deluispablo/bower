@@ -4844,7 +4844,7 @@
       "Test on the modelled C04 run."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the C04 run writes and counts exactly 4 checkpoints\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 (main 9f9eb22). Timing: checkpoints=16011/8, 11500/8, 11604/8."
   },
   {
