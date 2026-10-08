@@ -4726,10 +4726,11 @@
     "steps": [
       "Two retries with backoff and jitter on network errors and 5xx; never on 4xx.",
       "After the retries fail, the alarm is set 60 s out.",
-      "Tests with a stubbed GitHub."
+      "Tests with a stubbed GitHub.",
+      "The 60 s look-up never fails a run that has reported, and a GitHub 5xx on the look-up waits instead of failing."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"a dispatch network error is retried twice with backoff|a dispatch that keeps failing arms the alarm at 60 seconds\"",
-    "passes": true,
-    "note": "TL-P4-04 batch P4-4 (run 3 dispatch failed: network error after 40 ms)."
+    "verify": "pnpm -C api exec vitest run -t \"a dispatch network error is retried twice with backoff|a dispatch that keeps failing arms the alarm at 60 seconds|a lost dispatch.s early look-up leaves a run that has reported alone\"",
+    "passes": false,
+    "note": "TL-P4-04 batch P4-4 (run 3 dispatch failed: network error after 40 ms). Reopened: P4-4 review BLOCK (person.ts:617 early look-up fails a reporting run on a 502)."
   }
 ]

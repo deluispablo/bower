@@ -206,3 +206,7 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - claude.ts intentOf: one loop covers Markdown and www line links, so the first refusal hides the second case.
   - claude.ts shownOf: its room leaves out the "[N pages not read]" marker, so a run can pass 48k by a few dozen characters.
   - new-instance.test.ts fails 2 in a fresh worktree while dependencies install (environment, not the diff).
+- (P4-4 review, notes /private/tmp/p4-4-review-notes.md) Minors:
+  - runner/src/token.ts: the runner keeps the Drive token up to about 59 min after the DO's copy is cleared (sign-out). Before, it refused at the next batch. Lead to rate.
+  - drive-http.ts listAll: no test pages the checksum listing past 1000 files.
+  - read.ts admissionRead: on a Drive 401, up to 8 reads in flight each mint a fresh token.
