@@ -105,14 +105,22 @@ export interface StartOptions {
   subject?: string;
   /** The press's id, sent on every retry of it; a new one per call when absent (TL-P3-15). */
   requestId?: string;
+  /**
+   * An answer's run (TL-P4-13 addendum): while a run is going, the Worker keeps it and starts it when that run ends,
+   * and the run it answers is the one going, with `waits`.
+   */
+  answer?: boolean;
 }
+
+/** What a press is answered with: the run, and for an answer, whether it waits for the end of the run going. */
+export type StartedRun = RunState & { waits?: true };
 
 export interface RunSource {
   /**
    * `allowWeb`: the person lets Bower look things up on the web in this tidy-up (Settings). An answer's run
    * (`answer-loop.ts`) also gives `subject`, the one thing or pile of the inbox it takes, and its own `requestId`.
    */
-  start(scope: 'all' | 'instructions', opts?: StartOptions): Promise<RunState>;
+  start(scope: 'all' | 'instructions', opts?: StartOptions): Promise<StartedRun>;
   /**
    * The run going now, or the last one. `again`: the person asked (Try again),
    * so a remembered client error is asked once more instead of answered.

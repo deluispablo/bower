@@ -8,7 +8,8 @@ import { QUEUED_STALE_MS, RUNNING_STALE_MS, STALE_FAILURE } from '../src/process
 import type { AdmitInput, RunReply, RunWire } from '../src/process.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
-import { makeRunId } from '../src/run-ticket.js';
+import { hashTicket, makeRunId } from '../src/run-ticket.js';
+import type { Person } from '../src/person.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import { MANIFEST, driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
 
@@ -480,3 +481,71 @@ function deepText(value: unknown, seen = new Set<unknown>()): string {
   if (value instanceof Error) return [value.message, value.stack ?? '', deepText(value.cause, seen), deepText({ ...value }, seen)].join(' ');
   return Object.entries(value as Record<string, unknown>).map(([k, v]) => `${k}: ${deepText(v, seen)}`).join(' ');
 }
+
+describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
+  type Reply = RunReply & { waits?: true };
+  const answer = (requestId: string, subject: string): Record<string, unknown> => ({ scope: 'all', allowWeb: false, requestId, subject, answer: true });
+  const quota = async (sub: string): Promise<unknown[]> =>
+    await runInDurableObject(person(sub), (_i, state) => state.storage.sql.exec('SELECT counter FROM quota').toArray());
+
+  it('an answer during a run starts its scoped run when the run ends', async () => {
+    const { sub, cookie, fence } = await withThings();
+    const folder = wire;
+    if (folder === null) throw new Error('no folder');
+    await folder.drive.createText(folder.inbox, 'photo.jpg', 'jpg bytes', { pile: 'p-photo' });
+    await folder.drive.createText(folder.inbox, 'other.pdf', '%PDF other', { pile: 'p-other' });
+    // A tidy-up is going, pressed before the answers.
+    const going = (await (await post(cookie, { scope: 'instructions', allowWeb: false, requestId: 'press-1' }, fence)).json()) as Reply;
+    const goingId = going.run?.id ?? '';
+    // Two answers on two subjects, the first sent twice (a retry): each is told it waits; none starts a run now.
+    for (const body of [answer('answer-a', 'p-receipt'), answer('answer-a', 'p-receipt'), answer('answer-b', 'p-photo')]) {
+      const r = await post(cookie, body, fence);
+      expect(r.status).toBe(200);
+      const reply = (await r.json()) as Reply;
+      expect(reply.run?.id).toBe(goingId);
+      expect(reply.waits).toBe(true);
+    }
+    expect(await quota(sub)).toEqual([{ counter: 1 }]);
+    // The run ends: the person object wakes at once, with no press.
+    const ticket = (await person(sub).mintTicket(goingId, 2, Date.now())) ?? '';
+    const ended = await person(sub).runnerReport(goingId, await hashTicket(ticket), { attempt: 2, seq: 1, phase: 'done' }, Date.now());
+    expect(ended).toMatchObject({ accepted: true });
+    const alarm = await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm());
+    expect(alarm).not.toBeNull();
+    expect(alarm ?? Infinity).toBeLessThanOrEqual(Date.now());
+    const outbound = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => await folder.fetchImpl(input instanceof Request ? input.url : String(input), init));
+    try {
+      // Woken twice (a retried alarm, a second end): one run.
+      await runInDurableObject(person(sub), async (instance: Person) => {
+        await instance.alarm();
+        await instance.alarm();
+      });
+      const dispatches = outbound.mock.calls.filter(([input]) => String(input instanceof Request ? input.url : input).includes('/dispatches'));
+      expect(dispatches).toHaveLength(1);
+    } finally {
+      outbound.mockRestore();
+    }
+    const next = await status(cookie);
+    expect(next.run?.id).not.toBe(goingId);
+    expect(next.run).toMatchObject({ scope: 'all', phase: 'queued' });
+    // Scoped to the answers' subjects: the two piles answered about, never the other one; counted once.
+    const manifest = await runInDurableObject(person(sub), (_i, state) =>
+      JSON.parse(state.storage.sql.exec<{ manifest: string }>('SELECT manifest FROM runs ORDER BY seq DESC LIMIT 1').one().manifest) as AdmissionManifest);
+    expect(manifest.piles.map((p) => p.pileId).sort()).toEqual(['p-photo', 'p-receipt']);
+    expect(manifest.journal).toHaveLength(1);
+    expect(await quota(sub)).toEqual([{ counter: 2 }]);
+    // A retry of an answer taken answers that run, and keeps nothing waiting.
+    const again = (await (await post(cookie, answer('answer-b', 'p-photo'), fence)).json()) as Reply;
+    expect(again.run?.id).toBe(next.run?.id);
+    expect(again.waits).toBeUndefined();
+    expect(await quota(sub)).toEqual([{ counter: 2 }]);
+  });
+
+  it('an answer during a run with the day used up is refused, so the app says so', async () => {
+    const { sub } = await holder();
+    const day = Date.now();
+    await admitted(sub, ask('press-1', day, { dailyLimit: 1 }));
+    const refused = await person(sub).admit({ ...ask('answer-a', day, { dailyLimit: 1, manifest: null }), answer: true, subject: 'p-receipt' } as AdmitInput);
+    expect(refused).toEqual({ admitted: false, refused: 'rate-limited' });
+  });
+});
