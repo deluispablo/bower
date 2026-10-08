@@ -10,6 +10,7 @@ import { unrecoveredCeiling } from '../src/recovery.js';
 import type { RunReply } from '../src/process.js';
 import { hashTicket } from '../src/run-ticket.js';
 import { MANIFEST } from './drive-v3.js';
+import { dispatchOf, pretendGitHubForFile } from './github-support.js';
 import { inWindow } from './time.js';
 
 const env = testEnv as unknown as Env;
@@ -18,6 +19,9 @@ const GITHUB = `https://api.github.com/repos/${env.GITHUB_REPO}`;
 const MINUTE = 60_000;
 
 const person = (sub: string) => env.PERSON.get(env.PERSON.idFromName(sub));
+
+/** The GitHub the runtime's own alarm reaches: runs are admitted at the wall clock, and their dispatch is due then. */
+const alarmGitHub = pretendGitHubForFile(env);
 
 let log: MockInstance<typeof console.error>;
 beforeEach(() => {
@@ -79,8 +83,7 @@ async function aRun(): Promise<{ sub: string; runId: string; ticket: string; t0:
   const t0 = Date.now();
   const admitted = await p.admit({ scope: 'instructions', allowWeb: true, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
   if (!admitted.admitted) throw new Error('not admitted');
-  const ticket = await p.mintTicket(admitted.run.id, 1, t0);
-  if (ticket === null) throw new Error('no ticket');
+  const { ticket } = await dispatchOf(alarmGitHub, admitted.run.id);
   return { sub, runId: admitted.run.id, ticket, t0 };
 }
 

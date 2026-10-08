@@ -6,6 +6,7 @@ import type { Person } from '../src/person.js';
 import { SCHEMA_VERSION } from '../src/person-schema.js';
 import { QUEUED_STALE_MS, STALE_FAILURE } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
+import { pretendGitHub } from './github-support.js';
 import { HOUR, MINUTE, farAhead, inWindow } from './time.js';
 
 const env = testEnv as unknown as Env;
@@ -30,27 +31,42 @@ async function alarmOf(sub: string): Promise<number | null> {
   return await runInDurableObject(person(sub), (_i, state) => state.storage.getAlarm());
 }
 
-/** Signed in with a folder, and one queued run admitted at `now`. */
+/** Signed in with a folder, and one queued run admitted at `now` and dispatched by the alarm then (its ticket expires an hour later). */
 async function admitted(sub: string, requestId: string, now: number): Promise<string> {
   const p = person(sub);
   await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
   await p.setFolderId('FOLDER_ID');
   const r = await p.admit({ scope: 'all', allowWeb: false, requestId, now, dailyLimit: 100, manifest: MANIFEST });
   if (!r.admitted) throw new Error('not admitted');
+  const gh = pretendGitHub(env);
+  try {
+    await runInDurableObject(p, async (instance: Person) => {
+      await instance.wake(now, gh.access);
+    });
+  } finally {
+    gh.restore();
+  }
   return r.run.id;
+}
+
+/** Takes back schema step 14 (the run's dispatch deadline and version), for the tests that rewind further. */
+function undoV14(sql: SqlStorage): void {
+  sql.exec('ALTER TABLE runs DROP COLUMN deadline_at');
+  sql.exec('ALTER TABLE runs DROP COLUMN version');
 }
 
 describe('worker deadlines (TL-P4-14)', () => {
   it('one deadline table rearms the alarm', async () => {
     const sub = `deadlines-sub-${crypto.randomUUID()}`;
     const p = person(sub);
-    const t0 = Date.now();
-    // A ticket minted 50 minutes ago lives 10 minutes more: after Delete me its gone row is kept until then.
-    const runId = await admitted(sub, 'press-1', t0);
-    const minted = t0 - 50 * MINUTE;
-    if ((await p.mintTicket(runId, 1, minted)) === null) throw new Error('no ticket');
+    const t0 = farAhead();
+    // A ticket that lives 10 minutes more: after Delete me its gone row is kept until then.
+    await admitted(sub, 'press-1', t0);
+    const expiry = t0 + 10 * MINUTE;
+    await runInDurableObject(p, (_i, state) => {
+      state.storage.sql.exec('UPDATE run_ticket SET expires_at = ?', expiry);
+    });
     await p.forget();
-    const expiry = minted + HOUR;
     expect(await alarmOf(sub)).toBe(expiry);
 
     // Signed in again, a new run is admitted: its stale deadline (17 minutes) is later than the gone row's
@@ -76,7 +92,7 @@ describe('worker deadlines (TL-P4-14)', () => {
       });
     });
     expect(asked).toEqual([]);
-    expect(await runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
+    expect(await runInDurableObject(p, (_i, state) => state.storage.sql.exec(`SELECT hash FROM run_ticket WHERE run_id = ''`).toArray())).toEqual([]);
     expect(await alarmOf(sub)).toBeNull();
   });
 
@@ -88,6 +104,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     // A person object as v11 left it: a run going, a gone row kept, and the alarm somewhere.
     const gone = { hash: 'a'.repeat(64), expiresAt: t0 + 30 * MINUTE, attempt: 1 };
     await runInDurableObject(p, (_i, state) => {
+      undoV14(state.storage.sql);
       state.storage.sql.exec('DROP TABLE deadlines');
       state.storage.sql.exec('UPDATE schema_version SET version = 11 WHERE id = 1');
       state.storage.kv.put('goneTickets', [gone]);
@@ -108,6 +125,11 @@ describe('worker deadlines (TL-P4-14)', () => {
       await instance.wake(Date.now(), { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl: () => Promise.reject(new Error('not asked')) });
     });
     expect(await alarmOf(sub)).toBe(t0 + QUEUED_STALE_MS);
+    // v14 moves the gone ticket into its table, with no run id, and the key-value entry goes.
+    expect(await runInDurableObject(p, (_i, state) => state.storage.sql.exec(`SELECT hash, attempt, expires_at FROM run_ticket WHERE run_id = ''`).toArray())).toEqual([
+      { hash: gone.hash, attempt: 1, expires_at: gone.expiresAt },
+    ]);
+    expect(await runInDurableObject(p, (_i, state) => state.storage.kv.get('goneTickets'))).toBeUndefined();
   });
 
   it('a handler that always throws stops after 6 attempts and its run ends failed', async () => {
@@ -184,6 +206,7 @@ describe('worker deadlines (TL-P4-14)', () => {
     const runId = await admitted(sub, 'press-1', farAhead());
     const before = await rowsOf(sub);
     await runInDurableObject(p, (_i, state) => {
+      undoV14(state.storage.sql);
       state.storage.sql.exec('ALTER TABLE deadlines DROP COLUMN attempts');
       state.storage.sql.exec('UPDATE schema_version SET version = 12 WHERE id = 1');
     });

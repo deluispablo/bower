@@ -8,8 +8,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DriveHttp } from '../../src/data/drive/drive-http.js';
 import { planAdmission } from '../../src/data/spine/plan.js';
 import { driveRead } from '../../src/data/spine/read.js';
-import { declaredPile, holderOf, press, storedManifest } from './admission-support.js';
+import { declaredPile, holderOf, press, pressGitHub, storedManifest } from './admission-support.js';
 import { driveFolder, type DriveFolder } from './drive-v3.js';
+
+/** The GitHub the alarm reaches: each press dispatches its run from the alarm. */
+const gh = pressGitHub();
 
 /** About what one Drive call took in the live tail. */
 const DRIVE_MS = 150;
@@ -60,7 +63,7 @@ describe('admission reads', () => {
     const who = await holderOf(folder);
     const drive = slowed(folder, DRIVE_MS);
     const log = vi.spyOn(console, 'log');
-    const r = await press(drive.fetchImpl, who.headers);
+    const r = await press(drive.fetchImpl, who.headers, gh);
     expect(r.status).toBe(200);
     const timing = log.mock.calls.map((args) => String(args[0])).find((line) => line.startsWith('admission timing:')) ?? '';
     const reads = Number(/reads=(\d+)ms/.exec(timing)?.[1] ?? NaN);
@@ -83,7 +86,7 @@ describe('admission reads', () => {
     expect(before.kind).toBe('manifest');
     if (before.kind !== 'manifest') return;
     const now = slowed(folder, 0);
-    expect((await press(now.fetchImpl, who.headers)).status).toBe(200);
+    expect((await press(now.fetchImpl, who.headers, gh)).status).toBe(200);
     const after = await storedManifest(who.sub);
     expect({ ...after, id: 'same', at: 0 }).toEqual(before.manifest);
     console.info(`admission Drive calls: ${plain.calls()} before, ${now.calls()} now`);

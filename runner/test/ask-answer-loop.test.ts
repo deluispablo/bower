@@ -240,13 +240,10 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await w.paths()).toContain(OTHER);
     expect(await answersWaiting(w, KEEP_Q)).toHaveLength(1);
     expect(await openQuestions(w)).toEqual([KEEP_Q]);
-    // The run ended: the person object wakes and starts the answer's run, with no press (TL-P4-13 addendum).
-    expect(await w.api.fireAlarm()).toBe(true);
+    // The run ended: the person object's alarm, due at once, starts the answer's run and dispatches it, with no press
+    // (TL-P4-13 addendum; a retried alarm still starts one: api/test/process.test.ts).
     expect(w.dispatched).toHaveLength(2);
     expect(w.dispatched[1]?.scope).toBe('instructions');
-    // Woken again (a retried alarm): still one run.
-    await w.api.fireAlarm();
-    expect(w.dispatched).toHaveLength(2);
     expect(await w.runJob(1)).toBe(0);
     expect(await w.paths()).not.toContain(OTHER);
     expect(await answersWaiting(w, KEEP_Q)).toEqual([]);
