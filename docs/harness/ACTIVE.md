@@ -232,3 +232,4 @@ P3-9 is closed.
 - input-sections closed (57ac56d). No src/e2e/api change since c6ddb96, so its suites stand; check 3609/190/135. Main moves.
 - Main and backup at 80ae66d; SHA sent to the lead; asked to confirm the offer-and-flat reset (Bin earlier outputs, reset hubs).
 - 80ae66d live: garden 5/5 PASS (only the things section varies); offer-and-flat run 1 refused (a question about a pile it also files), no retry; ruling asked. Reset done before it (Applications, listing, Flat 9 note, Viewing photos, Areas/Money binned; hubs reset to the corpus start).
+- TL-P4-08 addendum 4 (1ffb63a): per-thing-ask (escalated, with retry for every refusal) and things-normalised (mechanical). 375/381.

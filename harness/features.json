@@ -4997,5 +4997,33 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a change in one input section moves only that section hash\"",
     "note": "TL-P4-08 addendum 3 (main e35644e): before the next deploy SHA."
+  },
+  {
+    "id": "per-thing-ask",
+    "task": "p4-c",
+    "category": "feature",
+    "passes": false,
+    "what": "An ask names a fileId (one thing) or a pileId (a words-only pile or the whole pile). Asked things stay in the inbox untouched with the pile words kept; the rest of the pile is filed; the report and question flow name the thing. Every validation refusal gets one retry with its reason, then ends as C12 does.",
+    "steps": [
+      "asks gains a fileId or pileId target; a partial ask leaves only the asked things in the inbox with the pile words.",
+      "Report and question name the thing.",
+      "Every refusal kind retries once with its reason; a test lists every refusal kind and checks each retries."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"an ask about one thing leaves it in the inbox and files the rest of its pile|every validation refusal is retried once with its reason\"",
+    "note": "TL-P4-08 addendum 4 (main 1ffb63a). Live offer-and-flat on 80ae66d refused: a question about a pile it also files."
+  },
+  {
+    "id": "things-normalised",
+    "task": "p4-c",
+    "category": "fix",
+    "passes": false,
+    "what": "The things section of the model input carries a per-run value (live, its hash changed on every garden run while the others stayed). Found and normalised in the fingerprint, or dropped from the input if the model does not need it.",
+    "steps": [
+      "Find the per-run value in shown piles.",
+      "Normalise it in the fingerprint only, unless it is noise the model does not need (then drop it from the input).",
+      "Test: two fresh runs of the same case give the same things hash."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"two fresh runs of the same case give the same things section hash\"",
+    "note": "TL-P4-08 addendum 4 (main 1ffb63a)."
   }
 ]
