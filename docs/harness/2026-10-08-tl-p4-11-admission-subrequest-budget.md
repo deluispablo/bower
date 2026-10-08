@@ -32,3 +32,12 @@ On the free plan a Worker invocation may make 50 subrequests ([Cloudflare Worker
    - two runs whose asks are worded differently about the same thing leave one open question;
    - binning the thing closes its question;
    - a re-upload of the same photo does not add a second question.
+
+**Addendum 3, 2026-10-08: live on `2b08fc1`.**
+- **The runs.** Offer-and-flat passes 3/3 (1:32–1:46) and garden passes 1/1. The 6 stale photo questions closed, and a re-upload kept the same single question.
+- **Apply** fell from 26–37 s to 21–24 s, but reads (24–36 s) and the model step (17–20 s) are now the larger costs. The timings are in p4-speed-baseline.
+- **c05-hub-lines** passed its first run. The second kept the person's edit with a line and the folder question, but the Flat hunt hub missed its listing line, 1 run of 2, which the next C05 runs watch.
+
+Entries:
+- **`home-reads-once`** (`bower-implementer`). Home made 221 Drive calls in 24 s: 189 media reads of 42 files, one of them 10 times, likely `questions()` calling `piles()` again. Each file is read at most once per Home load, and a Drive-call golden for Home pins it.
+- **`corpus-offer-real-pdf`** (`bower-mechanical`). The corpus offer is text with a PDF header, which Drive cannot read. It becomes a real PDF with the same facts.
