@@ -416,3 +416,4 @@ corpus-offer-real-pdf	62d40732aa6f9f1e	2026-10-08	known-green: red by hand at te
 qa10-phone-flake	045034a07ed78fef	2026-10-08	known-green: red seen in the full e2e:fake runs at 8821e84 and 07ff1e4 (sheet list read as [] before it filled); not reproducible alone (0/30 with 8-10 workers and CPU load); fix 0049b8f is a toHaveCount wait, no retry; 30/30 under load
 duplicate-by-hash	48e0349ead67034e	2026-10-08	known-green: red by hand at tests-only 6488613: both verify tests fail on assertions (the copy reached the model; no alreadySaved row); green at 2cf38a4 (new file duplicates.ts, so the revert cannot load)
 fallback-no-duplicate	ccc2ccc885710d4e	2026-10-08	red (fixed in 8250e96)
+duplicate-by-hash	f39ce2760b21c516	2026-10-08	red (fixed in 29c2682)

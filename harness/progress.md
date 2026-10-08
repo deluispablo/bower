@@ -171,3 +171,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: qa10-phone-flake passes — The one-name test waits for the sheet's names with a web-first count before reading them
 - 2026-10-08: duplicate-by-hash passes — A thing whose content is already filed goes to the Bin, reported already saved as <name>, with no note or line (TL-P4-10 addendum 2)
 - 2026-10-08: fallback-no-duplicate passes — No Current-state fallback line when the run already cites the same thing on that note (TL-P4-10 addendum 2)
+- 2026-10-08: duplicate-by-hash passes — Copies are binned only while their filed twin still holds and the copy is as read; pile words kept (P4-17 fix)
