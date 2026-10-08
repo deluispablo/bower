@@ -1230,7 +1230,11 @@ export class DriveVault implements VaultSource {
   async questions(): Promise<Question[]> {
     const all = (await this.json(SYSTEM.questions))?.questions ?? [];
     const answered = new Set((await this.journal.list()).filter((r) => r.kind === 'answer').map((r) => r.questionId));
-    return all.filter((q) => !answered.has(q.id));
+    // A question about a thing that is no longer in the inbox is closed, even when no tidy-up can run (an empty inbox
+    // has nothing to tidy): its subject is the thing's or pile's id (older ones carry it in their id).
+    const here = new Set((await this.piles()).flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
+    const subject = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
+    return all.filter((q) => !answered.has(q.id) && (subject(q) === undefined || here.has(subject(q) ?? '')));
   }
 
   async answer(id: string, yes: boolean): Promise<void> {

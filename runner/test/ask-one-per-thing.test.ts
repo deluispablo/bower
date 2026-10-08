@@ -62,13 +62,15 @@ describe('one open question per thing (TL-P4-11 addendum)', () => {
   it('a re-upload of the same thing adds no question', async () => {
     const c = await offerAndFlat();
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const first = await runWithClaude({ ...c, inbox: [photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
+    const first = await runWithClaude({ ...c, inbox: [...Array.from({ length: 6 }, (_, n) => ({ ...otherPile, line: `A listing ${n}.` })), photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
     const before = openOf(first.after);
     expect(before).toHaveLength(1);
     // After a reset the same bytes come back under a new fileId (another file is added first, so the ids shift).
     const second = await runWithClaude({ ...c, inbox: [otherPile, photoPile], questions: before as never }, asking('Was this taken at the viewing?'));
     expect(second.code).toBe(0);
-    expect(openOf(second.after)).toEqual(before);
+    // The one question stays, now about the new file.
+    expect(openOf(second.after)).toEqual([expect.objectContaining({ id: before[0]?.id, text: before[0]?.text, hash: before[0]?.hash })]);
+    expect(openOf(second.after)[0]?.subject).not.toBe(before[0]?.subject);
   });
 
   it('an instructions run keeps an open thing question', async () => {

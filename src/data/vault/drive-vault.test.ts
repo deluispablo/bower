@@ -2567,7 +2567,9 @@ describe('a question about a thing that is gone (TL-P4-11 addendum)', () => {
   it('binning the only thing left in the inbox closes its question', async () => {
     for (const p of await vault.piles()) await vault.removePile(p.id);
     const pile = await vault.addPile({ text: '', items: [{ name: 'kitchen.jpg', kind: 'image', origin: 'x', body: new Blob(['kitchen']) }] });
-    const thing = pile.items[0]?.id ?? '';
+    expect(pile.items).toHaveLength(1);
+    await vault.settled();
+    const thing = (await vault.piles())[0]?.items[0]?.id ?? '';
     const file = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === '.bower/questions.json');
     if (!file) throw new Error('no questions.json');
     const ask = { id: `q-ask-${thing}`, text: 'Is it from the viewing?', yes: 'Yes', no: 'No', subject: thing, askedAt: 1 };
