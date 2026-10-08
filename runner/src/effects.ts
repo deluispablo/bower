@@ -31,7 +31,7 @@ import type { Checkpoint, EffectEvidence, Failure } from '../../src/data/contrac
 import { readBackEdit, recheckEdit, savedLinkKey } from '../../src/data/contracts/note-edit';
 import type { EditText, OperationV2, SeenFile } from '../../src/data/contracts/run-manifest';
 import type { DriveFile, FencedDrive, StoredEvidence } from '../../src/data/drive/drive-api';
-import { isNoAnswer } from '../../src/data/drive/transport';
+import { isNoAnswer, isUnconfirmedWrite } from '../../src/data/drive/transport';
 import { SOURCE_NOT_AS_SEEN, reusedNoteOf, shows } from '../../src/data/fake/fake-run-records';
 import { savedTwins } from '../../src/data/spine/duplicates';
 import type { RunManifest } from '../../src/data/spine/records';
@@ -346,7 +346,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
           return refused('conflict', op.effect.kind === 'edit-text' ? NOTE_CHANGED : op.effect.kind === 'write-runner-json' ? LIST_CHANGED : NOT_AS_SEEN);
         }
         // No answer kept (a network error, or Google's 5xx): read back once, never sent again blindly (TL-P3-28).
-        if (isNoAnswer(e)) {
+        if (isNoAnswer(e) || isUnconfirmedWrite(e)) {
           console.error(e);
           const back = await reconcile(op, head, manifest);
           if (back.state === 'landed') return { state: 'applied', evidence: back.evidence };

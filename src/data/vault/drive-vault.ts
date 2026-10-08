@@ -7,6 +7,7 @@
  */
 import { hasBinLookup, type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
+import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -1677,7 +1678,7 @@ export class DriveVault implements VaultSource {
   }
 
   /**
-   * A write whose reply was lost (offline from the write itself) may still have landed: read the file back
+   * A write whose reply was lost (no answer or a 5xx: unconfirmed) may still have landed: read the file back
    * before telling the person (Google Cloud retry strategy, idempotency: an ambiguous outcome is read, not assumed).
    * Shows the intended change: it counts as saved. Shows the old state: offline, as before. Unreadable: not sure.
    * Anything else is somebody else's change: the usual "changed somewhere else".
@@ -1686,7 +1687,7 @@ export class DriveVault implements VaultSource {
     try {
       return await write();
     } catch (e) {
-      if (!(e instanceof BowerError) || e.code !== 'offline') throw e;
+      if (!isNoAnswer(e) && !isUnconfirmedWrite(e)) throw e;
       let now: DriveFile;
       let intended: boolean;
       try {
@@ -1694,7 +1695,7 @@ export class DriveVault implements VaultSource {
         intended = await landed(now);
       } catch (again) {
         console.error(again);
-        throw new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
+        throw isUnconfirmedWrite(e) ? e : new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
       }
       if (intended) return now;
       if (notAsSeen({ ...seenPlace(f), ...(text ? { modifiedTime: f.modifiedTime } : {}) }, { ...now, trashed: false }) === null) throw e;

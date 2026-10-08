@@ -367,3 +367,4 @@ P3-9 is closed.
 - c2-read-cache fix round merged (red 6d3a4da1, fix 20d1e0fa; net -2; check green on merged tree on the second run, first run hit lost-bytes-slow). Verify widened. Fix-round check queued; closes after it passes.
 - P4-27 BLOCK (c2-worker-dispatch): a press during recover's GitHub look-up has its dispatch-now deadline replaced by +17 min (person.ts:1023). Fresh escalated fix round (plus v13→v14 direct test, fireDue throws). delete-me-admit-window diagnosed by P4-27 §4 (predates); ruling asked.
 - delete-me-admit-window ruled (main 314380d): generation floor checked in admitSync; folded into the running c2-worker-dispatch fix round. v13/v14 skew accepted.
+- c2-transport-outcome-kind fix round merged (red 932794ac, fix 53b6e99f, e0aed43d; check green on merged tree); verify widened. One Opus reviewer now checks both it and the c2-read-cache fix round.

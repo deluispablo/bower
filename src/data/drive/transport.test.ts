@@ -108,7 +108,7 @@ describe('the Drive transport', () => {
     }
   });
 
-  it('a stalled write or chunk is sent once, and the browser words it offline', async () => {
+  it('a stalled write or chunk is sent once; the write is unconfirmed, the chunk offline', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.useFakeTimers();
     const sends: string[] = [];
@@ -118,7 +118,7 @@ describe('the Drive transport', () => {
     }) as unknown as typeof fetch;
     const drive = new DriveHttp({ token: async () => 'TOKEN', fetch: stalls });
     const moved = await after(drive.update('FILE_ID', { name: 'Lemon cake.md' }), LONG);
-    expect(moved).toMatchObject({ state: 'rejected', error: { code: 'offline' } });
+    expect(moved).toMatchObject({ state: 'rejected', error: { code: 'unknown', message: "Bower couldn't confirm that change. Refresh to check." } });
     expect(sends).toEqual(['PATCH']);
     sends.length = 0;
     const chunk = await after(drive.putChunk('https://www.googleapis.com/upload/drive/v3/files?upload_id=SESSION', 0, new Blob(['x']), 1), LONG);
