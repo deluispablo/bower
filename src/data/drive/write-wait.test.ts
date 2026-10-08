@@ -40,7 +40,7 @@ async function after<T>(p: Promise<T>, ms: number): Promise<{ state: 'pending' }
 afterEach(() => vi.useRealTimers());
 
 describe('a write that gets no answer', () => {
-  it('a write that gets no answer ends as unconfirmed after the bounded wait', async () => {
+  it('a write that gets no answer ends in the lost-reply path after the bounded wait', async () => {
     vi.useFakeTimers();
     const drive = new DriveHttp({ token: async () => 'TOKEN', fetch: silent });
     const rename = await after(drive.update('FILE_ID', { name: 'Lemon cake.md' }), LONG);
