@@ -363,3 +363,4 @@ P3-9 is closed.
 - close-before-review (process slip, lead): c2-worker-dispatch reopened as integrated-open until P4-27 PASS (also happened with c2-drive-transport 13a6ecad). P4-27 takes the next free slot. 413/424.
 - c2-transport-outcome-kind merged (red b3f3eb3b, fix e3d1cc54; check green on merged tree). Open: a write with no HTTP answer (network error, timeout) keeps the offline / no-answer wording; lead asked whether that is in scope. P4-27 dispatched.
 - c2-transport-outcome-kind: lead ruled no-answer writes in scope (fix round queued for the next slot, then review, then close). Queue: outcome-kind fix round, delete-me-admit-window diagnoser.
+- lost-bytes-slow logged (regression from c2-drive-transport: 10 ms → 3.5 s; flakes pnpm check under load). c2-cache2 check rerun. Outcome-kind fix round dispatched.
