@@ -215,3 +215,4 @@ P3-9 is closed.
 - TL-P4-08 (f296674): the owner's second-brain method is the P4-C semantic reference. Entry second-brain-method (escalated) queued after placement-check. 370/373.
 - placement-check re-closed (af15aed) after a compatibility row for 5092e03 (optional area on a filed row; app and runner deploy together). 371/373. second-brain-method running (escalated, bower-p4-method).
 - Suites at b47bc52 (after placement-check): e2e 226, e2e:fake 250, e2e:pwa pass.
+- second-brain-method closed (bd427ab): op asks added; c05-hub-lines and c15-scanned-letter rubrics changed (logged); left out sent to the lead (Current state change kind, type-table rows in the report, bench-4, answers to asks). 372/373. Next: P4-8 Opus delta.
