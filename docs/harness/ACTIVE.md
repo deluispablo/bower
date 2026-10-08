@@ -231,3 +231,4 @@ P3-9 is closed.
 - note-required delta check PASS (minors to polish; the fingerprint test's log write and missing main() go to the input-sections worker).
 - input-sections closed (57ac56d). No src/e2e/api change since c6ddb96, so its suites stand; check 3609/190/135. Main moves.
 - Main and backup at 80ae66d; SHA sent to the lead; asked to confirm the offer-and-flat reset (Bin earlier outputs, reset hubs).
+- 80ae66d live: garden 5/5 PASS (only the things section varies); offer-and-flat run 1 refused (a question about a pile it also files), no retry; ruling asked. Reset done before it (Applications, listing, Flat 9 note, Viewing photos, Areas/Money binned; hubs reset to the corpus start).
