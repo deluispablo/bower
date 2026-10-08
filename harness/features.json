@@ -5541,7 +5541,7 @@
       "A note save whose answer from Drive is lost shows: Bower couldn't confirm that change. Refresh to check.",
       "A read whose answer is lost still shows: Google Drive didn't answer. Try again."
     ],
-    "verify": "pnpm vitest run -t \"a write whose outcome is unknown says Bower could not confirm it|a read with no answer still says Google Drive did not answer\"",
+    "verify": "pnpm vitest run -t \"a write whose outcome is unknown says Bower could not confirm it|a read with no answer still says Google Drive did not answer|a write that times out says Bower could not confirm it|a write with a network error says Bower could not confirm it|a write tried while known offline says you are offline\"",
     "note": "TL-P4-16 addendum 6 (main 630697b): unknown-write-copy. Starting model: bower-implementer. One error kind per meaning; no read-back in the transport (addendum 5). Lead ruling 2026-10-09: any write with no definitive answer (5xx, network error, timeout) is UNCONFIRMED_WRITE; only a failure proven before sending (browser known offline before the call) stays offline. Fix round tests: \"a write that times out says Bower could not confirm it\", \"a write with a network error says Bower could not confirm it\", \"a write tried while known offline says you are offline\"."
   },
   {
