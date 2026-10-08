@@ -43,3 +43,17 @@
   - The prompt says so in the same words. Scripted tests cover all three paths.
 - **`fingerprint-normalised` is reopened** (`bower-mechanical`): `input=` still differs every run. The test is two runs on fresh fake folders with the same case, which must give the same fingerprint.
 - **`c04-offer-and-flat` waits** for these two entries, so its runs measure the fixed prompt. Claude is off.
+
+**Addendum 4, 2026-10-08: live runs on `80ae66d`.**
+- **Garden ×5 passes 5/5.** Every run put the PDF and its note in `Resources/Community garden`, and every note holds the 4 dates. Press → done took 0:52–1:03.
+- **The input sections.** prompt, tree, notes and rules are identical on all five runs. Only `things` varies, so a per-run value in the shown piles is not normalised.
+- **Offer-and-flat run 1 failed** with nothing changed. The model filed part of the 4-thing pile and asked about the same pile. The spine refused the reply, and that refusal had no retry.
+
+**Ruling: both changes.**
+1. **An ask can name one thing.** The local method asks about a file and processes everything else, so `asks` takes a `fileId` (a thing) as well as a `pileId` (a words-only pile, or the whole pile).
+   - The things asked about stay in the inbox untouched, keeping the pile's words, and the rest of the pile is filed.
+   - It is `per-thing-ask` (`bower-escalated`, since it changes the operation contract). The report and the question flow show which thing is meant.
+2. **Every validation refusal gets the same single retry** with its reason, then ends as C12 does. No refusal kind ends a run without one. The same entry makes this uniform, with a test that lists every refusal kind and checks that each one retries.
+3. **`things-normalised`** (`bower-mechanical`) finds the per-run value in the shown piles, most likely a pile id or a time, and normalises it in the fingerprint only, never in what the model sees, unless the value is noise the model does not need.
+
+Then offer-and-flat ×3, and garden ×2 as a regression check. Claude is off.
