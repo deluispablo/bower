@@ -5580,7 +5580,7 @@
       "Add a file while the browser is offline: it shows offline at once, not uploading.",
       "Lost bytes still ask to choose the file again."
     ],
-    "verify": "pnpm vitest run -t \"a send takes its backoff, sleep and signal as options, with no global|an upload added while known offline shows offline at once|lost bytes ask to choose the file again\"",
+    "verify": "pnpm vitest run -t \"a send takes its backoff, sleep and signal as options, with no global|an upload added while known offline shows offline at once|lost bytes ask to choose the file again|a network TypeError rejects offline with no real wait|HTTP keeps auth, missing-file and offline transport refusals with no real wait|stop settles at once during an offline generateIds|stop settles at once during an offline getUploaded|a send told the browser is offline does not send a network error again\" && pnpm -C api exec vitest run -t \"a Drive read that loses the network waits the options it was given, not a real backoff\"",
     "note": "Defect lost-bytes-slow, ruling (b)+(a2) (main 1968a8c); docs/harness/defects/2026-10-09-lost-bytes-slow.md. The note's 5 same-class sites become named tests (added to this verify at close). Starting model: bower-implementer. After c2-fake-parity, before c2-one-engine."
   },
   {
