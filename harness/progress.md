@@ -159,3 +159,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: process-error-honest passes — A failed start keeps the Worker's sentence and offers Try again (TL-P4-11)
 - 2026-10-08: admission-subrequest-budget passes — Admission keeps 3 subrequests in reserve: pile notes are skipped, not failed (TL-P4-11)
 - 2026-10-08: ask-one-per-thing passes — One open question per thing: keyed by subject and content hash; closes when the thing leaves the inbox (TL-P4-11 addendum)
+- 2026-10-08: admission-subrequest-budget passes — Every admission read is granted against the budget; unread piles go to the runner, which holds them as before (TL-P4-11, P4-14 fix)
