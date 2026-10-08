@@ -4757,7 +4757,7 @@
       "A plain sign-out leaves an admitted run running."
     ],
     "verify": "pnpm -C api exec vitest run -t \"the attempt route answers gone after delete me or revoked access|a plain sign-out leaves the attempt route answering\" && pnpm -C runner exec vitest run -t \"the runner drops its token and stops before the next write when the person is gone\"",
-    "passes": false,
+    "passes": true,
     "note": "Lead 3ce00dd (P4-4 review minor rated Important for delete me and revocation)."
   }
 ]

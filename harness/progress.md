@@ -125,3 +125,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: dispatch-retry passes — Dispatch retried twice with backoff on network errors or 5xx; then the alarm at 60 s (TL-P4-04)
 - 2026-10-08: dispatch-retry passes — Dispatch retry: a lost dispatch's 60 s look-up leaves a reporting run alone and never fails on a 5xx; 4xx keeps the normal window (P4-4 review)
 - 2026-10-08: deploy-scan-extracted-token passes — The deploy scan allows the token its own regex extracts from the real unpdf line; real addresses still refuse
+- 2026-10-08: runner-stops-when-gone passes — After Delete me or revoked access the attempt route answers gone and the runner drops its token before the next write; sign-out leaves runs alone
