@@ -25,6 +25,8 @@ export const FOLDER = 'application/vnd.google-apps.folder';
 const BATCH = SEARCH_FOLDERS;
 /** Keys looked up in one Bin query. */
 const BIN_KEYS = 20;
+/** How many folders up a binned file's place is looked for. */
+const BIN_DEPTH = 8;
 const SMALL = 5 * 1024 * 1024;
 const CHUNK = 8 * 1024 * 1024;
 
@@ -242,10 +244,26 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     if (!keys.length) return [];
     const inside = new Set(this.known.get(rootId) ?? (await this.listAll(rootId)).map((f) => f.id)).add(rootId);
     const hits = new Map<string, BinnedItem>();
+    // A file in a folder that is itself in the Bin is trashed too (`trashed` true, `explicitlyTrashed` false), and its
+    // folder is in no listing: its place is found by walking up the folders it names, a few `files.get` at most.
+    const placed = new Map<string, Promise<boolean>>();
+    const below = (id: string, depth = 0): Promise<boolean> => {
+      if (inside.has(id)) return Promise.resolve(true);
+      if (depth >= BIN_DEPTH) return Promise.resolve(false);
+      let known = placed.get(id);
+      if (!known) {
+        known = this.call(`${API}/files/${id}?fields=id,parents`).then(async (res) => {
+          const parents = ((await res.json()) as { parents?: string[] }).parents ?? [];
+          return (await Promise.all(parents.map((p) => below(p, depth + 1)))).some(Boolean);
+        }, () => false);
+        placed.set(id, known);
+      }
+      return known;
+    };
     for (let i = 0; i < keys.length; i += BIN_KEYS) {
       const has = keys.slice(i, i + BIN_KEYS).map((k) => `appProperties has { key='bowerItem' and value=${quote(k)} }`).join(' or ');
       for (const file of await this.query(`trashed = true and (${has})`, SEARCH_MAX_PAGES, LISTED_FIELDS)) {
-        if (file.folder || !file.parents.some((p) => inside.has(p))) continue;
+        if (file.folder || !(await Promise.all(file.parents.map((p) => below(p)))).some(Boolean)) continue;
         hits.set(file.id, { file, size: file.sha256 !== undefined ? (file.size ?? null) : null, sha256: file.sha256 ?? null });
       }
     }
