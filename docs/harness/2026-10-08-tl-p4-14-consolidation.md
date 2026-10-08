@@ -90,3 +90,7 @@ Stages run in order: stage 0, then 1, 2, 3 and 4.
 - **Within a stage,** at most two workers, with any two entries that touch different files.
 - **In stage 2,** the transport and the cache come before the engine and write-once, and `c2-fake-parity` before `c2-one-engine`.
 - **After stage 4,** the slices resume from C06, with P4-E alongside, as P4_PLAN says.
+
+**Addendum, 2026-10-08: two stage 1 rulings.**
+1. **`generateIds` is a write** for the session fence. It creates nothing in Drive, but it reserves ids that a later upload will use, and the lease exists so that a tab which is no longer current starts nothing toward a write. Rule 1 also says behaviour stays the same, and today it is fenced. The ops table classes it as a write, and a test covers it: on a lost lease no id is reserved.
+2. **No hand-written cryptography.** `c1-digest` added a hand-written synchronous SHA-256 on the `bowerOp` stamp path, and `hashes.ts` already had a hand-written MD5. The owner's rule is to reuse existing libraries, and hand-rolled hashes are a known source of subtle bugs. `c1-digest-library` (`bower-mechanical`) replaces both with [`@noble/hashes`](https://github.com/paulmillr/noble-hashes): audited, dependency-free and synchronous, with SHA-256 from `sha2` and MD5 from `legacy`. The existing fuzz tests against `node:crypto` stay as the check. It is not deferred to polish, because it sits on the data-safety path.
