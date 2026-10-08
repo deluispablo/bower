@@ -248,3 +248,4 @@ P3-9 is closed.
 - Main and backup at 327b987; SHA sent to the lead for offer-and-flat x3 + garden x1 (C04 close).
 - 327b987 live: C04 PASS (offer-and-flat 3/3, garden 1/1; input= stable within each case; no retries). Asked the lead to start drive-calls-cut and C05 (state-rewrite-change).
 - TL-P4-08 addendum 6 (cf592bf): C04 closed. state-rewrite-change (escalated, C05) and drive-calls-cut (implementer) running. 378/383.
+- state-rewrite-change closed (red by hand at bbc1d0e): new change kind for the Bower-owned Current state; compat rows added; left out: creating a missing Current state, runner undo run (C13), q-state answers (C11). 379/383. drive-calls-cut running.
