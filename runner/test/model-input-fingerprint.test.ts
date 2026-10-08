@@ -15,6 +15,8 @@ import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
 import { claudeProvider } from '../src/claude';
 import { RunTiming } from '../src/timing';
+import { loadCorpus } from '../src/corpus';
+import { runWithClaude } from './corpus-run';
 import { RUN_ID, fixedDrive } from './drive-v3';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
@@ -58,28 +60,24 @@ async function gardenFolder(): Promise<{ drive: FakeDrive; root: string }> {
 
 describe('model input fingerprint', () => {
   it('the model input on the C04 fixture equals its golden copy', async () => {
-    const g = await gardenFolder();
-    const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
-    if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
-
+    // The corpus case runs through main() on the Drive v3 fake with a fake spawn: the runner's own reads decide what the model sees.
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    if (!c) throw new Error('the C04 garden newsletter case is missing');
     const calls: ClaudeCall[] = [];
-    const spawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
+    await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
+    expect(calls).toHaveLength(1);
 
-    const modelInput = calls[0]?.input ?? '';
-
-    // Normalize run-dependent ids and dates so comparison is stable
-    const normalized = modelInput
-      .replace(RUN_ID, 'RUN_ID')
+    // Only run-dependent ids and times are normalised.
+    const normalized = (calls[0]?.input ?? '')
+      .replaceAll(RUN_ID, 'RUN_ID')
       .replace(/"at":\d+/g, '"at":0')
       .replace(/"runId":"[^"]+"/g, '"runId":"RUN_ID"')
       .replace(/"id":"[^"]+"/g, '"id":"ID"');
 
     // Verify against golden file (must exist; golden files are not created by tests)
     const goldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.golden.txt');
-    const golden = readFileSync(goldenPath, 'utf8');
-    expect(normalized).toBe(golden);
+    expect(normalized).toBe(readFileSync(goldenPath, 'utf8'));
   });
 
   it('the timing line carries the model input fingerprint', async () => {

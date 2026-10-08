@@ -92,6 +92,24 @@ const md5 = (bytes: Uint8Array): string => createHash('md5').update(bytes).diges
 const changedSomething = (chain: readonly Checkpoint[]): boolean =>
   chain.at(-1)?.outcomes.some((o) => o.state === 'applied' || o.state === 'possible-effect') ?? false;
 
+/**
+ * Times each checkpoint write as the `checkpoints` phase, once: `putNew` with no folder known yet calls `put`, which
+ * is already timed, so a write inside a timed one is not counted again.
+ */
+export function timeCheckpoints(records: RunRecords, timing: RunTiming): void {
+  const put = records.put.bind(records);
+  const putNew = records.putNew.bind(records);
+  let inside = false;
+  const timed = <A extends unknown[]>(write: (...args: A) => Promise<void>) => (...args: A): Promise<void> => {
+    const name: unknown = args[2];
+    if (inside || typeof name !== 'string' || !name.startsWith('checkpoint-')) return write(...args);
+    inside = true;
+    return timing.time('checkpoints', () => write(...args)).finally(() => { inside = false; });
+  };
+  records.put = timed(put);
+  records.putNew = timed(putNew);
+}
+
 /** An error after which this runner may not report at all: a newer attempt took the run, or the ticket was refused. */
 const mayNotReport = (e: unknown): boolean => isStaleAttempt(e) || (e instanceof BowerError && e.code === 'auth');
 
@@ -172,22 +190,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   opts.onDrive?.(drive);
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
-  const put = records.put.bind(records);
-  const putNew = records.putNew.bind(records);
-  records.put = (...args) => {
-    const name = args[2];
-    if (typeof name === 'string' && name.startsWith('checkpoint-')) {
-      return timing.time('checkpoints', () => put(...args));
-    }
-    return put(...args);
-  };
-  records.putNew = (...args) => {
-    const name = args[2];
-    if (typeof name === 'string' && name.startsWith('checkpoint-')) {
-      return timing.time('checkpoints', () => putNew(...args));
-    }
-    return putNew(...args);
-  };
+  timeCheckpoints(records, timing);
   const checksum: Checksum = { stored: (id) => drive.md5(id), of: async (bytes) => md5(bytes) };
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 

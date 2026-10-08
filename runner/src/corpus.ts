@@ -235,8 +235,12 @@ export function score(input: ScoreInput): Score {
       const rule = allowed.find((a) => path.startsWith(`${a.under}/`));
       if (!rule) unmet.push(`placed outside the rubric: ${path}`);
       else if (rule.linking !== undefined) {
-        const link = `[[${rule.linking}`;
-        const linked = placed.some((q) => q.endsWith('.md') && q.startsWith(`${rule.under}/`) && (after[q] ?? '').includes(link));
+        // The exact link target ([[Garden plot]], [[Garden plot|text]], [[Garden plot#heading]]), not one that starts the same.
+        const linksTo = (text: string, target: string): boolean => [...text.matchAll(/\[\[([^\]|#]*)[^\]]*\]\]/g)].some((m) => (m[1] ?? '').trim() === target);
+        const inFolder = (q: string): boolean => q.endsWith('.md') && q.startsWith(`${rule.under}/`);
+        // Tied together either way: a placed note links the linking note, or the linking note's own lines link a placed note.
+        const plot = after[`${rule.under}/${rule.linking}.md`] ?? '';
+        const linked = placed.some((q) => inFolder(q) && linksTo(after[q] ?? '', rule.linking ?? '')) || placed.some((q) => linksTo(plot, (q.split('/').pop() ?? '').replace(/\.[^.]+$/, '')));
         if (!linked) unmet.push(`placed under ${rule.under} without a link to [[${rule.linking}]]: ${path}`);
       }
     }

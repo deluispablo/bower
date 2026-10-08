@@ -190,11 +190,12 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId>"}]}',
     `A folder path starts with one of ${MAIN_FOLDERS.join(', ')}; missing folders are made. A thing keeps its extension`,
     '(a saved link may become a ".md" note). A thing left out stays in the inbox with its whole pile.',
-    // Placement wording from the original's rulebook (bower: vault-template/CLAUDE.md, PARA folders; agent/prompts/ingest.md
-    // step "Decide the PARA destination"): an existing folder, else Resources; a new Area or Project is the exception.
-    'Where a thing goes: into a folder below that fits it. A thing that fits no folder below goes to Resources (a new folder',
-    'there, one per topic). Make a new Area or Project only when the rules or notes show an ongoing responsibility',
-    '(an Area, no end date) or a goal with an end (a Project); a newsletter, guide or reference is not one.',
+    // Placement wording from the original's rulebook (bower: vault-template/CLAUDE.md:232 "an existing folder, or a new direct
+    // subfolder of" the PARA folders; :34-37 what each holds): only what the model is shown (folders and notes below).
+    'Where a thing goes: into a folder below that fits it, else a new subfolder of a main folder (missing folders are made).',
+    'Projects hold a goal with an end date, Areas an ongoing responsibility with no end date, Resources topics and reference',
+    'material (one folder per topic), Archive what is no longer active. A thing that fits no folder below, and is neither a',
+    'goal nor an ongoing responsibility, goes to Resources.',
     `"note" is optional: a note beside the thing, saying what it says. Use only facts from its text; invent none.`,
     `Its summary is at most ${AUTHORED.summary} characters, its body at most ${AUTHORED.body}, with no front matter and`,
     'no "## Current state", "## Timeline" or "## Bower\'s note" heading: Bower writes those. A saved link filed as a note takes none.',

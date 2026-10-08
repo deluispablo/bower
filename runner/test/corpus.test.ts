@@ -109,6 +109,31 @@ describe('the capability corpus', () => {
     expect(at('Projects/Garden', 'See [[Garden plot]].').pass).toBe(false);
   });
 
+  it('the C04 scorer matches the exact link target, from the newsletter note or from the plot note', async () => {
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    if (!c) throw new Error('the C04 case is missing');
+    const lastRun = { v: 1, run: { report: { filed: [{}], created: [{ path: 'x.md' }], updated: [], setAside: [], questions: [], requests: [], rulesWorded: 0, yourChanges: 0 } } };
+    const dates = '18 October, 8 November, 7 December, 31 January';
+    const run = (newsletter: string, plot?: string): { pass: boolean; unmet: string[] } => {
+      const after: Record<string, string> = {
+        ...c.folder,
+        'Areas/Home/Community garden newsletter, autumn.pdf': 'pdf',
+        'Areas/Home/Community garden newsletter, autumn.md': `---\nby: bower\n---\n${newsletter}\n${dates}\n`,
+      };
+      if (plot !== undefined) after['Areas/Home/Garden plot.md'] = plot;
+      return score({ expected: c.expected, before: c.folder, after, lastRun });
+    };
+    // A longer name that only starts the same is another note.
+    expect(run('See [[Garden plot 2]].').pass).toBe(false);
+    expect(run('See [[Garden plot|my plot]].', undefined).pass).toBe(true);
+    expect(run('See [[Garden plot#Timeline]].', undefined).pass).toBe(true);
+    // The plot note's own Timeline line citing the newsletter is a link too (what the prompt's "lines" write).
+    const cited = '---\nby: bower\n---\n## Timeline\n- 2026-10-07 · Autumn dates ([[Community garden newsletter, autumn]]).\n';
+    expect(run('Dates only.', cited)).toEqual({ pass: true, unmet: [] });
+    // A link from the plot note to something else is not one.
+    expect(run('Dates only.', '---\nby: bower\n---\nSee [[Garden plot]] and [[Other]].\n').pass).toBe(false);
+  });
+
   it('the bench cases start from the original\'s bench folder', async () => {
     const bench = (await loadCorpus(ROOT)).filter((c) => c.speedBaseline);
     expect(bench.map((c) => c.id)).toHaveLength(5);
