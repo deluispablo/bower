@@ -13,6 +13,8 @@
 .running { display: flex; align-items: center; gap: 14px; width: 100%; border: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent); }
 .row2 { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .inboxHead { display: flex; align-items: flex-end; gap: 10px; }
+/* Room for the longest sentence from the start, so the list does not move when readiness arrives. */
+.inboxSub { min-height: 2lh; }
 .inboxBird { margin: -18px 0 -6px -8px; }
 .piles { list-style: none; margin: 10px 0 0; padding: 0; }
 .piles > li { border-bottom: 1px solid var(--line); }

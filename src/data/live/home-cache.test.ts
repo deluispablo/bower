@@ -62,7 +62,24 @@ describe('Home on the latency fake', () => {
     expect(out.piles.length).toBeGreaterThan(0);
     expect(out.questions.length).toBeGreaterThan(0);
     expect(out.done.listed ?? 0).toBeLessThan(1200);
-    expect(out.ms, `complete after ${out.ms} ms, ${out.calls} Drive calls`).toBeLessThan(2000);
+    // Four calls at once at 300 ms: the floor of the Drive calls this folder needs is ceil(calls / 4) waits. Home must
+    // be within 35% of it (before: 5 s for a 3.5 s floor). Under 2 s needs fewer calls, not better ordering.
+    const floor = Math.ceil(out.calls / 4) * 300;
+    expect(out.ms, `complete after ${out.ms} ms, ${out.calls} Drive calls, floor ${floor} ms`).toBeLessThan(floor * 1.35);
+  }, 60_000);
+
+  it('Home reads each file of the live-shaped folder once in one load (golden)', async () => {
+    const { drive, s } = await slowReport();
+    const calls: Record<string, number> = {};
+    for (const k of ['listAll', 'readText', 'readBytes', 'storedDigest'] as const) {
+      const real = drive[k].bind(drive) as (...a: unknown[]) => Promise<unknown>;
+      (drive as unknown as Record<string, unknown>)[k] = (...a: unknown[]) => { calls[k] = (calls[k] ?? 0) + 1; return real(...a); };
+    }
+    const out = await homeLoad(s, drive);
+    // 1 listing, 3 pile notes + questions + last tidy-up + 12 changes as text, 1 declaration + 20 dispositions as bytes,
+    // 7 digests (4 papers, their note, 2 other notes).
+    expect(calls).toEqual({ listAll: 1, readText: 17, readBytes: 21, storedDigest: 7 });
+    expect(out.calls).toBe(46);
   }, 60_000);
 
   it('a report refresh does not restart the inbox reads', async () => {
@@ -78,5 +95,19 @@ describe('Home on the latency fake', () => {
     expect(out.piles.length).toBeGreaterThan(0);
     const twice = [...reads].filter(([, n]) => n > 1).map(([id, n]) => `${drive.pathOf(id, 'root')} x${n}`);
     expect(twice.join(', '), `read more than once in one load, ${out.calls} calls`).toBe('');
+  }, 60_000);
+
+  it('a change made elsewhere between two loads is still seen after a refresh', async () => {
+    const { drive, s } = await slowReport();
+    drive.latency = 0;
+    const before = (await s.vault.piles()).find((p) => p.text === 'Papers from Alex');
+    expect(before).toBeTruthy();
+    const note = (await drive.listAll('root')).find((f) => !f.folder && f.name === 'Pile note.md' && drive.pathOf(f.id, 'root').includes('Papers from Alex'));
+    expect(note).toBeTruthy();
+    // Another device rewrites the pile's words; this page's kept read is of the old version until it lists again.
+    const text = await drive.readText(note?.id ?? '');
+    await drive.writeText(note?.id ?? '', text.replace('Papers from Alex', 'Papers from Sam'), note?.modifiedTime ?? '');
+    await s.vault.refresh();
+    expect((await s.vault.piles()).some((p) => p.text.includes('Papers from Sam'))).toBe(true);
   }, 60_000);
 });

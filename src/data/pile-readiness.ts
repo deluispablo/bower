@@ -270,8 +270,8 @@ async function resolveBinned(declaration: Declaration, folder: DriveFile, states
 }
 
 async function observeAll(declaration: Declaration, folder: DriveFile, files: readonly DriveFile[], digest: DigestOf, binned?: BinnedOf): Promise<MemberState[]> {
-  const states: MemberState[] = [];
-  for (const m of declaration.members) states.push(await observe(m, folder, files, digest));
+  // Every member is looked up together (a pile of four is one wait on a slow Drive, not four); the order is kept.
+  const states = await Promise.all(declaration.members.map((m) => observe(m, folder, files, digest)));
   return resolveBinned(declaration, folder, states, binned);
 }
 
@@ -294,6 +294,25 @@ export interface Accounting extends Readiness {
 }
 
 /**
+ * Reads (and keeps, by file id and modified time) every disposition under `.bower/piles`, all at once: a score of
+ * leftovers is a score of waits on a slow Drive.
+ */
+async function readDispositions(rootId: string, files: readonly DriveFile[], read: ReadBytes, cache?: Map<string, DispositionResult>): Promise<{ f: DriveFile; parsed: DispositionResult }[]> {
+  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
+  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
+  const candidates = files.filter((f) => !f.folder && f.name.startsWith('disposition-') && f.parents.some((p) => piles.has(p)));
+  return Promise.all(candidates.map(async (f) => {
+    const key = `${f.id}@${f.modifiedTime}`;
+    let parsed = cache?.get(key);
+    if (!parsed) {
+      parsed = await parsePileDisposition(await read(f.id), rootId);
+      cache?.set(key, parsed);
+    }
+    return { f, parsed };
+  }));
+}
+
+/**
  * Member keys the consumed dispositions in `.bower/piles` record for this pile and this declaration,
  * found by real parents. A disposition that cannot be read records nothing and is logged. Parsed records
  * are kept in `cache` by file id and modified time, since a disposition never changes.
@@ -303,21 +322,8 @@ export interface Accounting extends Readiness {
  * not read back. Only Bower's runner writes there, after it confirmed that report (guard 13).
  */
 async function disposedKeys(declaration: Declaration, declarationSha256: string, files: readonly DriveFile[], read: ReadBytes, cache?: Map<string, DispositionResult>): Promise<Set<string>> {
-  const rootId = declaration.scope.rootId;
-  const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
-  const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
   const out = new Set<string>();
-  const candidates = files.filter((f) => !f.folder && f.name.startsWith('disposition-') && f.parents.some((p) => piles.has(p)));
-  // Read together, not one after the other: a score of leftovers is a score of waits on a slow Drive.
-  const results = await Promise.all(candidates.map(async (f) => {
-    const key = `${f.id}@${f.modifiedTime}`;
-    let parsed = cache?.get(key);
-    if (!parsed) {
-      parsed = await parsePileDisposition(await read(f.id), rootId);
-      cache?.set(key, parsed);
-    }
-    return { f, parsed };
-  }));
+  const results = await readDispositions(declaration.scope.rootId, files, read, cache);
   for (const { f, parsed } of results) {
     if (!parsed.ok || f.name !== `disposition-${parsed.sha256}.json`) {
       console.error(`A pile disposition was refused (${parsed.ok ? 'name' : parsed.reason}).`);
@@ -465,9 +471,10 @@ export function contextRemoved(records: readonly unknown[], folderPath: string):
 /** Your changes, read for `contextRemoved`; a line that is not JSON says nothing and is logged. */
 export async function journalValues(files: readonly DriveFile[], read: (id: string) => Promise<string>): Promise<unknown[]> {
   const out: unknown[] = [];
-  for (const f of files) {
-    if (f.folder || !f.name.endsWith('.json')) continue;
-    const text = await read(f.id);
+  // All lines are asked for at once (a dozen at 300 ms each is not a wait of a dozen calls); they are read in order.
+  const lines = files.filter((f) => !f.folder && f.name.endsWith('.json'));
+  const texts = await Promise.all(lines.map((f) => read(f.id)));
+  for (const text of texts) {
     try {
       out.push(JSON.parse(text));
     } catch (e) {
