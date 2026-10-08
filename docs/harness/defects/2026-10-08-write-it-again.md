@@ -49,3 +49,7 @@ Related, verified by reading the code only: a granted yes whose run returns no u
 ## Ruling: TL-P4-16
 
 Option (b), per [TL-P4-16](../2026-10-08-tl-p4-16-baseline-defects.md): fixed inside `c3-subject` with the rules in that decision (unanswered questions take missing evidence; "again" only when both marks differ; no silent used-up yes). Now: verify Write it and Undo on a question the current code creates, and close the old question through the app.
+
+## Ruling: TL-P4-16 addendum 2 (write-it-silent)
+
+A design flaw, not only the same class ([TL-P4-16](../2026-10-08-tl-p4-16-baseline-defects.md) addendum 2, main 7661ef8): a yes must apply the update the person was shown. `c3-subject` stores Bower's proposed text in the q-state question; a yes applies it deterministically through the fence, with no model call. If the section changed since, the person is asked again with the reason. This goes in `c3-subject`'s packet.
