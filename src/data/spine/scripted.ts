@@ -341,14 +341,15 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       continue;
     }
     if (ask) {
-      askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, askedAt: opts.requestedAt });
+      askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, subject: pile.id, askedAt: opts.requestedAt });
       continue;
     }
     // Things the model asks about: each stays where it is, named by its question; the rest of the pile goes on.
     const thingAsk = (fileId: string): Ask | undefined => (loose ? undefined : opts.filing?.thingAsks?.get(fileId));
     for (const item of pile.items) {
       const q = thingAsk(item.id);
-      if (q) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), askedAt: opts.requestedAt });
+      const hash = listing.find((f) => f.id === item.id)?.md5Checksum;
+      if (q) askedPiles.push({ id: askId(item.id), text: q.text, yes: q.yes, no: q.no, about: join(pile.path ?? '', item.name), subject: item.id, ...(hash ? { hash } : {}), askedAt: opts.requestedAt });
     }
     const partial = pile.items.some((item) => thingAsk(item.id));
     const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
@@ -460,10 +461,30 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (demo && /saltmere/i.test(pile.text)) asking.add(pile.id);
   }
 
+  // An open question belongs to its subject, never to its words (TL-P4-11 addendum): a later ask about the same thing
+  // (its fileId or pileId, or the same content uploaded again) adds nothing, and a thing that left the inbox closes it.
+  const inInbox = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
+  const hashesIn = new Set(listing.filter((f) => inInbox.has(f.id) && f.md5Checksum).map((f) => f.md5Checksum));
+  const subjectOf = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
+  const gone = (q: Question): boolean => {
+    const s = subjectOf(q);
+    return s !== undefined && !inInbox.has(s) && !(q.hash && hashesIn.has(q.hash));
+  };
+  const sameThing = (a: Question, b: Question): boolean => a.id === b.id || (subjectOf(a) !== undefined && subjectOf(a) === subjectOf(b)) || (!!a.hash && a.hash === b.hash);
+  /** A list too small to hold a question (`{"v":1,"questions":[]}` is 24 bytes, one question over 100) is not read. */
+  const mayHold = (f: DriveFile): boolean => f.size === undefined || f.size > 40;
+  /** Whether a question of the list now open has lost its thing (read only when a run has nothing else to do). */
+  const closable = async (): Promise<boolean> => {
+    const f = ix.file(SYSTEM.questions);
+    if (!f || !mayHold(f)) return false;
+    const value = parsed(await ownText(drive, f));
+    return isRunnerFile(SYSTEM.questions, value) && value.questions.some(gone);
+  };
   // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal. A run already
   // admitted (a pile changed between admission and the run) plans nothing instead: it ends done, with nothing filed,
   // its report saying nothing was ready yet, and every item it took waiting (TL-P3-25 point 2). It is no failure.
-  if (all && !capturedPiles.length && !journal.length && !askedPiles.length) {
+  // A thing that left the inbox closes its question, which is something to do.
+  if (all && !capturedPiles.length && !journal.length && !askedPiles.length && !(await closable())) {
     if (opts.taken) return nothingReadyPlan(rootId, opts);
     throw new BowerError('conflict', NOTHING_READY);
   }
@@ -954,14 +975,14 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
   let fresh: Question[] = [];
-  if ((answered.size || toAsk.length) && questionsFile) {
+  if ((answered.size || toAsk.length || (all && inbox.length && questionsFile && mayHold(questionsFile))) && questionsFile) {
     const value = parsed(await ownText(drive, questionsFile));
     const readable = isRunnerFile(SYSTEM.questions, value);
     // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
     if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
     const all = readable ? value.questions : [];
-    fresh = toAsk.filter((q) => !all.some((x) => x.id === q.id));
-    const left = [...all.filter((q) => !answered.has(q.id)), ...fresh];
+    fresh = toAsk.filter((q) => !all.some((x) => sameThing(x, q)));
+    const left = [...all.filter((q) => !answered.has(q.id) && !gone(q)), ...fresh];
     if (!readable || left.length !== all.length || fresh.length) questionsText = questionsJson(left);
   } else if (toAsk.length && sys?.folder) {
     // A missing list is made again in `.bower` with the question (TL-P2-33 §2a).
@@ -1206,7 +1227,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       questionsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.questions), createKey: newKey('runner'), text: questionsText, content: await utf8(questionsText), purpose: 'runner-json' }, derived);
     }
     // The question's row is grounded by that one write, with the same fields (contract B).
-    if (questionsOp && fresh.length) reportPlan.push({ requires: [questionsOp], when: 'applied', value: { ...empty(), questions: fresh } });
+    if (questionsOp && fresh.length) reportPlan.push({ requires: [questionsOp], when: 'applied', value: { ...empty(), questions: fresh.map(({ subject: _s, hash: _h, ...q }) => q) } });
   }
   // Rules.md made from the template's empty one when it is missing (R3-4); every rule line it words waits for it.
   // When it is there, its rules are worded by its one note edit above, which their archives wait for (rule 7).

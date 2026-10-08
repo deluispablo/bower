@@ -123,6 +123,10 @@ export interface Question {
   yes: string;
   no: string;
   about?: string;
+  /** What the question is about: a fileId or pileId. One open question per subject, whatever its words (TL-P4-11). */
+  subject?: string;
+  /** The content hash (md5Checksum) of that thing, so the same photo uploaded again is the same subject. */
+  hash?: string;
   askedAt: number;
 }
 

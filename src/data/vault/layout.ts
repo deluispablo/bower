@@ -85,7 +85,7 @@ const text = (v: unknown): v is string => typeof v === 'string';
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const optional = (v: unknown, check: (x: unknown) => boolean): boolean => v === undefined || check(v);
 const list = (v: unknown, check: (x: unknown) => boolean): boolean => Array.isArray(v) && v.every(check);
-const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text);
+const question = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && text(v.yes) && text(v.no) && number(v.askedAt) && optional(v.about, text) && optional(v.subject, text) && optional(v.hash, text);
 const suggestion = (v: unknown): boolean => object(v) && text(v.id) && text(v.title) && text(v.why);
 const request = (v: unknown): boolean => object(v) && text(v.id) && text(v.text) && number(v.at) && optional(v.done, text);
 const pathChange = (v: unknown): boolean => object(v) && text(v.path) && text(v.what);
