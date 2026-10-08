@@ -19,14 +19,20 @@ afterEach(() => {
  * The live-shaped folder (a declared pile, 20 leftovers, 12 changes, questions, an unseen finished tidy-up) on a
  * pretend Drive at 300 ms a call, four at once, read as Home reads it (TL-P4-13 home-cache-stable).
  */
-async function slowReport(opts: { cold?: boolean } = {}) {
+async function slowReport(opts: { cold?: boolean; earlier?: number; stamped?: boolean; empty?: boolean; latency?: number } = {}) {
   localStorage.clear();
   sessionStorage.clear();
   // The made-up leftovers are not real dispositions: their refusal is logged and expected.
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const drive = new FakeDrive();
   const rootId = (await seedFakeDrive(drive, 'slow-report', Date.now())) as string;
-  await liveShape(drive, rootId);
+  await liveShape(drive, rootId, { earlier: opts.earlier, stamped: opts.stamped });
+  if (opts.empty) {
+    // Everything in the Inbox is filed or removed; the records of earlier runs stay in `.bower/piles`.
+    const all = await drive.listAll(rootId);
+    const inbox = all.find((f) => f.folder && drive.pathOf(f.id, rootId) === 'Inbox');
+    for (const f of all) if (inbox && f.parents.includes(inbox.id)) await drive.trash(f.id);
+  }
   const runs = new FakeRunService({ drive, scale: 'instant' });
   const worker = new FakeWorker({ drive, scenario: 'slow-report', rootId, fresh: true, runs });
   if (opts.cold) {
@@ -34,7 +40,7 @@ async function slowReport(opts: { cold?: boolean } = {}) {
     versions = new Map((await drive.listAll('root')).map((f) => [f.id, f.modifiedTime]));
     // The pretend Worker has read the folder's last run for itself, as the real one does on its own side.
     await worker.status();
-    drive.latency = 300;
+    drive.latency = opts.latency ?? 300;
     drive.concurrency = 4;
     drive.calls = 0;
     live = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true });
@@ -44,7 +50,7 @@ async function slowReport(opts: { cold?: boolean } = {}) {
   const s = live;
   await s.session.current();
   await s.vault.tree();
-  drive.latency = 300;
+  drive.latency = opts.latency ?? 300;
   drive.concurrency = 4;
   drive.calls = 0;
   return { drive, s };
@@ -178,3 +184,37 @@ describe('one read cache serves app and runner', () => {
   }, 60_000);
 });
 
+
+describe('Home reads only the records of the piles in the inbox (TL-P4-16 b)', () => {
+  it('Home makes the same Drive calls after 10 and after 500 earlier runs', async () => {
+    // Live: an empty Inbox took 144 Drive calls and 59 s, since every earlier run's declaration and disposition was read.
+    const made: number[] = [];
+    for (const earlier of [10, 500]) {
+      const { drive, s } = await slowReport({ cold: true, earlier, latency: 0 });
+      await homeLoad(s, drive);
+      made.push(drive.calls);
+      live?.dispose();
+      live = null;
+    }
+    expect(made[1], `Drive calls after 10 and after 500 earlier runs: ${made.join(' and ')}`).toBe(made[0]);
+  }, 120_000);
+
+  it('an empty inbox reads no old pile records', async () => {
+    const { drive, s } = await slowReport({ cold: true, earlier: 30, empty: true, latency: 0 });
+    const calls = countReads(drive);
+    const out = await homeLoad(s, drive);
+    expect(out.piles).toEqual([]);
+    const records = Object.keys(calls).filter((k) => !k.startsWith('listAll') && k.includes('.bower/piles/'));
+    expect(records, `${out.calls} Drive calls, ${records.length} pile records read`).toEqual([]);
+  }, 60_000);
+
+  it('records written before the stamp still count: a leftover folder is read once, in parallel, and nothing is lost', async () => {
+    const plain = await slowReport({ cold: true, earlier: 0, latency: 0 });
+    const expected = (await homeLoad(plain.s, plain.drive)).piles.map((p) => p.text);
+    live?.dispose();
+    const { drive, s } = await slowReport({ cold: true, earlier: 6, stamped: false, latency: 0 });
+    const out = await homeLoad(s, drive);
+    expect(out.piles.map((p) => p.text)).toEqual(expected);
+    expect(expected).toContain('Papers from Alex');
+  }, 60_000);
+});

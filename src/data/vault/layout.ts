@@ -76,6 +76,10 @@ export const PROP = {
   item: 'bowerItem',
   /** On a declared pile's folder and its things: the declaration id in `.bower/piles`. */
   declaration: 'bowerDeclaration',
+  /** On a declaration or disposition in `.bower/piles`: the id of the pile it is about. Absent on records written before this stamp. */
+  recordPile: 'bowerRecordPile',
+  /** On a declaration in `.bower/piles`: `loose` or `folder`, the layout its pile was declared with. */
+  recordAnchor: 'bowerRecordAnchor',
 } as const;
 
 /** Runtime checks for the runner's data: a version alone does not prove its shape. */
