@@ -255,3 +255,7 @@ P3-9 is closed.
 - state-rewrite-change re-closed per TL-P4-10 (red by hand at aea3176; merged with drive-calls-cut). 380/383. Waiting for the P4-13 review, then a short check of this round.
 - P4-13 review BLOCK (drive-calls-cut): the 3-s fence reuse lets a person rename between check and send be overwritten. Reopened; fix round with the same worker (fresh read right before each send, schedule clash file:F vs dir:F, barrier under the pool, bin evidence from Drive, overhead check restored). 379/383.
 - state-rewrite fix-round check PASS (minors to polish). Waiting for the drive-calls-cut fix round.
+- Before the owner's compaction:
+  - running: `drive-calls-cut` fix round (bower-implementer, worktree /private/tmp/bower-p4-dcut2, branch claude/p4-dcut2, verify gained "a person change between the check and the send is refused");
+  - main holds the first round, so don't deploy it until the fix closes. 380/383 counts drive-calls-cut as open (379 passing).
+  - Next: a check of the fix, the four suites, main, the SHA, then live offer-and-flat ×3 + garden ×1 + a C05 case.

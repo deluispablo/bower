@@ -12,25 +12,31 @@ Coordinator: the Claude Code session named "Orquestador". It integrates in `/Use
 - **P4 is authorized:** [P4_PLAN](../P4_PLAN.md), [TL-P4-01](2026-10-07-tl-p4-01-p4-start.md). The production cutover still needs the owner's approval of the moment and the rollback.
 - **Backup:** `backup/main` is pushed after each green integration. Per BACKUP.md: `git push backup refs/heads/main:refs/heads/main`, then check the remote SHA. Bash runs outside the sandbox (keychain).
 - **Local-only branch** `archive/p2-o5-snapshot`: uncommitted P2 work, kept as a P4 candidate. Never push it.
-- **P4 progress (2026-10-08), rulings TL-P4-01 to TL-P4-06:**
+- **P4 progress (2026-10-08), rulings TL-P4-01 to TL-P4-10:**
   - **Closed:**
-    - P4-1: corpus and Claude provider;
-    - P4-2: provider-contract and runner-overhead;
-    - P4-3: checkpoint cost and c04-incorporation;
-    - P4-4: admission reads, attempt check and dispatch retry;
-    - P4-5: deploy scan token and runner-stops-when-gone.
-  - **Staging** runs `c76fd2f`. The C04 comparison passed 3 of 3 with Claude Sonnet: press to done 1:17–1:35, model 3–4 s, 1 turn. Every live run is in [p4-speed-baseline.md](p4-speed-baseline.md).
+    - P4-1 to P4-8: speed (checkpoint per batch, reads and report, input fingerprint and sections, Drive-call golden);
+    - placement-check, second-brain-method (TL-P4-08: the owner's local method is the semantic reference), per-thing asks, numbers grounded, naming.
+  - **C04 is closed** (TL-P4-08 addendum 6). Staging `327b987`: offer-and-flat passed 3/3 and garden 1/1, input= stable within a case. Every live run is in [p4-speed-baseline.md](p4-speed-baseline.md).
+  - **C05 has started.** `state-rewrite-change` is closed per [TL-P4-10](2026-10-08-tl-p4-10-current-state-ownership.md):
+    - every Bower note write sets `bowerMd5`;
+    - an unmarked section is adopted when md5Checksum matches; otherwise a line and one question per folder;
+    - the fix-round check passed. It touches contracts, so the app and the runner deploy together.
   - **Open:**
-    - `checkpoint-per-batch` (escalated, `/private/tmp/bower-p4-ckbatch`): TL-P4-05 addendum, option (b), the `bowerOp` stamp;
-    - `runner-reads-and-report` (implementer, `/private/tmp/bower-p4-readsreport`).
-  - **After those:** the P4-6 close (an Opus delta review, the four suites, main, backup, the deploy SHA to the lead), then 1 scripted run to measure, then the C05 slice (updates and the merge question).
-  - **Live model runs:** the lead switches `BOWER_PROVIDER` on and off in bower-home. I press. Each run starts from a fresh folder: Bin the previous output by page script, synthetic data only.
+    - `drive-calls-cut` (implementer, fix round, `/private/tmp/bower-p4-dcut2`): the P4-13 review blocked it, because the fence reused a read up to 3 s old and a person's rename was lost;
+    - `report-kept-your-change` (C12), `type-proposals` and `ask-answer-loop` (C11).
+  - **Main holds `drive-calls-cut`'s first round (`f41e508`), which is under its fix round: do not deploy main until it closes.**
+  - **Next:**
+    - when the drive-calls-cut fix closes: a short Opus check, the four suites (src changed since 222f9c0), main, backup, the SHA to the lead;
+    - then the live checks: offer-and-flat ×3 + garden ×1, plus a C05 case.
+  - **Live model runs:** the lead switches `BOWER_PROVIDER` in bower-home. I press by keyboard on tab `tab-10`.
+    - **Fresh folder:** Bin outputs created after `localStorage.__of_resetAt`, restore the two hubs from `__of_flathub` and `__of_jobhub`, and Bin the leftover inbox pile.
+    - **Pile files:** in localStorage (`__of_*`, `__c04b64`). Synthetic only, Bin only.
 - **Owner's standing permission (in my session):** made-up piles and Tidy up presses on staging with test accounts A and B. Never delete-account, sign-in or production.
 
 ## The plan, in order
 
-1. **Speed (P4-B):** finish `checkpoint-per-batch` and `runner-reads-and-report`, then measure on staging.
-2. **Semantic slices (P4-C):** C05, then C06–C11 and C13–C15 against the corpus. Each slice goes scripted first, then the model; the corpus scorer is the bar.
+1. **Speed (P4-B):** close the `drive-calls-cut` fix round, then measure on staging. Reads and apply are the biggest steps.
+2. **Semantic slices (P4-C):** C05 next (state-rewrite-change is done), then C06–C11 and C13–C15 against the corpus. Each slice goes scripted first, then the model; the corpus scorer is the bar.
 3. Then P4-D quality and the comparison with the original, and P4-E production readiness, as P4_PLAN orders them.
    - **Cutover last,** with the owner's approval.
 - **Reuse first:** the original app is at `/Users/deluisp/Projects/bower` (`agent/claude-settings.json`, `agent/run.sh`, `agent/prompts/`, `agent/bench/`).
