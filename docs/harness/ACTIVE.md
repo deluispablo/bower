@@ -179,3 +179,4 @@ P3-9 is closed.
 - TL-P4-05 (c588797): checkpoints in the DO declined; checkpoint-per-batch running (escalated, bower-p4-ckbatch at 5c55e7d); runner-reads-and-report next; then C05. 362/364.
 - P4-5 review BLOCK (runner-stops-when-gone: the token route answers 401, not 410, on revoked access). Reopened (98e6ae7); fix round running. 361/364.
 - checkpoint-per-batch BLOCKED (no code): a mid-batch kill after a person's rename cannot reconcile (TL-P3-23), and 5 tests must change; ruling asked (options a/b/c). runner-reads-and-report running (implementer, at 4d8191a).
+- TL-P4-05 addendum (9a12727): checkpoint-per-batch takes option (b), a bowerOp stamp on every effect; the test changes are allowed with reasons. Resumes when a slot frees.
