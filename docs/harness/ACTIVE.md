@@ -251,3 +251,4 @@ P3-9 is closed.
 - state-rewrite-change closed (red by hand at bbc1d0e): new change kind for the Bower-owned Current state; compat rows added; left out: creating a missing Current state, runner undo run (C13), q-state answers (C11). 379/383. drive-calls-cut running.
 - P4-12 review BLOCK (state-rewrite-change): no bower_state mark counts as Bower-owned, so person edits on existing notes are never caught. Reopened; ruling asked on the unmarked case. 378/383.
 - TL-P4-10 (da18746): state-rewrite-change fix round (escalated): bowerMd5, adoption, one question per folder, minors. drive-calls-cut still running.
+- drive-calls-cut closed (ce633bd): 134 -> 72 Drive calls; modelled apply 13.4 -> 3.8 s; run 19.6 -> 9.2 s; fence read reused up to 3 s. 379/383. P4-13 Opus delta running; state-rewrite fix round running.
