@@ -5502,5 +5502,111 @@
     ],
     "verify": "pnpm -C api exec vitest run -t \"an api test that calls the network fails|storage from before the deadline table keeps its deadlines\"",
     "note": "Defect deadlines-test-flake, ruled (b) inside stage 1 (main 8acdfed). bower-implementer."
+  },
+  {
+    "id": "c2-drive-transport",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One Drive transport for app, runner and Worker: token refresh, one retry policy (a timeout per attempt, idempotent GETs retried with backoff inside a total budget, errors mapped by context; outside a browser never offline), error mapping, one wire type and field list. DriveHttp builds on it; RunnerDrive keeps only the fence and the attempt check; the Worker's vault.ts client goes. FencedDrive and StoredEvidence move into drive-api.ts.",
+    "steps": [
+      "One transport; retry policy per TL-P4-16 addendum 4.",
+      "Named tests for the six sites in the smoke-runner-offline note (drive-http.ts:374,292; runner drive.ts:451,508; token.ts:105; status.ts:94).",
+      "Remove the dependency-rules exceptions it owns."
+    ],
+    "verify": "pnpm vitest run -t \"one Drive transport retries a stalled read inside its budget|a runner Drive error is never called offline\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-offline (TL-P4-16 addendum 4)."
+  },
+  {
+    "id": "c2-runner-exit",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One exit function for the runner's exit paths; an additive \"attempt ended\" report on the status wire; the Worker arms the run deadline at +60 s and redispatches. No if:failure step.",
+    "steps": [
+      "One exit function for main.ts:156, :340, main's catch; :146 excepted.",
+      "Additive status report; Worker deadline +60 s.",
+      "Every exit, including an uncaught error, reaches the Worker or is recovered within 60 s."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"every runner exit reaches the Worker or is recovered within 60 s\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Defect smoke-runner-silent-stop (TL-P4-16 addendum 4)."
+  },
+  {
+    "id": "c2-read-cache",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One read cache keyed by file id plus modifiedTime, used by DriveVault, Journal and the runner; only the listing is invalidated, so a refresh never clears a read in flight; the runner's eight caches and time-based holds go.",
+    "steps": [
+      "One cache; listing-only invalidation.",
+      "Remove the other caches."
+    ],
+    "verify": "pnpm vitest run -t \"one read cache serves app and runner\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. After c2-drive-transport."
+  },
+  {
+    "id": "c2-fake-parity",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Digests, unchecked and binnedByItem join DriveApi and are built on both fake and real Drive; runtime has-it checks go; fake search behaves like Drive's (tokens, page cap).",
+    "steps": [
+      "Ports on both Drives.",
+      "Fake search parity."
+    ],
+    "verify": "pnpm vitest run -t \"the fake and real Drive offer the same ports\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer. Before c2-one-engine."
+  },
+  {
+    "id": "c2-one-engine",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "One engine in src/data/spine (check, send with a fence, observe, read back) behind a Drive port; the runner and the fake run service both use it; checkpoints per batch and bowerOp recovery everywhere.",
+    "steps": [
+      "One engine.",
+      "Fake becomes a Drive adapter."
+    ],
+    "verify": "pnpm vitest run -t \"the runner and the fake run the same engine\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a landed move later purged is reported as applied (safety-polish #7)."
+  },
+  {
+    "id": "c2-write-once",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Every write (operations, run records, report files) carries bowerOp, reconciles by the stamp and confirms from the answer's checksum; the six recovery methods and their text checks go.",
+    "steps": [
+      "One write-once path.",
+      "Remove the six recovery methods."
+    ],
+    "verify": "pnpm vitest run -t \"every write reconciles by its bowerOp stamp\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. After c2-one-engine."
+  },
+  {
+    "id": "c2-upload-queue-only",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "The upload queue is always used, with an in-memory store in tests; the direct upload path and DriveHttp's second resumable loop go.",
+    "steps": [
+      "Queue only."
+    ],
+    "verify": "pnpm vitest run -t \"every upload goes through the queue\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer."
+  },
+  {
+    "id": "c2-worker-dispatch",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Admission schedules a dispatch-now deadline; only the alarm mints tickets and dispatches; a run row holds deadline_at and version, compare-and-set; Delete me deletes personal tables explicitly and keeps ticket rows and the generation floor, with a test that classes every table.",
+    "steps": [
+      "Dispatch only from the alarm.",
+      "Compare-and-set run row.",
+      "Table classification test for Delete me."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"only the alarm dispatches|Delete me classes every table\"",
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a failed run-end start says so, and a retry does not claim it waits (safety-polish #4)."
   }
 ]
