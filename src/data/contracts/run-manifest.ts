@@ -54,7 +54,7 @@ export type EditText = {
 };
 export type EffectV2 = Effect | EditText;
 export type OperationV2 = { operationId: string; ordinal: number; dependsOn: string[]; effect: EffectV2 };
-export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string };
+export type ReportFiled = { name: string; title: string; kind: FileKind; to: string; note?: string; area?: string };
 export type ReportQuestion = { id: string; text: string; yes: string; no: string; askedAt: number; about?: string };
 /** The existing RunReport shape in the stricter closed form used inside new records. */
 export type ManifestRunReport = {
@@ -318,8 +318,8 @@ const rows = (value: unknown, keys: string[], optional: string[] = []): boolean 
   list(value, (row) => closed(row, keys, optional) && Object.values(row).every(text));
 function runReport(value: unknown): value is ManifestRunReport {
   if (!closed(value, ['filed', 'created', 'updated', 'setAside', 'questions'], ['yourChanges', 'requests', 'rulesWorded'])) return false;
-  return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note']) && text(row.name) && text(row.title)
-      && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)))
+  return list(value.filed, (row) => closed(row, ['name', 'title', 'kind', 'to'], ['note', 'area']) && text(row.name) && text(row.title)
+      && oneOf(row.kind, fileKinds) && text(row.to) && (!Object.hasOwn(row, 'note') || text(row.note)) && (!Object.hasOwn(row, 'area') || text(row.area)))
     && rows(value.created, ['path', 'what']) && rows(value.updated, ['path', 'what']) && rows(value.setAside, ['name', 'why'])
     && list(value.questions, (row) => closed(row, ['id', 'text', 'yes', 'no', 'askedAt'], ['about'])
       && text(row.id) && text(row.text) && text(row.yes) && text(row.no) && integer(row.askedAt)

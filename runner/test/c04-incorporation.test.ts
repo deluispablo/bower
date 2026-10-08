@@ -131,7 +131,7 @@ describe('what the model is shown (P4-3)', () => {
 
 /** A proposal by names, as a script would write it: the runner's context gives each thing's file id. */
 interface Proposal {
-  things: Array<{ thing: string; to: string; name: string; basis?: string; note?: { name: string; summary: string; body: string } }>;
+  things: Array<{ thing: string; to: string; name: string; basis?: string; responsibility?: string; note?: { name: string; summary: string; body: string } }>;
   lines?: Array<{ note: string; text: string; cites?: string }>;
 }
 
@@ -163,7 +163,7 @@ const PROPOSALS: Record<string, Proposal> = {
       { thing: 'Offer_letter_final(2).pdf', to: 'Projects/Job hunt/Applications', basis: 'Projects/Job hunt/Job hunt.md', name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Salary 42,000 a year. Start 2 November.' } },
       { thing: 'listing-88213.example.url', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
       { thing: 'IMG_2301.jpg', to: 'Projects/Flat hunt/Viewing photos', basis: 'Projects/Flat hunt/Flat hunt.md', name: 'Wrenfield Road, kitchen.jpg' },
-      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', basis: 'Payslips go to Areas / Money / Payslips.', name: 'Payslip August (2).pdf' },
+      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', responsibility: 'pay and tax records', name: 'Payslip August (2).pdf' },
     ],
     lines: [
       { note: 'Projects/Flat hunt/Flat hunt.md', text: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example.url' },

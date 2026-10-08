@@ -307,6 +307,16 @@ export function grounded(manifest: RunManifest): boolean {
     written.add(op.operationId);
     return true;
   }
+  const areaMade = new Set<string>();
+  const areaGrounded = (area: string, chain: string[]): boolean => {
+    const id = chain.find((x) => {
+      const path = pathOf({ createdBy: x });
+      return path !== null && path.startsWith('Areas/') && area.startsWith(`New area ${path.split('/').at(-1) ?? ''}, for `) && area.length > `New area ${path.split('/').at(-1) ?? ''}, for `.length;
+    });
+    if (id === undefined || areaMade.has(id)) return false;
+    areaMade.add(id);
+    return true;
+  };
   const filed = new Set<string>();
   const setAside = new Set<string>();
   const claimedNotes = new Set<string>();
@@ -360,6 +370,9 @@ export function grounded(manifest: RunManifest): boolean {
     if (row.name !== member.file.name || row.to !== pathOf(move.parent) || filed.has(member.file.fileId)) return false;
     if (!chainOf(move.parent).every((id) => c.requires.includes(id))) return false;
     if (row.note !== undefined && !noteGrounded(manifest, c, moveOp, row.note, claimedNotes)) return false;
+    // A new Area's reason (TL-P4-07 addendum 3): says "New area <name>, for <responsibility>" for a folder under Areas this
+    // run makes on the way to the move's place, once per folder.
+    if (row.area !== undefined && !areaGrounded(row.area, chainOf(move.parent))) return false;
     if (v.created.length && !linkNoteMade(c, row.note)) return false;
     filed.add(member.file.fileId);
   }

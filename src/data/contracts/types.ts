@@ -188,6 +188,8 @@ export interface FiledItem {
   to: string;
   /** Its companion note, when Bower wrote one. */
   note?: string;
+  /** Why a new Area was made for it: "New area Money, for pay and tax records". */
+  area?: string;
 }
 
 export interface RunReport {

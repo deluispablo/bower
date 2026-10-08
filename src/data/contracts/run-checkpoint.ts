@@ -141,9 +141,9 @@ function outcome(value: unknown): value is Outcome {
 }
 
 function filed(value: unknown): boolean {
-  return closed(value, ['name', 'title', 'kind', 'to'], ['note'])
+  return closed(value, ['name', 'title', 'kind', 'to'], ['note', 'area'])
     && text(value.name) && text(value.title) && oneOf(value.kind, FILE_KINDS) && text(value.to)
-    && (!Object.hasOwn(value, 'note') || text(value.note));
+    && (!Object.hasOwn(value, 'note') || text(value.note)) && (!Object.hasOwn(value, 'area') || text(value.area));
 }
 const pathChange = (value: unknown): boolean => closed(value, ['path', 'what']) && text(value.path) && text(value.what);
 const setAside = (value: unknown): boolean => closed(value, ['name', 'why']) && text(value.name) && text(value.why);

@@ -117,9 +117,13 @@ export interface Filing {
   words(pileId: string): Placement | null;
   note?(fileId: string): AuthoredNote | null;
   lines?: readonly AuthoredLine[];
+  /** A new Area's path and the ongoing responsibility it is for; the report says it beside the made folder. */
+  areas?: ReadonlyMap<string, string>;
 }
 
 export type { HubUpdate };
+
+const emptyReport = (): ManifestRunReport => ({ filed: [], created: [], updated: [], setAside: [], questions: [] });
 
 
 /**
@@ -879,9 +883,20 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   }
   const chainOf = (path: string): string[] => (made.has(path) ? [made.get(path) ?? '', ...chainOf(parentOf(path))] : []);
   const reportPlan: ReportContribution[] = [];
+  // A new Area the model gave a responsibility for: the first thing filed there says why it was made (TL-P4-07 addendum 3).
+  const said = new Set<string>();
+  const areaOf = (to: string): { area: string } | Record<string, never> => {
+    for (const [path, why] of opts.filing?.areas ?? []) {
+      if ((to === path || to.startsWith(`${path}/`)) && made.has(path) && !said.has(path)) {
+        said.add(path);
+        return { area: `New area ${nameOf(path)}, for ${why}` };
+      }
+    }
+    return {};
+  };
   const movesOf = new Map<string, string[]>();
   const moveOf = new Map<string, string>();
-  const empty = (): ManifestRunReport => ({ filed: [], created: [], updated: [], setAside: [], questions: [] });
+  const empty = emptyReport;
   /** Each edit by the journal records it comes from (their archives wait for it, rule 7, R3-4), and by its note. */
   const editsFrom = new Map<string, string[]>();
   const editOf = new Map<string, string>();
@@ -917,7 +932,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       const row = line
         ? { name: thing.file.name, title: displayName(nameOf(merge.into)), kind: thing.item.kind, to, note: merge.into }
         : { name: thing.file.name, title: thingName(name), kind: thing.item.kind, to };
-      reportPlan.push({ requires: [...(line ? [line] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [row] } });
+      reportPlan.push({ requires: [...(line ? [line] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ ...row, ...areaOf(to) }] } });
       reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
       return;
     }
@@ -925,11 +940,11 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       // R3-5: filed only with every operation for it; a rejected move (or its note's) leaves it to the next run.
       // The note it wrote is listed with the notes the run made; one reused is not (R4-2).
       const made = created && note.what !== null ? [{ path: join(to, note.name), what: note.what }] : [];
-      reportPlan.push({ requires: [...(created ? [created] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(note.name), kind: thing.item.kind, to, note: join(to, note.name) }], created: made } });
+      reportPlan.push({ requires: [...(created ? [created] : []), move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(note.name), kind: thing.item.kind, to, note: join(to, note.name), ...areaOf(to) }], created: made } });
       reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
       return;
     }
-    reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(name), kind: thing.item.kind, to }] } });
+    reportPlan.push({ requires: [move, ...chainOf(to)], when: 'applied', value: { ...empty(), filed: [{ name: thing.file.name, title: thingName(name), kind: thing.item.kind, to, ...areaOf(to) }] } });
     reportPlan.push({ requires: [move], when: 'rejected', value: { ...empty(), setAside: [{ name: thing.file.name, why: NOT_FILED }] } });
   };
   for (const f of filing.filter((x) => !x.merge)) await fileOne(f);
