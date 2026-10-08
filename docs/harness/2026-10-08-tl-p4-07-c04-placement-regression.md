@@ -35,3 +35,22 @@ Entries, in place of `model-context-regression`:
 3. **The speed result,** a median of 0:43, counts once C04 passes 5/5. The model step is the same on both SHAs, so the gain comes from the spine, as designed.
 
 **Next speed lever.** Live `reads` take 10.6–16.0 s. The model put plan reads at 1.8 s, so `reads` now cost more than checkpoints (11.5 s over 8 writes). `checkpoint-count` reports the 8. A later entry measures where the live reads go, after C04 passes.
+
+**Addendum 2, 2026-10-08: five live runs on `cd3af43`, 4/5 pass.** Run 2 went to `Areas/Community garden` again; runs 1, 3, 4 and 5 went to `Resources/Community garden`. All five notes hold the 4 dates.
+
+| Step (runner, ms) | `a566241` runs 2–3 | `cd3af43` runs 1–5 |
+| --- | ---: | ---: |
+| reads | 10,577–10,807 | 12,447–15,664 |
+| apply | 4,392–5,281 | 8,829–15,886 |
+| checkpoints | 11,500–11,604 (counted 8) | 6,414–8,556 (4) |
+| report | 2,508–2,706 | 7,904–9,764 |
+| total | 34,612–35,515 | 42,122–53,574 |
+
+Press → done was 0:50–0:59, plus one run that waited about 50 s for a GitHub runner.
+
+1. **The bar is not met.** Prompt wording alone leaves placement to chance. The standard fix for structured model output is to validate it and retry once with the validation error ([Instructor, retrying](https://python.useinstructor.com/concepts/retrying/)). That is `placement-check` (`bower-implementer`):
+   - The spine refuses an operation that makes a new folder under Areas or Projects unless it cites a rule line or an existing note.
+   - The provider asks the model once more with that error. A second refusal ends the run honestly (C12), never with a silent fallback.
+   - Scripted tests cover both paths. The live proof is 5/5 again.
+2. **`model-input-fingerprint` hashes the normalized input,** as the golden does, with file ids and the run id replaced. Then the value matches across fresh folders.
+3. **The runner got slower:** a median of about 49 s against 35 s. Checkpoints saved 4–5 s, but apply and report gained 9–11 s, likely run records moving from one counter to another, or more calls. `drive-calls-golden` (`bower-mechanical`) records the Drive calls per step for C04 on the fake, on both SHAs. It explains the difference, and a golden pins the counts, so a speed regression shows up as a failing test.
