@@ -345,3 +345,4 @@ P3-9 is closed.
 - Lead accepted the shared-contracts choices (8b064bd). Waiting: deadlines-test-flake note, gate ratchet; then safety-polish, verify-names-precheck, suites, SHA.
 - safety-polish closed as superseded (TL-P4-14 addendum 3, 03f20c6); its 8 items become acceptance tests in their owner packets: docs/harness/2026-10-08-safety-polish-carryover.md. Entry removed from features.json. Stage 1 ends with c1-api-test-harness and verify-names-precheck.
 - verify-names-precheck closed (e8c65a8c); c1-api-test-harness closed (381ec99d; deadlines-test-flake fixed). Stage 1 entries all closed. 411/415. Suites next.
+- Stage 1 suites at 7f738897: check (runner 192, harness 411/415), e2e 226, e2e:fake 256, pwa 4. Main moves.
