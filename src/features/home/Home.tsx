@@ -286,7 +286,6 @@ function Questions() {
     // Stored once; a yes a tidy-up can act on starts a small one at once (TL-P4-08 addendum 8).
     answerQuestion(vault, runs, id, yes, { allowWeb: usePrefs.getState().lookUpWeb }).then(
       (done) => {
-        if (done?.outcome.kind === 'failed') console.error(done.outcome.error);
         toast(done ? answerToast(done.outcome, label) : answered(label));
         after.current = Math.max(index, 0);
         // The list may already have changed, or change a moment later (then the effect lands it).

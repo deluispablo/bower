@@ -6,8 +6,10 @@
  * - a thing or pile asked about (`q-ask-…`, its `subject`): a run that takes only that pile, and your changes;
  * - keeping one note (a question naming its two notes as [[links]]): a run of your changes only, no pile.
  * Every other answer starts none and waits for the next tidy-up: a no, or a choice that changes nothing, closes its
- * question; a yes to Bower keeping the summaries it did not write (`q-adopt-states`) records that as a rule; a yes to
- * writing a Current state you edited (`q-state-…`) waits, as before.
+ * question; a yes to Bower keeping the summaries it did not write (`q-adopt-states`) records that as a rule. A yes to
+ * writing over a Current state you edited (`q-state-…`) is not something Bower can do yet: it says so, starts nothing,
+ * and the next tidy-up closes the question, your summary as you wrote it (P4-20 I2; the lead decides whether to build it).
+ * While a run is going, an answer starts none: it waits for the next run, and says so (P4-20 I1).
  *
  * The run is asked for as a press of Tidy up is, with an Idempotency-Key made from the question (its id and when it
  * was asked), so answering twice, on one device or two, is one run
@@ -22,6 +24,8 @@ export type AnswerRun = { scope: 'all'; subject: string } | { scope: 'instructio
 
 /** A question about keeping one note: the corpus' and the runner's wording (`runner/src/claude.ts`, `mergesOf`). */
 const KEEP_ONE = /\bkeep one note\b/i;
+/** The phases of a run still going (the Worker's `ACTIVE_PHASES`). */
+const GOING: readonly RunState['phase'][] = ['queued', 'reading', 'writing', 'saving'];
 /** A subject the Worker takes: a Drive file id or a pile id. */
 const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -71,13 +75,19 @@ export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'ans
   const question = (await vault.questions()).find((q) => q.id === id);
   if (!question) return null;
   await vault.answer(id, yes);
+  if (yes && question.id.startsWith('q-state-')) return { question, outcome: { kind: 'not-yet' } };
   const plan = answerRun(question, yes);
   if (!plan) return { question, outcome: { kind: 'next' } };
   const requestId = await answerRequestId(question);
   try {
+    // A run going keeps what it took: the answer waits for the next run, and is not told it is being done now.
+    const current = await runs.current();
+    if (current && GOING.includes(current.phase)) return { question, outcome: { kind: 'waits' } };
     const run = await runs.start(plan.scope, { allowWeb: opts.allowWeb, requestId, ...(plan.scope === 'all' ? { subject: plan.subject } : {}) });
     return { question, outcome: { kind: 'now', run } };
   } catch (error) {
+    // The answer is kept; the person hears one sentence (`answerToast`), the details go to the console.
+    console.error(error);
     return { question, outcome: { kind: 'failed', error } };
   }
 }

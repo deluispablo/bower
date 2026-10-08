@@ -446,17 +446,21 @@ async function answersTaken(read: ScriptedRead, run: ScriptedRun, took: Admitted
   const open = json(await read.readText(file.id)) as { questions?: unknown } | null;
   const questions = Array.isArray(open?.questions) ? (open.questions as Array<Record<string, unknown>>) : [];
   const text = (v: unknown): string => (typeof v === 'string' ? v : '');
-  const out: TakenAnswer[] = [];
+  const out: Array<{ answer: TakenAnswer; at: number }> = [];
   for (const line of took.taken.journal) {
-    const rec = json(await read.readText(line.fileId)) as { id?: unknown; kind?: unknown; text?: unknown; questionId?: unknown } | null;
+    const rec = json(await read.readText(line.fileId)) as { id?: unknown; kind?: unknown; text?: unknown; questionId?: unknown; at?: unknown } | null;
     if (rec?.kind !== 'answer' || (rec.text !== 'yes' && rec.text !== 'no') || typeof rec.id !== 'string') continue;
     const q = questions.find((x) => x.id === rec.questionId);
     if (!q || typeof q.id !== 'string' || typeof q.text !== 'string') continue;
-    // One answer per question: a second one (another device's) adds nothing.
-    if (out.some((a) => a.question.id === q.id)) continue;
-    out.push({ id: rec.id, yes: rec.text === 'yes', question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) } });
+    const at = typeof rec.at === 'number' ? rec.at : 0;
+    // One answer per question: of two (another device's), the later one is the person's answer (P4-20 M1).
+    const before = out.findIndex((a) => a.answer.question.id === q.id);
+    if (before >= 0 && (out[before]?.at ?? 0) >= at) continue;
+    const answer: TakenAnswer = { id: rec.id, yes: rec.text === 'yes', question: { id: q.id, text: q.text, yes: text(q.yes), no: text(q.no), ...(typeof q.subject === 'string' ? { subject: q.subject } : {}) } };
+    if (before >= 0) out.splice(before, 1);
+    out.push({ answer, at });
   }
-  return out;
+  return out.map((a) => a.answer);
 }
 
 /**
