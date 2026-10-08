@@ -1,0 +1,30 @@
+{
+  "files": {
+    "present": [
+      "Areas/Home/*ees*.txt"
+    ],
+    "absent": [
+      "Inbox/*",
+      "Areas/Home/*ees*.md",
+      "Resources/*"
+    ]
+  },
+  "notes": [
+    {
+      "path": "Areas/Home/Garden plot.md",
+      "contains": [
+        "Plot fees: 25 a year, due by 31 January."
+      ],
+      "timelineCount": 2
+    }
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "created": [],
+    "updated": [
+      "Areas/Home/Garden plot.md"
+    ],
+    "questions": []
+  }
+}

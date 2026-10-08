@@ -1,0 +1,25 @@
+{
+  "files": {
+    "present": [
+      "Resources/Cooking/Leek soup.txt",
+      "Inbox/*/Letter, 14 October.txt"
+    ],
+    "absent": [
+      "Projects/*Letter*",
+      "Areas/*Letter*",
+      "Resources/*Letter*"
+    ]
+  },
+  "unchanged": [
+    "Projects/Flat hunt/Flat hunt.md",
+    "Projects/Job hunt/Job hunt.md"
+  ],
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "setAside": 0,
+    "questions": [
+      "q-ask-p-2"
+    ]
+  }
+}

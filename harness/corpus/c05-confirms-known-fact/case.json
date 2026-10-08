@@ -1,0 +1,20 @@
+{
+  "id": "c05-confirms-known-fact",
+  "capability": "C05",
+  "title": "A letter that only confirms what a note already says",
+  "covers": "model",
+  "source": "new (TL-P4-08 point 2: the value gate)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "",
+      "files": [
+        "Plot fees 2027.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}

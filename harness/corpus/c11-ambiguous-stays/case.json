@@ -1,0 +1,26 @@
+{
+  "id": "c11-ambiguous-stays",
+  "capability": "C11",
+  "title": "A letter that could be for the flat or the job stays in the inbox with a question",
+  "covers": "scripted",
+  "source": "new (TL-P4-08 point 1: ask, and the run goes on)",
+  "scope": "all",
+  "allowWeb": false,
+  "inbox": [
+    {
+      "line": "A soup recipe",
+      "files": [
+        "Leek soup.txt"
+      ]
+    },
+    {
+      "line": "Not sure if this is for the flat or the job",
+      "files": [
+        "Letter, 14 October.txt"
+      ]
+    }
+  ],
+  "journal": [],
+  "questions": [],
+  "bowerOwned": []
+}
