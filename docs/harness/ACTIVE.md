@@ -216,3 +216,4 @@ P3-9 is closed.
 - placement-check re-closed (af15aed) after a compatibility row for 5092e03 (optional area on a filed row; app and runner deploy together). 371/373. second-brain-method running (escalated, bower-p4-method).
 - Suites at b47bc52 (after placement-check): e2e 226, e2e:fake 250, e2e:pwa pass.
 - second-brain-method closed (bd427ab): op asks added; c05-hub-lines and c15-scanned-letter rubrics changed (logged); left out sent to the lead (Current state change kind, type-table rows in the report, bench-4, answers to asks). 372/373. Next: P4-8 Opus delta.
+- TL-P4-08 addendum (c85da86): rubric changes accepted; bench-4 unchanged. Entries ask-not-repeated (this batch), state-rewrite-change (C05), type-proposals and ask-answer-loop (C11). 372/377.

@@ -4916,5 +4916,58 @@
     "verify": "pnpm -C runner exec vitest run -t \"the instructions carry the method fit, create, ask in that order|an ambiguous thing stays in the inbox with a question and the run goes on|a document that only confirms a known fact updates the note and makes none|the C04 to C15 rubrics agree with the method\"",
     "passes": true,
     "note": "TL-P4-08 (main f296674). Method only, never vault content. Runs after placement-check (both edit the prompt)."
+  },
+  {
+    "passes": false,
+    "id": "ask-not-repeated",
+    "task": "p4-c",
+    "category": "fix",
+    "what": "A later run does not ask again a question that is still open for the same thing in the inbox (asks op); the thing stays with its one open question until the person answers (C11 loop later).",
+    "steps": [
+      "Check whether a second run over an inbox thing with an open ask adds a duplicate question.",
+      "If it does, fix it; either way pin it with a test."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a later run does not repeat an open question\"",
+    "note": "TL-P4-08 addendum (main c85da86) point 4: fix in this batch if it repeats today."
+  },
+  {
+    "passes": false,
+    "id": "state-rewrite-change",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "A new change kind rewrites a Bower-owned Current state only, with stillAsSeen and the modifiedTime it read, keeping the previous text in the manifest for undo; a section the person edited gets a Timeline line plus a question, never a rewrite (C05).",
+    "steps": [
+      "Register the change kind end to end (contracts, spine, runner, undo, report).",
+      "Person-edited Current state: Timeline line plus question, no rewrite.",
+      "Undo restores the previous text."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a Bower-owned Current state is rewritten and undo restores it|a Current state the person edited gets a line and a question, never a rewrite\"",
+    "note": "TL-P4-08 addendum (main c85da86) point 1: first C05 entry (escalated)."
+  },
+  {
+    "passes": false,
+    "id": "type-proposals",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "The report carries at most 2 proposed type-table rows per run, applied only when the person accepts (C11).",
+    "steps": [
+      "A report field for up to 2 type-table proposals.",
+      "Accept applies the row; ignore leaves the table."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a run proposes at most two kinds and an accepted one joins the table\"",
+    "note": "TL-P4-08 addendum (main c85da86) point 2: C11 slice."
+  },
+  {
+    "passes": false,
+    "id": "ask-answer-loop",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "An answer to an asks question reaches the next run, which files the thing as answered (C11).",
+    "steps": [
+      "The answer is part of the model input for that thing.",
+      "The thing is filed per the answer and the question closes."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"an answered question files its thing on the next run\"",
+    "note": "TL-P4-08 addendum (main c85da86) point 4: C11 slice."
   }
 ]
