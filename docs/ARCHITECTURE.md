@@ -93,6 +93,7 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Model reply validation and refusal kinds | one declarative schema, runner | Target: 33 hand refusals (`c3-reply-schema`) |
 | Question subject and identity | `src/data/contracts/` | Target: four id styles (`c3-subject`) |
 | Note sections (Current state, Timeline, Bower's sections) | `src/data/contracts/ownership-format.ts` | Target: three or four parsers (`c3-note-sections`) |
+| Pile readiness accounting (declarations, dispositions, which pile a record belongs to) | `src/data/pile-readiness.ts` | Reads the whole history; target `c2-pile-records` |
 | Planning: capture, decide, build operations | `src/data/spine/` | Target: one 1,100-line function (`c3-planner-split`) |
 | Worker deadlines (alarms) | `api/src` deadlines table | Target: four kinds on one alarm (`c1-worker-deadlines`) |
 | Worker route helpers (person RPC, errors, JSON body) | `api/src` middleware | Target: per-file copies (`c1-worker-routes`) |
