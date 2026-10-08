@@ -6,6 +6,7 @@
  * knows what happened. It never writes Bower's own sections of a note.
  */
 import { hasBinLookup, type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
+import { ReadCache, type Version } from '../drive/read-cache';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
 import { buildTree, checkCreationName, displayName, thingName, freeName, join, kindOf, moveEntry, nameOf, parentOf, removeEntry, renameEntry } from '../tree';
@@ -93,6 +94,9 @@ function deviceId(): string {
   }
 }
 
+/** The pretend Drive stored no digest for a file: not an error, and not kept. */
+class NoDigest extends Error {}
+
 export class DriveVault implements VaultSource {
   readonly driveLinks: boolean;
   protected readonly drive: DriveApi;
@@ -104,15 +108,13 @@ export class DriveVault implements VaultSource {
   private declarationCache = new Map<string, DeclarationResult>();
   private dispositionCache = new Map<string, DispositionResult>();
   /**
-   * Single-flight reads (the standard request-coalescing pattern): a file asked for twice while the folder looks the
-   * same is read once, whether the second ask comes during the first or after it. Forgotten at every change; a
-   * refresh forgets only the files whose listed version (modifiedTime) moved or that left, so a person's change or
-   * another device's shows at the next load while reads in flight are not restarted (invalidation by version, as an
-   * ETag does, not by clearing everything). Never used to verify a write.
+   * What files hold, by id and the modifiedTime the listing gives (`read-cache.ts`, shared with the journal). A refresh
+   * lists again and nothing else: a file whose version moved is read at its new one, the others and the reads on
+   * their way stay. Never used to verify a write.
    */
-  private readonce = new Map<string, { read: Promise<string | Uint8Array>; version: string | undefined }>();
-  /** The modifiedTime of each file in the latest listing, the version a read is kept under. */
-  private listedVersions = new Map<string, string>();
+  protected readonly reads = new ReadCache();
+  /** The latest listing, as this page's own writes keep it: the version each file's read is kept under. */
+  private listed: VaultIndex | null = null;
   /** Pile folders whose declaration could not be read, already logged: once per failure, not per listing. */
   private unreadableLogged = new Set<string>();
   /**
@@ -122,10 +124,6 @@ export class DriveVault implements VaultSource {
   private lockedNotes = new Map<string, string>();
   /** Pile notes Bower refused to parse, by file id and modified time, already logged: once until they change. */
   private refusalsLogged = new Set<string>();
-  /** Sizes and hashes of files already checked, by file id and modified time. */
-  private digests = new Map<string, Digest>();
-  /** A digest being worked out, shared by every listing that asks for it meanwhile. */
-  private digesting = new Map<string, Promise<Digest | null>>();
   private ix: Promise<VaultIndex> | null = null;
   private listeners = new Set<() => void>();
   /** Parsed notes by file id, with the raw text they were parsed from (front matter included). */
@@ -135,7 +133,6 @@ export class DriveVault implements VaultSource {
   /** Declaration copies a Remove of this pile sent to the Bin before it stopped: Undo restores them with the rest. */
   private removing = new Map<string, string[]>();
   private bin = new Map<string, { id: string | null; change: string | null; top?: string; late?: string[]; pending?: Upload; pileKey?: string; declarations?: string[] }>();
-  private texts = new Map<string, { modified: string; text: string }>();
   /** Things on their way into the inbox, by pile; a failed one stays with upload -1. */
   private uploads = new Map<string, Upload>();
   private sendingPiles = new Set<string>();
@@ -167,7 +164,7 @@ export class DriveVault implements VaultSource {
       {
         folder: () => this.systemFolder(SYSTEM.changes),
         owner: journalOwner,
-        readText: (id) => this.readTextOnce(id),
+        reads: this.reads,
         files: async (fresh, archived) => {
           if (fresh) {
             const root = await this.rootId();
@@ -187,7 +184,8 @@ export class DriveVault implements VaultSource {
 
   dispose(): void {
     this.disposed = true;
-    this.readonce.clear();
+    this.reads.clear();
+    this.listed = null;
     this.unqueue();
     for (const u of this.uploads.values()) for (const e of u.entries) { delete e.body; delete e.url; }
     this.uploads.clear();
@@ -195,7 +193,6 @@ export class DriveVault implements VaultSource {
     this.removing.clear();
     this.ix = null;
     this.notes.clear();
-    this.texts.clear();
     this.making.clear();
     this.journal.dispose();
     this.listeners.clear();
@@ -217,10 +214,6 @@ export class DriveVault implements VaultSource {
   async refresh(): Promise<void> {
     this.ix = null;
     await this.index();
-    // Reads of files the new listing shows unchanged stay (and the ones on their way finish for their callers).
-    for (const [key, kept] of this.readonce) {
-      if (kept.version === undefined || kept.version !== this.listedVersions.get(key.slice(2))) this.readonce.delete(key);
-    }
     if (!this.current()) return;
     this.listeners.forEach((l) => l());
   }
@@ -853,33 +846,26 @@ export class DriveVault implements VaultSource {
 
   /** A file's size and hash from its bytes, kept while it is unchanged; null when they cannot be read. */
   private async digestOf(f: DriveFile): Promise<Digest | null> {
-    const key = `${f.id}@${f.modifiedTime}`;
-    const known = this.digests.get(key);
-    if (known) return known;
-    const going = this.digesting.get(key);
-    if (going) return going;
-    const work = this.digestFresh(f, key).finally(() => this.digesting.delete(key));
-    this.digesting.set(key, work);
-    return work;
-  }
-
-  private async digestFresh(f: DriveFile, key: string): Promise<Digest | null> {
-    let d: Digest | null;
     try {
-      // The pretend Drive says what it stored (fake-stored); any other Drive is read.
-      const drive = this.drive;
-      if (hasStoredDigests(drive)) d = await drive.storedDigest(f.id);
-      else {
-        const bytes = (await this.bytesFromText(f)) ?? (await this.readBytesOnce(f.id));
-        d = { size: bytes.byteLength, sha256: await sha256(new Blob([new Uint8Array(bytes).buffer])) };
-      }
+      return await this.reads.digest(f, () => this.digestFresh(f));
     } catch (e) {
       // A file that cannot be read now is not counted as arrived; the next listing asks again.
-      console.error(e);
+      if (!(e instanceof NoDigest)) console.error(e);
       return null;
     }
-    if (d) this.digests.set(key, d);
-    return d;
+  }
+
+  private async digestFresh(f: DriveFile): Promise<Digest> {
+    // The pretend Drive says what it stored (fake-stored); any other Drive is read.
+    const drive = this.drive;
+    if (hasStoredDigests(drive)) {
+      const d = await drive.storedDigest(f.id);
+      // None stored: not kept, so the next listing asks again.
+      if (d) return d;
+      throw new NoDigest();
+    }
+    const bytes = (await this.bytesFromText(f)) ?? (await this.readBytesOnce(f.id));
+    return { size: bytes.byteLength, sha256: await sha256(new Blob([new Uint8Array(bytes).buffer])) };
   }
 
   /** A declared pile's note, missing though you never removed it, written again from its first words. */
@@ -1350,9 +1336,9 @@ export class DriveVault implements VaultSource {
     if (!this.ix) {
       const p = (async () => {
         const root = await this.rootId();
-        const files = await this.drive.listAll(root);
-        if (this.current()) this.listedVersions = new Map(files.map((f) => [f.id, f.modifiedTime]));
-        return VaultIndex.build(root, files);
+        const ix = VaultIndex.build(root, await this.drive.listAll(root));
+        if (this.current()) this.listed = ix;
+        return ix;
       })();
       this.ix = p;
       // expected: the caller hears the error; this only forgets the failed listing, so the next call lists again.
@@ -1366,7 +1352,6 @@ export class DriveVault implements VaultSource {
   }
 
   protected emit(): void {
-    this.readonce.clear();
     if (!this.current()) return;
     this.listeners.forEach((l) => l());
   }
@@ -1388,7 +1373,7 @@ export class DriveVault implements VaultSource {
     if (!id) return null;
     let value: unknown;
     try {
-      value = JSON.parse(await this.readTextOnce(id, false));
+      value = JSON.parse(await this.readTextOnce(id));
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
       console.error(`${path} is not valid JSON`);
@@ -1401,13 +1386,18 @@ export class DriveVault implements VaultSource {
     return value;
   }
 
-  /** `drive.readText`, shared within one view of the folder; a failed read is forgotten so the next ask tries again. */
-  protected readTextOnce(id: string, keep = true): Promise<string> {
-    return this.once(`t:${id}`, () => this.drive.readText(id), keep) as Promise<string>;
+  /** A file at the version the latest listing gives it, by id. */
+  private versionOf(id: string): Version {
+    return { id, modifiedTime: this.listed?.byId(id)?.modifiedTime };
+  }
+
+  /** `drive.readText`, once per version of the file (`reads`); a failed read is forgotten so the next ask tries again. */
+  protected readTextOnce(id: string): Promise<string> {
+    return this.reads.text(this.versionOf(id), () => this.drive.readText(id));
   }
 
   protected readBytesOnce(id: string): Promise<Uint8Array> {
-    return this.once(`b:${id}`, () => this.drive.readBytes(id), true) as Promise<Uint8Array>;
+    return this.reads.bytes(this.versionOf(id), () => this.drive.readBytes(id));
   }
 
   /**
@@ -1416,11 +1406,11 @@ export class DriveVault implements VaultSource {
    * the stored size (a byte-order mark, dropped by the read, shows as a size that differs). Otherwise null.
    */
   private async bytesFromText(f: DriveFile): Promise<Uint8Array | null> {
-    const read = this.readonce.get(`t:${f.id}`)?.read;
+    const read = this.reads.keptText(f);
     if (!read || f.size === undefined) return null;
     let text: string;
     try {
-      text = (await read) as string;
+      text = await read;
     } catch {
       // expected: the text read's own caller hears the failure; the bytes are then read on their own.
       return null;
@@ -1430,26 +1420,9 @@ export class DriveVault implements VaultSource {
     return bytes.byteLength === f.size ? bytes : null;
   }
 
-  private once(key: string, read: () => Promise<string | Uint8Array>, keep: boolean): Promise<string | Uint8Array> {
-    const have = this.readonce.get(key);
-    if (have) return have.read;
-    const p = read();
-    this.readonce.set(key, { read: p, version: this.listedVersions.get(key.slice(2)) });
-    // A file others write (Bower's own runner files) is shared only while the read is on its way: the next ask reads again.
-    const forget = (): void => {
-      if (this.readonce.get(key)?.read === p) this.readonce.delete(key);
-    };
-    // expected: the caller hears the error; this only forgets a failed read (so the next ask reads again).
-    p.then(keep ? () => undefined : forget, forget);
-    return p;
-  }
-
   protected async text(f: DriveFile): Promise<string> {
-    const cached = this.texts.get(f.id);
-    if (cached && cached.modified === f.modifiedTime) return cached.text;
-    const text = await this.readTextOnce(f.id);
+    const text = await this.reads.text(f, () => this.drive.readText(f.id));
     this.checkCurrent();
-    this.texts.set(f.id, { modified: f.modifiedTime, text });
     return text;
   }
 
@@ -1747,7 +1720,7 @@ export class DriveVault implements VaultSource {
     if (cached && cached.modified === f.modifiedTime) return cached.text;
     let text: string;
     try {
-      text = await this.readTextOnce(f.id);
+      text = await this.reads.text(f, () => this.drive.readText(f.id));
     } catch (e) {
       // A note that cannot be read now holds only its pile, as not checked; the next listing asks again.
       // Signed out, or a session that changed, stops the whole listing.

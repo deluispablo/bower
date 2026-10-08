@@ -84,7 +84,7 @@ Each mechanism has one home in the code ([TL-P4-15](harness/2026-10-08-tl-p4-15-
 | Mechanism | Home | Today |
 | --- | --- | --- |
 | Drive transport (token, retry, errors, wire type) | `src/data/drive/` | Target: four clients today (`c2-drive-transport`) |
-| Drive read cache, keyed by id and modifiedTime | `src/data/drive/` | Target: about 14 caches today (`c2-read-cache`) |
+| Drive read cache, keyed by id and modifiedTime | `src/data/drive/read-cache.ts` | DriveVault, Journal and the runner's plan reads; parse memos and the runner's write-answer maps stay (`c2-write-once`) |
 | Drive ports (what a Drive can do, read or write) | `src/data/drive/drive-api.ts` | The fake has extras the real Drive lacks (`c2-fake-parity`, `c1-drive-ops-table`) |
 | "Still as seen" fence before an act | `src/data/contracts/` | Target: five or more versions (`c1-still-as-seen`) |
 | Write-once and recovery by the `bowerOp` stamp | `src/data/spine/` | Target: six methods (`c2-write-once`) |

@@ -42,6 +42,7 @@ import type { SpineRead } from '../../src/data/spine/plan';
 import type { AdmissionScope } from '../../src/data/spine/admission';
 import { admissionRead } from '../../src/data/spine/read';
 import { md5Hex, sha256, sha256Hex } from '../../src/data/contracts/hashes';
+import { ReadCache } from '../../src/data/drive/read-cache';
 import { SeenFiles, targetOf, type StoredNow } from './still-as-seen';
 import { staleAttempt, type RunnerToken } from './token';
 
@@ -59,8 +60,6 @@ const CHECKSUMS = 'md5Checksum,sha256Checksum';
 const RECORD = /^(?:(?:checkpoint-\d+|manifest|report|disposition)-[0-9a-f]{64}\.json|dispositions\.json)$/;
 /** The report files the barrier brings up to date: confirmed by the md5 of their write's answer, never by kept text. */
 const REPORT_FILE = /^(?:questions|suggestions|requests|hashes)\.json$/;
-/** How long a plan read is answered again from the first (`planReads`). */
-const PLAN_KEEP_MS = 5000;
 /**
  * How long a folder this run made stands for the read the fence would make before a create into it (`heldNow`): the
  * records go into the run's own folders, and each effect that makes something in a folder it just made. Nothing else is
@@ -101,6 +100,8 @@ export class RunnerDrive {
   private readonly sums = new Map<string, { size?: number; md5?: string; sha256?: string; trashed?: boolean }>();
   /** Each fenced write that ended, with the generation it ended at: what it did (null: not known, e.g. a lost answer). */
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
+  /** What the plan read of each file, by id and the modifiedTime its listing gave (the one read cache, `read-cache.ts`). */
+  private readonly reads = new ReadCache();
 
   constructor(opts: RunnerDriveOptions) {
     this.token = opts.token;
@@ -287,35 +288,36 @@ export class RunnerDrive {
    *   listing and not from one `files.get` each.
    * - **The files the plan will read are started together,** at most `READ_AHEAD` (8) at a time, once the folder is
    *   listed; the plan then takes each from here. Which files depend on the run's `scope`, set by the provider.
-   * - **Answered again from the first** (the plan looks at the listing and at a file more than once), keyed by id (a
-   *   digest by id and modifiedTime), for a few seconds at most; a write sent in between, or a later time, reads afresh.
+   * - **Each file read once per version** (`read-cache.ts`): its text, bytes and digest are kept by id and the
+   *   modifiedTime the latest listing gave, however long the plan takes (a model's turn takes minutes). The listing is
+   *   kept until this runner sends a write (`generation`), then read again; a file it shows changed is read afresh.
+   *   Nothing here stands in for the fence's read before a write (`fenced`).
    */
   planReads(): SpineRead & { scope: AdmissionScope } {
-    const kept = new Map<string, { at: number; generation: number; value: Promise<unknown> }>();
-    const once = <T>(key: string, read: () => Promise<T>): Promise<T> => {
-      const hit = kept.get(key);
-      const now = Date.now();
-      if (hit && hit.generation === this.generation && now - hit.at < PLAN_KEEP_MS) return hit.value as Promise<T>;
-      const value = read();
-      kept.set(key, { at: now, generation: this.generation, value });
-      value.catch(() => kept.delete(key));
-      return value;
+    let listed: { generation: number; reads: SpineRead; listings: Map<string, Promise<DriveFile[]>> } | null = null;
+    /** The modifiedTime each file had in the latest listing: the version its reads are kept under. */
+    const versions = new Map<string, string>();
+    const current = (): NonNullable<typeof listed> => {
+      if (!listed || listed.generation !== this.generation) listed = { generation: this.generation, reads: admissionRead(this.http, out.scope), listings: new Map() };
+      return listed;
     };
-    let source: { generation: number; at: number; reads: SpineRead } | null = null;
-    const reads = (): SpineRead => {
-      const now = Date.now();
-      if (!source || source.generation !== this.generation || now - source.at >= PLAN_KEEP_MS) {
-        source = { generation: this.generation, at: now, reads: admissionRead(this.http, out.scope) };
-      }
-      return source.reads;
-    };
+    const at = (id: string): { id: string; modifiedTime: string | undefined } => ({ id, modifiedTime: versions.get(id) });
     const out: SpineRead & { scope: AdmissionScope } = {
       scope: 'all',
-      listAll: async (rootId) => [...(await once(`all:${rootId}`, () => reads().listAll(rootId)))],
-      readBytes: async (id) => (await once(`bytes:${id}`, () => reads().readBytes(id))).slice(),
-      readText: (id) => once(`text:${id}`, () => reads().readText(id)),
+      listAll: async (rootId) => {
+        const now = current();
+        let listing = now.listings.get(rootId);
+        if (!listing) {
+          listing = now.reads.listAll(rootId);
+          now.listings.set(rootId, listing);
+          listing.then((files) => { for (const f of files) versions.set(f.id, f.modifiedTime); }, () => now.listings.delete(rootId));
+        }
+        return [...(await listing)];
+      },
+      readBytes: (id) => this.reads.bytes(at(id), () => current().reads.readBytes(id)),
+      readText: (id) => this.reads.text(at(id), () => current().reads.readText(id)),
       // By version: a file changed since (a newer modifiedTime in the listing) is never paired with an older digest.
-      digest: (file) => once(`digest:${file.id}:${file.modifiedTime}`, () => reads().digest(file)),
+      digest: (file) => this.reads.digest(file, () => current().reads.digest(file)),
       // The plan's own hint that it is about to read these: started together, kept for the reads that follow. A read
       // that fails here is met again, as it failed, by the read of its own.
       warm: (wanted) => {

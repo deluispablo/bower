@@ -4,7 +4,9 @@
  * and the cache's own rules.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BowerError } from '../types';
 import type { DriveFile } from './drive-api';
+import { ReadCache } from './read-cache';
 import { RunnerDrive } from '../../../runner/src/drive';
 import { RunnerToken } from '../../../runner/src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from '../../../runner/test/drive-v3';
@@ -71,5 +73,22 @@ describe('one read cache serves app and runner', () => {
     const writes = await drive.batch();
     await expect(writes.writeText(note.id, 'Our words.', note.modifiedTime)).rejects.toMatchObject({ code: 'conflict' });
     expect(await wire.drive.readText(note.id)).toBe('Their words.');
+  });
+
+  it('keeps one read per version, shared while in flight; a failed read is not kept', async () => {
+    const cache = new ReadCache();
+    let n = 0;
+    const read = async (): Promise<string> => `read ${++n}`;
+    const v1 = { id: 'FILE', modifiedTime: '2026-10-08T10:00:00.000Z' };
+    const [a, b] = await Promise.all([cache.text(v1, read), cache.text(v1, read)]);
+    expect([a, b, n]).toEqual(['read 1', 'read 1', 1]);
+    expect(await cache.text({ ...v1, modifiedTime: '2026-10-08T10:00:01.000Z' }, read)).toBe('read 2');
+    // An id with no version known is read, never kept.
+    expect(await cache.text({ id: 'FILE', modifiedTime: undefined }, read)).toBe('read 3');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failing = async (): Promise<string> => { throw new BowerError('offline', 'Bower could not reach Google Drive.'); };
+    const v2 = { id: 'OTHER', modifiedTime: '2026-10-08T10:00:00.000Z' };
+    await expect(cache.text(v2, failing)).rejects.toMatchObject({ code: 'offline' });
+    expect(await cache.text(v2, read)).toBe('read 4');
   });
 });
