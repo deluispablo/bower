@@ -34,7 +34,7 @@ afterEach(() => vi.restoreAllMocks());
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 
 /** The model's intent for the hub-lines pile: both things filed, and these notes' Current states brought up to date. */
-const proposingStates = (states: Array<{ note: string; lines: string[] }>): ClaudeSpawn => async (call) => {
+const proposingStates = (states: Array<{ note: string; lines: string[] }>, citing = false): ClaudeSpawn => async (call) => {
   const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
   const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
   const offer = ids.get('Offer_letter_final(2).pdf') ?? 'none';
@@ -44,7 +44,8 @@ const proposingStates = (states: Array<{ note: string; lines: string[] }>): Clau
       { fileId: offer, to: 'Projects/Job hunt/Applications', basis: HUB, name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Start 2 November. [[Job hunt]]' } },
       { fileId: ids.get('listing-88213.example.url') ?? 'none', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
     ],
-    lines: [{ note: HUB, text: 'New offer from Ferrowick, fully remote.', cites: offer }],
+    // By default the hub's line cites nothing, so the Current-state fallback stands alone; `citing` has it cite the offer.
+    lines: [{ note: HUB, text: 'New offer from Ferrowick, fully remote.', ...(citing ? { cites: offer } : {}) }],
     states: states.map((st) => ({ ...st, cites: offer })),
   };
   return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
@@ -122,6 +123,22 @@ describe('a change kind of its own for Current state (C05)', () => {
     const report = (run.lastRun as { run: { report: { questions: Array<{ id: string }> } } }).run.report;
     expect(report.questions.map((q) => q.id)).toContain(asked?.id);
     expect(hubEdit(manifestOf(run.after)).some((x) => x.kind === 'state-rewrite')).toBe(false);
+  });
+
+  it('no fallback line when the run already cites the same thing on that note', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    const edited = (c.folder[HUB] ?? '')
+      .replace('by: bower\n', `by: bower\nbower_state: ${stateMark(['One application open.'])}\n`)
+      .replace('- One application open.', '- Two applications open, one interview on Friday.');
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: edited } }, proposingStates([{ note: HUB, lines: NEW_STATE }], true));
+    const note = parseNote(HUB, run.after[HUB] ?? '');
+    // The model's own line cites the offer: the same news is not written a second time.
+    expect(note.timeline.filter((t) => t.source === 'Industrial Designer, Ferrowick').map((t) => t.text)).toEqual(['New offer from Ferrowick, fully remote.']);
+    expect(note.timeline.some((t) => t.text.startsWith('New: '))).toBe(false);
+    // The person's section stays theirs and they are still asked.
+    expect(note.currentState).toEqual(['Two applications open, one interview on Friday.']);
+    expect(questionsOf(run.after).some((q) => q.id.startsWith('q-state-') && q.about === HUB)).toBe(true);
   });
 
   it('the fallback line reads as plain news', () => {
