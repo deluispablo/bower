@@ -4885,7 +4885,7 @@
       "Two C04 runs with different ids give the same input=."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs."
   },
   {
