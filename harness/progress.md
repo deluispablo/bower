@@ -168,3 +168,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: state-no-adoption passes — Fallback line names only what is new; rewriteState refuses an unmarked section without a rule; undo of an adoption drops the mark (P4-16 fix)
 - 2026-10-08: state-no-adoption passes — A person-edited section's fallback names none of Bower's last lines; release only on a marked section; capitals kept (P4-16b fix)
 - 2026-10-08: corpus-offer-real-pdf passes — Corpus PDFs are real minimal PDFs with the same text; a readable payslip now gets its note (TL-P4-11 addendum 3)
+- 2026-10-08: qa10-phone-flake passes — The one-name test waits for the sheet's names with a web-first count before reading them

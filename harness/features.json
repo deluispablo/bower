@@ -5141,7 +5141,7 @@
     "id": "qa10-phone-flake",
     "task": "p4-b",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "e2e/qa10.spec.ts:165 (one thing, one name) passes under full-suite load on phone: the wait it races is fixed, never with a retry.",
     "steps": [
       "Reproduce under full-suite load (--repeat-each or the suite's workers).",
