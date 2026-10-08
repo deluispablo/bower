@@ -5256,7 +5256,7 @@
     "id": "safety-polish",
     "task": "p4-c",
     "category": "fix",
-    "what": "The data-safety and honesty minors from P2_POLISH (P4 items only): a refused Bin keeps its hash question; KEEP_CHANGED wording when the other note moved or was binned; disagreeing answers by time; a held subject pile and the quota; other items the lead marks.",
+    "what": "The data-safety and honesty minors from P2_POLISH (P4 items only): a refused Bin keeps its hash question; KEEP_CHANGED wording when the other note moved or was binned; disagreeing answers by time; a held subject pile and the quota; other items the lead marks. Includes words-only-pile-copy (TL-P4-16): a pile left with only its words never says its things have not arrived.",
     "steps": [
       "List the P4 polish items that touch data or honesty, with the lead's selection.",
       "Fix each with a test."
@@ -5305,17 +5305,18 @@
     "note": "TL-P4-13 (main aea42fe). Escalated."
   },
   {
-    "id": "home-reads-bounded",
+    "id": "c2-pile-records",
     "task": "p4-b",
     "category": "fix",
     "passes": false,
-    "what": "The runner stamps dispositions and changes with their pile id in appProperties, and Home queries only those of the piles in the inbox, so Home's Drive calls do not grow with earlier runs.",
+    "what": "One pile-records query: declarations and dispositions stamped with their pile id; Home reads only the records of piles in the inbox; questions() no longer waits for piles(); the latency fake gains leftover declarations. Home's calls do not grow with earlier runs.",
     "steps": [
-      "Runner stamps the pile id on dispositions and change files.",
-      "Home lists only the stamped files of piles in the inbox; unstamped older files keep working.",
-      "Test: the same call count with 10 and with 500 earlier runs."
+      "Stamp declarations and dispositions with their pile id; unstamped older records keep working.",
+      "One pile-records query for the piles in the inbox.",
+      "questions() independent of piles().",
+      "live-shape.ts gains leftover declarations."
     ],
-    "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs\"",
-    "note": "TL-P4-13 addendum 2 (main e317fc7): option (a); no device cache."
+    "verify": "pnpm vitest run -t \"Home makes the same Drive calls after 10 and after 500 earlier runs|an empty inbox reads no old pile records\"",
+    "note": "TL-P4-16 (b), defect home-empty-48s; replaces home-reads-bounded (TL-P4-13 addendum 2). Stage 2, after c2-read-cache."
   }
 ]
