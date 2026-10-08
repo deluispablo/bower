@@ -82,6 +82,8 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   const { drive, rootId, fresh } = await pretendDrive(scenario);
   drive.latency = scenario === 'slow' ? 1500 : scale === 'instant' ? 0 : 40;
   drive.offline = scenario === 'offline';
+  // A report and a question file that Drive answers late: Home shows the Inbox first, and these fill in after it.
+  if (scenario === 'slow-report') drive.readDelay = (name) => (name === 'last-run.json' || name === 'questions.json' ? 6000 : 0);
   // The pretend Worker's run service owns runs on the B path, across reloads, beside the pretend Drive.
   const runs = pretendRuns(scenario, drive, fresh, scale);
   // The pretend Worker's session lease, shared by this browser's tabs as devices share the real Worker's.

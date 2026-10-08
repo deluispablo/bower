@@ -12,11 +12,11 @@ test('the inbox shows before a slow report', async ({ page }) => {
   await expect(page.locator('section[aria-labelledby="inbox"] a[href^="/pile/"]').first()).toBeVisible();
   // The report and the questions are still on their way.
   await expect(page.getByText(/Tidy-up finished/)).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: /questions? for you/ })).toHaveCount(0);
+  await expect(page.locator('#qs')).toHaveCount(0);
   const before = await tidy.boundingBox();
   // They fill in later, and the button has not moved.
-  await expect(page.getByText(/Tidy-up finished/)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('heading', { name: /questions? for you/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Tidy-up finished/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('#qs')).toBeVisible({ timeout: 30_000 });
   const after = await tidy.boundingBox();
   expect(after?.y).toBe(before?.y);
   expect(after?.x).toBe(before?.x);

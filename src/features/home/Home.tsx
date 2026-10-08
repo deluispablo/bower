@@ -52,10 +52,12 @@ export function Home() {
       <div className={s.grid}>
         <div className={s.colMain}>
           <LoadError state={runState} />
-          {away && run && <AwayCard run={run} bird={birdOn === 'away'} />}
-          {stopped && run && <StoppedCard run={run} />}
           {running && run && <RunningCard run={run} />}
           <Inbox piles={piles} waiting={waiting} bird={birdOn === 'inbox'} running={running} />
+          {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
+              under the person's finger moves when it lands (progressive rendering: each part shows when its data is there). */}
+          {stopped && run && <StoppedCard run={run} />}
+          {away && run && <AwayCard run={run} bird={birdOn === 'away'} />}
         </div>
         <div className={s.colSide}>
           <SearchField />

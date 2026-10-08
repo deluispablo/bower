@@ -13,6 +13,7 @@ export const SCENARIOS = {
   'fail-run': 'The next tidy-up fails (trying again works)',
   'start-fails': 'The next tidy-up cannot start (trying again works)',
   slow: 'Everything answers slowly',
+  'slow-report': 'The last tidy-up and the questions answer slowly',
   offline: 'Offline',
 } as const;
 export type Scenario = keyof typeof SCENARIOS;

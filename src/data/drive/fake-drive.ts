@@ -54,6 +54,8 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   /** Can change after seeding, so a folder fills at once and then answers slowly or not at all. */
   latency: number;
   offline: boolean;
+  /** An extra wait, in ms, before a file's text is read, by its name: a report or a question file that Drive answers late. */
+  readDelay?: (name: string) => number;
 
   constructor(opts: FakeDriveOptions = {}) {
     this.clock = opts.clock ?? Date.now;
@@ -156,6 +158,8 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   async readText(id: string): Promise<string> {
     await this.gate();
     const f = this.find(id);
+    const extra = this.readDelay?.(f.meta.name) ?? 0;
+    if (extra) await new Promise((r) => setTimeout(r, extra));
     if (f.content === null) return '';
     return typeof f.content === 'string' ? f.content : f.content.text();
   }

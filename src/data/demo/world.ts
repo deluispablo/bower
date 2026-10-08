@@ -134,7 +134,12 @@ export class DemoWorld {
     if (opts.scenario === 'signed-out') this.user = null;
     const kept = keptSignedIn();
     if (kept !== null) this.user = kept ? ALEX : null;
-    if (opts.scenario === 'back') this.seedFinishedRun(now);
+    if (opts.scenario === 'back' || opts.scenario === 'slow-report') this.seedFinishedRun(now);
+    if (opts.scenario === 'slow-report') {
+      // A finished run's report, and new piles waiting since: the Inbox and the report are both on Home.
+      this.piles = seedPiles(now);
+      this.syncInbox();
+    }
     if (opts.scenario === 'running') {
       this.run = this.newRun('all', now - 70_000);
       this.run.phase = 'reading';
