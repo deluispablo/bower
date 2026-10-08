@@ -403,9 +403,9 @@ describe('the Claude provider', () => {
     expect(line.length).toBeLessThan(300);
     // Numbers and phase names only: every field is name=number, but how the run ended.
     const fields = Object.fromEntries(line.replace(/^timing: /, '').split(' ').map((f) => f.split('=') as [string, string]));
-    expect(Object.keys(fields)).toEqual(['end', 'total', 'start', 'token', 'reads', 'model', 'api', 'turns', 'in', 'out', 'input', 'apply', 'checkpoints', 'report', 'status']);
+    expect(Object.keys(fields)).toEqual(['end', 'total', 'start', 'token', 'reads', 'model', 'api', 'turns', 'in', 'out', 'input', 'sections', 'apply', 'checkpoints', 'report', 'status']);
     expect(fields.end).toBe('done');
-    for (const [name, value] of Object.entries(fields)) if (name !== 'end') expect(value, name).toMatch(name === 'checkpoints' ? /^\d+\/[1-9]\d*$/ : name === 'input' ? /^[0-9a-f]{12}$/ : /^\d+$/);
+    for (const [name, value] of Object.entries(fields)) if (name !== 'end') expect(value, name).toMatch(name === 'checkpoints' ? /^\d+\/[1-9]\d*$/ : name === 'input' ? /^[0-9a-f]{12}$/ : name === 'sections' ? /^prompt:[0-9a-f]{6},tree:[0-9a-f]{6},things:[0-9a-f]{6},notes:[0-9a-f]{6}(?:,rules:[0-9a-f]{6})?$/ : /^\d+$/);
     // The model step as the recorded reply reports it: wall and API time, turns and tokens.
     expect(fields).toMatchObject({ model: '41250', api: '40980', turns: '1', in: '5120', out: '3890' });
     expect(line).not.toContain(TOKEN);

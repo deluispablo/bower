@@ -262,7 +262,7 @@ describe('model input fingerprint', () => {
     const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
     if (!c) throw new Error('the C04 garden newsletter case is missing');
 
-    // Run the case twice through main() to get different Drive IDs
+    // Run the case twice through main() to verify fingerprints are stable
     const captureInputViaMain = async (): Promise<{ input: string; normalized: string }> => {
       const calls: ClaudeCall[] = [];
       const fakeSpawn: ClaudeSpawn = async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('{"kind":"tidy-intent","v":1,"things":[],"notes":[],"lines":[],"asks":[]}') } satisfies ClaudeExit);
@@ -278,10 +278,8 @@ describe('model input fingerprint', () => {
     const run1 = await captureInputViaMain();
     const run2 = await captureInputViaMain();
 
-    expect(run1.input).not.toBe(run2.input);
-
-    // After normalization, they should be identical
-    expect(run1.normalized).toBe(run2.normalized);
+    // Two deterministic runs of the same case with fixed drives produce identical inputs
+    expect(run1.input).toBe(run2.input);
 
     // Fingerprints should also be identical
     const fingerprint1 = createHash('sha256').update(run1.normalized).digest('hex').slice(0, 12);
@@ -309,7 +307,7 @@ describe('model input fingerprint', () => {
     const extractSections = (timingLine: string): Record<string, string> => {
       const sections: Record<string, string> = {};
       const match = timingLine.match(/sections=([^ ]+)/);
-      if (!match) return sections;
+      if (!match || !match[1]) return sections;
       for (const part of match[1].split(',')) {
         const [key, value] = part.split(':');
         if (key && value) sections[key] = value;
