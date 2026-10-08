@@ -25,6 +25,8 @@ export interface JournalPlace {
    */
   files: (fresh?: boolean, archived?: boolean) => Promise<DriveFile[]>;
   /** Told about each file the journal writes or bins, so a listing cache stays true. */
+  /** Reads a change's file; the vault's shared read, so a Home load reads each change once. A change never changes. */
+  readText?: (id: string) => Promise<string>;
   wrote?: (f: DriveFile) => void;
   removed?: (id: string) => void;
   /** A change is kept only on this page; refresh the screen before reporting it. */
@@ -255,7 +257,7 @@ export class Journal {
       if (!this.read.has(f.id)) {
         let rec: JournalRecord;
         try {
-          const v: unknown = JSON.parse(await this.drive.readText(f.id));
+          const v: unknown = JSON.parse(await (this.place.readText ?? ((id: string) => this.drive.readText(id)))(f.id));
           if (!isJournalRecord(v)) throw new BowerError('unknown', 'Bower could not read your changes.');
           rec = v;
         } catch (e) {

@@ -99,6 +99,12 @@ export class DriveVault implements VaultSource {
   /** Declarations never change: each copy is read once, by file id and modified time. */
   private declarationCache = new Map<string, DeclarationResult>();
   private dispositionCache = new Map<string, DispositionResult>();
+  /**
+   * Single-flight reads (the standard request-coalescing pattern): a file asked for twice while the folder looks the
+   * same is read once, whether the second ask comes during the first or after it. Forgotten at every refresh and
+   * change, so a person's change or another device's shows at the next load. Never used to verify a write.
+   */
+  private readonce = new Map<string, Promise<string | Uint8Array>>();
   /** Pile folders whose declaration could not be read, already logged: once per failure, not per listing. */
   private unreadableLogged = new Set<string>();
   /**
@@ -149,6 +155,7 @@ export class DriveVault implements VaultSource {
       {
         folder: () => this.systemFolder(SYSTEM.changes),
         owner: journalOwner,
+        readText: (id) => this.readTextOnce(id),
         files: async (fresh, archived) => {
           if (fresh) {
             const root = await this.rootId();
@@ -168,6 +175,7 @@ export class DriveVault implements VaultSource {
 
   dispose(): void {
     this.disposed = true;
+    this.readonce.clear();
     this.unqueue();
     for (const u of this.uploads.values()) for (const e of u.entries) { delete e.body; delete e.url; }
     this.uploads.clear();
@@ -196,6 +204,7 @@ export class DriveVault implements VaultSource {
   /** Lists the folder again (after a tidy-up, or when another device may have changed it). */
   async refresh(): Promise<void> {
     this.ix = null;
+    this.readonce.clear();
     await this.index();
     this.emit();
   }
@@ -505,7 +514,7 @@ export class DriveVault implements VaultSource {
     // Your changes, read at most once for this listing, and only if a pile needs them.
     let journal: Promise<unknown[]> | null = null;
     const changes = (): Promise<unknown[]> =>
-      (journal ??= journalValues(ix.journalFiles(true), (id) => this.drive.readText(id)).catch((e: unknown) => {
+      (journal ??= journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id)).catch((e: unknown) => {
         // Logged once for this listing; each pile that needed them says it could not be checked.
         console.error(e);
         throw e;
@@ -644,7 +653,7 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const inbox = ix.file('Inbox');
     if (!inbox?.folder) return [];
-    const found = await findLooseDeclarations(this.known(ix), await this.rootId(), inbox.id, (id) => this.drive.readBytes(id), this.declarationCache);
+    const found = await findLooseDeclarations(this.known(ix), await this.rootId(), inbox.id, (id) => this.readBytesOnce(id), this.declarationCache);
     this.checkCurrent();
     return found.filter((d) => d.declaration.pileId === pileId).flatMap((d) => d.copies);
   }
@@ -664,7 +673,7 @@ export class DriveVault implements VaultSource {
     const root = await this.rootId();
     // A declaration a live folder or file carries is that pile's: the loose scan never reads it.
     const marked = new Set(files.flatMap((f) => f.appProperties?.[PROP.declaration] ?? []));
-    const found = await findLooseDeclarations(files, root, inbox.id, (id) => drive.readBytes(id), this.declarationCache, marked);
+    const found = await findLooseDeclarations(files, root, inbox.id, (id) => this.readBytesOnce(id), this.declarationCache, marked);
     this.checkCurrent();
     const out: Pile[] = [];
     for (const { declaration, sha256: hash } of found) {
@@ -680,7 +689,7 @@ export class DriveVault implements VaultSource {
         }
         : undefined;
       // A consumed disposition retires it first: no digest and no lookup of its member.
-      const readiness = await accountPile(declaration, hash, inbox, files, (id) => drive.readBytes(id), (f) => this.digestOf(f), binned, this.dispositionCache);
+      const readiness = await accountPile(declaration, hash, inbox, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
       this.checkCurrent();
       if (readiness.members[0]?.state !== 'missing' || inBin) continue;
       out.push({ id: declaration.pileId, text: '', createdAt: declaration.createdAt, items: [{ id: member.memberKey, name: shownName(member), kind: member.kind, origin: member.origin ?? 'Added in Drive', upload: -1, chooseAgain: true }] });
@@ -706,7 +715,7 @@ export class DriveVault implements VaultSource {
     // Only when a member is missing everywhere live: one Bin lookup for all of them.
     const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
     // The tidy-up's own accounting: a member a consumed disposition records is filed, the rest looked up.
-    const readiness = await accountPile(found.declaration, found.sha256, folder, files, (id) => drive.readBytes(id), (f) => this.digestOf(f), binned, this.dispositionCache);
+    const readiness = await accountPile(found.declaration, found.sha256, folder, files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
     this.checkCurrent();
     const state = new Map(readiness.members.map((m) => [m.memberKey, m]));
     // Only a member with no file anywhere has not arrived; a changed or unchecked one is not sent again.
@@ -741,7 +750,7 @@ export class DriveVault implements VaultSource {
     const drive = this.drive;
     const root = await this.rootId();
     const binned = hasBinLookup(drive) ? (keys: readonly string[]) => drive.binnedByItem(root, keys) : undefined;
-    const loose = await accountLoose(await this.declarationOf(file, files), ix.file('Inbox'), files, (id) => drive.readBytes(id), (f) => this.digestOf(f), binned, this.dispositionCache);
+    const loose = await accountLoose(await this.declarationOf(file, files), ix.file('Inbox'), files, (id) => this.readBytesOnce(id), (f) => this.digestOf(f), binned, this.dispositionCache);
     this.checkCurrent();
     const changed = loose.found?.accounting.members.some((m) => m.state === 'changed' && m.fileIds.includes(file.id)) ?? false;
     return { setAside: looseSetAside(loose), changed };
@@ -768,7 +777,7 @@ export class DriveVault implements VaultSource {
   }
 
   private async declarationOf(folder: DriveFile, files: readonly DriveFile[]): Promise<DeclarationLookup> {
-    const found = await findDeclaration(files, await this.rootId(), folder, (id) => this.drive.readBytes(id), this.declarationCache);
+    const found = await findDeclaration(files, await this.rootId(), folder, (id) => this.readBytesOnce(id), this.declarationCache);
     this.checkCurrent();
     // Only this pile waits (TL-P2-08 (a)); its failure is logged once, until its list can be read again.
     if (found.state !== 'unreadable') this.unreadableLogged.delete(folder.id);
@@ -812,7 +821,7 @@ export class DriveVault implements VaultSource {
       const drive = this.drive;
       if (hasStoredDigests(drive)) d = await drive.storedDigest(f.id);
       else {
-        const bytes = await drive.readBytes(f.id);
+        const bytes = (await this.bytesFromText(f)) ?? (await this.readBytesOnce(f.id));
         d = { size: bytes.byteLength, sha256: await sha256(new Blob([new Uint8Array(bytes).buffer])) };
       }
     } catch (e) {
@@ -833,7 +842,7 @@ export class DriveVault implements VaultSource {
     if (found.state !== 'found' || found.declaration.context.kind !== 'text') return;
     const context = found.declaration.context;
     if (ix.filesIn(pile.path).some((f) => f.appProperties?.[PROP.item] === context.memberKey)) return;
-    if (contextRemoved(await journalValues(ix.journalFiles(true), (id) => this.drive.readText(id)), pile.path)) return;
+    if (contextRemoved(await journalValues(ix.journalFiles(true), (id) => this.readTextOnce(id)), pile.path)) return;
     // A tidy-up may be writing it too: wait for it; and look again right before writing, so it is written once.
     if (this.runningPiles().has(pile.id)) throw new BowerError('conflict', 'Wait for the tidy-up to end.');
     const now = (await this.drive.listAll(folder.id)).filter((f) => f.parents[0] === folder.id);
@@ -1287,6 +1296,7 @@ export class DriveVault implements VaultSource {
   }
 
   protected emit(): void {
+    this.readonce.clear();
     if (!this.current()) return;
     this.listeners.forEach((l) => l());
   }
@@ -1308,7 +1318,7 @@ export class DriveVault implements VaultSource {
     if (!id) return null;
     let value: unknown;
     try {
-      value = JSON.parse(await this.drive.readText(id));
+      value = JSON.parse(await this.readTextOnce(id, false));
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
       console.error(`${path} is not valid JSON`);
@@ -1321,10 +1331,53 @@ export class DriveVault implements VaultSource {
     return value;
   }
 
+  /** `drive.readText`, shared within one view of the folder; a failed read is forgotten so the next ask tries again. */
+  protected readTextOnce(id: string, keep = true): Promise<string> {
+    return this.once(`t:${id}`, () => this.drive.readText(id), keep) as Promise<string>;
+  }
+
+  protected readBytesOnce(id: string): Promise<Uint8Array> {
+    return this.once(`b:${id}`, () => this.drive.readBytes(id), true) as Promise<Uint8Array>;
+  }
+
+  /**
+   * The bytes of a file whose text this view already read, without reading it again: text with no replacement
+   * character is well-formed UTF-8, which has exactly one byte form, so its encoding is the stored bytes when it has
+   * the stored size (a byte-order mark, dropped by the read, shows as a size that differs). Otherwise null.
+   */
+  private async bytesFromText(f: DriveFile): Promise<Uint8Array | null> {
+    const read = this.readonce.get(`t:${f.id}`);
+    if (!read || f.size === undefined) return null;
+    let text: string;
+    try {
+      text = (await read) as string;
+    } catch {
+      // expected: the text read's own caller hears the failure; the bytes are then read on their own.
+      return null;
+    }
+    if (text.includes('\uFFFD')) return null;
+    const bytes = new TextEncoder().encode(text);
+    return bytes.byteLength === f.size ? bytes : null;
+  }
+
+  private once(key: string, read: () => Promise<string | Uint8Array>, keep: boolean): Promise<string | Uint8Array> {
+    const have = this.readonce.get(key);
+    if (have) return have;
+    const p = read();
+    this.readonce.set(key, p);
+    // A file others write (Bower's own runner files) is shared only while the read is on its way: the next ask reads again.
+    const forget = (): void => {
+      if (this.readonce.get(key) === p) this.readonce.delete(key);
+    };
+    // expected: the caller hears the error; this only forgets a failed read (so the next ask reads again).
+    p.then(keep ? () => undefined : forget, forget);
+    return p;
+  }
+
   protected async text(f: DriveFile): Promise<string> {
     const cached = this.texts.get(f.id);
     if (cached && cached.modified === f.modifiedTime) return cached.text;
-    const text = await this.drive.readText(f.id);
+    const text = await this.readTextOnce(f.id);
     this.checkCurrent();
     this.texts.set(f.id, { modified: f.modifiedTime, text });
     return text;
@@ -1625,7 +1678,7 @@ export class DriveVault implements VaultSource {
     if (cached && cached.modified === f.modifiedTime) return cached.text;
     let text: string;
     try {
-      text = await this.drive.readText(f.id);
+      text = await this.readTextOnce(f.id);
     } catch (e) {
       // A note that cannot be read now holds only its pile, as not checked; the next listing asks again.
       // Signed out, or a session that changed, stops the whole listing.
