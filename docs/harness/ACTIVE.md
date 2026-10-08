@@ -234,3 +234,4 @@ P3-9 is closed.
 - 80ae66d live: garden 5/5 PASS (only the things section varies); offer-and-flat run 1 refused (a question about a pile it also files), no retry; ruling asked. Reset done before it (Applications, listing, Flat 9 note, Viewing photos, Areas/Money binned; hubs reset to the corpus start).
 - TL-P4-08 addendum 4 (1ffb63a): per-thing-ask (escalated, with retry for every refusal) and things-normalised (mechanical). 375/381.
 - per-thing-ask (escalated, bower-p4-thingask) and things-normalised (mechanical, bower-p4-thingsnorm) running. Garden step timings sent to the lead (median 52.8 s: reads 14.6, apply 10.6, report 9.2, model 7.1, checkpoints 7.3).
+- per-thing-ask closed (905b646; golden merge resolved with PILE_ID) and things-normalised closed (bd9c6b0; the per-run value was the pileId). 377/381. Opus check and suites running.
