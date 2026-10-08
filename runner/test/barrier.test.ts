@@ -29,10 +29,11 @@ class StubEffects implements Effects {
   breakAfter: number | null = null;
 
   async apply(op: OperationV2, _head: Checkpoint, _w: unknown, _m: RunManifest, sending: () => Promise<void>): Promise<Settled> {
-    if (this.breakAfter !== null && this.sent.size >= this.breakAfter) throw new Error('The runner stopped');
     const e = op.effect;
     if (e.kind === 'move' && (this.refused === 'all' || e.before.fileId === this.refused)) return { state: 'rejected', failure: { code: 'conflict', message: MOVED } };
     await sending();
+    // Operations run together: the break is met at the send, in the order they get there.
+    if (this.breakAfter !== null && this.sent.size >= this.breakAfter) throw new Error('The runner stopped');
     this.sent.set(op.operationId, (this.sent.get(op.operationId) ?? 0) + 1);
     return { state: 'applied', evidence: evidenceOf(op) };
   }
@@ -133,8 +134,6 @@ function tidy(wire: DriveV3, root: string, attempt: number, effects: Effects, wr
     fetch: wire.fetch,
     provider: () => provider(wire, root),
     effects: () => effects,
-    // One at a time: the stub's `breakAfter` counts sends in plan order.
-    concurrency: 1,
     clock: () => AT + attempt * 1000,
     newId: () => `attempt${attempt}-${++ids}`,
     onDrive: (d) => {

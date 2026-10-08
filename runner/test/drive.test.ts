@@ -62,17 +62,25 @@ describe('runner drive adapter', () => {
 
   it('a person change between the check and the send is refused (edit)', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { wire, note } = await seeded();
+    const { wire, note: first } = await seeded();
     const adapter = adapterOn(wire);
-    const text = 'First words.';
-    const bytes = new TextEncoder().encode(text);
-    const sha256 = createHash('sha256').update(bytes).digest('hex');
-    const content = { encoding: 'utf8' as const, size: bytes.byteLength, sha256 };
+    const note = await wire.drive.writeText(first.id, 'See [[Old]].', first.modifiedTime);
+    const sha = (t: string): string => createHash('sha256').update(t).digest('hex');
+    const sized = (t: string) => ({ encoding: 'utf8' as const, size: new TextEncoder().encode(t).byteLength, sha256: sha(t) });
+    const text = 'See [[New]].';
     const op = {
       operationId: 'e'.repeat(64),
       ordinal: 0,
       dependsOn: [],
-      effect: { kind: 'edit-text', before: { fileId: note.id, name: note.name, parents: note.parents, modifiedTime: note.modifiedTime }, path: 'Note.md', beforeContent: content, changes: [], text, content },
+      effect: {
+        kind: 'edit-text',
+        before: { fileId: note.id, name: note.name, parents: note.parents, modifiedTime: note.modifiedTime },
+        path: 'Note.md',
+        beforeContent: sized('See [[Old]].'),
+        changes: [{ kind: 'link-rewrite', recordIds: ['r'], renames: [{ from: 'Old', to: 'New' }] }],
+        text,
+        content: sized(text),
+      },
     } as unknown as OperationV2;
     const head = { runId: RUN_ID, outcomes: [] } as unknown as Checkpoint;
     const manifest = { operations: [op] } as unknown as RunManifest;

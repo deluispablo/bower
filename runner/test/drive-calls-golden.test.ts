@@ -86,10 +86,10 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
 
-    // Total Drive calls (reads + writes), after drive-calls-cut (TL-P4-08 addendum 6): 72, was 134 at fd99ca3
+    // Total Drive calls (reads + writes), after drive-calls-cut (TL-P4-08 addendum 6, fix round: the fence reads right before every send): 80, was 134 at fd99ca3
     // (106 reads + 28 writes). Updated on purpose; the cut is pinned at 40 percent in the next describe.
     const totalDriveCalls = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
-    expect(totalDriveCalls).toBe(72);
+    expect(totalDriveCalls).toBe(80);
 
     const count = analyzeCalls(calls);
 
@@ -99,7 +99,7 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     expect(count.model).toBe(2);
     expect(count.apply).toBe(19);
     expect(count.checkpoints).toBe(4);
-    expect(count.report).toBe(39);
+    expect(count.report).toBe(42);
     expect(count.status).toBe(4);
   });
 });

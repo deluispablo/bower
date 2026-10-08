@@ -18,6 +18,8 @@ export interface Call {
   at: number;
   /** For a write, the name of the file it made or changed (known once Drive answered). */
   name?: string;
+  /** For a create: whether the folder it goes into was made by an earlier write of this run. */
+  intoMade?: boolean;
 }
 
 /**
@@ -34,6 +36,8 @@ export async function modelled(): Promise<{ calls: Call[]; ms: number; code: num
   /** Every checkpoint the run created, in order: the record is the second part of its multipart create. */
   const checkpoints: Checkpoint[] = [];
   const names = new Map<string, string>();
+  /** The folders the run's own writes made, by id. */
+  const made = new Set<string>();
   const due: Array<{ at: number; wake: () => void }> = [];
   let clock = 0;
   let settled = false;
@@ -44,6 +48,11 @@ export async function modelled(): Promise<{ calls: Call[]; ms: number; code: num
     const kind = worker ? (url.pathname.endsWith('/token') ? 'token' : url.pathname.endsWith('/attempt') ? 'attempt' : 'status') : method === 'GET' ? 'read' : 'write';
     const call: Call = { kind, method, path: `${url.pathname}${url.search}`, at: clock };
     calls.push(call);
+    if (method === 'POST' && !worker) {
+      const sent = await new Response(init?.body).clone().text();
+      const parent = /"parents":\["([^"]+)"\]/.exec(sent)?.[1];
+      if (parent !== undefined) call.intoMade = made.has(parent);
+    }
     if (method === 'POST' && url.searchParams.get('uploadType') === 'multipart') {
       const text = await new Response(init?.body).text();
       if (/"name":"checkpoint-\d+-/.test(text)) checkpoints.push(JSON.parse(text.split(/\r\n--[^\r\n]+/)[1]?.split('\r\n\r\n')[1] ?? '{}') as Checkpoint);
@@ -54,6 +63,7 @@ export async function modelled(): Promise<{ calls: Call[]; ms: number; code: num
       const id = url.pathname.split('/').pop() ?? '';
       const body = (await res.clone().json().catch(() => null)) as { id?: string; name?: string } | null;
       if (body?.id && body.name) names.set(body.id, body.name);
+      if (method === 'POST' && body?.id) made.add(body.id);
       const named = names.get(body?.id ?? id);
       if (named) call.name = named;
     } else if (kind === 'read') {

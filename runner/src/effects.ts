@@ -174,8 +174,7 @@ export function driveEffects(drive: RunnerDrive): Effects {
       }
     }
     if (e.kind === 'edit-text') {
-      // The bytes first, then the stored version: the stored size and hash must be the planned ones, and so must the
-      // bytes read before it, so both are one version, whose modifiedTime the write carries (the fence reuses this read).
+      // The bytes read must be the planned ones (size and hash), and recompute to the planned text.
       let bytes: Uint8Array;
       try {
         bytes = await drive.readBytes(e.before.fileId);
@@ -183,21 +182,21 @@ export function driveEffects(drive: RunnerDrive): Effects {
         if (err instanceof BowerError && err.code === 'not-found') return { refused: refused('conflict', NOT_AS_SEEN) };
         throw err;
       }
-      const ev = await drive.evidence(e.before.fileId);
-      if (!ev || ev.trashed || !samePlace(ev.file, e.before)) return { refused: refused('conflict', NOT_AS_SEEN) };
-      if (ev.content?.size !== e.beforeContent.size || ev.content.sha256 !== e.beforeContent.sha256) return { refused: refused('conflict', NOTE_CHANGED) };
       if (createHash('sha256').update(bytes).digest('hex') !== e.beforeContent.sha256) return { refused: refused('conflict', NOTE_CHANGED) };
       if ((await recheckEdit(e, bytes)) !== 'ok') return { refused: refused('conflict', NOTE_CHANGED) };
-      return { parentId, modifiedTime: ev.file.modifiedTime };
+      // The write carries the modifiedTime the plan saw, and the fence reads the file right before the send and refuses
+      // it if its name, place or modifiedTime differ: that read is the check, with no earlier one to go stale.
+      drive.expectSeen(e.before, true);
+      return { parentId, modifiedTime: e.before.modifiedTime };
     }
     if (e.kind === 'write-runner-json') {
       const ev = await drive.evidence(e.before.fileId);
       if (!ev || ev.trashed || ev.content?.sha256 !== e.beforeContent.sha256) return { refused: refused('conflict', LIST_CHANGED) };
       return samePlace(ev.file, e.before) ? { parentId, modifiedTime: ev.file.modifiedTime } : { refused: refused('conflict', LIST_CHANGED) };
     }
-    // A move or a Bin: the source by the name and place the plan saw.
-    const source = await now(drive, e.before.fileId);
-    if (!source || !samePlace(source, e.before)) return { refused: refused('conflict', NOT_AS_SEEN) };
+    // A move or a Bin: the source by the name and place the plan saw. The fence reads it right before the send and
+    // refuses it if either differs (`expectSeen`): that one read is the check, with no earlier one to go stale.
+    drive.expectSeen(e.before);
     if (e.kind === 'bin' && (await drive.list(e.before.fileId)).some((f) => !e.capturedChildIds.includes(f.id))) return { refused: refused('conflict', ARRIVED) };
     return { parentId, modifiedTime: null };
   };

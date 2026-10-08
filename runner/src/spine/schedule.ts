@@ -23,7 +23,14 @@ export interface Claim {
   shared: boolean;
 }
 
-const dirOf = (parent: { fileId: string } | { createdBy: string }): string => `dir:${'fileId' in parent ? parent.fileId : parent.createdBy}`;
+/** What going into a folder claims: the folder as a place (alone for a create, shared for a move) and the folder itself, shared. */
+const intoClaims = (parent: { fileId: string } | { createdBy: string }, makes: boolean): Claim[] => {
+  const id = 'fileId' in parent ? parent.fileId : parent.createdBy;
+  return [
+    { key: `dir:${id}`, shared: !makes },
+    { key: `file:${id}`, shared: true },
+  ];
+};
 
 const ALL: Claim[] = [{ key: '*', shared: false }];
 
@@ -33,12 +40,9 @@ export function claimsOf(op: OperationV2): Claim[] {
   switch (e.kind) {
     case 'create-folder':
     case 'create-text':
-      return [{ key: dirOf(e.parent), shared: false }];
+      return intoClaims(e.parent, true);
     case 'move':
-      return [
-        { key: `file:${e.before.fileId}`, shared: false },
-        { key: dirOf(e.parent), shared: true },
-      ];
+      return [{ key: `file:${e.before.fileId}`, shared: false }, ...intoClaims(e.parent, false)];
     case 'bin':
     case 'edit-text':
     case 'write-runner-json':

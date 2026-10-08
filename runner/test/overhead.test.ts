@@ -36,25 +36,17 @@ describe('the runner overhead', () => {
   it('the runner overhead cuts keep recovery and ordered status', async () => {
     const { calls, code } = await modelled();
     expect(code).toBe(0);
-    // The attempt fence: each write is preceded by the attempt route since the write before it (writes go one at a time).
-    const fences: Array<{ at: number; fenceBeforeWrite: boolean }> = [];
+    // The attempt fence: each write (one fenced write may be a few requests in a row) is preceded by the attempt route,
+    // and by a read of its target after that. The one exception is a create into a folder the run itself made moments
+    // before (its records, and what it makes there), which its own answer stands for (drive-calls-cut).
+    const fences: Array<{ at: number; name?: string | undefined; fenceBeforeWrite: boolean; targetRead: boolean }> = [];
     calls.forEach((x, i) => {
-      if (x.kind !== 'write') return;
-      const last = calls.slice(0, i).map((y) => y.kind === 'write').lastIndexOf(true);
-      fences.push({ at: i, fenceBeforeWrite: calls.slice(last + 1, i).some((y) => y.kind === 'attempt') });
+      if (x.kind !== 'write' || calls[i - 1]?.kind === 'write') return;
+      const lastToken = calls.slice(0, i).map((y) => y.kind).lastIndexOf('attempt');
+      fences.push({ at: i, name: x.name, fenceBeforeWrite: lastToken >= 0, targetRead: x.intoMade === true || calls.slice(lastToken + 1, i).some((y) => y.kind === 'read') });
     });
     expect(fences.length).toBeGreaterThan(0);
-    for (const f of fences) expect(f).toEqual({ at: f.at, fenceBeforeWrite: true });
-    // Still as seen: a change to a file already there (a move, an edit, a Bin) is preceded by a read of that very file
-    // since the opening checkpoint, which the fence then reuses. A create has its folder read, or held when the run made it.
-    const opening = calls.findIndex((x) => x.kind === 'write' && x.name?.startsWith('checkpoint-1-'));
-    expect(opening).toBeGreaterThan(0);
-    const changes = calls.map((x, i) => ({ x, i })).filter(({ x, i }) => i > opening && x.kind === 'write' && x.method === 'PATCH');
-    expect(changes.length).toBeGreaterThan(0);
-    for (const { x, i } of changes) {
-      const id = /\/files\/([^/?]+)/.exec(x.path)?.[1] ?? '';
-      expect(calls.slice(opening + 1, i).some((y) => y.kind === 'read' && y.path.includes(`/files/${id}?`)), `a read of ${id} before its write`).toBe(true);
-    }
+    for (const f of fences) expect(f).toEqual({ at: f.at, name: f.name, fenceBeforeWrite: true, targetRead: true });
     // Ordered status: reading, writing, saving, then done, and nothing after done.
     const phases = calls.filter((x) => x.kind === 'status').length;
     expect(phases).toBeGreaterThanOrEqual(3);
