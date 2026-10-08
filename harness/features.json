@@ -4830,7 +4830,7 @@
       "Tests: the fingerprint is on the timing line and matches the golden input."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the model input on the C04 fixture equals its golden copy|the timing line carries the model input fingerprint\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 addendum (main 50a99a1): inputs identical on c76fd2f and a566241 (fixture and live token counts); runs after placement-guidance, since that changes the prompt."
   },
   {
