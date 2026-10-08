@@ -209,3 +209,4 @@ P3-9 is closed.
 - TL-P4-07 addendum 2 (c924560): 4/5 isn't the bar. Entries placement-check (implementer), fingerprint-normalised (after it), drive-calls-golden (mechanical). 368/372.
 - placement-check closed (e0d8f56). Lead asked to confirm two worker choices: Rules.md shown to the model; c04-offer-and-flat fixture gained a payslip rule. fingerprint-normalised running (mechanical). 369/372.
 - TL-P4-07 addendum 3 (0c1eb8b): placement-check reopened as a fix round (revert the fixture rule; responsibility basis for a new Area, shown in the report; a cut Rules.md says so). Live after: garden x5, offer-and-flat x3. 368/372.
+- placement-check fix round queued (worktree bower-p4-plcheck2 at d269d5e); both slots busy (drive-calls-golden, fingerprint-normalised).
