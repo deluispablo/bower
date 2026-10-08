@@ -5323,7 +5323,7 @@
     "id": "c1-digest",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One digest module (size, SHA-256, MD5, empty-file constants) used by app, runner and Worker.",
     "steps": [
       "Red from today's drift: seven or more inline hashers; MD5 in the runner against SHA-256 in the fake for the same report check",
