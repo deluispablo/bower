@@ -40,6 +40,8 @@ function asAdded(name: string): Record<string, string> {
 export interface CaseRun {
   /** The folder after the run, path to text; folders and the Bin are left out. */
   after: Record<string, string>;
+  /** Each file's appProperties after the run, by the same paths (none: no entry). */
+  props: Record<string, Record<string, string>>;
   lastRun: unknown;
   code: number;
 }
@@ -52,17 +54,19 @@ export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalT
  * Runs a case through the Claude provider with `claude` answering in place of the model: a recorded reply, or
  * scripted proposals in the same intent shape (P4-3). No live call.
  */
-export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn): Promise<CaseRun> {
-  return runCase(c, { claude });
+export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn, props?: Record<string, Record<string, string>>): Promise<CaseRun> {
+  return runCase(c, { claude, ...(props ? { props } : {}) });
 }
 
 interface CaseOptions {
   around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
   realTokens?: boolean;
   claude?: ClaudeSpawn;
+  /** More appProperties for some of the case's folder files, by path (as an older run or the original app left them). */
+  props?: Record<string, Record<string, string>>;
 }
 
-async function runCase(c: LoadedCase, { around, realTokens = false, claude }: CaseOptions): Promise<CaseRun> {
+async function runCase(c: LoadedCase, { around, realTokens = false, claude, props = {} }: CaseOptions): Promise<CaseRun> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const folders = new Map<string, string>();
@@ -75,7 +79,8 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude }: Ca
     const parts = path.split('/');
     const name = parts.pop() ?? path;
     const parent = await ensureFolder(drive, root, folders, parts.join('/'));
-    await drive.createText(parent, name, text, c.bowerOwned.includes(path) || /^by: bower$/m.test(text) ? { by: 'bower' } : undefined);
+    const own = c.bowerOwned.includes(path) || /^by: bower$/m.test(text) ? { by: 'bower' } : undefined;
+    await drive.createText(parent, name, text, own || props[path] ? { ...own, ...props[path] } : undefined);
   }
   for (const [path, bytes] of Object.entries(c.folderBinary)) {
     const parts = path.split('/');
@@ -107,22 +112,23 @@ async function runCase(c: LoadedCase, { around, realTokens = false, claude }: Ca
   wire.folderId = root;
   // The token route's expiry on the real clock, as the Worker's is, so the runner keeps a token as it does on Actions.
   if (realTokens) wire.now = Date.now();
-  if (admitted.kind !== 'manifest') return { after: await snapshot(drive, root), lastRun: null, code: -1 };
+  if (admitted.kind !== 'manifest') return { ...(await snapshot(drive, root)), lastRun: null, code: -1 };
   wire.manifest = admitted.manifest;
   const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: RUN_ID, attempt: 1, ticket: TICKET, scope: c.scope, allow_web: c.allowWeb } }));
   const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
   const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
-  const after = await snapshot(drive, root);
+  const { after, props: kept } = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
-  return { after, lastRun, code };
+  return { after, props: kept, lastRun, code };
 }
 
-async function snapshot(drive: FakeDrive, root: string): Promise<Record<string, string>> {
+async function snapshot(drive: FakeDrive, root: string): Promise<{ after: Record<string, string>; props: Record<string, Record<string, string>> }> {
   const all = await drive.listAll(root);
   const byId = new Map(all.map((f) => [f.id, f]));
   const out: Record<string, string> = {};
+  const props: Record<string, Record<string, string>> = {};
   for (const f of all) {
     if (f.folder) continue;
     const parts: string[] = [];
@@ -131,6 +137,7 @@ async function snapshot(drive: FakeDrive, root: string): Promise<Record<string, 
       if (x.parents[0] === root) break;
     }
     out[parts.join('/')] = await drive.readText(f.id);
+    if (f.appProperties) props[parts.join('/')] = f.appProperties;
   }
-  return out;
+  return { after: out, props };
 }

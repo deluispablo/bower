@@ -5,6 +5,8 @@
  */
 import type { DriveApi, DriveFile, ResumableDrive } from '../drive/drive-api';
 import type { FakeDrive } from '../drive/fake-drive';
+import { md5Hex } from '../contracts/hashes';
+import { BOWER_MD5 } from '../contracts/note-edit';
 import { declarationCopies } from '../pile-readiness';
 import { PILE_NOTE } from '../piles';
 import type { Pile } from '../types';
@@ -41,7 +43,15 @@ export function driveRead(drive: DriveReads): SpineRead {
 /** The pretend Drive: what it stored (`fake-stored`), and its Bin lookup by item key. */
 export function fakeRead(drive: Pick<FakeDrive, 'listAll' | 'readBytes' | 'readText' | 'storedDigest' | 'binnedByItem'>): SpineRead {
   return {
-    listAll: (rootId) => drive.listAll(rootId),
+    // Drive's listing carries each file's `md5Checksum` when asked (TL-P4-10); the pretend Drive keeps none, so it is
+    // worked out from the stored bytes, only for the files that carry a `bowerMd5` to compare it with.
+    listAll: async (rootId) => Promise.all((await drive.listAll(rootId)).map(async (f) => (f.folder || f.appProperties?.[BOWER_MD5] === undefined
+      ? f
+      : drive.readBytes(f.id).then((bytes) => ({ ...f, md5Checksum: md5Hex(bytes) }), (error: unknown) => {
+        // expected: a file whose bytes the pretend Drive lost has no checksum, as on Drive; it is then not adopted.
+        console.error('A file had no bytes to check:', error);
+        return f;
+      })))),
     readBytes: (id) => drive.readBytes(id),
     readText: (id) => drive.readText(id),
     digest: (file) => drive.storedDigest(file.id),

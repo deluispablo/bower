@@ -12,7 +12,7 @@ import { formerNames, linkTarget } from './links';
 import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
-import { sha256 } from './hashes';
+import { md5Hex, sha256 } from './hashes';
 import { parseNote } from './note-format';
 import { parseOwnership, type ByteSpan, type OwnershipFailure } from './ownership-format';
 import { parseRules } from './rules-format';
@@ -91,10 +91,13 @@ export const STATE_LINES_MAX = 20;
 export const STATE_LINE_MAX = 400;
 /** The report's row for a note whose Current state a run brought up to date. */
 export const STATE_UPDATED = 'Current state brought up to date.';
-/** Current state lines: `lines` 1+, each one trimmed line; `previous` as read (one line each, no control character). */
+/**
+ * Current state lines: `lines` each one trimmed line, none only to take back a rewrite of an empty section (TL-P4-10
+ * point 4; a model always writes 1+); `previous` as read (one line each, no control character).
+ */
 export function stateLinesOk(previous: readonly string[], lines: readonly string[]): boolean {
   const one = (line: string): boolean => !controls(line) && line.length <= STATE_LINE_MAX;
-  return lines.length > 0 && lines.length <= STATE_LINES_MAX && previous.length <= STATE_LINES_MAX
+  return lines.length <= STATE_LINES_MAX && previous.length <= STATE_LINES_MAX
     && lines.every((line) => one(line) && line.trim() === line && line.length > 0) && previous.every(one);
 }
 function fieldsOk(change: Change): boolean {
@@ -265,11 +268,29 @@ function appendLines(text: string, change: Extract<Change, { kind: 'timeline-app
 }
 
 // ---------------------------------------------------------------------------------------------
-// state-rewrite (TL-P4-08 addendum 1 point 1)
+// state-rewrite (TL-P4-08 addendum 1 point 1, TL-P4-10)
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * The rule that lets Bower keep up to date the Current states it did not write (TL-P4-10 point 3): the person's yes
+ * to `ADOPT_STATES_QUESTION`, as a rule line (C11 words it).
+ */
+export const ADOPT_STATES_RULE = 'Keep the summaries Bower did not write up to date.';
+/** The one question a run asks a folder about Current states Bower did not write (TL-P4-10 point 3), word for word. */
+export const ADOPT_STATES_QUESTION = 'Bower found summaries it did not write. May it keep them up to date?';
 /** The front-matter key that marks what Bower last wrote in a note's Current state. */
 export const STATE_KEY = 'bower_state';
+/**
+ * The appProperty every Bower note write sets, in the same request as the bytes (TL-P4-10 point 2): the MD5 of the
+ * content it sends. A listing's `md5Checksum` equal to it says nobody has changed the file since Bower wrote it.
+ */
+export const BOWER_MD5 = 'bowerMd5';
+/** The appProperties a Bower note write carries for `text`: its `bowerMd5`, of the UTF-8 bytes sent. */
+export function bowerWrite(text: string): Record<string, string> {
+  return { [BOWER_MD5]: md5Hex(encoder.encode(text)) };
+}
+/** An authored Timeline line's limit (the Claude intent's), which a line Bower makes from a Current state keeps too. */
+export const AUTHORED_LINE_MAX = 200;
 
 /**
  * The mark of a Current state's lines: FNV-1a 64-bit (http://www.isthe.com/chongo/tech/comp/fnv/) of their UTF-8
@@ -288,9 +309,10 @@ export function stateMark(lines: readonly string[]): string {
 /**
  * A note's Current state as the integrated grammars frame it: its lines (without `- `), where they are
  * ([start, end) of the raw text, after the heading for legacy, the payload for ownership/2), the line ending to
- * write, and the front matter's mark line and closing line.
+ * write, and the front matter's mark line and closing line. `missing`: a legacy Bower note (`by: bower`) with no
+ * section, where `start` = `end` is where one goes (after the blank lines that follow the front matter).
  */
-interface StateSection { lines: string[]; start: number; end: number; open: 'heading' | 'tail' | null; eol: string; mark: Line | null; close: Line }
+interface StateSection { lines: string[]; start: number; end: number; open: 'heading' | 'tail' | null; eol: string; mark: Line | null; close: Line; missing: boolean }
 function stateSection(text: string): StateSection | EditRefusal {
   const bytes = encoder.encode(text);
   const own = parseOwnership(bytes);
@@ -313,27 +335,41 @@ function stateSection(text: string): StateSection | EditRefusal {
     end = span.end;
   } else {
     const legacy = legacyOf(text);
-    if (!legacy?.current) return 'unsupported';
+    if (!legacy) return 'unsupported';
+    if (!legacy.current) {
+      // No section in a Bower note: it goes where the grammar reads one, after the blank lines below the front matter.
+      let at = legacy.frontEnd;
+      while (text.startsWith('\n', at) || text.startsWith('\r\n', at)) at += text[at] === '\r' ? 2 : 1;
+      // A heading with nothing after it, not even a line ending, is not read as a section: never a second one.
+      if (text.startsWith('## Current state', at)) return 'unsupported';
+      return { lines: [], start: at, end: at, open: null, eol, mark: marks[0] ?? null, close, missing: true };
+    }
     const heading = linesOf(text, legacy.current.start, legacy.current.end)[0];
     if (!heading) return 'unsupported';
     start = heading.after;
     end = legacy.current.end;
     // The file can end at the heading or at the last line, with no line ending: the rewrite keeps it that way.
-    open = heading.after === heading.end ? 'heading' : text[end - 1] !== '\n' ? 'tail' : null;
+    open = heading.after === heading.end ? 'heading' : end > start && text[end - 1] !== '\n' ? 'tail' : null;
   }
   const lines = linesOf(text, start, end);
   if (!lines.every((line) => line.text.startsWith('- '))) return 'unsupported';
-  return { lines: lines.map((line) => line.text.slice(2)), start, end, open, eol, mark: marks[0] ?? null, close };
+  return { lines: lines.map((line) => line.text.slice(2)), start, end, open, eol, mark: marks[0] ?? null, close, missing: false };
 }
 const markOf = (section: StateSection): string | null => section.mark?.text.slice(STATE_KEY.length + 1).trim() ?? null;
 const sameLines = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((line, i) => line === b[i]);
 
 /**
- * Whose a note's Current state is now: Bower's when its mark is what Bower last wrote there, or when there is no mark
- * (a note Bower wrote whole, before marks); the person's when the lines differ from the mark. Null when there is
- * none Bower could rewrite (not Bower's note, no section, a form it does not write).
+ * Whose a note's Current state is now (TL-P4-10):
+ * - `bower`: its mark is what Bower last wrote there;
+ * - `person`: its lines differ from its mark, so the person edited it;
+ * - `unmarked`: no mark. It is the person's unless the planner adopts it (the file as Bower last wrote it, by
+ *   `bowerMd5`, or a rule that says so); `applyChanges` cannot tell, so the planner decides and the write guard (the
+ *   bytes and modifiedTime it read) holds that decision;
+ * - `missing`: a Bower note with no section, which Bower may add with its mark.
+ * Null when there is none Bower could write (not Bower's note, a form it does not write, not UTF-8).
  */
-export function currentStateOf(bytes: Uint8Array): { owner: 'bower' | 'person'; lines: string[] } | null {
+export type StateOwner = 'bower' | 'person' | 'unmarked' | 'missing';
+export function currentStateOf(bytes: Uint8Array): { owner: StateOwner; lines: string[] } | null {
   let text: string;
   try { text = decoder.decode(bytes); }
   catch {
@@ -343,20 +379,47 @@ export function currentStateOf(bytes: Uint8Array): { owner: 'bower' | 'person'; 
   const section = stateSection(text);
   if (typeof section === 'string') return null;
   const mark = markOf(section);
-  return { owner: mark === null || mark === stateMark(section.lines) ? 'bower' : 'person', lines: section.lines };
+  const owner: StateOwner = section.missing ? 'missing' : mark === null ? 'unmarked' : mark === stateMark(section.lines) ? 'bower' : 'person';
+  return { owner, lines: section.lines };
+}
+
+/**
+ * What Bower would have written in a Current state, as one Timeline line within an authored line's limits: as many
+ * whole lines as fit, or the first one cut at a word with an ellipsis.
+ */
+export function stateNewsLine(lines: readonly string[]): string {
+  const lead = "Bower's current state would now read: ";
+  const clean = lines.map((line) => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').trim()).filter(Boolean);
+  let text = lead;
+  for (const [i, line] of clean.entries()) {
+    const next = `${text}${i ? '; ' : ''}${line}`;
+    if (next.length > AUTHORED_LINE_MAX) break;
+    text = next;
+  }
+  if (text !== lead) return text;
+  const room = AUTHORED_LINE_MAX - lead.length - 1;
+  const first = clean[0] ?? '';
+  const cut = first.slice(0, room).replace(/\s+\S*$/, '');
+  return `${lead}${cut || first.slice(0, room)}…`;
 }
 
 function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewrite' }>): Step | { refused: EditRefusal } {
   const section = stateSection(text);
   if (typeof section === 'string') return { refused: section };
   const mark = markOf(section);
-  if (mark !== null && mark !== stateMark(section.lines)) return { refused: 'person-edited' };
+  if (!section.missing && mark !== null && mark !== stateMark(section.lines)) return { refused: 'person-edited' };
   if (!sameLines(section.lines, change.previous)) return { refused: 'state-changed' };
   // The same lines again change nothing, not even the mark (rule 5).
   if (sameLines(change.lines, change.previous)) return { text, added: [], rules: null };
   const { eol } = section;
   const written = change.lines.map((line) => `- ${line}`).join(eol);
-  const body = section.open === 'heading' ? `${eol}${written}` : section.open === 'tail' ? written : `${written}${eol}`;
+  let body: string;
+  if (section.missing) {
+    // A new section, its heading on a line of its own and a blank line before what follows (as `serializeNote`).
+    const lead = section.start > 0 && text[section.start - 1] !== '\n' ? eol : '';
+    body = `${lead}## Current state${eol}${written}${eol}${section.start < text.length ? eol : ''}`;
+  } else if (!change.lines.length) body = '';
+  else body = section.open === 'heading' ? `${eol}${written}` : section.open === 'tail' ? written : `${written}${eol}`;
   const markLine = `${STATE_KEY}: ${stateMark(change.lines)}`;
   // Right to left, so earlier offsets hold: the section first, then the mark in the front matter.
   let next = text.slice(0, section.start) + body + text.slice(section.end);
@@ -366,11 +429,20 @@ function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewri
   return { text: next, added: [], rules: null };
 }
 
-/** The text with the Current state's lines and the mark line taken out: what a state rewrite never touches. */
-function outsideState(text: string): string | null {
+/**
+ * The text with the Current state's lines and the mark line taken out: what a state rewrite never touches. With
+ * `heading`, a legacy section's heading goes too (to compare a note that had none with one that has it now).
+ */
+function outsideState(text: string, heading = false): string | null {
   const section = stateSection(text);
   if (typeof section === 'string') return null;
-  const cut = text.slice(0, section.start) + text.slice(section.end);
+  let from = section.start;
+  if (heading && !section.missing) {
+    const legacy = legacyOf(text);
+    if (!legacy?.current) return null;
+    from = legacy.current.start;
+  }
+  const cut = text.slice(0, from) + text.slice(section.end);
   if (!section.mark) return cut;
   return cut.slice(0, section.mark.start) + cut.slice(section.mark.after);
 }
@@ -378,12 +450,20 @@ function stateHolds(before: string, after: string, change: Extract<Change, { kin
   const a = parseOwnership(encoder.encode(before));
   const b = parseOwnership(encoder.encode(after));
   if (a.status === 'invalid' || b.status !== a.status) return false;
+  const old = stateSection(before);
+  const added = typeof old !== 'string' && old.missing;
   const was = outsideState(before);
-  const now = outsideState(after);
-  // Only a heading that ended the file without a line ending gains one.
-  if (was === null || now === null || (now !== was && now.replace(/\r?\n$/, '') !== was)) return false;
+  const now = outsideState(after, added);
+  if (was === null || now === null) return false;
+  if (added) {
+    // A section added: the rest reads as before, but for the line endings around the new block.
+    const at = old.start - (old.mark ? old.mark.after - old.mark.start : 0);
+    const eol = eolOf(before);
+    const around = [now, now.slice(0, at) + now.slice(at + eol.length), now.slice(0, at) + now.slice(at + 2 * eol.length)];
+    if (!around.includes(was)) return false;
+  } else if (now !== was && now.replace(/\r?\n$/, '') !== was) return false; // only a heading that ended the file gains one
   const section = stateSection(after);
-  if (typeof section === 'string' || !sameLines(section.lines, change.lines) || markOf(section) !== stateMark(change.lines)) return false;
+  if (typeof section === 'string' || section.missing || !sameLines(section.lines, change.lines) || markOf(section) !== stateMark(change.lines)) return false;
   try {
     const read = (text: string): unknown => {
       const note = parseNote('note.md', text);
@@ -399,11 +479,12 @@ function stateHolds(before: string, after: string, change: Extract<Change, { kin
 
 /**
  * The changes that take an edit back (C13), from what the manifest kept: a state rewrite's lines are replaced by the
- * lines it replaced. Only a Current state Bower still owns is restored, through `applyChanges` on the bytes as they are
- * then (a person's later edit refuses it as `person-edited`). The other kinds are taken back by later entries.
+ * lines it replaced, none when the section was empty (TL-P4-10 point 4). Only a Current state Bower still owns is
+ * restored, through `applyChanges` on the bytes as they are then (a person's later edit refuses it as
+ * `person-edited`). The other kinds are taken back by later entries.
  */
 export function undoChanges(changes: readonly Change[]): Change[] {
-  return changes.flatMap((change): Change[] => (change.kind === 'state-rewrite' && change.previous.length
+  return changes.flatMap((change): Change[] => (change.kind === 'state-rewrite'
     ? [{ kind: 'state-rewrite', recordIds: [], previous: change.lines, lines: change.previous }]
     : []));
 }

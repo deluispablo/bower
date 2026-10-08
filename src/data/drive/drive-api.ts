@@ -19,6 +19,12 @@ export interface DriveFile {
   /** SHA-256 of the content, hex; only from `ResumableDrive.getUploaded`, or a listing that asks for it. */
   sha256?: string;
   /**
+   * MD5 of the stored content, hex, as Drive's `md5Checksum` gives it
+   * (https://developers.google.com/workspace/drive/api/reference/rest/v3/files); only from a listing that asks for it.
+   * Equal to a note's `bowerMd5` appProperty, nobody has changed the file since Bower wrote it (TL-P4-10).
+   */
+  md5Checksum?: string;
+  /**
    * Drive keeps no checksum of its content, so no run can check its bytes without reading them: in the pretend
    * Drive, a big file reloaded with neither its bytes nor its hash. On Google Drive the same is a file listed with no
    * `sha256Checksum` or `size` (Docs Editors files, shortcuts); the P3 listing asks for those fields and sets it.

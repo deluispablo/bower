@@ -28,7 +28,7 @@
 import { createHash } from 'node:crypto';
 import { BowerError } from '../../src/data/types';
 import type { Checkpoint, EffectEvidence, Failure } from '../../src/data/contracts/run-checkpoint';
-import { readBackEdit, recheckEdit, savedLinkKey } from '../../src/data/contracts/note-edit';
+import { bowerWrite, readBackEdit, recheckEdit, savedLinkKey } from '../../src/data/contracts/note-edit';
 import type { EditText, OperationV2, SeenFile } from '../../src/data/contracts/run-manifest';
 import type { DriveFile } from '../../src/data/drive/drive-api';
 import type { FencedDrive, StoredEvidence } from '../../src/data/drive/fake-drive';
@@ -222,11 +222,13 @@ export function driveEffects(drive: RunnerDrive): Effects {
       case 'write-runner-json':
       case 'edit-text':
         if (modifiedTime === null) throw new BowerError('unknown', UNRESOLVED);
-        return w.writeText(e.before.fileId, e.text, modifiedTime, op);
+        // A note edit carries the MD5 of the very text it sends, in the same request (TL-P4-10: `bowerMd5`).
+        return w.writeText(e.before.fileId, e.text, modifiedTime, e.kind === 'edit-text' ? { ...bowerWrite(e.text), ...op } : op);
       case 'create-text':
-        // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17); a runner file
-        // made again only with its create key. Either way a lost reply is found again by that key.
-        return w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...op } : { bowerItem: e.createKey, ...op });
+        // A generated note is stamped as Bower's, new, and with its create key at creation (TL-P2-17), and its
+        // `bowerMd5` (TL-P4-10); a runner file made again only with its create key. Either way a lost reply is found
+        // again by that key.
+        return w.createText(parentId, e.name, e.text, e.purpose === 'generated' ? { by: 'bower', bowerNew: '1', bowerItem: e.createKey, ...bowerWrite(e.text), ...op } : { bowerItem: e.createKey, ...op });
     }
   };
 

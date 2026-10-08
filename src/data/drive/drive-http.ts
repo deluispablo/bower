@@ -14,6 +14,8 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
 /** A file made by a resumable upload, with its content's checksum to check it. */
 const UPLOADED_FIELDS = `${FIELDS},sha256Checksum`;
+/** A listing with checksums: also `md5Checksum`, which a Bower note's `bowerMd5` is compared with (TL-P4-10). */
+const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
 /** The only session addresses that get the person's token. */
 const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';
 const FOLDER = 'application/vnd.google-apps.folder';
@@ -33,6 +35,7 @@ interface WireFile {
   appProperties?: Record<string, string>;
   trashed?: boolean;
   sha256Checksum?: string;
+  md5Checksum?: string;
 }
 
 export interface DriveHttpOptions {
@@ -51,6 +54,7 @@ const toFile = (w: WireFile): DriveFile => ({
   ...(w.size !== undefined ? { size: Number(w.size) } : {}),
   ...(w.appProperties ? { appProperties: w.appProperties } : {}),
   ...(w.sha256Checksum ? { sha256: w.sha256Checksum } : {}),
+  ...(w.md5Checksum ? { md5Checksum: w.md5Checksum } : {}),
 });
 
 const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -83,11 +87,11 @@ export class DriveHttp implements DriveApi, ResumableDrive {
 
   /**
    * Every file and folder under `rootId`, one `files.list` per level of up to 40 folders, paged. With `checksums`,
-   * each file also carries the `sha256Checksum` Drive keeps (Drive v3, "Return specific fields"), so a reader checks
+   * each file also carries the `sha256Checksum` and `md5Checksum` Drive keeps (Drive v3, "Return specific fields"), so a reader checks
    * stored bytes from the listing rather than one `files.get` per file.
    */
   async listAll(rootId: string, opts: { checksums?: boolean } = {}): Promise<DriveFile[]> {
-    const fields = opts.checksums ? UPLOADED_FIELDS : FIELDS;
+    const fields = opts.checksums ? LISTED_FIELDS : FIELDS;
     const out: DriveFile[] = [];
     let level = [rootId];
     while (level.length) {

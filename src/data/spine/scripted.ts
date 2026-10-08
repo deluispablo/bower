@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, BOWER_MD5, STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -537,6 +537,21 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   }
   /** Current states the person edited: what Bower would write goes on the Timeline as a line, and they are asked. */
   const personStates: Array<{ line: WantedLine; file: DriveFile; path: string }> = [];
+  /** Unmarked Current states Bower may not adopt: a line each, and one question for the whole folder (TL-P4-10). */
+  const unmarkedStates: WantedLine[] = [];
+  /** Whether a rule lets Bower keep up to date the Current states it did not write: Rules.md, read once, when needed. */
+  let adoptRule: Promise<boolean> | null = null;
+  const adopting = (): Promise<boolean> => (adoptRule ??= (async () => {
+    const rulesNote = ix.file(RULES_PATH);
+    if (!rulesNote || rulesNote.folder) return false;
+    try {
+      return ruleLike(parseRules(await ownText(drive, rulesNote)), ADOPT_STATES_RULE) !== undefined;
+    } catch (e) {
+      // An unreadable Rules.md grants nothing: the sections stay the person's, and the run goes on.
+      console.error('Your rules could not be read for the summaries rule:', e);
+      return false;
+    }
+  })());
   // A merge's line, by its answer (R3-4): only into a note in a main folder, never the inbox or Bower's own files.
   for (const thing of things) {
     const m = thing.merge;
@@ -645,20 +660,28 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     }
     // A Current state (C05): rewritten only while it is Bower's (as Bower last wrote it, by its mark); one the person
     // edited since is never rewritten: what Bower would write becomes a Timeline line, and the person is asked.
+    // TL-P4-10: an unmarked one is the person's, unless the file is as Bower last wrote it (its listed md5Checksum is
+    // the bowerMd5 Bower set with that write) or a rule lets Bower adopt it; a Bower note with none gets one.
     let state: StateRewrite | null = null;
     if (w.state) {
       const now = currentStateOf(bytes);
-      if (now?.owner === 'bower' && now.lines.join('\n') !== w.state.lines.join('\n')) {
-        const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines };
-        const result = applyChanges(bytes, [change]);
-        if (result.ok) state = change;
-        else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
-      } else if (now?.owner === 'person') {
-        const text = `Bower's current state would now read: ${w.state.lines.join('; ')}`.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '');
+      const md5 = f.appProperties?.[BOWER_MD5];
+      const adopt = now?.owner === 'unmarked' && ((md5 !== undefined && f.md5Checksum === md5) || (await adopting()));
+      if (now && (now.owner === 'bower' || now.owner === 'missing' || adopt)) {
+        if (now.lines.join('\n') !== w.state.lines.join('\n')) {
+          const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines };
+          const result = applyChanges(bytes, [change]);
+          if (result.ok) state = change;
+          else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
+        }
+      } else {
+        // Never silently dropped: what Bower would write becomes one Timeline line (a person's note takes none).
+        const text = stateNewsLine(w.state.lines);
         const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
         w.lines.push(line);
         lineState.set(line, 'refused');
-        personStates.push({ line, file: f, path: w.path });
+        if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path });
+        if (now?.owner === 'unmarked') unmarkedStates.push(line);
         if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
       }
     }
@@ -732,6 +755,11 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const kept = lineState.get(p.line);
     if (kept !== 'planned' && kept !== 'present') continue;
     askedPiles.push({ id: `q-state-${p.file.id}`, text: `You changed the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?`, yes: 'Write it', no: 'Keep mine', about: p.path, askedAt: opts.requestedAt });
+  }
+  // Summaries Bower did not write: one question for the folder, however many there are (TL-P4-10 point 3); a yes
+  // becomes ADOPT_STATES_RULE (C11), and Bower then adopts them.
+  if (unmarkedStates.some((l) => lineState.get(l) === 'planned' || lineState.get(l) === 'present')) {
+    askedPiles.push({ id: ADOPT_STATES_ID, text: ADOPT_STATES_QUESTION, yes: 'Keep them up to date', no: 'Leave them', askedAt: opts.requestedAt });
   }
   /** A merge's line, when its note is one a line can go to at all. */
   const lineOf = (m: Merge): WantedLine | undefined => wanted.get(ix.idOf(m.into) ?? '')?.lines.find((l) => l.record === m.answer && l.entry.text === m.line);
@@ -1548,6 +1576,8 @@ type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Ren
 /** A Current state a model wrote for a note (C05): its lines, the name it cites and the thing whose move it waits for. */
 type WantedState = { lines: string[]; source: string | null; thing: string | null };
 type StateRewrite = Extract<Change, { kind: 'state-rewrite' }>;
+/** The id of the folder's one question about summaries Bower did not write (TL-P4-10 point 3). */
+export const ADOPT_STATES_ID = 'q-adopt-states';
 /** A thing joining a note you said yes to keeping (MERGES), with the answer that says so. */
 type Merge = { into: string; title: string; line: string; answer: string };
 /** Where a wanted Timeline line ended up at plan time. */

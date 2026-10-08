@@ -3,10 +3,16 @@
  * the Bower-owned "## Current state" of a note, through the modifiedTime and bytes it read; the manifest keeps the
  * previous lines so an undo (C13) restores them; a Current state the person edited after Bower is never rewritten:
  * the change becomes a Timeline line plus a question (the C11 asks flow).
+ *
+ * TL-P4-10: an unmarked Current state is the person's, unless the file is as Bower last wrote it (its listed
+ * `md5Checksum` equals the `bowerMd5` Bower set with that write) or a rule says Bower may keep such summaries up to
+ * date; otherwise a Timeline line only, and one question per folder.
  */
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyChanges, stateMark, undoChanges } from '../../src/data/contracts/note-edit';
+import { ADOPT_STATES_RULE, applyChanges, stateMark, undoChanges } from '../../src/data/contracts/note-edit';
+import { serializeRules } from '../../src/data/contracts/rules-format';
 import type { Change, ManifestV2 } from '../../src/data/contracts/run-manifest';
 import { parseNote } from '../../src/data/vault/note-format';
 import type { ClaudeSpawn } from '../src/claude';
@@ -15,14 +21,22 @@ import { runWithClaude } from './corpus-run';
 
 const ROOT = resolve(import.meta.dirname, '../../harness/corpus');
 const HUB = 'Projects/Job hunt/Job hunt.md';
+const FLAT = 'Projects/Flat hunt/Flat hunt.md';
+const MADE = 'Projects/Job hunt/Applications/Industrial Designer, Ferrowick.md';
 const NEW_STATE = ['One application open.', 'An offer from Ferrowick to answer.'];
+/** TL-P4-10 point 3, word for word. */
+const ADOPT_QUESTION = 'Bower found summaries it did not write. May it keep them up to date?';
+/** Drive's `md5Checksum`: the MD5 of the stored bytes, hex (RFC 1321). */
+const md5 = (text: string): string => createHash('md5').update(Buffer.from(text, 'utf8')).digest('hex');
+/** A hub whose Current state carries Bower's mark of what it holds: Bower's own. */
+const marked = (text: string, lines: string[]): string => text.replace('by: bower\n', `by: bower\nbower_state: ${stateMark(lines)}\n`);
 
 afterEach(() => vi.restoreAllMocks());
 
 const envelope = (intent: unknown): string => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 900, num_turns: 1, result: JSON.stringify(intent), usage: { input_tokens: 10, output_tokens: 10 } });
 
-/** The model's intent for the hub-lines pile: both things filed, and the job hunt's Current state brought up to date. */
-const proposing: ClaudeSpawn = async (call) => {
+/** The model's intent for the hub-lines pile: both things filed, and these notes' Current states brought up to date. */
+const proposingStates = (states: Array<{ note: string; lines: string[] }>): ClaudeSpawn => async (call) => {
   const ctx = JSON.parse(call.input.split('\n').at(-1) ?? '{}') as { piles: Array<{ things: Array<{ name: string; fileId: string }> }> };
   const ids = new Map(ctx.piles.flatMap((p) => p.things).map((t) => [t.name, t.fileId]));
   const offer = ids.get('Offer_letter_final(2).pdf') ?? 'none';
@@ -33,10 +47,11 @@ const proposing: ClaudeSpawn = async (call) => {
       { fileId: ids.get('listing-88213.example.url') ?? 'none', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
     ],
     lines: [{ note: HUB, text: 'New offer from Ferrowick, fully remote.', cites: offer }],
-    states: [{ note: HUB, lines: NEW_STATE, cites: offer }],
+    states: states.map((st) => ({ ...st, cites: offer })),
   };
   return { code: 0, stderr: '', cut: null, stdout: envelope(intent) };
 };
+const proposing = proposingStates([{ note: HUB, lines: NEW_STATE }]);
 
 async function hubCase(): Promise<LoadedCase> {
   const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c05-hub-lines');
@@ -48,14 +63,18 @@ const manifestOf = (after: Record<string, string>): ManifestV2 => {
   const [path] = Object.keys(after).filter((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p));
   return JSON.parse(after[path ?? ''] ?? 'null') as ManifestV2;
 };
-const hubEdit = (m: ManifestV2): Change[] => m.operations.flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === HUB ? o.effect.changes : []));
+const editOf = (m: ManifestV2, path: string): Change[] => m.operations.flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === path ? o.effect.changes : []));
+const hubEdit = (m: ManifestV2): Change[] => editOf(m, HUB);
+const questionsOf = (after: Record<string, string>): Array<{ id: string; text: string; about?: string }> =>
+  (JSON.parse(after['.bower/questions.json'] ?? '{}') as { questions?: Array<{ id: string; text: string; about?: string }> }).questions ?? [];
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
 describe('a change kind of its own for Current state (C05)', () => {
   it('a Bower-owned Current state is rewritten and undo restores it', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const c = await hubCase();
-    const run = await runWithClaude(c, proposing);
+    // Bower last wrote "One application open." there: its mark says so.
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: marked(c.folder[HUB] ?? '', ['One application open.']) } }, proposing);
 
     expect(run.code).toBe(0);
     const after = run.after[HUB] ?? '';
@@ -104,5 +123,88 @@ describe('a change kind of its own for Current state (C05)', () => {
     const report = (run.lastRun as { run: { report: { questions: Array<{ id: string }> } } }).run.report;
     expect(report.questions.map((q) => q.id)).toContain(asked?.id);
     expect(hubEdit(manifestOf(run.after)).some((x) => x.kind === 'state-rewrite')).toBe(false);
+  });
+
+  it('an unmarked section in a file whose md5Checksum equals bowerMd5 is adopted', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // No mark (a run before marks wrote it), but Bower's last write set bowerMd5 and nobody has changed the file since.
+    const run = await runWithClaude(c, proposing, { [HUB]: { bowerMd5: md5(c.folder[HUB] ?? '') } });
+
+    expect(run.code).toBe(0);
+    const after = run.after[HUB] ?? '';
+    expect(parseNote(HUB, after).currentState).toEqual(NEW_STATE);
+    expect(after).toContain(`bower_state: ${stateMark(NEW_STATE)}\n`);
+    expect(hubEdit(manifestOf(run.after)).find((x) => x.kind === 'state-rewrite')).toEqual({ kind: 'state-rewrite', recordIds: [], previous: ['One application open.'], lines: NEW_STATE });
+    expect(questionsOf(run.after)).toEqual([]);
+    // Every Bower note write sets bowerMd5 to the MD5 of the very bytes it sent: the edit and the made note alike.
+    for (const path of [HUB, MADE]) expect(run.props[path]?.bowerMd5, path).toBe(md5(run.after[path] ?? ''));
+  });
+
+  it('an unmarked section with no bowerMd5 gets a line and at most one question per folder', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // The job hunt has no bowerMd5 (the original app wrote it); the flat hunt's was set by a write the person changed since.
+    const long = Array.from({ length: 8 }, (_, i) => `Flat ${'abcdefgh'[i] ?? ''} on the shortlist, with a long description of its rooms, its light, its street and the walk to the station.`);
+    const run = await runWithClaude(c, proposingStates([{ note: HUB, lines: NEW_STATE }, { note: FLAT, lines: long }]), { [FLAT]: { bowerMd5: md5('what Bower wrote before the person changed it') } });
+
+    expect(run.code).toBe(0);
+    const hub = parseNote(HUB, run.after[HUB] ?? '');
+    const flat = parseNote(FLAT, run.after[FLAT] ?? '');
+    // Never rewritten: the sections stay as the person has them, with no mark.
+    expect(hub.currentState).toEqual(['One application open.']);
+    expect(flat.currentState).toEqual(['Three flats on the shortlist.']);
+    expect(run.after[HUB]).not.toContain('bower_state');
+    expect(run.after[FLAT]).not.toContain('bower_state');
+    expect(editOf(manifestOf(run.after), HUB).some((x) => x.kind === 'state-rewrite')).toBe(false);
+    expect(editOf(manifestOf(run.after), FLAT).some((x) => x.kind === 'state-rewrite')).toBe(false);
+    // The news goes on each Timeline as one line, within an authored line's limits.
+    const hubLine = hub.timeline.find((t) => t.text.includes('An offer from Ferrowick to answer.'));
+    expect(hubLine?.source).toBe('Industrial Designer, Ferrowick');
+    const flatLine = flat.timeline.find((t) => t.text.includes('Flat a on the shortlist'));
+    expect(flatLine).toBeDefined();
+    expect(flatLine?.text.length).toBeLessThanOrEqual(200);
+    // One question for the folder, word for word; none per note.
+    const questions = questionsOf(run.after);
+    expect(questions.map((q) => q.text)).toEqual([ADOPT_QUESTION]);
+    expect(questions.some((q) => q.id.startsWith('q-state-'))).toBe(false);
+    const report = (run.lastRun as { run: { report: { questions: Array<{ id: string }> } } }).run.report;
+    expect(report.questions.map((q) => q.id)).toEqual(questions.map((q) => q.id));
+  });
+
+  it('a yes rule lets Bower adopt the section', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // The yes to the folder's question, as a rule line (C11 words it; scripted here until ask-answer-loop).
+    const rules = serializeRules([{ id: 'rule-1', text: ADOPT_STATES_RULE, since: Date.UTC(2026, 9, 1) }]);
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, 'Rules.md': rules } }, proposing);
+
+    expect(run.code).toBe(0);
+    const after = run.after[HUB] ?? '';
+    expect(parseNote(HUB, after).currentState).toEqual(NEW_STATE);
+    expect(after).toContain(`bower_state: ${stateMark(NEW_STATE)}\n`);
+    expect(hubEdit(manifestOf(run.after)).find((x) => x.kind === 'state-rewrite')).toEqual({ kind: 'state-rewrite', recordIds: [], previous: ['One application open.'], lines: NEW_STATE });
+    expect(questionsOf(run.after)).toEqual([]);
+  });
+
+  it('undo restores an empty section empty', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // Bower's own Current state, empty.
+    const empty = marked((c.folder[HUB] ?? '').replace('- One application open.\n', ''), []);
+    expect(parseNote(HUB, empty).currentState).toEqual([]);
+    const run = await runWithClaude({ ...c, folder: { ...c.folder, [HUB]: empty } }, proposing);
+
+    expect(run.code).toBe(0);
+    const after = run.after[HUB] ?? '';
+    expect(parseNote(HUB, after).currentState).toEqual(NEW_STATE);
+    const changes = hubEdit(manifestOf(run.after));
+    expect(changes.find((x) => x.kind === 'state-rewrite')).toEqual({ kind: 'state-rewrite', recordIds: [], previous: [], lines: NEW_STATE });
+    const back = applyChanges(bytes(after), undoChanges(changes));
+    expect(back.ok).toBe(true);
+    const undone = back.ok ? back.text : '';
+    expect(parseNote(HUB, undone).currentState).toEqual([]);
+    // Byte for byte what Bower had, but for the Timeline line this run added.
+    expect(undone.replace(/^- 2026-10-07 · .*\n/m, '')).toBe(empty);
   });
 });
