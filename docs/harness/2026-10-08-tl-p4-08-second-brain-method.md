@@ -90,3 +90,16 @@ Next, two workers in parallel:
   - Effects that do not depend on each other run with bounded concurrency.
   - Each effect still has its `bowerOp` stamp and its own `stillAsSeen` check, and the checkpoint barrier stays as it is.
   - The Drive-call golden is updated on purpose.
+
+**Addendum 7, 2026-10-08: two C05 rulings.**
+1. **`c05-hub-lines` `expected.json`.** It pinned "scored 7 out of 10 against your CV", but no source has a CV or a score. A line that invents a score breaks the method and `numbers-grounded`, so the expectation is wrong. It becomes a grounded line ("fully remote, 42,000 a year, start 2 November"), logged in the rubric-change file.
+2. **`c05-keep-one-note` stays in C05,** since "keep one note" is in C05's matrix row. It is split:
+   - **`keep-one-note-merge`** (`bower-escalated`), now. The spine gains a merge of two existing notes:
+     - the intent names the kept note and the other note;
+     - the facts and the Timeline are carried into the kept note, with sources;
+     - the other note goes to the Drive Bin;
+     - links are rewritten;
+     - every step is undoable from the manifest.
+     It is proven with scripted proposals in which the person's answer is given in the fixture.
+   - **`ask-answer-loop` comes forward from C11,** because C05 needs it. It waits for the owner's decision on its trigger (TL-P4-09 note): either a small tidy-up for that item at once, or the next tidy-up the person starts.
+   - C05 closes when both pass.

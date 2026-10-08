@@ -5205,5 +5205,21 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the C05 corpus cases score green with scripted proposals\"",
     "note": "P4_PLAN P4-C: each slice proven with scripted proposals before the model. TL-P4-10 addendum 2: then the rest of C05."
+  },
+  {
+    "id": "keep-one-note-merge",
+    "task": "p4-c",
+    "category": "feature",
+    "passes": false,
+    "what": "Keep one note: the intent names the kept note and the other; the other note's facts and Timeline carry over with their sources, the other goes to the Drive Bin, links to it are rewritten to the kept note, all undoable.",
+    "steps": [
+      "An intent field (kept, other) validated by the spine.",
+      "Facts and Timeline lines carry over with sources; the person's words in the kept note untouched.",
+      "The other note goes to the Bin, never hard-deleted; links rewritten.",
+      "Undo restores both notes and the links.",
+      "Proved with scripted proposals whose answer comes from the c05-keep-one-note fixture."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"keep one note carries the facts and bins the other|undo of keep one note restores both notes and links|the C05 corpus cases score green with scripted proposals\"",
+    "note": "TL-P4-08 addendum 7 (main f10109d). ask-answer-loop moves into C05 but waits for the owner's trigger ruling."
   }
 ]
