@@ -14,7 +14,7 @@
 import { attemptEnded } from '../../src/data/contracts/attempt-ended';
 import { PHASE_RANK as RANK } from '../../src/data/contracts/run-phases';
 import { BowerError, type RunPhase } from '../../src/data/types';
-import { send, type Fetch } from '../../src/data/drive/transport';
+import { send, type Fetch, type Pacing } from '../../src/data/drive/transport';
 import { serverBusy, staleAttempt, unreached } from './token';
 
 export interface RunnerStatusOptions {
@@ -23,6 +23,8 @@ export interface RunnerStatusOptions {
   ticket: string;
   attempt: number;
   fetch?: Fetch;
+  /** The transport's waits between tries; the real backoff when absent. */
+  pacing?: Partial<Pacing>;
 }
 
 const ended = (phase: RunPhase): boolean => phase === 'done' || phase === 'failed';
@@ -108,7 +110,7 @@ export class RunnerStatus {
   private async request(body: object): Promise<Response> {
     try {
       const init = { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` }, body: JSON.stringify(body) };
-      return await send(this.fetchFn, this.url, init, { idempotent: true, again: serverBusy });
+      return await send(this.fetchFn, this.url, init, { idempotent: true, again: serverBusy, ...(this.opts.pacing ? { pacing: this.opts.pacing } : {}) });
     } catch (e) {
       console.error(e);
       throw unreached();

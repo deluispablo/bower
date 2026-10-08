@@ -7,7 +7,7 @@
  * or Google access revoked or unreadable) drops the kept token.
  */
 import { BowerError } from '../../src/data/types';
-import { noAnswer, send, type Fetch } from '../../src/data/drive/transport';
+import { noAnswer, send, type Fetch, type Pacing } from '../../src/data/drive/transport';
 import { isAdmissionManifest, type AdmissionManifest } from '../../src/data/spine/admission';
 
 /** What `GET /runner/runs/:id/token` answers. */
@@ -28,6 +28,8 @@ export interface RunnerTokenOptions {
   ticket: string;
   fetch?: Fetch;
   now?: () => number;
+  /** The transport's waits between tries; the real backoff when absent. */
+  pacing?: Partial<Pacing>;
 }
 
 /** A token this close to its expiry is asked for again. */
@@ -109,7 +111,7 @@ export class RunnerToken {
     let res: Response;
     try {
       // Idempotent: asking again changes nothing on the Worker (`transport.ts`).
-      res = await send(this.fetchFn, url, { headers: { authorization: `Bearer ${this.opts.ticket}` } }, { idempotent: true, again: serverBusy });
+      res = await send(this.fetchFn, url, { headers: { authorization: `Bearer ${this.opts.ticket}` } }, { idempotent: true, again: serverBusy, ...(this.opts.pacing ? { pacing: this.opts.pacing } : {}) });
     } catch (e) {
       console.error(e);
       throw unreached();

@@ -30,7 +30,7 @@
  */
 import { Hono } from 'hono';
 
-import { DriveHttp } from '../../src/data/drive/drive-http.js';
+import { DriveHttp, type Pacing } from '../../src/data/drive/drive-http.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import { NOTHING } from '../../src/data/spine/admission.js';
 import { planAdmission } from '../../src/data/spine/plan.js';
@@ -151,7 +151,7 @@ export interface AdmissionAsk {
  * The admission manifest for the person's folder, read now with their Drive token. Drive trouble answers as the
  * contract's codes with no cause: a refused token is `signed-out`, anything else `internal` (logged only).
  */
-export async function admission(env: Env, person: PersonHandle, ask: AdmissionAsk, fetchImpl: FetchLike, spent: () => number): Promise<AdmissionManifest> {
+export async function admission(env: Env, person: PersonHandle, ask: AdmissionAsk, fetchImpl: FetchLike, spent: () => number, pacing?: Partial<Pacing>): Promise<AdmissionManifest> {
   const { scope, subjects, now } = ask;
   const folderId = await person.folderId();
   if (folderId === null) throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
@@ -170,6 +170,7 @@ export async function admission(env: Env, person: PersonHandle, ask: AdmissionAs
     },
     fetch: fetchImpl,
     context: 'headless',
+    ...(pacing ? { pacing } : {}),
   });
   let planned;
   try {

@@ -38,6 +38,7 @@
  * `Rules.md` (`repairRules`). Nothing here logs a file name, content or token.
  */
 
+import type { Pacing } from '../../src/data/drive/drive-http.js';
 import { Hono } from 'hono';
 
 import { requireSession } from './auth.js';
@@ -85,6 +86,7 @@ export interface VaultResult {
 export interface VaultOptions {
   fetchImpl?: FetchLike;
   files?: readonly VaultFile[];
+  pacing?: Partial<Pacing>;
 }
 
 /** Drive's wire file, with only the fields each request asks for. */
@@ -113,7 +115,7 @@ async function json<T>(what: string, response: Response): Promise<T> {
  * token and its one refresh, the retry policy and the error mapping, c2-drive-transport). A 404 or a 409 is read
  * here; any other failure rejects, and the route answers it 500.
  */
-function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike) {
+function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike, pacing?: Partial<Pacing>) {
   // One token for the call, asked again only after Drive answers 401.
   let kept: string | undefined;
   const http = new DriveHttp({
@@ -123,6 +125,7 @@ function vaultDrive(env: Env, sub: string, fetchImpl: FetchLike) {
     },
     fetch: fetchImpl,
     context: 'headless',
+    ...(pacing ? { pacing } : {}),
   });
   const list = async (q: string, fields: string, extra: Record<string, string> = {}): Promise<DriveItem[]> => {
     const params = new URLSearchParams({ q, fields, pageSize: '1000', spaces: 'drive', ...extra });
@@ -310,7 +313,7 @@ export async function ensureVault(
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
   const files = options.files ?? VAULT_TEMPLATE;
   const person = personFor(env, sub);
-  const drive = vaultDrive(env, sub, fetchImpl);
+  const drive = vaultDrive(env, sub, fetchImpl, options.pacing);
 
   // Delete me or a sign-out may land while this call waits on Drive: each person-object write below carries
   // the generation the request was authenticated with and the person object refuses it when it differs
@@ -420,6 +423,7 @@ export function createVaultRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const sub = signedInSub(c.get('userId'));
     const options: VaultOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
+    if (deps.pacing !== undefined) options.pacing = deps.pacing;
     const account = c.get('account');
     if (account === undefined) throw new HttpError(500, 'internal');
     return c.json(await ensureVault(c.get('env'), sub, account.generation, options));

@@ -16,7 +16,6 @@ import { join } from 'node:path';
 import { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { ClaudeSpawn } from '../src/claude';
 import { main } from '../src/main';
-import { backoff } from '../../src/data/drive/transport';
 import { realDrive } from './drive-v3-real';
 import type { ApiHost, ApiOptions, Dispatched, Fetch, Hop, RealWorld } from './real-world-types';
 
@@ -51,8 +50,6 @@ export interface WorldOptions {
 }
 
 export async function realWorld(opts: WorldOptions = {}): Promise<RealWorld> {
-  // Replayed transports take no real time: the runner's retries wait none here (`src/data/drive/transport.ts`).
-  backoff.baseMs = 0;
   const drive = new FakeDrive();
   const rootId = opts.seed ? await opts.seed(drive) : await demoFolder(drive);
   if (rootId === null) throw new Error('the default scenario has a Bower folder');
@@ -111,7 +108,7 @@ export async function realWorld(opts: WorldOptions = {}): Promise<RealWorld> {
     };
     try {
       const claude = opts.claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
-      return await main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: event, ...claude }, { fetch: runner as typeof fetch, ...(opts.claude ? { claude: opts.claude } : {}) });
+      return await main({ BOWER_API_URL: ORIGIN, GITHUB_EVENT_PATH: event, ...claude }, { fetch: runner as typeof fetch, pacing: { baseMs: 0 }, ...(opts.claude ? { claude: opts.claude } : {}) });
     } finally {
       job.status = 'completed';
       job.completedAt = new Date().toISOString();

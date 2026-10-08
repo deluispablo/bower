@@ -415,7 +415,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         }
         if (body === null) {
           // Drive may have made it before its reply was lost: then it is sent, and nothing is chosen again.
-          const there = record.fileId === null ? null : await arrivedFile(fenced, { id: record.fileId, size: record.size, sha256: record.sha256 });
+          const there = record.fileId === null ? null : await arrivedFile(fenced, { id: record.fileId, size: record.size, sha256: record.sha256 }, controller.signal);
           if (there !== null) {
             await finish(there);
             return;
@@ -429,7 +429,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       }
       if (record.fileId === null) {
         // The file's identity is reserved and kept before anything is created.
-        const [id] = await fenced.generateIds(1);
+        const [id] = await fenced.generateIds(1, controller.signal);
         if (id === undefined) throw driveError('unknown');
         if (item.durable && gen === generation) await keepFileId(id);
         record.fileId = id;

@@ -35,6 +35,7 @@
  * default) and the real Drive effects (`effects.ts`), so a run there really changes the folder. Injected effects
  * are for tests only.
  */
+import type { Pacing } from '../../src/data/drive/transport';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
@@ -71,6 +72,8 @@ export interface TidyOptions {
   /** This runner's attempt, from its dispatch. */
   attempt: number;
   fetch?: typeof fetch;
+  /** The transport's waits between tries, for the status, token and Drive clients; the real backoff when absent. */
+  pacing?: Partial<Pacing>;
   /** How many independent operations are in flight together; `POOL` when not given (`spine/schedule.ts`). */
   concurrency?: number;
   /** What plans a new run from what it took, read through this runner's adapter in the folder (`rootId`). */
@@ -121,7 +124,7 @@ const mayNotReport = (e: unknown): boolean => isStaleAttempt(e) || (e instanceof
 export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   const timing = opts.timing ?? new RunTiming();
   const fetchFn = opts.fetch;
-  const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
+  const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}), ...(opts.pacing ? { pacing: opts.pacing } : {}) });
   const post = status.post.bind(status);
   status.post = (...args) => timing.time('status', () => post(...args));
   let ended: 'done' | 'saving' | 'failed' | 'stopped' = 'stopped';
@@ -152,7 +155,7 @@ async function leave(status: RunnerStatus, how: { end: TidyEnd } | { error: unkn
 
 async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatus): Promise<TidyEnd> {
   const fetchFn = opts.fetch;
-  const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}) });
+  const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}), ...(opts.pacing ? { pacing: opts.pacing } : {}) });
   const seen: Seen = { chain: null, saving: false, total: undefined };
   let end: Ended;
   try {
@@ -209,7 +212,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const grant = await timing.time('token', () => token.grant());
   const rootId = grant.folderId;
   if (grant.manifest) seen.total = admittedThings(grant.manifest);
-  const drive = new RunnerDrive({ token, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
+  const drive = new RunnerDrive({ token, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}), ...(opts.pacing ? { pacing: opts.pacing } : {}) });
   opts.onDrive?.(drive);
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
@@ -303,6 +306,8 @@ export function dispatchOf(event: unknown): Dispatch | null {
 
 export interface MainOptions {
   fetch?: typeof fetch;
+  /** The transport's waits between tries; the real backoff when absent. Tests only. */
+  pacing?: Partial<Pacing>;
   /** A recorded `claude` for the Claude provider; tests only. */
   claude?: ClaudeSpawn;
 }
@@ -352,6 +357,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
       ticket,
       attempt,
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
+      ...(opts.pacing ? { pacing: opts.pacing } : {}),
       provider: (drive, rootId) => providerFor(name, drive, { rootId, runId, allowWeb }, { env, timing, ...(opts.claude ? { spawn: opts.claude } : {}) }),
       timing,
       effects: driveEffects,

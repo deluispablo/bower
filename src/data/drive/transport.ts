@@ -16,7 +16,7 @@
  *   Drive's "Resolve errors" guide says (https://developers.google.com/workspace/drive/api/guides/handle-errors,
  *   "Exponential backoff"), and as Google Cloud's retry strategy (https://cloud.google.com/storage/docs/retry-strategy).
  * - **Exponential backoff with full jitter** (https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/):
- *   at most `RETRIES` more sends; the n-th wait is a random share of `backoff.baseMs * 2^n` (0.5 s, 1 s, 2 s caps).
+ *   at most `RETRIES` more sends; the n-th wait is a random share of `pacing.baseMs * 2^n` (0.5 s, 1 s, 2 s caps).
  * - **Inside a total budget** for an idempotent request, `BUDGET_MS` from the first send: one stalled send and one more
  *   try fit. A write is bounded by its sends (`RETRIES` more at most, each by its size), not by the read budget, so a
  *   large upload on a slow link is not cut short. Nothing waits without a bound; the backoff stops on the caller's abort.
@@ -31,8 +31,6 @@ import { answered, waitFor } from '../wait';
 export const RETRIES = 3;
 /** The first wait's cap; each next one doubles. */
 export const BASE_MS = 500;
-/** The base of the waits: `BASE_MS`, set to 0 by the runner's tests (`runner/test/setup.ts`) but the retry test's own. */
-export const backoff = { baseMs: BASE_MS };
 /** The longest one idempotent request may take, from its first send: one 30 s stall, the backoff and one more try. */
 export const BUDGET_MS = 60_000;
 
@@ -42,15 +40,36 @@ export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 /** Where a request runs: the person's browser, or a server (the runner, the Worker) whose network is not theirs. */
 export type Context = 'browser' | 'headless';
 
+/**
+ * How a send waits between tries: the base of the backoff and the sleep itself. Each client takes them at construction
+ * (`pacing`) and a test injects its own, so no global is shared (dependency injection of the clock, as in Node's and
+ * Vitest's own timer seams); the default is the real backoff and a timer that stops on the caller's abort.
+ */
+export interface Pacing {
+  baseMs: number;
+  /** Waits `ms`, or rejects with the abort reason as soon as `signal` aborts. */
+  sleep: (ms: number, signal: AbortSignal | null | undefined) => Promise<void>;
+}
+
 export interface SendOptions {
   /** Safe to send again after a network error or a stall: a read, or a request keyed so a repeat changes nothing. */
   idempotent: boolean;
   /** Whether this answer is worth asking again after a wait (rate limited, or failing on the server's side). */
   again?: (res: Response) => boolean | Promise<boolean>;
+  /** The waits between tries; the real ones when absent. */
+  pacing?: Partial<Pacing>;
+  /** The caller's abort, for a request whose `init` carries none: it ends the request and the backoff. */
+  signal?: AbortSignal;
+  /**
+   * The browser said it had no network before this was sent (`navigator.onLine` is false: no connection,
+   * https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine). A network error then cannot succeed and is
+   * not sent again; the person's connection coming back is what flushes their queue.
+   */
+  knownOffline?: boolean;
 }
 
 /** Waits `ms`, or rejects with the caller's abort reason as soon as `signal` aborts (as `fetch` does). */
-function sleep(ms: number, signal: AbortSignal | null | undefined): Promise<void> {
+export function sleep(ms: number, signal: AbortSignal | null | undefined): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(signal.reason);
@@ -69,11 +88,11 @@ function sleep(ms: number, signal: AbortSignal | null | undefined): Promise<void
 }
 
 /** Waits before the next send and says yes, or says no when the retries or the budget are used up. */
-async function pause(n: number, started: number, budget: number, signal: AbortSignal | null | undefined): Promise<boolean> {
+async function pause(n: number, started: number, budget: number, signal: AbortSignal | null | undefined, pacing: Partial<Pacing> | undefined): Promise<boolean> {
   if (n >= RETRIES) return false;
-  const wait = Math.random() * backoff.baseMs * 2 ** n;
+  const wait = Math.random() * (pacing?.baseMs ?? BASE_MS) * 2 ** n;
   if (Date.now() - started + wait >= budget) return false;
-  await sleep(wait, signal);
+  await (pacing?.sleep ?? sleep)(wait, signal);
   return true;
 }
 
@@ -81,7 +100,8 @@ async function pause(n: number, started: number, budget: number, signal: AbortSi
  * Sends `init` to `url` under the policy. Resolves with the last answer (the caller reads its status); rejects with
  * fetch's `TypeError` when no answer came (a network error or the bound), or with the caller's own `AbortError`.
  */
-export async function send(fetchFn: Fetch, url: string, init: RequestInit, opts: SendOptions): Promise<Response> {
+export async function send(fetchFn: Fetch, url: string, given: RequestInit, opts: SendOptions): Promise<Response> {
+  const init = opts.signal && !given.signal ? { ...given, signal: opts.signal } : given;
   const started = Date.now();
   // The read budget bounds idempotent requests only; a write's sends are each bounded by its size.
   const budget = opts.idempotent ? BUDGET_MS : Infinity;
@@ -91,14 +111,14 @@ export async function send(fetchFn: Fetch, url: string, init: RequestInit, opts:
     try {
       res = await answered(fetchFn, url, init, Math.min(waitFor(init.body), Math.max(left, 0)));
     } catch (e) {
-      if (!(e instanceof TypeError) || !opts.idempotent || init.signal?.aborted) throw e;
+      if (!(e instanceof TypeError) || !opts.idempotent || opts.knownOffline || init.signal?.aborted) throw e;
       console.error(e);
-      if (!(await pause(n, started, budget, init.signal))) throw e;
+      if (!(await pause(n, started, budget, init.signal, opts.pacing))) throw e;
       continue;
     }
     if (!opts.again || !(await opts.again(res))) return res;
     console.error(`Answered ${res.status}; sending again (${n + 1} of ${RETRIES})`);
-    if (!(await pause(n, started, budget, init.signal))) return res;
+    if (!(await pause(n, started, budget, init.signal, opts.pacing))) return res;
   }
 }
 

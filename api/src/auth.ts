@@ -9,6 +9,7 @@
  * code, its cause for the log only.
  */
 
+import type { Pacing } from '../../src/data/drive/drive-http.js';
 import { Hono } from 'hono';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { JWTVerifyGetKey } from 'jose';
@@ -184,6 +185,8 @@ export interface AuthDeps {
   fetchImpl?: FetchLike;
   /** Google's signing keys; tests pass a local key set. Defaults to Google's JWKS. */
   keys?: JWTVerifyGetKey;
+  /** The Drive transport's waits between tries (`src/data/drive/transport.ts`); tests pass `{ baseMs: 0 }`. */
+  pacing?: Partial<Pacing>;
 }
 
 /** The sign-in routes and `GET /me`, mounted at `/` by `index.ts`. */
