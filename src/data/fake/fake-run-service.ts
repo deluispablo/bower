@@ -30,7 +30,7 @@ import type { RunWire } from '../worker/worker-api';
 import { RunRecords, canonical, checkpointName, dispositionsFor, manifestName, materialize, reportName, reusedNoteOf, shows, SOURCE_NOT_AS_SEEN, textHash, toEvidence, type RunManifest } from './fake-run-records';
 import { firstCheckpoint, nextCheckpoint, type CheckpointPatch } from '../spine/records';
 import { fixedReport, lastRunText, sameView, saveReport } from '../spine/barrier';
-import { sha256 } from '../vault/hashes';
+import { checksumOf, md5Hex } from '../contracts/hashes';
 import { B_FAILURE } from '../spine/scripted';
 
 /** Who asks: the synthetic account slot and the folder it is bound to. */
@@ -734,7 +734,7 @@ export class FakeRunService {
     await saveReport({
       rootId: row.binding.rootId,
       reads: this.drive,
-      checksum: { stored: async (id) => sha256(new Blob([(await this.drive.readBytes(id)).slice()])), of: (bytes) => sha256(new Blob([bytes.slice()])) },
+      checksum: { stored: async (id) => md5Hex(await this.drive.readBytes(id)), of: checksumOf },
       batch: async () => this.fence(attempt),
       report,
       view: text,

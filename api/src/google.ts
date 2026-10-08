@@ -12,6 +12,7 @@
 import { createRemoteJWKSet, customFetch, errors, jwtVerify } from 'jose';
 import type { JWTVerifyGetKey } from 'jose';
 
+import { sha256Bytes } from '../../src/data/contracts/hashes.js';
 import { base64UrlEncode, timingSafeEqual } from './crypto.js';
 import { HttpError } from './errors.js';
 
@@ -62,8 +63,7 @@ export function createCodeVerifier(): string {
 
 /** The PKCE S256 challenge for `verifier`: base64url(SHA-256(verifier)) (RFC 7636 4.2). */
 export async function codeChallenge(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return base64UrlEncode(new Uint8Array(digest));
+  return base64UrlEncode(await sha256Bytes(verifier));
 }
 
 /**

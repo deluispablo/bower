@@ -14,6 +14,7 @@
  * Nothing here logs a ticket or its hash.
  */
 
+import { sha256Hex } from '../../src/data/contracts/hashes.js';
 import { base64UrlEncode } from './crypto.js';
 import type { RunPhase, RunReply } from './process.js';
 
@@ -30,8 +31,7 @@ const RUN_ID = /^([0-9a-f]{64})-[A-Za-z0-9_-]{1,64}$/;
 
 /** Lowercase hex SHA-256 of `ticket`'s UTF-8 bytes. */
 export async function hashTicket(ticket: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ticket));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return sha256Hex(ticket);
 }
 
 /** A new ticket: 32 random bytes, base64url. */

@@ -30,10 +30,10 @@
  * default) and the real Drive effects (`effects.ts`), so a run there really changes the folder. Injected effects
  * are for tests only.
  */
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
+import { checksumOf } from '../../src/data/contracts/hashes';
 import { admittedThings } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import { B_FAILURE } from '../../src/data/spine/scripted';
@@ -87,9 +87,6 @@ export type TidyEnd =
 
 /** What a run whose chain cannot be verified says: it is not touched again. */
 const UNREADABLE = 'Bower could not read what it did. Try again later.';
-
-/** Drive's `md5Checksum`: the MD5 of the stored bytes, hex. */
-const md5 = (bytes: Uint8Array): string => createHash('md5').update(bytes).digest('hex');
 
 /** Whether a chain holds an effect that changed the folder, or may have: applied, or sent with no answer kept. */
 const changedSomething = (chain: readonly Checkpoint[]): boolean =>
@@ -194,7 +191,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
   timeCheckpoints(records, timing);
-  const checksum: Checksum = { stored: (id) => drive.md5(id), of: async (bytes) => md5(bytes) };
+  const checksum: Checksum = { stored: (id) => drive.md5(id), of: checksumOf };
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
