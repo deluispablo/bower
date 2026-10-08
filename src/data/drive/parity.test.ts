@@ -74,7 +74,7 @@ describe('the fake and real Drive offer the same ports', () => {
     const queries: string[] = [];
     const http = real(async (url) => {
       const q = new URL(url).searchParams.get('q') ?? '';
-      queries.push(q);
+      if (q) queries.push(q);
       if (q.startsWith('trashed = true')) {
         return new Response(JSON.stringify({ files: [wire('in', { appProperties: { bowerItem: 'k1' }, size: '5', sha256Checksum: 'ab' }), wire('out', { parents: ['elsewhere'], appProperties: { bowerItem: 'k1' } }), wire('plain', { appProperties: { bowerItem: 'k2' }, size: '9' })] }));
       }
@@ -84,6 +84,36 @@ describe('the fake and real Drive offer the same ports', () => {
     expect(hits.map((h) => [h.file.id, h.size, h.sha256])).toEqual([['in', 5, 'ab'], ['plain', null, null]]);
     expect(queries.at(-1)).toBe("trashed = true and (appProperties has { key='bowerItem' and value='k1' } or appProperties has { key='bowerItem' and value='k2' })");
     expect(await http.binnedByItem('root', [])).toEqual([]);
+  });
+
+  it('a file binned inside a binned folder counts as removed', async () => {
+    // Drive marks the children of a trashed folder trashed (explicitlyTrashed false); their folder is in no listing.
+    const asked: string[] = [];
+    const http = real(async (url) => {
+      const u = new URL(url);
+      const q = u.searchParams.get('q') ?? '';
+      if (q.startsWith('trashed = true')) {
+        return new Response(JSON.stringify({ files: [wire('kid', { parents: ['gone'], appProperties: { bowerItem: 'k1' }, size: '5', sha256Checksum: 'ab' }), wire('stray', { parents: ['abroad'], appProperties: { bowerItem: 'k1' } })] }));
+      }
+      const id = u.pathname.split('/').pop() ?? '';
+      if (u.pathname.includes('/files/')) {
+        asked.push(id);
+        const parents: Record<string, string[]> = { gone: ['mid'], mid: ['root'], abroad: ['elsewhere'] };
+        return parents[id] ? new Response(JSON.stringify({ id, parents: parents[id] })) : new Response('{}', { status: 404 });
+      }
+      return new Response(JSON.stringify({ files: [wire('plain')] }));
+    });
+    const hits = await http.binnedByItem('root', ['k1']);
+    expect(hits.map((h) => h.file.id)).toEqual(['kid']);
+    expect(asked.length, 'a few folder lookups, not a listing').toBeLessThanOrEqual(5);
+    // The fake answers the same.
+    const fake = new FakeDrive();
+    const top = await fake.createFolder('root', 'Bower');
+    const folder = await fake.createFolder(top.id, 'Pile');
+    const inner = await fake.createText(folder.id, 'a.md', 'a', { bowerItem: 'k1' });
+    await fake.trash(inner.id);
+    await fake.trash(folder.id);
+    expect((await fake.binnedByItem(top.id, ['k1'])).map((h) => h.file.id)).toEqual([inner.id]);
   });
 
   it('a listing with checksums marks a file Drive keeps no checksum of, as the fake does', async () => {

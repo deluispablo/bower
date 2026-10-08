@@ -35,7 +35,7 @@ import { Journal, type JournalRecord } from './journal';
 import { formerNames, linkTarget } from '../links';
 import { ruleLike } from '../rules';
 import { ADOPT_STATES_ID, ADOPT_STATES_RULE } from '../contracts/note-edit';
-import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, type RunnerFiles, type LastRunFile } from './layout';
+import { HIDDEN_AT_ROOT, PROP, SYSTEM, isRunnerFile, recordStamp, type RunnerFiles, type LastRunFile } from './layout';
 import { sha256 } from './hashes';
 import { placeOf, plainSnippet, plainText, savedLinkAddress, savedLinkUrl, searchLines } from '../search-text';
 import { noteRefusal, parseNote, toggleTaskInText, type ParsedNote } from './note-format';
@@ -688,7 +688,7 @@ export class DriveVault implements VaultSource {
     const ix = await this.index();
     const inbox = ix.file('Inbox');
     if (!inbox?.folder) return [];
-    const found = await findLooseDeclarations(this.known(ix), await this.rootId(), inbox.id, (id) => this.readBytesOnce(id), this.declarationCache);
+    const found = await findLooseDeclarations(this.known(ix), await this.rootId(), inbox.id, (id) => this.readBytesOnce(id), this.declarationCache, new Set(), pileId);
     this.checkCurrent();
     return found.filter((d) => d.declaration.pileId === pileId).flatMap((d) => d.copies);
   }
@@ -908,7 +908,7 @@ export class DriveVault implements VaultSource {
       throw new BowerError('unknown', 'Bower could not save this pile. Try again.');
     }
     const at = await this.systemFolder(SYSTEM.piles);
-    const written = await this.drive.createText(at, record.name, record.text);
+    const written = await this.drive.createText(at, record.name, record.text, recordStamp(declaration.pileId, name === null ? 'loose' : 'folder'));
     this.checkCurrent();
     (await this.index()).put(written);
     return { pileId: declaration.pileId, declarationId: declaration.declarationId, contextKey, keys: members.map((m) => m.memberKey), hashes: members.map((m) => m.content.sha256) };
@@ -1267,12 +1267,16 @@ export class DriveVault implements VaultSource {
 
   async questions(): Promise<Question[]> {
     const all = (await this.json(SYSTEM.questions))?.questions ?? [];
-    // Your changes and the inbox are read together: neither needs the other.
-    const [lines, inbox] = await Promise.all([this.journal.list(), this.piles()]);
+    // Your changes and the inbox as the listing shows it are read together: neither needs the other, and the inbox's
+    // full read (each pile's note and records) is not what these questions wait on (TL-P4-16 b).
+    const [lines, inbox] = await Promise.all([this.journal.list(), this.pilesListed()]);
     const answered = new Set(lines.filter((r) => r.kind === 'answer').map((r) => r.questionId));
     // A question about a thing that is no longer in the inbox is closed, even when no tidy-up can run (an empty inbox
     // has nothing to tidy): its subject is the thing's or pile's id (older ones carry it in their id).
     const here = new Set(inbox.flatMap((p) => [p.id, ...p.items.map((i) => i.id)]));
+    // Things still on their way from here have no file to list yet; their questions stay open.
+    for (const [id, u] of this.uploads) for (const e of u.entries) here.add(id).add(e.item.id);
+    for (const item of this.queuedItems()) here.add(item.pileId).add(item.memberKey);
     const subject = (q: Question): string | undefined => q.subject ?? (q.id.startsWith('q-ask-') ? q.id.slice('q-ask-'.length) : undefined);
     return all.filter((q) => !answered.has(q.id) && (subject(q) === undefined || here.has(subject(q) ?? '')));
   }

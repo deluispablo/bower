@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Checkpoint, Outcome } from '../contracts/run-checkpoint';
 import { DriveHttp } from '../drive/drive-http';
 import type { DriveFile } from '../drive/drive-api';
 import { FakeDrive, type FencedDrive } from '../drive/fake-drive';
 import { planRun } from '../fake/fake-runner';
 import { seedFakeDrive } from '../fake/seed';
+import { PROP, recordStamp } from '../vault/layout';
 import { RunRecords, canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type CheckpointPatch, type RunManifest } from './records';
 
 const AT = Date.UTC(2026, 9, 7, 9);
@@ -106,5 +107,33 @@ describe('shared run records', () => {
     expect(b.manifestHash).toBe(a.manifestHash);
     const names = async (r: RunRecords): Promise<string[]> => (await r.list({ runId: manifest.runId })).map((f) => f.name).sort();
     expect(await names(onDrive)).toEqual(await names(onFake));
+  });
+});
+
+describe('a record write that stamps its pile (TL-P4-16 b)', () => {
+  it('stamps a new disposition with its pile id', async () => {
+    const { drive, root } = await seeded();
+    const records = new RunRecords(drive, root);
+    await records.put(drive.fenced(() => {}), 'piles', `disposition-${'a'.repeat(64)}.json`, '{}', recordStamp('pile-1'));
+    const made = (await drive.listAll(root)).find((f) => f.name.startsWith('disposition-'));
+    expect(made?.appProperties).toEqual({ [PROP.recordPile]: 'pile-1' });
+  });
+
+  it('never rewrites a record that is there: one changed between the read and the write is a conflict, and an identical one keeps its version', async () => {
+    const { drive, root } = await seeded();
+    const records = new RunRecords(drive, root);
+    const w = drive.fenced(() => {});
+    const name = `disposition-${'b'.repeat(64)}.json`;
+    await records.put(w, 'piles', name, '{}');
+    const old = (await drive.listAll(root)).find((f) => f.name === name);
+    // The same bytes: nothing is written, so a record without the stamp stays as it was (never restamped).
+    await records.put(w, 'piles', name, '{}', recordStamp('pile-1'));
+    const same = (await drive.listAll(root)).find((f) => f.name === name);
+    expect([same?.modifiedTime, same?.appProperties]).toEqual([old?.modifiedTime, old?.appProperties]);
+    // Other bytes appear at the name after a first look: the write refuses and leaves them.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await drive.writeText(old?.id ?? '', '{"other":1}', old?.modifiedTime ?? '');
+    await expect(records.put(w, 'piles', name, '{}', recordStamp('pile-1'))).rejects.toMatchObject({ code: 'conflict' });
+    expect(await drive.readText(old?.id ?? '')).toBe('{"other":1}');
   });
 });
