@@ -7,3 +7,15 @@ export const SUBREQUEST_BUDGET = 35;
 
 /** What the dispatch after admission may need: its one request and its two retries (`dispatchOutcome`). */
 export const DISPATCH_SUBREQUESTS = 3;
+
+/**
+ * A read the reader chose not to make (admission is out of subrequests, TL-P4-11): not a failure of the file. What
+ * it would have decided is left to the runner, which reads every file itself and holds a pile by the same rules
+ * before any write (`scripted.ts`, `capturePiles` with notes). Only the Worker's admission reader raises it.
+ */
+export class NotReadHere extends Error {
+  constructor() {
+    super('This file was not read at admission');
+    this.name = 'NotReadHere';
+  }
+}

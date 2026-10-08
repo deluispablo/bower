@@ -14,6 +14,7 @@ import { PILE_NOTE, safeInboxName } from './piles';
 import { isJournalRecord } from './contracts/journal-record';
 import { PROP, SYSTEM } from './vault/layout';
 import { BowerError, type SetAside } from './types';
+import { NotReadHere } from './spine/budget';
 import { sha256 } from './vault/hashes';
 
 export type ReadBytes = (id: string) => Promise<Uint8Array>;
@@ -147,7 +148,8 @@ export async function findDeclaration(files: readonly DriveFile[], rootId: strin
       try {
         bytes = await read(copy.id);
       } catch (e) {
-        if (e instanceof BowerError && e.code === 'auth') throw e;
+        // Signed out stops the look; a read admission left to the runner (TL-P4-11) is not this copy's failure.
+        if ((e instanceof BowerError && e.code === 'auth') || e instanceof NotReadHere) throw e;
         return { state: 'unreadable', error: e instanceof BowerError ? e : new BowerError('unknown', `A pile declaration could not be read (${String(e)}).`) };
       }
       parsed = await parsePileDeclaration(bytes, rootId);
@@ -197,7 +199,7 @@ export async function findLooseDeclarations(files: readonly DriveFile[], rootId:
       } catch (e) {
         // One copy that cannot be read affects only its own pile (TL-P2-08 a): it is skipped this time and read
         // again next listing. Signed out stops the listing.
-        if (e instanceof BowerError && e.code === 'auth') throw e;
+        if ((e instanceof BowerError && e.code === 'auth') || e instanceof NotReadHere) throw e;
         console.error(e);
         continue;
       }
