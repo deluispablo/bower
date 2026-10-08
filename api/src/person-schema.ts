@@ -8,22 +8,19 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
   'schema_version',
   'session_lease',
   'session_leave',
-  'admission',
   'quota',
   'control',
   'run_ticket',
   'account',
   'runs',
 ] as const;
-
-export type PersonTable = (typeof PERSON_TABLES)[number];
 
 /** Step n brings the schema from version n - 1 to n. One statement per string. */
 const STEPS: readonly (readonly string[])[] = [
@@ -150,6 +147,17 @@ const STEPS: readonly (readonly string[])[] = [
     // The phase of the last report an attempt sent with its ticket (null before the first): a later attempt may
     // report a phase behind the run's, which is kept without moving the run, so its own order needs its own mark.
     'ALTER TABLE run_ticket ADD COLUMN report_phase TEXT',
+  ],
+  [
+    // Dead schema goes (TL-P4-14): the v1 `admission` table, never read or written (the v7 `runs` table took its
+    // place), and the `control` columns nothing used (only `status_revision` is). In place, so every kept row and
+    // value stays: SQLite's ALTER TABLE DROP COLUMN and RENAME COLUMN (https://www.sqlite.org/lang_altertable.html).
+    'DROP TABLE admission',
+    'ALTER TABLE control DROP COLUMN head',
+    'ALTER TABLE control DROP COLUMN claim',
+    'ALTER TABLE control DROP COLUMN epoch',
+    // A ticket's `epoch` was always the attempt it was minted for (v8), and is named so; its values are kept.
+    'ALTER TABLE run_ticket RENAME COLUMN epoch TO attempt',
   ],
 ];
 

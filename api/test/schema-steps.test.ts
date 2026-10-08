@@ -18,6 +18,7 @@ const SHIPPED: readonly string[] = [
   'c25824c0a29b7fb09296b7a5a38491bcdeeaf28200b3fb4817252e9e22f0cbb4', // 8: runner ticket expiry and report seq
   '5a808d58e22843ac85679a9aaa1c2266d61e62588008171fc66db87aec0198f4', // 9: admission manifest
   '57176deac8fffcf05cbb607fb1a5787436538f67190f29fefa5e2900a756f989', // 10: ticket report phase
+  '9fbb521c0a6358d0ebe4aaae29c9adf8132bfe17bda36d2b4a2868a76c74d112', // 11: dead schema dropped, ticket epoch named attempt
 ];
 
 /** The statements `migrate` runs on a database recorded at `current`, without its own schema_version bookkeeping. */

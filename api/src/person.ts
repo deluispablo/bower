@@ -129,7 +129,7 @@ interface RecoveryLookup {
 /**
  * One person's Durable Object, addressed by `idFromName(sub)` (TL-P2-05:
  * people are keyed by their OIDC sub). It holds that person's session
- * lease, run admission, quota, control row and run tickets in its own
+ * lease, runs, quota, control row and run tickets in its own
  * SQLite database (person-schema.ts).
  *
  * One at a time: a Durable Object is single-threaded, and every method here
@@ -528,9 +528,9 @@ export class Person extends DurableObject<Env> {
     const floor = Math.max(kv.get<number>(GENERATION_FLOOR) ?? 0, now === undefined ? 0 : now + 1);
     const at = Date.now();
     const live = this.ctx.storage.sql
-      .exec<{ hash: string; expires_at: number; epoch: number }>('SELECT hash, expires_at, epoch FROM run_ticket WHERE retired = 0 AND expires_at > ?', at)
+      .exec<{ hash: string; expires_at: number; attempt: number }>('SELECT hash, expires_at, attempt FROM run_ticket WHERE retired = 0 AND expires_at > ?', at)
       .toArray()
-      .map((t): GoneTicket => ({ hash: t.hash, expiresAt: t.expires_at, attempt: t.epoch }));
+      .map((t): GoneTicket => ({ hash: t.hash, expiresAt: t.expires_at, attempt: t.attempt }));
     const kept = [...(kv.get<GoneTicket[]>(GONE_TICKETS) ?? []).filter((t) => t.expiresAt > at), ...live];
     await this.ctx.storage.deleteAll();
     kv.put(GENERATION_FLOOR, floor);
@@ -876,7 +876,7 @@ export class Person extends DurableObject<Env> {
 
   /** The run's current attempt: its ticket's, or 1 before any ticket was minted. */
   private attemptOf(runId: string): number {
-    return this.ctx.storage.sql.exec<{ epoch: number }>('SELECT MAX(epoch) AS epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0]?.epoch ?? 1;
+    return this.ctx.storage.sql.exec<{ attempt: number | null }>('SELECT MAX(attempt) AS attempt FROM run_ticket WHERE run_id = ?', runId).toArray()[0]?.attempt ?? 1;
   }
 
   /**
@@ -899,14 +899,14 @@ export class Person extends DurableObject<Env> {
     const sql = this.ctx.storage.sql;
     const run = sql.exec<{ phase: RunPhase }>('SELECT phase FROM runs WHERE id = ?', runId).toArray()[0];
     if (run === undefined || !ACTIVE_PHASES.includes(run.phase)) return false;
-    const held = sql.exec<{ epoch: number }>('SELECT MAX(epoch) AS epoch FROM run_ticket WHERE run_id = ?', runId).toArray()[0];
-    if (held?.epoch != null && attempt <= held.epoch) return false;
+    const held = sql.exec<{ attempt: number | null }>('SELECT MAX(attempt) AS attempt FROM run_ticket WHERE run_id = ?', runId).toArray()[0];
+    if (held?.attempt != null && attempt <= held.attempt) return false;
     // The run's earlier tickets are retired, not deleted: a lower attempt than the newest is superseded.
     // The tickets of runs no longer kept go.
     sql.exec('UPDATE run_ticket SET retired = 1 WHERE run_id = ?', runId);
     sql.exec('DELETE FROM run_ticket WHERE run_id NOT IN (SELECT id FROM runs)');
     sql.exec(
-      'INSERT INTO run_ticket (hash, run_id, epoch, retired, expires_at) VALUES (?, ?, ?, 0, ?)',
+      'INSERT INTO run_ticket (hash, run_id, attempt, retired, expires_at) VALUES (?, ?, ?, 0, ?)',
       hash,
       runId,
       attempt,
@@ -935,7 +935,7 @@ export class Person extends DurableObject<Env> {
       if (this.encryptedRefreshToken() === null) return 'gone';
       const kept = this.ctx.storage.sql.exec<{ manifest: string | null }>('SELECT manifest FROM runs WHERE id = ?', runId).toArray()[0]?.manifest ?? null;
       const manifest: unknown = kept === null ? null : JSON.parse(kept);
-      return { attempt: found.row.epoch, folderId: this.folderId(), manifest: isAdmissionManifest(manifest) ? manifest : null };
+      return { attempt: found.row.attempt, folderId: this.folderId(), manifest: isAdmissionManifest(manifest) ? manifest : null };
     });
   }
 
@@ -965,14 +965,14 @@ export class Person extends DurableObject<Env> {
       const found = this.findTicket(runId, hash, now);
       if (found.kind === 'superseded') return { accepted: false, refused: 'stale-attempt' };
       if (found.kind === 'retired') {
-        const again = report.attempt === found.row.epoch && report.seq === found.row.report_seq;
+        const again = report.attempt === found.row.attempt && report.seq === found.row.report_seq;
         const ended = sql.exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`, runId).toArray()[0];
         if (!again || ended === undefined) return { accepted: false, refused: 'signed-out' };
         return { accepted: true, reply: { run: toWire(ended), revision: this.revision() } };
       }
       if (found.kind !== 'live') return { accepted: false, refused: 'signed-out' };
       const ticket = found.row;
-      if (report.attempt !== ticket.epoch) return { accepted: false, refused: 'stale-attempt' };
+      if (report.attempt !== ticket.attempt) return { accepted: false, refused: 'stale-attempt' };
       const run = sql.exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`, runId).toArray()[0];
       if (run === undefined) return { accepted: false, refused: 'signed-out' };
       if (report.seq === ticket.report_seq) {
@@ -1027,11 +1027,11 @@ export class Person extends DurableObject<Env> {
   ): { kind: 'live' | 'retired'; row: TicketRow } | { kind: 'superseded' | 'unknown' } {
     const sql = this.ctx.storage.sql;
     const row = sql
-      .exec<TicketRow>('SELECT hash, epoch, expires_at, retired, report_seq, report_phase FROM run_ticket WHERE run_id = ? AND hash = ?', runId, hash)
+      .exec<TicketRow>('SELECT hash, attempt, expires_at, retired, report_seq, report_phase FROM run_ticket WHERE run_id = ? AND hash = ?', runId, hash)
       .toArray()[0];
     if (row === undefined || !timingSafeEqual(row.hash, hash)) return { kind: 'unknown' };
     if (row.retired === 1) {
-      const newer = sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM run_ticket WHERE run_id = ? AND epoch > ?', runId, row.epoch).one().n;
+      const newer = sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM run_ticket WHERE run_id = ? AND attempt > ?', runId, row.attempt).one().n;
       return newer > 0 ? { kind: 'superseded' } : { kind: 'retired', row };
     }
     return row.expires_at <= now ? { kind: 'unknown' } : { kind: 'live', row };
@@ -1129,7 +1129,7 @@ interface RunRow extends Record<string, SqlStorageValue> {
 interface TicketRow extends Record<string, SqlStorageValue> {
   hash: string;
   /** The attempt the ticket was minted for. */
-  epoch: number;
+  attempt: number;
   expires_at: number;
   retired: number;
   report_seq: number | null;
