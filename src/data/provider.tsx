@@ -70,6 +70,7 @@ export function useLoad<T>(
 
 export const useTree = () => useLoad((s) => s.vault.tree(), (s, cb) => s.vault.subscribe(cb));
 export const usePiles = () => useLoad((s) => s.vault.piles(), (s, cb) => s.vault.subscribe(cb));
+export const usePilesListed = () => useLoad(async (s) => (await s.vault.pilesListed?.()) ?? null, (s, cb) => s.vault.subscribe(cb));
 export const useQuestions = () => useLoad((s) => s.vault.questions(), (s, cb) => s.vault.subscribe(cb));
 export const useRules = () => useLoad((s) => s.vault.rules(), (s, cb) => s.vault.subscribe(cb));
 export const useSuggestions = () => useLoad((s) => s.vault.suggestions(), (s, cb) => s.vault.subscribe(cb));

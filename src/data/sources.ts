@@ -53,6 +53,8 @@ export interface VaultSource {
   restore(path: string): Promise<void>;
   markSeen(path: string): Promise<void>;
   piles(): Promise<Pile[]>;
+  /** The piles as the folder listing alone shows them, read before `piles()` finishes reading each one; only a source with a slow `piles()` has it. */
+  pilesListed?(): Promise<Pile[]>;
   addPile(pile: NewPile): Promise<Pile>;
   removePile(id: string): Promise<void>;
   /** Changes a pile's note before a tidy-up reads it. */

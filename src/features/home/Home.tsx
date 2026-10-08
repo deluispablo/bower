@@ -6,7 +6,7 @@ import { answered } from './answer-words';
 import { startRun } from '@/features/tidy/start-run';
 import { pileName, waitingIn } from '@/data/piles';
 import { Link, useNavigate } from 'react-router';
-import { useChanges, useLoad, usePiles, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
+import { useChanges, useLoad, usePiles, usePilesListed, useQuestions, useRun, useSources, useSuggestions, useTree, useUser } from '@/data/provider';
 import type { Pile, RunState, TreeNode } from '@/data/types';
 import { displayName, nameOf, parentOf, thingName } from '@/data/tree';
 import { useUi } from '@/app/ui-store';
@@ -34,7 +34,10 @@ export function Home() {
   const name = user?.name.trim() ?? '';
   const runState = useRun();
   const { data: run } = runState;
-  const { data: piles } = usePiles();
+  // The Inbox draws from the folder listing at once; what each pile's note and filed things add fills in after it.
+  const { data: read } = usePiles();
+  const { data: listed } = usePilesListed();
+  const piles = read ?? listed ?? undefined;
   const waiting = waitingIn(piles);
   const away = replayWaiting(run);
   const stopped = stoppedUnseen(run);
@@ -52,10 +55,12 @@ export function Home() {
       <div className={s.grid}>
         <div className={s.colMain}>
           <LoadError state={runState} />
-          {away && run && <AwayCard run={run} bird={birdOn === 'away'} />}
-          {stopped && run && <StoppedCard run={run} />}
           {running && run && <RunningCard run={run} />}
           <Inbox piles={piles} waiting={waiting} bird={birdOn === 'inbox'} running={running} />
+          {/* The last tidy-up's report comes from a read of its own and fills in after the Inbox: below it, so nothing
+              under the person's finger moves when it lands (progressive rendering: each part shows when its data is there). */}
+          {stopped && run && <StoppedCard run={run} />}
+          {away && run && <AwayCard run={run} bird={birdOn === 'away'} />}
         </div>
         <div className={s.colSide}>
           <SearchField />

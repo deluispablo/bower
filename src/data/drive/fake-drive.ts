@@ -54,6 +54,12 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   /** Can change after seeding, so a folder fills at once and then answers slowly or not at all. */
   latency: number;
   offline: boolean;
+  /** How many calls have been made (for measuring what a screen asks of Drive). */
+  calls = 0;
+  /** At most this many calls wait at once, as a browser holds a few connections to one host; 0 is no limit. */
+  concurrency = 0;
+  private active = 0;
+  private queue: Array<() => void> = [];
 
   constructor(opts: FakeDriveOptions = {}) {
     this.clock = opts.clock ?? Date.now;
@@ -402,7 +408,17 @@ export class FakeDrive implements DriveApi, BinLookup, ResumableDrive {
   }
 
   private async gate(): Promise<void> {
-    if (this.latency) await new Promise((r) => setTimeout(r, this.latency * (0.6 + Math.random() * 0.8)));
+    this.calls++;
+    if (this.latency) {
+      if (this.concurrency && this.active >= this.concurrency) await new Promise<void>((r) => this.queue.push(r));
+      this.active++;
+      try {
+        await new Promise((r) => setTimeout(r, this.latency * (0.6 + Math.random() * 0.8)));
+      } finally {
+        this.active--;
+        this.queue.shift()?.();
+      }
+    }
     if (this.offline) throw driveError('offline');
     const code = this.failing;
     if (!code) return;

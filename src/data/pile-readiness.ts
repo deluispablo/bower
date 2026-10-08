@@ -307,14 +307,18 @@ async function disposedKeys(declaration: Declaration, declarationSha256: string,
   const bower = new Set(files.filter((f) => f.folder && f.name === BOWER_DIR && f.parents.includes(rootId)).map((f) => f.id));
   const piles = new Set(files.filter((f) => f.folder && f.name === PILES_NAME && f.parents.some((p) => bower.has(p))).map((f) => f.id));
   const out = new Set<string>();
-  for (const f of files) {
-    if (f.folder || !f.name.startsWith('disposition-') || !f.parents.some((p) => piles.has(p))) continue;
+  const candidates = files.filter((f) => !f.folder && f.name.startsWith('disposition-') && f.parents.some((p) => piles.has(p)));
+  // Read together, not one after the other: a score of leftovers is a score of waits on a slow Drive.
+  const results = await Promise.all(candidates.map(async (f) => {
     const key = `${f.id}@${f.modifiedTime}`;
     let parsed = cache?.get(key);
     if (!parsed) {
       parsed = await parsePileDisposition(await read(f.id), rootId);
       cache?.set(key, parsed);
     }
+    return { f, parsed };
+  }));
+  for (const { f, parsed } of results) {
     if (!parsed.ok || f.name !== `disposition-${parsed.sha256}.json`) {
       console.error(`A pile disposition was refused (${parsed.ok ? 'name' : parsed.reason}).`);
       continue;
