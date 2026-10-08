@@ -61,7 +61,7 @@ describe('what the model is shown (P4-3)', () => {
     await drive.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
     // One of Bower's hub notes, long enough to be cut; a note of Alex's own, never offered for an update.
     const garden = (await drive.createFolder(folders.Areas ?? root, 'Garden')).id;
-    const hub = serializeNote({ summary: 'Alex\'s plot.', properties: [], tags: [], currentState: [], body: 'Plot 14. '.repeat(800), timeline: [{ date: '2026-09-12', text: 'Planted garlic.', source: null }], byBower: true });
+    const hub = serializeNote({ summary: 'Alex\'s plot.', properties: [], tags: [], currentState: [], body: 'Plot 14. '.repeat(800), timeline: [{ date: '2026-09-12', text: 'Planted garlic.', source: '' }], byBower: true });
     await drive.createText(garden, 'Garden.md', hub, { by: 'bower' });
     await drive.createText(garden, 'Seeds.md', 'My own list.\n');
     const loose = async (name: string, body: string | Uint8Array, pile: string): Promise<void> => {
@@ -101,16 +101,19 @@ describe('what the model is shown (P4-3)', () => {
     expect(things.get('Broken.pdf')).toMatchObject({ text: null });
     expect(things.get('Broken.pdf')?.why).toMatch(/could not be read/);
     // Bounded per thing, and the cut is marked, never silent.
-    const first = things.get('Long notes 1.txt');
-    expect(first?.cut).toBe(30_000 - PER_THING);
-    expect(first?.text).toMatch(CUT);
-    expect(first?.text?.replace(CUT, '')).toBe('1'.repeat(PER_THING));
-    // Bounded per run: what is past the run's budget is cut too, and says so.
+    for (const n of [1, 2, 3, 4, 5]) {
+      const long = things.get(`Long notes ${n}.txt`);
+      const kept = long?.text?.replace(CUT, '') ?? '';
+      expect(kept.length).toBeLessThanOrEqual(PER_THING);
+      expect(kept).toBe(`${n}`.repeat(kept.length));
+      expect(long?.cut).toBe(30_000 - kept.length);
+      expect(long?.text).toMatch(CUT);
+      expect(Number(CUT.exec(long?.text ?? '')?.[1])).toBe(long?.cut);
+    }
+    // Bounded per run, shared out so a big thing never crowds out a small one: the small ones are whole.
     const shown = [...things.values()].reduce((n, t) => n + (t.text?.replace(CUT, '').length ?? 0), 0);
     expect(shown).toBeLessThanOrEqual(PER_RUN);
-    const last = things.get('Long notes 5.txt');
-    expect(last?.cut).toBeGreaterThan(30_000 - PER_THING);
-    expect(last?.text ?? last?.why ?? '').toMatch(/cut here|budget/);
+    expect(things.get('Long notes 5.txt')?.cut).toBeGreaterThan(30_000 - PER_THING);
     // The prompt tells the model what it was not shown.
     expect(input).toMatch(/OCR/);
 
