@@ -147,3 +147,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: fingerprint-normalised passes — round 3: two fresh fake folders through main() give the same input=; no further per-run value found on the fake
 - 2026-10-08: input-sections passes — timing line carries sections=prompt,tree,things,notes,rules (6 hex each of the normalised section), hashes only; fingerprint test now runs through main() and writes no logs
 - 2026-10-08: per-thing-ask passes — an ask names a fileId or pileId; asked things stay in the inbox with the pile words, the rest is filed; 31 refusal kinds each retried once with the reason
+- 2026-10-08: things-normalised passes — the things section's per-run value was the pileId; normalised in the fingerprint only; test asserts the timing's section hashes
