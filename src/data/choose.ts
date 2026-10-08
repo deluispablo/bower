@@ -11,6 +11,7 @@ import { DriveHttp } from './drive/drive-http';
 import type { DemoWorld } from './demo/world';
 import type { Scenario, TimeScale } from './demo/scenario';
 import { makeLiveSources, uploadAccount } from './live';
+import { BowerError } from './types';
 import { fenceDoors, leavingLetsGo } from './session';
 import type { Sources } from './sources';
 import { WorkerHttp } from './worker/worker-http';
@@ -95,5 +96,18 @@ export async function buildSources(kind: SourceKind, scenario: Scenario, scale: 
   const world = `fake:${scenario}`;
   const lease = new FakeLease({ key: leaseKey(world, await uploadAccount(ALEX.email)) });
   const worker = new FakeWorker({ drive, scenario, rootId, fresh, offline: scenario === 'offline', runs, lease });
-  return { sources: makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, uploadQueue: true, place: { world } }) };
+  const sources = makeLiveSources({ worker, drive, runningPiles: () => worker.runningPiles(), pollMs: 300, declarePiles: true, uploadQueue: true, place: { world } });
+  // The full read of the piles fails after the listing answered, until the page heals it (the test's hook).
+  if (scenario === 'inbox-read-fails') {
+    let heals = false;
+    (window as unknown as { __healInboxRead: () => void }).__healInboxRead = () => { heals = true; };
+    const vault = Object.create(sources.vault) as typeof sources.vault;
+    vault.piles = async () => {
+      if (heals) return sources.vault.piles();
+      console.error(new Error('inbox read failed (made up for this situation)'));
+      throw new BowerError('offline', 'Bower could not read your inbox. Try again.');
+    };
+    return { sources: { ...sources, vault } };
+  }
+  return { sources };
 }

@@ -271,3 +271,46 @@ describe('the tidy-up sheet and Home focus', () => {
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
   });
 });
+
+describe('a failed full read of the piles says why on Home', () => {
+  const at = Date.now();
+  const listedPile: Pile = { id: 'ready', path: 'Inbox/Ready', text: 'Ready to file', createdAt: at, items: [{ id: 'f', name: 'f.pdf', kind: 'pdf', origin: 'From this computer' }] };
+  const SAYS = 'Bower could not read your inbox. Try again.';
+
+  function failing() {
+    const base = loadingSources();
+    let heals = false;
+    const piles = vi.fn(async (): Promise<Pile[]> => {
+      if (!heals) throw new BowerError('offline', SAYS);
+      return [listedPile];
+    });
+    const doors: Record<string, unknown> = { piles, pilesListed: async () => [listedPile], uploadNotice: async () => null, questions: async () => [], changes: async () => [], suggestions: async () => [] };
+    const vault = new Proxy({}, { get: (_t, k) => (typeof k === 'string' && k in doors ? doors[k] : Reflect.get(base.vault, k)) }) as Sources['vault'];
+    useUi.setState({ tidyOpen: false });
+    render(<MemoryRouter><DataProvider sources={{ ...base, vault, runs: { ...base.runs, current: async () => null } }}><Home /><TidySheet /></DataProvider></MemoryRouter>);
+    return { piles, heal: () => { heals = true; } };
+  }
+
+  it('the Inbox says why, offers Try again, and no longer lists what it cannot vouch for', async () => {
+    const { heal } = failing();
+    const inbox = screen.getByRole('region', { name: 'Inbox' });
+    expect(await within(inbox).findByRole('alert')).toHaveTextContent(SAYS);
+    expect(within(inbox).queryByRole('link', { name: /Ready to file/ })).toBeNull();
+    expect(within(inbox).queryByRole('button', { name: /^Tidy up/ })).toBeNull();
+    expect(within(inbox).queryByText('Looking…')).toBeNull();
+    heal();
+    fireEvent.click(within(inbox).getByRole('button', { name: 'Try again' }));
+    await within(inbox).findByRole('link', { name: /Ready to file/ });
+    expect(within(inbox).queryByRole('alert')).toBeNull();
+    expect(within(inbox).getByRole('button', { name: 'Tidy up 1 thing' })).toBeVisible();
+  });
+
+  it('the tidy-up sheet leaves its busy state and says why', async () => {
+    failing();
+    useUi.getState().setTidy(true);
+    const sheet = await screen.findByRole('dialog');
+    expect(await within(sheet).findByText(SAYS)).toBeVisible();
+    expect(sheet.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(within(sheet).getByRole('button', { name: 'Try again' })).toBeVisible();
+  });
+});

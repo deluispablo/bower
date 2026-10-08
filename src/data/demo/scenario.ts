@@ -14,6 +14,7 @@ export const SCENARIOS = {
   'start-fails': 'The next tidy-up cannot start (trying again works)',
   slow: 'Everything answers slowly',
   'slow-report': 'The last tidy-up and the questions answer slowly',
+  'inbox-read-fails': 'The full read of the inbox fails after the listing (heals when the page says so)',
   offline: 'Offline',
 } as const;
 export type Scenario = keyof typeof SCENARIOS;
