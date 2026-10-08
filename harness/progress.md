@@ -117,3 +117,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: provider-contract passes — Claude runs plan no demo extras; digest cache keyed by modifiedTime; name limits (P4-2 review)
 - 2026-10-08: runner-checkpoint-cost passes — Checkpoints use the write's own checksum instead of a read-back; admission timed in parts; Claude Code install cached (TL-P4-03)
 - 2026-10-08: runner-checkpoint-cost passes — Checkpoints use the write's own checksum instead of a read-back; admission timed in parts; Claude Code install cached (TL-P4-03)
+- 2026-10-08: c04-incorporation passes — The model sees bounded extracted text (unpdf for the PDF text layer) and writes note text; the spine still builds every operation (TL-P4-03, first P4-C slice)

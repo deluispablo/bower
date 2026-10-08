@@ -362,3 +362,4 @@ provider-contract	4e6abc8dd75c6526	2026-10-08	red (fixed in f9d2c90)
 provider-contract	2dd9d85222924f03	2026-10-08	red (fixed in 37ed7d8)
 runner-checkpoint-cost	8671a6d09468572d	2026-10-08	red (fixed in b681161)
 runner-checkpoint-cost	185c66fae33f9a11	2026-10-08	known-green: Red at fcce87c (tests only, incl. the cache test): cost expected 56 to be 0 read-backs; verify renamed to the real cache test title.
+c04-incorporation	ad338974365c06b5	2026-10-08	red (fixed in 97ebefb)

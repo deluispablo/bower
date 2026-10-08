@@ -4672,7 +4672,7 @@
       "Scripted proposals pass the C04 corpus cases; recorded Claude replies on the C04 cases score green."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the model context carries bounded extracted text for each admitted thing|the C04 corpus cases score green with scripted proposals|a recorded Claude reply on a C04 case writes a note with its content\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-03 batch P4-3 (first P4-C slice)."
   }
 ]
