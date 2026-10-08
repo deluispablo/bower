@@ -269,10 +269,12 @@ describe('deploy-staging.sh', { timeout: 30_000 }, () => {
   it('the deploy scan allows the unpdf literal and still refuses a real address', () => {
     const at = checkout();
     // A bundle with only the unpdf literal should pass.
-    const withLiteral = run(at, [at.sha, ORIGIN], { DIST_TEXT: 'const obfuscated = "jm@kbswfq.pkbglt";' });
+    const literalText = 'const obfuscated = "jm@kbswfq.pkbglt";';
+    const withLiteral = run(at, [at.sha, ORIGIN], { DIST_TEXT: literalText });
     expect(withLiteral.status).toBe(0);
     // A bundle with the literal plus a real address should refuse.
-    const withBoth = run(at, [at.sha, ORIGIN], { DIST_TEXT: 'const obfuscated = "jm@kbswfq.pkbglt"; const contact = "alex@company.test";' });
+    const mixedText = 'const obfuscated = "jm@kbswfq.pkbglt"; const contact = "alex@company.test";';
+    const withBoth = run(at, [at.sha, ORIGIN], { DIST_TEXT: mixedText });
     expectRefused(withBoth, /address/i);
     expect(`${withBoth.stdout}${withBoth.stderr}`).not.toContain('alex@company.test');
   });

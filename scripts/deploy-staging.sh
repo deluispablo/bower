@@ -36,6 +36,7 @@ PRODUCTION_NAME='bower-api'
 STAGING_KV='6969d46bffdb4b1e90d068f84235fbec'
 PRODUCTION_KV='dedd167004be415cbd90c4b154b1f4e2'
 ALLOWED_ADDRESS='you@example.com'
+ALLOWED_UNPDF_LITERAL='jm@kbswfq.pkbglt'  # obfuscated literal inside the unpdf library
 ADDRESS_RE='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
 # Each wait is 10 seconds and each check at most 10 more (curl --max-time): one rerun of /health, and up to
 # 15 checks of /status, 15*10 + 14*10 = 290 seconds in the worst case, under 5 minutes.
@@ -155,7 +156,11 @@ scan() {
   shift
   # NUL-separated, so a name with a space stays one name.
   while IFS= read -r -d '' file; do
-    if grep -oaE "$ADDRESS_RE" "$file" | grep -vxqF "$ALLOWED_ADDRESS"; then hits="$hits ${file#"$ROOT"/}"; fi
+    if grep -oaE "$ADDRESS_RE" "$file" \
+       | grep -vxF "$ALLOWED_ADDRESS" \
+       | grep -vxqF "$ALLOWED_UNPDF_LITERAL"; then
+      hits="$hits ${file#"$ROOT"/}"
+    fi
   done < <(grep -rlaE --null "$ADDRESS_RE" "$@" 2>/dev/null || true)
   [ -z "$hits" ] || die "Refusing: $label holds an address other than $ALLOWED_ADDRESS (in$hits)."
   hits=$(
