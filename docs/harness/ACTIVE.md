@@ -173,3 +173,4 @@ P3-9 is closed.
 - dispatch-retry closed (7efeab1). 360/360. P4-4 close: Opus delta and the four suites.
 - P4-4 review BLOCK (dispatch-retry: the 60 s look-up fails a reporting run on a GitHub 502). Reopened (c51058d); fix round running. 359/360.
 - dispatch-retry re-closed (851b5db): sent/lost/refused; the 60 s look-up leaves a reporting run alone. 360/360. A short fix-round check is running.
+- P4-4 suites: e2e 226, e2e:fake 250, e2e:pwa 4 at 3f94717; check 3608/184/90 at eb856db (after the API-only fix). P4-4 ready to deploy.
