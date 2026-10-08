@@ -4,6 +4,7 @@ import type { Declaration } from './contracts/pile-declaration';
 import { SET_ASIDE } from './fake/fake-runner';
 import { SET_ASIDE_TEXT, declarationRecord, findLooseDeclarations, setAsideOf } from './pile-readiness';
 import { BowerError } from './types';
+import { recordStamp } from './vault/layout';
 
 describe('a set-aside pile shows its reason in the inbox', () => {
   it('in the same words as the tidy-up report', () => {
@@ -39,7 +40,7 @@ describe('a set-aside pile shows its reason in the inbox', () => {
 
 describe('loose declarations are found in .bower/piles by real parents', () => {
   const at = '2026-10-06T10:00:00.000Z';
-  const file = (id: string, name: string, parent: string, folder = false): DriveFile => ({ id, name, folder, parents: [parent], modifiedTime: at, createdTime: at });
+  const file = (id: string, name: string, parent: string, folder = false, appProperties?: Record<string, string>): DriveFile => ({ id, name, folder, parents: [parent], modifiedTime: at, createdTime: at, ...(appProperties ? { appProperties } : {}) });
   const loose = (declarationId: string, inboxId = 'INBOX_ID', size = 8): Declaration => ({
     v: 1, kind: 'pile-declaration', scope: { rootId: 'ROOT_ID' }, declarationId, pileId: `pile-${declarationId}`, createdAt: 1,
     anchor: { kind: 'loose', inboxId },
@@ -55,7 +56,7 @@ describe('loose declarations are found in .bower/piles by real parents', () => {
       const record = await declarationRecord(value, 'ROOT_ID');
       if (!record) throw new Error('refused');
       bytes.set(id, record.text);
-      files.push(file(id, record.name, parent));
+      files.push(file(id, record.name, parent, false, recordStamp(value.pileId, value.anchor.kind)));
     };
     await put('one-a', loose('one'));
     await put('one-b', loose('one'));
@@ -77,7 +78,7 @@ describe('loose declarations are found in .bower/piles by real parents', () => {
 
   it('skips a copy it cannot read, and stops only when signed out', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const files: DriveFile[] = [file('BOWER', '.bower', 'ROOT_ID', true), file('PILES', 'piles', 'BOWER', true), file('copy', `declaration-one-${'0'.repeat(64)}.json`, 'PILES')];
+    const files: DriveFile[] = [file('BOWER', '.bower', 'ROOT_ID', true), file('PILES', 'piles', 'BOWER', true), file('copy', `declaration-one-${'0'.repeat(64)}.json`, 'PILES', false, recordStamp('pile-one', 'loose'))];
     await expect(findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', async () => { throw new BowerError('offline', 'You are offline.'); })).resolves.toEqual([]);
     await expect(findLooseDeclarations(files, 'ROOT_ID', 'INBOX_ID', async () => { throw new BowerError('auth', 'Sign in again.'); })).rejects.toMatchObject({ code: 'auth' });
   });

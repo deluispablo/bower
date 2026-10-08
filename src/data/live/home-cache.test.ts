@@ -215,13 +215,17 @@ describe('Home reads only the records of the piles in the inbox (TL-P4-16 b)', (
     expect(records, `${out.calls} Drive calls, ${records.length} pile records read`).toEqual([]);
   }, 60_000);
 
-  it('records written before the stamp still count: a leftover folder is read once, in parallel, and nothing is lost', async () => {
+  it('an unstamped pile record is not read', async () => {
+    // Records with no pile id (staging test folders only) are left alone: Home shows the same piles and reads none of them.
     const plain = await slowReport({ cold: true, earlier: 0, latency: 0 });
     const expected = (await homeLoad(plain.s, plain.drive)).piles.map((p) => p.text);
     live?.dispose();
     const { drive, s } = await slowReport({ cold: true, earlier: 6, stamped: false, latency: 0 });
+    const calls = countReads(drive);
     const out = await homeLoad(s, drive);
     expect(out.piles.map((p) => p.text)).toEqual(expected);
     expect(expected).toContain('Papers from Alex');
+    const read = Object.keys(calls).filter((k) => !k.startsWith('listAll') && /\/(declaration-old-|disposition-)/.test(k));
+    expect(read, 'unstamped records read').toEqual([]);
   }, 60_000);
 });
