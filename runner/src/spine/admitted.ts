@@ -129,7 +129,7 @@ export function outsideAdmitted(m: RunManifest, took: Admitted, own: string | un
       case 'edit-text': {
         const kinds = new Set(e.changes.map((c) => c.kind));
         const rules = e.path === RULES_PATH;
-        if (rules ? kinds.has('timeline-append') : kinds.has('rules-wording')) return 'a note edit outside what the runner authors';
+        if (rules ? kinds.has('timeline-append') || kinds.has('state-rewrite') : kinds.has('rules-wording')) return 'a note edit outside what the runner authors';
         break;
       }
       case 'create-folder':

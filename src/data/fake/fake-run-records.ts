@@ -13,7 +13,7 @@ import type { DriveFile } from '../drive/drive-api';
 import type { StoredEvidence } from '../drive/fake-drive';
 import type { EffectEvidence } from '../contracts/run-checkpoint';
 import type { Effect, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
-import { savedLinkKey } from '../contracts/note-edit';
+import { STATE_UPDATED, savedLinkKey } from '../contracts/note-edit';
 import { displayName, join, nameOf, parentOf, thingName } from '../tree';
 import { PARA_ROOTS, type Question } from '../types';
 import { sha256 } from '../vault/hashes';
@@ -209,7 +209,10 @@ export function grounded(manifest: RunManifest): boolean {
     const [id, ...more] = c.requires;
     const edit = id === undefined ? undefined : ops.get(id)?.effect;
     if (!row || rest.length || more.length || id === undefined || edit?.kind !== 'edit-text' || edit.path !== row.path || updated.has(id)) return false;
-    if (!edit.changes.some((change) => change.kind === 'timeline-append' && change.entries.some((entry) => entry.text === row.what))) return false;
+    // Its row says one of its Timeline lines, or (C05) that its Current state was brought up to date.
+    const says = edit.changes.some((change) => (change.kind === 'timeline-append' && change.entries.some((entry) => entry.text === row.what))
+      || (change.kind === 'state-rewrite' && row.what === STATE_UPDATED));
+    if (!says) return false;
     updated.add(id);
     return true;
   };

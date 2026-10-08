@@ -3,7 +3,7 @@
  * what in a note"):
  *
  *   ---
- *   summary: one line          status, tags: [a, b], by: bower, original, bower_source
+ *   summary: one line          status, tags: [a, b], by: bower, original, bower_source, bower_state
  *   <key>: <value>             one per property, in order; [[X]] links to X
  *   ---
  *   ## Current state           Bower's, read-only in the app
@@ -24,7 +24,7 @@ import { TASK_LINE } from './tasks';
 import { parseOwnership, togglePersonalTask, type ByteSpan } from './ownership-format';
 
 /** Frontmatter keys that are not properties. */
-export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source'] as const;
+export const BOWER_KEYS = ['summary', 'status', 'tags', 'by', 'original', 'bower_source', 'bower_state'] as const;
 
 const LABELS: Record<string, string> = { next: 'Next due' };
 const CURRENT = '## Current state';

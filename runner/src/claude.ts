@@ -42,7 +42,7 @@ import { PILE_NOTE } from '../../src/data/piles';
 import type { Admitted, RunProvider } from '../../src/data/spine/provider';
 import type { ScriptedRead } from '../../src/data/spine/read';
 import { canonical, type RunManifest } from '../../src/data/spine/records';
-import { planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type Filing, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
+import { planScripted, runKeys, type Ask, type AuthoredLine, type AuthoredNote, type AuthoredState, type Filing, type Placement, type ScriptedRun } from '../../src/data/spine/scripted';
 import { MAX_NAME } from '../../src/data/contracts/tree';
 import { BowerError, PARA_ROOTS } from '../../src/data/types';
 import { SYSTEM } from '../../src/data/vault/layout';
@@ -151,7 +151,7 @@ export function claudeArgs(model: string, maxTurns: number): string[] {
  */
 export const CONTEXT_BOUNDS = { perThing: 12_000, perRun: 48_000, perNote: 4_000, notes: 12, notesPerRun: 24_000 } as const;
 /** What the model may write: a note's summary and body, a Timeline line, and how many lines one reply may add. */
-const AUTHORED = { summary: 200, body: 8_000, line: 200, lines: 20 } as const;
+const AUTHORED = { summary: 200, body: 8_000, line: 200, lines: 20, stateLines: 8 } as const;
 /** A question's bounds: its text and each answer, one short line with no link (TL-P4-08 point 1). */
 const ASK = { text: 200, answer: 40 } as const;
 const CUT = (left: number): string => `\n[cut here: ${left} more characters not shown]`;
@@ -221,6 +221,7 @@ function promptInstructions(): string {
     '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
     ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
     ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId>"}],',
+    ' "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing\'s fileId>"}],',
     ' "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}]}',
     `Every key but "things" is optional. A folder path starts with one of ${MAIN_FOLDERS.join(', ')}. A thing keeps its extension`,
     '(a saved link may become a ".md" note). "rules" below are the person\'s rules and win; a list that ends "[cut here: ..." goes on.',
@@ -252,10 +253,14 @@ function promptInstructions(): string {
     '  (the note named as its folder, or its project\'s or area\'s note) when there is one, and 1 to 5 related notes below,',
     '  as [[links]].',
     `- "lines" (optional): at most ${AUTHORED.lines} Timeline lines, each at most ${AUTHORED.line} characters with no link, only on the notes`,
-    '  below; "cites" names a thing you file, and Bower links it as the source. A note\'s Current state is Bower\'s to rewrite;',
-    '  its Timeline only grows. Look in each thing for what it changes in a note below,',
-    '  a status, a date, a deadline or an amount, and add a line to that note too. When a thing disagrees with a note,',
-    '  never change it silently: the line gives both figures, the note\'s and the thing\'s, and cites the thing.',
+    '  below; "cites" names a thing you file, and Bower links it as the source. A note\'s Timeline only grows. Look in each',
+    '  thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.',
+    '  When a thing disagrees with a note, never change it silently: the line gives both figures, the note\'s and the',
+    '  thing\'s, and cites the thing.',
+    `- "states" (optional): a note's whole "## Current state" as it should read now, at most ${AUTHORED.stateLines} lines of at most`,
+    `  ${AUTHORED.line} characters with no link, only for a note below whose state the thing changes (a status, a count, a date),`,
+    '  at most one per note, citing the thing; add a Timeline line saying what changed too. Bower rewrites it only if the',
+    '  person has not edited it; otherwise it asks them.',
     '- Every summary, line and question is one short plain line, the outcome first.',
     '- Names: every "name" says what the thing is, in plain words. A name made with underscores (Offer_letter_final), a copy',
     '  number such as "(2)", "final" ending a name, or a camera or scanner id (IMG_1234, DSC_0012, scan0001) says nothing: replace it',
@@ -455,6 +460,11 @@ export const REFUSALS = {
   lineText: 'a Timeline line that is not one short line',
   lineCites: 'a line citing a thing it does not file',
   noNote: 'a thing with text and no note',
+  stateKeys: 'a state with keys outside the intent',
+  stateNote: 'a state for a note it was not shown',
+  stateTwice: 'two states for one note',
+  stateText: 'a state that is not 1 to 8 short lines',
+  stateCites: 'a state citing a thing it does not file',
   askKeys: 'a question with keys outside the intent: give it a "fileId" or a "pileId", not both',
   askNotAdmitted: 'a question about a thing or pile it was not admitted to take',
   askTwice: 'a thing or pile asked about twice',
@@ -613,9 +623,9 @@ const RESPONSIBILITY_MAX = 60;
 
 export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
   const { notes } = seen;
-  if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines', 'asks']) || value.kind !== 'tidy-intent' || value.v !== 1) return no('notIntent');
-  const { things, notes: worded = [], lines = [], asks = [] } = value;
-  if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines) || !Array.isArray(asks)) return no('notIntent');
+  if (!exactly(value, ['kind', 'v', 'things'], ['notes', 'lines', 'asks', 'states']) || value.kind !== 'tidy-intent' || value.v !== 1) return no('notIntent');
+  const { things, notes: worded = [], lines = [], asks = [], states = [] } = value;
+  if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines) || !Array.isArray(asks) || !Array.isArray(states)) return no('notIntent');
   const piles = new Map(took.taken.piles.map((p) => [p.pileId, p]));
   const admitted = new Map(took.taken.piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
   const areas = new Map<string, string>();
@@ -677,6 +687,21 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     if (bad) return no('numbers', bad.replace('{where}', 'the Timeline line on'));
     timeline.push({ path: l.note, text: l.text.trim(), cites: typeof l.cites === 'string' ? l.cites : null });
   }
+  // A note's Current state as it should read now (C05): only on a note it was shown, one per note; Bower decides
+  // whether it may rewrite it (only while the person has not edited it), never the model.
+  const current: AuthoredState[] = [];
+  for (const st of states as unknown[]) {
+    if (!exactly(st, ['note', 'lines'], ['cites'])) return no('stateKeys');
+    if (typeof st.note !== 'string' || !notes.has(st.note)) return no('stateNote');
+    if (current.some((x) => x.path === st.note)) return no('stateTwice');
+    const stateLines = st.lines;
+    if (!Array.isArray(stateLines) || !stateLines.length || stateLines.length > AUTHORED.stateLines
+      || !stateLines.every((x: unknown) => lineOk(x, AUTHORED.line) && !/\[\[|\]\]|·|\]\(/.test(x) && !new RegExp(WEB.source, 'i').test(x))) return no('stateText');
+    if ('cites' in st && (typeof st.cites !== 'string' || !placed.has(st.cites))) return no('stateCites');
+    const bad = grounded(typeof st.cites === 'string' ? st.cites : undefined, stateLines as string[]);
+    if (bad) return no('numbers', bad.replace('{where}', 'the Current state of'));
+    current.push({ path: st.note, lines: (stateLines as string[]).map((x) => x.trim()), cites: typeof st.cites === 'string' ? st.cites : null });
+  }
   // A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (TL-P4-08 addendum 2).
   const cited = new Set(timeline.flatMap((l) => (l.cites === null ? [] : [l.cites])));
   for (const [id, place] of placed) {
@@ -713,7 +738,7 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     const why = bodyLinks(n.body, seen.texts?.get(id) ?? '', named);
     if (why) return no(why);
   }
-  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, areas, asks: asked, thingAsks: askedThings } };
+  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, states: current, areas, asks: asked, thingAsks: askedThings } };
 }
 
 /** The runner's environment cut down to the allow-list, with a home of the run's own. */

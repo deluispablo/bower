@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { applyChanges, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, timelineDate } from '../contracts/note-edit';
+import { STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -108,6 +108,17 @@ export interface AuthoredLine {
 }
 
 /**
+ * A note's Current state as a model would write it now (C05, TL-P4-08 addendum 1 point 1), for a note it was shown,
+ * citing a thing this run files, or none. Bower rewrites only a Current state it still owns; one the person edited
+ * gets these lines as a Timeline line and a question instead.
+ */
+export interface AuthoredState {
+  path: string;
+  lines: string[];
+  cites: string | null;
+}
+
+/**
  * A model's intent, by what it was admitted to take: a thing by its file id, a pile of words by its pile id; and
  * (P4-3) a thing's own note and Timeline lines. The plan authors every note's front matter and Bower's sections, and
  * `applyChanges` alone adds a line, on Bower's notes only.
@@ -117,6 +128,8 @@ export interface Filing {
   words(pileId: string): Placement | null;
   note?(fileId: string): AuthoredNote | null;
   lines?: readonly AuthoredLine[];
+  /** Current states to bring up to date (C05), at most one per note. */
+  states?: readonly AuthoredState[];
   /** A new Area's path and the ongoing responsibility it is for; the report says it beside the made folder. */
   areas?: ReadonlyMap<string, string>;
   /** Piles it could not place without guessing, by pile id, each with its question: they stay in the inbox (TL-P4-08). */
@@ -482,7 +495,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const want = (f: DriveFile, path: string): Wanted => {
     const had = wanted.get(f.id);
     if (had) return had;
-    const made: Wanted = { file: f, path, lines: [], renames: null, rules: null };
+    const made: Wanted = { file: f, path, lines: [], renames: null, rules: null, state: null };
     wanted.set(f.id, made);
     return made;
   };
@@ -514,6 +527,16 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     want(f, l.path).lines.push(line);
     if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
   }
+  // A model's Current states (C05): planned below on the bytes read, only where Bower still owns the section.
+  for (const st of all && date ? (opts.filing?.states ?? []) : []) {
+    const f = ix.file(st.path);
+    if (!f || f.folder) continue;
+    const thing = st.cites === null ? undefined : things.find((t) => t.file.id === st.cites && !t.merge);
+    const asked = thing ? (opts.filing?.note?.(thing.file.id)?.name ?? opts.filing?.thing(thing.file.id)?.name) : undefined;
+    want(f, st.path).state = { lines: st.lines, source: asked === undefined ? null : citeName(asked), thing: asked === undefined ? null : (thing?.file.id ?? null) };
+  }
+  /** Current states the person edited: what Bower would write goes on the Timeline as a line, and they are asked. */
+  const personStates: Array<{ line: WantedLine; file: DriveFile; path: string }> = [];
   // A merge's line, by its answer (R3-4): only into a note in a main folder, never the inbox or Bower's own files.
   for (const thing of things) {
     const m = thing.merge;
@@ -582,7 +605,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const lineState = new Map<WantedLine, LineState>();
   /** A line wanted twice in one note (the same words): written once, and it goes as its twin goes. */
   const twins = new Map<WantedLine, WantedLine>();
-  const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[]; rules: RulesWording | null }> = [];
+  const candidates: Array<{ file: DriveFile; path: string; before: VerifiedContent; bytes: Uint8Array; rewrite: boolean; lines: WantedLine[]; rules: RulesWording | null; state: StateRewrite | null; stateAfter: string | null }> = [];
   const editing = [...wanted.values()].sort((a, b) => byCodePoint(a.path, b.path));
   // What the next loops read, one after the other: the notes to edit, and the saved links being filed.
   drive.warm?.([...editing.map((w) => ({ id: w.file.id, as: 'bytes' as const })), ...things.filter((t) => t.item.kind === 'link').map((t) => ({ id: t.file.id, as: 'text' as const }))]);
@@ -620,6 +643,25 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
         holdRenames = true;
       }
     }
+    // A Current state (C05): rewritten only while it is Bower's (as Bower last wrote it, by its mark); one the person
+    // edited since is never rewritten: what Bower would write becomes a Timeline line, and the person is asked.
+    let state: StateRewrite | null = null;
+    if (w.state) {
+      const now = currentStateOf(bytes);
+      if (now?.owner === 'bower' && now.lines.join('\n') !== w.state.lines.join('\n')) {
+        const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines };
+        const result = applyChanges(bytes, [change]);
+        if (result.ok) state = change;
+        else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
+      } else if (now?.owner === 'person') {
+        const text = `Bower's current state would now read: ${w.state.lines.join('; ')}`.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '');
+        const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
+        w.lines.push(line);
+        lineState.set(line, 'refused');
+        personStates.push({ line, file: f, path: w.path });
+        if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
+      }
+    }
     // Each line on its own: one already there (from any day) is dropped; a person's note takes none.
     const lines: WantedLine[] = [];
     // A hub line with nothing to cite is there already when its words are, with or without a source (C06).
@@ -655,7 +697,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       } else if (!result.ok && result.reason === 'unchanged') rulesState = 'present';
       else console.error(`${RULES_PATH} was refused for wording (${result.ok ? 'count' : result.reason})`);
     }
-    if (rewrite || lines.length || rules) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules });
+    if (rewrite || lines.length || rules || state) candidates.push({ file: f, path: w.path, before, bytes, rewrite, lines, rules, state, stateAfter: state ? (w.state?.thing ?? null) : null });
   }
   // At most editCap edits, in path order; the rest wait for the next run, which plans them again. Their rename lines
   // stay unarchived meanwhile (TL-P2-29 (1)).
@@ -666,7 +708,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     ? [{ kind: 'timeline-append', recordIds: [...new Set([...lines, ...[...twins].filter(([, t]) => lines.includes(t)).map(([l]) => l)].flatMap((l) => (l.record === null ? [] : [l.record])))], entries: lines.map((l) => l.entry) }]
     : []);
   const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
-    [...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...appendOf(c.lines), ...(c.rules ? [c.rules] : [])];
+    [...(c.state ? [c.state] : []), ...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds, renames }] : []), ...appendOf(c.lines), ...(c.rules ? [c.rules] : [])];
   const authored = candidates.slice(0, editCap).flatMap((c) => {
     const result = applyChanges(c.bytes, changesOf(c, []));
     if (result.ok) return [{ c, text: result.text }];
@@ -679,12 +721,18 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   for (const { c, text } of authored) {
     for (const l of c.lines) lineState.set(l, 'planned');
     if (c.rules) rulesState = 'planned';
-    const what = c.lines.find((l) => l.what !== null)?.what ?? null;
-    const after = [...new Set(c.lines.flatMap((l) => (l.after === null ? [] : [l.after])))];
+    const what = c.lines.find((l) => l.what !== null)?.what ?? (c.state ? STATE_UPDATED : null);
+    const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after });
     places.set(c.file.id, c.file);
   }
   for (const [l, twin] of twins) lineState.set(l, lineState.get(twin) ?? 'refused');
+  // A Current state the person edited is asked about once its line is there (C11 asks flow), never rewritten.
+  for (const p of personStates) {
+    const kept = lineState.get(p.line);
+    if (kept !== 'planned' && kept !== 'present') continue;
+    askedPiles.push({ id: `q-state-${p.file.id}`, text: `You changed the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?`, yes: 'Write it', no: 'Keep mine', about: p.path, askedAt: opts.requestedAt });
+  }
   /** A merge's line, when its note is one a line can go to at all. */
   const lineOf = (m: Merge): WantedLine | undefined => wanted.get(ix.idOf(m.into) ?? '')?.lines.find((l) => l.record === m.answer && l.entry.text === m.line);
   const stateOf = (m: Merge | null): LineState | undefined => {
@@ -897,7 +945,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   }
   // A run that only asks, about piles asked about already, has nothing new to do: nothing was ready yet.
   // A Timeline line the model added on a note is something to do, so a run with one is not "nothing ready".
-  if (all && !capturedPiles.length && !journal.length && questionsText === null && ![...wanted.values()].some((w) => w.lines.length)) {
+  if (all && !capturedPiles.length && !journal.length && questionsText === null && ![...wanted.values()].some((w) => w.lines.length || w.state)) {
     if (opts.taken) return nothingReadyPlan(rootId, opts);
     throw new BowerError('conflict', NOTHING_READY);
   }
@@ -1496,7 +1544,10 @@ function generatedName(title: string): string {
  */
 type WantedLine = { entry: EditEntry; record: string | null; what: string | null; after: string | null };
 /** What a run wants to change in one note, before applyChanges decides what it may. */
-type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null; rules: RulesWording | null };
+type Wanted = { file: DriveFile; path: string; lines: WantedLine[]; renames: Rename[] | null; rules: RulesWording | null; state: WantedState | null };
+/** A Current state a model wrote for a note (C05): its lines, the name it cites and the thing whose move it waits for. */
+type WantedState = { lines: string[]; source: string | null; thing: string | null };
+type StateRewrite = Extract<Change, { kind: 'state-rewrite' }>;
 /** A thing joining a note you said yes to keeping (MERGES), with the answer that says so. */
 type Merge = { into: string; title: string; line: string; answer: string };
 /** Where a wanted Timeline line ended up at plan time. */
