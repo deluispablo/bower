@@ -175,3 +175,4 @@ P3-9 is closed.
 - dispatch-retry re-closed (851b5db): sent/lost/refused; the 60 s look-up leaves a reporting run alone. 360/360. A short fix-round check is running.
 - P4-4 suites: e2e 226, e2e:fake 250, e2e:pwa 4 at 3f94717; check 3608/184/90 at eb856db (after the API-only fix). P4-4 ready to deploy.
 - Staging c76fd2f: scripted run press to done 1:23, press to job 11 s (was 25–31); checkpoints still about 2 s each (the cost is the Drive write). P4-5 running: deploy-scan-extracted-token (mechanical) and runner-stops-when-gone (escalated), at 22a48a6. 360/362. Waiting for the lead to switch claude on for 3 C04 runs.
+- C04 comparison on c76fd2f: 3/3 PASS, from fresh folders. Press to done 1:35, 1:17, 1:28; model 3–4 s, 1 turn. P4-5 closed: deploy-scan-extracted-token (22e2e2c), runner-stops-when-gone (5632d95). 362/362. P4-5 Opus delta and suites running.
