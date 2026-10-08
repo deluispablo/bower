@@ -148,7 +148,8 @@ export function landedSummary(r: RunState): string {
   const rest = all.slice(2);
   if (rest.length === 1) parts.push(`${rest[0]?.[0]} got ${rest[0]?.[1]}`);
   else if (rest.length > 1) parts.push(`${rest.length} other folders got the rest`);
-  return parts.length ? `${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : '';
+  const said = (r.report?.filed ?? []).flatMap((f) => (f.area ? [`${f.area}.`] : []));
+  return parts.length ? [`${parts.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`, ...said].join(' ') : '';
 }
 
 /** The footer's line when nothing is running or waiting to be seen; `waiting` is undefined while the inbox loads. */

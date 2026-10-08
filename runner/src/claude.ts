@@ -187,8 +187,8 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'You plan one Bower tidy-up. You have no tools: never try to read, write or run anything.',
     'Reply with one JSON object and nothing else, of exactly this shape:',
     '{"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing\'s fileId>","to":"<folder path>","name":"<new name>",',
-    '  "basis":"<a rule line or the path of a note below>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
-    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>"}],',
+    '  "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],',
+    ' "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],',
     ' "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing\'s fileId>"}]}',
     `A folder path starts with one of ${MAIN_FOLDERS.join(', ')}; missing folders are made. A thing keeps its extension`,
     '(a saved link may become a ".md" note). A thing left out stays in the inbox with its whole pile.',
@@ -199,8 +199,9 @@ function prepared(run: ScriptedRun, took: Admitted, shown: Shown): string {
     'material (one folder per topic), Archive what is no longer active. A thing that fits no folder below, and is neither a',
     'goal nor an ongoing responsibility, goes to Resources.',
     '"basis" (optional) is one line copied from "rules" below, or the path of a note below, that shows an ongoing responsibility',
-    'or a goal. A NEW folder under Areas or Projects needs one; without it Bower refuses the reply, so use Resources instead.',
-    'A folder below needs none.',
+    'or a goal. A NEW folder under Projects needs one. A NEW folder under Areas needs one, or "responsibility" instead: one short',
+    'phrase (at most 60 characters) naming the ongoing responsibility it is for, such as "pay and tax records". Without one',
+    'Bower refuses the reply, so use Resources instead. A folder below needs none. A "rules" list that ends "[cut here: ..." goes on.',
     `"note" is optional: a note beside the thing, saying what it says. Use only facts from its text; invent none.`,
     `Its summary is at most ${AUTHORED.summary} characters, its body at most ${AUTHORED.body}, with no front matter and`,
     'no "## Current state", "## Timeline" or "## Bower\'s note" heading: Bower writes those. A saved link filed as a note takes none.',
@@ -279,7 +280,10 @@ async function shownOf(read: ScriptedRead, run: ScriptedRun, took: Admitted): Pr
     return path === undefined ? [] : [path, f.name];
   }));
   const rulesFile = listing.find((f) => !f.folder && f.name === 'Rules.md' && f.parents.includes(run.rootId));
-  const rules = rulesFile ? bounded(await read.readText(rulesFile.id), CONTEXT_BOUNDS.perNote).text : null;
+  // A cut list says so in words about the rules, so the model never takes part of the list for all of it (TL-P4-07 addendum 3).
+  const rules = rulesFile
+    ? bounded(await read.readText(rulesFile.id), CONTEXT_BOUNDS.perNote).text?.replace(/\[cut here: (\d+) more characters not shown\]$/, '[cut here: $1 more characters of the rules not shown; the list may go on]') ?? null
+    : null;
   return { own: ix.file(SYSTEM.dir)?.id, piles, notes: await notesShown(read, listing, ix), folders, names, ...(rules ? { rules } : {}) };
 }
 
@@ -399,12 +403,27 @@ function bodyLinks(body: string, ownText: string, named: (target: string) => boo
  * folder, or a new direct subfolder of" the PARA folders, `vault-template/CLAUDE.md:232`; Areas hold an ongoing
  * responsibility, `:34-37`) and never checked it, so this check is new here. `basis` is a note path or a rule line it was shown.
  */
-function newPlace(to: string, basis: unknown, seen: Seen): string | null {
+function newPlace(to: string, basis: unknown, responsibility: unknown, seen: Seen, areas: Map<string, string>): string | null {
   const [root = ''] = to.split('/');
   if (!seen.folders || !['Areas', 'Projects'].includes(root) || to === root || seen.folders.has(to)) return null;
   if (typeof basis === 'string' && (seen.notes.has(basis) || (basis.trim().length >= 12 && (seen.rules ?? '').includes(basis.trim())))) return null;
-  return `a new folder "${to}" under ${root} with no rule line or note of an ongoing responsibility or goal cited in "basis"; file it in an existing folder or in Resources`;
+  // An Area is an ongoing responsibility (the original's definition): one short phrase naming it is enough, and the report
+  // shows it. A Project has a goal the person stated, so it needs a rule line or a note.
+  if (root === 'Areas' && lineOk(responsibility, RESPONSIBILITY_MAX) && !/[[\]]/.test(responsibility)) {
+    const parts = to.split('/');
+    let area = parts[0] ?? root;
+    for (const part of parts.slice(1)) {
+      area = `${area}/${part}`;
+      if (!seen.folders.has(area)) break;
+    }
+    if (!areas.has(area)) areas.set(area, responsibility.trim());
+    return null;
+  }
+  return `a new folder "${to}" under ${root} with no rule line or note cited in "basis"${root === 'Areas' ? ' and no "responsibility" (one short phrase naming the ongoing responsibility)' : ''}; file it in an existing folder or in Resources`;
 }
+
+/** The longest responsibility phrase a model may give for a new Area. */
+const RESPONSIBILITY_MAX = 60;
 
 export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: new Set() }): Intent {
   const { notes } = seen;
@@ -413,17 +432,18 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
   if (!Array.isArray(things) || !Array.isArray(worded) || !Array.isArray(lines)) return { ok: false, why: 'a reply that is not a tidy-up intent' };
   const piles = new Map(took.taken.piles.map((p) => [p.pileId, p]));
   const admitted = new Map(took.taken.piles.flatMap((p) => thingsOf(p).map((i) => [i.fileId, { pileId: p.pileId, name: i.name }] as const)));
+  const areas = new Map<string, string>();
   const placed = new Map<string, Placement>();
   const authored = new Map<string, AuthoredNote>();
   for (const t of things as unknown[]) {
-    if (!exactly(t, ['fileId', 'to', 'name'], ['note', 'basis'])) return { ok: false, why: 'a thing with keys outside the intent' };
+    if (!exactly(t, ['fileId', 'to', 'name'], ['note', 'basis', 'responsibility'])) return { ok: false, why: 'a thing with keys outside the intent' };
     const thing = typeof t.fileId === 'string' ? admitted.get(t.fileId) : undefined;
     if (!thing || typeof t.fileId !== 'string') return { ok: false, why: 'a thing it was not admitted to take' };
     if (placed.has(t.fileId)) return { ok: false, why: 'a thing placed twice' };
     if (!placeOk(t.to)) return { ok: false, why: 'a place outside the main folders' };
     const was = extensionOf(thing.name);
     if (!nameOk(t.name) || !(extensionOf(t.name) === was || (was === '.url' && extensionOf(t.name) === '.md'))) return { ok: false, why: 'a name that changes what a thing is' };
-    const fresh = newPlace(t.to, t.basis, seen);
+    const fresh = newPlace(t.to, t.basis, t.responsibility, seen, areas);
     if (fresh) return { ok: false, why: fresh, placement: true };
     placed.set(t.fileId, { to: t.to, name: t.name });
     if ('note' in t) {
@@ -436,12 +456,12 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
   }
   const words = new Map<string, Placement>();
   for (const n of worded as unknown[]) {
-    if (!exactly(n, ['pileId', 'to', 'name'], ['basis'])) return { ok: false, why: 'a note with keys outside the intent' };
+    if (!exactly(n, ['pileId', 'to', 'name'], ['basis', 'responsibility'])) return { ok: false, why: 'a note with keys outside the intent' };
     if (typeof n.pileId !== 'string' || !piles.has(n.pileId)) return { ok: false, why: 'a pile it was not admitted to take' };
     if (words.has(n.pileId)) return { ok: false, why: 'a pile placed twice' };
     if (!placeOk(n.to)) return { ok: false, why: 'a place outside the main folders' };
     if (!nameOk(n.name) || extensionOf(n.name) !== '.md') return { ok: false, why: 'a note name that is not a note' };
-    const fresh = newPlace(n.to, n.basis, seen);
+    const fresh = newPlace(n.to, n.basis, n.responsibility, seen, areas);
     if (fresh) return { ok: false, why: fresh, placement: true };
     words.set(n.pileId, { to: n.to, name: n.name });
   }
@@ -462,7 +482,7 @@ export function intentOf(value: unknown, took: Admitted, seen: Seen = { notes: n
     const why = bodyLinks(n.body, seen.texts?.get(id) ?? '', named);
     if (why) return { ok: false, why };
   }
-  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline } };
+  return { ok: true, held, filing: { thing: (id) => placed.get(id) ?? null, words: (id) => words.get(id) ?? null, note: (id) => authored.get(id) ?? null, lines: timeline, areas } };
 }
 
 /** The runner's environment cut down to the allow-list, with a home of the run's own. */

@@ -134,7 +134,7 @@ export function sameView(a: string | null, b: string | null): boolean {
  */
 export function fixedReport(r: RunReport): RunReport {
   const out: RunReport = {
-    filed: r.filed.map((f) => ({ name: f.name, title: f.title, kind: f.kind, to: f.to, ...(f.note !== undefined ? { note: f.note } : {}) })),
+    filed: r.filed.map((f) => ({ name: f.name, title: f.title, kind: f.kind, to: f.to, ...(f.note !== undefined ? { note: f.note } : {}), ...(f.area !== undefined ? { area: f.area } : {}) })),
     created: r.created.map((c) => ({ path: c.path, what: c.what })),
     updated: r.updated.map((u) => ({ path: u.path, what: u.what })),
     setAside: r.setAside.map((a) => ({ name: a.name, why: a.why })),

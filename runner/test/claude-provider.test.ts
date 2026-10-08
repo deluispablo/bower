@@ -180,7 +180,7 @@ describe('the Claude provider', () => {
     expect(listing.filter((f) => f.folder && f.name === 'Finance')).toHaveLength(1);
     const last = listing.find((f) => f.name === 'last-run.json');
     const report = JSON.parse(await wire.drive.readText(last?.id ?? '')) as unknown;
-    expect(JSON.stringify(report)).toContain('New area Finance, for pay and tax records');
+    expect(JSON.stringify(report)).toContain('"area":"New area Finance, for pay and tax records"');
   });
 
   it('a responsibility does not open a new Project', async () => {
