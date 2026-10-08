@@ -385,3 +385,4 @@ drive-calls-golden	45ea64ac3ed13fc8	2026-10-08	known-green: test-only golden: pe
 fingerprint-normalised	7ddcd4b6960f3b2c	2026-10-08	known-green: red by hand at 266c99c: AssertionError expected '5a744ad98d87' to be 'cca0d4ea1520' (the fix adds runner/src/model-input.ts, so a revert cannot load)
 placement-check	49d783ac53a04c27	2026-10-08	red (fixed in 5092e03)
 second-brain-method	e2a139cc54f1206e	2026-10-08	red (fixed in 4ce0c68)
+ask-not-repeated	8e4c186140cdd1a3	2026-10-08	known-green: already held before the test (c8b6145, test only): the planner dedupes q-ask-<pileId>; the second run's different wording is kept out of questions.json and the report

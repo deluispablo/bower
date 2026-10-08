@@ -4918,7 +4918,7 @@
     "note": "TL-P4-08 (main f296674). Method only, never vault content. Runs after placement-check (both edit the prompt)."
   },
   {
-    "passes": false,
+    "passes": true,
     "id": "ask-not-repeated",
     "task": "p4-c",
     "category": "fix",

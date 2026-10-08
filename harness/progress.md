@@ -140,3 +140,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: fingerprint-normalised passes — input= hashes the normalised model input (shared with the golden), so fresh-id runs of the same case match
 - 2026-10-08: placement-check passes — fix round: a new Area carries a responsibility phrase shown in the report (New area Money, for pay and tax records); Projects need a rule or note; a cut Rules.md says so; corpus untouched
 - 2026-10-08: second-brain-method passes — instructions follow TL-P4-08 points 1-8 (fit, create, ask; value gate; kinds table; budget); new op asks leaves an ambiguous thing in the inbox with a question; 2 rubrics changed and logged
+- 2026-10-08: ask-not-repeated passes — a second run over an asked thing keeps one open question (q-ask-<pileId>, deduped by the planner); the thing stays byte-identical in the inbox
