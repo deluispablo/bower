@@ -52,7 +52,7 @@ describe('one open question per thing (TL-P4-11 addendum)', () => {
   it('a thing that leaves the inbox closes its question', async () => {
     const c = await offerAndFlat();
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const first = await runWithClaude({ ...c, inbox: [photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
+    const first = await runWithClaude({ ...c, inbox: [otherPile, photoPile] }, asking('Is the kitchen photo from the Wrenfield Road viewing?'));
     expect(openOf(first.after)).toHaveLength(1);
     // The photo is binned (it is not in the inbox any more); something else is tidied.
     const second = await runWithClaude({ ...c, inbox: [otherPile], questions: openOf(first.after) as never }, answering(() => ({ kind: 'tidy-intent', v: 1, things: [] })));
