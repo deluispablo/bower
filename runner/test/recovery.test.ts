@@ -341,6 +341,26 @@ describe('recovery without the browser', () => {
     expect(wire.tokenCalls).toBe(2);
   });
 
+  it('a run whose Drive token Google revoked ends failed once the token route answers gone', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    const writes = (): number => w.wire.requests.filter((r) => r.url.origin !== API && r.method !== 'GET').length;
+    // Google access is revoked right after the run made its first folder, with no browser open: Drive answers 401 to
+    // the kept token, and the token route that finds the refresh token refused answers 410 gone.
+    let at = -1;
+    const end = await tidy(w, 1, {
+      applied: (call) => {
+        if (at >= 0 || !madeFolder(call)) return;
+        w.wire.revoked = true;
+        at = writes();
+      },
+    });
+    expect(at).toBeGreaterThan(0);
+    expect(writes()).toBe(at);
+    expect(end).toEqual({ phase: 'failed', why: GONE_SENTENCE });
+    expect(w.wire.statuses.at(-1)).toMatchObject({ phase: 'failed', failure: GONE_SENTENCE });
+  });
+
   it('a run killed after any checkpoint ends like an uninterrupted run', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { end: expected, chain, sends } = await uninterrupted();

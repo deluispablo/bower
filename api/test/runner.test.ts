@@ -103,19 +103,46 @@ describe('runner wire', () => {
     expect(JSON.stringify(rows)).not.toContain(runner.ticket);
   });
 
-  it('a runner token call with an unreadable refresh token is signed out and retires the sessions', async () => {
-    const { sub, runner } = await aRun();
-    const p = person(sub);
-    // No cached Drive token, and the kept refresh token cannot be read (TOKEN_ENC_KEY rotated).
+  it('the token request that finds access revoked or unreadable answers gone', async () => {
+    // Unreadable: no cached Drive token, and the kept refresh token cannot be read (TOKEN_ENC_KEY rotated).
+    const unreadable = await aRun();
+    const p = person(unreadable.sub);
     const oldKey = await importEncryptionKey(btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))));
     await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: await encrypt('test-refresh-token', oldKey) });
     await p.cacheDriveToken({ accessToken: 'access-old', expiresAt: Date.now() - HOUR });
     const before = (await p.account())?.generation ?? -1;
-    const r = await runner.token();
-    expect(r.status).toBe(401);
-    expect(await code(r)).toBe('signed-out');
+    const r = await unreadable.runner.token();
+    expect(r.status).toBe(410);
+    expect(await code(r)).toBe('gone');
+    // Access is forgotten and the sessions retired, as for the app's own token route.
     expect((await p.account())?.generation).toBe(before + 1);
     expect(await p.encryptedRefreshToken()).toBeNull();
+
+    // Revoked: Google refuses the kept refresh token (`invalid_grant`).
+    const revoked = await aRun();
+    const q = person(revoked.sub);
+    await q.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: await encrypt('test-refresh-token', await importEncryptionKey(env.TOKEN_ENC_KEY)) });
+    await q.cacheDriveToken({ accessToken: 'access-old', expiresAt: Date.now() - HOUR });
+    const fetchImpl: typeof fetch = async () => Response.json({ error: 'invalid_grant' }, { status: 400 });
+    const t = await createApp({ fetchImpl }).request(`${API}/runner/runs/${revoked.runner.runId}/token`, { headers: { authorization: `Bearer ${revoked.runner.ticket}` } }, env);
+    expect(t.status).toBe(410);
+    expect(await code(t)).toBe('gone');
+    expect(await q.encryptedRefreshToken()).toBeNull();
+  });
+
+  it('a wrong ticket after delete me still gets 401', async () => {
+    const { sub, runner } = await aRun();
+    await person(sub).forget();
+    for (const ticket of [null, 'not-the-ticket', 'A'.repeat(43)]) {
+      const t = await runner.token(ticket);
+      expect(t.status, String(ticket)).toBe(401);
+      expect(await code(t)).toBe('signed-out');
+      const headers: Record<string, string> = ticket === null ? {} : { authorization: `Bearer ${ticket}` };
+      const a = await createApp().request(`${API}/runner/runs/${runner.runId}/attempt`, { headers }, env);
+      expect(a.status, String(ticket)).toBe(401);
+    }
+    // The run's own ticket is still told the person is gone.
+    expect((await runner.token()).status).toBe(410);
   });
 
   it('a wrong or expired ticket is signed out', async () => {
