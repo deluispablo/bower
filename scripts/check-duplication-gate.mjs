@@ -4,7 +4,18 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-const baselineFile = 'harness/duplication-baseline.json';
+import { fileURLToPath } from 'url';
+
+// Usage: check-duplication-gate.mjs [--root <dir>] [--baseline <file>]
+const args = process.argv.slice(2);
+const arg = (name, fallback) => {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] ? path.resolve(args[i + 1]) : fallback;
+};
+const root = arg('--root', process.cwd());
+const baselineFile = arg('--baseline', path.join(root, 'harness/duplication-baseline.json'));
+const jscpd = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../node_modules/.bin/jscpd');
+const targets = ['src', 'api', 'runner'].filter((d) => fs.existsSync(path.join(root, d)));
 const baseline = JSON.parse(fs.readFileSync(baselineFile, 'utf8'));
 
 // Run jscpd and capture output
@@ -22,8 +33,8 @@ const ignorePatterns = [
 ].join(',');
 
 const output = execSync(
-  `npx jscpd --format typescript,javascript --mode strict --ignore "${ignorePatterns}" src api runner 2>&1`,
-  { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+  `"${jscpd}" --format typescript,javascript --mode strict --ignore "${ignorePatterns}" ${targets.join(' ')} 2>&1`,
+  { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
 );
 
 // Extract clone count from the output using regex
