@@ -123,3 +123,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: attempt-check-light passes — Attempt checked from the person object alone; the runner keeps the Drive token until near expiry (TL-P4-04)
 - 2026-10-08: admission-reads-cost passes — Admission reads in half the calls, pile notes read 8 at a time; same manifest (TL-P4-04)
 - 2026-10-08: dispatch-retry passes — Dispatch retried twice with backoff on network errors or 5xx; then the alarm at 60 s (TL-P4-04)
+- 2026-10-08: dispatch-retry passes — Dispatch retry: a lost dispatch's 60 s look-up leaves a reporting run alone and never fails on a 5xx; 4xx keeps the normal window (P4-4 review)
