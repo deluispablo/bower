@@ -386,3 +386,4 @@ fingerprint-normalised	7ddcd4b6960f3b2c	2026-10-08	known-green: red by hand at 2
 placement-check	49d783ac53a04c27	2026-10-08	red (fixed in 5092e03)
 second-brain-method	e2a139cc54f1206e	2026-10-08	red (fixed in 4ce0c68)
 ask-not-repeated	8e4c186140cdd1a3	2026-10-08	known-green: already held before the test (c8b6145, test only): the planner dedupes q-ask-<pileId>; the second run's different wording is kept out of questions.json and the report
+placement-check	953cc3c73a37f00c	2026-10-08	red (fixed in 533e7b5)

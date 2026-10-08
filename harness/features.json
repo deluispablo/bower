@@ -4872,7 +4872,7 @@
       "Scripted tests for both paths; live proof 5/5 C04 (coordinator)."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"a new Area with no cited rule or note is refused and retried once|a second refusal ends the run honestly|a new Area with a responsibility is made and the report says why|a cut Rules.md is marked as cut in the model input|the retry runs the model in a folder that still exists\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 addendum 2 (main c924560). Live C04 on cd3af43 was 4/5 (run 2 Areas). Reopened by TL-P4-07 addendum 3 (main 0c1eb8b): revert the c04-offer-and-flat Rules.md; basis kind responsibility (short phrase) for a new Area, shown in the report; Projects still need a rule or note; a cut Rules.md says so. Reopened by the P4-8 review (Critical): the retry spawned claude after rm(work), so live every refusal ended the run."
   },
   {
