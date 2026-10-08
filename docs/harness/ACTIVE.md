@@ -238,3 +238,4 @@ P3-9 is closed.
 - P4-10 delta check PASS (minors to polish; manifest/outsideAdmitted are invariant guards the reply can't reach). Waiting for the suites.
 - P4-10 suites at 222f9c0: check 3609/190/138, e2e 225/226 (qa10:149 desktop flake again; 10/10 alone; logged in P2_POLISH), e2e:fake 250, e2e:pwa pass. Main moves.
 - Main and backup at b54392c; SHA sent to the lead for offer-and-flat x3 + garden x2.
+- b54392c live: garden 2/2 PASS (input= equal); offer-and-flat 0/3 strict (photo asked, payslip to a new area Pay and tax records; run 1 offer not renamed; run 3 invented a 30-minute limit); things section still varies on multi-thing piles. Sent to the lead.
