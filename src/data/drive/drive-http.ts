@@ -14,7 +14,7 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
 /** A file made by a resumable upload, with its content's checksum to check it. */
 const UPLOADED_FIELDS = `${FIELDS},sha256Checksum`;
-/** A listing with checksums: also `md5Checksum`, which a Bower note's `bowerMd5` is compared with (TL-P4-10). */
+/** A listing with checksums: also `md5Checksum`, which names the same content uploaded again. */
 const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
 /** The only session addresses that get the person's token. */
 const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';

@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, BOWER_MD5, STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -688,13 +688,12 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     }
     // A Current state (C05): rewritten only while it is Bower's (as Bower last wrote it, by its mark); one the person
     // edited since is never rewritten: what Bower would write becomes a Timeline line, and the person is asked.
-    // TL-P4-10: an unmarked one is the person's, unless the file is as Bower last wrote it (its listed md5Checksum is
-    // the bowerMd5 Bower set with that write) or a rule lets Bower adopt it; a Bower note with none gets one.
+    // TL-P4-10: an unmarked one is the person's, unless a rule lets Bower adopt it (no write of Bower's ever does);
+    // a Bower note with none gets one, with its mark.
     let state: StateRewrite | null = null;
     if (w.state) {
       const now = currentStateOf(bytes);
-      const md5 = f.appProperties?.[BOWER_MD5];
-      const adopt = now?.owner === 'unmarked' && ((md5 !== undefined && f.md5Checksum === md5) || (await adopting()));
+      const adopt = now?.owner === 'unmarked' && (await adopting());
       if (now && (now.owner === 'bower' || now.owner === 'missing' || adopt)) {
         if (now.lines.join('\n') !== w.state.lines.join('\n')) {
           const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines };

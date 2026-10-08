@@ -21,7 +21,6 @@ export interface DriveFile {
   /**
    * MD5 of the stored content, hex, as Drive's `md5Checksum` gives it
    * (https://developers.google.com/workspace/drive/api/reference/rest/v3/files); only from a listing that asks for it.
-   * Equal to a note's `bowerMd5` appProperty, nobody has changed the file since Bower wrote it (TL-P4-10).
    */
   md5Checksum?: string;
   /**
