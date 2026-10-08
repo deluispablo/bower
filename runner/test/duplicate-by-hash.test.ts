@@ -234,6 +234,9 @@ describe('a thing already saved (duplicate-by-hash)', () => {
     // inbox file was not taken.
     expect([...dups.keys()]).toEqual([]);
     expect([...duplicatesOf(listing, ix, ['inbox-other', 'own-new'])]).toEqual([['own-new', { of: 'run', keptId: 'inbox-other' }]]);
+    // A file at the top of the folder (Rules.md) is not a filed copy either.
+    const rules = [...listing, file('rules', 'Rules.md', 'root', { md5Checksum: 'bb'.repeat(16) }), file('rules-copy', 'Rules copy.md', 'inbox', { md5Checksum: 'bb'.repeat(16) })];
+    expect([...duplicatesOf(rules, VaultIndex.build('root', rules), ['rules-copy']).keys()]).toEqual([]);
   });
 
   it('a copy whose twin left during the run is not binned', async () => {

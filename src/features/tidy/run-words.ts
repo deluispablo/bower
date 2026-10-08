@@ -66,10 +66,20 @@ export function runTitle(r: RunState): string {
       return stepLabel(r, r.phase);
     case 'done':
       if (r.scope === 'instructions') return 'Done. Bower read your changes';
-      return `Done. ${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
+      return `Done. ${filedWords(r.report)}`;
     case 'failed':
       return 'The tidy-up stopped';
   }
+}
+
+/**
+ * What a finished tidy-up did with the inbox, in a few words: how many things it filed, or, when it filed none and
+ * only found things already saved, how many those were (never "0 things filed" for a run that did something).
+ */
+export function filedWords(report: RunReport | undefined): string {
+  const filed = report?.filed.length ?? 0;
+  const saved = report?.alreadySaved?.length ?? 0;
+  return !filed && saved ? `${plural(saved, 'thing')} already saved` : `${plural(filed, 'thing')} filed`;
 }
 
 export function runDetail(r: RunState): string {
@@ -126,7 +136,7 @@ export function runClock(r: RunState, now: number): string {
 
 /** The short line of the chip and the status bar. */
 export function runShort(r: RunState): string {
-  if (r.phase === 'done') return r.scope === 'instructions' ? 'Bower read your changes' : `${plural(r.report?.filed.length ?? 0, 'thing')} filed`;
+  if (r.phase === 'done') return r.scope === 'instructions' ? 'Bower read your changes' : filedWords(r.report);
   if (r.phase === 'failed') return 'The tidy-up stopped';
   return `${stepLabel(r, r.phase)}…`;
 }
