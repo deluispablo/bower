@@ -8,7 +8,9 @@ import type { Change, EditText } from './run-manifest';
 // (http://www.isthe.com/chongo/tech/comp/fnv/): "" cbf29ce484222325, "a" af63dc4c8601ec8c, "foobar" 85944171f73967e8.
 
 const enc = (text: string): Uint8Array => new TextEncoder().encode(text);
-const rewrite = (previous: string[], lines: string[]): Change => ({ kind: 'state-rewrite', recordIds: [], previous, lines });
+// The fixtures below are unmarked, so these changes carry the grant a rule gives (`adopted`); `plain` carries none.
+const plain = (previous: string[], lines: string[]): Change => ({ kind: 'state-rewrite', recordIds: [], previous, lines });
+const rewrite = (previous: string[], lines: string[]): Change => ({ ...plain(previous, lines), adopted: true } as Change);
 const text = (result: ReturnType<typeof applyChanges>): string => (result.ok ? result.text : `refused: ${result.reason}`);
 
 const HUB = '---\nsummary: Applications and offers.\nby: bower\n---\n\n## Current state\n- One application open.\n\nYour own words.\n\n## Timeline\n- 2026-09-28 · Started the job hunt.\n';
@@ -129,5 +131,29 @@ describe('TL-P4-10: MD5, a missing section, an empty one, the news line', () => 
     const one = stateNewsLine(['word '.repeat(80).trim()]);
     expect(one.length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
     expect(one.endsWith('word…')).toBe(true);
+  });
+});
+
+describe('state-no-adoption guards', () => {
+  it('rewriteState refuses an unmarked section unless the change says a rule granted it', () => {
+    expect(applyChanges(enc(HUB), [plain(['One application open.'], ['Two applications open.'])])).toEqual({ ok: false, reason: 'person-edited' });
+    expect(applyChanges(enc(HUB), [rewrite(['One application open.'], ['Two applications open.'])]).ok).toBe(true);
+    // A Bower-marked section needs no grant.
+    const marked = HUB.replace('by: bower\n', `by: bower\n${STATE_KEY}: ${stateMark(['One application open.'])}\n`);
+    expect(applyChanges(enc(marked), [plain(['One application open.'], ['Two applications open.'])]).ok).toBe(true);
+  });
+
+  it('undo of an adopted rewrite gives the person their lines back without a mark', () => {
+    const changes = [rewrite(['One application open.'], ['Two applications open.'])];
+    const after = applyChanges(enc(HUB), changes);
+    const back = applyChanges(after.ok ? after.bytes : enc(''), undoChanges(changes));
+    expect(text(back)).toBe(HUB);
+    expect(text(back)).not.toContain(STATE_KEY);
+  });
+
+  it('the fallback line names only what the section lacks', () => {
+    expect(stateNewsLine(['One application open.', 'An offer from Ferrowick to answer.'], ['One application open.'])).toBe('New: an offer from Ferrowick to answer.');
+    expect(stateNewsLine(['One application open.'], ['One application open.'])).toBeNull();
+    expect(stateNewsLine(['One open.', 'Two flats.'], [])).toBe('New: One open, two flats.');
   });
 });

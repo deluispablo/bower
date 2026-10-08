@@ -113,7 +113,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     const note = parseNote(HUB, run.after[HUB] ?? '');
     expect(note.currentState).toEqual(['Two applications open, one interview on Friday.']);
     // What Bower would have written goes on the Timeline, citing the thing, and the person is asked.
-    const line = note.timeline.find((t) => t.text.startsWith('New: ') && t.text.includes('an offer from Ferrowick to answer.'));
+    const line = note.timeline.find((t) => t.text === 'New: an offer from Ferrowick to answer.');
     expect(line?.source).toBe('Industrial Designer, Ferrowick');
     const questions = JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string; about?: string }> };
     const asked = questions.questions.find((q) => q.id.startsWith('q-state-'));
@@ -124,8 +124,20 @@ describe('a change kind of its own for Current state (C05)', () => {
   });
 
   it('the fallback line reads as plain news', () => {
-    expect(stateNewsLine(['One open.', 'An offer · to [[answer]].'])).toBe('New: One open, an offer, to answer.');
+    expect(stateNewsLine(['One open.', 'An offer · to [[answer]].'], [])).toBe('New: One open, an offer, to answer.');
     for (const line of [stateNewsLine(['One open.', 'An offer · to [[answer]].']), stateNewsLine(['Done.'])]) expect(line).not.toMatch(/;|Where things stand|Bower|would|\.,/);
+  });
+
+  it('the fallback line names only what the section lacks', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const c = await hubCase();
+    // Nothing new against the person's unmarked section: no Timeline line for it at all.
+    const same = await runWithClaude(c, proposingStates([{ note: HUB, lines: ['One application open.'] }]));
+    expect(parseNote(HUB, same.after[HUB] ?? '').timeline.some((t) => t.text.startsWith('New: '))).toBe(false);
+    // One thing new: only that is named, never the person's own line.
+    const more = await runWithClaude(c, proposing);
+    const news = parseNote(HUB, more.after[HUB] ?? '').timeline.filter((t) => t.text.startsWith('New: ')).map((t) => t.text);
+    expect(news).toEqual(['New: an offer from Ferrowick to answer.']);
   });
 
   it('after a Bower append the next run only adds a line', async () => {
@@ -139,7 +151,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     expect(parseNote(HUB, after).currentState).toEqual(['One application open.']);
     expect(after).not.toContain('bower_state');
     expect(hubEdit(manifestOf(run.after)).some((x) => x.kind === 'state-rewrite')).toBe(false);
-    expect(parseNote(HUB, after).timeline.some((t) => t.text.startsWith('New: ') && t.text.includes('an offer from Ferrowick to answer.'))).toBe(true);
+    expect(parseNote(HUB, after).timeline.some((t) => t.text === 'New: an offer from Ferrowick to answer.')).toBe(true);
     // A Bower write no longer leaves a checksum behind for a later run to adopt by.
     expect(run.props[MADE]?.bowerMd5).toBeUndefined();
   });
@@ -161,7 +173,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     expect(editOf(manifestOf(run.after), HUB).some((x) => x.kind === 'state-rewrite')).toBe(false);
     expect(editOf(manifestOf(run.after), FLAT).some((x) => x.kind === 'state-rewrite')).toBe(false);
     // The news goes on each Timeline as one line, within an authored line's limits.
-    const hubLine = hub.timeline.find((t) => t.text.startsWith('New: ') && t.text.includes('an offer from Ferrowick to answer.'));
+    const hubLine = hub.timeline.find((t) => t.text === 'New: an offer from Ferrowick to answer.');
     expect(hubLine?.source).toBe('Industrial Designer, Ferrowick');
     const flatLine = flat.timeline.find((t) => t.text.includes('Flat a on the shortlist'));
     expect(flatLine).toBeDefined();
