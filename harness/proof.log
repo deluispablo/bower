@@ -433,3 +433,4 @@ c1-digest	15d2aeedcb68f220	2026-10-08	red (fixed in c734261a)
 c1-small-fixes	68a1b1287f2aeb93	2026-10-08	red (fixed in f8758d76)
 c1-drive-ops-table	889306b66ee52917	2026-10-08	known-green: reason: later commits touched the same lines. Red by hand at tests-only 1e64a9f0: 'every Drive method is classed read or write' fails on assertions (storedDigest read guarded); 'no id is reserved on a lost lease' failed on its assertion before e7afd25a (/tmp/dops-red.log); green at e7afd25a
 c1-worker-schema-v11	54610e3df454b6c3	2026-10-08	red (fixed in 528053c2)
+c1-digest-library	1c2413ca7e7e4351	2026-10-08	known-green: reason: one commit held test and change. Red by hand: with hashes.ts restored from 75ce21c6^ the verify fails on its assertion (hand-written SHA-256/MD5 present); green at 75ce21c6

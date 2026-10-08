@@ -5492,7 +5492,7 @@
     "id": "c1-digest-library",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "hashes.ts uses @noble/hashes (sha2 and legacy md5) instead of the hand-written SHA-256 (sha256Sync) and MD5; the fuzz tests against node:crypto stay as the check.",
     "steps": [
       "Add @noble/hashes.",
