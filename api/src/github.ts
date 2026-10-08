@@ -41,38 +41,51 @@ function headers(token: string): Record<string, string> {
   };
 }
 
+/**
+ * A failed dispatch is tried again twice, after 200 ms and 400 ms, each wait cut by up to half at random so
+ * callers do not retry in step: truncated exponential backoff with jitter, as Google's retry guidance and
+ * AWS's "Exponential backoff and jitter" describe. Only a network error or a 5xx is retried (the server may
+ * accept it next time); a 4xx would fail the same way again.
+ */
+const RETRY_BASE_MS = 200;
+const RETRIES = 2;
+
+const sleepFor = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
+
 /** Sends the dispatch; resolves whether GitHub accepted it. Never throws, never logs a secret. */
-export async function dispatchTidy(input: TidyDispatch, fetchImpl: FetchLike): Promise<boolean> {
+export async function dispatchTidy(input: TidyDispatch, fetchImpl: FetchLike, sleep: (ms: number) => Promise<void> = sleepFor): Promise<boolean> {
   if (input.token === undefined) {
     console.error('tidy dispatch is not configured: no GitHub token');
     return false;
   }
-  let response: Response;
-  try {
-    response = await fetchImpl(`${API_URL}/repos/${input.repo}/dispatches`, {
-      method: 'POST',
-      headers: { ...headers(input.token), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_type: 'bower-tidy',
-        client_payload: {
-          run_id: input.runId,
-          attempt: input.attempt,
-          ticket: input.ticket,
-          scope: input.scope,
-          allow_web: input.allowWeb,
-        },
-      }),
-    });
-  } catch {
-    // The error's message could carry anything; log that the network failed, nothing more.
-    console.error('tidy dispatch failed: network error');
-    return false;
+  const init = {
+    method: 'POST',
+    headers: { ...headers(input.token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event_type: 'bower-tidy',
+      client_payload: {
+        run_id: input.runId,
+        attempt: input.attempt,
+        ticket: input.ticket,
+        scope: input.scope,
+        allow_web: input.allowWeb,
+      },
+    }),
+  };
+  for (let tried = 0; ; tried += 1) {
+    let status: number | null;
+    try {
+      status = (await fetchImpl(`${API_URL}/repos/${input.repo}/dispatches`, init)).status;
+    } catch {
+      // The error's message could carry anything; log that the network failed, nothing more.
+      console.error('tidy dispatch failed: network error');
+      status = null;
+    }
+    if (status === 204) return true;
+    if (status !== null) console.error(`tidy dispatch failed: status ${status}`);
+    if ((status !== null && status < 500) || tried >= RETRIES) return false;
+    await sleep(RETRY_BASE_MS * 2 ** tried * (0.5 + Math.random() / 2));
   }
-  if (response.status !== 204) {
-    console.error(`tidy dispatch failed: status ${response.status}`);
-    return false;
-  }
-  return true;
 }
 
 /** The run name the workflow gives an attempt (`run-name` in the workflow; GitHub's `display_title`). */

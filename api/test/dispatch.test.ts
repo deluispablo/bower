@@ -150,7 +150,7 @@ describe('dispatch on admission', () => {
         const who = await holder();
         const gh = github(status);
         const reply = await process(who, gh.fetchImpl, 'press-1');
-        expect(gh.sent).toHaveLength(1);
+        expect(gh.sent).toHaveLength(3);
         expect(reply.run?.phase).toBe('queued');
         expect(reply.revision).toBe(1);
         const lines = log.mock.calls.map((c) => c.map(String).join(' ')).join('\n');

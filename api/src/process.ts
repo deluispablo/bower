@@ -161,10 +161,16 @@ async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolea
   }
   const ticket = await reach('mint ticket', async () => await personFor(env, sub).mintTicket(run.id, 1, now));
   if (ticket === null) return;
-  await dispatchTidy(
+  const sent = await dispatchTidy(
     { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, runId: run.id, attempt: 1, ticket, scope: run.scope, allowWeb },
     fetchImpl,
   );
+  // Lost after its retries: the alarm looks at the run in a minute, not when it would go stale.
+  if (!sent) {
+    await personFor(env, sub)
+      .dispatchLost(run.id, Date.now())
+      .catch((err: unknown) => console.error('tidy dispatch: the retry alarm was not armed', err));
+  }
 }
 
 /**
