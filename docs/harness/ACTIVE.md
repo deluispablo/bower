@@ -211,3 +211,4 @@ P3-9 is closed.
 - TL-P4-07 addendum 3 (0c1eb8b): placement-check reopened as a fix round (revert the fixture rule; responsibility basis for a new Area, shown in the report; a cut Rules.md says so). Live after: garden x5, offer-and-flat x3. 368/372.
 - placement-check fix round queued (worktree bower-p4-plcheck2 at d269d5e); both slots busy (drive-calls-golden, fingerprint-normalised).
 - drive-calls-golden closed (5cbbc27): 134 Drive calls on C04 at a566241 and HEAD alike; the live 35→49 s rise is Drive latency. 369/372. placement-check fix round running (implementer, bower-p4-plcheck2).
+- fingerprint-normalised closed (red proven by hand at 266c99c). 370/372. placement-check fix round running.
