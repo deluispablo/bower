@@ -191,3 +191,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c1-digest-library passes — hashes.ts uses @noble/hashes for SHA-256 and MD5; fuzz tests against node:crypto unchanged (TL-P4-14 addendum; removed 91 lines)
 - 2026-10-08: c1-worker-deadlines passes — One deadlines table and one rearm(); alarm() handles what is due; Delete me clears every deadline (TL-P4-14 stage 1; removed 43 lines)
 - 2026-10-08: c1-admit-once passes — admit(null) first: the quota is checked before any Drive read; wouldAdmit dropped (TL-P4-14 stage 1)
+- 2026-10-08: c1-still-as-seen passes — One still-as-seen expectation and check for every write; parents compare as a set (TL-P4-14 stage 1; removed 63 lines)
