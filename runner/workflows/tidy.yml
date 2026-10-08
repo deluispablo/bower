@@ -45,11 +45,11 @@ jobs:
         with:
           node-version: '24'
       # Claude Code is kept between runs by its pinned version, as the original's ingest.yml keeps its CLI
-      # (https://github.com/actions/cache): restored on a hit, installed into the same folder on a miss.
+      # (https://github.com/actions/cache, v6 on Node 24 as its ci.yml pins it): restored on a hit, installed on a miss.
       - name: Cache Claude Code
         id: cache-claude-cli
         if: vars.BOWER_PROVIDER == 'claude'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/claude-cli
           key: claude-code-${{ runner.os }}-${{ env.CLAUDE_CODE_VERSION }}

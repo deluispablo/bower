@@ -206,6 +206,20 @@ describe('the Claude provider', () => {
     expect(line).not.toMatch(/Inbox|Payslip|Dentist|Flat photos|\.pdf|\.jpg/);
   });
 
+  it('the timing line counts cache-read input tokens', async () => {
+    const { wire } = await wired();
+    const said: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => void said.push(args.map(String).join(' ')));
+    // A later turn reads most of its prompt from the cache: those tokens are input too.
+    const envelope = JSON.parse(recorded('reply-ok.json')) as { usage: Record<string, number> };
+    envelope.usage = { ...envelope.usage, input_tokens: 120, cache_creation_input_tokens: 1000, cache_read_input_tokens: 4000 };
+
+    expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: wire.fetch, claude: recordedClaude({ stdout: JSON.stringify(envelope) }).spawn })).toBe(0);
+
+    const line = said.find((l) => l.startsWith('timing:')) ?? '';
+    expect(line).toMatch(/ in=5120 /);
+  });
+
   it('the Claude provider runs under the original permission policy and never logs the token', async () => {
     const { wire } = await wired();
     const said: string[] = [];

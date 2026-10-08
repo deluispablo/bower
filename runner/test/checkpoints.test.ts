@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { Checkpoint, EffectEvidence } from '../../src/data/contracts/run-checkpoint';
@@ -256,6 +257,37 @@ describe('runner checkpoints', () => {
     expect(after.requests).toBe(2 * after.checkpoints);
     console.log(`checkpoint cost: before=${(before.requests / before.ops).toFixed(2)} after=${(after.requests / after.ops).toFixed(2)} Drive requests per operation`);
     expect(after.requests / after.ops).toBeLessThan(before.requests / before.ops);
+  });
+
+  it('a checkpoint Drive stored with other bytes than were sent is read back and refused', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root, manifest } = await seeded();
+    // Drive answers the second checkpoint's create with 200, but what it stored (and its checksums) are other bytes.
+    const send = wire.fetch;
+    let changed = '';
+    wire.fetch = async (input, init) => {
+      const res = await send(input, init);
+      if ((init?.method ?? 'GET') !== 'POST' || changed) return res;
+      const body = (await res.clone().json().catch(() => null)) as { id?: string; name?: string } | null;
+      if (!body?.id || !body.name?.startsWith('checkpoint-1-')) return res;
+      const stored = (await wire.drive.listAll(root)).find((f) => f.id === body.id);
+      if (!stored) return res;
+      const other = '{"not":"the checkpoint"}';
+      await wire.drive.writeText(stored.id, other, stored.modifiedTime);
+      changed = stored.id;
+      const bytes = new TextEncoder().encode(other);
+      return Response.json({ ...body, md5Checksum: createHash('md5').update(bytes).digest('hex'), sha256Checksum: createHash('sha256').update(bytes).digest('hex') });
+    };
+    const effects = new CountedEffects();
+
+    await expect(start(wire, root, manifest, 1, effects).end).rejects.toMatchObject({ code: 'unknown' });
+
+    expect(changed).not.toBe('');
+    expect(errors.mock.calls.some((c) => String(c[0]).includes('Drive stored other bytes'))).toBe(true);
+    // The checkpoint read back from Drive, never taken as written: the chain stops before it, and nothing after it was sent.
+    const reads = wire.requests.filter((r) => r.url.searchParams.get('alt') === 'media' && decodeURIComponent(r.url.pathname.split('/').at(-1) ?? '') === changed);
+    expect(reads.length).toBeGreaterThan(0);
+    expect(effects.sent.size).toBeLessThanOrEqual(1);
   });
 
   it('only the last 20 finished run folders are kept', async () => {
