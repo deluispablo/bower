@@ -75,3 +75,14 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
    (the CV score was invented) with addendum 5 (numbers grounded: a figure must be in the cited thing's text, the pile's
    words or a note shown). Was: "New offer from Ferrowick, scored 7 out of 10 against your CV." Now: "New offer from
    Ferrowick: fully remote, 42,000 a year, start 2 November." (all three facts are in the offer letter).
+
+## Corpus numbers grounded (`corpus-grounded-scorer`)
+
+5. **c07-rent-disagrees, `expected.json`.** Reason: TL-P4-08 addenda 5 and 7. The Job hunt note's expected Timeline text
+   ("New offer from Ferrowick: fully remote, 42,000 a year, start 2 November.") named an offer that c07's own sources do
+   not hold (its pile is one line about a rent, its folder has no offer letter), so 42,000 had no source in the case.
+   Now: the Timeline text is dropped and the note keeps `timelineCount` 2 (the scripted run's Job hunt line, which comes
+   from the shared demo plan, still counts); nothing in c07 supports a figure there. No other expectation changed: the new
+   test (`every expected number is grounded in its case`, runner/test/corpus.test.ts) found no other ungrounded number in
+   note `timeline` or `contains` texts across the corpus. It reuses `groundsOf` and `ungrounded` from runner/src/claude.ts
+   (now exported, unchanged) and skips paths, report ids and the app's `<!-- since DATE -->` stamp, which are not facts.
