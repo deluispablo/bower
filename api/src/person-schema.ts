@@ -8,7 +8,7 @@
  * `SCHEMA_VERSION`, never edits a step that has shipped.
  */
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 /** Every table the schema owns, for tests and checks. */
 export const PERSON_TABLES = [
@@ -171,6 +171,12 @@ const STEPS: readonly (readonly string[])[] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (kind, key)
     )`,
+  ],
+  [
+    // How many times in a row a deadline's handler threw (TL-P4-14 addendum 2): the alarm backs off and, after the
+    // last attempt, the deadline fails (`Person.wake`). Rows kept from v12 start at 0; setting a deadline again
+    // starts it over.
+    'ALTER TABLE deadlines ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0)',
   ],
 ];
 

@@ -195,7 +195,7 @@ describe('person object', () => {
       control: ['id', 'status_revision'],
       runTicket: ['hash', 'run_id', 'attempt', 'retired', 'expires_at', 'report_seq', 'report_phase'],
     });
-    expect(await alex.schemaVersion()).toBe(12);
+    expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
   });
 
   it('a person object refuses storage from a newer build', async () => {
