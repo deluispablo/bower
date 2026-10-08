@@ -393,3 +393,4 @@ fingerprint-normalised	b484878418658bc4	2026-10-08	known-green: test only (8e8f8
 input-sections	11a311822af60274	2026-10-08	red (fixed in a06c902)
 per-thing-ask	0b37c51fb0036482	2026-10-08	red (fixed in 4c04aa7)
 things-normalised	505969ca0971bbf9	2026-10-08	red (fixed in a9392d8)
+c04-prompt-fixes	de470a308f8c1bcc	2026-10-08	red (fixed in ebff7d2)
