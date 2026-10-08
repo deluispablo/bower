@@ -5,7 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { answered } from '../wait';
-import { isRunWire, type Me, type RunReply, type StatusReply, type WorkerApi } from './worker-api';
+import { isRunWire, type Me, type ProcessOptions, type RunReply, type StatusReply, type WorkerApi } from './worker-api';
 import { isLeaseReply, openElsewhere, type LeaseReply, type SessionAction } from '../session';
 
 const SENTENCE: Record<ErrorCode, string> = {
@@ -79,10 +79,10 @@ export class WorkerHttp implements WorkerApi {
     return { id: r.folderId, found: r.found };
   }
 
-  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string } = {}): Promise<RunReply> {
-    const body = { scope, allowWeb: !!opts.allowWeb, ...(opts.requestId !== undefined ? { requestId: opts.requestId } : {}), ...(opts.subject !== undefined ? { subject: opts.subject } : {}) };
+  async process(scope: 'all' | 'instructions', opts: ProcessOptions = {}): Promise<RunReply> {
+    const body = { scope, allowWeb: !!opts.allowWeb, ...(opts.requestId !== undefined ? { requestId: opts.requestId } : {}), ...(opts.subject !== undefined ? { subject: opts.subject } : {}), ...(opts.answer ? { answer: true } : {}) };
     const reply = await this.call<RunReply>('POST', '/process', body, isRunReply, this.fence());
-    return { run: reply.run, revision: reply.revision };
+    return { run: reply.run, revision: reply.revision, ...(reply.waits === true ? { waits: true } : {}) };
   }
 
   async status(): Promise<StatusReply> {

@@ -38,8 +38,8 @@ interface AppVault {
   questions(): Promise<AppQuestion[]>;
   answer(id: string, yes: boolean): Promise<void>;
 }
-interface StartOptions { allowWeb?: boolean; subject?: string; requestId?: string }
-interface AppRun { id: string; phase: string }
+interface StartOptions { allowWeb?: boolean; subject?: string; requestId?: string; answer?: boolean }
+interface AppRun { id: string; phase: string; waits?: true }
 interface AppRuns { start(scope: 'all' | 'instructions', opts?: StartOptions): Promise<AppRun>; current(): Promise<AppRun | null> }
 type Outcome = { kind: 'now'; run: AppRun } | { kind: 'waits' | 'next' | 'not-yet' } | { kind: 'failed'; error: unknown };
 type AnswerQuestion = (vault: AppVault, runs: AppRuns, id: string, yes: boolean, opts: { allowWeb: boolean }) => Promise<{ outcome: Outcome } | null>;
@@ -84,11 +84,11 @@ function runsOf(w: RealWorld): AppRuns {
   return {
     start: async (scope, opts = {}) => {
       const lease = (await (await w.api.browser(`${ORIGIN}/session`, { method: 'POST', headers: json, body: JSON.stringify({ place: 'tab-1', action: 'check', gen: 0 }) })).json()) as { epoch: number };
-      const body = { scope, allowWeb: !!opts.allowWeb, requestId: opts.requestId ?? crypto.randomUUID(), ...(opts.subject !== undefined ? { subject: opts.subject } : {}) };
+      const body = { scope, allowWeb: !!opts.allowWeb, requestId: opts.requestId ?? crypto.randomUUID(), ...(opts.subject !== undefined ? { subject: opts.subject } : {}), ...(opts.answer ? { answer: true } : {}) };
       const res = await w.api.browser(`${ORIGIN}/process`, { method: 'POST', headers: { ...json, 'x-bower-place': 'tab-1', 'x-bower-epoch': String(lease.epoch) }, body: JSON.stringify(body) });
       expect(res.status).toBe(200);
-      const reply = (await res.json()) as { run: AppRun };
-      return reply.run;
+      const reply = (await res.json()) as { run: AppRun; waits?: true };
+      return reply.waits ? { ...reply.run, waits: true } : reply.run;
     },
     current: async () => ((await (await w.api.browser(`${ORIGIN}/status`)).json()) as { run: AppRun | null }).run,
   };
@@ -177,7 +177,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     const w = await keepWorld([{ kind: 'rule', text: 'Receipts go in Areas/Money' }]);
     const { vault, answerQuestion } = await vaultOf(w);
     const runs = runsOf(w);
-    // A tidy-up is going (pressed before the answer): the answer does not join it and starts no other.
+    // A tidy-up is going (pressed before the answer): the answer does not join it and starts no other now.
     const going = await runs.start('instructions', { allowWeb: false });
     const done = await answerQuestion(vault, runs, KEEP_Q, true, { allowWeb: false });
     expect(done?.outcome).toEqual({ kind: 'waits' });
@@ -187,8 +187,12 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await w.paths()).toContain(OTHER);
     expect(await answersWaiting(w, KEEP_Q)).toHaveLength(1);
     expect(await openQuestions(w)).toEqual([KEEP_Q]);
-    // The next run takes it and keeps one note.
-    await runs.start('instructions', { allowWeb: false });
+    // The run ended: the person object wakes and starts the answer's run, with no press (TL-P4-13 addendum).
+    expect(await w.api.fireAlarm()).toBe(true);
+    expect(w.dispatched).toHaveLength(2);
+    expect(w.dispatched[1]?.scope).toBe('instructions');
+    // Woken again (a retried alarm): still one run.
+    await w.api.fireAlarm();
     expect(w.dispatched).toHaveLength(2);
     expect(await w.runJob(1)).toBe(0);
     expect(await w.paths()).not.toContain(OTHER);

@@ -21,6 +21,9 @@
  *
  * An answer's run (TL-P4-08 addendum 8) is a press like any other, with the answer's own requestId and, for a thing or
  * pile asked about, its `subject`: admission then reads and takes only the pile that holds it, with your changes.
+ * While a run is going, an answer (`answer: true`) is kept by the person object with no Drive read, and answered
+ * `waits`; when that run ends, the object starts one run for every answer that waited (`Person.wake`, TL-P4-13
+ * addendum), counted in the daily quota. With the day's tidy-ups used up, the answer is refused as any press is.
  *
  * Staleness reuses the original app's thresholds and rule (bower `api/src/process.ts`,
  * `runStaleness`/`markStale`), measured on this contract's `requestedAt` and `phaseAt`.
@@ -35,7 +38,8 @@ import { DISPATCH_SUBREQUESTS, SUBREQUEST_BUDGET } from '../../src/data/spine/bu
 import { admissionRead } from '../../src/data/spine/read.js';
 import { BowerError } from '../../src/data/types.js';
 import { requireSession } from './auth.js';
-import { accessTokenFor } from './drive-token.js';
+import { accessTokenOf } from './drive-token.js';
+import type { DriveTokenKeeper } from './drive-token.js';
 import type { AppEnv, Env } from './env.js';
 import type { FetchLike } from './google.js';
 import { HttpError } from './errors.js';
@@ -63,6 +67,8 @@ export interface RunWire {
 export interface RunReply {
   run: RunWire | null;
   revision: number;
+  /** An answer kept for the end of the run going (`run`): the person object starts it then (TL-P4-13 addendum). */
+  waits?: true;
 }
 
 /**
@@ -70,7 +76,7 @@ export interface RunReply {
  * that needs its manifest first (the press was asked with none, and in between it became one that admits).
  */
 export type AdmitResult =
-  | { admitted: true; run: RunWire; revision: number; created?: true }
+  | { admitted: true; run: RunWire; revision: number; created?: true; waits?: true }
   | { admitted: false; refused: 'rate-limited' | 'needs-manifest' };
 
 export interface AdmitInput {
@@ -82,6 +88,10 @@ export interface AdmitInput {
   dailyLimit: number;
   /** What a new run takes (TL-P3-21); null when none was built, because the press looked like a repeat or a run going. */
   manifest: AdmissionManifest | null;
+  /** An answer's press: while a run is going it waits for that run's end, instead of being told the run going. */
+  answer?: boolean;
+  /** An answer's subject, kept with it while it waits. */
+  subject?: string;
 }
 
 /** A queued run nobody started within this long is stale (the original's `QUEUED_STALE_MS`). */
@@ -117,6 +127,8 @@ interface ProcessBody {
   requestId: string | undefined;
   /** An answer's run: the one thing or pile of the inbox it takes (scope `all` only); absent for a press of Tidy up. */
   subject: string | undefined;
+  /** An answer's press (TL-P4-13 addendum): it waits for a run going to end. */
+  answer: boolean;
 }
 
 /** A body that fails validation is refused as the JSON guard refuses one: 415, no other code. */
@@ -126,12 +138,13 @@ function unreadable(): HttpError {
 
 function parseBody(value: unknown): ProcessBody {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw unreadable();
-  const { scope, allowWeb, requestId, subject } = value as Record<string, unknown>;
+  const { scope, allowWeb, requestId, subject, answer } = value as Record<string, unknown>;
   if (scope !== 'all' && scope !== 'instructions') throw unreadable();
   if (typeof allowWeb !== 'boolean') throw unreadable();
   if (requestId !== undefined && !(typeof requestId === 'string' && REQUEST_ID.test(requestId))) throw unreadable();
   if (subject !== undefined && !(scope === 'all' && typeof subject === 'string' && SUBJECT.test(subject))) throw unreadable();
-  return { scope, allowWeb, requestId, subject };
+  if (answer !== undefined && typeof answer !== 'boolean') throw unreadable();
+  return { scope, allowWeb, requestId, subject, answer: answer === true };
 }
 
 export function personFor(env: Env, sub: string) {
@@ -163,12 +176,12 @@ export function signedInSub(sub: string | undefined): string {
  * Sends a new run to GitHub with attempt 1's ticket. A failure never changes the answer: the run stays
  * `queued` and the alarm recovers it. Nothing here logs the ticket.
  */
-async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolean, now: number, fetchImpl: FetchLike): Promise<void> {
+export async function dispatchNew(env: Env, person: PersonHandle, run: RunWire, allowWeb: boolean, now: number, fetchImpl: FetchLike): Promise<void> {
   if (env.GITHUB_TOKEN === undefined) {
     console.error('tidy dispatch is not configured: no GitHub token');
     return;
   }
-  const ticket = await reach('mint ticket', async () => await personFor(env, sub).mintTicket(run.id, 1, now));
+  const ticket = await reach('mint ticket', async () => await person.mintTicket(run.id, 1, now));
   if (ticket === null) return;
   const outcome = await dispatchOutcome(
     { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, runId: run.id, attempt: 1, ticket, scope: run.scope, allowWeb },
@@ -176,25 +189,43 @@ async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolea
   );
   // Lost to the network or a 5xx after its retries: the alarm looks at the run in a minute. A 4xx would fail again, so it keeps the normal window.
   if (outcome === 'lost') {
-    await personFor(env, sub)
+    await person
       .dispatchLost(run.id, Date.now())
       .catch((err: unknown) => console.error('tidy dispatch: the retry alarm was not armed', err));
   }
 }
 
 /**
+ * What admission and its dispatch ask of the person object: the route's stub, or the object itself when it starts the
+ * run its waiting answers asked for (`Person.wake`).
+ */
+export interface PersonHandle extends DriveTokenKeeper {
+  folderId(): string | null | Promise<string | null>;
+  mintTicket(runId: string, attempt: number, now: number): Promise<string | null>;
+  dispatchLost(runId: string, now: number): Promise<void>;
+}
+
+/** What an admission reads: its scope, and for answers' runs the subjects whose piles it takes. */
+export interface AdmissionAsk {
+  scope: RunScope;
+  subjects: readonly string[];
+  now: number;
+}
+
+/**
  * The admission manifest for the person's folder, read now with their Drive token. Drive trouble answers as the
  * contract's codes with no cause: a refused token is `signed-out`, anything else `internal` (logged only).
  */
-async function admission(env: Env, sub: string, scope: RunScope, subject: string | undefined, now: number, fetchImpl: FetchLike, spent: () => number): Promise<AdmissionManifest> {
-  const folderId = await reach('folder', async () => await personFor(env, sub).folderId());
+export async function admission(env: Env, person: PersonHandle, ask: AdmissionAsk, fetchImpl: FetchLike, spent: () => number): Promise<AdmissionManifest> {
+  const { scope, subjects, now } = ask;
+  const folderId = await reach('folder', async () => await person.folderId());
   if (folderId === null) throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
   // The token is asked of the person object once per press, not once per Drive call; a 401 asks for a fresh one.
   let token: Promise<string> | null = null;
   const drive = new DriveHttp({
     token: async (fresh) => {
       if (fresh || token === null) {
-        const asked = accessTokenFor(env, sub, { fresh, fetchImpl }).then((t) => t.accessToken);
+        const asked = accessTokenOf(env, person, { fresh, fetchImpl }).then((t) => t.accessToken);
         token = asked;
         asked.catch(() => {
           if (token === asked) token = null;
@@ -206,7 +237,7 @@ async function admission(env: Env, sub: string, scope: RunScope, subject: string
   });
   let planned;
   try {
-    planned = await planAdmission(admissionRead(drive, scope, { limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS, used: spent }), folderId, { scope, ...(subject !== undefined ? { subject } : {}), clock: () => now, newId: () => crypto.randomUUID() });
+    planned = await planAdmission(admissionRead(drive, scope, { limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS, used: spent }), folderId, { scope, subjects, clock: () => now, newId: () => crypto.randomUUID() });
   } catch (err) {
     if (err instanceof HttpError) throw err;
     if (err instanceof BowerError && err.code === 'auth') throw new HttpError(401, 'signed-out', undefined, { cause: err });
@@ -281,7 +312,8 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const person = personFor(env, sub);
     // Drive is read only for a press that would admit a new run; a repeat or a run going answers from the object.
     const fresh = await timing.time('check', () => reach('would admit', async (): Promise<boolean> => await person.wouldAdmit(requestId, now)));
-    let manifest = fresh ? await timing.time('reads', () => admission(env, sub, body.scope, body.subject, now, counted, () => fetches)) : null;
+    const ask: AdmissionAsk = { scope: body.scope, subjects: body.subject !== undefined ? [body.subject] : [], now };
+    let manifest = fresh ? await timing.time('reads', () => admission(env, person, ask, counted, () => fetches)) : null;
     const input = (): AdmitInput => ({
       scope: body.scope,
       allowWeb: body.allowWeb,
@@ -289,22 +321,24 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       now,
       dailyLimit: Number(env.DAILY_RUN_LIMIT),
       manifest,
+      ...(body.answer ? { answer: true } : {}),
+      ...(body.subject !== undefined ? { subject: body.subject } : {}),
     });
     const admit = (): Promise<AdmitResult> => timing.time('admit', () => reach('admit', async (): Promise<AdmitResult> => await person.admit(input())));
     let result = await admit();
     // The run it looked like ended in between: this press is new after all, so it reads the inbox once.
     if (!result.admitted && result.refused === 'needs-manifest' && manifest === null) {
-      manifest = await timing.time('reads', () => admission(env, sub, body.scope, body.subject, now, counted, () => fetches));
+      manifest = await timing.time('reads', () => admission(env, person, ask, counted, () => fetches));
       result = await admit();
     }
     if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
     if (!result.admitted) throw new HttpError(429, 'rate-limited');
     if (result.created === true) {
       const run = result.run;
-      await timing.time('dispatch', () => dispatchNew(env, sub, run, body.allowWeb, now, counted));
+      await timing.time('dispatch', () => dispatchNew(env, person, run, body.allowWeb, now, counted));
     }
     timing.log();
-    const reply: RunReply = { run: result.run, revision: result.revision };
+    const reply: RunReply = { run: result.run, revision: result.revision, ...(result.waits === true ? { waits: true } : {}) };
     return c.json(reply);
   });
 

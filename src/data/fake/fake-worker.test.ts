@@ -118,6 +118,29 @@ describe('the fake Worker', () => {
     await expect(worker.process('all', { requestId: 'press-1' })).resolves.toMatchObject({ run: { id: run.id, phase: 'done' } });
   });
 
+  it('an answer during a run waits, and its run starts when the run ends (TL-P4-13 addendum)', async () => {
+    const { drive, rootId, worker } = await world('default');
+    const going = (await worker.process('all', { requestId: 'press-1' })).run;
+    // The answer, one of your changes, written while the run is going (keeping one note: no subject).
+    const changes = (await drive.listAll(rootId ?? '')).find((f) => f.folder && f.name === 'changes');
+    await drive.createText(changes?.id ?? '', 'change-1.json', JSON.stringify({ v: 1, id: 'change-1', device: 'laptop', at: 1, what: 'A rule', kind: 'rule', text: 'Receipts go to Money' }));
+    const reply = await worker.process('instructions', { requestId: 'answer-1', answer: true });
+    expect(reply).toMatchObject({ run: { id: going.id }, waits: true });
+    // A retry is told the same.
+    expect(await worker.process('instructions', { requestId: 'answer-1', answer: true })).toMatchObject({ run: { id: going.id }, waits: true });
+    let next = (await worker.status()).run;
+    for (let i = 0; i < 500 && next?.id === going.id; i++) {
+      await new Promise((r) => setTimeout(r, 1));
+      next = (await worker.status()).run;
+    }
+    expect(next?.id).not.toBe(going.id);
+    // Its run, with no press; a retry of the answer now answers that run.
+    expect(next?.scope).toBe('instructions');
+    const again = await worker.process('instructions', { requestId: 'answer-1', answer: true });
+    expect(again.run.id).toBe(next?.id);
+    expect(again.waits).toBeUndefined();
+  });
+
   it('refuses a tidy-up with nothing to do', async () => {
     const { worker } = await world('empty');
     await expect(worker.process('all')).rejects.toMatchObject({ code: 'conflict', message: 'Nothing is waiting in the inbox.' });

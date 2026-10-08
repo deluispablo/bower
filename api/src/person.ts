@@ -9,8 +9,10 @@ import { applyingWatch, decide, staleDeadline, staleFailure, unrecoveredCeiling 
 import type { Recovery, RecoveryWatch } from './recovery.js';
 import { timingSafeEqual } from './crypto.js';
 import { migrate, readSchemaVersion } from './person-schema.js';
-import { ACTIVE_PHASES, QUEUED_STALE_MS, utcDay } from './process.js';
+import { ACTIVE_PHASES, QUEUED_STALE_MS, admission, dispatchNew, utcDay } from './process.js';
 import type { AdmitInput, AdmitResult, RunPhase, RunReply, RunScope, RunWire } from './process.js';
+import type { FetchLike } from './google.js';
+import { HttpError } from './errors.js';
 import { PHASE_RANK, TICKET_TTL_MS, hashTicket, makeRunId, newTicket } from './run-ticket.js';
 import type { RunnerAccess, RunnerReport, RunnerReportResult } from './run-ticket.js';
 import { LEASE_TTL_MS } from './session-lease.js';
@@ -90,6 +92,29 @@ interface DispatchLost {
   /** The run as it was at the loss: a flag only holds while the run has not moved since. */
   attempt: number;
   phaseAt: number;
+}
+
+/**
+ * Key-value entry: the answers that came while a run was going (TL-P4-13 addendum), for the one run that run's end
+ * starts (`wake`). Deleted when a run takes them: that run, or a press of Tidy up on the whole inbox.
+ */
+const ANSWERS_WAITING = 'answersWaiting';
+/** Key-value entry: which run took each answer that waited, by its requestId, so a retry of it answers that run. */
+const ANSWERS_TAKEN = 'answersTaken';
+/** How many taken answers are remembered (the newest); an older retry is a new press, as with the run history. */
+const ANSWERS_TAKEN_KEPT = 50;
+/** How many times in a row the alarm tries to start the waiting answers' run through Drive or GitHub trouble. */
+const WAITING_TRIES = 3;
+
+/** The answers waiting for the run going to end (`ANSWERS_WAITING`). */
+interface AnswersWaiting {
+  requestIds: string[];
+  /** The things and piles they are about: the run takes only the piles that hold them, with your changes. */
+  subjects: string[];
+  /** The latest answer's setting: whether Bower may look things up on the web. */
+  allowWeb: boolean;
+  /** Starts that failed in a row on Drive or GitHub trouble. */
+  tries: number;
 }
 
 /** A stale run the alarm looks up on GitHub: what it saw, so the second section can tell whether anything moved. */
@@ -544,46 +569,89 @@ export class Person extends DurableObject<Env> {
    * 6. admission: a `queued` run bound to the requestId, keeping its manifest, and the revision rises.
    */
   admit(input: AdmitInput): AdmitResult {
-    return this.ctx.storage.transactionSync((): AdmitResult => {
-      const sql = this.ctx.storage.sql;
-      this.expire(input.now);
-      const repeat = sql
-        .exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE request_id = ?`, input.requestId)
-        .toArray()[0];
-      if (repeat !== undefined) return { admitted: true, run: toWire(repeat), revision: this.revision() };
-      const current = this.currentRunRow();
-      if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) {
-        return { admitted: true, run: toWire(current), revision: this.revision() };
-      }
-      if (input.manifest === null) return { admitted: false, refused: 'needs-manifest' };
-      const day = utcDay(input.now);
-      const used = sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', day).toArray()[0]?.counter ?? 0;
+    return this.ctx.storage.transactionSync((): AdmitResult => this.admitSync(input, false));
+  }
+
+  /**
+   * `admit`'s section. Answers (`input.answer`, TL-P4-13 addendum): one taken by a run, or waiting, answers that run
+   * or the run going, as a repeat does; one that comes while a run is going is kept for that run's end (`wake`) and
+   * answered `waits`, with nothing counted, unless the day's tidy-ups are used up already: then it is refused
+   * `rate-limited` as any press (no run can be admitted while one is going, so the count cannot rise before the end).
+   * A new run takes the waiting answers when it is their run (`takesWaiting`) or a press on the whole inbox.
+   */
+  private admitSync(input: AdmitInput, takesWaiting: boolean): AdmitResult {
+    const sql = this.ctx.storage.sql;
+    const kv = this.ctx.storage.kv;
+    this.expire(input.now);
+    const repeat = sql
+      .exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE request_id = ?`, input.requestId)
+      .toArray()[0];
+    if (repeat !== undefined) return { admitted: true, run: toWire(repeat), revision: this.revision() };
+    const takenBy = kv.get<Record<string, string>>(ANSWERS_TAKEN)?.[input.requestId];
+    const taken = takenBy === undefined ? undefined : sql.exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`, takenBy).toArray()[0];
+    if (taken !== undefined) return { admitted: true, run: toWire(taken), revision: this.revision() };
+    const current = this.currentRunRow();
+    const waiting = kv.get<AnswersWaiting>(ANSWERS_WAITING);
+    if (current !== undefined && waiting?.requestIds.includes(input.requestId) === true) {
+      return { admitted: true, run: toWire(current), revision: this.revision(), waits: true };
+    }
+    const day = utcDay(input.now);
+    const used = sql.exec<{ counter: number }>('SELECT counter FROM quota WHERE window = ?', day).toArray()[0]?.counter ?? 0;
+    if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) {
+      if (input.answer !== true) return { admitted: true, run: toWire(current), revision: this.revision() };
       if (used >= input.dailyLimit) return { admitted: false, refused: 'rate-limited' };
-      this.countQuota(day);
-      // Only today's counter matters; earlier days go.
-      sql.exec('DELETE FROM quota WHERE window < ?', day);
-      const seq = (current?.seq ?? 0) + 1;
-      const row = sql
-        .exec<RunRow>(
-          `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at, manifest)
-           VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)
-           RETURNING ${RUN_COLUMNS}`,
-          makeRunId(this.ctx.id.toString()),
-          seq,
-          input.requestId,
-          input.scope,
-          input.allowWeb ? 1 : 0,
-          input.now,
-          input.now,
-          JSON.stringify(input.manifest),
-        )
-        .one();
-      // The history is bounded: older runs go, and with them their requestIds (a repeat that late is new).
-      sql.exec('DELETE FROM runs WHERE seq <= ?', seq - RUNS_KEPT);
-      // Recovery: if nobody has started the run by its stale deadline, the alarm writes the expiry.
-      void this.ctx.storage.setAlarm(input.now + QUEUED_STALE_MS);
-      return { admitted: true, run: toWire(row), revision: this.raiseRevision(), created: true };
-    });
+      const subjects = waiting?.subjects ?? [];
+      kv.put(ANSWERS_WAITING, {
+        requestIds: [...(waiting?.requestIds ?? []), input.requestId],
+        subjects: input.subject === undefined || subjects.includes(input.subject) ? subjects : [...subjects, input.subject],
+        allowWeb: input.allowWeb,
+        tries: 0,
+      } satisfies AnswersWaiting);
+      return { admitted: true, run: toWire(current), revision: this.revision(), waits: true };
+    }
+    if (input.manifest === null) return { admitted: false, refused: 'needs-manifest' };
+    if (used >= input.dailyLimit) return { admitted: false, refused: 'rate-limited' };
+    this.countQuota(day);
+    // Only today's counter matters; earlier days go.
+    sql.exec('DELETE FROM quota WHERE window < ?', day);
+    const seq = (current?.seq ?? 0) + 1;
+    const row = sql
+      .exec<RunRow>(
+        `INSERT INTO runs (id, seq, request_id, scope, allow_web, phase, requested_at, phase_at, manifest)
+         VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)
+         RETURNING ${RUN_COLUMNS}`,
+        makeRunId(this.ctx.id.toString()),
+        seq,
+        input.requestId,
+        input.scope,
+        input.allowWeb ? 1 : 0,
+        input.now,
+        input.now,
+        JSON.stringify(input.manifest),
+      )
+      .one();
+    // The history is bounded: older runs go, and with them their requestIds (a repeat that late is new).
+    sql.exec('DELETE FROM runs WHERE seq <= ?', seq - RUNS_KEPT);
+    // A press on the whole inbox takes your changes and every pile, so it takes the answers that waited too.
+    const whole = input.scope === 'all' && input.subject === undefined;
+    if (waiting !== undefined && (takesWaiting || (whole && input.answer !== true))) this.takeWaiting(waiting, row.id);
+    // Recovery: if nobody has started the run by its stale deadline, the alarm writes the expiry.
+    void this.ctx.storage.setAlarm(input.now + QUEUED_STALE_MS);
+    return { admitted: true, run: toWire(row), revision: this.raiseRevision(), created: true };
+  }
+
+  /** The waiting answers go to run `runId`: each requestId is remembered with it, and nothing waits any more. */
+  private takeWaiting(waiting: AnswersWaiting, runId: string): void {
+    const kv = this.ctx.storage.kv;
+    const kept = Object.entries(kv.get<Record<string, string>>(ANSWERS_TAKEN) ?? {});
+    const taken = [...kept, ...waiting.requestIds.map((id): [string, string] => [id, runId])].slice(-ANSWERS_TAKEN_KEPT);
+    kv.put(ANSWERS_TAKEN, Object.fromEntries(taken));
+    kv.delete(ANSWERS_WAITING);
+  }
+
+  /** A run ended at `now`: when answers wait for it, the alarm wakes at once to start their run (`wake`). */
+  private wakeForWaiting(now: number): void {
+    if (this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING) !== undefined) void this.ctx.storage.setAlarm(now);
   }
 
   /**
@@ -591,15 +659,87 @@ export class Person extends DurableObject<Env> {
    * without the browser, with this object's own env and the Workers fetch (as `worker-dispatch` reaches GitHub).
    */
   async alarm(): Promise<void> {
-    // The alarm is shared: expired gone rows go first, recovery runs as before (it may clear the alarm), and the
-    // alarm is then set again for the earliest gone row still kept, unless an earlier one is already set.
-    this.pruneGone(Date.now());
-    await this.recover(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, fetchImpl: (i, init) => fetch(i, init) });
-    const kept = this.ctx.storage.kv.get<GoneTicket[]>(GONE_TICKETS);
-    if (kept === undefined) return;
-    const earliest = Math.min(...kept.map((t) => t.expiresAt));
-    const set = await this.ctx.storage.getAlarm();
-    if (set === null || set > earliest) await this.ctx.storage.setAlarm(earliest);
+    await this.wake(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, fetchImpl: (i, init) => fetch(i, init) });
+  }
+
+  /**
+   * What the alarm does at `now`, through `github.fetchImpl` for every request. The alarm is shared: expired gone rows
+   * go first, recovery runs as before (it may clear the alarm), then the run the waiting answers asked for starts
+   * (`startWaiting`), and the alarm is set again for the earliest gone row still kept, unless an earlier one is set.
+   * Every request of one alarm counts against one invocation's subrequests (TL-P4-11).
+   */
+  async wake(now: number, github: GitHubAccess): Promise<void> {
+    this.pruneGone(now);
+    let fetches = 0;
+    const counted: FetchLike = (input, init) => {
+      fetches += 1;
+      return github.fetchImpl(input, init);
+    };
+    await this.recover(now, { ...github, fetchImpl: counted });
+    try {
+      await this.startWaiting(now, counted, () => fetches);
+    } finally {
+      const kept = this.ctx.storage.kv.get<GoneTicket[]>(GONE_TICKETS);
+      if (kept !== undefined) {
+        const earliest = Math.min(...kept.map((t) => t.expiresAt));
+        const set = await this.ctx.storage.getAlarm();
+        if (set === null || set > earliest) await this.ctx.storage.setAlarm(earliest);
+      }
+    }
+  }
+
+  /**
+   * The run the answers that waited asked for (TL-P4-13 addendum), once the run they waited for has ended: the state
+   * transition on a run's end, carried out by the object's own alarm (https://developers.cloudflare.com/durable-objects/api/alarms/),
+   * so no press is needed. One run for all of them: scoped to their subjects' piles with your changes (scope `all`), or
+   * to your changes alone when none has a subject (keeping one note). It is admitted as any press, under the requestId
+   * `answers-after-<the ended run>`, so a retried alarm or a second end admits it once; it counts in the daily quota.
+   * The day's tidy-ups used up: the answers keep waiting (refused at the answer already, so only a lowered limit gets
+   * here). Drive or GitHub trouble: logged, and tried again a minute later, `WAITING_TRIES` in a row; a folder or
+   * Google access gone, or nothing left to take, is logged and not tried again. The answers stay in your changes for
+   * the next tidy-up whatever happens here.
+   */
+  private async startWaiting(now: number, fetchImpl: FetchLike, spent: () => number): Promise<void> {
+    const due = this.ctx.storage.transactionSync((): { waiting: AnswersWaiting; requestId: string } | null => {
+      const waiting = this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING);
+      const current = this.currentRunRow();
+      // A run going takes them at its own end.
+      if (waiting === undefined || (current !== undefined && ACTIVE_PHASES.includes(current.phase))) return null;
+      return { waiting, requestId: `answers-after-${current?.id ?? 'none'}` };
+    });
+    if (due === null) return;
+    const { waiting, requestId } = due;
+    const scope: RunScope = waiting.subjects.length > 0 ? 'all' : 'instructions';
+    let manifest: AdmissionManifest;
+    try {
+      manifest = await admission(this.env, this, { scope, subjects: waiting.subjects, now }, fetchImpl, spent);
+    } catch (err) {
+      console.error('the answers that waited could not start their tidy-up', err);
+      const final = err instanceof HttpError && (err.code === 'signed-out' || err.code === 'no-folder' || err.code === 'nothing');
+      this.ctx.storage.transactionSync(() => this.waitingFailed(requestId, final, now));
+      return;
+    }
+    const input: AdmitInput = { scope, allowWeb: waiting.allowWeb, requestId, now, dailyLimit: Number(this.env.DAILY_RUN_LIMIT), manifest };
+    const result = this.ctx.storage.transactionSync((): AdmitResult => this.admitSync(input, true));
+    if (!result.admitted) {
+      console.error(`the answers that waited keep waiting: ${result.refused}`);
+      return;
+    }
+    if (result.created === true) await dispatchNew(this.env, this, result.run, waiting.allowWeb, now, fetchImpl);
+  }
+
+  /** A start of the waiting answers' run failed: another in a minute, unless `final` or tried enough; they keep waiting. */
+  private waitingFailed(requestId: string, final: boolean, now: number): void {
+    const kv = this.ctx.storage.kv;
+    const waiting = kv.get<AnswersWaiting>(ANSWERS_WAITING);
+    // Taken in between (a press on the whole inbox), or already their run: nothing to try again.
+    if (waiting === undefined || this.ctx.storage.sql.exec('SELECT id FROM runs WHERE request_id = ?', requestId).toArray().length > 0) return;
+    const tries = waiting.tries + 1;
+    kv.put(ANSWERS_WAITING, { ...waiting, tries } satisfies AnswersWaiting);
+    if (final || tries >= WAITING_TRIES) return;
+    const current = this.currentRunRow();
+    if (current !== undefined && ACTIVE_PHASES.includes(current.phase)) return;
+    void this.ctx.storage.setAlarm(now + RECHECK_MS);
   }
 
   /** Drops the gone rows (`GONE_TICKETS`) expired at `now`; the entry goes with the last one. Returns the rows still live. */
@@ -870,6 +1010,7 @@ export class Person extends DurableObject<Env> {
             .one()
         : run;
       sql.exec('UPDATE run_ticket SET report_seq = ?, report_phase = ?, retired = ? WHERE hash = ?', report.seq, report.phase, ended ? 1 : 0, hash);
+      if (ended) this.wakeForWaiting(now);
       return { accepted: true, reply: { run: toWire(row), revision: shows ? this.raiseRevision() : this.revision() } };
     });
   }
@@ -943,6 +1084,7 @@ export class Person extends DurableObject<Env> {
     this.ctx.storage.sql.exec('UPDATE run_ticket SET retired = 1 WHERE run_id = ?', run.id);
     this.ctx.storage.kv.delete(RECOVERY_WATCH);
     void this.ctx.storage.deleteAlarm();
+    this.wakeForWaiting(now);
     this.raiseRevision();
   }
 

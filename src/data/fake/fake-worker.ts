@@ -18,7 +18,7 @@ import { DriveVault } from '../vault/drive-vault';
 import { BOWER_FOLDER, SYSTEM, isRunnerFile, type LastRunFile } from '../vault/layout';
 import { serializeNote } from '../vault/note-format';
 import { RULES_TEMPLATE } from '../vault/rules-format';
-import type { Me, RunReply, RunWire, StatusReply, WorkerApi } from '../worker/worker-api';
+import type { Me, ProcessOptions, RunReply, RunWire, StatusReply, WorkerApi } from '../worker/worker-api';
 import { planRun, type HubUpdate } from './fake-runner';
 import type { Binding, FakeRunService } from './fake-run-service';
 import type { FakeLease } from './fake-lease';
@@ -175,11 +175,20 @@ export class FakeWorker implements WorkerApi {
     return { run, revision: this.revision };
   }
 
-  async process(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string } = {}): Promise<RunReply> {
-    return this.stamp(await this.admit(scope, opts));
+  async process(scope: 'all' | 'instructions', opts: ProcessOptions = {}): Promise<RunReply> {
+    const run = await this.admit(scope, opts);
+    // An answer kept for the end of the run going (TL-P4-13 addendum), as the real Worker answers it.
+    const waits = opts.requestId !== undefined && (this.waiting?.requestIds.includes(opts.requestId) ?? false);
+    return waits ? { ...this.stamp(run), waits: true } : this.stamp(run);
   }
 
-  private async admit(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string }): Promise<RunWire> {
+  /**
+   * The answers that came while a run was going (TL-P4-13 addendum): the real Worker's person object starts their one
+   * run at that run's end, from its alarm; here the first status after the end does.
+   */
+  private waiting: { requestIds: string[]; subjects: string[]; allowWeb: boolean } | null = null;
+
+  private async admit(scope: 'all' | 'instructions', opts: ProcessOptions): Promise<RunWire> {
     this.online();
     this.fenced();
     await this.loaded;
@@ -195,6 +204,12 @@ export class FakeWorker implements WorkerApi {
     this.lastAllowWeb = !!opts.allowWeb;
     // A run on the B path that is not over is the run, whichever client asked for it: nothing new is admitted.
     const going = await this.goingOnB();
+    if (going && opts.answer && opts.requestId !== undefined) {
+      const w = this.waiting ?? { requestIds: [], subjects: [], allowWeb: false };
+      if (!w.requestIds.includes(opts.requestId)) {
+        this.waiting = { requestIds: [...w.requestIds, opts.requestId], subjects: opts.subject === undefined || w.subjects.includes(opts.subject) ? w.subjects : [...w.subjects, opts.subject], allowWeb: !!opts.allowWeb };
+      }
+    }
     if (going) return going;
     // Quick repeated asks share one admission.
     this.starting ??= this.begin(scope, opts).finally(() => {
@@ -226,7 +241,7 @@ export class FakeWorker implements WorkerApi {
     return run;
   }
 
-  private async begin(scope: 'all' | 'instructions', opts: { allowWeb?: boolean; requestId?: string; subject?: string }): Promise<RunWire> {
+  private async begin(scope: 'all' | 'instructions', opts: ProcessOptions & { subjects?: readonly string[] }): Promise<RunWire> {
     const root = this.rootId;
     if (!root) throw new BowerError('not-found', 'Your Bower folder is not there any more.');
     const vault = new DriveVault({ drive: this.drive, rootId: async () => root, runningPiles: () => new Set(), device: 'worker' });
@@ -237,7 +252,8 @@ export class FakeWorker implements WorkerApi {
     const runId = minted.runId;
     const requestId = opts.requestId ?? minted.requestId;
     // An answer's run takes only the pile that holds its subject (TL-P4-08 addendum 8), admitted as the Worker does.
-    const scoped = opts.subject === undefined ? null : await planAdmission(fakeRead(this.drive), root, { scope, subject: opts.subject, clock: () => Date.now(), newId: () => requestId });
+    const subjects = [...(opts.subject !== undefined ? [opts.subject] : []), ...(opts.subjects ?? [])];
+    const scoped = !subjects.length ? null : await planAdmission(fakeRead(this.drive), root, { scope, subjects, clock: () => Date.now(), newId: () => requestId });
     if (scoped?.kind === 'nothing') throw new BowerError('conflict', NOTHING[scoped.cause]);
     const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(scoped ? { taken: scoped.manifest } : {}), ...(this.updates ? { updates: this.updates } : {}) });
     const failAt = this.failOnce;
@@ -245,11 +261,35 @@ export class FakeWorker implements WorkerApi {
     const wire = await this.runs.admit(this.binding(root), plan.manifest, failAt ? { failAt: 'writing' } : {});
     this.onB = true;
     if (opts.requestId !== undefined) this.presses.set(opts.requestId, { ...wire });
+    // A press on the whole inbox takes the answers that waited too.
+    if (this.waiting && scope === 'all' && !subjects.length && !opts.answer) {
+      for (const id of this.waiting.requestIds) this.presses.set(id, { ...wire });
+      this.waiting = null;
+    }
     return wire;
   }
 
   async status(): Promise<StatusReply> {
-    return this.stamp(await this.latest());
+    const run = await this.latest();
+    if (this.waiting && (!run || ['done', 'failed'].includes(run.phase))) {
+      const next = await this.startWaiting(this.waiting);
+      if (next) return this.stamp(next);
+    }
+    return this.stamp(run);
+  }
+
+  /** The one run of the answers that waited, scoped to their subjects (your changes alone when none has one). */
+  private async startWaiting(w: { requestIds: string[]; subjects: string[]; allowWeb: boolean }): Promise<RunWire | null> {
+    this.waiting = null;
+    try {
+      const wire = await this.begin(w.subjects.length ? 'all' : 'instructions', { allowWeb: w.allowWeb, subjects: w.subjects });
+      for (const id of w.requestIds) this.presses.set(id, { ...wire });
+      return wire;
+    } catch (e) {
+      // The answers stay in your changes for the next tidy-up; the reason is logged, as the Worker logs it.
+      console.error('the answers that waited could not start their tidy-up', e);
+      return null;
+    }
   }
 
   private async latest(): Promise<RunWire | null> {

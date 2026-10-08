@@ -312,6 +312,11 @@ export interface AdmissionOptions {
    * with your changes. Only with scope `all`.
    */
   subject?: string;
+  /**
+   * Answers that waited for a run to end (TL-P4-13 addendum): the one run their end starts reads and takes the piles
+   * that hold any of these, with your changes. Only with scope `all`.
+   */
+  subjects?: readonly string[];
 }
 
 /** Whether `f`, a pile folder or loose thing of the inbox, is or holds `subject` (its pile id, its id, or a thing's id in it). */
@@ -391,15 +396,17 @@ export async function planAdmission(source: SpineRead, rootId: string, opts: Adm
   };
   const ix = VaultIndex.build(rootId, listing);
   const journal = (await journalOf(read, ix)).map(admitted).sort((a, b) => byCodePoint(a.fileId, b.fileId));
-  const subject = opts.scope === 'all' ? opts.subject : undefined;
+  const wanted = opts.scope === 'all' ? [...new Set([...(opts.subject !== undefined ? [opts.subject] : []), ...(opts.subjects ?? [])])] : [];
+  // The manifest names a subject only when there is one; with several, its piles say what it takes.
+  const subject = wanted.length === 1 ? wanted[0] : undefined;
   const manifest = (piles: AdmittedPile[]): Admission => {
     const value: AdmissionManifest = { v: 1, id: opts.newId(), rootId, scope: opts.scope, at: opts.clock(), piles, journal, ...(subject !== undefined ? { subject } : {}) };
     return { kind: 'manifest', manifest: value };
   };
   if (opts.scope === 'instructions') return journal.length ? manifest([]) : { kind: 'nothing', cause: 'new' };
-  // An answer's run reads and takes only the pile that holds its subject; the rest of the inbox is not read.
-  const only = (f: DriveFile): boolean => subject === undefined || holds(ix, f, subject);
-  if (!inboxPiles(ix, only).some((p) => p.itemIds.length || p.hasWords)) return subject !== undefined && journal.length ? manifest([]) : { kind: 'nothing', cause: 'waiting' };
+  // An answer's run reads and takes only the piles that hold its subjects; the rest of the inbox is not read.
+  const only = (f: DriveFile): boolean => !wanted.length || wanted.some((s) => holds(ix, f, s));
+  if (!inboxPiles(ix, only).some((p) => p.itemIds.length || p.hasWords)) return wanted.length && journal.length ? manifest([]) : { kind: 'nothing', cause: 'waiting' };
   const unread = new Set<string>();
   // A pile whose note was not read has words when the note is not empty (its size is in the listing), as `inboxPiles` says.
   const piles = (await listedPiles(read, rootId, unread, only)).map((p) => {

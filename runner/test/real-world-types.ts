@@ -28,9 +28,9 @@ export interface ApiHost {
   /** When the person object's alarm is set for, or null. */
   alarmAt(): number | null;
   /**
-   * Fires the person object's alarm at the time it was set for: what `Person.alarm()` does, `recover` with the
-   * Worker's GitHub repository and token, at that time and through `outside` (the alarm itself reads the wall clock
-   * and the global fetch). False when no alarm was set.
+   * Fires the person object's alarm at the time it was set for: what `Person.alarm()` does (`wake`: recovery, then
+   * the run the waiting answers asked for) with the Worker's GitHub repository and token, at that time and through
+   * `outside` (the alarm itself reads the wall clock and the global fetch). False when no alarm was set.
    */
   fireAlarm(): Promise<boolean>;
 }
