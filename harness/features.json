@@ -4830,8 +4830,8 @@
       "Tests: the fingerprint is on the timing line and matches the golden input."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the model input on the C04 fixture equals its golden copy|the timing line carries the model input fingerprint\"",
-    "passes": true,
-    "note": "TL-P4-07 addendum (main 50a99a1): inputs identical on c76fd2f and a566241 (fixture and live token counts); runs after placement-guidance, since that changes the prompt."
+    "passes": false,
+    "note": "TL-P4-07 addendum (main 50a99a1): inputs identical on c76fd2f and a566241 (fixture and live token counts); runs after placement-guidance, since that changes the prompt. Reopened by the P4-7 review (BLOCK): the golden bypasses the aimed reads and planReads and uses a made-up plot note; it must run the C04 corpus fixture through main() with the Drive v3 fake."
   },
   {
     "id": "checkpoint-count",

@@ -201,3 +201,4 @@ P3-9 is closed.
 - placement-guidance closed (f41f86b): the original's PARA wording in the prompt; C04 rubric allows Resources or Areas/Home linking the plot note. 367/369. model-input-fingerprint running (mechanical, at f41f86b).
 - model-input-fingerprint merged (1289d2e) but not closed: the timing test passes at the red commit and the golden test writes its own file when missing. Back to the worker. 367/369.
 - model-input-fingerprint closed (dd2f5f7). 368/369 (open: report-kept-your-change, C12). P4-7 Opus delta a566241..HEAD running.
+- P4-7 review BLOCK: the fingerprint golden bypasses the real read path (provider aimed reads, planReads) and uses a made-up plot note. model-input-fingerprint reopened; fix round (implementer) with the minors: the citation, the [[Garden plot prefix match, putNew counting a checkpoint twice on resume, prompt wording that refers to rules the model never sees. 367/369.
