@@ -269,14 +269,30 @@ describe('deploy-staging.sh', { timeout: 30_000 }, () => {
   it('the deploy scan allows the unpdf literal and still refuses a real address', () => {
     const at = checkout();
     // A bundle with only the unpdf literal should pass.
-    const literalText = 'const obfuscated = "jm@kbswfq.pkbglt";';
+    const literalText = 'const obfuscated = "jm@kbswfq.pkbgltMlwbaof";';
     const withLiteral = run(at, [at.sha, ORIGIN], { DIST_TEXT: literalText });
     expect(withLiteral.status).toBe(0);
     // A bundle with the literal plus a real address should refuse.
-    const mixedText = 'const obfuscated = "jm@kbswfq.pkbglt"; const contact = "alex@company.test";';
+    const mixedText =
+      'const obfuscated = "jm@kbswfq.pkbgltMlwbaof"; const contact = "alex@company.test";';
     const withBoth = run(at, [at.sha, ORIGIN], { DIST_TEXT: mixedText });
     expectRefused(withBoth, /address/i);
     expect(`${withBoth.stdout}${withBoth.stderr}`).not.toContain('alex@company.test');
+  });
+
+  it('the deploy scan passes the real unpdf bundle line and still refuses a real address', () => {
+    const at = checkout();
+    // The real unpdf bundle line extracted from the library, with the full token.
+    const realBundleLine =
+      'ufqwz`kbnafqOjujmd#ulovnfpBmwklmzoldjm!#QfobwfgF`lmlnzqfb`kfp`vwwjmd' +
+      'dqbujwzojef#jm@kbswfq.pkbgltMlwbaof?,wg=	#qfwvqmpwbgjvntjgdfwpubqz';
+    const withRealBundle = run(at, [at.sha, ORIGIN], { DIST_TEXT: realBundleLine });
+    expect(withRealBundle.status).toBe(0);
+    // The bundle line plus a real address should refuse.
+    const mixedText = `${realBundleLine} const contact = "alex@larkspur.example.org";`;
+    const withBoth = run(at, [at.sha, ORIGIN], { DIST_TEXT: mixedText });
+    expectRefused(withBoth, /address/i);
+    expect(`${withBoth.stdout}${withBoth.stderr}`).not.toContain('alex@larkspur.example.org');
   });
 
   it('deploy-staging deploys a clean main SHA and checks health', () => {
