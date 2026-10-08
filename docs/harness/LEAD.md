@@ -9,7 +9,7 @@ The lead keeps this file current under [TL-P2-43](2026-10-06-tl-p2-43-session-st
 - **Where P4 stands (2026-10-08):** [P4_PLAN](../P4_PLAN.md), with rulings TL-P4-01 to TL-P4-08.
   - **C04 with Claude passes 3/3.** The median is 1:28 from the press to `done`; the model takes 3–4 s and 1 turn. The original took 6:38 before its speed work, and its model step took 44 s. What is left is the spine's own overhead.
   - **C04 passes live on 327b987** (TL-P4-07, TL-P4-08 addenda 1–6): garden 1:00 median, offer-and-flat 1:20–1:48. Claude is off.
-  - **TL-P4-08:** the local second-brain method is the semantic reference (method only), and the layout stays. Running: C05 (state-rewrite-change first) and drive-calls-cut. Deferred to C11: type-proposals, ask-answer-loop. Deferred to C12: report-kept-your-change.
+  - **Do not deploy main 54ddb09:** it holds drive-calls-cut's blocked first round; deploy only after its fix round closes. **TL-P4-08:** the local second-brain method is the semantic reference (method only), and the layout stays. Running: C05 (state-rewrite-change first) and drive-calls-cut. Deferred to C11: type-proposals, ask-answer-loop. Deferred to C12: report-kept-your-change.
   - **Next:** the C05 slice (updates and the merge question), then C06, C07, C11, C08, C09, C10, C15, C13 and C12, per P4_PLAN.
 - **Codex review on 2026-10-12** (TL-P3-16): check that `codex exec` answers, then run one review of the P3 Worker and spine range. Its findings are fixed before P4 code depends on that code.
 - **Pane:** the coordinator's pane is signed in as test account A. The owner gave the coordinator standing permission for made-up piles and Tidy up presses on staging with A and B (2026-10-08).
