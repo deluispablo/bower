@@ -5095,5 +5095,46 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"two differently worded asks about one thing give one question|a thing that leaves the inbox closes its question|a re-upload of the same thing adds no question|an instructions run keeps an open thing question|a pile ask then a thing ask leave one question\" && pnpm vitest run src/data/vault/drive-vault.test.ts -t \"binning the only thing left in the inbox closes its question\"",
     "note": "TL-P4-11 addendum (main 1f91b43). The owner saw the IMG_2301 question repeated in the app. Cause (coordinator): each live offer-and-flat run re-uploaded the pile after a reset (new fileIds, so new q-ask ids) and binned piles never closed their questions. Reopened by P4-15 (BLOCK): binning the last inbox thing leaves its question open; a scripted instructions run or any answer drops every q-ask; a pile ask then a thing ask on one photo give two questions."
+  },
+  {
+    "id": "state-no-adoption",
+    "task": "p4-c",
+    "category": "fix",
+    "passes": false,
+    "what": "An unmarked Current state is the person's unless a rule line grants it; a Bower write never adopts it (TL-P4-10 point 2 withdrawn). The fallback line reads as plain news.",
+    "steps": [
+      "Remove adoption by md5Checksum/bowerMd5; keep bowerMd5 only if something else uses it.",
+      "A Bower append to a note with a person's or unmarked state does not make the next run rewrite it.",
+      "Reword the fallback Timeline line (no \"Bower's current state would now read\", no \".;\")."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"after a Bower append the next run only adds a line|an unmarked Current state is never adopted without a rule|the fallback line reads as plain news\"",
+    "note": "TL-P4-10 addendum (main 657c081). Live on 2b08fc1: run JNxHTk appended to Job hunt after a hand edit and set bowerMd5, so the next run would adopt the person's state (scripted.ts:694)."
+  },
+  {
+    "id": "home-reads-once",
+    "task": "p4-b",
+    "category": "fix",
+    "passes": false,
+    "what": "Home reads each Drive file at most once per load, with a Home Drive-call golden.",
+    "steps": [
+      "Find the duplicate reads (likely questions() calling piles() again, and repeated media reads).",
+      "Each file read at most once per Home load.",
+      "A Home Drive-call golden pins the count."
+    ],
+    "verify": "pnpm vitest run -t \"Home reads each file at most once|Home Drive calls match the golden\"",
+    "note": "Live on 2b08fc1: Home took about 24 s with 221 Drive calls, 189 media reads of 42 files, one file up to 10 times."
+  },
+  {
+    "id": "corpus-offer-real-pdf",
+    "task": "p4-c",
+    "category": "fix",
+    "passes": false,
+    "what": "The corpus offer letters are real minimal PDFs with the same text, so live runs read them as the scripted runs do.",
+    "steps": [
+      "Replace text-with-PDF-header offers in harness/corpus with minimal valid PDFs carrying the same text.",
+      "Scripted corpus scores unchanged."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"corpus PDFs are valid PDFs\"",
+    "note": "Live c05-hub-lines on 2b08fc1: the corpus offer was unreadable, so it was filed with no terms."
   }
 ]
