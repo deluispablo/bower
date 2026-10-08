@@ -60,13 +60,13 @@ describe('runner drive adapter', () => {
     const { wire, note } = await seeded();
     const adapter = adapterOn(wire, 1);
     await adapter.get(note.id);
-    const before = wire.tokenCalls;
+    const before = wire.attemptCalls;
     const writes = await adapter.batch();
-    // One token-route read per batch, and one more right before each write (TL-P3-23).
-    expect(wire.tokenCalls).toBe(before + 1);
+    // One attempt read per batch, and one more right before each write (TL-P3-23).
+    expect(wire.attemptCalls).toBe(before + 1);
     const renamed = await writes.update(note.id, { name: 'Kept.md' });
     expect(renamed.name).toBe('Kept.md');
-    expect(wire.tokenCalls).toBe(before + 2);
+    expect(wire.attemptCalls).toBe(before + 2);
 
     // The Worker started attempt 2: this runner's next batch is refused before any write, and so is a write of a
     // batch it began before the takeover.
@@ -74,12 +74,59 @@ describe('runner drive adapter', () => {
     const sent = writesSent(wire).length;
     await expect(adapter.batch()).rejects.toMatchObject(STALE);
     await expect(writes.update(note.id, { name: 'Late.md' })).rejects.toMatchObject(STALE);
-    // The token route itself refuses an older ticket the same way.
+    // The Worker itself refuses an older ticket the same way.
     wire.attempt = 1;
     wire.tokenRefusal = { status: 409, error: 'stale-attempt' };
     await expect(adapter.batch()).rejects.toMatchObject(STALE);
     expect(writesSent(wire).length).toBe(sent);
     expect((await wire.drive.get(note.id)).name).toBe('Kept.md');
+  });
+
+  it('the attempt check before a write does not fetch a token', async () => {
+    const { wire, note, folder } = await seeded();
+    const adapter = adapterOn(wire, 1);
+    await adapter.get(note.id);
+    await adapter.get(folder.id);
+    // One token for the reads; it is kept until shortly before it expires.
+    expect(wire.tokenCalls).toBe(1);
+    const writes = await adapter.batch();
+    await writes.update(note.id, { name: 'One.md' });
+    await writes.createText(folder.id, 'Two.md', 'Words.');
+    await (await adapter.batch()).update(note.id, { name: 'Three.md' });
+    // Each batch and each write asked the attempt route (2 batches, 3 writes); none fetched a token.
+    expect(wire.attemptCalls).toBe(5);
+    expect(wire.tokenCalls).toBe(1);
+    // Near its expiry the token is asked for again, once.
+    wire.now += 3_600_000 - 30_000;
+    await (await adapter.batch()).update(note.id, { name: 'Four.md' });
+    expect(wire.tokenCalls).toBe(2);
+    expect((await wire.drive.get(note.id)).name).toBe('Four.md');
+  });
+
+  it('a stale attempt is still refused before any write', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, note } = await seeded();
+    const adapter = adapterOn(wire, 1);
+    await adapter.get(note.id);
+    const writes = await adapter.batch();
+    const sent = writesSent(wire).length;
+    const tokens = wire.tokenCalls;
+    // A newer attempt holds the run: the attempt route names it, and nothing more is sent.
+    wire.attempt = 2;
+    await expect(adapter.batch()).rejects.toMatchObject(STALE);
+    await expect(writes.update(note.id, { name: 'Late.md' })).rejects.toMatchObject(STALE);
+    // The Worker answers this runner's superseded ticket 409 stale-attempt: refused the same way.
+    wire.attempt = 1;
+    wire.tokenRefusal = { status: 409, error: 'stale-attempt' };
+    await expect(adapter.batch()).rejects.toMatchObject(STALE);
+    await expect(writes.update(note.id, { name: 'Later.md' })).rejects.toMatchObject(STALE);
+    // A refused ticket stays an auth error, never a takeover.
+    wire.tokenRefusal = { status: 401, error: 'signed-out' };
+    await expect(writes.update(note.id, { name: 'Latest.md' })).rejects.toMatchObject({ code: 'auth' });
+    expect(writesSent(wire).length).toBe(sent);
+    expect(wire.attemptCalls).toBe(6);
+    expect(wire.tokenCalls).toBe(tokens);
+    expect((await wire.drive.get(note.id)).name).toBe('Note.md');
   });
 
   it('the adapter refuses with stale-attempt on the Worker\'s real reply', async () => {

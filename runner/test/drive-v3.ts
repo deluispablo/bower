@@ -28,9 +28,11 @@ export interface DriveV3 {
   requests: WireRequest[];
   /** The attempt the token route reports as current. */
   attempt: number;
-  /** When set, the token route answers this instead of a token. */
+  /** When set, the token and attempt routes answer this instead. */
   tokenRefusal: { status: number; error: string } | null;
   tokenCalls: number;
+  /** Calls to the attempt route (`GET /runner/runs/:id/attempt`), which never hands out a token. */
+  attemptCalls: number;
   now: number;
   /** The folder and the admission manifest the token route gives. */
   folderId: string;
@@ -69,6 +71,7 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     attempt,
     tokenRefusal: null,
     tokenCalls: 0,
+    attemptCalls: 0,
     now: 1_000_000,
     folderId: 'FOLDER_ID',
     manifest: null,
@@ -85,10 +88,14 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
           if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
           return status(wire, JSON.parse(String(init.body)) as Omit<StatusPost, 'after'>);
         }
-        wire.tokenCalls++;
-        if (url.pathname !== `/runner/runs/${RUN_ID}/token` || method !== 'GET') return json(404, { error: { code: 'not-found', message: 'Not found.' } });
+        const route = method === 'GET' ? /^\/runner\/runs\/([^/]+)\/(token|attempt)$/.exec(url.pathname) : null;
+        if (route?.[2] === 'attempt') wire.attemptCalls++;
+        else wire.tokenCalls++;
+        if (route?.[1] !== RUN_ID) return json(404, { error: { code: 'not-found', message: 'Not found.' } });
         if (auth !== `Bearer ${TICKET}`) return json(401, { error: { code: 'signed-out', message: 'Sign in again to keep going.' } });
         if (wire.tokenRefusal) return json(wire.tokenRefusal.status, { error: { code: wire.tokenRefusal.error, message: 'This tidy-up was taken over.' } });
+        // The attempt route answers from the person object alone: the attempt, no token.
+        if (route[2] === 'attempt') return json(200, { attempt: wire.attempt });
         const accessToken = `drive-token-${++minted}`;
         live.add(accessToken);
         return json(200, { accessToken, expiresAt: wire.now + 3_600_000, folderId: wire.folderId, attempt: wire.attempt, ...(wire.manifest ? { manifest: wire.manifest } : {}) });

@@ -5,6 +5,8 @@
  *
  * - `GET /runner/runs/:id/token` answers `{ accessToken, expiresAt, folderId, attempt, manifest }`, the
  *   manifest being what the run was admitted to take (TL-P3-21);
+ * - `GET /runner/runs/:id/attempt` answers `{ attempt }` from the person object alone, with no Google call: the
+ *   runner's check before each fenced write (TL-P4-04);
  * - `POST /runner/runs/:id/status` takes `{ attempt, seq, phase, total?, failure? }` and answers
  *   `{ run, revision }`.
  *
@@ -39,6 +41,11 @@ export interface RunnerToken {
   folderId: string;
   attempt: number;
   manifest: AdmissionManifest | null;
+}
+
+/** What `GET /runner/runs/:id/attempt` answers: the run's current attempt, from the person object alone (TL-P4-04). */
+export interface RunnerAttempt {
+  attempt: number;
 }
 
 /** Longest `failure` sentence kept on a run. */
@@ -101,13 +108,14 @@ function parseReport(value: unknown): RunnerReport {
   };
 }
 
-/** `GET /runner/runs/:id/token` and `POST /runner/runs/:id/status`, mounted at `/` by `index.ts`. */
+/** `GET /runner/runs/:id/token`, `GET /runner/runs/:id/attempt` and `POST /runner/runs/:id/status`, mounted at `/` by `index.ts`. */
 export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const runner = new Hono<AppEnv>();
 
-  runner.get('/runner/runs/:id/token', async (c) => {
+  /** The run's grant for this ticket from the person object alone; a superseded ticket is 409, anything else unknown 401. */
+  async function granted(c: Context<AppEnv>): Promise<{ person: DurableObjectStub<Person>; access: RunnerGrant & { folderId: string } }> {
     const env = c.get('env');
-    const runId = c.req.param('id');
+    const runId = c.req.param('id') ?? '';
     const ticket = bearer(c);
     const person = personOfRun(env, runId);
     const hash = await hashTicket(ticket);
@@ -117,6 +125,19 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     );
     if (access === 'stale-attempt') throw refusal('stale-attempt');
     if (access?.folderId == null) throw signedOut();
+    return { person, access: { ...access, folderId: access.folderId } };
+  }
+
+  // The runner's check before each fenced write (TL-P4-04): the current attempt, with no Google call.
+  runner.get('/runner/runs/:id/attempt', async (c) => {
+    const { access } = await granted(c);
+    const reply: RunnerAttempt = { attempt: access.attempt };
+    return c.json(reply);
+  });
+
+  runner.get('/runner/runs/:id/token', async (c) => {
+    const env = c.get('env');
+    const { person, access } = await granted(c);
     const options: DriveTokenOptions = {};
     if (deps.fetchImpl !== undefined) options.fetchImpl = deps.fetchImpl;
     const { accessToken, expiresAt } = await accessTokenOf(env, person, options);

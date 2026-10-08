@@ -107,7 +107,7 @@ export class RunnerDrive {
   }
 
   /**
-   * The writes of one batch, after the token route confirms this runner's
+   * The writes of one batch, after the attempt route confirms this runner's
    * attempt is still the current one. Call it again for each batch.
    */
   async batch(): Promise<FencedDrive> {
@@ -123,11 +123,14 @@ export class RunnerDrive {
     return this.seen.wrap(this.writes);
   }
 
-  /** The token route's attempt is still this runner's; otherwise a newer attempt took the run over. */
+  /**
+   * The Worker's attempt is still this runner's; otherwise a newer attempt took the run over. Asked of the light
+   * attempt route, which fetches no token (TL-P4-04); the Drive token is kept until near its expiry (`token.ts`).
+   */
   private async stillCurrent(): Promise<void> {
-    const grant = await this.token.grant();
-    if (grant.attempt !== this.attempt) {
-      console.error(`Attempt ${this.attempt} was taken over by attempt ${grant.attempt}`);
+    const current = await this.token.attempt();
+    if (current !== this.attempt) {
+      console.error(`Attempt ${this.attempt} was taken over by attempt ${current}`);
       throw staleAttempt();
     }
   }
