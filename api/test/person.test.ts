@@ -13,7 +13,16 @@ const personFor = (sub: string) => people.get(people.idFromName(sub));
  * Takes back schema step 11 (the dead schema it dropped, and the ticket's attempt named epoch again), for the tests
  * that rewind further. The v1 `control` columns come back at the end of the row, with their v1 types and checks.
  */
+/** The tables of a person from before v12, which added `deadlines` (its moved rows: test/deadlines.test.ts). */
+const TABLES_BEFORE_V12 = PERSON_TABLES.filter((t) => t !== 'deadlines');
+
+/** Takes back schema step 12 (the deadlines table), for the tests that rewind further. */
+function undoV12(sql: SqlStorage): void {
+  sql.exec('DROP TABLE deadlines');
+}
+
 function undoV11(sql: SqlStorage): void {
+  undoV12(sql);
   sql.exec('ALTER TABLE run_ticket RENAME COLUMN attempt TO epoch');
   sql.exec('ALTER TABLE control ADD COLUMN head TEXT');
   sql.exec('ALTER TABLE control ADD COLUMN claim TEXT');
@@ -117,6 +126,7 @@ describe('person object', () => {
       run_ticket: 0,
       account: 0,
       runs: 0,
+      deadlines: 0,
     });
     // Alex's rows are still all there, untouched by Sam.
     const alexCounts = await runInDurableObject(alex, (_instance, state) =>
@@ -131,6 +141,7 @@ describe('person object', () => {
       run_ticket: 1,
       account: 1,
       runs: 0,
+      deadlines: 0,
     });
     expect(await alex.countQuota('2026-10-06')).toBe(3);
   });
@@ -179,11 +190,12 @@ describe('person object', () => {
     // The v1 admission table was never read or written (runs replaced it in v7), nor were control's head,
     // claim and epoch; a ticket's epoch is the attempt it was minted for, and is named so.
     expect(shape).toEqual({
-      tables: ['account', 'control', 'quota', 'run_ticket', 'runs', 'schema_version', 'session_lease', 'session_leave'],
+      // v12 adds the deadlines table (TL-P4-14).
+      tables: ['account', 'control', 'deadlines', 'quota', 'run_ticket', 'runs', 'schema_version', 'session_lease', 'session_leave'],
       control: ['id', 'status_revision'],
       runTicket: ['hash', 'run_id', 'attempt', 'retired', 'expires_at', 'report_seq', 'report_phase'],
     });
-    expect(await alex.schemaVersion()).toBe(11);
+    expect(await alex.schemaVersion()).toBe(12);
   });
 
   it('a person object refuses storage from a newer build', async () => {
@@ -316,7 +328,7 @@ describe('person storage migration', () => {
       sql.exec('INSERT INTO run_ticket (hash, run_id, epoch, retired) VALUES (?, ?, ?, 0)', 'hash-1', 'run-1', 2);
       sql.exec('UPDATE schema_version SET version = 6 WHERE id = 1');
       return Object.fromEntries(
-        PERSON_TABLES.filter((t) => t !== 'runs').map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]),
+        TABLES_BEFORE_V12.filter((t) => t !== 'runs').map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]),
       );
     });
     await evictDurableObject(alex);
@@ -325,7 +337,7 @@ describe('person storage migration', () => {
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
       return Object.fromEntries(
-        PERSON_TABLES.map((t) => [
+        TABLES_BEFORE_V12.map((t) => [
           t,
           // v8's ticket columns aside: the v7 → v8 test covers them. v11 names the ticket's epoch attempt.
           sql.exec(t === 'run_ticket' ? 'SELECT hash, run_id, attempt AS epoch, retired FROM run_ticket' : `SELECT * FROM ${t}`).toArray(),
@@ -361,14 +373,14 @@ describe('person storage migration', () => {
       undoV8(sql);
       sql.exec('INSERT INTO run_ticket (hash, run_id, epoch, retired) VALUES (?, ?, ?, 0)', 'hash-1', 'run-1', 2);
       sql.exec('UPDATE schema_version SET version = 7 WHERE id = 1');
-      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
     });
     await evictDurableObject(alex);
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
-      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
     });
     // Every v7 row is there as it was; a ticket kept from before has no expiry, so it never works.
     expect({ ...after, schema_version: undefined, run_ticket: undefined, runs: undefined }).toEqual({
@@ -394,14 +406,14 @@ describe('person storage migration', () => {
       const sql = state.storage.sql;
       undoV9(sql);
       sql.exec('UPDATE schema_version SET version = 8 WHERE id = 1');
-      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
     });
     await evictDurableObject(alex);
 
     expect(await alex.schemaVersion()).toBe(SCHEMA_VERSION);
     const after = await runInDurableObject(alex, (_instance, state) => {
       const sql = state.storage.sql;
-      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      return Object.fromEntries(TABLES_BEFORE_V12.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
     });
     // Every v8 row is there as it was; a run admitted before has no manifest.
     expect({ ...after, schema_version: undefined, runs: undefined }).toEqual({
@@ -433,7 +445,7 @@ describe('person storage migration', () => {
   });
 
   it('person storage migrates from v10 to v11 keeping every row', async () => {
-    expect(SCHEMA_VERSION).toBe(11);
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(11);
     const alex = personFor('sub-alex-v10');
     await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
     expect(await alex.setFolderId('FOLDER_ID')).toBe(true);
@@ -451,7 +463,7 @@ describe('person storage migration', () => {
       sql.exec('INSERT INTO admission (id, active_run_id, request_id) VALUES (1, ?, ?)', 'run-old', 'req-old');
       sql.exec('UPDATE control SET head = ?, claim = ?, epoch = 5 WHERE id = 1', 'head-1', 'claim-1');
       sql.exec('UPDATE schema_version SET version = 10 WHERE id = 1');
-      return Object.fromEntries(PERSON_TABLES.map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
+      return Object.fromEntries(PERSON_TABLES.filter((t) => t !== 'deadlines').map((t) => [t, sql.exec(`SELECT * FROM ${t}`).toArray()]));
     });
     await evictDurableObject(alex);
 
@@ -468,6 +480,8 @@ describe('person storage migration', () => {
     expect(after.rows).toEqual({
       ...before,
       schema_version: [{ id: 1, version: SCHEMA_VERSION }],
+      // v12 moves the going run's deadline into its table (TL-P4-14).
+      deadlines: [expect.objectContaining({ kind: 'run', key: runId })],
       control: keptControl(before.control),
       run_ticket: (before.run_ticket ?? []).map(({ epoch, ...t }) => ({ ...t, attempt: epoch })),
     });
