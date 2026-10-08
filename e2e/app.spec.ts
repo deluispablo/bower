@@ -107,3 +107,17 @@ test('runs on the source it was asked for', async ({ page }) => {
   await open(page, '/');
   expect(await page.evaluate(() => sessionStorage.getItem('bower:demo:source'))).toBe(isFake ? 'fake' : null);
 });
+
+test('a failed start says why and offers to try again', async ({ page, allowConsole }) => {
+  test.skip(!isFake, 'the Worker answering 500 is the fake source');
+  allowConsole(/Worker answered 500/, 'the Worker answers 500 to the first press, on purpose');
+  await open(page, '/', 'start-fails');
+  await page.getByRole('button', { name: /^Tidy up \d+ things$/ }).first().click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByRole('button', { name: /^Tidy up \d+ things$/ }).click();
+  await expect(sheet.getByRole('alert')).toHaveText("Something went wrong on Bower's side. Try again later.");
+  await expect(sheet.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Try again' }).click();
+  await expect(sheet.getByText(/Done\. \d+ things filed/).last()).toBeVisible();
+});

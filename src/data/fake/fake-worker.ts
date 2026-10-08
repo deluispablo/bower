@@ -45,6 +45,8 @@ export class FakeWorker implements WorkerApi {
   private rootId: string | null;
   private signedIn: boolean;
   private failOnce: boolean;
+  /** The Worker answers 500 to the first press (the start-fails situation); the next press works. */
+  private startFails: boolean;
   /** A run view from before the run service (a legacy `last-run.json`): read on load, never run or written by a run. */
   private record: RunWire | null = null;
   private loaded: Promise<void>;
@@ -64,6 +66,7 @@ export class FakeWorker implements WorkerApi {
     this.rootId = opts.rootId;
     this.signedIn = keptSignedIn() ?? opts.scenario !== 'signed-out';
     this.failOnce = opts.scenario === 'fail-run';
+    this.startFails = opts.scenario === 'start-fails';
     this.offline = !!opts.offline;
     this.runs = opts.runs;
     this.account = opts.account ?? ALEX.email;
@@ -178,6 +181,11 @@ export class FakeWorker implements WorkerApi {
     this.fenced();
     await this.loaded;
     if (this.loadFailure) throw this.loadFailure.error;
+    if (this.startFails) {
+      this.startFails = false;
+      console.error('Worker answered 500 for POST /process');
+      throw new BowerError('unknown', "Something went wrong on Bower's side. Try again later.");
+    }
     // A repeat of a press answers that press's run, ended or not, and changes nothing (TL-P3-15).
     const repeat = opts.requestId === undefined ? null : await this.pressed(opts.requestId);
     if (repeat) return repeat;
