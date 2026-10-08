@@ -4884,9 +4884,9 @@
       "Share one normalisation between the golden test and the fingerprint.",
       "Two C04 runs with different ids give the same input=."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint|two fresh folders with different Drive and admission ids give the same fingerprint\"",
-    "passes": true,
-    "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs. Reopened by the P4-8 review: fileId and admission id were not normalised."
+    "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint|two fresh folders with different Drive and admission ids give the same fingerprint|two fresh fake folders on the same case give the same input fingerprint through main\"",
+    "passes": false,
+    "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs. Reopened by the P4-8 review: fileId and admission id were not normalised. Reopened by TL-P4-08 addendum 2: live input= still differed on all 5 c6ddb96 runs."
   },
   {
     "id": "drive-calls-golden",
@@ -4969,5 +4969,19 @@
     ],
     "verify": "pnpm -C runner exec vitest run -t \"an answered question files its thing on the next run\"",
     "note": "TL-P4-08 addendum (main c85da86) point 4: C11 slice."
+  },
+  {
+    "id": "document-note-required",
+    "task": "p4-c",
+    "category": "fix",
+    "passes": false,
+    "what": "A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (the value gate). The spine refuses a reply that breaks this, retries once with the reason, and a second refusal ends the run as C12 does. Photos and things with no text need no note. The prompt says the same.",
+    "steps": [
+      "Prompt: a thing with text gets a note unless a Timeline line on an existing note cites it.",
+      "Spine check plus one retry; a second refusal ends the run as C12 does.",
+      "Scripted tests for the three paths: note made, value-gate line, retry then end."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a thing with text and no note or citing line is refused and retried once|a thing cited by a Timeline line on an existing note needs no note|a photo with no text needs no note\"",
+    "note": "TL-P4-08 addendum 2 (main 502bdc4). Live garden on c6ddb96 2/5: three runs made no note."
   }
 ]
