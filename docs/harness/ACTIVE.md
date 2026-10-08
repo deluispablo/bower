@@ -342,3 +342,4 @@ P3-9 is closed.
 - c1-duplication-gate closed (ca2396d7; gate 0.12 s; real tree 25 clones vs baseline 28, baseline not lowered: asking the lead). c1-worker-deadlines closed (70b0b6d9; schema v13). check green again. 407/415. c1-shared-contracts and c1-dependency-rules (implementers) dispatched.
 - Duplication baseline set to 25 (lead ok). c1-duplication-gate reopened for a two-way ratchet (queued). DEFECT_LOG: merge-before-check process slip. 406/415.
 - c1-dependency-rules closed (36d41f08); c1-shared-contracts closed (0675be81; removed 341; old leaves count as none after 24 h; new real folders' About me.md now has the app's front matter). deadlines-test-flake diagnosing. Gate ratchet fix round dispatched. 408/415.
+- Lead accepted the shared-contracts choices (8b064bd). Waiting: deadlines-test-flake note, gate ratchet; then safety-polish, verify-names-precheck, suites, SHA.
