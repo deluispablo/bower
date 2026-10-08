@@ -346,3 +346,4 @@ P3-9 is closed.
 - safety-polish closed as superseded (TL-P4-14 addendum 3, 03f20c6); its 8 items become acceptance tests in their owner packets: docs/harness/2026-10-08-safety-polish-carryover.md. Entry removed from features.json. Stage 1 ends with c1-api-test-harness and verify-names-precheck.
 - verify-names-precheck closed (e8c65a8c); c1-api-test-harness closed (381ec99d; deadlines-test-flake fixed). Stage 1 entries all closed. 411/415. Suites next.
 - Stage 1 suites at 7f738897: check (runner 192, harness 411/415), e2e 226, e2e:fake 256, pwa 4. Main moves.
+- Stage 1 smoke on 9265d860: garden PASS (6-KotARu, 57 s); offer-and-flat attempt 1 stopped (smoke-runner-offline/silent-stop), recovered by the v13 deadline table at +17 min, attempt 2 PASS (75 s; only Job hunt got a hub line); c05-hub-lines PASS (YU-CNZ8, 76 s; edit kept, q-state asked); Home empty Inbox 59 s / 144 calls (home-empty-48s, stage 2). Stage 2 registration next.
