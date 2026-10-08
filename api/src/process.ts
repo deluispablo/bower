@@ -28,6 +28,7 @@ import { DriveHttp } from '../../src/data/drive/drive-http.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import { NOTHING } from '../../src/data/spine/admission.js';
 import { planAdmission } from '../../src/data/spine/plan.js';
+import { DISPATCH_SUBREQUESTS, SUBREQUEST_BUDGET } from '../../src/data/spine/budget.js';
 import { admissionRead } from '../../src/data/spine/read.js';
 import { BowerError } from '../../src/data/types.js';
 import { requireSession } from './auth.js';
@@ -177,7 +178,7 @@ async function dispatchNew(env: Env, sub: string, run: RunWire, allowWeb: boolea
  * The admission manifest for the person's folder, read now with their Drive token. Drive trouble answers as the
  * contract's codes with no cause: a refused token is `signed-out`, anything else `internal` (logged only).
  */
-async function admission(env: Env, sub: string, scope: RunScope, now: number, fetchImpl: FetchLike): Promise<AdmissionManifest> {
+async function admission(env: Env, sub: string, scope: RunScope, now: number, fetchImpl: FetchLike, spent: () => number): Promise<AdmissionManifest> {
   const folderId = await reach('folder', async () => await personFor(env, sub).folderId());
   if (folderId === null) throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
   // The token is asked of the person object once per press, not once per Drive call; a 401 asks for a fresh one.
@@ -197,7 +198,7 @@ async function admission(env: Env, sub: string, scope: RunScope, now: number, fe
   });
   let planned;
   try {
-    planned = await planAdmission(admissionRead(drive, scope), folderId, { scope, clock: () => now, newId: () => crypto.randomUUID() });
+    planned = await planAdmission(admissionRead(drive, scope, { limit: SUBREQUEST_BUDGET, reserve: DISPATCH_SUBREQUESTS, used: spent }), folderId, { scope, clock: () => now, newId: () => crypto.randomUUID() });
   } catch (err) {
     if (err instanceof HttpError) throw err;
     if (err instanceof BowerError && err.code === 'auth') throw new HttpError(401, 'signed-out', undefined, { cause: err });
@@ -261,11 +262,18 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const body = parseBody(value);
     const env = c.get('env');
     const now = Date.now();
+    // Every fetch this press makes counts against a Worker invocation's subrequests: 50 on the free plan
+    // (https://developers.cloudflare.com/workers/platform/limits/#subrequests), of which admission keeps to 35.
+    let fetches = 0;
+    const counted: FetchLike = (input, init) => {
+      fetches += 1;
+      return fetchImpl(input, init);
+    };
     const requestId = body.requestId ?? crypto.randomUUID();
     const person = personFor(env, sub);
     // Drive is read only for a press that would admit a new run; a repeat or a run going answers from the object.
     const fresh = await timing.time('check', () => reach('would admit', async (): Promise<boolean> => await person.wouldAdmit(requestId, now)));
-    let manifest = fresh ? await timing.time('reads', () => admission(env, sub, body.scope, now, fetchImpl)) : null;
+    let manifest = fresh ? await timing.time('reads', () => admission(env, sub, body.scope, now, counted, () => fetches)) : null;
     const input = (): AdmitInput => ({
       scope: body.scope,
       allowWeb: body.allowWeb,
@@ -278,14 +286,14 @@ export function createProcessRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     let result = await admit();
     // The run it looked like ended in between: this press is new after all, so it reads the inbox once.
     if (!result.admitted && result.refused === 'needs-manifest' && manifest === null) {
-      manifest = await timing.time('reads', () => admission(env, sub, body.scope, now, fetchImpl));
+      manifest = await timing.time('reads', () => admission(env, sub, body.scope, now, counted, () => fetches));
       result = await admit();
     }
     if (!result.admitted && result.refused === 'needs-manifest') throw new HttpError(500, 'internal', undefined, { cause: new Error('admitted with no manifest') });
     if (!result.admitted) throw new HttpError(429, 'rate-limited');
     if (result.created === true) {
       const run = result.run;
-      await timing.time('dispatch', () => dispatchNew(env, sub, run, body.allowWeb, now, fetchImpl));
+      await timing.time('dispatch', () => dispatchNew(env, sub, run, body.allowWeb, now, counted));
     }
     timing.log();
     const reply: RunReply = { run: result.run, revision: result.revision };

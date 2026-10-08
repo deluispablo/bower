@@ -13,7 +13,7 @@ import type { Pile } from '../types';
 import { PROP, SYSTEM } from '../vault/layout';
 import { VaultIndex } from '../vault/vault-index';
 import type { AdmissionScope } from './admission';
-import type { SpineRead } from './plan';
+import { NotReadHere, type SpineRead } from './plan';
 
 /**
  * What the scripted provider reads (`scripted.ts`): the plan's reads, the inbox's piles as the Inbox reads them, and
@@ -85,12 +85,24 @@ export function limiter(limit: number): <T>(task: () => Promise<T>) => Promise<T
   };
 }
 
+/**
+ * What admission has spent of a Worker invocation's subrequests (`SUBREQUEST_BUDGET`): `used()` counts every fetch the
+ * request has made so far (the token, each listing page, each read and its retries), and `reserve` is kept for what
+ * comes after admission (the dispatch and its two retries).
+ */
+export interface SubrequestBudget {
+  limit: number;
+  reserve: number;
+  used(): number;
+}
+
 /** What the plan will read of this listing, by kind, in the order it reads them. */
-function readsOf(rootId: string, listing: readonly DriveFile[], scope: AdmissionScope): { texts: string[]; bytes: string[] } {
+function readsOf(rootId: string, listing: readonly DriveFile[], scope: AdmissionScope): { texts: string[]; notes: string[]; bytes: string[] } {
   const ix = VaultIndex.build(rootId, listing);
   const texts = ix.journalFiles().filter((f) => !f.folder && f.name.endsWith('.json')).map((f) => f.id);
+  const notes: string[] = [];
   const bytes: string[] = [];
-  if (scope !== 'all') return { texts, bytes };
+  if (scope !== 'all') return { texts, notes, bytes };
   const declared = new Set<string>();
   for (const f of ix.filesIn('Inbox')) {
     const declarationId = f.appProperties?.[PROP.declaration];
@@ -98,14 +110,14 @@ function readsOf(rootId: string, listing: readonly DriveFile[], scope: Admission
     const path = f.folder ? ix.pathOf(f.id) : undefined;
     if (!path) continue;
     const note = ix.filesIn(path).find((k) => !k.folder && k.name === PILE_NOTE);
-    if (note) texts.push(note.id);
+    if (note) notes.push(note.id);
   }
   for (const id of declared) bytes.push(...declarationCopies(listing, rootId, id).map((f) => f.id));
   if (declared.size) {
     const piles = ix.file(SYSTEM.piles);
     bytes.push(...listing.filter((f) => !f.folder && piles !== undefined && f.parents.includes(piles.id) && f.name.startsWith('disposition-')).map((f) => f.id));
   }
-  return { texts, bytes };
+  return { texts, notes, bytes };
 }
 
 /**
@@ -121,10 +133,14 @@ function readsOf(rootId: string, listing: readonly DriveFile[], scope: Admission
  *   `READ_AHEAD` at a time: your changes, each pile's first note (the one the Inbox reads), the declarations the
  *   inbox's piles name and, when any pile is declared, the dispositions beside them. The plan then reads each one
  *   from here: every file is read at most once per press, and its text lives only for that press.
+ * - **A budget** (TL-P4-11). With one, the pile notes are read only while the invocation has subrequests to spare
+ *   (everything it has fetched so far, plus the dispatch still to come, under `limit`); the others are not read here
+ *   (`NotReadHere`), the plan goes on without them, and the runner, which reads every file itself, checks them. Your
+ *   changes and the declarations are always read, since the manifest is made of them.
  * - A read ahead that fails is kept as it failed, so the plan meets the very error a read of its own would have
  *   met; it is logged (no file text is ever in an error).
  */
-export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope): SpineRead {
+export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope, budget?: SubrequestBudget): SpineRead {
   const limit = limiter(READ_AHEAD);
   const texts = new Map<string, Promise<string>>();
   const bytes = new Map<string, Promise<Uint8Array>>();
@@ -136,7 +152,9 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope): Spi
     }
     return pending;
   };
-  const text = (id: string): Promise<string> => once(texts, id, () => drive.readText(id));
+  // The pile notes admission cannot afford to read (see `SubrequestBudget`); the plan meets `NotReadHere` for them.
+  const unaffordable = new Set<string>();
+  const text = (id: string): Promise<string> => (unaffordable.has(id) ? Promise.reject(new NotReadHere()) : once(texts, id, () => drive.readText(id)));
   const raw = (id: string): Promise<Uint8Array> => once(bytes, id, () => drive.readBytes(id));
   const ahead = <T>(pending: Promise<T>): void => {
     pending.catch((e: unknown) => console.error('An admission read ahead failed', e));
@@ -145,7 +163,13 @@ export function admissionRead(drive: AdmissionDrive, scope: AdmissionScope): Spi
     listAll: async (rootId) => {
       const listing = await drive.listAll(rootId, { checksums: true });
       const reads = readsOf(rootId, listing, scope);
-      for (const id of reads.texts) ahead(text(id));
+      if (budget) {
+        // Your changes and the declarations are always read: the manifest is made of them. A pile note is read while
+        // the budget has room, in the inbox's order; the rest are left to the runner, which reads every file itself.
+        const room = Math.max(0, budget.limit - budget.reserve - budget.used() - reads.texts.length - reads.bytes.length);
+        for (const id of reads.notes.slice(room)) unaffordable.add(id);
+      }
+      for (const id of [...reads.texts, ...reads.notes]) if (!unaffordable.has(id)) ahead(text(id));
       for (const id of reads.bytes) ahead(raw(id));
       return listing;
     },
