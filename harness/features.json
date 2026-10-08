@@ -5183,7 +5183,7 @@
   {
     "task": "p4-b",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "id": "home-inbox-first",
     "what": "Home renders the Inbox from the listing first; the last run report and questions fill in after. Inbox within 3 s.",
     "steps": [

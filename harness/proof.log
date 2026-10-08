@@ -417,3 +417,4 @@ qa10-phone-flake	045034a07ed78fef	2026-10-08	known-green: red seen in the full e
 duplicate-by-hash	48e0349ead67034e	2026-10-08	known-green: red by hand at tests-only 6488613: both verify tests fail on assertions (the copy reached the model; no alreadySaved row); green at 2cf38a4 (new file duplicates.ts, so the revert cannot load)
 fallback-no-duplicate	ccc2ccc885710d4e	2026-10-08	red (fixed in 8250e96)
 duplicate-by-hash	f39ce2760b21c516	2026-10-08	red (fixed in 29c2682)
+home-inbox-first	d9e8128bd49cbbfd	2026-10-08	red (fixed in 0514571)
