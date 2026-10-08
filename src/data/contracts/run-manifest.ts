@@ -47,10 +47,15 @@ export type RuleRemove = { recordId: string; text: string };
  * (TL-P4-08 addendum 1 point 1) replaces the lines of Bower's own `## Current state`, which must read `previous`,
  * with `lines`: the manifest keeps the previous text, so an undo (C13) restores it (`undoChanges`). `adopted`: the section
  * had no mark and a rule let Bower take it over (without it an unmarked section is refused); `release`: an undo of that,
- * which gives the lines back to the person without a mark.
+ * which gives the lines back to the person without a mark. `granted` (`state-yes-writes`): the section is one the person
+ * edited, and their yes to "Write it" (`answer`, a journal record id, also in `recordIds`) grants this one write over
+ * the section still as asked about, still under `mark`, the mark it had; `mark`: an undo of that, which gives the
+ * person's lines back under the mark they had, so the section is theirs again.
  */
+/** A person's yes that grants one write over a Current state they edited: the answer, and the mark the section had. */
+export type StateGrant = { answer: string; mark: string };
 export type Change =
-  | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true }
+  | { kind: 'state-rewrite'; recordIds: string[]; previous: string[]; lines: string[]; adopted?: true; release?: true; granted?: StateGrant; mark?: string }
   | { kind: 'link-rewrite'; recordIds: string[]; renames: Rename[] }
   | { kind: 'timeline-append'; recordIds: string[]; entries: EditEntry[] }
   | { kind: 'rules-wording'; add: RuleAdd[]; remove: RuleRemove[] };
@@ -301,11 +306,19 @@ function ruleAdd(value: unknown): value is RuleAdd {
 function ruleRemove(value: unknown): value is RuleRemove {
   return closed(value, ['recordId', 'text']) && recordId(value.recordId) && text(value.text) && ruleRemoveOk(value as RuleRemove);
 }
+/** A Current state's mark (`stateMark`): 16 lowercase hex digits. */
+const stateMarkText = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{16}$/.test(value);
+/** A grant names the answer that gives it, which the change carries in its record ids too, and the mark it saw. */
+function stateGrant(value: unknown, ids: readonly string[]): value is StateGrant {
+  return closed(value, ['answer', 'mark']) && recordId(value.answer) && ids.includes(value.answer as string) && stateMarkText(value.mark);
+}
 function change(value: unknown): value is Change {
   if (!record(value)) return false;
   switch (value.kind) {
-    case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines'], ['adopted', 'release']) && recordIds(value.recordIds)
+    case 'state-rewrite': return closed(value, ['kind', 'recordIds', 'previous', 'lines'], ['adopted', 'release', 'granted', 'mark']) && recordIds(value.recordIds)
       && (value.adopted === undefined || value.adopted === true) && (value.release === undefined || (value.release === true && value.adopted === undefined))
+      && [value.adopted, value.release, value.granted, value.mark].filter((x) => x !== undefined).length <= 1
+      && (value.granted === undefined || stateGrant(value.granted, value.recordIds as string[])) && (value.mark === undefined || stateMarkText(value.mark))
       && list(value.previous, text) && list(value.lines, text) && stateLinesOk(value.previous as string[], value.lines as string[]);
     case 'link-rewrite': return closed(value, ['kind', 'recordIds', 'renames']) && recordIds(value.recordIds)
       && list(value.renames, rename) && value.renames.length > 0 && unique((value.renames as Rename[]).map((item) => item.from.toLowerCase()));

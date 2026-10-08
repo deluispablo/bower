@@ -4,11 +4,12 @@
  * The answer is stored with its question once (`VaultSource.answer`: a journal line keyed by the question), and a yes
  * the run can act on starts a small tidy-up scoped to what it is about, at once:
  * - a thing or pile asked about (`q-ask-…`, its `subject`): a run that takes only that pile, and your changes;
- * - keeping one note (a question naming its two notes as [[links]]): a run of your changes only, no pile.
+ * - keeping one note (a question naming its two notes as [[links]]): a run of your changes only, no pile;
+ * - writing Bower's update over a Current state you edited ("Write it", `q-state-<note's file id>`): a run of your
+ *   changes only, in which the model computes the update and the yes grants that one write, while the section still
+ *   reads as asked about (`state-yes-writes`); "Keep mine" starts none and closes the question.
  * Every other answer starts none and waits for the next tidy-up: a no, or a choice that changes nothing, closes its
- * question; a yes to Bower keeping the summaries it did not write (`q-adopt-states`) records that as a rule. A yes to
- * writing over a Current state you edited (`q-state-…`) is not something Bower can do yet: it says so, starts nothing,
- * and the next tidy-up closes the question, your summary as you wrote it (P4-20 I2; the lead decides whether to build it).
+ * question; a yes to Bower keeping the summaries it did not write (`q-adopt-states`) records that as a rule.
  * While a run is going, an answer starts none now: the Worker keeps it, and when that run ends its person object starts
  * the answer's run with no press (TL-P4-13 addendum); the answer says so. With the day's tidy-ups used up it is refused,
  * and the answer says it is saved for the next tidy-up, and why.
@@ -26,6 +27,8 @@ export type AnswerRun = { scope: 'all'; subject: string } | { scope: 'instructio
 
 /** A question about keeping one note: the corpus' and the runner's wording (`runner/src/claude.ts`, `mergesOf`). */
 const KEEP_ONE = /\bkeep one note\b/i;
+/** A question about a Current state you edited, by its note's file id. */
+const STATE_Q = 'q-state-';
 /** A subject the Worker takes: a Drive file id or a pile id. */
 const SUBJECT = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -37,6 +40,7 @@ export function subjectOf(q: Pick<Question, 'id' | 'subject'>): string | undefin
 /** The run a yes starts at once, or null: a no, and a choice no run acts on, start none. */
 export function answerRun(q: Question, yes: boolean): AnswerRun | null {
   if (!yes) return null;
+  if (q.id.startsWith(STATE_Q)) return { scope: 'instructions' };
   const subject = subjectOf(q);
   if (subject !== undefined) return SUBJECT.test(subject) ? { scope: 'all', subject } : null;
   const notes = new Set((q.text.match(/\[\[[^\]]+\]\]/g) ?? []).map((l) => l.toLowerCase()));
@@ -53,14 +57,13 @@ export async function answerRequestId(q: Pick<Question, 'id' | 'askedAt'>): Prom
 /**
  * What an answer did, once the run it asks for has answered: `now` a run of its own started; `waits` a run is going and
  * the answer's run starts when it ends; `failed` the run could not start (the answer is kept for the next tidy-up); `next`
- * it starts no run and the next tidy-up closes it; `not-yet` Bower cannot do what was chosen yet (the question closes).
+ * it starts no run and the next tidy-up closes it.
  */
 export type AnswerOutcome =
   | { kind: 'now'; run: RunState }
   | { kind: 'waits' }
   | { kind: 'failed'; error: unknown }
-  | { kind: 'next' }
-  | { kind: 'not-yet' };
+  | { kind: 'next' };
 
 export interface Answered {
   question: Question;
@@ -75,7 +78,6 @@ export async function answerQuestion(vault: Pick<VaultSource, 'questions' | 'ans
   const question = (await vault.questions()).find((q) => q.id === id);
   if (!question) return null;
   await vault.answer(id, yes);
-  if (yes && question.id.startsWith('q-state-')) return { question, outcome: { kind: 'not-yet' } };
   const plan = answerRun(question, yes);
   if (!plan) return { question, outcome: { kind: 'next' } };
   const requestId = await answerRequestId(question);

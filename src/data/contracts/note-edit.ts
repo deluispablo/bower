@@ -433,7 +433,9 @@ function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewri
   const section = stateSection(text);
   if (typeof section === 'string') return { refused: section };
   const mark = markOf(section);
-  if (!section.missing && mark !== null && mark !== stateMark(section.lines)) return { refused: 'person-edited' };
+  // A section the person edited is written over only by their yes to it (`granted`), under the mark it had when asked.
+  if (change.granted && (section.missing || mark !== change.granted.mark)) return { refused: 'person-edited' };
+  if (!section.missing && mark !== null && mark !== stateMark(section.lines) && !change.granted) return { refused: 'person-edited' };
   // No mark is the person's: only a rule's grant (`adopted`) lets Bower rewrite it.
   if (!section.missing && mark === null && !change.adopted) return { refused: 'person-edited' };
   // A release only takes back Bower's own write: a section Bower marked.
@@ -450,7 +452,8 @@ function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewri
     body = `${lead}## Current state${eol}${written}${eol}${section.start < text.length ? eol : ''}`;
   } else if (!change.lines.length) body = '';
   else body = section.open === 'heading' ? `${eol}${written}` : section.open === 'tail' ? written : `${written}${eol}`;
-  const markLine = `${STATE_KEY}: ${stateMark(change.lines)}`;
+  // Bower's mark of what it wrote; an undo of a granted write puts back the mark the person's lines had.
+  const markLine = `${STATE_KEY}: ${change.mark ?? stateMark(change.lines)}`;
   // Right to left, so earlier offsets hold: the section first, then the mark in the front matter.
   let next = text.slice(0, section.start) + body + text.slice(section.end);
   // Given back to the person: their lines again, with no mark (the section is not Bower's any more).
@@ -495,7 +498,7 @@ function stateHolds(before: string, after: string, change: Extract<Change, { kin
     if (!around.includes(was)) return false;
   } else if (now !== was && now.replace(/\r?\n$/, '') !== was) return false; // only a heading that ended the file gains one
   const section = stateSection(after);
-  if (typeof section === 'string' || section.missing || !sameLines(section.lines, change.lines) || markOf(section) !== (change.release ? null : stateMark(change.lines))) return false;
+  if (typeof section === 'string' || section.missing || !sameLines(section.lines, change.lines) || markOf(section) !== (change.release ? null : (change.mark ?? stateMark(change.lines)))) return false;
   try {
     const read = (text: string): unknown => {
       const note = parseNote('note.md', text);
@@ -511,13 +514,14 @@ function stateHolds(before: string, after: string, change: Extract<Change, { kin
 
 /**
  * The changes that take an edit back (C13), from what the manifest kept: a state rewrite's lines are replaced by the
- * lines it replaced, none when the section was empty (TL-P4-10 point 4); one a rule adopted is given back without a mark. Only a Current state Bower still owns is
+ * lines it replaced, none when the section was empty (TL-P4-10 point 4); one a rule adopted is given back without a mark,
+ * and one the person's yes granted (`granted`) under the mark it had, so it reads as theirs again. Only a Current state Bower still owns is
  * restored, through `applyChanges` on the bytes as they are then (a person's later edit refuses it as
  * `person-edited`). The other kinds are taken back by later entries.
  */
 export function undoChanges(changes: readonly Change[]): Change[] {
   return changes.flatMap((change): Change[] => (change.kind === 'state-rewrite'
-    ? [{ kind: 'state-rewrite', recordIds: [], previous: change.lines, lines: change.previous, ...(change.adopted ? { release: true as const } : {}) }]
+    ? [{ kind: 'state-rewrite', recordIds: [], previous: change.lines, lines: change.previous, ...(change.adopted ? { release: true as const } : {}), ...(change.granted ? { mark: change.granted.mark } : {}) }]
     : []));
 }
 

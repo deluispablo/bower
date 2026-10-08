@@ -186,7 +186,7 @@ async function hubId(w: RealWorld): Promise<string> {
 }
 /** The hub's edits in the run's manifest. */
 async function hubEdits(w: RealWorld): Promise<EditText[]> {
-  const path = (await w.paths()).find((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p));
+  const path = (await w.drive.listAll(w.rootId)).map((f) => w.drive.pathOf(f.id, w.rootId)).find((p) => /^\.bower\/runs\/[^/]+\/manifest-[0-9a-f]{64}\.json$/.test(p));
   const m = JSON.parse((path ? await textAt(w, path) : null) ?? '{"operations":[]}') as ManifestV2;
   return m.operations.flatMap((o) => (o.effect.kind === 'edit-text' && o.effect.path === HUB ? [o.effect] : []));
 }

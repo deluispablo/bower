@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -170,6 +170,8 @@ export interface Ask {
  * about again is not asked twice.
  */
 export const askId = (pileOrFileId: string): string => `q-ask-${pileOrFileId}`;
+/** The id of the question about a note's Current state the person edited: `q-state-` and the note's file id. */
+const STATE_Q = 'q-state-';
 
 export type { HubUpdate };
 
@@ -243,7 +245,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const tookSubjects = new Set((opts.taken?.piles ?? []).flatMap((p) => [p.pileId, ...(p.anchor ? [p.anchor.fileId] : []), ...p.items.map((i) => i.fileId)]));
   const settles = (l: JournalLine): boolean => {
     const q = l.rec.questionId ?? '';
-    // A Current state you edited is never written over (yet): either answer closes its question (P4-20 I2).
+    // A Current state you edited: a no closes its question; a yes too, once its run wrote the update (the answer goes
+    // with that edit) or asked again about a section changed since (`state-yes-writes`).
     return keepAnswers.has(l.rec.id) || l.rec.text === 'no' || q === ADOPT_STATES_ID || q.startsWith('q-state-') || (q.startsWith('q-ask-') && tookSubjects.has(q.slice('q-ask-'.length)));
   };
   const settled = new Set(lines.filter((l) => l.rec.kind === 'answer' && settles(l)).map((l) => l.rec.questionId ?? ''));
@@ -622,16 +625,46 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     want(f, l.path).lines.push(line);
     if (thing && asked !== undefined) modelLines.push({ line, cites: thing.file.id });
   }
-  // A model's Current states (C05): planned below on the bytes read, only where Bower still owns the section.
-  for (const st of all && date ? (opts.filing?.states ?? []) : []) {
+  // "Write it" (`state-yes-writes`): your yes, among the changes this run took, to Bower writing its update over a
+  // Current state you edited, by the note's file id: the grant for that one write, while the section still reads as
+  // the question saw it (its `state` mark, an optimistic-concurrency precondition). The later answer counts. Each
+  // granted note is read below even with no update for it, so a section changed since is asked about again.
+  const grants = new Map<string, { answer: string; seen: string | null; question: Question }>();
+  const stateAnswers = date && !demo ? lines.filter((l) => l.rec.kind === 'answer' && (l.rec.questionId ?? '').startsWith(STATE_Q)) : [];
+  if (stateAnswers.length) {
+    const file = ix.file(SYSTEM.questions);
+    const value = file && !file.folder ? parsed(await ownText(drive, file)) : null;
+    const asked = isRunnerFile(SYSTEM.questions, value) ? value.questions : [];
+    const last = new Map<string, JournalLine>();
+    for (const l of stateAnswers) {
+      const id = l.rec.questionId ?? '';
+      const had = last.get(id);
+      if (!had || had.rec.at <= l.rec.at) last.set(id, l);
+    }
+    for (const [id, l] of last) {
+      const q = asked.find((x) => x.id === id);
+      // The note by its file id, never by name: wherever it is now.
+      const path = ix.pathOf(id.slice(STATE_Q.length));
+      const f = path === undefined ? undefined : ix.file(path);
+      if (l.rec.text !== 'yes' || !q || !f || f.folder || path === undefined) continue;
+      grants.set(f.id, { answer: l.rec.id, seen: q.state ?? null, question: q });
+      want(f, path);
+    }
+  }
+  // A model's Current states (C05): planned below on the bytes read, only where Bower still owns the section, or the
+  // person's yes grants it. A run of your changes only (no pile) writes only a granted one.
+  for (const st of date ? (opts.filing?.states ?? []) : []) {
     const f = ix.file(st.path);
     if (!f || f.folder) continue;
+    if (!all && !grants.has(f.id)) continue;
     const thing = st.cites === null ? undefined : things.find((t) => t.file.id === st.cites && !t.merge);
     const asked = thing ? (opts.filing?.note?.(thing.file.id)?.name ?? opts.filing?.thing(thing.file.id)?.name) : undefined;
     want(f, st.path).state = { lines: st.lines, source: asked === undefined ? null : citeName(asked), thing: asked === undefined ? null : (thing?.file.id ?? null) };
   }
   /** Current states the person edited: what Bower would write goes on the Timeline as a line, and they are asked. */
-  const personStates: Array<{ line: WantedLine; file: DriveFile; path: string }> = [];
+  const personStates: Array<{ line: WantedLine; file: DriveFile; path: string; seen: string }> = [];
+  /** Granted sections the person changed again since they were asked: nothing is written, and they are asked again. */
+  const reasked: Question[] = [];
   /** Unmarked Current states Bower may not adopt: a line each, and one question for the whole folder (TL-P4-10). */
   const unmarkedStates: WantedLine[] = [];
   /** Whether a rule lets Bower keep up to date the Current states it did not write: Rules.md, read once, when needed. */
@@ -762,6 +795,9 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     if (!before || !bytes || before.size !== bytes.byteLength || before.sha256 !== (await sha256(new Blob([bytes.slice()])))) {
       console.error('A note changed while it was read; no edit is planned for it this time');
       raced.add(f.id);
+      // A yes to writing over it is not used up on a note that changed under the read: it is asked again, as it was.
+      const grant = grants.get(f.id);
+      if (grant) reasked.push({ ...grant.question, askedAt: opts.requestedAt });
       if (w.renames) holdRenames = true;
       // A passing race, not a refusal: its lines wait for the next run, like those past the cap.
       for (const l of w.lines) lineState.set(l, 'deferred');
@@ -786,7 +822,19 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     // TL-P4-10: an unmarked one is the person's, unless a rule lets Bower adopt it (no write of Bower's ever does);
     // a Bower note with none gets one, with its mark.
     let state: StateRewrite | null = null;
-    if (w.state) {
+    const grant = grants.get(f.id);
+    const section = grant ? currentStateOf(bytes) : null;
+    const mark = stateMarkOf(bytes);
+    if (grant && section?.owner === 'person' && (grant.seen === null || grant.seen !== stateMark(section.lines))) {
+      // Changed since the question (or asked before questions kept what they saw): the yes was not to these lines.
+      reasked.push({ id: `${STATE_Q}${f.id}`, text: `You changed the current state of ${displayName(nameOf(w.path))} again. Should Bower still write its update there?`, yes: 'Write it', no: 'Keep mine', about: w.path, state: stateMark(section.lines), askedAt: opts.requestedAt });
+    } else if (grant && section?.owner === 'person' && mark !== null && w.state && section.lines.join('\n') !== w.state.lines.join('\n')) {
+      // The person's yes grants this one write over their lines, as read now; the answer goes with the edit.
+      const change: StateRewrite = { kind: 'state-rewrite', recordIds: [grant.answer], previous: section.lines, lines: w.state.lines, granted: { answer: grant.answer, mark } };
+      const result = applyChanges(bytes, [change]);
+      if (result.ok) state = change;
+      else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
+    } else if (w.state && !(grant && section?.owner === 'person')) {
       const now = currentStateOf(bytes);
       const adopt = now?.owner === 'unmarked' && (await adopting());
       if (now && (now.owner === 'bower' || now.owner === 'missing' || adopt)) {
@@ -802,14 +850,14 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
         // Same news twice in one run: a line this run adds to the note citing the same thing already says it.
         const cited = w.state.thing === null ? undefined : w.lines.find((l) => l.after === w.state?.thing && l.entry.source !== null);
         // The person is still asked, once that line is there.
-        if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path });
+        if (cited && now?.owner === 'person') personStates.push({ line: cited, file: f, path: w.path, seen: stateMark(now.lines) });
         if (cited && now?.owner === 'unmarked') unmarkedStates.push(cited);
         const text = cited ? null : stateNewsLine(w.state.lines, now?.lines ?? [], stateMarkOf(bytes));
         if (text !== null) {
           const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
           w.lines.push(line);
           lineState.set(line, 'refused');
-          if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path });
+          if (now?.owner === 'person') personStates.push({ line, file: f, path: w.path, seen: stateMark(now.lines) });
           if (now?.owner === 'unmarked') unmarkedStates.push(line);
           if (w.state.thing !== null && w.state.source !== null) modelLines.push({ line, cites: w.state.thing });
         }
@@ -879,7 +927,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     const what = c.lines.find((l) => l.what !== null)?.what ?? (c.state ? STATE_UPDATED : null);
     const after = [...new Set([...c.lines.flatMap((l) => (l.after === null ? [] : [l.after])), ...(c.stateAfter === null ? [] : [c.stateAfter])])];
     // An edit a keep needs (the kept note's lines, a link to the other note) keeps the note's text as read, for its undo.
-    const keeps = [...new Set([...keeping.filter((x) => x.kept.id === c.file.id).map((x) => x.k.answer), ...(c.rewrite ? keptFor(c.bytes) : [])])];
+    // So does a write the person's yes granted: its undo puts their section back byte for byte (`undoEdit`).
+    const keeps = [...new Set([...keeping.filter((x) => x.kept.id === c.file.id).map((x) => x.k.answer), ...(c.rewrite ? keptFor(c.bytes) : []), ...(c.state?.granted ? [c.state.granted.answer] : [])])];
     edits.push({ file: c.file, path: ix.pathOf(c.file.id) ?? c.path, what, before: c.before, bytes: c.bytes, changes: changesOf(c, renameIds), text, after, keeps });
     places.set(c.file.id, c.file);
   }
@@ -888,7 +937,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   for (const p of personStates) {
     const kept = lineState.get(p.line);
     if (kept !== 'planned' && kept !== 'present') continue;
-    askedPiles.push({ id: `q-state-${p.file.id}`, text: `You changed the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?`, yes: 'Write it', no: 'Keep mine', about: p.path, askedAt: opts.requestedAt });
+    askedPiles.push({ id: `${STATE_Q}${p.file.id}`, text: `You changed the current state of ${displayName(nameOf(p.path))}. Should Bower write its update there?`, yes: 'Write it', no: 'Keep mine', about: p.path, state: p.seen, askedAt: opts.requestedAt });
   }
   // Summaries Bower did not write: one question for the folder, however many there are (TL-P4-10 point 3); a yes
   // becomes ADOPT_STATES_RULE (C11), and Bower then adopts them.
@@ -1094,8 +1143,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
   // goes into that same write (TL-P2-37 Q1 (a)), asked at `requestedAt`, unless it is open already or answered now.
   const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
-  const toAsk = [...(asking.size ? [saltmereQuestion(opts.requestedAt)] : []), ...disagreeing.map((d) => d.question), ...askedPiles]
-    .filter((q, i, all) => !answered.has(q.id) && all.findIndex((x) => x.id === q.id) === i);
+  // A question asked again (a granted section changed since) replaces the one its answer drops, under the same id.
+  const again = new Set(reasked.map((q) => q.id));
+  const toAsk = [...(asking.size ? [saltmereQuestion(opts.requestedAt)] : []), ...disagreeing.map((d) => d.question), ...reasked, ...askedPiles]
+    .filter((q, i, all) => (again.has(q.id) || !answered.has(q.id)) && all.findIndex((x) => x.id === q.id) === i);
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
   let fresh: Question[] = [];
@@ -1105,7 +1156,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     // An unreadable list is Bower's own file: replaced with a fresh one (TL-P2-17); the report never claims its old entries.
     if (!readable) console.error(new BowerError('unknown', QUESTIONS_REPLACED), `${SYSTEM.questions} is not a valid questions file`);
     const all = readable ? value.questions : [];
-    fresh = toAsk.filter((q) => !all.some((x) => sameThing(x, q)));
+    fresh = toAsk.filter((q) => again.has(q.id) || !all.some((x) => sameThing(x, q)));
     // The same content uploaded again keeps its one question, now about the new file (so the reader still shows it).
     const retarget = (x: Question): Question => {
       const again = toAsk.find((q) => q.subject !== undefined && related(subjectOf(x), q.subject) === false && sameContent(x, q));
@@ -1385,7 +1436,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       questionsOp = await add({ kind: 'create-text', parent: { fileId: sys.id }, name: nameOf(SYSTEM.questions), createKey: newKey('runner'), text: questionsText, content: await utf8(questionsText), purpose: 'runner-json' }, derived);
     }
     // The question's row is grounded by that one write, with the same fields (contract B).
-    if (questionsOp && fresh.length) reportPlan.push({ requires: [questionsOp], when: 'applied', value: { ...empty(), questions: fresh.map(({ subject: _s, hash: _h, ...q }) => q) } });
+    if (questionsOp && fresh.length) reportPlan.push({ requires: [questionsOp], when: 'applied', value: { ...empty(), questions: fresh.map(({ subject: _s, hash: _h, state: _m, ...q }) => q) } });
   }
   // Rules.md made from the template's empty one when it is missing (R3-4); every rule line it words waits for it.
   // When it is there, its rules are worded by its one note edit above, which their archives wait for (rule 7).

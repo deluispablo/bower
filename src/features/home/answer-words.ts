@@ -17,8 +17,6 @@ export function answerToast(outcome: AnswerOutcome, label: string): string {
       return answeredNow(label);
     case 'waits':
       return `You chose "${label}". Bower will do this as soon as the current tidy-up ends.`;
-    case 'not-yet':
-      return `You chose "${label}". Bower cannot write over your own summary yet, so it stays as you wrote it.`;
     case 'failed':
       return answerWaits(outcome.error instanceof BowerError ? outcome.error.message : null);
     default:
