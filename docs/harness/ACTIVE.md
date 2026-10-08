@@ -218,3 +218,4 @@ P3-9 is closed.
 - second-brain-method closed (bd427ab): op asks added; c05-hub-lines and c15-scanned-letter rubrics changed (logged); left out sent to the lead (Current state change kind, type-table rows in the report, bench-4, answers to asks). 372/373. Next: P4-8 Opus delta.
 - TL-P4-08 addendum (c85da86): rubric changes accepted; bench-4 unchanged. Entries ask-not-repeated (this batch), state-rewrite-change (C05), type-proposals and ask-answer-loop (C11). 372/377.
 - P4-8 review BLOCK: Critical, the placement retry spawns claude after rm(work), so live every refusal ends the run; Important, the fingerprint misses fileId and admission id. placement-check and fingerprint-normalised reopened; one fix round (implementer) plus minors (rule-basis substring, New area for a subfolder, dropped Timeline lines in an asks-only run). 370/377.
+- ask-not-repeated closed (test only; it already held: q-ask-<pileId> deduped by the planner). 371/377. P4-8 fix round running.
