@@ -223,3 +223,4 @@ P3-9 is closed.
 - P4-8 fix-round check PASS (minors to polish). Waiting for the suites, then main and the SHA.
 - P4-8 suites at 71e80f7: check 3609/190/129, e2e 226, e2e:fake 250, e2e:pwa pass. P4-8 closed; main moves.
 - Main and backup at c6ddb96; deploy SHA sent to the lead for garden x5 and offer-and-flat x3.
+- Garden x5 on c6ddb96: 2/5 PASS (3 runs made no note; PDF in Resources every time); input= still differs per run. offer-and-flat not run; asked the lead.
