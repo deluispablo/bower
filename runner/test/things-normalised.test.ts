@@ -98,4 +98,77 @@ describe('things section normalisation', () => {
 
     expect(hash1).toBe(hash2);
   });
+
+  it('a multi-thing pile with a link gives the same things section hash on fresh runs', async () => {
+    const captureThingsHash = async (createInOrder: boolean, runId: string): Promise<string> => {
+      const drive = fixedDrive();
+      const root = (await drive.createFolder('root', 'Bower')).id;
+      const box = (await drive.createFolder(root, 'Inbox')).id;
+      const ids = new Map<string, string>();
+      const folder = async (path: string): Promise<string> => {
+        let parent = root;
+        let at = '';
+        for (const part of path.split('/').filter(Boolean)) {
+          at = at ? `${at}/${part}` : part;
+          const known = ids.get(at) ?? (await drive.createFolder(parent, part)).id;
+          ids.set(at, known);
+          parent = known;
+        }
+        return parent;
+      };
+      for (const name of ['Projects', 'Areas', 'Resources', 'Archive']) await folder(name);
+      const sys = await folder(SYSTEM.dir);
+      await drive.createFolder(sys, 'changes');
+      await drive.createText(sys, 'questions.json', '{ "v": 1, "questions": [] }\n');
+
+      // Create a pile with 4 things: PDF, image, PDF, link (in different orders per run)
+      const pileFolder = (await drive.createFolder(box, 'Job offer and a flat near it. Compare the commute.', { pile: 'p-1' })).id;
+
+      type FileSpec = { name: string; file: string };
+      const uploadByIndex: Record<number, FileSpec> = {
+        0: { name: 'Offer_letter_final(2).pdf', file: 'c04-offer-and-flat/inbox/Offer_letter_final(2).pdf' },
+        1: { name: 'IMG_2301.jpg', file: 'c04-offer-and-flat/inbox/IMG_2301.jpg' },
+        2: { name: 'Payslip_Aug.pdf', file: 'c04-offer-and-flat/inbox/Payslip_Aug.pdf' },
+        3: { name: 'listing-88213.example.url', file: 'c04-offer-and-flat/inbox/listing-88213.example.url' },
+      };
+
+      // Shuffle the order on second run to simulate different listing order on live
+      const uploadOrder = createInOrder ? [0, 1, 2, 3] : [2, 0, 3, 1];
+
+      for (const idx of uploadOrder) {
+        const upload = uploadByIndex[idx];
+        if (upload) {
+          await drive.upload(pileFolder, upload.name, new Blob([bytesOf(upload.file).slice()]));
+        }
+      }
+
+      const admitted = await planAdmission(fakeRead(drive), root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
+      if (admitted.kind !== 'manifest') throw new Error('nothing admitted');
+
+      const timing = new CapturingTiming();
+      const spawn: ClaudeSpawn = async () => ({ code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        await claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: root, runId, allowWeb: false }, fakeScripted(drive))({ taken: admitted.manifest, deferred: [] });
+      } catch {
+        // Expected to throw
+      }
+
+      if (!timing.capturedHashes?.things) {
+        throw new Error('No things hash captured from timing');
+      }
+
+      return timing.capturedHashes.things;
+    };
+
+    // Two fresh runs with different file ordering (simulating different Drive listing order)
+    const hash1 = await captureThingsHash(true, RUN_ID);
+    const hash2 = await captureThingsHash(false, 'different-run-id-2');
+
+    console.log('Multi-thing pile run 1 hash:', hash1);
+    console.log('Multi-thing pile run 2 hash:', hash2);
+
+    expect(hash1).toBe(hash2);
+  });
 });
