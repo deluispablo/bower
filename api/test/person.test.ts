@@ -3,7 +3,11 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Env } from '../src/env.js';
+import type { Person } from '../src/person.js';
+import * as schema from '../src/person-schema.js';
 import { PERSON_TABLES, SCHEMA_VERSION } from '../src/person-schema.js';
+import { hashTicket } from '../src/run-ticket.js';
+import { pretendGitHub } from './github-support.js';
 import { QUEUED_STALE_MS } from '../src/process.js';
 import { MANIFEST } from './drive-v3.js';
 import { farAhead, inWindow } from './time.js';
@@ -234,6 +238,52 @@ describe('person object', () => {
     } finally {
       again.mockRestore();
     }
+  });
+});
+
+describe('Delete me', () => {
+  it('Delete me classes every table', async () => {
+    const classes = (schema as unknown as Record<string, unknown>).TABLES_AT_DELETE as Record<string, 'personal' | 'kept'> | undefined;
+    expect(classes, 'person-schema.ts says what Delete me does with each table').toBeDefined();
+    const alex = personFor(`sub-alex-delete-${crypto.randomUUID()}`);
+    const t0 = farAhead();
+    // A row in every table: account and folder, the lease and a leave, a run (quota, revision, deadlines), a ticket
+    // the alarm minted and its report, an answer waiting.
+    await alex.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
+    await alex.setFolderId('FOLDER_ID');
+    await alex.session('laptop', 'check', 0, t0);
+    await alex.session('laptop', 'leave', 0, t0);
+    await alex.session('phone', 'check', 0, t0);
+    const admitted = await alex.admit({ scope: 'all', allowWeb: false, requestId: 'press-1', now: t0, dailyLimit: 100, manifest: MANIFEST });
+    if (!admitted.admitted) throw new Error('not admitted');
+    const gh = pretendGitHub(env as Env);
+    await runInDurableObject(alex, async (instance: Person) => {
+      await instance.wake(t0, gh.access);
+    });
+    const ticket = gh.dispatched[0]?.ticket ?? '';
+    expect(await alex.runnerReport(admitted.run.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'reading', total: 1 }, t0)).toMatchObject({ accepted: true });
+    await alex.admit({ scope: 'all', allowWeb: false, requestId: 'answer-1', subject: 'p-receipt', answer: true, now: t0, dailyLimit: 100, manifest: null });
+    const tables = async (): Promise<Record<string, Record<string, SqlStorageValue>[]>> =>
+      await runInDurableObject(alex, (_i, state) => {
+        const sql = state.storage.sql;
+        const names = sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'").toArray();
+        return Object.fromEntries(names.map(({ name }) => [name, sql.exec(`SELECT * FROM ${name}`).toArray()]));
+      });
+    const before = await tables();
+    // Every table is classed, so a new one cannot be forgotten.
+    expect(Object.keys(before).sort()).toEqual(Object.keys(classes ?? {}).sort());
+    for (const [name, rows] of Object.entries(before)) expect(rows.length, `${name} has a row before Delete me`).toBeGreaterThan(0);
+
+    await alex.forget();
+    const after = await tables();
+    for (const [name, kind] of Object.entries(classes ?? {})) if (kind === 'personal') expect(after[name], name).toEqual([]);
+    expect(after.schema_version).toEqual(before.schema_version);
+    // The ticket live at Delete me is kept until it expires, with nothing personal: no run id, no report.
+    expect(after.run_ticket).toEqual([{ hash: await hashTicket(ticket), run_id: '', attempt: 1, retired: 1, expires_at: before.run_ticket?.[0]?.expires_at, report_seq: null, report_phase: null }]);
+    expect(after.deadlines).toEqual([expect.objectContaining({ kind: 'gone', key: await hashTicket(ticket), at: before.run_ticket?.[0]?.expires_at })]);
+    // The generation floor is the one value kept besides.
+    const kv = await runInDurableObject(alex, (_i, state) => Array.from(state.storage.kv.list(), ([k]) => k));
+    expect(kv).toEqual(['generationFloor']);
   });
 });
 

@@ -11,6 +11,7 @@ import { hashTicket, personIdOf } from '../src/run-ticket.js';
 import { SESSION_COOKIE, signSession } from '../src/session.js';
 import { allowKey } from '../src/store.js';
 import { driveFolder, withThingsIn, type DriveFolder } from './drive-v3.js';
+import { dispatchesReach, pretendGitHub } from './github-support.js';
 
 const env = testEnv as unknown as Env;
 const kv = env.BOWER_KV;
@@ -105,6 +106,41 @@ async function process(
   expect(r.status).toBe(200);
   return (await r.json()) as RunReply;
 }
+
+describe('dispatch from the alarm (TL-P4-14 stage 2)', () => {
+  it('only the alarm dispatches', async () => {
+    const who = await holder();
+    // What the press itself could reach, and the GitHub the alarm reaches (the runtime fires a due alarm itself).
+    const pressGitHub = github();
+    const gh = pretendGitHub(env);
+    const { run } = await process(who, pressGitHub.fetchImpl, 'press-1');
+    // The press admits and schedules the dispatch for now: it sends nothing to GitHub itself.
+    expect(pressGitHub.sent).toHaveLength(0);
+    expect(run?.phase).toBe('queued');
+    // Three alarms at once, with the runtime's own: the run row is compared and set, so one dispatch.
+    const p = person(who.sub);
+    await runInDurableObject(p, async (instance) => {
+      const now = Date.now();
+      await Promise.all([instance.wake(now, gh.access), instance.wake(now, gh.access), instance.wake(now, gh.access)]);
+    });
+    await dispatchesReach(gh, 1);
+    // A repeat, a second press and an answer while it goes: nothing more is sent, by the press or the alarm.
+    await process(who, pressGitHub.fetchImpl, 'press-1');
+    await process(who, pressGitHub.fetchImpl, 'press-2');
+    await runInDurableObject(p, async (instance) => {
+      await instance.wake(Date.now(), gh.access);
+    });
+    expect(pressGitHub.sent).toHaveLength(0);
+    expect(gh.dispatched).toHaveLength(1);
+    expect(gh.dispatched[0]).toMatchObject({ run_id: run?.id, attempt: 1, scope: 'instructions', allow_web: true });
+    const row = await runInDurableObject(p, (_i, state) => state.storage.sql.exec<{ deadline_at: number | null; version: number }>('SELECT deadline_at, version FROM runs').one());
+    expect(row).toEqual({ deadline_at: null, version: 1 });
+    // The ticket the alarm minted opens the token route; the stale deadline is set as before.
+    const token = await createApp().request(`${API}/runner/runs/${run?.id ?? ''}/token`, { headers: { authorization: `Bearer ${gh.dispatched[0]?.ticket ?? ''}` } }, env);
+    expect(token.status).toBe(200);
+    expect(await runInDurableObject(p, (_i, state) => state.storage.getAlarm())).toBe((run?.requestedAt ?? 0) + QUEUED_STALE_MS);
+  });
+});
 
 describe('dispatch on admission', () => {
   it('a new run is dispatched once with its ticket', async () => {
