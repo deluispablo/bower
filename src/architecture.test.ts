@@ -7,7 +7,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { fixture, removeFixtures, ROOT, run } from '@/testing/dependency-gate';
+
+afterAll(removeFixtures);
 
 const SRC = dirname(fileURLToPath(import.meta.url));
 const files = (dir: string): string[] =>
@@ -16,33 +19,22 @@ const files = (dir: string): string[] =>
     return statSync(p).isDirectory() ? files(p) : /\.(ts|tsx)$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : [];
   });
 
-/** Where the data comes from is picked once, in main.tsx; screens only see the doors. */
-/** An import of a data source: static or dynamic, by alias or by a relative path. */
-const SOURCES = /(from |import\()'(@\/|(\.\.\/)+)data\/(demo|drive|vault|live|worker|fake|choose|contract)[/']/;
-/** The app shell may mount the demo panel (it shows only on demo and fake). */
-const ALLOWED: Record<string, RegExp> = { 'app/App.tsx': /(from |import\()'@\/data\/(demo\/DemoPanel|demo\/scenario|demo\/world|choose)'/ };
-
+// Who may import which data source is checked by dependency-cruiser (.dependency-cruiser.cjs); these tests drive that gate.
 describe('the shape of the code', () => {
   it('the import rule sees dynamic and relative imports', () => {
-    expect(SOURCES.test("import { DemoWorld } from '@/data/demo/world';")).toBe(true);
-    expect(SOURCES.test("const m = await import('@/data/fake/pretend');")).toBe(true);
-    expect(SOURCES.test("import { FakeDrive } from '../../data/drive/fake-drive';")).toBe(true);
-    expect(SOURCES.test("import { useSources } from '@/data/provider';")).toBe(false);
+    const base = { 'src/data/demo/world.ts': 'export const w = 1;\n', 'src/data/fake/pretend.ts': 'export const p = 1;\n', 'src/data/drive/fake-drive.ts': 'export const d = 1;\n' };
+    for (const text of ["import { w } from '@/data/demo/world';", "export const m = () => import('../../data/fake/pretend');", "import { d } from '../../data/drive/fake-drive';"]) {
+      const r = run(fixture({ ...base, 'src/features/a/Screen.ts': `${text}\n` }));
+      expect(r.code, text).not.toBe(0);
+      expect(r.out).toContain('screens-use-data-only-through-sources');
+    }
+    expect(run(fixture({ ...base, 'src/data/provider.tsx': 'export const q = 1;\n', 'src/features/a/Screen.ts': "import { q } from '../../data/provider';\n" })).code).toBe(0);
   });
 
   it('screens never import a data source directly', () => {
-    const bad: string[] = [];
-    for (const dir of ['features', 'app', 'ui', 'bird']) {
-      for (const f of files(join(SRC, dir))) {
-        const rel = relative(SRC, f);
-        readFileSync(f, 'utf8')
-          .split('\n')
-          .forEach((line, i) => {
-            if (SOURCES.test(line) && !ALLOWED[rel]?.test(line)) bad.push(`${rel}:${i + 1}  ${line.trim()}`);
-          });
-      }
-    }
-    expect(bad, 'Screens talk to data only through src/data/sources.ts (useSources, useLoad hooks in provider.tsx) and types.ts. Move what the screen needs behind a VaultSource/RunSource method, or into a pure module outside demo/drive/vault/live/worker/fake.').toEqual([]);
+    const r = run(ROOT);
+    expect(r.out, 'Screens talk to data only through src/data/sources.ts (useSources, useLoad hooks in provider.tsx) and types.ts. Move what the screen needs behind a VaultSource/RunSource method, or into a pure module outside demo/drive/vault/live/worker/fake.').not.toContain('screens-use-data-only-through-sources');
+    expect(r.code).toBe(0);
   });
 
   it('errors are never swallowed', () => {

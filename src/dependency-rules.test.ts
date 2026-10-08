@@ -3,31 +3,13 @@
  * (docs/harness/METHOD.md, "Rules machines check"; TL-P4-15 c1-dependency-rules).
  */
 /// <reference types="node" />
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { fixture, removeFixtures, ROOT, run } from '@/testing/dependency-gate';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const GATE = join(ROOT, 'scripts/check-dependencies.mjs');
-const run = (root: string) => {
-  const r = spawnSync('node', [GATE, '--root', root], { encoding: 'utf8' });
-  return { code: r.status, out: `${r.stdout}${r.stderr}` };
-};
-
-const made: string[] = [];
-const fixture = (files: Record<string, string>): string => {
-  const root = mkdtempSync(join(tmpdir(), 'bower-deps-'));
-  made.push(root);
-  for (const [path, text] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), text);
-  }
-  return root;
-};
-afterAll(() => made.forEach((d) => rmSync(d, { recursive: true, force: true })));
+afterAll(removeFixtures);
 
 describe('dependency rules', () => {
   it('production code imports no fake or demo module', () => {
@@ -52,10 +34,9 @@ describe('dependency rules', () => {
     expect(run(wider).code).not.toBe(0);
   });
 
-  it('screens never import a data source directly', () => {
-    const bad = fixture({ 'src/data/vault/drive-vault.ts': 'export const v = 1;\n', 'src/features/a/Screen.ts': "import { v } from '../../data/vault/drive-vault';\nexport const s = v;\n" });
-    const r = run(bad);
-    expect(r.code).not.toBe(0);
-    expect(r.out).toContain('screens-use-data-only-through-sources');
+  it('every named exception is still needed, so the list only shrinks', () => {
+    const { KNOWN } = createRequire(import.meta.url)(join(ROOT, 'scripts/dependency-exceptions.cjs')) as { KNOWN: { from: string; to: string[]; entry: string }[] };
+    const stale = KNOWN.flatMap((k) => k.to.filter((t) => !new RegExp(`from '[^']*/${(t.split('/').pop() ?? t).replace(/\.tsx?$/, '')}'`).test(readFileSync(join(ROOT, k.from), 'utf8'))).map((t) => `${k.from} -> ${t} (${k.entry})`));
+    expect(stale, 'These imports are gone: delete their lines from scripts/dependency-exceptions.cjs.').toEqual([]);
   });
 });
