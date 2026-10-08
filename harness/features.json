@@ -5571,6 +5571,19 @@
     "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-implementer. Before c2-one-engine."
   },
   {
+    "id": "c2-transport-options",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "Backoff, sleep and the abort signal become send options each Drive client (app, runner, Worker) injects; no mutable global for tests to zero. While the browser is known offline, a network error is not resent and an upload shows offline at once.",
+    "steps": [
+      "Add a file while the browser is offline: it shows offline at once, not uploading.",
+      "Lost bytes still ask to choose the file again."
+    ],
+    "verify": "pnpm vitest run -t \"a send takes its backoff, sleep and signal as options, with no global|an upload added while known offline shows offline at once|lost bytes ask to choose the file again\"",
+    "note": "Defect lost-bytes-slow, ruling (b)+(a2) (main 1968a8c); docs/harness/defects/2026-10-09-lost-bytes-slow.md. The note's 5 same-class sites become named tests (added to this verify at close). Starting model: bower-implementer. After c2-fake-parity, before c2-one-engine."
+  },
+  {
     "id": "c2-one-engine",
     "task": "p4-consolidation",
     "category": "refactor",
@@ -5612,7 +5625,7 @@
     "id": "c2-worker-dispatch",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": true,
+    "passes": false,
     "what": "Admission schedules a dispatch-now deadline; only the alarm mints tickets and dispatches; a run row holds deadline_at and version, compare-and-set; Delete me deletes personal tables explicitly and keeps ticket rows and the generation floor, with a test that classes every table.",
     "steps": [
       "Dispatch only from the alarm.",
@@ -5620,6 +5633,6 @@
       "Table classification test for Delete me."
     ],
     "verify": "pnpm -C api exec vitest run -t \"only the alarm dispatches|Delete me classes every table|a failed run-end start says so, and a retry does not claim it waits|a press during a recovery look-up is dispatched at once|a Delete me during the alarm's admission reads admits no run|a Delete me during a press's admission reads admits no run\"",
-    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a failed run-end start says so, and a retry does not claim it waits (safety-polish #4). Integrated at 76933a3f (red 67e59d04, fix d155dcab) but reopened: closed before its Opus review (close-before-review); closes again only after P4-27 PASS; a P4-27 fix round lands before anything builds on it."
+    "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a failed run-end start says so, and a retry does not claim it waits (safety-polish #4). Integrated at 76933a3f (red 67e59d04, fix d155dcab) but reopened: closed before its Opus review (close-before-review); closes again only after P4-27 PASS; a P4-27 fix round lands before anything builds on it. Reopened 2026-10-09 for sign-out-refuses-answers (main ada1e12): admission compares account identity, never the session generation; tests \"a sign-out during admission still admits the waiting answers\" and \"a Delete me during admission still refuses\"."
   }
 ]
