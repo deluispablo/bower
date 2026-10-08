@@ -5421,7 +5421,7 @@
     "id": "c1-worker-schema-v11",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Drop the unused admission table and control columns, rename run_ticket.epoch to attempt, delete dead exports.",
     "steps": [
       "Red from today's drift: dead schema",

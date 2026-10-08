@@ -187,3 +187,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: c1-digest passes — One digest module serves app, runner and Worker; the fake's report check uses MD5 like the runner (TL-P4-14 stage 1; removed 38 lines)
 - 2026-10-08: c1-small-fixes passes — BirdLab only in development; Settings plural; markSeen errors reported (TL-P4-14 stage 1)
 - 2026-10-08: c1-drive-ops-table passes — Every Drive method is classed read or write in one table; generateIds stays a fenced write; unknown keys keep the after-check (TL-P4-14 stage 1 and addendum)
+- 2026-10-08: c1-worker-schema-v11 passes — Schema v11: unused admission table and control columns dropped; run_ticket.epoch renamed attempt with values kept (TL-P4-14 stage 1)
