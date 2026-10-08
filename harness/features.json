@@ -4643,5 +4643,20 @@
     "verify": "pnpm -C runner exec vitest run -t \"the Claude provider passes the scripted provider contract fixtures|a Claude reply that targets a thing not admitted is refused and writes nothing|the runner computes ids and digests, never the model|claude runs with no checkout or home settings and the secret only reaches the claude step|a Claude run writes no hub line or demo extra it did not propose\"",
     "passes": true,
     "note": "TL-P4-01 P4-2; P4-1 review Important (notAdmitted) and two minors; lead 1089bd1. Live C04 smoke after it closes. Reopened: P4-2 review BLOCK (scripted.ts:415 demo hub line on a non-admitted note)."
+  },
+  {
+    "id": "runner-checkpoint-cost",
+    "task": "p4-b",
+    "category": "perf",
+    "what": "Checkpoints cost about 1.9 s each on staging (24–47 s per run, half the runner). Merge checkpoints or drop the checkpoint read-back only where the kill-after-every-step recovery tests still pass; and split the 25 s press→job start into the Worker admission (manifest reads, pile notes) and GitHub queue time, cutting only the Worker part.",
+    "steps": [
+      "Measure press→dispatch inside the Worker (admission, manifest reads, pile notes) vs dispatch→job created (R3: 2 s).",
+      "Cut the Worker admission time where safe.",
+      "Merge checkpoints / drop the read-back only where kill-after-every-step recovery tests pass unchanged.",
+      "A modelled test shows the checkpoint cost per run reduced; recovery, ordered-status and dispositions suites green."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"checkpoints cost fewer Drive round trips per operation|a kill after every step still recovers with merged checkpoints\" && pnpm -C api exec vitest run -t \"admission timing is logged in parts\"",
+    "passes": false,
+    "note": "TL-P4-01 P4-3 (lead approval after the staging runs 37734385418, 37734625824, 37734833636)."
   }
 ]
