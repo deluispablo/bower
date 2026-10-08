@@ -52,7 +52,7 @@
 | `c2-write-once` (escalated) | Every write (operations, run records, report files) carries `bowerOp`, reconciles by the stamp and confirms from the answer's checksum. The six recovery methods, their text checks and their take-once caches go. |
 | `c2-upload-queue-only` | The upload queue is always used, with an in-memory store in tests. The direct upload path and `DriveHttp`'s second resumable loop go. |
 | `c2-worker-dispatch` (escalated) | Admission schedules a "dispatch now" deadline, and only the alarm mints tickets and dispatches. A run row holds `deadline_at` and `version`, and the alarm compares and sets. Delete me deletes personal tables explicitly and keeps the ticket rows and the generation floor, with a test that classes every table. |
-| `home-reads-bounded` | As ruled in TL-P4-13 addendum 2, built on the new cache. |
+| `c2-pile-records` | Replaces `home-reads-bounded` ([TL-P4-16](2026-10-08-tl-p4-16-baseline-defects.md)): one "pile records for these piles" query in `pile-readiness.ts` for the Inbox, Remove, admission and the plan; declarations and dispositions stamped with their pile id; Home's calls the same for 10 and 500 earlier runs. |
 
 **Review.** Stage 2 gets the cross-provider Codex review once `codex exec` answers (from 2026-10-12, TL-P3-16), together with the P3 range that review was already due to cover. If Codex is not back, the Opus fallback (TL-P2-46) applies.
 
