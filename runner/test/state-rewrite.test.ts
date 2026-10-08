@@ -4,14 +4,12 @@
  * previous lines so an undo (C13) restores them; a Current state the person edited after Bower is never rewritten:
  * the change becomes a Timeline line plus a question (the C11 asks flow).
  *
- * TL-P4-10: an unmarked Current state is the person's, unless the file is as Bower last wrote it (its listed
- * `md5Checksum` equals the `bowerMd5` Bower set with that write) or a rule says Bower may keep such summaries up to
- * date; otherwise a Timeline line only, and one question per folder.
+ * TL-P4-10: an unmarked Current state is the person's, unless a rule says Bower may keep such summaries up to date; otherwise a Timeline line only, and one question per folder.
  */
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ADOPT_STATES_RULE, applyChanges, stateMark, undoChanges } from '../../src/data/contracts/note-edit';
+import { ADOPT_STATES_RULE, applyChanges, stateMark, stateNewsLine, undoChanges } from '../../src/data/contracts/note-edit';
 import { serializeRules } from '../../src/data/contracts/rules-format';
 import type { Change, ManifestV2 } from '../../src/data/contracts/run-manifest';
 import { parseNote } from '../../src/data/vault/note-format';
@@ -115,7 +113,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     const note = parseNote(HUB, run.after[HUB] ?? '');
     expect(note.currentState).toEqual(['Two applications open, one interview on Friday.']);
     // What Bower would have written goes on the Timeline, citing the thing, and the person is asked.
-    const line = note.timeline.find((t) => t.text.includes('An offer from Ferrowick to answer.'));
+    const line = note.timeline.find((t) => t.text.startsWith('New: ') && t.text.includes('an offer from Ferrowick to answer.'));
     expect(line?.source).toBe('Industrial Designer, Ferrowick');
     const questions = JSON.parse(run.after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string; about?: string }> };
     const asked = questions.questions.find((q) => q.id.startsWith('q-state-'));
@@ -125,28 +123,32 @@ describe('a change kind of its own for Current state (C05)', () => {
     expect(hubEdit(manifestOf(run.after)).some((x) => x.kind === 'state-rewrite')).toBe(false);
   });
 
-  it('an unmarked section in a file whose md5Checksum equals bowerMd5 is adopted', async () => {
+  it('the fallback line reads as plain news', () => {
+    expect(stateNewsLine(['One open.', 'An offer · to [[answer]].'])).toBe('New: One open, an offer, to answer.');
+    for (const line of [stateNewsLine(['One open.', 'An offer · to [[answer]].']), stateNewsLine(['Done.'])]) expect(line).not.toMatch(/;|Where things stand|Bower|would|\.,/);
+  });
+
+  it('after a Bower append the next run only adds a line', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const c = await hubCase();
-    // No mark (a run before marks wrote it), but Bower's last write set bowerMd5 and nobody has changed the file since.
+    // The file is as an earlier write left it (a stale bowerMd5 equal to its listed md5Checksum): still the person's.
     const run = await runWithClaude(c, proposing, { [HUB]: { bowerMd5: md5(c.folder[HUB] ?? '') } });
 
     expect(run.code).toBe(0);
     const after = run.after[HUB] ?? '';
-    expect(parseNote(HUB, after).currentState).toEqual(NEW_STATE);
-    expect(after).toContain(`bower_state: ${stateMark(NEW_STATE)}\n`);
-    expect(hubEdit(manifestOf(run.after)).find((x) => x.kind === 'state-rewrite')).toEqual({ kind: 'state-rewrite', recordIds: [], previous: ['One application open.'], lines: NEW_STATE });
-    expect(questionsOf(run.after)).toEqual([]);
-    // Every Bower note write sets bowerMd5 to the MD5 of the very bytes it sent: the edit and the made note alike.
-    for (const path of [HUB, MADE]) expect(run.props[path]?.bowerMd5, path).toBe(md5(run.after[path] ?? ''));
+    expect(parseNote(HUB, after).currentState).toEqual(['One application open.']);
+    expect(after).not.toContain('bower_state');
+    expect(hubEdit(manifestOf(run.after)).some((x) => x.kind === 'state-rewrite')).toBe(false);
+    expect(parseNote(HUB, after).timeline.some((t) => t.text.startsWith('New: ') && t.text.includes('an offer from Ferrowick to answer.'))).toBe(true);
+    // A Bower write no longer leaves a checksum behind for a later run to adopt by.
+    expect(run.props[MADE]?.bowerMd5).toBeUndefined();
   });
 
-  it('an unmarked section with no bowerMd5 gets a line and at most one question per folder', async () => {
+  it('an unmarked Current state is never adopted without a rule', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const c = await hubCase();
-    // The job hunt has no bowerMd5 (the original app wrote it); the flat hunt's was set by a write the person changed since.
     const long = Array.from({ length: 8 }, (_, i) => `Flat ${'abcdefgh'[i] ?? ''} on the shortlist, with a long description of its rooms, its light, its street and the walk to the station.`);
-    const run = await runWithClaude(c, proposingStates([{ note: HUB, lines: NEW_STATE }, { note: FLAT, lines: long }]), { [FLAT]: { bowerMd5: md5('what Bower wrote before the person changed it') } });
+    const run = await runWithClaude(c, proposingStates([{ note: HUB, lines: NEW_STATE }, { note: FLAT, lines: long }]));
 
     expect(run.code).toBe(0);
     const hub = parseNote(HUB, run.after[HUB] ?? '');
@@ -159,7 +161,7 @@ describe('a change kind of its own for Current state (C05)', () => {
     expect(editOf(manifestOf(run.after), HUB).some((x) => x.kind === 'state-rewrite')).toBe(false);
     expect(editOf(manifestOf(run.after), FLAT).some((x) => x.kind === 'state-rewrite')).toBe(false);
     // The news goes on each Timeline as one line, within an authored line's limits.
-    const hubLine = hub.timeline.find((t) => t.text.includes('An offer from Ferrowick to answer.'));
+    const hubLine = hub.timeline.find((t) => t.text.startsWith('New: ') && t.text.includes('an offer from Ferrowick to answer.'));
     expect(hubLine?.source).toBe('Industrial Designer, Ferrowick');
     const flatLine = flat.timeline.find((t) => t.text.includes('Flat a on the shortlist'));
     expect(flatLine).toBeDefined();

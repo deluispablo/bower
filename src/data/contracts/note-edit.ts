@@ -12,7 +12,7 @@ import { formerNames, linkTarget } from './links';
 import { ruleLike } from './rules';
 import { displayName, nameOf } from './tree';
 import type { ChangeEntry, Rule } from './types';
-import { md5Hex, sha256 } from './hashes';
+import { sha256 } from './hashes';
 import { parseNote } from './note-format';
 import { parseOwnership, type ByteSpan, type OwnershipFailure } from './ownership-format';
 import { parseRules } from './rules-format';
@@ -280,15 +280,6 @@ export const ADOPT_STATES_RULE = 'Keep the summaries Bower did not write up to d
 export const ADOPT_STATES_QUESTION = 'Bower found summaries it did not write. May it keep them up to date?';
 /** The front-matter key that marks what Bower last wrote in a note's Current state. */
 export const STATE_KEY = 'bower_state';
-/**
- * The appProperty every Bower note write sets, in the same request as the bytes (TL-P4-10 point 2): the MD5 of the
- * content it sends. A listing's `md5Checksum` equal to it says nobody has changed the file since Bower wrote it.
- */
-export const BOWER_MD5 = 'bowerMd5';
-/** The appProperties a Bower note write carries for `text`: its `bowerMd5`, of the UTF-8 bytes sent. */
-export function bowerWrite(text: string): Record<string, string> {
-  return { [BOWER_MD5]: md5Hex(encoder.encode(text)) };
-}
 /** An authored Timeline line's limit (the Claude intent's), which a line Bower makes from a Current state keeps too. */
 export const AUTHORED_LINE_MAX = 200;
 
@@ -388,15 +379,18 @@ export function currentStateOf(bytes: Uint8Array): { owner: StateOwner; lines: s
  * whole lines as fit, or the first one cut at a word with an ellipsis.
  */
 export function stateNewsLine(lines: readonly string[]): string {
-  const lead = "Bower's current state would now read: ";
-  const clean = lines.map((line) => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').trim()).filter(Boolean);
+  const lead = 'New: ';
+  // Plain news: the lines joined by commas, each without its closing full stop, the sentence taking one at its end.
+  // A later line starts in lower case (not an acronym), so the sentence reads as one.
+  const clean = lines.map((line) => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').replace(/;/g, ',').trim().replace(/[.!?]+$/, '')).filter(Boolean)
+    .map((line, i) => (i && /^[A-Z][a-z]/.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line));
   let text = lead;
   for (const [i, line] of clean.entries()) {
-    const next = `${text}${i ? '; ' : ''}${line}`;
-    if (next.length > AUTHORED_LINE_MAX) break;
+    const next = `${text}${i ? ', ' : ''}${line}`;
+    if (next.length + 1 > AUTHORED_LINE_MAX) break;
     text = next;
   }
-  if (text !== lead) return text;
+  if (text !== lead) return `${text}.`;
   const room = AUTHORED_LINE_MAX - lead.length - 1;
   const first = clean[0] ?? '';
   const cut = first.slice(0, room).replace(/\s+\S*$/, '');

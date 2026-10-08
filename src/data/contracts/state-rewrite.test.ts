@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { AUTHORED_LINE_MAX, BOWER_MD5, STATE_KEY, applyChanges, bowerWrite, currentStateOf, readBackEdit, recheckEdit, stateMark, stateNewsLine, undoChanges } from './note-edit';
+import { AUTHORED_LINE_MAX, STATE_KEY, applyChanges, currentStateOf, readBackEdit, recheckEdit, stateMark, stateNewsLine, undoChanges } from './note-edit';
 import { md5Hex } from './hashes';
 import type { Change, EditText } from './run-manifest';
 
@@ -57,7 +57,7 @@ describe('the state-rewrite change (C05)', () => {
     expect(applyChanges(enc(HUB), [rewrite(['One application open.'], ['two\nlines'])])).toEqual({ ok: false, reason: 'field' });
     expect(currentStateOf(enc('---\nby: bower\n---\nNo state here.\n'))).toEqual({ owner: 'missing', lines: [] });
     expect(currentStateOf(enc('---\nsummary: x\n---\nNo state here.\n'))).toBeNull();
-    // TL-P4-10: no mark is not Bower's by default; the planner adopts it only by bowerMd5 or a rule.
+    // TL-P4-10: no mark is not Bower's by default; the planner adopts it only by a rule.
     expect(currentStateOf(enc(HUB))).toEqual({ owner: 'unmarked', lines: ['One application open.'] });
   });
 
@@ -87,7 +87,7 @@ describe('the state-rewrite change (C05)', () => {
   });
 });
 
-describe('TL-P4-10: bowerMd5, a missing section, an empty one, the news line', () => {
+describe('TL-P4-10: MD5, a missing section, an empty one, the news line', () => {
   it('computes MD5 as RFC 1321 and Drive do', () => {
     // RFC 1321 appendix A.5 test suite.
     expect(md5Hex(enc(''))).toBe('d41d8cd98f00b204e9800998ecf8427e');
@@ -97,7 +97,6 @@ describe('TL-P4-10: bowerMd5, a missing section, an empty one, the news line', (
     for (const t of ['x'.repeat(55), 'x'.repeat(56), 'x'.repeat(64), 'é · ✓'.repeat(300), HUB]) {
       expect(md5Hex(enc(t))).toBe(createHash('md5').update(Buffer.from(t, 'utf8')).digest('hex'));
     }
-    expect(bowerWrite(HUB)).toEqual({ [BOWER_MD5]: createHash('md5').update(Buffer.from(HUB, 'utf8')).digest('hex') });
   });
 
   it('adds a missing section, with its mark, only in a Bower note', () => {
@@ -124,8 +123,7 @@ describe('TL-P4-10: bowerMd5, a missing section, an empty one, the news line', (
     expect(text(v2Back)).toBe(v2.replace('by: bower\n', `by: bower\n${STATE_KEY}: ${stateMark([])}\n`));
   });
 
-  it('says what Bower would write in one line within an authored line\'s limits', () => {
-    expect(stateNewsLine(['One open.', 'An offer · to [[answer]].'])).toBe("Bower's current state would now read: One open.; An offer, to answer.");
+  it('keeps the fallback line within an authored line\'s limits', () => {
     const long = Array.from({ length: 8 }, () => 'A long line about the flats on the shortlist and the walk to the station every morning.');
     expect(stateNewsLine(long).length).toBeLessThanOrEqual(AUTHORED_LINE_MAX);
     const one = stateNewsLine(['word '.repeat(80).trim()]);
