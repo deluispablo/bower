@@ -372,3 +372,4 @@ P3-9 is closed.
 - Closed: c2-read-cache (0030e06c, P4-28a PASS), c2-transport-outcome-kind (605a34f0, red by hand at 932794ac, P4-28b PASS), c2-worker-dispatch (0da4839f, P4-29 PASS; delete-me-admit-window fixed). P4-29 minor asked: sign-out during startWaiting leaves answers waiting, no re-arm. 416/424. Next: lost-bytes-slow diagnoser, c2-fake-parity.
 - sign-out-refuses-answers logged and ruled (main ada1e12); c2-worker-dispatch reopened for a small implementer fix round (queued for the next slot). 415/424.
 - lost-bytes-slow ruled (b)+(a2) (main 1968a8c): c2-transport-options registered (implementer), after c2-fake-parity, before c2-one-engine. 415/425.
+- c2-worker-dispatch sign-out fix round merged (red 59e3456b, fix 06871745; admission compares the kept generation floor, raised only by forget; check green on merged tree). P4-30 short check dispatched.
