@@ -183,3 +183,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: home-cache-stable passes — A report refresh keeps unchanged reads; the count waits for readiness; Home within 35% of the call minimum (TL-P4-13 addendum 2)
 - 2026-10-08: state-yes-writes passes — A yes to Write it writes Bower's update in a scoped run, stops on a later edit, and undo restores the person's section (TL-P4-13 addendum)
 - 2026-10-08: ask-answer-loop passes — Verify updated after state-yes-writes replaced the Write it test (TL-P4-13 addendum)
+- 2026-10-08: corpus-grounded-scorer passes — Every corpus expectation's numbers are grounded in its own case; c07's ungrounded offer line fixed (TL-P4-13)
