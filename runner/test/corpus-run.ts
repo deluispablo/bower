@@ -11,6 +11,7 @@ import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { main } from '../src/main';
+import type { ClaudeSpawn } from '../src/claude';
 import type { LoadedCase } from '../src/corpus';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive } from './drive-v3';
 
@@ -44,6 +45,24 @@ export interface CaseRun {
 }
 
 export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false): Promise<CaseRun> {
+  return runCase(c, { around, realTokens });
+}
+
+/**
+ * Runs a case through the Claude provider with `claude` answering in place of the model: a recorded reply, or
+ * scripted proposals in the same intent shape (P4-3). No live call.
+ */
+export async function runWithClaude(c: LoadedCase, claude: ClaudeSpawn): Promise<CaseRun> {
+  return runCase(c, { claude });
+}
+
+interface CaseOptions {
+  around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch;
+  realTokens?: boolean;
+  claude?: ClaudeSpawn;
+}
+
+async function runCase(c: LoadedCase, { around, realTokens = false, claude }: CaseOptions): Promise<CaseRun> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const folders = new Map<string, string>();
@@ -69,14 +88,19 @@ export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalT
   }
   for (const [i, pile] of c.inbox.entries()) {
     const props = { pile: `p-${i + 1}` };
-    const text = (name: string): string => c.inboxFiles[name] ?? `made-up content of ${name}`;
+    // A file of the case's inbox as it is (a PDF or a picture by its bytes); a name with no file, made-up text.
+    const add = async (parent: string, name: string, extra: Record<string, string>): Promise<void> => {
+      const bytes = c.inboxBinary[name];
+      if (bytes) await drive.upload(parent, name, new Blob([bytes.slice()]), undefined, { ...extra, ...asAdded(name) });
+      else await drive.createText(parent, name, c.inboxFiles[name] ?? `made-up content of ${name}`, { ...extra, ...asAdded(name) });
+    };
     if (!pile.line && pile.files.length === 1) {
-      await drive.createText(inbox, pile.files[0] ?? '', text(pile.files[0] ?? ''), { ...props, ...asAdded(pile.files[0] ?? '') });
+      await add(inbox, pile.files[0] ?? '', props);
       continue;
     }
     const folder = (await drive.createFolder(inbox, pile.line.slice(0, 40) || `Pile ${i + 1}`, props)).id;
     if (pile.line) await drive.createText(folder, PILE_NOTE, `${pile.line}\n`);
-    for (const f of pile.files) await drive.createText(folder, f, text(f), asAdded(f));
+    for (const f of pile.files) await add(folder, f, {});
   }
   const admitted = await planAdmission(fakeRead(drive), root, { scope: c.scope === 'undo' ? 'instructions' : c.scope, clock: () => AT, newId: () => 'admission-1' });
   const wire = driveV3(drive);
@@ -88,7 +112,8 @@ export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalT
   const dir = await mkdtemp(join(tmpdir(), 'bower-corpus-'));
   const file = join(dir, 'event.json');
   await writeFile(file, JSON.stringify({ action: 'bower-tidy', client_payload: { run_id: RUN_ID, attempt: 1, ticket: TICKET, scope: c.scope, allow_web: c.allowWeb } }));
-  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file }, { fetch: around ? around(wire.fetch) : wire.fetch });
+  const env = claude ? { BOWER_PROVIDER: 'claude', CLAUDE_CODE_OAUTH_TOKEN: 'made-up-token-for-tests-only' } : {};
+  const code = await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: file, ...env }, { fetch: around ? around(wire.fetch) : wire.fetch, ...(claude ? { claude } : {}) });
   const after = await snapshot(drive, root);
   const lastRun: unknown = after[SYSTEM.lastRun] ? JSON.parse(after[SYSTEM.lastRun] ?? 'null') : null;
   return { after, lastRun, code };
