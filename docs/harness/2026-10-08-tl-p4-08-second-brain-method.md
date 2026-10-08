@@ -24,3 +24,12 @@
 - `second-brain-method` (`bower-escalated`, since the prompt contract crosses every slice). It rewrites the provider's instructions from points 1–8. It keeps the operation list as a starting contract (PRODUCT): if "leave in the inbox with a question" or "update the timeline" has no operation yet, it registers one and does not stretch an existing one. It checks every C04–C15 rubric against the method and fixes a rubric only where it contradicts the method, recording each change. The model-input golden is regenerated on purpose.
 - `placement-check` finishes under TL-P4-07 addendum 3. Its `responsibility` basis is point 1's "create and say why".
 - P4_PLAN's "Reuse from the original app" now names this decision.
+
+**Addendum, 2026-10-08: what `second-brain-method` left open.** The rubric changes are accepted as recorded in [the rubric changes](2026-10-08-p4-method-rubric-changes.md).
+1. **Rewriting Current state needs a change kind of its own,** so it can be undone (C13) and checked against the person's text. It is the first entry of the C05 slice: `state-rewrite-change` (`bower-escalated`, since it touches contracts and undo).
+   - It rewrites only the Bower-owned *Current state* section, through `stillAsSeen` and the modifiedTime it read.
+   - The manifest keeps the previous text, so undo restores it.
+   - A section the person edited after Bower is never rewritten: the change becomes a timeline line plus a question.
+2. **Proposing type-table rows** waits for the C11 slice (rules and proposals) as `type-proposals`: a report field, at most 2 per run, applied only once the person accepts.
+3. **`bench-4-scanned-pdf` stays unchanged,** so the speed comparison with the original stays like for like. Its file `scan0001.pdf` has no text and a name that says nothing, so under the method "asks" is the correct outcome. Quality is judged that way. The original's filing is recorded as the original's behaviour, not as Bower's bar.
+4. **The answer to an ask reaching the model** waits for the C11 slice as `ask-answer-loop`. Until then, an item that is asked about stays in the inbox, and a later run does not repeat a question that is already open.
