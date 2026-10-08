@@ -66,6 +66,14 @@ describe('what the repository promises', () => {
     for (const part of ['## Where things stand', '## The plan, in order', '## How to run a round', '## Traps on this machine', '## Decisions taken in phase 2']) expect(handoff, part).toContain(part);
   });
 
+  it('a compaction re-reads the session state and the output rules (TL-P4-06)', () => {
+    const settings = JSON.parse(read('.claude/settings.json')) as { hooks: Record<string, { matcher: string; hooks: { command: string }[] }[]> };
+    const start = settings.hooks.SessionStart ?? [];
+    expect(start.some((h) => h.matcher === 'compact' && h.hooks.some((c) => c.command.includes('harness/after-compact.md')))).toBe(true);
+    const note = read('harness/after-compact.md');
+    for (const part of ['docs/harness/LEAD.md', 'docs/harness/HANDOFF.md', 'never asks the owner', 'under 120 characters']) expect(note, part).toContain(part);
+  });
+
   it('the Worker config never targets the original production Worker, and serves the app as a single-page app (TL-P3-08)', () => {
     const config = read('api/wrangler.jsonc');
     expect(config).not.toMatch(/"name":\s*"bower-api"/);
