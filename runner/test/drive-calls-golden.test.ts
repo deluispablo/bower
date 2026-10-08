@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modelled, type Call } from './modelled';
+import { DRIVE_MS, modelled, type Call } from './modelled';
 
 interface PhaseCount {
   name: string;
@@ -104,5 +104,30 @@ describe('the C04 run makes the golden number of Drive calls per step', () => {
     expect(count.checkpoints).toBe(4);
     expect(count.report).toBe(45);
     expect(count.status).toBe(4);
+  });
+});
+
+/** The C04 run's Drive calls before the cut (TL-P4-08 addendum 6, at fd99ca3): 106 reads and 28 writes. */
+const DRIVE_CALLS_BEFORE = 134;
+/** Its modelled apply before the cut, from the opening checkpoint's answer to the closing checkpoint's send, at 150 ms a call. */
+const APPLY_MS_BEFORE = 13350;
+
+describe('drive-calls-cut', () => {
+  it('the C04 run makes at least 40 percent fewer Drive calls', async () => {
+    const { calls, code } = await modelled();
+    expect(code).toBe(0);
+    const drive = calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
+    expect(drive).toBeLessThanOrEqual(Math.floor(DRIVE_CALLS_BEFORE * 0.6));
+  });
+
+  it('offer-and-flat apply takes at most half its modelled time', async () => {
+    const { calls, code } = await modelled();
+    expect(code).toBe(0);
+    const opening = calls.find((c) => c.kind === 'write' && c.name?.startsWith('checkpoint-1-'));
+    const closing = calls.find((c) => c.kind === 'write' && c.name?.startsWith('checkpoint-2-'));
+    if (!opening || !closing) throw new Error('the opening or the closing checkpoint is missing');
+    const apply = closing.at - (opening.at + DRIVE_MS);
+    console.log(`apply: modelled ${apply} ms (was ${APPLY_MS_BEFORE})`);
+    expect(apply).toBeLessThanOrEqual(APPLY_MS_BEFORE / 2);
   });
 });
