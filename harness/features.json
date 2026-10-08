@@ -5351,7 +5351,7 @@
     "id": "c1-drive-ops-table",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Every DriveApi method classed read or write in one typed table.",
     "steps": [
       "Red from today's drift: the fake-only digest read going through the lease guard",

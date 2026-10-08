@@ -186,3 +186,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: corpus-grounded-scorer passes — Every corpus expectation's numbers are grounded in its own case; c07's ungrounded offer line fixed (TL-P4-13)
 - 2026-10-08: c1-digest passes — One digest module serves app, runner and Worker; the fake's report check uses MD5 like the runner (TL-P4-14 stage 1; removed 38 lines)
 - 2026-10-08: c1-small-fixes passes — BirdLab only in development; Settings plural; markSeen errors reported (TL-P4-14 stage 1)
+- 2026-10-08: c1-drive-ops-table passes — Every Drive method is classed read or write in one table; generateIds stays a fenced write; unknown keys keep the after-check (TL-P4-14 stage 1 and addendum)
