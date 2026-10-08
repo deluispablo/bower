@@ -146,9 +146,9 @@ export const DRIVE_OPS = {
   fullText: 'read',
   binnedByItem: 'read',
   storedDigest: 'read',
-  generateIds: 'read',
   sessionStatus: 'read',
   getUploaded: 'read',
+  generateIds: 'write', // reserves an id the upload keeps: a write, fenced like the rest
   createFolder: 'write',
   createText: 'write',
   upload: 'write',
@@ -161,3 +161,6 @@ export const DRIVE_OPS = {
 } as const satisfies Record<keyof (DriveApi & ResumableDrive & BinLookup & StoredDigests), 'read' | 'write'>;
 
 export const isDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Record<PropertyKey, string>)[key] !== 'read';
+
+/** A method the table knows as a write. An unknown key is not one, but is not a read either (the after-check still runs). */
+export const isKnownDriveWrite = (key: PropertyKey): boolean => (DRIVE_OPS as Record<PropertyKey, string>)[key] === 'write';

@@ -2,7 +2,7 @@
  * The real doors: the Bower folder in Google Drive, and the Worker for the
  * session and tidy-ups. The same screens run on these as on the demo.
  */
-import { isDriveWrite, type DriveApi, type ResumableDrive } from '../drive/drive-api';
+import { isKnownDriveWrite, type DriveApi, type ResumableDrive } from '../drive/drive-api';
 import type { Sources } from '../sources';
 import { DriveVault } from '../vault/drive-vault';
 import { outboxKey } from '../vault/journal';
@@ -323,7 +323,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
             const result: unknown = await Reflect.apply(value, target, args);
             policy?.after(key, result);
             // Successful issued mutations can still reach their original owner's bookkeeping.
-            if (!isDriveWrite(key)) check(at);
+            if (!isKnownDriveWrite(key)) check(at);
             return result;
           };
         },
