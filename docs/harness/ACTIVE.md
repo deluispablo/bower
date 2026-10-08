@@ -237,3 +237,4 @@ P3-9 is closed.
 - per-thing-ask closed (905b646; golden merge resolved with PILE_ID) and things-normalised closed (bd9c6b0; the per-run value was the pileId). 377/381. Opus check and suites running.
 - P4-10 delta check PASS (minors to polish; manifest/outsideAdmitted are invariant guards the reply can't reach). Waiting for the suites.
 - P4-10 suites at 222f9c0: check 3609/190/138, e2e 225/226 (qa10:149 desktop flake again; 10/10 alone; logged in P2_POLISH), e2e:fake 250, e2e:pwa pass. Main moves.
+- Main and backup at b54392c; SHA sent to the lead for offer-and-flat x3 + garden x2.
