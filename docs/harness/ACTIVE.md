@@ -354,3 +354,4 @@ P3-9 is closed.
 - P4-25 BLOCK (c2-drive-transport): budget cuts slow uploads; Worker repair PATCH resent on 5xx without a fence. Reopened; fresh escalated fix round. c2-worker-dispatch running. 412/423.
 - c2-drive-transport fix round merged (a0c8d806; red 0c13ad4f, fix 56b4d7fd); not closed: done.sh precheck rejects a mixed src+api verify (precheck-mixed-verify, lead asked). Opus fix-round check running; c2-worker-dispatch running. 412/423.
 - P4-25b fix-round check PASS. precheck-mixed-verify fixed (51d4c6c4, lead ok). c2-drive-transport closed (ef649c93). c2-write-once gains the stamp test (lead ruling). unknown-write-copy logged: the copy says "Try again", not the ruled sentence; lead asked. 413/423.
+- Addendum 6: c2-transport-outcome-kind registered (implementer, queued for a free slot); c2-write-once gains the own-unknown-write retry test. c2-read-cache dispatched on escalated (entry note) before the lead said implementer; kept. 413/424.
