@@ -5463,7 +5463,7 @@
     "id": "c1-dependency-rules",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "dependency-cruiser in pnpm check: production code never imports fake/ or demo/; screens import only sources, provider and types; today's breaks listed as exceptions, each with the entry that removes it (TL-P4-15).",
     "steps": [
       "Red from today's drift: production code importing fake/ (FencedDrive, StoredEvidence)",
