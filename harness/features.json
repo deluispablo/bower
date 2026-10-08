@@ -4885,7 +4885,7 @@
       "Two C04 runs with different ids give the same input=."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint|two fresh folders with different Drive and admission ids give the same fingerprint\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs. Reopened by the P4-8 review: fileId and admission id were not normalised."
   },
   {

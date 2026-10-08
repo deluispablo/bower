@@ -142,3 +142,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: second-brain-method passes — instructions follow TL-P4-08 points 1-8 (fit, create, ask; value gate; kinds table; budget); new op asks leaves an ambiguous thing in the inbox with a question; 2 rubrics changed and logged
 - 2026-10-08: ask-not-repeated passes — a second run over an asked thing keeps one open question (q-ask-<pileId>, deduped by the planner); the thing stays byte-identical in the inbox
 - 2026-10-08: placement-check passes — P4-8 fix round: the retry keeps its work folder; the rule basis is a whole rules line; New area only for a new top-level Area
+- 2026-10-08: fingerprint-normalised passes — P4-8 fix round: fileId and admission id normalised, so fresh folders match; ids written inside a note still change the hash
