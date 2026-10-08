@@ -4860,5 +4860,46 @@
     "verify": "pnpm -C runner exec vitest run -t \"the prompt says a thing with no fitting folder goes to Resources|the C04 scorer accepts its rubric placements and refuses others\"",
     "passes": true,
     "note": "TL-P4-07 addendum (main 50a99a1): Areas placement on a566241 is model variance on an under-specified case. The 0:43 counts once C04 passes 5/5."
+  },
+  {
+    "id": "placement-check",
+    "task": "p4-c",
+    "category": "feature",
+    "what": "The spine refuses a model proposal that makes a new folder under Areas or Projects citing no rule line or existing note; the provider retries once with that error, and a second refusal ends the run honestly (C12), with no silent fallback.",
+    "steps": [
+      "Spine check: a new Areas/Projects folder needs a cited rule line or existing note.",
+      "Provider retries once, telling the model why; a second refusal ends the run honestly.",
+      "Scripted tests for both paths; live proof 5/5 C04 (coordinator)."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"a new Area with no cited rule or note is refused and retried once|a second refusal ends the run honestly\"",
+    "passes": false,
+    "note": "TL-P4-07 addendum 2 (main c924560). Live C04 on cd3af43 was 4/5 (run 2 Areas)."
+  },
+  {
+    "id": "fingerprint-normalised",
+    "task": "p4-c",
+    "category": "fix",
+    "what": "The timing line's input= hashes the normalised model input (run ids, file ids and times replaced, as the golden does), so runs on fresh folders with the same content match.",
+    "steps": [
+      "Share one normalisation between the golden test and the fingerprint.",
+      "Two C04 runs with different ids give the same input=."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"two runs of the same case on fresh ids give the same input fingerprint\"",
+    "passes": false,
+    "note": "TL-P4-07 addendum 2 (main c924560). Live input= differed on all 5 cd3af43 runs."
+  },
+  {
+    "id": "drive-calls-golden",
+    "task": "p4-b",
+    "category": "fix",
+    "what": "Runner time rose from a median of about 35 s on a566241 to 49 s on cd3af43 (apply 4.4–5.3 → 8.8–15.9 s, report 2.5–2.7 → 7.9–9.8 s). Drive calls per step for C04 on the fake are counted on both SHAs, the difference explained and fixed if real, and the counts pinned in a golden.",
+    "steps": [
+      "Count Drive calls per timing step for C04 on the fake at a566241 and HEAD.",
+      "Explain the difference (timing attribution or real calls); fix it if real.",
+      "Golden of the per-step call counts."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step\"",
+    "passes": false,
+    "note": "TL-P4-07 addendum 2 (main c924560)."
   }
 ]
