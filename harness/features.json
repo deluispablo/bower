@@ -4931,7 +4931,7 @@
     "note": "TL-P4-08 addendum (main c85da86) point 4: fix in this batch if it repeats today."
   },
   {
-    "passes": true,
+    "passes": false,
     "id": "state-rewrite-change",
     "task": "p4-c",
     "category": "feature",
@@ -4941,8 +4941,8 @@
       "Person-edited Current state: Timeline line plus question, no rewrite.",
       "Undo restores the previous text."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"a Bower-owned Current state is rewritten and undo restores it|a Current state the person edited gets a line and a question, never a rewrite|an unmarked section in a file whose md5Checksum equals bowerMd5 is adopted|an unmarked section with no bowerMd5 gets a line and at most one question per folder|a yes rule lets Bower adopt the section|undo restores an empty section empty\"",
-    "note": "TL-P4-08 addendum (main c85da86) point 1: first C05 entry (escalated). Reopened by the P4-12 review (BLOCK): an unmarked Current state counts as Bower-owned, so person edits on every existing note go uncaught; the unmarked case awaits the lead. TL-P4-10 (main da18746): bowerMd5 on every Bower note write; adopt when md5Checksum matches; otherwise a line and one question per folder; minors folded in."
+    "verify": "pnpm -C runner exec vitest run -t \"a Bower-owned Current state is rewritten and undo restores it|a Current state the person edited gets a line and a question, never a rewrite|a yes rule lets Bower adopt the section|undo restores an empty section empty\"",
+    "note": "TL-P4-08 addendum (main c85da86) point 1: first C05 entry (escalated). Reopened by the P4-12 review (BLOCK): an unmarked Current state counts as Bower-owned, so person edits on every existing note go uncaught; the unmarked case awaits the lead. TL-P4-10 (main da18746): bowerMd5 on every Bower note write; adopt when md5Checksum matches; otherwise a line and one question per folder; minors folded in. Verify narrowed by state-no-adoption (TL-P4-10 addendum): the md5-adoption test is removed and the no-bowerMd5 test is now state-no-adoption's."
   },
   {
     "passes": false,
