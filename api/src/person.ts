@@ -64,16 +64,17 @@ export interface SignInResult {
 const GENERATION_FLOOR = 'generationFloor';
 /**
  * Durable Object key-value entry that outlives `forget()` for at most a ticket's hour: the run tickets that were live at
- * Delete me (their run id, SHA-256 and expiry; random values, nothing personal), so a runner still holding one is told
- * the person is gone, while any other bearer stays signed out.
+ * Delete me (their SHA-256, expiry and attempt; random values, nothing personal: no run id), so a runner still holding
+ * one is told the person is gone, while any other bearer stays signed out. An alarm at the earliest expiry (and any
+ * later access) prunes expired rows, so after the last expiry nothing is kept.
  */
 const GONE_TICKETS = 'goneTickets';
 
 /** A run ticket live at Delete me (`GONE_TICKETS`). */
 interface GoneTicket {
-  runId: string;
   hash: string;
   expiresAt: number;
+  attempt: number;
 }
 /** Durable Object key-value entry: the extra time the alarm gave the current run's attempt (`RecoveryWatch`). */
 const RECOVERY_WATCH = 'recoveryWatch';
@@ -502,13 +503,18 @@ export class Person extends DurableObject<Env> {
     const floor = Math.max(kv.get<number>(GENERATION_FLOOR) ?? 0, now === undefined ? 0 : now + 1);
     const at = Date.now();
     const live = this.ctx.storage.sql
-      .exec<{ run_id: string; hash: string; expires_at: number }>('SELECT run_id, hash, expires_at FROM run_ticket WHERE retired = 0 AND expires_at > ?', at)
+      .exec<{ hash: string; expires_at: number; epoch: number }>('SELECT hash, expires_at, epoch FROM run_ticket WHERE retired = 0 AND expires_at > ?', at)
       .toArray()
-      .map((t): GoneTicket => ({ runId: t.run_id, hash: t.hash, expiresAt: t.expires_at }));
+      .map((t): GoneTicket => ({ hash: t.hash, expiresAt: t.expires_at, attempt: t.epoch }));
     const kept = [...(kv.get<GoneTicket[]>(GONE_TICKETS) ?? []).filter((t) => t.expiresAt > at), ...live];
     await this.ctx.storage.deleteAll();
     kv.put(GENERATION_FLOOR, floor);
-    if (kept.length > 0) kv.put(GONE_TICKETS, kept);
+    if (kept.length > 0) {
+      kv.put(GONE_TICKETS, kept);
+      // deleteAll cleared any alarm; one alarm per object (https://developers.cloudflare.com/durable-objects/api/alarms/),
+      // so the earliest expiry takes it. The next run admission sets its own, and `alarm` re-arms this one.
+      await this.ctx.storage.setAlarm(Math.min(...kept.map((t) => t.expiresAt)));
+    }
     this.ctx.storage.transactionSync(() => migrate(this.ctx.storage.sql));
   }
 
@@ -585,7 +591,26 @@ export class Person extends DurableObject<Env> {
    * without the browser, with this object's own env and the Workers fetch (as `worker-dispatch` reaches GitHub).
    */
   async alarm(): Promise<void> {
+    // The alarm is shared: expired gone rows go first, recovery runs as before (it may clear the alarm), and the
+    // alarm is then set again for the earliest gone row still kept, unless an earlier one is already set.
+    this.pruneGone(Date.now());
     await this.recover(Date.now(), { repo: this.env.GITHUB_REPO, token: this.env.GITHUB_TOKEN, fetchImpl: (i, init) => fetch(i, init) });
+    const kept = this.ctx.storage.kv.get<GoneTicket[]>(GONE_TICKETS);
+    if (kept === undefined) return;
+    const earliest = Math.min(...kept.map((t) => t.expiresAt));
+    const set = await this.ctx.storage.getAlarm();
+    if (set === null || set > earliest) await this.ctx.storage.setAlarm(earliest);
+  }
+
+  /** Drops the gone rows (`GONE_TICKETS`) expired at `now`; the entry goes with the last one. Returns the rows still live. */
+  private pruneGone(now: number): GoneTicket[] {
+    const kv = this.ctx.storage.kv;
+    const kept = kv.get<GoneTicket[]>(GONE_TICKETS);
+    if (kept === undefined) return [];
+    const live = kept.filter((t) => t.expiresAt > now);
+    if (live.length === 0) kv.delete(GONE_TICKETS);
+    else if (live.length < kept.length) kv.put(GONE_TICKETS, live);
+    return live;
   }
 
   /**
@@ -762,7 +787,7 @@ export class Person extends DurableObject<Env> {
    */
   runnerAccess(runId: string, hash: string, now: number): RunnerGrant | 'stale-attempt' | 'gone' | null {
     return this.ctx.storage.transactionSync((): RunnerGrant | 'stale-attempt' | 'gone' | null => {
-      if (this.account() === null) return this.goneTicket(runId, hash, now) ? 'gone' : null;
+      if (this.account() === null) return this.goneTicket(hash, now) ? 'gone' : null;
       this.expire(now);
       const found = this.findTicket(runId, hash, now);
       if (found.kind === 'superseded') return 'stale-attempt';
@@ -774,15 +799,9 @@ export class Person extends DurableObject<Env> {
     });
   }
 
-  /** Whether `hash` is a ticket of `runId` that was live at Delete me and has not expired at `now` (`GONE_TICKETS`). */
-  private goneTicket(runId: string, hash: string, now: number): boolean {
-    const kv = this.ctx.storage.kv;
-    const kept = kv.get<GoneTicket[]>(GONE_TICKETS);
-    if (kept === undefined) return false;
-    const live = kept.filter((t) => t.expiresAt > now);
-    if (live.length === 0) kv.delete(GONE_TICKETS);
-    else if (live.length < kept.length) kv.put(GONE_TICKETS, live);
-    return live.some((t) => t.runId === runId && timingSafeEqual(t.hash, hash));
+  /** Whether `hash` is a ticket that was live at Delete me and has not expired at `now` (`GONE_TICKETS`); expired rows go. */
+  private goneTicket(hash: string, now: number): boolean {
+    return this.pruneGone(now).some((t) => timingSafeEqual(t.hash, hash));
   }
 
   /**
