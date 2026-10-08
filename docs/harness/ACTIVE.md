@@ -301,3 +301,4 @@ P3-9 is closed.
 - P4-18 check PASS (home-inbox-first; minors to polish, one on a swallowed read error). keep-one-note-merge running; ask-answer-loop waits for it (its yes-to-merge test needs the merge).
 - keep-one-note-merge closed (51515f5) and c05-incorporation closed (57a9c96): C05 corpus 4/4 scripted. 392/395. P4-19 Opus check and ask-answer-loop (escalated) running.
 - P4-19 check BLOCK (keep-one-note-merge): other note binned on name/place only; substring dedup drops a different fact. Reopened; fix round with the same escalated worker. ask-answer-loop running. 391/395.
+- keep-one-note-merge re-closed (3680523): Bin passes what it read; whole-line compare. 392/395. P4-19b check and ask-answer-loop running.
