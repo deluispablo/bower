@@ -36,7 +36,7 @@ async function admitted(sub: string, requestId: string, now: number): Promise<st
   const p = person(sub);
   await p.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: 'enc-token' });
   await p.setFolderId('FOLDER_ID');
-  const r = await p.admit({ generation: (await p.account())?.generation ?? -1, scope: 'all', allowWeb: false, requestId, now, dailyLimit: 100, manifest: MANIFEST });
+  const r = await p.admit({ accountEpoch: (await p.account())?.accountEpoch ?? -1, scope: 'all', allowWeb: false, requestId, now, dailyLimit: 100, manifest: MANIFEST });
   if (!r.admitted) throw new Error('not admitted');
   const gh = pretendGitHub(env);
   try {

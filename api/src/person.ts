@@ -35,6 +35,11 @@ export interface PersonAccount {
   name: string;
   /** Bumped at sign-out: a session cookie carrying another value is retired. */
   generation: number;
+  /**
+   * Which account this is: only Delete me changes it (the kept `GENERATION_FLOOR` forget raises, which a new account
+   * starts its sessions at). A sign-out moves `generation`, never this; runs depend on this one (`admitSync`).
+   */
+  accountEpoch: number;
 }
 
 /** A Drive access token and when it stops working (epoch ms). */
@@ -249,7 +254,9 @@ export class Person extends DurableObject<Env> {
         'SELECT email, name, session_generation FROM account WHERE id = 1',
       )
       .toArray()[0];
-    return row === undefined ? null : { email: row.email, name: row.name, generation: row.session_generation };
+    return row === undefined
+      ? null
+      : { email: row.email, name: row.name, generation: row.session_generation, accountEpoch: this.ctx.storage.kv.get<number>(GENERATION_FLOOR) ?? 0 };
   }
 
   /** The encrypted refresh token (crypto.ts envelope), or null. */
@@ -645,8 +652,9 @@ export class Person extends DurableObject<Env> {
   private admitSync(input: AdmitInput, takesWaiting: boolean): AdmitResult {
     const sql = this.ctx.storage.sql;
     const kv = this.ctx.storage.kv;
-    // The account admission started for is gone, or signed in again since (Delete me during the reads): nothing is written.
-    if (this.account()?.generation !== input.generation) return { admitted: false, refused: 'gone' };
+    // The account admission started for is gone, or is a new one since (Delete me during the reads): nothing is written.
+    // A sign-out does not matter here: the run is the person's, not the browser session's (TL-P4-04 addendum).
+    if (this.account()?.accountEpoch !== input.accountEpoch) return { admitted: false, refused: 'gone' };
     this.expire(input.now);
     const repeat = sql
       .exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE request_id = ?`, input.requestId)
@@ -833,16 +841,16 @@ export class Person extends DurableObject<Env> {
    * the next tidy-up whatever happens here.
    */
   private async startWaiting(now: number, github: GitHubAccess, spent: () => number): Promise<void> {
-    const due = this.ctx.storage.transactionSync((): { waiting: AnswersWaiting; requestId: string; generation: number } | null => {
+    const due = this.ctx.storage.transactionSync((): { waiting: AnswersWaiting; requestId: string; accountEpoch: number } | null => {
       const waiting = this.ctx.storage.kv.get<AnswersWaiting>(ANSWERS_WAITING);
       const current = this.currentRunRow();
-      const generation = this.account()?.generation;
+      const accountEpoch = this.account()?.accountEpoch;
       // A run going takes them at its own end.
-      if (waiting === undefined || generation === undefined || (current !== undefined && ACTIVE_PHASES.includes(current.phase))) return null;
-      return { waiting, requestId: `answers-after-${current?.id ?? 'none'}`, generation };
+      if (waiting === undefined || accountEpoch === undefined || (current !== undefined && ACTIVE_PHASES.includes(current.phase))) return null;
+      return { waiting, requestId: `answers-after-${current?.id ?? 'none'}`, accountEpoch };
     });
     if (due === null) return;
-    const { waiting, requestId, generation } = due;
+    const { waiting, requestId, accountEpoch } = due;
     const scope: RunScope = waiting.subjects.length > 0 ? 'all' : 'instructions';
     let manifest: AdmissionManifest;
     try {
@@ -853,7 +861,7 @@ export class Person extends DurableObject<Env> {
       this.ctx.storage.transactionSync(() => this.waitingFailed(requestId, final, now));
       return;
     }
-    const input: AdmitInput = { scope, allowWeb: waiting.allowWeb, requestId, now, generation, dailyLimit: Number(this.env.DAILY_RUN_LIMIT), manifest };
+    const input: AdmitInput = { scope, allowWeb: waiting.allowWeb, requestId, now, accountEpoch, dailyLimit: Number(this.env.DAILY_RUN_LIMIT), manifest };
     const result = this.ctx.storage.transactionSync((): AdmitResult => this.admitSync(input, true));
     if (!result.admitted && result.refused === 'gone') {
       console.error('the answers that waited were not started: the account is gone');

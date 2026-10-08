@@ -5625,14 +5625,14 @@
     "id": "c2-worker-dispatch",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Admission schedules a dispatch-now deadline; only the alarm mints tickets and dispatches; a run row holds deadline_at and version, compare-and-set; Delete me deletes personal tables explicitly and keeps ticket rows and the generation floor, with a test that classes every table.",
     "steps": [
       "Dispatch only from the alarm.",
       "Compare-and-set run row.",
       "Table classification test for Delete me."
     ],
-    "verify": "pnpm -C api exec vitest run -t \"only the alarm dispatches|Delete me classes every table|a failed run-end start says so, and a retry does not claim it waits|a press during a recovery look-up is dispatched at once|a Delete me during the alarm's admission reads admits no run|a Delete me during a press's admission reads admits no run\"",
+    "verify": "pnpm -C api exec vitest run -t \"only the alarm dispatches|Delete me classes every table|a failed run-end start says so, and a retry does not claim it waits|a press during a recovery look-up is dispatched at once|a Delete me during the alarm's admission reads admits no run|a Delete me during a press's admission reads admits no run|a sign-out during admission still admits the waiting answers|a Delete me during admission still refuses\"",
     "note": "TL-P4-14 stage 2 (main 2b7a6bb); rules: behaviour unchanged except listed fixes, red from today's drift, removed: <lines>, goldens never rise. Starting model: bower-escalated. Carry-over: a failed run-end start says so, and a retry does not claim it waits (safety-polish #4). Integrated at 76933a3f (red 67e59d04, fix d155dcab) but reopened: closed before its Opus review (close-before-review); closes again only after P4-27 PASS; a P4-27 fix round lands before anything builds on it. Reopened 2026-10-09 for sign-out-refuses-answers (main ada1e12): admission compares account identity, never the session generation; tests \"a sign-out during admission still admits the waiting answers\" and \"a Delete me during admission still refuses\"."
   }
 ]
