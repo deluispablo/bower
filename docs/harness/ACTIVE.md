@@ -369,3 +369,4 @@ P3-9 is closed.
 - delete-me-admit-window ruled (main 314380d): generation floor checked in admitSync; folded into the running c2-worker-dispatch fix round. v13/v14 skew accepted.
 - c2-transport-outcome-kind fix round merged (red 932794ac, fix 53b6e99f, e0aed43d; check green on merged tree); verify widened. One Opus reviewer now checks both it and the c2-read-cache fix round.
 - c2-worker-dispatch fix round merged (red 9944dcc3, fix 7f5c22ee; P4-27 Important + delete-me-admit-window; check green on merged tree); verify widened. P4-29 fix-round check dispatched.
+- Closed: c2-read-cache (0030e06c, P4-28a PASS), c2-transport-outcome-kind (605a34f0, red by hand at 932794ac, P4-28b PASS), c2-worker-dispatch (0da4839f, P4-29 PASS; delete-me-admit-window fixed). P4-29 minor asked: sign-out during startWaiting leaves answers waiting, no re-arm. 416/424. Next: lost-bytes-slow diagnoser, c2-fake-parity.
