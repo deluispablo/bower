@@ -19,8 +19,9 @@ Read this and your packet. Do not read other planning or harness documents unles
   - match by id, never by name or substring;
   - every new sentence in the app has a test of the behaviour it promises; no copy promises what is not built;
   - the red reproduces the live evidence, with its numbers and shape;
-  - the card's `red:` and `green:` lines name the exact verify tests.
-- **Reviewers.** Read only the diff range and the packet. Never start a server or run e2e; run the unit and contract tests only. Judge against the acceptance contract: only Critical and Important findings against it block, each with a reproduction. List Minor findings in one line each; they never block.
+  - the card's `red:` and `green:` lines name the exact verify tests;
+  - use the mechanism the packet names from the ARCHITECTURE mechanism map. Never write a second way of doing what it does; if it cannot do what you need, stop and report `blocked`. For a defect, the packet cites its diagnosis note: implement the ruling, nothing else ([DEFECTS.md](DEFECTS.md)).
+- **Reviewers.** Read only the diff range and the packet. Never start a server or run e2e; run the unit and contract tests only. Always answer one fixed question: does this change add a second way to do something that already exists (ARCHITECTURE mechanism map)? A yes is an Important finding. Judge against the acceptance contract: only Critical and Important findings against it block, each with a reproduction. List Minor findings in one line each; they never block.
 - **Fix rounds** start in a fresh session with the packet, the finding and the diff range; nobody resumes a finished worker.
 - **Output ([TL-P3-17](2026-10-07-tl-p3-17-output-discipline.md)).** Only the coordinator reads you, and only your final reply. Write no text between tool calls: think, act, and keep notes in files. Your final reply is one card of `key: value` lines and nothing else, with no greeting, recap or narrative. Point to files and SHAs instead of pasting them. Keep each card line under 120 characters: list SHAs, test names and paths, never explanations. Never leave out a fact the coordinator needs to decide; a missing fact costs more than a line.
 - **Delivery card (implementer), at most 8 lines:**

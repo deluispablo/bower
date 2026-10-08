@@ -68,6 +68,18 @@ Steps 3–6 describe implementation. Reviewers/evaluators follow their assigned 
    - Parallel workers commit a candidate without shared-record changes; the coordinator integrates and closes with `--fixed-in` as described in `COORDINATION.md`. A candidate is not completion.
 7. Before stopping: your assigned work is committed, checks and blockers are reported honestly, the coordinator records the next step under `## Next` in `progress.md` (`pnpm check` refuses an empty one). Every finding entry carries `steps` an evaluator can replay.
 
+## When something fails
+
+A live failure, a suite failure the diff did not cause, an evaluator finding, or a review finding that shows a design is wrong follows [DEFECTS.md](DEFECTS.md) ([TL-P4-15](2026-10-08-tl-p4-15-defect-workflow.md)):
+1. log it;
+2. diagnose the root cause in a fresh read-only session;
+3. the lead rules on the design against the [mechanism map](../ARCHITECTURE.md#mechanism-map);
+4. implement from the ruling;
+5. review for a second way of doing the same thing;
+6. review patterns at each stage end.
+
+Nobody fixes a defect where it shows without that ruling, except a one-line fix the lead confirms as trivial.
+
 ## Roles
 
 Either tool can hold any role. Prefer cross-tool review when available. Only one coordinator integrates candidates and writes shared records; no session may assign itself work already reserved by another. A reviewer can inspect an immutable commit while an implementer works in a separate checkout.
@@ -76,6 +88,7 @@ Either tool can hold any role. Prefer cross-tool review when available. Only one
 - **Technical lead / planner** (owner-appointed, currently planning/method only): maintains purpose, dependencies, contracts and acceptance with the human; implementation coordinator registers findings/gaps as entries. Brief: `harness/briefs/technical-lead.md`.
 - **Implementer**: one entry at a time, test first. Brief: `harness/briefs/implementer.md`.
 - **Evaluator**: a fresh agent that did not build it uses the app as a person would and tries to break it. Its findings go into the feature list. Brief: `harness/briefs/evaluator.md`.
+- **Diagnoser**: a fresh read-only Opus session that finds a defect's root cause and the fix options, and writes one note (`bower-diagnoser`, [DEFECTS.md](DEFECTS.md)).
 - **Reviewer**: a fresh independent session from the other provider reads the diff against the packet's acceptance contract and the plan. Brief: `harness/briefs/reviewer.md`.
 
 The builder never grades its own work: every phase ends with an evaluator round and a review, and the phase is not done while any entry is open (owner's rule: no next phase until this one is right).
@@ -86,5 +99,6 @@ The builder never grades its own work: every phase ends with an evaluator round 
 - The vault contract (`src/data/contract/`): every `VaultSource` behaves the same.
 - `pnpm e2e` and `pnpm e2e:fake` run the same tests on two sources.
 - Lint, strict types, unit tests, build: `pnpm check`.
+- Duplication (jscpd) and dependency rules (dependency-cruiser) in `pnpm check`, each with a baseline that may only shrink (TL-P4-15, entries `c1-duplication-gate` and `c1-dependency-rules`).
 
 When a rule keeps being broken by hand, turn it into a check here rather than a longer `AGENTS.md`.

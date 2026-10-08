@@ -37,6 +37,8 @@
 | `c1-shared-contracts` | The Worker imports `RunWire`, phases, lease types and the folder template from `src/data/contracts`; one pure `decideLease()` for the Durable Object and the fake | Four phase lists, two lease state machines that differ on old leaves, three folder templates that differ |
 | `c1-worker-schema-v11` (mechanical) | Drop the unused `admission` table and `control` columns, rename `run_ticket.epoch` to `attempt`, delete dead exports | Dead schema |
 | `c1-small-fixes` (mechanical) | BirdLab only in development builds; Settings' plural; `markSeen` errors reported | Visible defects |
+| `c1-duplication-gate` (mechanical) | jscpd in `pnpm check` with a baseline that may only fall (TL-P4-15) | New copy-paste goes unnoticed |
+| `c1-dependency-rules` | dependency-cruiser in `pnpm check`: production code never imports `fake/` or `demo/`; screens import only `sources`, `provider` and `types`; today's breaks are listed as exceptions, each with the entry that removes it (TL-P4-15) | Boundaries broken by hand |
 | TL-P4-13 items | `corpus-grounded-scorer`, `verify-names-precheck`, `safety-polish` | As ruled |
 
 ## Stage 2: one engine, one Drive (the largest gain)

@@ -29,6 +29,12 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - climb Haiku → Sonnet → Opus on the ladder's triggers;
   - record each agent run in `harness/tokens.csv` with the TL-P2-44 columns, add your own row per batch from `npx ccusage session`, and give the entry's total in its closure note;
   - budgets are 1.5× the role's measured median (TL-P2-44 rule 3).
+- Defects ([TL-P4-15](../../docs/harness/2026-10-08-tl-p4-15-defect-workflow.md)): follow `docs/harness/DEFECTS.md`.
+  - Log each defect in `DEFECT_LOG.md` and dispatch `bower-diagnoser`.
+  - Send the lead the note path, and write packets only from the lead's ruling.
+  - Never design a fix yourself, and never add a second way of doing what a mechanism in the ARCHITECTURE mechanism map already does.
+  - A trivial one-line fix still needs a log line and the lead's "ok".
+  - Every packet cites the mechanism-map entries it touches.
 - Research first, always (owner rule, 2026-10-06). Every packet tells the worker to look up the standard solution, recommended practice and specifications before designing a fix. The worker cites them in its delivery. A worker's own mechanism needs a stated reason why no standard approach fits.
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
