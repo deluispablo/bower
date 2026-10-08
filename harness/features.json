@@ -4974,7 +4974,7 @@
     "id": "document-note-required",
     "task": "p4-c",
     "category": "fix",
-    "passes": false,
+    "passes": true,
     "what": "A thing with prepared text gets its note, unless a Timeline line on an existing note cites it (the value gate). The spine refuses a reply that breaks this, retries once with the reason, and a second refusal ends the run as C12 does. Photos and things with no text need no note. The prompt says the same.",
     "steps": [
       "Prompt: a thing with text gets a note unless a Timeline line on an existing note cites it.",
