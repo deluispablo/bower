@@ -44,7 +44,7 @@ export function runnerTests(root, cwd = process.cwd()) {
 const isE2e = (part) => /playwright test|e2e-both|\bpnpm\s+e2e(:\w+)?(\s|$)/.test(part);
 
 /** The test patterns a verify names: vitest -t "…" and playwright -g "…"; `pnpm -C api …` and `pnpm -C runner …` run those packages' own tests. */
-function patterns(part) {
+export function patterns(part) {
   const m = /(?: -| --)(t|g|grep|testNamePattern)(?: |=)"([^"]*)"/.exec(part);
   if (!m) return null;
   const pkg = /\bpnpm\s+(-C|--dir)\s+(api|runner)\b/.exec(part)?.[2];
