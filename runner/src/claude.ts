@@ -434,6 +434,18 @@ function bodyLinks(body: string, ownText: string, named: (target: string) => boo
   return null;
 }
 
+/** Whether `basis` is one whole line of the rules it was shown (a bullet aside), never the cut marker or half a line. */
+function ruleLine(basis: string, rules: string | undefined): boolean {
+  const bare = (line: string): string => line.replace(/<!--.*?-->/g, '').trim().replace(/^[-*]\s+/, '').trim();
+  const want = bare(basis);
+  if (want.length < 12 || want.startsWith('[cut here:')) return false;
+  const lines = (rules ?? '').split('\n');
+  // A list that was cut ends in a half line before the marker: that line is not one of the person's.
+  const cut = lines.findIndex((line) => line.trim().startsWith('[cut here:'));
+  const whole = cut < 0 ? lines : lines.slice(0, Math.max(0, cut - 1));
+  return whole.some((line) => bare(line) === want);
+}
+
 /**
  * Why a place makes a new folder under Areas or Projects with no note cited, or null. The standard fix for model output
  * that is well-formed but wrong is to validate it and ask again with the error (Instructor, retrying,
@@ -444,7 +456,7 @@ function bodyLinks(body: string, ownText: string, named: (target: string) => boo
 function newPlace(to: string, basis: unknown, responsibility: unknown, seen: Seen, areas: Map<string, string>): string | null {
   const [root = ''] = to.split('/');
   if (!seen.folders || !['Areas', 'Projects'].includes(root) || to === root || seen.folders.has(to)) return null;
-  if (typeof basis === 'string' && (seen.notes.has(basis) || (basis.trim().length >= 12 && (seen.rules ?? '').includes(basis.trim())))) return null;
+  if (typeof basis === 'string' && (seen.notes.has(basis) || ruleLine(basis, seen.rules))) return null;
   // An Area is an ongoing responsibility (the original's definition): one short phrase naming it is enough, and the report
   // shows it. A Project has a goal the person stated, so it needs a rule line or a note.
   if (root === 'Areas' && lineOk(responsibility, RESPONSIBILITY_MAX) && !/[[\]]/.test(responsibility)) {
@@ -454,7 +466,8 @@ function newPlace(to: string, basis: unknown, responsibility: unknown, seen: See
       area = `${area}/${part}`;
       if (!seen.folders.has(area)) break;
     }
-    if (!areas.has(area)) areas.set(area, responsibility.trim());
+    // Only a new top-level Area is reported as one; a new subfolder of an Area that exists is just a folder.
+    if (area.split('/').length === 2 && !areas.has(area)) areas.set(area, responsibility.trim());
     return null;
   }
   return `a new folder "${to}" under ${root} with no rule line or note cited in "basis"${root === 'Areas' ? ' and no "responsibility" (one short phrase naming the ongoing responsibility)' : ''}; file it in an existing folder or in Resources`;
@@ -684,9 +697,8 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
         return setup.timing ? setup.timing.time('model', again) : again();
       };
     } catch (e) {
-      return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
-    } finally {
       await rm(work, { recursive: true, force: true });
+      return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
     }
     const texts = new Map(shown.piles.flatMap((p) => p.things.flatMap((t) => (t.text === null ? [] : [[t.fileId, t.text] as const]))));
     const seen: Seen = { notes: new Set(shown.notes.map((n) => n.path)), names: shown.names ?? new Set(), texts, folders: new Set(shown.folders), ...(shown.rules ? { rules: shown.rules } : {}) };
@@ -699,15 +711,21 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
       const got = intentOf(reply.value, took, seen);
       return got.ok ? { ok: true, intent: got } : { ok: false, why: got.why, placement: got.placement === true };
     };
-    let checked = check(exit);
-    if (!checked.ok && checked.placement) {
-      console.error(`The Claude provider's plan for run ${run.runId} was refused: ${checked.why}; asking once more.`);
-      try {
-        checked = check(await asked(checked.why));
-      } catch (e) {
-        if (e instanceof BowerError) throw e;
-        return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
+    let checked: ReturnType<typeof check>;
+    try {
+      checked = check(exit);
+      if (!checked.ok && checked.placement) {
+        console.error(`The Claude provider's plan for run ${run.runId} was refused: ${checked.why}; asking once more.`);
+        // The retry runs in the same folder and home, so they stay until it ends.
+        try {
+          checked = check(await asked(checked.why));
+        } catch (e) {
+          if (e instanceof BowerError) throw e;
+          return refuse(`claude could not start (${e instanceof Error ? e.message : String(e)})`);
+        }
       }
+    } finally {
+      await rm(work, { recursive: true, force: true });
     }
     if (!checked.ok) return refuse(checked.why);
     const intent = checked.intent;
