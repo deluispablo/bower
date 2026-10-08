@@ -2666,3 +2666,17 @@ describe('one Home load on a folder like the live one (TL-P4-11 addendum)', () =
     });
   });
 });
+
+describe('the inbox from the listing alone (home-inbox-first)', () => {
+  it('lists the piles without reading a file, and concurrent digests of one file ask Drive once', async () => {
+    const reads = vi.spyOn(drive, 'readText');
+    const bytes = vi.spyOn(drive, 'readBytes');
+    const listed = await vault.pilesListed();
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed.every((p) => p.id && p.items.length > 0)).toBe(true);
+    expect(reads).not.toHaveBeenCalled();
+    expect(bytes).not.toHaveBeenCalled();
+    const read = (await vault.piles()).map((p) => p.id).sort();
+    expect(listed.map((p) => p.id).sort()).toEqual(read);
+  });
+});
