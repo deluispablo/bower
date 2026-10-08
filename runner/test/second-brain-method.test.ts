@@ -108,6 +108,31 @@ describe('the second-brain method (TL-P4-08)', () => {
     expect(ask({ text: 'See [[Flat hunt]]?' }).ok).toBe(false);
   });
 
+  it('a later run does not repeat an open question', async () => {
+    const c = await corpusCase('c11-ambiguous-stays');
+    const calls: ClaudeCall[] = [];
+    const asking = (text: string) => answering((ctx, id) => ({
+      kind: 'tidy-intent',
+      v: 1,
+      things: [{ fileId: id('Leek soup.txt'), to: 'Resources/Cooking', name: 'Leek soup.txt' }].filter(() => ctx.piles.some((p) => p.things.some((t) => t.name === 'Leek soup.txt'))),
+      asks: [{ pileId: ctx.piles.find((p) => /not sure/i.test(p.words))?.pileId ?? 'none', text, yes: 'Yes, the flat hunt', no: 'No, the job hunt' }],
+    }), calls);
+    const questionsOf = (after: Record<string, string>) => (JSON.parse(after['.bower/questions.json'] ?? '{}') as { questions: Array<{ id: string; text: string }> }).questions;
+    const inboxOf = (after: Record<string, string>) => Object.keys(after).filter((p) => p.startsWith('Inbox/')).sort();
+
+    // First run: the letter is asked about and stays. Second run over the same inbox, with the first run's open
+    // question kept: the model asks again (in other words), nothing is added, the thing stays, the rest goes on.
+    const first = await runWithClaude(c, asking('Is the letter of 14 October for the flat hunt?'));
+    const open = questionsOf(first.after);
+    expect(open).toHaveLength(1);
+    const second = await runWithClaude({ ...c, questions: open as never }, asking('Does the letter of 14 October belong to the flat?'));
+    expect(second.code).toBe(0);
+    expect(questionsOf(second.after)).toEqual(open);
+    expect(inboxOf(second.after).filter((p) => /Letter, 14 October/.test(p))).toHaveLength(1);
+    expect(second.after[inboxOf(second.after).find((p) => /Letter, 14 October\.txt$/.test(p)) ?? '']).toBe(c.inboxFiles['Letter, 14 October.txt']);
+    expect((second.lastRun as { report?: { questions?: unknown[] } }).report?.questions ?? []).toEqual([]);
+  });
+
   it('a document that only confirms a known fact updates the note and makes none', async () => {
     expect(await instructions()).toMatch(/only confirms[^.]*makes no new note[^.]*/);
     const c = await corpusCase('c05-confirms-known-fact');
