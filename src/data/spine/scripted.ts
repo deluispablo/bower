@@ -15,7 +15,7 @@ import type { DriveFile } from '../drive/drive-api';
 import { applyChanges, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
-import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
+import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
 import { PILE_NOTE, safeInboxName } from '../piles';
 import { recordablePile, sameText, type Digest } from '../pile-readiness';
 import { displayName, freeName, join, kindOf, nameOf, parentOf, thingName } from '../tree';
@@ -119,7 +119,22 @@ export interface Filing {
   lines?: readonly AuthoredLine[];
   /** A new Area's path and the ongoing responsibility it is for; the report says it beside the made folder. */
   areas?: ReadonlyMap<string, string>;
+  /** Piles it could not place without guessing, by pile id, each with its question: they stay in the inbox (TL-P4-08). */
+  asks?: ReadonlyMap<string, Ask>;
 }
+
+/**
+ * A question about a pile whose place is genuinely unclear (TL-P4-08 point 1, C11): the pile stays in the inbox
+ * untouched, the question goes to the person, and the rest of the run goes on. A run never waits and never guesses.
+ */
+export interface Ask {
+  text: string;
+  yes: string;
+  no: string;
+}
+
+/** The id of the question asked about a pile: one per pile, so a pile asked about again is not asked twice. */
+export const askId = (pileId: string): string => `q-ask-${pileId}`;
 
 export type { HubUpdate };
 
@@ -261,6 +276,8 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   const things: Array<{ pile: Pile; folder: DriveFile; item: PileItem; file: DriveFile; content: VerifiedContent; words: string; merge: Merge | null }> = [];
   /** Captured piles the run asks a question about (TL-P2-37 Q1 (a)). */
   const asking = new Set<string>();
+  /** Questions about piles that stay in the inbox untouched, since their place is unclear (TL-P4-08 point 1). */
+  const askedPiles: Question[] = [];
   const fromWords: Array<{ pileId: string; folder: DriveFile; words: string; context: DriveFile | null }> = [];
   for (const pile of piles) {
     const marks = { members: members.length, things: things.length };
@@ -285,8 +302,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     }
     // A pile that is not ready is held (TL-P2-21): not captured, no effect, no report row; its reason shows in the Inbox.
     if (cap.blocked !== null) continue;
+    // A pile the model asks about (or the demo's stand-in for one): asked, never captured (TL-P4-08 point 1).
+    const ask = opts.filing ? opts.filing.asks?.get(pile.id) : demo ? askAbout(pile.text) : null;
     // A pile whose merge line waits past the edit cap waits whole, with its answer (planned again without it).
-    if (held.has(pile.id)) {
+    if (held.has(pile.id) && !ask) {
       for (const item of pile.items) {
         const m = mergeOf(item);
         if (m) heldAnswers.add(m.answer);
@@ -296,6 +315,10 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
     // A pile id no run record can carry is held (TL-P2-38); the Inbox holds it already, this keeps it so.
     if (!recordableId(pile.id)) {
       hold('its id cannot be recorded');
+      continue;
+    }
+    if (ask) {
+      askedPiles.push({ id: askId(pile.id), text: ask.text, yes: ask.yes, no: ask.no, askedAt: opts.requestedAt });
       continue;
     }
     const children = loose ? [folder] : listing.filter((f) => f.parents[0] === folder.id);
@@ -395,7 +418,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // Only held piles and nothing else to read: nothing is admitted (TL-P2-21), the existing refusal. A run already
   // admitted (a pile changed between admission and the run) plans nothing instead: it ends done, with nothing filed,
   // its report saying nothing was ready yet, and every item it took waiting (TL-P3-25 point 2). It is no failure.
-  if (all && !capturedPiles.length && !journal.length) {
+  if (all && !capturedPiles.length && !journal.length && !askedPiles.length) {
     if (opts.taken) return nothingReadyPlan(rootId, opts);
     throw new BowerError('conflict', NOTHING_READY);
   }
@@ -818,7 +841,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   // Answers drop their questions from questions.json; an answer held back keeps its own. The question the run asks
   // goes into that same write (TL-P2-37 Q1 (a)), asked at `requestedAt`, unless it is open already or answered now.
   const answered = new Set(journal.filter((l) => l.rec.kind === 'answer').map((l) => l.rec.questionId ?? ''));
-  const toAsk = [...(asking.size ? [saltmereQuestion(opts.requestedAt)] : []), ...disagreeing.map((d) => d.question)]
+  const toAsk = [...(asking.size ? [saltmereQuestion(opts.requestedAt)] : []), ...disagreeing.map((d) => d.question), ...askedPiles]
     .filter((q, i, all) => !answered.has(q.id) && all.findIndex((x) => x.id === q.id) === i);
   const questionsFile = ix.file(SYSTEM.questions);
   let questionsText: string | null = null;
@@ -839,6 +862,11 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
   } else if (toAsk.length) {
     // No `.bower` yet: the run's own records make it; there is no list to ask in, so the question is not asked.
     console.error(new BowerError('unknown', NOT_ASKED), `${SYSTEM.dir} is missing; the question is not asked`);
+  }
+  // A run that only asks, about piles asked about already, has nothing new to do: nothing was ready yet.
+  if (all && !capturedPiles.length && !journal.length && questionsText === null) {
+    if (opts.taken) return nothingReadyPlan(rootId, opts);
+    throw new BowerError('conflict', NOTHING_READY);
   }
   // Your changes go to the archive the legacy runner used, made in `.bower/changes` only when a line needs it
   // (TL-P2-33 §1). With no `.bower/changes` there is no line: the journal is empty and no folder is made. A line

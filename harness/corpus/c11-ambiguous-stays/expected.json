@@ -1,0 +1,21 @@
+{
+  "files": {
+    "present": [
+      "Resources/Cooking/Leek soup.txt",
+      "Inbox/*/Letter, 14 October.txt"
+    ],
+    "absent": [
+      "Projects/*Letter*",
+      "Areas/*Letter*",
+      "Resources/*Letter*"
+    ]
+  },
+  "linksResolve": true,
+  "report": {
+    "filed": 1,
+    "setAside": 0,
+    "questions": [
+      "q-ask-p-2"
+    ]
+  }
+}

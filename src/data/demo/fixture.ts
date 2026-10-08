@@ -274,6 +274,14 @@ export function saltmereQuestion(now: number): Question {
   };
 }
 
+/**
+ * The demo's stand-in for a model asking where a pile goes (TL-P4-08 point 1): words that leave its place open between
+ * two projects. The pile stays in the inbox with this question.
+ */
+export function askAbout(words: string): { text: string; yes: string; no: string } | null {
+  return /\bflat or the job\b/i.test(words) ? { text: 'Is this for the flat hunt?', yes: 'Yes, the flat hunt', no: 'No, the job hunt' } : null;
+}
+
 /** The Saltmere receipts go by month, as the person's rule says. */
 export const RECEIPTS_TO = 'Areas/Money/Receipts/2026-10';
 

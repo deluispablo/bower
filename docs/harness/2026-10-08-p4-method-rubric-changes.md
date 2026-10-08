@@ -1,0 +1,51 @@
+# C04-C15 corpus rubrics against the second-brain method (TL-P4-08)
+
+Entry `second-brain-method`. Each case's `case.json`, `expected.json` and `rubric.md` was read against TL-P4-08
+points 1-8. A rubric changes only where it contradicts the method (the corpus describes the person, not the code;
+TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the method" checks every row below.
+
+| Case | Verdict | Reason |
+| --- | --- | --- |
+| c04-garden-newsletter | agrees | A garden topic in Resources is a fit when the note links the plot note and the plot note gets a line (points 1, 4, 7). |
+| c04-hardware-receipt | agrees | The person's rule decides the place (fit); the note states only the receipt's facts. |
+| c04-offer-and-flat | agrees | Each thing fits an existing project or a new Area said with its responsibility (point 1, addendum 3). |
+| c05-confirms-known-fact | agrees | New case for point 2: the value gate files the letter beside the plot note, adds a line, makes no note. |
+| c05-hub-lines | changed | It pinned the hubs' Current state untouched; point 3 has Bower rewrite it where the pile changes it. |
+| c05-keep-one-note | agrees | Facts move into the kept note's Current state or Timeline; the second note goes to the Bin. |
+| c05-line-not-repeated | agrees | A line saying the same thing is not added twice: the Timeline only grows with new facts (points 2, 3). |
+| c06-clipping-compared | agrees | The new note links the job hunt hub and the Ferrowick offer (point 4); the hub gets a line (point 7). |
+| c06-offer-and-listing-linked | agrees | Links only where the connection is real (point 4). |
+| c07-answer-yes | agrees | Already asks a model run to rewrite the Current state and keep the old figure in the Timeline (point 3). |
+| c07-rent-disagrees | agrees | The disagreement is asked with both notes and both figures, never resolved silently (point 3). |
+| c08-compare-flats | agrees | A requested comparison is a new generated note linking its sources (point 4). |
+| c08-revise-comparison | agrees | The same note is revised, not a second one made (value gate, point 2); the revision is a Timeline line. |
+| c09-burst-pipe | agrees | An answer from the notes; nothing filed or changed. |
+| c09-closest-flat | agrees | An answer from the notes; nothing filed or changed. |
+| c10-lookup-fails | agrees | Honest about a failed lookup; invents nothing. |
+| c10-web-allowed | agrees | The finding is a Timeline line with its source (point 3). |
+| c10-web-denied | agrees | Nothing looked up, nothing changed. |
+| c11-ambiguous-stays | agrees | New case for point 1's ask: the unclear letter stays in the inbox with a question; the recipe is filed. |
+| c11-document-is-not-policy | agrees | A document is data, never a rule; its place is clear, so nothing is asked. |
+| c11-rule-worded | agrees | A rule comes only from the person. |
+| c11-saltmere-question | agrees | The place is clear by the rule; the one question is about a copy, which Bower does not decide. |
+| c13-undo-protects-edit | agrees | Undo keeps the person's edit; outside the filing method. |
+| c13-undo-whole-run | agrees | Undo from the manifest, Bin only; outside the filing method. |
+| c15-more-context-bounded | agrees | The words ("papers for the move") make the place clear; the run says what it could not read. |
+| c15-scanned-letter | changed | It filed an unread, unnamed scan by guess; point 1 never guesses, so it stays in the inbox with a question. |
+
+## Changes
+
+1. **c05-hub-lines, `rubric.md`.** Was: "The person's earlier lines, the Current state and the summary are untouched."
+   Now: the earlier lines and the summary are untouched; Bower may rewrite the Current state only where the pile
+   changes it. Reason: point 3 (a compiled note's Current state is rewritten, its Timeline appended). `expected.json`
+   did not pin the Current state and is unchanged.
+2. **c15-scanned-letter, `expected.json` and `rubric.md`.** Was: filed under `Resources/*scan0001.pdf`, the inbox
+   empty, at most one question. Now: `Inbox/scan0001.pdf` stays, nothing filed, one question `q-ask-p-1`. Reason:
+   point 1 ("a run never waits and never guesses"): with no words and no readable text, nothing says where it goes.
+   When the C15 slice reads scans, the case is checked again.
+
+## Not changed, for the lead
+
+- **bench-4-scanned-pdf** expects the unread scan filed (`report.filed: 1`), as c15-scanned-letter did. It is the
+  original's benchmark case, kept unchanged as a speed baseline (`docs/harness/p4-speed-baseline.md`), so it is left
+  as it is; under the method a live run asks instead, which changes that baseline's work. The lead rules.

@@ -1,15 +1,19 @@
 {
   "files": {
     "present": [
-      "Resources/*scan0001.pdf"
+      "Inbox/scan0001.pdf"
     ],
     "absent": [
-      "Inbox/*"
+      "Projects/*scan0001*",
+      "Areas/*scan0001*",
+      "Resources/*scan0001*"
     ]
   },
   "linksResolve": true,
   "report": {
-    "filed": 1,
-    "questionsAtMost": 1
+    "filed": 0,
+    "questions": [
+      "q-ask-p-1"
+    ]
   }
 }
