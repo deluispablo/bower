@@ -56,9 +56,7 @@ export class FakeLease {
     const now = this.now();
     const lease: Lease = { holder: stored.holder, epoch: stored.epoch, beatAt: stored.beatAt, left: stored.left ?? null };
     const decision = decideLease(lease, stored.leaves?.[place], { place, action, gen, now });
-    const leaves = { ...stored.leaves };
-    if (decision.leave) leaves[place] = decision.leave;
-    for (const [p, m] of Object.entries(leaves)) if (!leaveCounts(m, now)) delete leaves[p];
+    const leaves = Object.fromEntries(Object.entries({ ...stored.leaves, ...(decision.leave ? { [place]: decision.leave } : {}) }).filter(([, m]) => leaveCounts(m, now)));
     if (decision.lease !== lease || decision.leave) {
       const { holder, epoch, beatAt, left } = decision.lease;
       this.write({ holder, epoch, beatAt, ...(left !== null ? { left } : {}), ...(Object.keys(leaves).length ? { leaves } : {}) });
