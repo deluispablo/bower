@@ -8,7 +8,8 @@
  * - `GET /runner/runs/:id/attempt` answers `{ attempt }` from the person object alone, with no Google call: the
  *   runner's check before each fenced write (TL-P4-04);
  * - `POST /runner/runs/:id/status` takes `{ attempt, seq, phase, total?, failure? }` and answers
- *   `{ run, revision }`.
+ *   `{ run, revision }`; or `{ attempt, ended: true }`, an attempt that ended with no terminal report
+ *   (`attempt-ended.ts`, TL-P4-16 addendum 4), which has the alarm look at the run within a minute.
  *
  * `:id` is the run id, `<person object id hex>-<random>` (run-ticket.ts): the route reaches the person
  * object with `idFromString` and no lookup. The ticket in `Authorization: Bearer` (RFC 6750) is the only
@@ -29,6 +30,8 @@ import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import type { Person, RunnerGrant } from './person.js';
+import { isAttemptEnded } from '../../src/data/contracts/attempt-ended.js';
+import type { AttemptEnded } from '../../src/data/contracts/attempt-ended.js';
 import { isRunPhase } from '../../src/data/contracts/run-phases.js';
 import type { RunReply } from './process.js';
 import { hashTicket, personIdOf } from './run-ticket.js';
@@ -113,6 +116,11 @@ function parseReport(value: unknown): RunnerReport {
   };
 }
 
+/** A status body: a phase report, or the ended report (additive: a phase report is read as before). */
+function parseStatusBody(value: unknown): RunnerReport | AttemptEnded {
+  return isAttemptEnded(value) ? value : parseReport(value);
+}
+
 /** `GET /runner/runs/:id/token`, `GET /runner/runs/:id/attempt` and `POST /runner/runs/:id/status`, mounted at `/` by `index.ts`. */
 export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
   const runner = new Hono<AppEnv>();
@@ -165,9 +173,11 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const runId = c.req.param('id');
     const ticket = bearer(c);
     const person = personOfRun(env, runId);
-    const report = await jsonBody(c, parseReport);
+    const report = await jsonBody(c, parseStatusBody);
     const hash = await hashTicket(ticket);
-    const result: RunnerReportResult = await person.runnerReport(runId, hash, report, Date.now());
+    const result: RunnerReportResult = isAttemptEnded(report)
+      ? await person.runnerEnded(runId, hash, report.attempt, Date.now())
+      : await person.runnerReport(runId, hash, report, Date.now());
     if (!result.accepted && result.refused === 'stale-report') {
       // The contract's error shape, with where the Worker is, so a restarted runner goes on from `seq + 1`.
       const late = refusal('stale-report');

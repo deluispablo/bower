@@ -445,3 +445,4 @@ c1-shared-contracts	95be68b0fcf53084	2026-10-08	known-green: reason: the lint-fi
 c1-duplication-gate	8c4211c3a3f03441	2026-10-08	red (fixed in 9ff194bb)
 verify-names-precheck	371114bd413843c9	2026-10-08	red (fixed in 70529f5b)
 c1-api-test-harness	32721a0d9e5c015b	2026-10-08	known-green: reason: the guard lives in api/test (setupFiles), which done.sh's revert keeps. Red by hand at tests-only 3d74c317: 'an api test that calls the network fails' fails on its assertion (the fetch resolved); the deadlines race failed 1/20 under load before, 0/20 after (8f49057d)
+c2-runner-exit	4ec82ebf22a1147a	2026-10-08	red (fixed in c17c3290)

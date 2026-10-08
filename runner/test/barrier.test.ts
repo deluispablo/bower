@@ -439,3 +439,66 @@ describe('the report barrier', () => {
     expect(other.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving']);
   });
 });
+
+describe('how an attempt ends (TL-P4-16 addendum 4)', () => {
+  /** What the Worker heard from `attempt`: a terminal phase, the ended report, or nothing that ends it. */
+  const heard = (wire: DriveV3, attempt: number): 'terminal' | 'ended' | 'nothing' => {
+    if (wire.statuses.some((s) => s.attempt === attempt && (s.phase === 'done' || s.phase === 'failed'))) return 'terminal';
+    return wire.endings.includes(attempt) ? 'ended' : 'nothing';
+  };
+  /** The wire's fetch, with the status route answering 500 to a report of `phase`, after its retries too. */
+  const statusDown = (wire: DriveV3, phase: string): typeof fetch => async (input, init = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    const body = typeof init.body === 'string' ? (JSON.parse(init.body) as { phase?: unknown }) : null;
+    if (url.origin === API && url.pathname.endsWith('/status') && body?.phase === phase) return new Response(null, { status: 500 });
+    return wire.fetch(input, init);
+  };
+
+  /** An operation that stops on an error before anything is sent: the chain holds no effect. */
+  const stopsFirst = (): Promise<Settled> => Promise.reject(new Error('The runner stopped'));
+
+  it('every runner exit reaches the Worker or is recovered within 60 s', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Each exit, by where it stops; `heard` is what the Worker must have from it before the job ends.
+    const exits: { name: string; heard: 'terminal' | 'ended' | 'nothing'; set(wire: DriveV3, effects: StubEffects): Partial<TidyOptions> }[] = [
+      { name: 'token route down', heard: 'ended', set: (w) => { w.tokenRefusal = { status: 500, error: 'unknown' }; return {}; } },
+      // Actions 37843268864: the first Drive read (whether the report landed) fails; no status had been sent.
+      { name: 'Drive read fails in shownDone', heard: 'ended', set: (w) => ({ fetch: noDrive(w, () => true) }) },
+      { name: 'an error nobody caught, before any report', heard: 'ended', set: () => ({ onDrive: () => { throw new TypeError('x is not a function'); } }) },
+      { name: 'the provider throws', heard: 'ended', set: () => ({ provider: () => { throw new TypeError('provider broke'); } }) },
+      { name: 'stops before any effect', heard: 'terminal', set: (_w, e) => { e.apply = stopsFirst; return {}; } },
+      { name: 'stops after an effect (left in saving)', heard: 'ended', set: (_w, e) => { e.breakAfter = 1; return {}; } },
+      { name: 'failed not taken', heard: 'ended', set: (w, e) => { e.apply = stopsFirst; return { fetch: statusDown(w, 'failed') }; } },
+      { name: 'saving not taken', heard: 'ended', set: (w, e) => { e.breakAfter = 1; return { fetch: statusDown(w, 'saving') }; } },
+      { name: 'done refused', heard: 'ended', set: (w) => { w.refuseDone = true; return {}; } },
+      { name: 'person gone', heard: 'terminal', set: (w) => { w.revoked = true; return {}; } },
+      // A newer attempt or a refused ticket owns the run: this one may not report.
+      { name: 'stale attempt', heard: 'nothing', set: (w) => { w.tokenRefusal = { status: 409, error: 'stale-attempt' }; return {}; } },
+      { name: 'ticket refused', heard: 'nothing', set: (w) => { w.tokenRefusal = { status: 401, error: 'signed-out' }; return {}; } },
+    ];
+    const seen: Record<string, string> = {};
+    for (const exit of exits) {
+      const { wire, root } = await demo();
+      const effects = new StubEffects();
+      const over = exit.set(wire, effects);
+      await tidy(wire, root, 1, effects, [], () => false, over).catch((e: unknown) => e);
+      seen[exit.name] = heard(wire, 1);
+    }
+    expect(seen).toEqual(Object.fromEntries(exits.map((e) => [e.name, e.heard])));
+  });
+
+  it('a Worker from before the ended report leaves the run to its deadline, and the exit is unchanged', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    wire.oldWorker = true;
+    const effects = new StubEffects();
+    effects.breakAfter = 1;
+    expect((await tidy(wire, root, 1, effects)).phase).toBe('saving');
+    expect(wire.endings).toEqual([]);
+    const unread = await demo();
+    unread.wire.oldWorker = true;
+    const error = await tidy(unread.wire, unread.root, 1, new StubEffects(), [], () => false, { fetch: noDrive(unread.wire, () => true) }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(unread.wire.statuses).toEqual([]);
+  });
+});

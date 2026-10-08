@@ -22,8 +22,13 @@
  * - otherwise, only when it read its run's chain and found no such effect in it, it ends `failed` with "The tidy-up
  *   stopped before changing anything. Try again." (`B_FAILURE`).
  * - when it could not read its run's chain (a restarted runner whose first Drive read fails, or a token that never
- *   came), it says nothing: it throws, so the job fails visibly, and the Worker's recovery decides how the run ends.
+ *   came), it claims nothing: it throws, so the job fails visibly, and the Worker's recovery decides how the run ends.
  * A run taken over by a newer attempt, or no longer allowed, reports nothing more.
+ *
+ * Every way out of `runTidy` goes through one exit (`leave`, TL-P4-16 addendum 4): an attempt that stops with no
+ * `done` or `failed` the Worker took (left in `saving`, its chain unread, a report not taken, any error nobody caught)
+ * sends "attempt ended" last (`attempt-ended.ts`), so the Worker's recovery looks at the run within a minute instead
+ * of at its stale deadline. A job Actions kills is still caught only by that deadline.
  *
  * The provider (what the run plans from what it took) and the effects (how an operation reaches Drive) are handed
  * in to `runTidy`; `main`, the process on GitHub Actions, hands in the provider `BOWER_PROVIDER` names (scripted by
@@ -115,22 +120,39 @@ const mayNotReport = (e: unknown): boolean => isStaleAttempt(e) || (e instanceof
 
 export async function runTidy(opts: TidyOptions): Promise<TidyEnd> {
   const timing = opts.timing ?? new RunTiming();
+  const fetchFn = opts.fetch;
+  const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
+  const post = status.post.bind(status);
+  status.post = (...args) => timing.time('status', () => post(...args));
   let ended: 'done' | 'saving' | 'failed' | 'stopped' = 'stopped';
   try {
-    const end = await tidyRun(opts, timing);
+    const end = await tidyRun(opts, timing, status);
     ended = end.phase;
+    await leave(status, { end });
     return end;
+  } catch (e) {
+    await leave(status, { error: e });
+    throw e;
   } finally {
     console.log(timing.line(ended));
   }
 }
 
-async function tidyRun(opts: TidyOptions, timing: RunTiming): Promise<TidyEnd> {
+/**
+ * The one exit of an attempt (TL-P4-16 addendum 4). Ended `done` or `failed`, the Worker took it (a report it did not
+ * take throws). Stopped any other way, the attempt says it ended with no terminal report, so the Worker's recovery
+ * looks at the run within a minute: unless a newer attempt or a refused ticket owns the run, or the Worker already
+ * holds it ended. A Worker that cannot take it leaves the run to its stale deadline, as before; the job still fails.
+ */
+async function leave(status: RunnerStatus, how: { end: TidyEnd } | { error: unknown }): Promise<void> {
+  const told = 'end' in how ? how.end.phase !== 'saving' : mayNotReport(how.error);
+  if (told || status.finished) return;
+  await status.ended().catch((e: unknown) => console.error(e));
+}
+
+async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatus): Promise<TidyEnd> {
   const fetchFn = opts.fetch;
   const token = new RunnerToken({ api: opts.api, runId: opts.runId, ticket: opts.ticket, ...(fetchFn ? { fetch: fetchFn } : {}) });
-  const status = new RunnerStatus({ api: opts.api, runId: opts.runId, ticket: opts.ticket, attempt: opts.attempt, ...(fetchFn ? { fetch: fetchFn } : {}) });
-  const post = status.post.bind(status);
-  status.post = (...args) => timing.time('status', () => post(...args));
   const seen: Seen = { chain: null, saving: false, total: undefined };
   let end: Ended;
   try {
@@ -152,7 +174,8 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming): Promise<TidyEnd> {
     return end;
   }
   if (end.phase === 'failed') return end;
-  // Its chain never read: what it changed is unknown here, so nothing is said (TL-P3-22 addendum, I1).
+  // Its chain never read: what it changed is unknown here, so no phase is claimed (TL-P3-22 addendum, I1); `leave`
+  // says the attempt ended.
   if (seen.chain === null) throw end.error;
   console.error(end.error);
   // The one rule for a run that stops: saving when it changed something, never "nothing changed" then.
@@ -291,7 +314,7 @@ export interface MainOptions {
  * (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log).
  * Gives the exit code: 0 once the Worker took a terminal report (`done` or `failed`, or it already held the run
  * ended); 1 when it could not start, stopped on an error, or was left in `saving` for a redispatch to finish, said in
- * the log. Nothing runs after `done` is taken (the report is saved and read back before it), so a run already done
+ * the log. Past the dispatch, `runTidy`'s one exit (`leave`) has already told the Worker the attempt ended. Nothing runs after `done` is taken (the report is saved and read back before it), so a run already done
  * never ends non-zero by a later step.
  */
 export async function main(env: Readonly<Record<string, string | undefined>>, opts: MainOptions = {}): Promise<number> {
@@ -336,7 +359,7 @@ export async function main(env: Readonly<Record<string, string | undefined>>, op
     console.log(`Tidy-up ${runId} ended ${end.phase}.`);
     if (end.phase !== 'done') console.error(end.why);
     // Left in saving with no terminal report: the job fails, so it never shows success for an unfinished run; the
-    // Worker's alarm recovery still redispatches it (TL-P3-28).
+    // Worker's recovery, told the attempt ended, redispatches it (TL-P3-28; TL-P4-16 addendum 4).
     return end.phase === 'saving' ? 1 : 0;
   } catch (e) {
     console.error(e);

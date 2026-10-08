@@ -83,10 +83,13 @@ interface GoneTicket {
 const RECOVERY_WATCH = 'recoveryWatch';
 /** When a run moved during the alarm's lookup and is somehow still due, the alarm looks again this much later. */
 const RECHECK_MS = 60 * 1000;
-/** Key-value entry: a dispatch that failed after its retries (`DispatchLost`); the alarm looks at the run then. */
+/**
+ * Key-value entry: the alarm looks at the run early (`DispatchLost`): a dispatch that failed after its retries, or an
+ * attempt that ended with no terminal report (`runnerEnded`, TL-P4-16 addendum 4).
+ */
 const DISPATCH_LOST = 'dispatchLost';
 
-/** The run whose dispatch was lost, and when the alarm should look at it (`RECHECK_MS` after the loss). */
+/** The run to look at early, and when (`RECHECK_MS` after the lost dispatch or the ended attempt). */
 interface DispatchLost {
   runId: string;
   at: number;
@@ -1109,6 +1112,27 @@ export class Person extends DurableObject<Env> {
       sql.exec('UPDATE run_ticket SET report_seq = ?, report_phase = ?, retired = ? WHERE hash = ?', report.seq, report.phase, ended ? 1 : 0, hash);
       if (ended) this.wakeForWaiting(now);
       return { accepted: true, reply: { run: toWire(row), revision: shows ? this.raiseRevision() : this.revision() } };
+    });
+  }
+
+  /**
+   * `POST /runner/runs/:id/status` with `{ attempt, ended: true }` (TL-P4-16 addendum 4): the attempt stopped with no
+   * terminal report, so the alarm looks at the run `RECHECK_MS` from `now` instead of at its stale deadline, through
+   * the same early look as a lost dispatch; `decide` then redispatches, waits for a live job or ends the run. Nothing
+   * a person sees changes. The ticket is checked as for a report: a superseded one is `stale-attempt`; a run already
+   * ended answers its state, with nothing armed.
+   */
+  runnerEnded(runId: string, hash: string, attempt: number, now: number): RunnerReportResult {
+    return this.ctx.storage.transactionSync((): RunnerReportResult => {
+      this.expire(now);
+      const found = this.findTicket(runId, hash, now);
+      if (found.kind === 'superseded') return { accepted: false, refused: 'stale-attempt' };
+      if (found.kind !== 'live' && found.kind !== 'retired') return { accepted: false, refused: 'signed-out' };
+      if (attempt !== found.row.attempt) return { accepted: false, refused: 'stale-attempt' };
+      const run = this.ctx.storage.sql.exec<RunRow>(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`, runId).toArray()[0];
+      if (run === undefined) return { accepted: false, refused: 'signed-out' };
+      if (found.kind === 'live') this.dispatchLostSync(runId, now + RECHECK_MS);
+      return { accepted: true, reply: { run: toWire(run), revision: this.revision() } };
     });
   }
 
