@@ -297,3 +297,4 @@ P3-9 is closed.
 - c05-incorporation blocked (branch claude/p4-c05inc, not merged): confirms-known-fact and line-not-repeated pass; hub-lines expected.json pins an ungrounded 'scored 7 out of 10'; keep-one-note needs ask-answer-loop (C11) and a merge operation. Rulings asked.
 - TL-P4-08 addendum 7 (f10109d): hub-lines expected.json grounded (rubric change); keep-one-note-merge (escalated) registered on top of claude/p4-c05inc; ask-answer-loop into C05, waiting for the owner. 389/395.
 - TL-P4-08 addendum 8 (5de7297): ask-answer-loop updated (answer applies at once, scoped run); queued (escalated) after keep-one-note-merge.
+- home-inbox-first closed (5454151): latency fake 17 s -> 0.6 s to Inbox (7 calls before it); full read ~6 s; refresh still drops reads. 390/395. P4-18 Opus check running; c05inc grounding hub-lines.
