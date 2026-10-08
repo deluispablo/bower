@@ -8,7 +8,10 @@
  *   is nothing to tell it;
  * - otherwise (a restarted runner whose `seq` started over) the report is sent once more from `seq + 1`. Refused
  *   again, a `done` or `failed` throws, so the job fails visibly; it is never swallowed.
+ *
+ * A runner that stops with no `done` or `failed` taken says so last (`ended`, TL-P4-16 addendum 4).
  */
+import { attemptEnded } from '../../src/data/contracts/attempt-ended';
 import { PHASE_RANK as RANK } from '../../src/data/contracts/run-phases';
 import { BowerError, type RunPhase } from '../../src/data/types';
 import { retried } from './retry';
@@ -85,13 +88,26 @@ export class RunnerStatus {
     if (ended(phase)) throw new BowerError('unknown', "Bower's server didn't take how the tidy-up ended. It will try again.");
   }
 
-  private async send(phase: RunPhase, extra: { total?: number; failure?: string }, seq: number): Promise<Answer> {
-    const body = { attempt: this.opts.attempt, seq, phase, ...extra };
-    let res: Response;
+  /**
+   * "Attempt ended, no terminal report" (`attempt-ended.ts`), for a runner on its way out with no `done` or `failed`
+   * taken: the Worker then looks at the run within a minute. Nothing is sent once the Worker holds the run ended.
+   * Not taken (a Worker from before it, or one that cannot be reached), it throws; the run waits for its deadline.
+   */
+  async ended(): Promise<void> {
+    if (this.endedAs) return;
+    const res = await this.request(attemptEnded(this.opts.attempt));
+    if (res.ok) return;
+    console.error(`The status route answered ${res.status} for the ended report`);
+    throw new BowerError('unknown', "Bower's server didn't answer. It will try again.");
+  }
+
+  /**
+   * One report sent, with retries: idempotent, since the Worker answers a repeat of the last seq with the current
+   * state and changes nothing, even once the run ended, and an ended report only sets when it looks (TL-P3-28; `retry.ts`).
+   */
+  private async request(body: object): Promise<Response> {
     try {
-      // Idempotent by attempt and seq: the Worker answers a repeat of the last seq with the current state and changes
-      // nothing, even once the run ended (TL-P3-28; `retry.ts`).
-      res = await retried(() =>
+      return await retried(() =>
         this.fetchFn(this.url, {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` },
@@ -102,6 +118,10 @@ export class RunnerStatus {
       console.error(e);
       throw new BowerError('offline', "Bower couldn't reach its server. It will try again.");
     }
+  }
+
+  private async send(phase: RunPhase, extra: { total?: number; failure?: string }, seq: number): Promise<Answer> {
+    const res = await this.request({ attempt: this.opts.attempt, seq, phase, ...extra });
     if (res.ok) return { kind: 'taken' };
     const reply = (await res.json().catch((e: unknown) => {
       console.error(e);

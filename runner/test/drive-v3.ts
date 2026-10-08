@@ -43,6 +43,10 @@ export interface DriveV3 {
   dropDone: number | null;
   /** When set, every `done` report is answered `stale-report` (a Worker that refuses it). */
   refuseDone: boolean;
+  /** Each "attempt ended, no terminal report" taken (`AttemptEnded`), by attempt. */
+  endings: number[];
+  /** A Worker from before the ended report: it refuses it as a body it cannot read (415), as any without a phase. */
+  oldWorker: boolean;
   /** Whether a create's answer carries the checksums its `fields` ask for, as Drive's does; off, it carries none. */
   checksums: boolean;
   /**
@@ -83,6 +87,8 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
     statuses: [],
     dropDone: null,
     refuseDone: false,
+    endings: [],
+    oldWorker: false,
     revoked: false,
     checksums: true,
     fetch: async (input, init = {}) => {
@@ -121,8 +127,17 @@ export function driveV3(drive: FakeDrive = fixedDrive(), attempt = 1): DriveV3 {
   return wire;
 }
 
-/** The Worker's status route, as the contract's "Runner wire" has it: attempt, then seq, then a forward phase. */
-function status(wire: DriveV3, body: Omit<StatusPost, 'after'>): Response {
+/**
+ * The Worker's status route, as the contract's "Runner wire" has it: attempt, then seq, then a forward phase; an ended
+ * report, by attempt alone.
+ */
+function status(wire: DriveV3, body: Omit<StatusPost, 'after'> & { ended?: unknown }): Response {
+  if (body.ended === true) {
+    if (wire.oldWorker) return json(415, { error: { code: 'unsupported-media-type', message: 'Bower could not read that.' } });
+    if (body.attempt !== wire.attempt) return json(409, { error: { code: 'stale-attempt', message: 'This tidy-up was taken over.' } });
+    wire.endings.push(body.attempt);
+    return json(200, { run: { id: RUN_ID, phase: wire.statuses.at(-1)?.phase ?? 'queued' }, revision: wire.statuses.length });
+  }
   if (body.phase === 'done' && wire.dropDone !== null) return json(wire.dropDone, { error: { code: 'unknown', message: 'Try again.' } });
   if (body.attempt !== wire.attempt) return json(409, { error: { code: 'stale-attempt', message: 'This tidy-up was taken over.' } });
   const last = wire.statuses.at(-1);
