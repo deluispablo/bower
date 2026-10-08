@@ -4914,7 +4914,7 @@
       "Regenerate the model-input golden on purpose."
     ],
     "verify": "pnpm -C runner exec vitest run -t \"the instructions carry the method fit, create, ask in that order|an ambiguous thing stays in the inbox with a question and the run goes on|a document that only confirms a known fact updates the note and makes none|the C04 to C15 rubrics agree with the method\"",
-    "passes": false,
+    "passes": true,
     "note": "TL-P4-08 (main f296674). Method only, never vault content. Runs after placement-check (both edit the prompt)."
   }
 ]
