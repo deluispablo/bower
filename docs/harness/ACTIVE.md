@@ -174,3 +174,4 @@ P3-9 is closed.
 - P4-4 review BLOCK (dispatch-retry: the 60 s look-up fails a reporting run on a GitHub 502). Reopened (c51058d); fix round running. 359/360.
 - dispatch-retry re-closed (851b5db): sent/lost/refused; the 60 s look-up leaves a reporting run alone. 360/360. A short fix-round check is running.
 - P4-4 suites: e2e 226, e2e:fake 250, e2e:pwa 4 at 3f94717; check 3608/184/90 at eb856db (after the API-only fix). P4-4 ready to deploy.
+- Staging c76fd2f: scripted run press to done 1:23, press to job 11 s (was 25–31); checkpoints still about 2 s each (the cost is the Drive write). P4-5 running: deploy-scan-extracted-token (mechanical) and runner-stops-when-gone (escalated), at 22a48a6. 360/362. Waiting for the lead to switch claude on for 3 C04 runs.
