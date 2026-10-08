@@ -299,3 +299,4 @@ P3-9 is closed.
 - TL-P4-08 addendum 8 (5de7297): ask-answer-loop updated (answer applies at once, scoped run); queued (escalated) after keep-one-note-merge.
 - home-inbox-first closed (5454151): latency fake 17 s -> 0.6 s to Inbox (7 calls before it); full read ~6 s; refresh still drops reads. 390/395. P4-18 Opus check running; c05inc grounding hub-lines.
 - P4-18 check PASS (home-inbox-first; minors to polish, one on a swallowed read error). keep-one-note-merge running; ask-answer-loop waits for it (its yes-to-merge test needs the merge).
+- keep-one-note-merge closed (51515f5) and c05-incorporation closed (57a9c96): C05 corpus 4/4 scripted. 392/395. P4-19 Opus check and ask-answer-loop (escalated) running.
