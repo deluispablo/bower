@@ -373,20 +373,42 @@ export function currentStateOf(bytes: Uint8Array): { owner: StateOwner; lines: s
   return { owner, lines: section.lines };
 }
 
+/** The mark a note's Current state carries (what Bower last wrote there), or null when it has none. */
+export function stateMarkOf(bytes: Uint8Array): string | null {
+  try {
+    const section = stateSection(decoder.decode(bytes));
+    return typeof section === 'string' || section.missing ? null : markOf(section);
+  } catch {
+    // expected: a file that is not UTF-8 has no mark to read.
+    return null;
+  }
+}
+
+/** The proposed lines minus any subset in order whose mark is `mark`: what Bower last wrote there, so not news. */
+function withoutSaid(lines: readonly string[], mark: string | null): string[] {
+  if (mark === null || lines.length === 0 || lines.length > 12) return [...lines];
+  for (let bits = (1 << lines.length) - 1; bits > 0; bits--) {
+    const subset = lines.filter((_, i) => (bits >> i) & 1);
+    if (stateMark(subset) === mark) return lines.filter((_, i) => !((bits >> i) & 1));
+  }
+  return [...lines];
+}
+
 /**
  * What Bower would have written in a Current state, as one Timeline line within an authored line's limits, naming
  * only what the section does not already hold (`existing`): as many whole lines as fit, or the first one cut at a word
  * with an ellipsis. Null when nothing is new, so no line is written.
  */
-export function stateNewsLine(lines: readonly string[], existing: readonly string[]): string | null {
+export function stateNewsLine(lines: readonly string[], existing: readonly string[], mark: string | null = null): string | null {
   const lead = 'New: ';
   const plain = (line: string): string => line.replace(/ · /g, ', ').replace(/\[\[|\]\]/g, '').replace(/;/g, ',').trim().replace(/[.!?]+$/, '');
   const held = new Set(existing.map((line) => plain(line).toLowerCase()));
   // Plain news: the new lines joined by commas, the sentence taking one full stop at its end. A later line starts in
   // lower case (not an acronym), so the sentence reads as one.
-  const clean = lines.map(plain).filter((line) => line && !held.has(line.toLowerCase()))
+  const clean = withoutSaid(lines, mark).map(plain).filter((line) => line && !held.has(line.toLowerCase()))
     .map((line, i) => (i && /^[A-Z][a-z]/.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line))
-    .map((line, i) => (i === 0 && existing.length > 0 && /^[A-Z][a-z]/.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line));
+    // After the person's own lines, an article opener reads on from "New:"; a name keeps its capital.
+    .map((line, i) => (i === 0 && existing.length > 0 && /^(A|An|The) /.test(line) ? `${line[0]?.toLowerCase() ?? ''}${line.slice(1)}` : line));
   if (!clean.length) return null;
   let text = lead;
   for (const [i, line] of clean.entries()) {
@@ -406,8 +428,10 @@ function rewriteState(text: string, change: Extract<Change, { kind: 'state-rewri
   if (typeof section === 'string') return { refused: section };
   const mark = markOf(section);
   if (!section.missing && mark !== null && mark !== stateMark(section.lines)) return { refused: 'person-edited' };
-  // No mark is the person's: only a rule's grant (`adopted`) lets Bower rewrite it, and the undo of that (`release`).
-  if (!section.missing && mark === null && !change.adopted && !change.release) return { refused: 'person-edited' };
+  // No mark is the person's: only a rule's grant (`adopted`) lets Bower rewrite it.
+  if (!section.missing && mark === null && !change.adopted) return { refused: 'person-edited' };
+  // A release only takes back Bower's own write: a section Bower marked.
+  if (change.release && (section.missing || mark === null)) return { refused: 'person-edited' };
   if (!sameLines(section.lines, change.previous)) return { refused: 'state-changed' };
   // The same lines again change nothing, not even the mark (rule 5).
   if (sameLines(change.lines, change.previous)) return { text, added: [], rules: null };

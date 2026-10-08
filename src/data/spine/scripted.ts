@@ -12,7 +12,7 @@
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
 import type { DriveFile } from '../drive/drive-api';
-import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateNewsLine, timelineDate } from '../contracts/note-edit';
+import { ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
 import { parseRunManifestV2, recordableId, recordableRecordId, type Capture as ManifestCapture, type CapturedMember, type CapturedPile, type Change, type EditEntry, type EffectV2, type Manifest, type ManifestRunReport, type ManifestV2, type Operation, type OperationV2, type Rename, type ReportContribution, type RuleAdd, type RuleRemove, type Target, type VerifiedContent } from '../contracts/run-manifest';
 import { DISAGREEMENTS, FILING, HUB_UPDATES, MERGES, NOT_LOOKED_UP, askAbout, citedName, disagreement, disagreementAnswer, guessFolder, saltmereQuestion, scriptedRequest, seedPiles, wordRule, type HubUpdate } from '../demo/fixture';
@@ -704,7 +704,7 @@ export async function planScripted(drive: ScriptedRead, rootId: string, opts: Pl
       } else {
         // Never silently dropped: what Bower would write becomes one Timeline line (a person's note takes none).
         // Only what the section lacks; nothing new, no line.
-        const text = stateNewsLine(w.state.lines, now?.lines ?? []);
+        const text = stateNewsLine(w.state.lines, now?.lines ?? [], stateMarkOf(bytes));
         if (text !== null) {
           const line: WantedLine = { entry: { date: date ?? '', text, source: w.state.source }, record: null, what: text, after: w.state.thing };
           w.lines.push(line);
