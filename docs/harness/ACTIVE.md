@@ -337,3 +337,4 @@ P3-9 is closed.
 - c1-still-as-seen closed (12c7b0c4; removed 63; rows added by me). P4-23 review (escalated) running; c1-worker-routes running; deadlines fix round queued. 404/415.
 - P4-23 PASS (c1-still-as-seen; minors to polish). c1-duplication-gate (mechanical) dispatched; c1-worker-routes running.
 - c1-worker-routes closed (047d6ad0; removed 137). 405/415. c1-worker-deadlines fix round (escalated, fresh) dispatched; c1-duplication-gate running.
+- c1-duplication-gate merged (cf11d037) but not closed: its test checks jscpd, not the gate script, copies whole packages (node_modules) to tmp, and has no red. Fresh fix round (implementer).
