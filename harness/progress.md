@@ -149,3 +149,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: per-thing-ask passes — an ask names a fileId or pileId; asked things stay in the inbox with the pile words, the rest is filed; 31 refusal kinds each retried once with the reason
 - 2026-10-08: things-normalised passes — the things section's per-run value was the pileId; normalised in the fingerprint only; test asserts the timing's section hashes
 - 2026-10-08: c04-prompt-fixes passes — numbers grounded in the sources (refuse and retry); raw names (underscore, (2), final, camera ids) refused with a retry; the kinds table describes areas; offer-and-flat rubric per addendum 5, logged
+- 2026-10-08: things-normalised passes — round 2: the things section hash sorts things within a pile (Drive listing order varied); multi-thing and link piles hash alike on fresh runs
