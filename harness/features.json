@@ -5045,14 +5045,14 @@
     "id": "drive-calls-cut",
     "task": "p4-b",
     "category": "perf",
-    "passes": true,
+    "passes": false,
     "what": "At least 40% fewer Drive calls on the C04 golden (134 now), and offer-and-flat apply at no more than half its median (about 28 s to 14 s or less), by running independent effects with bounded concurrency; bowerOp stamps, per-effect stillAsSeen and the checkpoint barrier unchanged.",
     "steps": [
       "Cut redundant Drive calls (reads before writes, repeated lookups) and run independent effects with bounded concurrency.",
       "Keep bowerOp stamps, per-effect stillAsSeen and the checkpoint barrier unchanged.",
       "Update the Drive-call golden on purpose; modelled apply for offer-and-flat at most half."
     ],
-    "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step|the C04 run makes at least 40 percent fewer Drive calls|offer-and-flat apply takes at most half its modelled time\"",
-    "note": "TL-P4-08 addendum 6 (main cf592bf). Live apply 26-37 s on offer-and-flat at 327b987."
+    "verify": "pnpm -C runner exec vitest run -t \"the C04 run makes the golden number of Drive calls per step|the C04 run makes at least 40 percent fewer Drive calls|offer-and-flat apply takes at most half its modelled time|a person change between the check and the send is refused\"",
+    "note": "TL-P4-08 addendum 6 (main cf592bf). Live apply 26-37 s on offer-and-flat at 327b987. Reopened by the P4-13 review (BLOCK): the fence reused a read up to 3 s old, so a person rename between check and send was overwritten."
   }
 ]
