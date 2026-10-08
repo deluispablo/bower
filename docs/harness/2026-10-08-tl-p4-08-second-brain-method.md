@@ -57,3 +57,27 @@
 3. **`things-normalised`** (`bower-mechanical`) finds the per-run value in the shown piles, most likely a pile id or a time, and normalises it in the fingerprint only, never in what the model sees, unless the value is noise the model does not need.
 
 Then offer-and-flat ×3, and garden ×2 as a regression check. Claude is off.
+
+**Addendum 5, 2026-10-08: offer-and-flat ×3 and garden ×2 on `b54392c`.** Both garden runs pass. Offer-and-flat shows the same pattern in all three runs:
+- the offer goes to Job hunt, with a correct note;
+- the link goes to Flat hunt, with a "Flat listing 88213" note;
+- the payslip goes to a new `Areas/Pay and tax records`;
+- the photo is asked about;
+- both hubs get a line.
+
+No run needed a retry.
+
+**What is accepted:**
+1. **The photo ask is a pass.** `IMG_2301.jpg` is an unread image whose name says nothing. The local method asks in that case, and the rubric itself says nothing is filed only because of the pile's words. The rubric gains this as a passing outcome; the change is logged in the rubric-change file.
+2. **The listing note without an address is a pass.** The link has no prepared content (no web, no preparation yet), so an address would be invented. The rubric becomes "keeps the address when the link's prepared text has one". C15 checks it again once links are prepared.
+3. **The payslip is a pass** with any Area named for money, pay or finance. The kinds line in the prompt says "payslip: Areas, pay and tax records", and the example became the folder name. The kinds table should describe the area, not name it ("the person's money area"), and the responsibility example should not be a ready-made folder name. That goes in `c04-prompt-fixes`.
+
+**Real misses, in `c04-prompt-fixes`** (`bower-implementer`):
+- **Run 3 invented "the 30-minute commute limit".** Add `numbers-grounded`: every number in a note body, summary or Timeline line must appear in the cited thing's prepared text, the pile's words or a note shown. Otherwise the reply is refused and retried once. This is a deterministic grounding check and does not judge style.
+- **Run 1 kept `Offer_letter_final(2).pdf`.** The prompt states the original's naming rule and makes it concrete: underscores, copy numbers like "(2)", "final" and camera-style ids make a name that says nothing, which is replaced by a plain one.
+- **`things-normalised` round 2:** a per-run value remains in multi-thing and link piles.
+- **The pile's request,** "Compare the commute", belongs to C08/C11 (requests in the pile's words). It is recorded, not fixed here.
+
+**Then** offer-and-flat ×3 and garden ×1. C04 closes when they pass.
+
+**Speed.** On offer-and-flat, apply takes 23–35 s and reads 15–36 s. `drive-calls-cut` (`bower-implementer`) runs beside the C05 slice once C04 closes. Its aim is a ≥40% cut of the Drive calls per run on the C04 golden, with batching and the listing reused.
