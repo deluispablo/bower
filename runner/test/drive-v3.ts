@@ -211,11 +211,11 @@ async function answer(wire: DriveV3, method: string, url: URL, body: RequestInit
 async function list(drive: FakeDrive, url: URL): Promise<Response> {
   const q = url.searchParams.get('q') ?? '';
   const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1] ?? '');
-  // A run's stamp, looked for in one folder, in the Bin or not.
-  const has = /^'([^']+)' in parents and appProperties has \{ key='([^']+)' and value='([^']+)' \}$/.exec(q);
+  // A run's stamp, looked for anywhere, in the Bin or not.
+  const has = /^appProperties has \{ key='([^']+)' and value='([^']+)' \}$/.exec(q);
   if (has) {
     const data = JSON.parse(await drive.snapshot()) as { files: Array<{ meta: DriveFile; trashed: boolean }> };
-    const files = data.files.filter((f) => f.meta.parents[0] === has[1] && f.meta.appProperties?.[has[2] ?? ''] === has[3]);
+    const files = data.files.filter((f) => f.meta.appProperties?.[has[1] ?? ''] === has[2]);
     return json(200, { kind: 'drive#fileList', files: files.map((f) => wireFile(f.meta, f.trashed)) });
   }
   if (!parents.length || !/trashed = false/.test(q)) return json(400, driveFailure(400, 'invalidQuery'));

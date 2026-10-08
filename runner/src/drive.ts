@@ -188,15 +188,16 @@ export class RunnerDrive {
   }
 
   /**
-   * The children of a folder that carry `key` = `value` in their appProperties, in the Bin or not: Drive's
-   * `appProperties has { key=... and value=... }` query (https://developers.google.com/workspace/drive/api/guides/search-files).
-   * A run's own stamp is found this way even after the person put the thing it made in the Bin.
+   * The files that carry `key` = `value` in their appProperties, wherever they are and in the Bin or not: Drive's
+   * `appProperties has { key=... and value=... }` query, with no parent clause and no `trashed` clause
+   * (https://developers.google.com/workspace/drive/api/guides/search-files). A run's own stamp is found this way even
+   * after the person moved the thing it made elsewhere, or put it in the Bin.
    */
-  async stamped(parentId: string, key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
+  async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
     const out: Array<{ file: DriveFile; trashed: boolean }> = [];
     let pageToken = '';
     do {
-      const q = `${quote(parentId)} in parents and appProperties has { key=${quote(key)} and value=${quote(value)} }`;
+      const q = `appProperties has { key=${quote(key)} and value=${quote(value)} }`;
       const params = new URLSearchParams({ q, fields: `nextPageToken,files(${FIELDS})`, pageSize: '1000' });
       if (pageToken) params.set('pageToken', pageToken);
       const body = (await this.read(`${API}/files?${params}`)) as { files?: Array<WireFile & { trashed?: boolean }>; nextPageToken?: string };
