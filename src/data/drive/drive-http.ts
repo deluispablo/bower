@@ -345,7 +345,7 @@ export class DriveHttp implements DriveApi, ResumableDrive {
     for (let refreshed = false; ; refreshed = true) {
       let res: Response;
       try {
-        res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, { ...opts, knownOffline, ...(this.pacing ? { pacing: this.pacing } : {}) });
+        res = await send(this.fetchFn, url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${token}` } }, { ...opts, knownOffline, pacing: this.pacing });
       } catch (e) {
         if (e instanceof BowerError) throw e;
         // Stopped on purpose: the queue tells this from a failure.

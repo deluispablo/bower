@@ -110,7 +110,7 @@ export class RunnerStatus {
   private async request(body: object): Promise<Response> {
     try {
       const init = { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.opts.ticket}` }, body: JSON.stringify(body) };
-      return await send(this.fetchFn, this.url, init, { idempotent: true, again: serverBusy, ...(this.opts.pacing ? { pacing: this.opts.pacing } : {}) });
+      return await send(this.fetchFn, this.url, init, { idempotent: true, again: serverBusy, pacing: this.opts.pacing });
     } catch (e) {
       console.error(e);
       throw unreached();

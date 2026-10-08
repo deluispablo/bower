@@ -57,7 +57,7 @@ export interface SendOptions {
   /** Whether this answer is worth asking again after a wait (rate limited, or failing on the server's side). */
   again?: (res: Response) => boolean | Promise<boolean>;
   /** The waits between tries; the real ones when absent. */
-  pacing?: Partial<Pacing>;
+  pacing?: Partial<Pacing> | undefined;
   /** The caller's abort, for a request whose `init` carries none: it ends the request and the backoff. */
   signal?: AbortSignal;
   /**

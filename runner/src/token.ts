@@ -111,7 +111,7 @@ export class RunnerToken {
     let res: Response;
     try {
       // Idempotent: asking again changes nothing on the Worker (`transport.ts`).
-      res = await send(this.fetchFn, url, { headers: { authorization: `Bearer ${this.opts.ticket}` } }, { idempotent: true, again: serverBusy, ...(this.opts.pacing ? { pacing: this.opts.pacing } : {}) });
+      res = await send(this.fetchFn, url, { headers: { authorization: `Bearer ${this.opts.ticket}` } }, { idempotent: true, again: serverBusy, pacing: this.opts.pacing });
     } catch (e) {
       console.error(e);
       throw unreached();
