@@ -93,6 +93,8 @@ export const STATE_LINE_MAX = 400;
 export const STATE_UPDATED = 'Current state brought up to date.';
 /** The report's line on a note kept as one with another (`keep-one-note-merge`), which went to the Bin. */
 export const keptLine = (other: string): string => `Kept as one note with ${other}, which went to the Bin.`;
+/** Why the other note of a keep stays: the person changed it while the run worked; the next tidy-up carries it all. */
+export const KEEP_CHANGED = 'It changed while Bower worked, so both notes stay; the next tidy-up keeps one.';
 /**
  * Current state lines: `lines` each one trimmed line, none only to take back a rewrite of an empty section (TL-P4-10
  * point 4; a model always writes 1+); `previous` as read (one line each, no control character).

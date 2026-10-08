@@ -211,6 +211,12 @@ export function driveEffects(drive: RunnerDrive): Effects {
       drive.expectSeen(e.before, true);
       return (await drive.list(e.before.fileId)).length ? { refused: refused('conflict', ARRIVED) } : { parentId, modifiedTime: null };
     }
+    // The other note of two kept as one (C05): a note captured as a place, binned only while it is still as the plan
+    // read it, its modifiedTime too, so a line the person added since is never binned unread (P4-19 I1).
+    if (e.kind === 'bin' && !e.before.folder && manifest.capture.places.some((p) => p.file.fileId === e.before.fileId)) {
+      drive.expectSeen(e.before, true);
+      return (await drive.list(e.before.fileId)).length ? { refused: refused('conflict', ARRIVED) } : { parentId, modifiedTime: null };
+    }
     // A move or a Bin: the source by the name and place the plan saw. The fence reads it right before the send and
     // refuses it if either differs (`expectSeen`): that one read is the check, with no earlier one to go stale.
     drive.expectSeen(e.before);

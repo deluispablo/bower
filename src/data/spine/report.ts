@@ -213,8 +213,14 @@ export function reportContradictions(admission: AdmissionManifest, manifest: Run
     const from = given.filter((c) => c.value.alreadySaved?.some((a) => a.name === row.name && a.as === row.as));
     trace(`already saved ${row.name}`, from, ['filed'], named.filed);
   }
+  // A keep's other note that stayed (C05) is a note of the folder, not an item the run took: its row names no item.
+  const keptBin = (id: string): boolean => {
+    const e = ops.get(id)?.effect;
+    return e?.kind === 'bin' && !e.before.folder && !members.has(e.before.fileId) && manifest.capture.places.some((p) => p.file.fileId === e.before.fileId);
+  };
   for (const row of report.setAside) {
     const from = given.filter((c) => c.value.setAside.some((a) => a.name === row.name));
+    if (from.length && from.every((c) => c.requires.every(keptBin))) continue;
     trace(`set aside ${row.name}`, from, ['filed', 'set-aside'], named.setAside);
   }
   const pileNamed = (set: ReadonlySet<string>, pileId: string | null): boolean => pileId !== null && (pileItems.get(pileId) ?? []).some((f) => set.has(f));
