@@ -17,6 +17,7 @@ import type { AuthDeps } from './auth.js';
 import { CryptoError, decrypt, importEncryptionKey } from './crypto.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
+import { personFor, signedInSub } from './route-helpers.js';
 import { refreshAccessToken } from './google.js';
 import { clearSessionCookie } from './session.js';
 import type { FetchLike } from './google.js';
@@ -46,7 +47,7 @@ export interface DriveTokenOptions {
  * route's, since making the folder itself needs a token.
  */
 export async function accessTokenFor(env: Env, sub: string, options: DriveTokenOptions = {}): Promise<DriveToken> {
-  return await accessTokenOf(env, env.PERSON.get(env.PERSON.idFromName(sub)), options);
+  return await accessTokenOf(env, personFor(env, sub), options);
 }
 
 /** What minting a Drive token asks of the person object: its stub, or the object itself (`Person.wake`). */
@@ -104,9 +105,8 @@ export function createDriveRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   drive.get('/drive/token', requireSession, async (c) => {
     const env = c.get('env');
-    const sub = c.get('userId');
-    if (sub === undefined) throw new HttpError(500, 'internal');
-    const person = env.PERSON.get(env.PERSON.idFromName(sub));
+    const sub = signedInSub(c.get('userId'));
+    const person = personFor(env, sub);
     if ((await person.folderId()) === null) {
       throw new HttpError(409, 'no-folder', 'Choose a folder for Bower first.');
     }

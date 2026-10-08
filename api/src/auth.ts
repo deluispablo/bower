@@ -16,6 +16,7 @@ import type { JWTVerifyGetKey } from 'jose';
 import { CryptoError, decrypt, encrypt, importEncryptionKey, timingSafeEqual } from './crypto.js';
 import type { AppEnv, Env } from './env.js';
 import { HttpError } from './errors.js';
+import { personFor } from './route-helpers.js';
 import {
   buildAuthUrl,
   codeChallenge,
@@ -80,7 +81,6 @@ function signedOut(cause: string, error?: unknown): HttpError {
   });
 }
 
-/** The person object for `sub` (TL-P2-05: one per person, keyed by OIDC sub). */
 /** Whether `envelope` decrypts with `key`; a `CryptoError` means it does not, anything else is thrown. */
 async function readable(envelope: string, key: CryptoKey): Promise<boolean> {
   try {
@@ -89,23 +89,6 @@ async function readable(envelope: string, key: CryptoKey): Promise<boolean> {
   } catch (err) {
     if (err instanceof CryptoError) return false;
     throw err;
-  }
-}
-
-function personFor(env: Env, sub: string) {
-  return env.PERSON.get(env.PERSON.idFromName(sub));
-}
-
-/**
- * Calls the person object. Any failure on the way is `internal` with no
- * cause: the error is logged here and never travels further.
- */
-async function reachPerson<T>(what: string, call: () => Promise<T>): Promise<T> {
-  try {
-    return await call();
-  } catch (err) {
-    console.error(`person object: ${what} failed`, err);
-    throw new HttpError(500, 'internal');
   }
 }
 
@@ -130,7 +113,7 @@ async function authenticate(cookieHeader: string | undefined, env: Env): Promise
   } catch (err) {
     throw signedOut('session refused', err);
   }
-  const account = await reachPerson('account', () => personFor(env, claims.sub).account());
+  const account = await personFor(env, claims.sub).account();
   if (account === null) throw signedOut('no account for this session');
   try {
     assertCurrentGeneration(claims, account.generation);
@@ -279,14 +262,12 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     if (encRefreshToken === null) {
       // Google sent no new token: a kept one this Worker cannot read (TOKEN_ENC_KEY rotated) is forgotten,
       // as Google's `invalid_grant` would be, so the sign-in below finds none and asks for consent.
-      const kept = await reachPerson('encryptedRefreshToken', () => person.encryptedRefreshToken());
+      const kept = await person.encryptedRefreshToken();
       if (kept !== null && !(await readable(kept, key))) {
-        await reachPerson('forgetGoogleAccess', () => person.forgetGoogleAccess(kept));
+        await person.forgetGoogleAccess(kept);
       }
     }
-    const signedIn = await reachPerson('signIn', () =>
-      person.signIn({ email: identity.email, name: identity.name, encRefreshToken }),
-    );
+    const signedIn = await person.signIn({ email: identity.email, name: identity.name, encRefreshToken });
     c.header('Set-Cookie', oauthCookie('', 0));
     if (!signedIn.hasRefreshToken) {
       // Google sends a refresh token only at consent: ask once more, with consent.
@@ -313,7 +294,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     }
     if (session !== undefined) {
       const sub = session.claims.sub;
-      await reachPerson('retireSessions', () => personFor(env, sub).retireSessions());
+      await personFor(env, sub).retireSessions();
     }
     c.header('Set-Cookie', clearSessionCookie());
     return c.body(null, 204);
@@ -325,7 +306,7 @@ export function createAuthRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     if (account === undefined || sub === undefined) throw new HttpError(500, 'internal');
     const env = c.get('env');
     // The pointer POST /vault stored, or null before the first one.
-    const folderId = await reachPerson('folderId', () => personFor(env, sub).folderId());
+    const folderId = await personFor(env, sub).folderId();
     return c.json({ user: { name: account.name, email: account.email }, folderId });
   });
 

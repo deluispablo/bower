@@ -30,9 +30,9 @@ import { HttpError } from './errors.js';
 import type { AdmissionManifest } from '../../src/data/spine/admission.js';
 import type { Person, RunnerGrant } from './person.js';
 import type { RunPhase, RunReply } from './process.js';
-import { reach } from './process.js';
 import { PHASE_RANK, hashTicket, personIdOf } from './run-ticket.js';
 import type { RunnerRefusal, RunnerReport, RunnerReportResult } from './run-ticket.js';
+import { jsonBody, personById, unreadable } from './route-helpers.js';
 import { limitBody, requireJsonBody } from './security.js';
 
 /** What `GET /runner/runs/:id/token` answers: with what the run was admitted to take (TL-P3-21). */
@@ -87,12 +87,7 @@ function personOfRun(env: Env, runId: string): DurableObjectStub<Person> {
   } catch {
     throw signedOut();
   }
-  return env.PERSON.get(id);
-}
-
-/** A body that fails validation is refused as the JSON guard refuses one: 415, no other code. */
-function unreadable(): HttpError {
-  return new HttpError(415, 'unsupported-media-type');
+  return personById(env, id);
 }
 
 const wholeFrom = (value: unknown, min: number): value is number =>
@@ -128,10 +123,7 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const ticket = bearer(c);
     const person = personOfRun(env, runId);
     const hash = await hashTicket(ticket);
-    const access = await reach(
-      'runner access',
-      async (): Promise<RunnerGrant | 'stale-attempt' | 'gone' | null> => await person.runnerAccess(runId, hash, Date.now()),
-    );
+    const access: RunnerGrant | 'stale-attempt' | 'gone' | null = await person.runnerAccess(runId, hash, Date.now());
     if (access === 'stale-attempt') throw refusal('stale-attempt');
     if (access === 'gone') throw gone();
     if (access?.folderId == null) throw signedOut();
@@ -172,19 +164,9 @@ export function createRunnerRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
     const runId = c.req.param('id');
     const ticket = bearer(c);
     const person = personOfRun(env, runId);
-    let value: unknown;
-    try {
-      value = await c.req.json();
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
-      throw unreadable();
-    }
-    const report = parseReport(value);
+    const report = await jsonBody(c, parseReport);
     const hash = await hashTicket(ticket);
-    const result = await reach(
-      'runner report',
-      async (): Promise<RunnerReportResult> => await person.runnerReport(runId, hash, report, Date.now()),
-    );
+    const result: RunnerReportResult = await person.runnerReport(runId, hash, report, Date.now());
     if (!result.accepted && result.refused === 'stale-report') {
       // The contract's error shape, with where the Worker is, so a restarted runner goes on from `seq + 1`.
       const late = refusal('stale-report');

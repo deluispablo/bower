@@ -11,6 +11,7 @@ import type { AuthDeps } from './auth.js';
 import { decrypt, importEncryptionKey } from './crypto.js';
 import type { AppEnv } from './env.js';
 import { HttpError } from './errors.js';
+import { personFor, signedInSub } from './route-helpers.js';
 import { revokeToken } from './google.js';
 import type { FetchLike } from './google.js';
 import { requireSameOrigin } from './security.js';
@@ -23,9 +24,7 @@ export function createMeRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
 
   routes.delete('/me', requireSameOrigin, requireSession, requireLease, async (c) => {
     const env = c.get('env');
-    const sub = c.get('userId');
-    if (sub === undefined) throw new HttpError(500, 'internal');
-    const person = env.PERSON.get(env.PERSON.idFromName(sub));
+    const person = personFor(env, signedInSub(c.get('userId')));
     try {
       const encrypted = await person.encryptedRefreshToken();
       if (encrypted !== null) {
@@ -39,6 +38,7 @@ export function createMeRoutes(deps: AuthDeps = {}): Hono<AppEnv> {
       }
       await person.forget();
     } catch (err) {
+      if (err instanceof HttpError) throw err;
       console.error(`[${c.get('requestId')}] delete me failed`, err);
       throw new HttpError(500, 'internal');
     }
