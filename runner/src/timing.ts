@@ -24,6 +24,7 @@ export class RunTiming {
   private checkpointWrites = 0;
   private readonly began: number;
   model: ModelStats | null = null;
+  private inputFingerprint: string | null = null;
 
   /** `startMs`: how long the job took to start this process (Node's uptime when the runner began). */
   constructor(
@@ -31,6 +32,11 @@ export class RunTiming {
     private readonly clock: () => number = () => performance.now(),
   ) {
     this.began = clock();
+  }
+
+  /** Set the input fingerprint (first 12 hex of sha256 of the model input). */
+  setInputFingerprint(fingerprint: string): void {
+    this.inputFingerprint = fingerprint;
   }
 
   /** Runs `f` as `phase`, its time taken out of the phase it runs inside. */
@@ -65,7 +71,7 @@ export class RunTiming {
       `timing: end=${end} total=${ms(this.clock() - this.began)} start=${ms(this.startMs)}`,
       `token=${own('token')} reads=${own('reads')}`,
       // The model's wall time is the one it reports; with no model, the provider's own time is zero.
-      `model=${m ? ms(m.wallMs) : own('model')} api=${ms(m?.apiMs ?? 0)} turns=${m?.turns ?? 0} in=${m?.inputTokens ?? 0} out=${m?.outputTokens ?? 0}`,
+      `model=${m ? ms(m.wallMs) : own('model')} api=${ms(m?.apiMs ?? 0)} turns=${m?.turns ?? 0} in=${m?.inputTokens ?? 0} out=${m?.outputTokens ?? 0}${this.inputFingerprint ? ` input=${this.inputFingerprint}` : ''}`,
       `apply=${own('apply')} checkpoints=${own('checkpoints')}/${this.checkpointWrites} report=${own('report')} status=${own('status')}`,
     ].join(' ');
   }
