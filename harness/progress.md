@@ -178,3 +178,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-08: keep-one-note-merge passes — The other note is binned only as read; whole lines compared, so no fact is dropped (P4-19 fix)
 - 2026-10-08: ask-answer-loop passes — An answer applies at once: stored idempotently, a run scoped to its subject, waits during a run, a no closes with no run (TL-P4-08 addendum 8)
 - 2026-10-08: ask-answer-loop passes — In-run answers say they wait; a yes to Write it says honestly Bower cannot write yet and closes next run; the later answer counts (P4-20 fix)
+- 2026-10-08: home-errors-shown passes — Home says why a failed inbox read happened, offers Try again, and the sheet leaves busy (TL-P4-13)

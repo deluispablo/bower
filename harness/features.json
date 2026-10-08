@@ -5225,7 +5225,7 @@
     "note": "TL-P4-08 addendum 7 (main f10109d). ask-answer-loop moves into C05 but waits for the owner's trigger ruling. Reopened by P4-19 (BLOCK): the other note is binned on name/place only (a person edit after the plan read is lost); carriedLines drops a line found as a substring of the kept text."
   },
   {
-    "passes": false,
+    "passes": true,
     "id": "home-errors-shown",
     "task": "p4-b",
     "category": "fix",

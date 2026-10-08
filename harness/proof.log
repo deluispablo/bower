@@ -423,3 +423,4 @@ c05-incorporation	1a441fc8c3ee7ee1	2026-10-08	known-green: red at tests-only 472
 keep-one-note-merge	ba8924645bf5bbde	2026-10-08	red (fixed in 320e08b)
 ask-answer-loop	12f4c5b3c25cc200	2026-10-08	known-green: red by hand at tests-only adc533f: all 4 verify tests fail on assertions; green at 517dc9b plus merge 33db41a
 ask-answer-loop	3d747d8da285416b	2026-10-08	red (fixed in 94af645)
+home-errors-shown	a12849094639de74	2026-10-08	red (fixed in 0deaaea)
