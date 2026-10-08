@@ -14,6 +14,7 @@ import { serializeNote } from '../../src/data/vault/note-format';
 import type { FakeDrive } from '../../src/data/drive/fake-drive';
 import type { ClaudeCall, ClaudeExit, ClaudeSpawn } from '../src/claude';
 import { claudeProvider } from '../src/claude';
+import { normalizeModelInput } from '../src/model-input';
 import { RunTiming } from '../src/timing';
 import { loadCorpus } from '../src/corpus';
 import { runWithClaude } from './corpus-run';
@@ -68,12 +69,9 @@ describe('model input fingerprint', () => {
     await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
     expect(calls).toHaveLength(1);
 
-    // Only run-dependent ids and times are normalised.
-    const normalized = (calls[0]?.input ?? '')
-      .replaceAll(RUN_ID, 'RUN_ID')
-      .replace(/"at":\d+/g, '"at":0')
-      .replace(/"runId":"[^"]+"/g, '"runId":"RUN_ID"')
-      .replace(/"id":"[^"]+"/g, '"id":"ID"');
+    // Normalize the input using the shared function
+    const input = calls[0]?.input ?? '';
+    const normalized = normalizeModelInput(input);
 
     // Verify against golden file (must exist; golden files are not created by tests)
     const goldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.golden.txt');
@@ -91,9 +89,10 @@ describe('model input fingerprint', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(claudeProvider({ env: { CLAUDE_CODE_OAUTH_TOKEN: 'made-up' }, spawn, timing }, { rootId: g.root, runId: RUN_ID, allowWeb: false }, fakeScripted(g.drive))({ taken: admitted.manifest, deferred: [] })).rejects.toThrow();
 
-    // The timing line should have the model input fingerprint
+    // The timing line should have the model input fingerprint (calculated on the normalized input)
     const modelInput = calls[0]?.input ?? '';
-    const expectedHash = createHash('sha256').update(modelInput).digest('hex').slice(0, 12);
+    const normalized = normalizeModelInput(modelInput);
+    const expectedHash = createHash('sha256').update(normalized).digest('hex').slice(0, 12);
     const line = timing.line('done');
 
     expect(line).toContain(`input=${expectedHash}`);
