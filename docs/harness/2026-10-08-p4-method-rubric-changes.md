@@ -44,6 +44,24 @@ TL-P4-07 addendum 3 point 2). The test "the C04 to C15 rubrics agree with the me
    point 1 ("a run never waits and never guesses"): with no words and no readable text, nothing says where it goes.
    When the C15 slice reads scans, the case is checked again.
 
+## Addendum 5 changes (`c04-prompt-fixes`)
+
+3. **c04-offer-and-flat, `rubric.md` and `expected.json`.** Reason: TL-P4-08 addendum 5 (three live runs on `b54392c`).
+   - Was: the photo is filed under the flat hunt. Now: filed there, or asked about (an unread image whose name says
+     nothing, `IMG_2301.jpg`) and left in the inbox with the pile's words. `expected.json`: `report.filed` 4 became
+     `filedAtLeast` 3 with `questionsAtMost` 1; the photo is checked by placement only (an asked photo stays in the inbox).
+   - Was: the listing note "keeps the address". Now: only when the link's prepared text has one (the link has none today;
+     C15 checks it again). `expected.json` never pinned the address.
+   - Was: the payslip at `Areas/Money/Payslips/Payslip August (2).pdf`. Now: any Area named for money, pay or finance.
+     `expected.json`: placement `Areas/*oney*`, `Areas/Pay*`, `Areas/*inance*`, `Areas/*ax*`, `Areas/*alary*`, `Areas/*ncome*`;
+     the offer stays under `Projects/Job hunt`, the photo under `Projects/Flat hunt`.
+   - Also: exact file names, exact Timeline texts and the exact `created`/`updated` lists were the scripted run's choices, not
+     the rubric's; they became patterns and minimums (`timelineMin` 2 on both hubs, `createdAtLeast` 2, `updatedAtLeast` 2).
+     The rubric gains the naming rule and the grounded-numbers rule.
+   - The scorer gains `filedAtLeast`, a list of `placement` objects, and `*` in a placement `under` (inside one folder name).
+   - The scripted proposals in `c04-incorporation.test.ts` and the recorded replies drop "(2)" from the payslip and the
+     invented "7 out of 10" from a Timeline line, since both now break a prompt rule.
+
 ## Not changed, for the lead
 
 - **bench-4-scanned-pdf** expects the unread scan filed (`report.filed: 1`), as c15-scanned-letter did. It is the

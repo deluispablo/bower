@@ -61,6 +61,8 @@ export interface CorpusCase {
 export interface ReportExpectation {
   /** How many things were filed. */
   filed?: number;
+  /** For a case where the model may ask about a thing it cannot place: at least this many filed. */
+  filedAtLeast?: number;
   created?: string[];
   updated?: string[];
   /** For cases where the model chooses names: at least this many. */
@@ -90,6 +92,9 @@ export interface NoteExpectation {
   timelineMin?: number;
 }
 
+/** An `under` folder may use `*` for any run of characters inside one folder name ("Areas/Pay*"). */
+export interface Placement { files: string[]; allowed: Array<{ under: string; linking?: string }> }
+
 export interface Expected {
   /** Paths here may use `*` for any run of characters (a model picks names; the rules fix only the place). */
   files?: { present?: string[]; absent?: string[] };
@@ -97,7 +102,7 @@ export interface Expected {
    * Where the matched files may be filed (a rubric that allows more than one place). Each file must sit under one
    * `allowed` folder; an entry with `linking` also needs a note among the files that links that note (`[[linking]]`).
    */
-  placement?: { files: string[]; allowed: Array<{ under: string; linking?: string }> };
+  placement?: Placement | Placement[];
   /** Paths of the starting folder that must be byte-identical after the run. */
   unchanged?: string[];
   notes?: NoteExpectation[];
@@ -214,6 +219,12 @@ function matching(after: Readonly<Record<string, string>>, pattern: string): str
   return Object.keys(after).filter((p) => re.test(p));
 }
 
+/** Whether `path` is under the folder `under`; a `*` in it stands for any run of characters inside one folder name. */
+function isUnder(path: string, under: string): boolean {
+  if (!under.includes('*')) return path.startsWith(`${under}/`);
+  return new RegExp(`^${under.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')}/`).test(path);
+}
+
 /** Whether a `[[target]]` names a note or file of the folder (by name with or without `.md`, or by path). */
 function resolves(target: string, after: Readonly<Record<string, string>>): boolean {
   const t = target.trim();
@@ -228,11 +239,10 @@ export function score(input: ScoreInput): Score {
   const unmet: string[] = [];
   for (const p of expected.files?.present ?? []) if (matching(after, p).length === 0) unmet.push(`missing file: ${p}`);
   for (const p of expected.files?.absent ?? []) for (const found of matching(after, p)) unmet.push(`file should not exist: ${found}`);
-  if (expected.placement) {
-    const { files, allowed } = expected.placement;
+  for (const { files, allowed } of [expected.placement ?? []].flat()) {
     const placed = files.flatMap((p) => matching(after, p)).filter((p) => !p.startsWith('Inbox/'));
     for (const path of placed) {
-      const rule = allowed.find((a) => path.startsWith(`${a.under}/`));
+      const rule = allowed.find((a) => isUnder(path, a.under));
       if (!rule) unmet.push(`placed outside the rubric: ${path}`);
       else if (rule.linking !== undefined) {
         // The exact link target ([[Garden plot]], [[Garden plot|text]], [[Garden plot#heading]]), not one that starts the same.
@@ -275,6 +285,7 @@ export function score(input: ScoreInput): Score {
     if (!report) unmet.push('report: no last-run.json report');
     else {
       if (want.filed !== undefined && list(report.filed).length !== want.filed) unmet.push(`report.filed: ${list(report.filed).length}, expected ${want.filed}`);
+      if (want.filedAtLeast !== undefined && list(report.filed).length < want.filedAtLeast) unmet.push(`report.filed: ${list(report.filed).length}, expected at least ${want.filedAtLeast}`);
       if (want.setAside !== undefined && list(report.setAside).length !== want.setAside) unmet.push(`report.setAside: ${list(report.setAside).length}, expected ${want.setAside}`);
       for (const key of ['created', 'updated'] as const) {
         const got = paths(report[key]);

@@ -43,12 +43,15 @@ describe('the capability corpus', () => {
     const asRun = { expected: c.expected, before: c.folder, lastRun: run.lastRun };
     expect(score({ ...asRun, after: run.after }).pass).toBe(true);
 
-    const gone = c.expected.files?.present?.[0] ?? '';
+    // The rubric names files by pattern (the model picks names): the first one the run made.
+    const want = c.expected.files?.present?.[0] ?? '';
+    const gone = want.includes('*') ? Object.keys(run.after).find((p) => new RegExp(`^${want.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(p)) ?? '' : want;
     expect(gone).not.toBe('');
     const { [gone]: _removed, ...without } = run.after;
     const missing = score({ ...asRun, after: without });
     expect(missing.pass).toBe(false);
-    expect(missing.unmet).toContain(`missing file: ${gone}`);
+    expect(missing.unmet.length).toBeGreaterThan(0);
+    expect(missing.unmet.some((l) => l.startsWith('missing file: '))).toBe(true);
 
     // A changed file, a missing Timeline line and a link that no longer resolves are each named too.
     const edited = score({ ...asRun, after: { ...run.after, 'Projects/Flat hunt/Flat hunt.md': '---\nby: bower\n---\n\n## Timeline\n' } });

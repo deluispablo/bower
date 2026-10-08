@@ -523,7 +523,9 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     const took = { taken: seeded.admission, deferred: [] };
     const onRich = await both(seeded.wire.drive, seeded.root, took, recorded('reply-rich.json'));
     const filed = (m: RunManifest): unknown[] => m.operations.flatMap((o) => (o.effect.kind === 'move' && o.effect.properties.bowerNew === '1' ? [[o.effect.before.fileId, o.effect.name]] : o.effect.kind === 'bin' ? [[o.effect.before.fileId]] : []));
-    expect(filed(onRich.claude)).toEqual(filed(onRich.scripted).filter((f) => !['f16', 'f18'].includes(String((f as string[])[0]))));
+    // The script keeps the payslip's name "(2)"; a model's reply gives it a plain one (the naming rule, addendum 5).
+    const plain = (f: unknown): unknown => ((f as string[])[1] === 'Payslip August (2).pdf' ? [(f as string[])[0], 'Payslip August.pdf'] : f);
+    expect(filed(onRich.claude)).toEqual(filed(onRich.scripted).filter((f) => !['f16', 'f18'].includes(String((f as string[])[0]))).map(plain));
     const { piles, members, journal } = onRich.scripted.capture;
     expect(onRich.claude.capture).toMatchObject({ piles, members, journal });
     const notes = (m: RunManifest): string[] => m.operations.flatMap((o) => (o.effect.kind === 'create-text' ? [o.effect.name] : []));
@@ -534,19 +536,22 @@ describe('the Claude provider contract (TL-P4-01 P4-2)', () => {
     // Alex's folder (main.test.ts's): the same, and the spine runs it to done.
     const { wire, admission } = await wired();
     const onAlex = await both(wire.drive, wire.folderId, { taken: admission, deferred: [] }, recorded('reply-ok.json'));
-    expect(onAlex.claude).toEqual(onAlex.scripted);
+    // The same effects and capture, but for the payslip's plain name (the script keeps "(2)"), so their ids and hashes differ.
+    const effects = (m: RunManifest): unknown => JSON.parse(JSON.stringify(m.operations.map((o) => o.effect).filter((e) => !('name' in e && e.name === 'hashes.json'))).split('Payslip August (2).pdf').join('Payslip August.pdf'));
+    expect(effects(onAlex.claude)).toEqual(effects(onAlex.scripted));
+    expect(onAlex.claude.capture).toEqual(onAlex.scripted.capture);
     const ran = await wired();
     expect(await main({ BOWER_API_URL: API, GITHUB_EVENT_PATH: await eventFile(), ...claudeEnv() }, { fetch: ran.wire.fetch, claude: recordedClaude({ stdout: recorded('reply-ok.json') }).spawn })).toBe(0);
     expect(ran.wire.statuses.map((s) => s.phase)).toEqual(['reading', 'writing', 'saving', 'done']);
 
     // A thing the reply leaves out waits with its whole pile: the plan is the scripted one without that pile.
     const left = await wired();
-    const partial = intent([{ fileId: 'f10', to: 'Areas/Money/Payslips', name: 'Payslip August (2).pdf' }]);
+    const partial = intent([{ fileId: 'f10', to: 'Areas/Money/Payslips', name: 'Payslip August.pdf' }]);
     const run = { rootId: left.wire.folderId, runId: RUN_ID, allowWeb: false };
     const planned = await claudeProvider({ env: claudeEnv(), spawn: recordedClaude({ stdout: partial }).spawn }, run, fakeScripted(left.wire.drive))({ taken: left.admission, deferred: [] });
     expect(planned.capture.piles.map((p) => p.pileId)).toEqual(['p-payslip']);
     const alone = await scriptedProvider(fakeScripted(left.wire.drive), run)({ taken: { ...left.admission, piles: left.admission.piles.filter((p) => p.pileId === 'p-payslip') }, deferred: [] });
-    expect(planned.operations.map((o) => o.effect)).toEqual(alone.operations.map((o) => o.effect));
+    expect(effects(planned)).toEqual(effects(alone));
   });
 
   it('a Claude reply that targets a thing not admitted is refused and writes nothing', async () => {

@@ -163,11 +163,11 @@ const PROPOSALS: Record<string, Proposal> = {
       { thing: 'Offer_letter_final(2).pdf', to: 'Projects/Job hunt/Applications', basis: 'Projects/Job hunt/Job hunt.md', name: 'Offer, Industrial Designer, Ferrowick.pdf', note: { name: 'Industrial Designer, Ferrowick.md', summary: 'An offer from Ferrowick for Industrial Designer.', body: 'Fully remote. Salary 42,000 a year. Start 2 November.' } },
       { thing: 'listing-88213.example.url', to: 'Projects/Flat hunt', name: 'Flat 9, Wrenfield Road.md' },
       { thing: 'IMG_2301.jpg', to: 'Projects/Flat hunt/Viewing photos', basis: 'Projects/Flat hunt/Flat hunt.md', name: 'Wrenfield Road, kitchen.jpg' },
-      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', responsibility: 'pay and tax records', name: 'Payslip August (2).pdf' },
+      { thing: 'Payslip_Aug.pdf', to: 'Areas/Money/Payslips', responsibility: 'pay and tax records', name: 'Payslip August.pdf' },
     ],
     lines: [
       { note: 'Projects/Flat hunt/Flat hunt.md', text: 'A fourth flat added; the shortlist compared by commute.', cites: 'listing-88213.example.url' },
-      { note: 'Projects/Job hunt/Job hunt.md', text: 'New offer from Ferrowick, scored 7 out of 10 against your CV.', cites: 'Offer_letter_final(2).pdf' },
+      { note: 'Projects/Job hunt/Job hunt.md', text: 'New offer from Ferrowick, fully remote.', cites: 'Offer_letter_final(2).pdf' },
       { note: 'Projects/Job hunt/Job hunt.md', text: 'A flat from the same pile went to the flat hunt.', cites: 'listing-88213.example.url' },
     ],
   },
