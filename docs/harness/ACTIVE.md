@@ -328,3 +328,4 @@ P3-9 is closed.
 - TL-P4-14 addendum (11f9a52): generateIds is a write (fix round for c1-drive-ops-table queued); c1-digest-library registered (mechanical, queued). Running: c1-small-fixes, c1-worker-schema-v11.
 - c1-small-fixes closed (43f2a77e). c1-worker-schema-v11 delivery not mergeable (one commit, 7 migration tests fail); fresh escalated rework. c1-drive-ops-table fix round (generateIds a write) dispatched. 399/415.
 - c1-drive-ops-table closed (d172de32; generateIds a fenced write; red by hand at 1e64a9f0). 400/415. c1-digest-library (mechanical) dispatched; schema v11 rework running.
+- c1-worker-schema-v11 closed (06b11309; escalated rework). 401/415. c1-worker-deadlines (escalated) dispatched; c1-digest-library running.
