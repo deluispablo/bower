@@ -31,6 +31,7 @@
  *   summary and body), and Timeline lines for the notes it was shown. The runner still builds every operation, id
  *   and digest from it (`planScripted`), and `applyChanges` alone writes a Timeline line, on Bower's notes only.
  */
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -542,6 +543,11 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     const { model, maxTurns } = claudeLimits(setup.env);
     const shown = await shownOf(read, run, took);
     const input = prepared(run, took, shown);
+    // Calculate and set the input fingerprint for the timing line
+    if (setup.timing) {
+      const fingerprint = createHash('sha256').update(input).digest('hex').slice(0, 12);
+      setup.timing.setInputFingerprint(fingerprint);
+    }
     // Its own empty folder, with an empty home in it: no checkout's or person's settings or CLAUDE.md to find.
     const work = await mkdtemp(join(tmpdir(), 'bower-claude-'));
     let exit: ClaudeExit;

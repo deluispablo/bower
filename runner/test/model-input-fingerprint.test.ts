@@ -3,7 +3,7 @@
  * and a golden test of the C04 fixture input ensures future changes are intentional.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { planAdmission } from '../../src/data/spine/plan';
@@ -76,21 +76,15 @@ describe('model input fingerprint', () => {
       .replace(/"runId":"[^"]+"/g, '"runId":"RUN_ID"')
       .replace(/"id":"[^"]+"/g, '"id":"ID"');
 
-    // Write golden file if it doesn't exist or verify if it does
+    // Verify against golden file
     const goldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.golden.txt');
     mkdirSync(resolve(import.meta.dirname, 'fixtures'), { recursive: true });
-    try {
-      const golden = readFileSync(goldenPath, 'utf8');
-      expect(normalized).toBe(golden);
-    } catch {
-      // Golden file doesn't exist, write it
-      writeFileSync(goldenPath, normalized);
-      throw new Error('Golden file created; rerun test to verify');
-    }
+    const golden = readFileSync(goldenPath, 'utf8');
+    expect(normalized).toBe(golden);
   });
 
   it('the timing line carries the model input fingerprint', async () => {
-    const input = 'test input';
+    const input = 'test input data for fingerprinting';
     const hash = createHash('sha256').update(input).digest('hex').slice(0, 12);
     expect(hash).toHaveLength(12);
     expect(/^[0-9a-f]{12}$/.test(hash)).toBe(true);
@@ -98,10 +92,10 @@ describe('model input fingerprint', () => {
     // Test that timing line includes the fingerprint
     const timing = new RunTiming();
     timing.model = { wallMs: 1000, apiMs: 900, turns: 1, inputTokens: 10, outputTokens: 10 };
+    timing.setInputFingerprint(hash);
     const line = timing.line('done');
 
-    // Timing line should have a format that can include input fingerprint
-    expect(line).toContain('timing:');
-    expect(line).toContain('end=done');
+    // Timing line should include the fingerprint after out=
+    expect(line).toContain(`input=${hash}`);
   });
 });
