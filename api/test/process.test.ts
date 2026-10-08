@@ -654,6 +654,89 @@ describe('answers that wait for the run going (TL-P4-13 addendum)', () => {
     expect(gh.dispatched.length).toBe(before);
   });
 
+  /**
+   * An answer waits for the run going; the run ends and the alarm reads Drive for the answers' run, and `during` lands
+   * on the person in the first of those reads. Returns what the person's object holds afterwards, and the log.
+   */
+  async function alarmAdmissionWith(during: (instance: Person) => void): Promise<{ runs: unknown[]; quota: unknown[]; log: string; dispatches: number }> {
+    const { sub, cookie, fence } = await withThings();
+    const folder = wire;
+    if (folder === null) throw new Error('no folder');
+    await person(sub).cacheDriveToken({ accessToken: 'access-cached', expiresAt: T0 + 3600_000 });
+    const { run: going } = await admitted(sub, ask('press-1', T0, { scope: 'instructions' }));
+    expect(((await (await post(cookie, answer('answer-a', 'p-receipt'), fence)).json()) as Reply).waits).toBe(true);
+    await runInDurableObject(person(sub), async (instance: Person) => {
+      await instance.wake(T0, gh.access);
+    });
+    const { ticket } = await dispatchOf(gh, going.id);
+    expect(await person(sub).runnerReport(going.id, await hashTicket(ticket), { attempt: 1, seq: 1, phase: 'done' }, T0 + 1000)).toMatchObject({ accepted: true });
+    const before = gh.dispatched.length;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const held = await runInDurableObject(person(sub), async (instance: Person, state) => {
+        let landed = false;
+        const fetchImpl = async (input: string, init?: RequestInit): Promise<Response> => {
+          if (!landed && input.startsWith('https://www.googleapis.com/')) {
+            landed = true;
+            during(instance);
+          }
+          return await folder.fetchImpl(input, init);
+        };
+        await instance.wake(T0 + 1000, { repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, fetchImpl });
+        expect(landed).toBe(true);
+        return { runs: state.storage.sql.exec('SELECT id FROM runs').toArray(), quota: state.storage.sql.exec('SELECT counter FROM quota').toArray() };
+      });
+      return { ...held, log: log.mock.calls.map((c) => c.map(String).join(' ')).join('\n'), dispatches: gh.dispatched.length - before };
+    } finally {
+      log.mockRestore();
+    }
+  }
+
+  it('a sign-out during admission still admits the waiting answers', async () => {
+    // Runs never depend on a browser session: signing out moves the session generation, not the account.
+    const out = await alarmAdmissionWith((instance) => {
+      expect(instance.retireSessions()).not.toBeNull();
+    });
+    expect(out.runs).toHaveLength(2);
+    expect(out.quota).toEqual([{ counter: 2 }]);
+    expect(out.log).not.toContain('the account is gone');
+    expect(out.dispatches).toBe(1);
+  });
+
+  it('a Delete me during admission still refuses', async () => {
+    // The alarm path: Delete me, then the same person signs in again, during the reads (a new account: still refused).
+    const alarm = await alarmAdmissionWith((instance) => {
+      instance.forget();
+      instance.signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: null });
+    });
+    expect(alarm.runs).toEqual([]);
+    expect(alarm.quota).toEqual([]);
+    expect(alarm.log).toContain('the account is gone');
+    expect(alarm.dispatches).toBe(0);
+    // The press path: Delete me, then a sign-in again, during the press's reads.
+    const { sub, cookie, fence } = await withThings();
+    const folder = wire;
+    if (folder === null) throw new Error('no folder');
+    let landed = false;
+    const fetchImpl = async (input: string, init?: RequestInit): Promise<Response> => {
+      if (!landed && input.startsWith('https://www.googleapis.com/drive/')) {
+        landed = true;
+        await person(sub).forget();
+        await person(sub).signIn({ email: 'you@example.com', name: 'Alex', encRefreshToken: null });
+      }
+      return await folder.fetchImpl(input, init);
+    };
+    const r = await createApp({ fetchImpl }).request(
+      `${APP}/process`,
+      { method: 'POST', headers: { cookie, origin: APP, 'content-type': 'application/json', ...fence }, body: JSON.stringify({ scope: 'all', allowWeb: false, requestId: 'press-1' }) },
+      env,
+    );
+    expect(landed).toBe(true);
+    expect(r.status).not.toBe(200);
+    const left = await runInDurableObject(person(sub), (_i, state) => ({ runs: state.storage.sql.exec('SELECT id FROM runs').toArray(), quota: state.storage.sql.exec('SELECT counter FROM quota').toArray() }));
+    expect(left).toEqual({ runs: [], quota: [] });
+  });
+
   it('an answer during a run with the day used up is refused, so the app says so', async () => {
     const { sub } = await holder();
     const day = T0;
