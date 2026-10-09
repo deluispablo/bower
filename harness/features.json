@@ -5587,7 +5587,7 @@
     "id": "c2-one-engine",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One engine in src/data/spine (check, send with a fence, observe, read back) behind a Drive port; the runner and the fake run service both use it; checkpoints per batch and bowerOp recovery everywhere.",
     "steps": [
       "One engine.",
