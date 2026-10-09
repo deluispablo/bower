@@ -16,7 +16,7 @@
  * Blink (5.2 s) is left out.
  */
 import type { Pose } from './Bower';
-import type { ActName } from './engine';
+import { ACT_NAMES, POSE_NAMES, type ActName, type BirdEngine } from './engine';
 
 export type PartKey =
   | 'dx'
@@ -226,6 +226,119 @@ export function actProblems(name: ActName, samples: ReadonlyArray<Record<PartKey
     if (min < lo || max > hi) problems.push(`${name}: ${k} spans ${min.toFixed(2)}..${max.toFixed(2)}, range ${lo}..${hi}`);
   }
   return problems;
+}
+
+/** The engine's named actions outside the act table, each with its reference row (TL-P4-22 addendum 20). */
+export type ActionName = 'startle';
+
+export interface ActionRef {
+  /** Each part the action moves, and the value it eases to and holds (within 2). */
+  parts: Partial<Record<PartKey, number>>;
+  /** Seconds every part holds its value (within 2). */
+  hold: number;
+}
+
+/**
+ * The bound, as for the acts: once a part reaches its value it stays within 2
+ * of the span from its rest to that value until it is back at rest.
+ */
+export const ACTION_REFERENCE: Partial<Record<ActionName, ActionRef>> = {
+  // TL-P4-25 addendum 1 (6), TL-P4-26 addendum 1: on waking or a nudge one step eases the tuft to 18deg and the head
+  // to -10deg, holds them 0.6 s and eases back (idle's range: tuft -2..20, head -12..2; TL-P4-22 addendum 20)
+  startle: { parts: { tuft: 18, head: -10 }, hold: 0.6 },
+};
+
+/**
+ * Every public member of the engine, and how its motion is checked. `acts`
+ * and `poses` are checked name by name (ACT_REFERENCE, POSE_REFERENCE); an
+ * `action` names its ACTION_REFERENCE row; `script` is a layer script step
+ * (the court's flights, pecks and displays), and `control` moves nothing.
+ * A new public member fails to compile until it is listed here. A `script` or
+ * `control` label is not an exemption: the member must also be on
+ * EXEMPT_MEMBERS (TL-P4-22 addendum 21).
+ */
+export type EngineMember = 'control' | 'script' | 'acts' | 'poses' | { action: ActionName };
+
+export const ENGINE_MEMBERS: Record<keyof BirdEngine, EngineMember> = {
+  speed: 'control',
+  start: 'control',
+  stop: 'control',
+  release: 'control',
+  setPose: 'poses',
+  setSize: 'control',
+  setHome: 'control',
+  snapHome: 'control',
+  look: 'control',
+  nudge: { action: 'startle' },
+  busy: 'control',
+  settled: 'control',
+  act: 'acts',
+  interrupt: 'control',
+  then: 'control',
+  wait: 'control',
+  chirp: 'script',
+  flyTo: 'script',
+  hopTo: 'script',
+  peck: 'script',
+  face: 'script',
+  study: 'script',
+  scribble: 'script',
+  holding: 'script',
+  showOff: 'script',
+  poke: 'script',
+};
+
+/**
+ * The closed allowlist of engine members with no reference row, each with its
+ * reason (TL-P4-22 addendum 21). It only shrinks: engine.test.ts fails if it grows.
+ */
+export const EXEMPT_MEMBERS: Readonly<Partial<Record<keyof BirdEngine, string>>> = {
+  speed: 'control: sets the pace of every motion, moves no part itself',
+  start: 'control: starts the frame loop, moves no part itself',
+  stop: 'control: stops the frame loop, moves no part itself',
+  release: 'control: frees the engine, moves no part itself',
+  setSize: 'control: sets the drawing box, moves no part itself',
+  setHome: 'control: sets the home point the steps fly back to',
+  snapHome: 'control: places the bird at home with no motion',
+  look: 'control: sets where the eyes point, read by the poses',
+  busy: 'control: reports whether a step runs, moves nothing',
+  settled: 'control: reports when the queue is empty, moves nothing',
+  interrupt: 'control: clears the queue, moves nothing',
+  then: 'control: queues a callback, moves nothing',
+  wait: 'control: queues a pause, moves nothing',
+  chirp: 'script: pre-V2 layer step, no reference',
+  flyTo: 'script: pre-V2 layer step, no reference',
+  hopTo: 'script: pre-V2 layer step, no reference',
+  peck: 'script: pre-V2 layer step, no reference',
+  face: 'script: pre-V2 layer step, no reference',
+  study: 'script: pre-V2 layer step, no reference',
+  scribble: 'script: pre-V2 layer step, no reference',
+  holding: 'script: pre-V2 layer step, no reference',
+  showOff: 'script: pre-V2 layer step, no reference',
+  poke: 'script: pre-V2 layer step, no reference',
+};
+
+/** The allowlist's exact names, own keys only, so an inherited name such as `toString` is never listed. */
+export const EXEMPT_NAMES: ReadonlySet<string> = new Set(Object.keys(EXEMPT_MEMBERS));
+
+/** Every engine member whose motion has no reference row, named as `member('name')` or `member: action`. */
+export function unreferencedMembers(
+  members: Readonly<Record<string, EngineMember>>,
+  exempt: ReadonlySet<string> = EXEMPT_NAMES,
+): string[] {
+  const missing: string[] = [];
+  for (const [member, kind] of Object.entries(members)) {
+    if (kind === 'script' || kind === 'control') {
+      if (!exempt.has(member)) missing.push(`${member}: not referenced and not on the allowlist`);
+    } else if (kind === 'acts' || kind === 'poses') {
+      // Only the one dispatcher of a table reaches its rows (act(name), setPose(name)); any other member needs its own.
+      const [dispatcher, names, rows] = kind === 'acts' ? (['act', ACT_NAMES, ACT_REFERENCE] as const) : (['setPose', POSE_NAMES, POSE_REFERENCE] as const);
+      if (member !== dispatcher) missing.push(`${member}: ${kind}, but not the ${kind === 'acts' ? 'act' : 'pose'} dispatcher, so no reference row`);
+      else missing.push(...names.filter((n) => !Object.hasOwn(rows, n)).map((n) => `${member}('${n}')`));
+    }
+    else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
+  }
+  return missing;
 }
 
 const nums = (s: string | null | undefined): number[] => (s ?? '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
