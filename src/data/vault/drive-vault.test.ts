@@ -16,7 +16,7 @@ import { canonicalRecordJson, hashRecordJson } from '../contracts/record-json';
 import { driveError } from '../drive/drive-api';
 import { IDBFactory } from 'fake-indexeddb';
 import { createUploadQueue, type StorageLike, type UploadQueue } from '../upload-queue';
-import { indexedDbUploadStore } from '../upload-store';
+import { indexedDbUploadStore, memoryUploadStore } from '../upload-store';
 import { makeLiveSources, uploadAccount } from '../live';
 import { FakeWorker } from '../fake/fake-worker';
 
@@ -695,6 +695,66 @@ describe('things that arrive late', () => {
     await vault.restore(p.path ?? '');
     await vault.settled();
     expect((await drive.listAll(root)).filter((f) => f.name === 'late.pdf')).toHaveLength(1);
+  });
+
+  /**
+   * The pile goes to the Bin while its only file is still being kept by the queue (not yet sent), so the Bin finds
+   * nothing to hold back; the file then lands and the Bin of the pile itself is still being written.
+   */
+  async function landsAfterTheBin(failFirstBin: boolean, binPileLast: boolean): Promise<{ lateId: string; pile: { id: string; path?: string }; failed: () => boolean; v: DriveVault }> {
+    const base = memoryUploadStore();
+    let kept: () => void = () => undefined;
+    const keeping = new Promise<void>((r) => (kept = r));
+    let letKeep: () => void = () => undefined;
+    const keepGate = new Promise<void>((r) => (letKeep = r));
+    const store = { ...base, add: async (rec: Parameters<typeof base.add>[0], body: Blob) => { kept(); await keepGate; return base.add(rec, body); } };
+    const queue = createUploadQueue({ drive, store });
+    const v = new DriveVault({ drive, rootId: async () => root, runningPiles: () => new Set(), uploads: { queue, account: async () => 'ACCOUNT_A' } });
+    const realTrash = drive.trash.bind(drive);
+    let lateId = '';
+    let failOnce = failFirstBin;
+    let lateBinned: () => void = () => undefined;
+    const binned = new Promise<void>((r) => (lateBinned = r));
+    holdChunks(drive, Promise.resolve(), true, (file) => { lateId = file.id; });
+    let folder = '';
+    drive.trash = async (id) => {
+      if (id === folder && binPileLast) await binned;
+      if (id === lateId && failOnce) {
+        failOnce = false;
+        throw new TypeError('Failed to fetch');
+      }
+      const r = await realTrash(id);
+      if (id === lateId) lateBinned();
+      return r;
+    };
+    const pile = await v.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    await keeping;
+    folder = (await drive.listAll(root)).find((f) => drive.pathOf(f.id, root) === pile.path)?.id ?? '';
+    const trashing = v.trash(pile.path ?? '');
+    letKeep();
+    await trashing;
+    await v.settled();
+    return { lateId, pile, failed: () => failOnce, v };
+  }
+
+  it('a file that lands after its pile is gone goes to the Bin', async () => {
+    const r = await landsAfterTheBin(true, true);
+    expect(r.lateId).not.toBe('');
+    // The first Bin of the late file failed and was tried again.
+    expect(r.failed()).toBe(false);
+    // The file itself is in the Bin, nothing is lost.
+    expect((await drive.listAll(root)).some((f) => f.id === r.lateId)).toBe(false);
+    expect(drive['files'].get(r.lateId)?.trashed).toBe(true);
+  });
+
+  it('a file that lands during a halt is not uploaded again on Undo', async () => {
+    const r = await landsAfterTheBin(false, true);
+    expect(r.lateId).not.toBe('');
+    await r.v.restore(r.pile.path ?? '');
+    await r.v.settled();
+    // One file in Drive, in the pile again: not a second upload with the first left in the Bin.
+    expect([...drive['files'].values()].filter((f) => f.meta.name.startsWith('late') && !f.meta.folder)).toHaveLength(1);
+    expect((await drive.listAll(root)).filter((f) => f.name.startsWith('late') && !f.folder)).toHaveLength(1);
   });
 
   it('a note whose text changed elsewhere can still be renamed, its text kept', async () => {
