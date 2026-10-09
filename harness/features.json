@@ -6304,7 +6304,7 @@
     "id": "c4-parse-once",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "One ownership parse per note per run through the existing parse home: a per-run memo keyed by file id plus the md5 that was read, so a changed note is parsed again.",
     "steps": [
