@@ -66,7 +66,7 @@ export interface RecoveryWatch {
   graced: boolean;
 }
 
-/** A run's own stale deadline: queued from `requestedAt`, a started phase from `phaseAt` (as `isStale`). */
+/** A run's own stale deadline: queued from `requestedAt`, a started phase from `phaseAt`. */
 export function ownDeadline(run: Pick<RunWire, 'phase' | 'requestedAt' | 'phaseAt'>): number {
   return run.phase === 'queued' ? run.requestedAt + QUEUED_STALE_MS : run.phaseAt + RUNNING_STALE_MS;
 }

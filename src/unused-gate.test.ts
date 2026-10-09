@@ -32,4 +32,19 @@ describe('unused-code gate', () => {
     });
     expect([...found].sort()).toEqual(['duplicates src/a.ts one=two', 'files src/dead.ts src/dead.ts', 'types src/a.ts T']);
   });
+
+  it('an export only tests call fails the production unused-code gate', () => {
+    // Tests are entries of the normal pass only, so a helper only they call is a finding of the production pass alone.
+    const normal = findingsOf(report([]));
+    const production = findingsOf(report(['keepFinished']));
+    expect(compare(normal, new Set<string>())).toEqual({ fresh: [], stale: [] });
+    expect(compare(production, new Set<string>()).fresh).toEqual(['exports src/lib.ts keepFinished']);
+    expect(compare(production, new Set(['exports src/lib.ts keepFinished']))).toEqual({ fresh: [], stale: [] });
+  });
+
+  it('the production unused baseline may only shrink', () => {
+    const { fresh, stale } = compare(findingsOf(report([])), new Set(['exports src/lib.ts gone']));
+    expect(fresh).toEqual([]);
+    expect(stale).toEqual(['exports src/lib.ts gone']);
+  });
 });

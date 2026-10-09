@@ -42,7 +42,6 @@ import { accessTokenOf } from './drive-token.js';
 import type { DriveTokenKeeper } from './drive-token.js';
 import type { AppEnv, Env } from './env.js';
 import type { FetchLike } from './google.js';
-import { ACTIVE_PHASES } from '../../src/data/contracts/run-phases.js';
 import type { RunScope, RunWire } from '../../src/data/contracts/run-wire.js';
 import { HttpError } from './errors.js';
 import { jsonBody, personFor, signedInSub, unreadable } from './route-helpers.js';
@@ -94,12 +93,6 @@ export const RUNNING_STALE_MS = 30 * 60 * 1000;
 export const STALE_FAILURE = 'This tidy-up took too long and stopped. Try again.';
 /** The failure a run stuck in `saving` is given: its changes were made, its summary was not saved (TL-P3-22). */
 export const SAVING_FAILURE = "Bower made changes but couldn't save the summary of this tidy-up.";
-
-/** Whether `run` is still going but past its window at `now`: queued from `requestedAt`, a started phase from `phaseAt`. */
-export function isStale(run: Pick<RunWire, 'phase' | 'requestedAt' | 'phaseAt'>, now: number): boolean {
-  if (!ACTIVE_PHASES.includes(run.phase)) return false;
-  return run.phase === 'queued' ? now - run.requestedAt >= QUEUED_STALE_MS : now - run.phaseAt >= RUNNING_STALE_MS;
-}
 
 /** The quota window for `now`: its UTC date. */
 export function utcDay(now: number): string {
