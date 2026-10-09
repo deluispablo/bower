@@ -220,3 +220,26 @@
 - tests changed: runner/test/ask-answer-loop.test.ts (d147b321): `proposeUpdate`'s state cites the offer it files, so
   its news line has a source; same asserts.
 - No `.only` or `.skip` added.
+
+## Round 4c (TL-P4-19 addenda 21 and 22)
+
+- Commits: red a802a1a2, fix 54291695, compatibility rows 8c2dd398.
+- Addendum 21, done; engine untouched. A granted Current-state edit gets one `when: 'rejected'` contribution with one
+  answered row (scripted.ts build, kind `state`, outcome `refused`, the existing shape), its question id from the
+  answer's journal line. `materialize` words it by the edit's failure code: `auth`/`not-found` "Drive would not let
+  Bower change <note>.", any other "Bower couldn't reach Drive to change <note>.", then `STATE_RETRY` ("Bower will try
+  again in the next tidy-up."; questions.ts `stateNotWritten`). A `conflict` (clash, STAYED) shows no row: it re-asks.
+  grounded.ts admits this one contribution shape and does not count it as set aside. `answersStayed` stays clash-only.
+- Red `the same non-clash refusal never starts more runs than the cap, then shows the not-written row` (runner
+  ask-answer-loop) failed: answered rows `[]`, expected the not-written row. Green after the fix.
+- The next tidy-up: a full press with an empty inbox and only your changes is "nothing waiting" (plan.ts admission,
+  unchanged), so the test adds an inbox thing before the next press; that run PATCHes the note once and it lands.
+- Addendum 22, done: note-edit `entryOk(entry, mode)`, `'read'` drops only the uncited rule (strict on write, lenient
+  on read, as `STATE_READ`); run-manifest's `editEntry` reads with it. `applyChanges` and plans keep `'write'`.
+  Red `an old manifest with a sourceless news line still reads` (note-edit.test.ts) failed: guard returned `shape`.
+- Gates: `pnpm check` exit 0 at 8c2dd398 (unit 3905, api 235, runner 259); e2e:fake capabilities phone and desktop
+  16 passed; goldens C04 78, 25 runs 88 (runner suite).
+- tests changed: runner/test/ask-answer-loop.test.ts: one test added; after the red, it adds an inbox thing before
+  the next press (a press with only your changes is "nothing waiting"); same asserts.
+- tests changed: src/data/contracts/note-edit.test.ts: one test added, none changed.
+- No `.only` or `.skip` added.
