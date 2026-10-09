@@ -12,3 +12,17 @@ Sources: WAI-ARIA APG modal dialog pattern (on close, focus returns to the eleme
 
 tests changed: e2e/focus-after-close.spec.ts: added the two tidy-sheet focus-return tests (d-v2-04) and the axe helper; no existing test changed.
 tests changed: src/ui/focus.test.ts: added the `focus returns on close with no timer` group; no existing test changed.
+
+## Fix round 2 (TL-P4-22 addendum 5): a sheet opened from a menu sheet
+
+review: skipped (TL-P4-22)
+
+Source: WAI-ARIA APG modal dialog pattern (focus returns to the invoking element; when it is gone, to a logical place).
+
+- Red f0df8925: the note-page Rename and Move tests failed on `toBeFocused` for "More for Lemon tart"; the file-row tests landed on "Files".
+- Fix a50ccb18, `src/ui/focus.ts` only: a capture `focusin` keeps, for the last control focused in a layer, the opener of that layer. `openerNow` returns that control when it left with its layer (focus on the body), and `returnFocusTo` tries the opener, then the layer's opener, then the heading. Sheet and the screens pick nothing; no timers.
+- The phone's file list holds the keyboard on the tree (the row is its active descendant), so "that row" is the tree.
+- The file-row red asserted a text match on the row; the fix commit changes it to `tree` `toBeFocused`, the real keyboard holder.
+
+tests changed: e2e/focus-after-close.spec.ts: added the four menu-sheet tests (Rename and Move, note page and file row); the file-row assertion corrected from the row text to the tree, which holds the keyboard; no existing test changed.
+tests changed: src/ui/focus.test.ts: added the `a sheet opened from a menu sheet` group; no existing test changed.
