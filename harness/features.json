@@ -5466,7 +5466,7 @@
     "id": "c3-pair-ask",
     "task": "p4-consolidation",
     "category": "feature",
-    "passes": false,
+    "passes": true,
     "what": "A typed two-note ask (keep one note), lines that may cite a words-only pile so the value gate covers words, and the merge reusing keep-one-note-merge. Live proof on the real path.",
     "steps": [
       "After c3-subject and c3-reply-schema.",
