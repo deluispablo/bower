@@ -32,3 +32,5 @@
 Then a Claude delta re-review and a Codex pass on the delta.
 
 **Note:** c4-undo-withdraw also edits `journal.ts` (`removeNow`). Whichever merges second resolves the conflict on its branch.
+
+**The journal.ts overlap rule (the lead, 2026-10-09).** Whichever of c4-retry-fence and c4-undo-withdraw merges second has its own worker resolve the conflict in its own worktree, never by hand in integrate. The worker merges claude/p3, reruns the verify and `pnpm check` under the lock, and then gets a delta review that covers the resolution, plus the Codex pass.
