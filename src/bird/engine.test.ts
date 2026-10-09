@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ACT_NAMES, BirdEngine, POSE_NAMES, type ActName, type EngineOptions } from './engine';
+import { BirdEngine, type ActName, type EngineOptions } from './engine';
 import { Rig, type RigPart } from './Rig';
 import type { Pose } from './Bower';
 import {
@@ -15,6 +15,7 @@ import {
   actProblems,
   fakeFrames,
   readRig,
+  unreferencedMembers,
   type PartKey,
 } from './pose-reference.fixture';
 
@@ -234,13 +235,14 @@ describe("the engine's idle mind", () => {
 
 describe("the engine's named actions", () => {
   it('every engine act has a reference row', () => {
-    const missing: string[] = [];
-    for (const [member, kind] of Object.entries(ENGINE_MEMBERS)) {
-      if (kind === 'acts') missing.push(...ACT_NAMES.filter((n) => !(n in ACT_REFERENCE)).map((n) => `${member}('${n}')`));
-      else if (kind === 'poses') missing.push(...POSE_NAMES.filter((n) => !(n in POSE_REFERENCE)).map((n) => `${member}('${n}')`));
-      else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
-    }
-    expect(missing).toEqual([]);
+    expect(unreferencedMembers(ENGINE_MEMBERS)).toEqual([]);
+  });
+
+  it('a new engine name tagged script but not on the allowlist fails the meta-test', () => {
+    expect(unreferencedMembers({ ...ENGINE_MEMBERS, glide: 'script', preen: 'control' })).toEqual([
+      'glide: not referenced and not on the allowlist',
+      'preen: not referenced and not on the allowlist',
+    ]);
   });
 
   it('the wake startle stays within its reference range', () => {

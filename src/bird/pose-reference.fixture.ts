@@ -16,7 +16,7 @@
  * Blink (5.2 s) is left out.
  */
 import type { Pose } from './Bower';
-import type { ActName, BirdEngine } from './engine';
+import { ACT_NAMES, POSE_NAMES, type ActName, type BirdEngine } from './engine';
 
 export type PartKey =
   | 'dx'
@@ -285,6 +285,17 @@ export const ENGINE_MEMBERS: Record<keyof BirdEngine, EngineMember> = {
   showOff: 'script',
   poke: 'script',
 };
+
+/** Every engine member whose motion has no reference row, named as `member('name')` or `member: action`. */
+export function unreferencedMembers(members: Readonly<Record<string, EngineMember>>): string[] {
+  const missing: string[] = [];
+  for (const [member, kind] of Object.entries(members)) {
+    if (kind === 'acts') missing.push(...ACT_NAMES.filter((n) => !(n in ACT_REFERENCE)).map((n) => `${member}('${n}')`));
+    else if (kind === 'poses') missing.push(...POSE_NAMES.filter((n) => !(n in POSE_REFERENCE)).map((n) => `${member}('${n}')`));
+    else if (typeof kind === 'object' && !ACTION_REFERENCE[kind.action]) missing.push(`${member}: ${kind.action}`);
+  }
+  return missing;
+}
 
 const nums = (s: string | null | undefined): number[] => (s ?? '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
 
