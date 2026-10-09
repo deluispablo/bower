@@ -87,7 +87,14 @@ export interface EngineOptions {
   frame?: (cb: (ts: number) => void) => number;
   cancelFrame?: (id: number) => void;
   random?: () => number;
+  /** The mind may fall asleep after 60 s with no input (perched birds; never a layer's). */
+  sleeps?: boolean;
+  /** `false` pauses the mind's act scheduling (a test seam). */
+  acts?: boolean;
 }
+
+/** The mind's idle acts (TL-P4-25); `look` is wait's own. */
+export type ActName = 'snap' | 'flick' | 'chirp' | 'wing' | 'preen' | 'pause' | 'look';
 
 export interface PeckOptions {
   /** How far the body leans in, the head's angle and the open beak while down. */
@@ -312,8 +319,12 @@ export class BirdEngine {
     if (!this.busy) return Promise.resolve();
     return new Promise((r) => this.idleWaiters.push(r));
   }
+  /** Fires one named idle act. Not built yet (d-v2-07 red). */
+  act(name: ActName): void {
+    void name;
+  }
   /** Queues an action; it runs after the ones before it. */
-  private act(a: Action): this {
+  private enqueue(a: Action): this {
     this.S.queue.push(a);
     return this;
   }
@@ -325,7 +336,7 @@ export class BirdEngine {
 
   /** Runs a callback in the queue, between moves. */
   then(fn: () => void): this {
-    return this.act({
+    return this.enqueue({
       update: () => {
         fn();
         return true;
@@ -333,7 +344,7 @@ export class BirdEngine {
     });
   }
   wait(seconds: number): this {
-    return this.act({ update: (el) => el >= seconds });
+    return this.enqueue({ update: (el) => el >= seconds });
   }
   chirp(d = 0.4): void {
     this.S.chirpT = d;
@@ -357,7 +368,7 @@ export class BirdEngine {
       dur = 1,
       pre = 0,
       go = false;
-    return this.act({
+    return this.enqueue({
       start: () => {
         const T = get();
         x0 = B.x;
@@ -430,7 +441,7 @@ export class BirdEngine {
       dur = 0.26,
       landed = -1;
     const hd = 0.26;
-    return this.act({
+    return this.enqueue({
       start: () => {
         const T = get();
         x0 = B.x;
@@ -484,7 +495,7 @@ export class BirdEngine {
     const C = this.C;
     const { depth = 34, head = 24, jaw = 20, upPitch = -8, upHead = -10, lean = 0.16, bite = 0.3, end = 0.55, kick = 1.2 } = o;
     let bit = false;
-    return this.act({
+    return this.enqueue({
       update: (el) => {
         if (el < lean) {
           C.pitch.t = depth;
@@ -513,7 +524,7 @@ export class BirdEngine {
 
   /** Turns to face right (1) or left (-1) with a small hop, if it is not already. */
   face(dir: 1 | -1): this {
-    return this.act({
+    return this.enqueue({
       update: () => {
         if (this.B.face !== dir) this.turn();
         return true;
@@ -525,7 +536,7 @@ export class BirdEngine {
   study(seconds = 1.1): this {
     const C = this.C;
     const angles = [-18, 6, -10, 12];
-    return this.act({
+    return this.enqueue({
       update: (el) => {
         const i = Math.min(angles.length - 1, Math.floor((el / seconds) * angles.length));
         C.head.t = angles[i] ?? 0;
@@ -546,7 +557,7 @@ export class BirdEngine {
   scribble(seconds: number, onStroke?: () => void, every = 0.45): this {
     const C = this.C;
     let next = 0;
-    return this.act({
+    return this.enqueue({
       update: (el) => {
         C.pitch.t = 14;
         C.head.t = 20 + 7 * Math.sin(el * 26);
@@ -584,7 +595,7 @@ export class BirdEngine {
     let c1 = false,
       c2 = false,
       c3 = false;
-    return this.act({
+    return this.enqueue({
       start: () => {
         if (turn) B.face = 1;
         if (swell !== undefined && wide !== undefined && swell !== 1) B.girth = (wide - 1) / (swell - 1);
