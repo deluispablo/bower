@@ -13,7 +13,17 @@ afterEach(({ task }) => {
 // Each test's CPU time (this process, user plus system), written when the file's tests end for check-harness to report
 // (scripts/harness-rules.mjs cpuReport). A report only: it never fails a test, since it moves with the machine. The
 // api tests run in the Workers runtime, which has no process CPU clock: they report nothing.
-if (typeof process !== 'undefined' && typeof process.cpuUsage === 'function') {
+/** Whether this runtime can read its process CPU time (the Workers runtime has the function but not the clock). */
+const hasCpuClock = (): boolean => {
+  try {
+    process.cpuUsage();
+    return true;
+  } catch {
+    // expected: the runtime has no CPU clock, so nothing is reported.
+    return false;
+  }
+};
+if (hasCpuClock()) {
   const cpu: Array<{ name: string; ms: number }> = [];
   let began = process.cpuUsage();
   beforeEach(() => {
