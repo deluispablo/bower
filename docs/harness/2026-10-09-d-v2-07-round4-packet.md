@@ -36,3 +36,12 @@
 3. A notes addendum ("Startle round (addendum 20)") with `tests changed:` lines.
 
 Then a Claude delta review, a Codex pass on the delta, and the designer's re-check of the startle.
+
+## Addendum 21 (main 39519641): the script-step exemption is a closed list
+
+- **The allowlist.** The meta-test keeps an explicit allowlist of the exact layer choreography names: flyTo, peck, showOff, poke, and the rest. Each entry has a one-line reason ("pre-V2, no reference").
+  - A `script` or `control` label on a member is not an exemption.
+  - Any new engine name that is neither referenced nor on the list fails.
+- **Steps that poses or reactions play.** If a pose or a reaction plays a step, that step has a row through the pose or reaction. 24a's composite steps use exempt steps only through rows carrying the designer's values.
+- **The list only shrinks,** like the baselines. A check fails if it grows.
+- **Red:** `a new engine name tagged script but not on the allowlist fails the meta-test`.
