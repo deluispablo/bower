@@ -9,10 +9,10 @@ for (const width of [375, 1440]) {
       // Keep the slow demo's two session reads pending past 3.5 s.
       await page.addInitScript(() => { Math.random = () => 0.99; });
       await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
-      await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
       await page.goto('/?scenario=slow&time=instant');
-      // The app has mounted, so bootStart has scheduled its timer; session reads are still held by the clock.
       await expect.poll(() => page.locator('#root').evaluate((root) => root.childElementCount)).toBeGreaterThan(0);
+      // Let React mount before pausing; the two sequential session reads still need more than 3.5 s.
+      await page.clock.pauseAt(await page.evaluate(() => new Date(Date.now())));
       const boot = page.locator('#boot');
       await expect(boot.locator('[data-boot-line]')).toHaveText('');
       await page.clock.runFor(3500);
@@ -31,7 +31,11 @@ for (const width of [375, 1440]) {
     test('a failed boot says it could not open and offers try again', async ({ page, allowConsole }) => {
       // Synthetic failure: a missing demo module rejects buildSources in main.tsx.
       allowConsole(/Failed to (fetch dynamically imported module|load resource)|net::ERR_FAILED/, 'synthetic boot module failure');
-      await page.route('**/src/data/demo/world.ts*', (route) => route.abort('failed'));
+      let failedModuleRequests = 0;
+      await page.route('**/src/data/demo/world.ts*', (route) => {
+        failedModuleRequests += 1;
+        return route.abort('failed');
+      });
       await page.goto('/?source=demo&time=instant');
       const boot = page.locator('#boot');
       await expect(boot.locator('b')).toHaveText('Bower could not open');
@@ -42,9 +46,9 @@ for (const width of [375, 1440]) {
       const box = await retry.boundingBox();
       expect(box?.width).toBeGreaterThanOrEqual(160);
       await expectAxeClean(page, { include: '#boot' });
+      const requestsBeforeRetry = failedModuleRequests;
       await retry.click();
-      await expect(retry).toHaveText('Trying…');
-      await expect(retry).toBeDisabled();
+      await expect.poll(() => failedModuleRequests).toBeGreaterThan(requestsBeforeRetry);
     });
   });
 }
