@@ -6141,7 +6141,7 @@
     "id": "v2-perched-bower",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "One engine hook shared by BowerLayer and PoseBower (perched use, fixed home); presence gains a minor flag that never takes the turn; engine gains setPose and a perched flag; Rig exposes b-carry. src/bird only.",
     "steps": [
