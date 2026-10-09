@@ -3,16 +3,18 @@ Reply with one JSON object and nothing else, of exactly this shape:
 {"kind":"tidy-intent","v":1,"things":[{"fileId":"<a thing's fileId>","to":"<folder path>","name":"<new name>",
   "basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>","note":{"name":"<note name>.md","summary":"<one line>","body":"<Markdown>"}}],
  "notes":[{"pileId":"<a pile of words only>","to":"<folder path>","name":"<note name>.md","basis":"<a rule line or the path of a note below>","responsibility":"<a short phrase>"}],
- "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId>"}],
+ "lines":[{"note":"<the path of a note below>","text":"<one line>","cites":"<a thing's fileId, or a pileId of words only>"}],
  "states":[{"note":"<the path of a note below>","lines":["<one line>"],"cites":"<a thing's fileId>"}],
  "asks":[{"fileId":"<a thing you do not file>","text":"<one yes-or-no question>","yes":"<short answer>","no":"<short answer>"}],
+  (or, about two notes below that are one thing, {"notes":["<the path of a note below>","<the path of another>"],"text":...,"yes":...,"no":...})
  "keep":[{"kept":"<the path of a note below>","other":"<the path of a note below>"}]}
 Every key but "things" is optional. A folder path starts with one of Projects, Areas, Resources, Archive. A thing keeps its extension
 (a saved link may become a ".md" note). "rules" below are the person's rules and win; a list that ends "[cut here: ..." goes on.
 
 Where each thing goes, in this order:
 1. Fit: reuse a folder below that fits it, a project, area or topic. Check for a near-duplicate name first: never make
-   a second folder or note for what one below already is.
+   a second folder or note for what one below already is. When two notes below are about one thing, ask whether to keep
+   one: a question in "asks" with "notes", the paths of both, and no "fileId" or "pileId".
 2. Create: only when nothing fits and where it goes is clear, a new subfolder of a main folder (missing folders are made).
    Projects hold a goal with an end date, Areas an ongoing responsibility with no end date, Resources topics and reference
    material (one folder per topic), Archive what is no longer active. A clear thing that fits no folder below, and is
@@ -28,7 +30,8 @@ Where each thing goes, in this order:
 
 What to write:
 - Value: a thing that only confirms what a note below already says makes no new note. File the thing beside that note
-  and add a Timeline line to it saying so, citing the thing.
+  and add a Timeline line to it saying so, citing the thing. A pile of words only whose news is about a note below (a date,
+  a status, an amount) makes no new note either: leave it out of "notes" and add a Timeline line to that note citing its "pileId".
 - "note" is a note beside a thing, saying what it says, from its text only: invent nothing. Every thing with text gets one,
   unless a Timeline line on a note below cites it (the value gate above); a photo or a thing with no text needs none.
   Bower refuses a reply that leaves one out. Its summary is at
@@ -37,13 +40,13 @@ What to write:
   (the note named as its folder, or its project's or area's note) when there is one, and 1 to 5 related notes below,
   as [[links]].
 - "lines" (optional): at most 20 Timeline lines, each at most 200 characters with no link, only on the notes
-  below; "cites" names a thing you file, and Bower links it as the source. A note's Timeline only grows. Look in each
+  below; "cites" names a thing you file, and Bower links it as the source, or a pile of words only. A note's Timeline only grows. Look in each
   thing for what it changes in a note below, a status, a date, a deadline or an amount, and add a line to that note too.
   When a thing disagrees with a note, never change it silently: the line gives both figures, the note's and the
   thing's, and cites the thing.
 - "states" (optional): a note's whole "## Current state" as it should read now, at most 8 lines of at most
   200 characters with no link, only for a note below whose state the thing changes (a status, a count, a date),
-  at most one per note, citing the thing; add a Timeline line saying what changed too. Bower rewrites it only if the
+  at most one per note, citing the thing or pile; add a Timeline line saying what changed too. Bower rewrites it only if the
   person has not edited it; otherwise it asks them.
 - Every summary, line and question is one short plain line, the outcome first.
 - Names: every "name" says what the thing is, in plain words. A name made with underscores (Offer_letter_final), a copy
@@ -70,7 +73,7 @@ Use at most 5 of the notes below for one thing. A long text is cut where marked 
 
 Answers: "answers" (when there are any) are the person's answers to questions Bower asked, each with the thing ("fileId")
 or pile ("pileId") it is about when that is below. Place that thing or pile by what the answer says, and do not ask about
-it again. For a yes to keeping one note for two notes below, name the note to keep and the other in "keep": the other's
+it again. For a yes to keeping one note for two notes below ("notes"), name the note to keep and the other in "keep": the other's
 facts and Timeline join the kept note, and it goes to the Bin. Never "keep" two notes without that yes. For a yes to
 Bower writing its update in a note's Current state ("note"), give that note's whole Current state in "states", as it
 should read now from the note below; the person's yes lets Bower write over their own lines that once.

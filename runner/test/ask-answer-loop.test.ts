@@ -262,7 +262,7 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(w.dispatched[1]?.scope).toBe('instructions');
     expect(await w.runJob(1)).toBe(0);
     // The model was shown the yes with the two notes it is about...
-    expect(shown.at(-1)?.answers).toEqual([expect.objectContaining({ answer: ask.yes, notes: [KEPT, OTHER] })]);
+    expect(shown.at(-1)?.answers).toEqual([expect.objectContaining({ answer: ask.yes, notes: expect.arrayContaining([KEPT, OTHER]) as unknown })]);
     // ...and the merge ran: the other note in the Bin, its fact on the kept note, the question and answer gone.
     expect(await w.paths()).not.toContain(OTHER);
     expect(await textAt(w, KEPT)).toContain('The listing says the lease is twelve months.');

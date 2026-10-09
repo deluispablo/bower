@@ -7,7 +7,7 @@ import type { DriveFile } from '../drive/drive-api';
 import type { EffectV2, OperationV2, ReportContribution, SeenFile, Target } from '../contracts/run-manifest';
 import { savedLinkKey } from '../contracts/note-edit';
 import { md5Hex } from '../contracts/hashes';
-import { join, nameOf } from '../tree';
+import { join, nameOf, parentOf } from '../tree';
 import { PARA_ROOTS } from '../types';
 import { sha256 } from '../vault/hashes';
 import { SYSTEM, isRunnerFile } from '../vault/layout';
@@ -65,10 +65,11 @@ export function grounded(manifest: RunManifest): boolean {
       else applied.set(id, [...(applied.get(id) ?? []), c]);
     }
     const required = c.requires.flatMap((id) => ops.get(id)?.effect ?? []);
-    // A filed row's place is its thing's move's, or its note's create's; its note the one made or edited, or in that place.
+    // A filed row's place is its thing's move's, or its note's create's, or (a pile of words carried as Timeline lines)
+    // its note's edit's; its note the one made or edited, or in that place.
     const move = required.find((e) => e.kind === 'move' && members.has(e.before.fileId));
     const made = required.find((e) => e.kind === 'create-text' || e.kind === 'edit-text');
-    const to = move?.kind === 'move' ? pathOf(move.parent) : made?.kind === 'create-text' ? pathOf(made.parent) : null;
+    const to = move?.kind === 'move' ? pathOf(move.parent) : made?.kind === 'create-text' ? pathOf(made.parent) : made?.kind === 'edit-text' ? parentOf(made.path) : null;
     for (const r of c.value.filed) {
       if (to === null || r.to !== to) return false;
       if (r.note !== undefined && r.note !== (made ? madeAt(made) : join(r.to, nameOf(r.note)))) return false;
