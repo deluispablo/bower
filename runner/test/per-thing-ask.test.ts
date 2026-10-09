@@ -184,34 +184,37 @@ describe('per-thing asks (TL-P4-08 addendum 4)', () => {
 
   const good = intentReply((_ctx, id) => filed(id));
 
-  it('every refusal kind has a bad reply here', () => {
-    expect(Object.keys(bad).sort()).toEqual(Object.keys(REFUSALS).sort());
-  });
+  // The name stays the one the harness entries verify; each kind is a test of its own inside it.
+  describe('every validation refusal is retried once with its reason', () => {
+    it('every refusal kind has a bad reply here', () => {
+      expect(Object.keys(bad).sort()).toEqual(Object.keys(REFUSALS).sort());
+    });
 
-  // One test for each kind (vitest's test.for), so each takes its own few milliseconds and names itself when it fails.
-  it.for(Object.keys(bad) as RefusalKind[])('a %s refusal is retried once with its reason', async (kind) => {
-    const c = await offerAndFlat();
-    const calls: ClaudeCall[] = [];
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const run = await runWithClaude(c, answering([bad[kind], good], calls));
-    // Refused for this kind, asked once more with the reason, and the second reply files the pile.
-    const retried = errors.mock.calls.map((a) => a.map(String).join(' ')).find((l) => /asking once more/.test(l)) ?? '';
-    expect({ kind, retried: retried.includes(`(${kind})`) }).toEqual({ kind, retried: true });
-    expect({ kind, calls: calls.length }).toEqual({ kind, calls: 2 });
-    expect({ kind, told: /Your reply was refused: .+\. Reply again/.test(calls[1]?.input ?? '') }).toEqual({ kind, told: true });
-    expect({ kind, code: run.code, filed: 'Projects/Flat hunt/Wrenfield Road, kitchen.jpg' in run.after }).toEqual({ kind, code: 0, filed: true });
-    errors.mockRestore();
-  });
+    // One test for each kind (vitest's test.for), so each takes its own few milliseconds and names itself when it fails.
+    it.for(Object.keys(bad) as RefusalKind[])('a %s refusal is retried once with its reason', async (kind) => {
+      const c = await offerAndFlat();
+      const calls: ClaudeCall[] = [];
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const run = await runWithClaude(c, answering([bad[kind], good], calls));
+      // Refused for this kind, asked once more with the reason, and the second reply files the pile.
+      const retried = errors.mock.calls.map((a) => a.map(String).join(' ')).find((l) => /asking once more/.test(l)) ?? '';
+      expect({ kind, retried: retried.includes(`(${kind})`) }).toEqual({ kind, retried: true });
+      expect({ kind, calls: calls.length }).toEqual({ kind, calls: 2 });
+      expect({ kind, told: /Your reply was refused: .+\. Reply again/.test(calls[1]?.input ?? '') }).toEqual({ kind, told: true });
+      expect({ kind, code: run.code, filed: 'Projects/Flat hunt/Wrenfield Road, kitchen.jpg' in run.after }).toEqual({ kind, code: 0, filed: true });
+      errors.mockRestore();
+    });
 
-  it('a structured output beside a bad result is refused and asked again', async () => {
-    const c = await offerAndFlat();
-    // The reply is read from the result text only (TL-P4-14 addendum 22): claude gets no --json-schema, and a
-    // structured_output beside a bad result is not taken as the reply; the result is refused and asked again.
-    const calls: ClaudeCall[] = [];
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const structured = (_ctx: Context, id: Id): string => JSON.stringify({ ...(JSON.parse(envelope('Here is my plan.')) as object), structured_output: filed(id) });
-    const run = await runWithClaude(c, answering([structured, good], calls));
-    expect({ calls: calls.length, code: run.code, schema: calls.some((call) => call.args.includes('--json-schema')) }).toEqual({ calls: 2, code: 0, schema: false });
-    expect(calls[1]?.input).toContain(`Your reply was refused: ${REFUSALS.notJson}. Reply again`);
+    it('a structured output beside a bad result is refused and asked again', async () => {
+      const c = await offerAndFlat();
+      // The reply is read from the result text only (TL-P4-14 addendum 22): claude gets no --json-schema, and a
+      // structured_output beside a bad result is not taken as the reply; the result is refused and asked again.
+      const calls: ClaudeCall[] = [];
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const structured = (_ctx: Context, id: Id): string => JSON.stringify({ ...(JSON.parse(envelope('Here is my plan.')) as object), structured_output: filed(id) });
+      const run = await runWithClaude(c, answering([structured, good], calls));
+      expect({ calls: calls.length, code: run.code, schema: calls.some((call) => call.args.includes('--json-schema')) }).toEqual({ calls: 2, code: 0, schema: false });
+      expect(calls[1]?.input).toContain(`Your reply was refused: ${REFUSALS.notJson}. Reply again`);
+    });
   });
 });
