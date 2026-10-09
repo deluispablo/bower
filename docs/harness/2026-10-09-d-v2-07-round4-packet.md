@@ -57,3 +57,9 @@ Then a Claude delta review, a Codex pass on the delta, and the designer's re-che
    - Red: `an inherited name like toString is not on the allowlist`.
 2. **The jump bound** (`engine.test.ts:285`) waits for the designer's answer, sent through the lead. The lead's lean: a smoothness rule (speed never jumps between frames) with a 6° ceiling. Until the number arrives, leave the test as it is; the number will be added to this round.
 3. **Method:** a worker may not loosen its own red. A red's numbers are contract, and a `tests changed:` line does not cover changing them. This is now on the WORKER checklist, and reviewers check it.
+
+## TL-P4-25 addendum 5 (main 8a6a8d56): the jump bound, from the designer
+
+This replaces both 3 and 6. In `engine.test.ts:285`, test by move class:
+- **Returns** (a step's head easing back, the gaze settling after a step) are ease-in-out. Speed starts and ends near 0, changes by at most 1.5°/frame between frames, and never goes over 6°/frame.
+- **Snaps and the startle rise** are exempt from the ramp. They stay at or below 6°/frame and land with no overshoot past 2°.
