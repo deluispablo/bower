@@ -5601,7 +5601,7 @@
     "id": "c2-write-once",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Every write (operations, run records, report files) carries bowerOp, reconciles by the stamp and confirms from the answer's checksum; the six recovery methods and their text checks go.",
     "steps": [
       "One write-once path.",
