@@ -313,3 +313,47 @@ describe('c2-create-by-id: a run makes each thing by its reserved id', () => {
   });
 });
 
+
+/**
+ * c4-create-landed (TL-P4-24 addenda 9 and 10), the reconcile guard: a run's recovery asks write-once's `happened`, never
+ * `landed`. A write of this run whose answer was lost and that the person then moved elsewhere in Drive did run, so it
+ * is reported applied, and nothing is sent to it again: sending it again would undo what the person did since.
+ */
+describe('c4-create-landed: a run reconciles on whether its write happened', () => {
+  /** Another device moves `id` into another folder, keeping what Bower set on it (a move in Drive itself). */
+  const moveAway = (drive: FakeDrive, id: string): void => {
+    const files = storedOf(drive) as unknown as Map<string, { meta: DriveFile }>;
+    const stored = files.get(id);
+    const other = [...files.values()].find((f) => f.meta.folder && f.meta.id !== id && !stored?.meta.parents.includes(f.meta.id));
+    if (stored && other) stored.meta = { ...stored.meta, parents: [other.meta.id] };
+  };
+
+  it('after a lost answer and an outside move the run reports applied and sends nothing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    for (const kind of ['move', 'create'] as const) {
+      const seen: { lost?: FencedCall; target?: string } = {};
+      const picks = (call: FencedCall): boolean => (kind === 'move' ? call.op === 'update' && call.patch.addParent !== undefined : call.op === 'create-text' && call.appProperties?.bowerOp !== undefined);
+      const { manifest, calls, chain } = await applied(
+        (call) => {
+          if (seen.lost !== undefined || !picks(call)) return 'pass';
+          seen.lost = call;
+          return 'lose-reply';
+        },
+        (call, drive) => {
+          if (call !== seen.lost) return;
+          seen.target = call.op === 'update' ? call.id : call.op === 'create-text' ? call.reserved : undefined;
+          // It landed; before Bower reads it back, the person moves it elsewhere in Drive.
+          if (seen.target !== undefined) moveAway(drive, seen.target);
+        },
+      );
+      const { lost: sent, target: t } = seen;
+      if (sent === undefined || t === undefined) throw new Error(`no ${kind} lost its answer`);
+      const op = manifest.operations.find((o) => (o.effect.kind === 'move' ? o.effect.before.fileId === t : o.effect.kind === 'create-text' && sent.op === 'create-text' && o.effect.name === sent.name));
+      expect({ kind, phase: chain.at(-1)?.phase, n: chain.length }).toEqual({ kind, phase: 'done', n: chain.length });
+      expect({ kind, state: chain.at(-1)?.outcomes.find((o) => o.operationId === op?.operationId)?.state }).toEqual({ kind, state: 'applied' });
+      // Nothing more sent to it, nor made again in its place.
+      const after = calls.slice(calls.indexOf(sent) + 1);
+      expect(after.filter((c) => ('id' in c && c.id === t) || (c.op === 'create-text' && sent.op === 'create-text' && c.name === sent.name && c.parentId === sent.parentId))).toEqual([]);
+    }
+  });
+});
