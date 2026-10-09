@@ -437,3 +437,4 @@ P3-9 is closed.
 - c2-create-by-id round 5 merged (red 3e0f19fe, fix 2992ce6e; one Drive failure table; prod -80; phone what-failed on the Bower tab; check green). Deviations asked: authError=wait, notFound=retry. runner/src/drive.ts:359 classification left for after the retention round. P4-37e check dispatched.
 - Retention round 4 merged (red 2d6e4480, fix d1711a0a; 24 h rule; failure path 59→40 calls; prod -29; check green). P4-38c and P4-37e checks dispatched.
 - Table deviations accepted with bounds (404 once then permanent); runner drive.ts:359 joins the table in a round 6 after P4-37e.
+- P4-38c BLOCK (retention round 4): the 24 h rule can bin a person-made folder in .bower/runs (no run-id or Bower mark check, records.ts:101). Lead asked: (a) bowerRun stamped at create, (b) run-id name shape.
