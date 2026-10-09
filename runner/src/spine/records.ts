@@ -27,30 +27,42 @@ const RECORD_FOLDERS: readonly string[] = [SYSTEM.dir, RUNS_NAME, PILES_NAME];
  * `runId`: the one run whose folder is gone into, so a run's own records are read from its folder alone (TL-P3-21
  * point 3); without it, every run's folder is (retention).
  */
-export function runnerReads(drive: RunnerReads, runId?: string): RecordReads {
+export function runnerReads(drive: RunnerReads, runId?: string): RecordReads & { asListed(): RecordReads } {
   // The listing taken last, kept while no write has been sent since: the run's own folders are read again and again
   // between writes (is it done, where is it up to, is the record there), and nothing of ours changed them meanwhile.
   // After this runner's own writes it is brought up to date from their answers (`patched`) rather than read again.
   let kept: { rootId: string; at: number; files: DriveFile[]; walked: Map<string, boolean> } | null = null;
-  return {
-    listAll: async (rootId) => {
-      const at = drive.generation;
-      if (kept && at !== undefined && kept.rootId === rootId) {
-        if (kept.at === at) return [...kept.files];
-        const changes = drive.changesSince?.(kept.at);
-        const files = changes ? patched(kept.files, kept.walked, changes, runId) : null;
-        if (files) {
-          kept = { ...kept, at, files };
-          return [...files];
-        }
-      }
-      const files = await listRecordFolders(drive, rootId, runId);
-      kept = at === undefined || drive.generation !== at ? null : { rootId, at, files, walked: walkedBy(rootId, files, runId) };
-      return [...files];
-    },
+  /** The kept listing, brought up to date when the adapter's answers allow; null when it is not current. */
+  const current = (rootId: string): DriveFile[] | null => {
+    const at = drive.generation;
+    if (!kept || at === undefined || kept.rootId !== rootId) return null;
+    if (kept.at === at) return [...kept.files];
+    const changes = drive.changesSince?.(kept.at);
+    const files = changes ? patched(kept.files, kept.walked, changes, runId) : null;
+    if (!files) return null;
+    kept = { ...kept, at, files };
+    return [...files];
+  };
+  const listAll = async (rootId: string): Promise<DriveFile[]> => {
+    const now = current(rootId);
+    if (now) return now;
+    const at = drive.generation;
+    const files = await listRecordFolders(drive, rootId, runId);
+    kept = at === undefined || drive.generation !== at ? null : { rootId, at, files, walked: walkedBy(rootId, files, runId) };
+    return [...files];
+  };
+  const reads: RecordReads = {
+    listAll,
     // Records are canonical JSON written as UTF-8 text, so their text gives their exact bytes back.
     readBytes: async (id) => new TextEncoder().encode(await drive.readText(id)),
     get: (id, opts) => drive.get(id, opts),
+  };
+  return {
+    ...reads,
+    // The run's listing as it last read it, never listed again (retention at a run's end): after a write whose answer
+    // never came (a refused report), the folders it holds are still those it read, and every write that follows is
+    // checked by its fence against what was read (`stillAsSeen`). Lists only when nothing was listed yet.
+    asListed: () => ({ ...reads, listAll: async (rootId) => current(rootId) ?? (kept?.rootId === rootId ? [...kept.files] : listAll(rootId)) }),
   };
 }
 

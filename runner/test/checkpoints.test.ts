@@ -331,8 +331,12 @@ describe('runner checkpoints', () => {
       const first = firstCheckpoint(manifest, m.hash, mark, AT + i);
       const c0 = await canonical(first);
       await records.put(w, where, checkpointName(0, c0.hash), c0.text);
-      // Still going, or from before the stamp: no stamp, so never counted nor let go of.
-      if (unfinished.has(i)) continue;
+      // Still going, made within the last 24 h: no stamp, so never counted nor let go of.
+      if (unfinished.has(i)) {
+        const going = (await drive.listAll(root)).find((f) => f.folder && f.name === manifest.runId);
+        drive.setTimes(going?.id ?? '', AT + i, AT + i);
+        continue;
+      }
       // Finished in a scrambled order, so the newest are told by when they finished, not by their names.
       const endedAt = AT + 1000 + ((i * 7) % 25);
       const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: endedAt });
