@@ -5788,5 +5788,31 @@
     ],
     "verify": "pnpm exec vitest run src/harness-git.test.ts src/docs.test.ts -t \"a branch commit with no compatibility row fails the check under a no-commit merge|every history reader takes its tips from the one helper\"",
     "note": "TL-P4-17 addendum 8 (main 96f1fafc); defect integrate-misses-branch-commits. Red: a fixture repo whose branch commit lacks its compatibility row, under a no-commit merge. Starting model: bower-implementer."
+  },
+  {
+    "id": "c3-retention-race",
+    "task": "p4-consolidation",
+    "category": "data",
+    "passes": false,
+    "what": "Retention lists each picked run folder just before its own Bin, not all three first, so a person moving an item into a picked folder in between is seen on the closest listing; no extra Drive call.",
+    "steps": [
+      "A folder whose child loses its mark between picks is kept.",
+      "The 25-run golden stays 88 calls."
+    ],
+    "verify": "pnpm -C runner exec vitest run -t \"each run folder is listed just before its own Bin|a picked folder that gains an unmarked child before its turn is kept\"",
+    "note": "Stage 3 carry-over (docs/harness/2026-10-09-stage3-carryover.md; P4-38e minor; lead 2026-10-09: touches data, not polish). runner/src/spine/retention.ts:126 clean() lists all picks before any Bin. Starting model: bower-escalated (it bins). Goldens: C04 78, 25-runs 88 never rise."
+  },
+  {
+    "id": "c3-reservation-worker",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "what": "The Worker template reserves and keeps its ids through the write-once home, with Durable Object storage as a third keeper behind the write-once port; api/src/vault.ts leaves the reservation allowlist.",
+    "steps": [
+      "The Worker template retried after a lost answer makes one file per intent.",
+      "api/src/vault.ts is no longer on the reservation allowlist."
+    ],
+    "verify": "pnpm -C api exec vitest run -t \"the Worker template retried after a lost answer makes one file per intent|the Worker keeps reserved ids in Durable Object storage through the write-once port\"",
+    "note": "TL-P4-17 addendum 3 (main 35989307): api/src/vault.ts:388,408 keeps ids across requests; same rule, not a batch site. After c3-reservation-upload. Starting model: bower-escalated. Subrequest budget (TL-P4-11) must hold."
   }
 ]
