@@ -6311,7 +6311,7 @@
       "A run parses each unchanged note at most once.",
       "A note whose md5 changed is parsed again."
     ],
-    "verify": "pnpm exec vitest run src/data -t \"each unchanged note is parsed at most once per run|a note changed during the run is parsed again\"",
+    "verify": "pnpm exec vitest run src/data/contracts/parse-once.test.ts -t \"each unchanged note is parsed at most once per run|a note changed during the run is parsed again|across a whole attempt with piles, each Drive-read text is parsed at most once\"",
     "note": "TL-P4-22 addendum 18 (main 5083a711); split from c4-test-timers (P4-52 BLOCK b1; load-timeouts diagnosis b1, 13 parseOwnership call sites, ~850 parses in the size-cap run). Escalated. After the TL-P4-24 entries. Red: a spy counting at most one parse per unchanged note per run. Packet to write. Packet 2026-10-09-c4-parse-once-packet.md (written); Codex contract sign-off (TL-P4-28 ruling 1).",
     "review": "P4-65 PASS"
   },
