@@ -466,3 +466,4 @@ P3-9 is closed.
 - c3-planner-split part 2 merged (a7c2ee04, P4-45c PASS, net -381); part 3 dispatched (split, op-id wire field, last capture tie).
 - Addendum 4 (main 49fb0270): op id + line accepted as the ordinal among the op's own lines; part 3's line is 'counted from the end of the Timeline' (a note position) → change in the P4-45d fix round. P4-45d running.
 - c3-planner-split part 3 fix round blocked: line ordinal has no anchor in the note (no per-line op); lead asked (options 1-4). No worker running.
+- Planner-split smoke prep: four suites green at b9c2674d (check: app 3858, api 234, runner 236, harness 441/449; e2e 226; e2e:fake 257; pwa 4). main moved to a0a0c1a7 (docs-only beyond b9c2674d) and backed up (remote verified a0a0c1a7). SHA sent to the lead for deploy.
