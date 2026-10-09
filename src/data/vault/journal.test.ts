@@ -165,6 +165,39 @@ describe('when Drive does not answer', () => {
     expect((await journal.list()).map((r) => r.what)).toEqual(['one']);
   });
 
+  it('an archived journal line is still recovered exactly once', async () => {
+    const archive = (await drive.createFolder(changes, 'archive')).id;
+    journal = new Journal(drive, { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder) }, 'device-a');
+    const real = drive.createText.bind(drive);
+    let lose = true;
+    // The line lands and its answer is lost: it waits in the outbox.
+    drive.createText = async (parent, name, text, props) => {
+      const f = await real(parent, name, text, props);
+      if (lose) {
+        lose = false;
+        throw new TypeError('Failed to fetch');
+      }
+      return f;
+    };
+    const one = await journal.record('move', 'one');
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toContain(one.id);
+    // A tidy-up archives it, stamping its own operation over the line's bowerOp.
+    const landed = (await drive.listAll(changes)).filter((f) => !f.folder);
+    expect(landed).toHaveLength(1);
+    const line = landed[0];
+    if (!line) throw new Error('no line');
+    await drive.update(line.id, { addParent: archive, removeParent: changes, appProperties: { bowerOp: 'RUN_STAMP' } });
+    const read = vi.spyOn(drive, 'readText');
+    await journal.record('move', 'two');
+    // Found by its own key, which the archive move kept: never sent again, nor read back by its name and fields.
+    const lines = (await drive.listAll(changes)).filter((f) => !f.folder);
+    expect((await drive.get(line.id)).appProperties).toMatchObject({ bowerLine: one.id, bowerOp: 'RUN_STAMP' });
+    expect(lines.filter((f) => f.appProperties?.bowerLine === one.id)).toHaveLength(1);
+    expect(lines).toHaveLength(2);
+    expect(read).not.toHaveBeenCalled();
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+  });
+
   it('outbox: a line whose answer was lost is not sent twice', async () => {
     const real = drive.createText.bind(drive);
     let lose = true;
