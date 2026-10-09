@@ -488,3 +488,4 @@ c3-done-harness-paths	2c906fd88093e0d5	2026-10-09	red (fixed in b2222dd5)
 c3-branch-cleanup	d4a1350c7af72e3d	2026-10-09	red (fixed in c8f43681)
 c3-planner-split	fc8aa32a0e6ea2d2	2026-10-09	known-green: red at f9b658c6/c1de99be (/tmp/c3plan-handred*.log); green at a5719afb
 c3-note-sections	dd52f59d42e4d429	2026-10-09	red (fixed in 8233a111)
+c3-design-gate	5b1b929d75b55243	2026-10-09	red (fixed in fc044c95)

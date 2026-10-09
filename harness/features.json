@@ -5983,7 +5983,7 @@
     "id": "c3-design-gate",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "features.json gains optional ui (boolean) and design (\"verified\") fields; harness-rules and done.sh refuse passes for a ui entry without design: \"verified\", like the review PASS for escalated entries.",
     "steps": [
       "A ui entry without design: \"verified\" cannot pass.",
