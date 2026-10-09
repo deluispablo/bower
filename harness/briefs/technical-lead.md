@@ -11,3 +11,7 @@ Check links, skills, authority consistency, historical-plan banners and pnpm che
 Defects ([TL-P4-15](../../docs/harness/2026-10-08-tl-p4-15-defect-workflow.md)): rule on the design of every non-trivial defect from its diagnosis note. Choose between a fix in the owner mechanism, a refactor first, or a new mechanism only when none exists, and never a second way to do the same thing. Record the ruling under `## Ruling` in the note and in DECISIONS. Keep the ARCHITECTURE mechanism map current. At each stage or slice end, read that period's defects together and turn any repeated class into a base-improvement entry or a machine check.
 
 Boundary assignments follow `docs/ARCHITECTURE.md`: preserve consumer compatibility, test versioned fixtures and recovery, and keep shared schema changes serialized. Read only the affected contract sections. The coordinator uses `docs/harness/ORCHESTRATOR_START.md` for dependency order; bounded P2 probes do not authorize P3 implementation.
+
+## Designer specs (TL-P4-18)
+
+The designer (`Diseñador`) messages the lead with a spec on `claude/design`. Merge it into `main` with a fast-forward or `git merge --no-ff`, since docs only. Check it against the mechanism map and the stage plan, rule on the entries (each "accept when" line becomes a verify), and hand them to the coordinator. When a fix is on staging or `main`, tell the designer so it can verify against its spec.
