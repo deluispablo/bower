@@ -45,3 +45,17 @@ Reviewers are read-only. They never move the main checkout in any form.
 - The write-it fake scenario gets a source: add `cites` to WRITE_IT_STATES.
 - The one home that checks a planned Timeline line refuses a news line with no citation. That home is the note-edit contract or the zod reply schema; find which one does it today. If the check already exists, only the fixture changes; say which home did it on your card.
 - Red, only if the check is new: `a timeline news line with no source is refused`.
+
+## Round 4b (TL-P4-19 addenda 19 and 20, main af67e834)
+
+- **a16 (addendum 19):**
+  - No tries carry across runs. A write still refused at the end of a run settles in that same run: the runner adds the answered row to its own report, the existing report home, and the answer is used up.
+  - A permanent kind gets: "Not written: Drive would not let Bower change <note>. Your current state is as you left it."
+  - A retry kind gets the provisional copy: "Not written: Bower couldn't reach Drive to change <note>. It will ask again in the next tidy-up." The designer confirms it at the design check.
+  - The next tidy-up asks again on its own.
+  - Class test: `the same non-clash refusal never starts more runs than the cap, then shows the not-written row`. It asserts both rows and no further run.
+- **a18 (addendum 20):**
+  - note-edit `entryOk` rejects a Timeline news line with `source === null`, and that rule gates every writer.
+  - The zod reply schema's refinement calls the same note-edit predicate; it does not restate the rule.
+  - The fake seed returns a map from fixture key to the id it created. WRITE_IT_STATES cites that key, which is resolved when the scenario runs, never by name.
+  - Red: `a timeline news line with no source is refused`.
