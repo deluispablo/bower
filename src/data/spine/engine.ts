@@ -38,6 +38,7 @@
  * Drive v3 offers no compare-and-swap on files: these are prechecks with a short window, not a lock (ARCHITECTURE,
  * "Safety at the actual storage boundary").
  */
+import type { OwnershipContext } from '../contracts/ownership-format';
 import { BowerError } from '../types';
 import { sha256Hex } from '../contracts/hashes';
 import type { Checkpoint, EffectEvidence, Failure, Outcome } from '../contracts/run-checkpoint';
@@ -429,7 +430,7 @@ function stampSays(file: DriveFile, runId: string, op: OperationV2, manifest: Ru
   return waitsOn(manifest, op.operationId, id) ? 'not-landed' : 'unknown';
 }
 
-export function driveEffects(drive: RunDrive): Effects {
+export function driveEffects(drive: RunDrive, context?: OwnershipContext): Effects {
   const toEvidence = (ev: StoredEvidence, encoding: 'utf8' | 'blob' = 'blob'): EffectEvidence => asEvidence(ev, encoding, drive.provenance);
 
   /**
@@ -466,7 +467,7 @@ export function driveEffects(drive: RunDrive): Effects {
         throw err;
       }
       if ((await sha256Hex(bytes)) !== e.beforeContent.sha256) return { refused: refused('conflict', NOTE_CHANGED) };
-      if ((await recheckEdit(e, bytes)) !== 'ok') return { refused: refused('conflict', NOTE_CHANGED) };
+      if ((await recheckEdit(e, bytes, context ? { fileId: e.before.fileId, context } : undefined)) !== 'ok') return { refused: refused('conflict', NOTE_CHANGED) };
       // The write carries the modifiedTime the plan saw, and the fence reads the file right before the send and refuses
       // it if its name, place or modifiedTime differ: that read is the check, with no earlier one to go stale.
       drive.expectSeen(e.before, true);

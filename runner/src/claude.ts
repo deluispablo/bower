@@ -1162,7 +1162,7 @@ export function claudeProvider(setup: ClaudeSetup, run: ScriptedRun, read: Scrip
     // The runner builds the manifest, every id, hash and digest its own, exactly as the scripted provider does.
     const plannedWith = async (filing: Filing, held: ReadonlySet<string> | undefined, own: string | undefined, by: string): Promise<RunManifest> => {
       const t = took.taken;
-      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing) }, undefined, held);
+      const plan = await planScripted(read, run.rootId, { scope: t.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: t.id, requestedAt: t.at, taken: t, mintKey: await runKeys(run.runId), decisions: modelDecisions(filing), context: run.context }, undefined, held);
       const manifest: RunManifest = plan.manifest;
       const parsed = await parseRunManifestV2((await canonical(manifest)).bytes, run.rootId, RUNNER_WRITES);
       if (!parsed.ok) return refuse(`outside the run manifest contract (${parsed.reason})`);

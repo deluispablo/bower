@@ -6,6 +6,7 @@
  * legacy `last-run.json`) is only read, and repaired when a reload cut it
  * off; nothing runs or writes outside the service (TL-P2-38).
  */
+import { createOwnershipContext } from '../contracts/ownership-format';
 import type { FakeDrive } from '../drive/fake-drive';
 import { ALEX } from '../demo/fixture';
 import { keepSignedIn, keptSignedIn, type Scenario } from '../demo/scenario';
@@ -273,10 +274,11 @@ export class FakeWorker implements WorkerApi {
     const subjects = [...(opts.subject !== undefined ? [opts.subject] : []), ...(opts.subjects ?? [])];
     const scoped = !subjects.length ? null : await planAdmission(fakeRead(this.drive), root, { scope, subjects, clock: () => Date.now(), newId: () => requestId });
     if (scoped?.kind === 'nothing') throw new BowerError('conflict', NOTHING[scoped.cause]);
-    const plan = await planRun(this.drive, root, { scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(scoped ? { taken: scoped.manifest } : {}), ...(this.updates ? { updates: this.updates } : {}), ...(this.states ? { states: this.states } : {}) });
+    const context = createOwnershipContext();
+    const plan = await planRun(this.drive, root, { context, scope, allowWeb: !!opts.allowWeb, runId, requestId, requestedAt: Date.now(), ...(scoped ? { taken: scoped.manifest } : {}), ...(this.updates ? { updates: this.updates } : {}), ...(this.states ? { states: this.states } : {}) });
     const failAt = this.failOnce;
     this.failOnce = false;
-    const wire = await this.runs.admit(this.binding(root), plan.manifest, failAt ? { failAt: 'writing' } : {});
+    const wire = await this.runs.admit(this.binding(root), plan.manifest, { context, ...(failAt ? { failAt: 'writing' as const } : {}) });
     this.onB = true;
     if (opts.requestId !== undefined) this.presses.set(opts.requestId, { ...wire });
     // A press on the whole inbox takes the answers that waited too.
@@ -391,8 +393,9 @@ export class FakeWorker implements WorkerApi {
   private async startRunning(root: string): Promise<void> {
     try {
       const { runId, requestId } = this.runs.ids();
-      const plan = await planRun(this.drive, root, { scope: 'all', allowWeb: false, runId, requestId, requestedAt: Date.now() - 70_000, ...(this.updates ? { updates: this.updates } : {}), ...(this.states ? { states: this.states } : {}) });
-      await this.runs.admit(this.binding(root), plan.manifest);
+      const context = createOwnershipContext();
+      const plan = await planRun(this.drive, root, { context, scope: 'all', allowWeb: false, runId, requestId, requestedAt: Date.now() - 70_000, ...(this.updates ? { updates: this.updates } : {}), ...(this.states ? { states: this.states } : {}) });
+      await this.runs.admit(this.binding(root), plan.manifest, { context });
       this.onB = true;
     } catch (e) {
       // The situation starts with no run going; the person can still tidy up.
