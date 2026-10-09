@@ -278,3 +278,35 @@ export function slowReport(tests, count = 5) {
     .slice(0, count)
     .map((t) => `${Math.round(t.duration)} ms  ${t.name}`);
 }
+
+/** Test files: unit, e2e, and the api and runner tests (the same set as TEST_PATTERN in harness-git.mjs, without the helper folders). */
+const TEST_FILE = /\.test\.tsx?$|^e2e\/.+\.spec\.ts$|^(api|runner)\/test\/.+\.ts$/;
+/** A notes file a branch adds or changes. */
+const NOTES_FILE = /^docs\/harness\/.+-notes\.md$/;
+
+const git = (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+
+/**
+ * One line per existing test file that the judged tips of a branch modify or delete, since their merge base with
+ * `base`, when no notes file the same tips add or change carries `tests changed: <file>: <why>` for it (TL-P4-20).
+ * `tips` are the commits to judge: HEAD, plus MERGE_HEAD during an uncommitted merge (historyTips). The one home of
+ * the rule: check-harness runs it, and integrate.sh calls check-harness.
+ */
+export function testsChangedProblems(base, tips = ['HEAD'], cwd = process.cwd()) {
+  const out = [];
+  for (const tip of tips) {
+    let from;
+    try {
+      from = git(['merge-base', base, tip], cwd).trim();
+    } catch {
+      // expected: the base ref does not exist here (a fixture or a fresh clone); nothing to compare with.
+      continue;
+    }
+    const names = (filter) => git(['diff', '--name-only', `--diff-filter=${filter}`, from, tip], cwd).split('\n').filter(Boolean);
+    const stated = new Set(names('AM').filter((f) => NOTES_FILE.test(f)).flatMap((f) => [...git(['show', `${tip}:${f}`], cwd).matchAll(/^\W*tests changed:\s*(\S+?):\s/gm)].map((m) => m[1])));
+    for (const f of names('DM').filter((n) => TEST_FILE.test(n))) {
+      if (!stated.has(f)) out.push(`${f} is a changed test with no "tests changed: ${f}: <why>" line in a notes file of this branch`);
+    }
+  }
+  return [...new Set(out)];
+}

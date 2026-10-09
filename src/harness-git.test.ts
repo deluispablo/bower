@@ -130,6 +130,73 @@ describe('the harness and git', () => {
     expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
   });
 
+  // A worker branch that changes or deletes an existing test, with the notes file it adds (or none).
+  const tamper = (change: 'edit' | 'delete', notes: string | null) => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    mkdirSync(join(dir, 'e2e'), { recursive: true });
+    writeFileSync(join(dir, 'src/a.test.ts'), "it('a', () => {});\n");
+    writeFileSync(join(dir, 'e2e/b.spec.ts'), "test('b', () => {});\n");
+    git('add -A && git commit -qm base');
+    git('branch -M main');
+    git('checkout -qb worker');
+    if (change === 'edit') writeFileSync(join(dir, 'src/a.test.ts'), "it('a', () => { expect(1).toBe(1); });\n");
+    else git('rm -q src/a.test.ts');
+    if (notes !== null) {
+      mkdirSync(join(dir, 'docs/harness'), { recursive: true });
+      writeFileSync(join(dir, 'docs/harness/2026-10-09-x-notes.md'), notes);
+    }
+    git('add -A && git commit -qm "worker change"');
+    git('checkout -q main');
+    const run = spawnSync('bash', [join(process.cwd(), 'harness/integrate.sh'), 'worker'], { cwd: dir, encoding: 'utf8', env: { ...process.env, INTEGRATE_CHECK: 'true', HARNESS_LOCK: join(dir, '.git/heavy.lock') } });
+    return { dir, git, run, out: run.stdout + run.stderr };
+  };
+
+  it('a branch that changes an existing test without a tests-changed line fails integration', () => {
+    const { dir, git, run, out } = tamper('edit', null);
+    expect(run.status).toBe(1);
+    expect(out).toContain('src/a.test.ts');
+    expect(out).toContain('tests changed');
+    expect(existsSync(join(dir, '.git/MERGE_HEAD'))).toBe(false);
+    expect(git('log --oneline').trim().split('\n')).toHaveLength(1);
+    // A line for another file does not cover it.
+    const other = tamper('edit', 'tests changed: src/other.test.ts: not this one\n');
+    expect(other.run.status).toBe(1);
+    expect(other.out).toContain('src/a.test.ts');
+  });
+
+  it('check-harness reports a changed test without a line against the branch base', () => {
+    const { dir, git } = repo();
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src/a.test.ts'), "it('a', () => {});\n");
+    git('add -A && git commit -qm base');
+    git('branch -M main');
+    git('checkout -qb worker');
+    writeFileSync(join(dir, 'src/a.test.ts'), "it('a', () => { expect(1).toBe(1); });\n");
+    git('commit -qam edit');
+    const run = () => spawnSync('node', [join(process.cwd(), 'scripts/check-harness.mjs'), '--tests-changed', 'main'], { cwd: dir, encoding: 'utf8' });
+    expect(run().status).toBe(1);
+    expect(run().stderr).toContain('src/a.test.ts');
+    mkdirSync(join(dir, 'docs/harness'), { recursive: true });
+    writeFileSync(join(dir, 'docs/harness/2026-10-09-x-notes.md'), 'tests changed: src/a.test.ts: asserts the value\n');
+    git('add -A && git commit -qm notes');
+    expect(run().status).toBe(0);
+  });
+
+  it('a tests-changed line for each changed test lets the branch pass', () => {
+    const { run, git } = tamper('edit', 'tests changed: src/a.test.ts: asserts the value now\n');
+    expect(run.status).toBe(0);
+    expect(git('log -1 --format=%p').trim().split(' ')).toHaveLength(2);
+  });
+
+  it('a deleted test needs its own tests-changed line', () => {
+    const missing = tamper('delete', null);
+    expect(missing.run.status).toBe(1);
+    expect(missing.out).toContain('src/a.test.ts');
+    const named = tamper('delete', 'tests changed: src/a.test.ts: the screen it covered is gone\n');
+    expect(named.run.status).toBe(0);
+  });
+
   // A fixture repo with a worker branch checked out in its own worktree (never the real repositories).
   const cleanupFixture = (branch: string) => {
     const { dir, git } = repo();

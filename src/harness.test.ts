@@ -252,7 +252,7 @@ describe('the harness', () => {
     git('config', 'user.name', 'Alex');
     mkdirSync(join(dir, 'scripts'));
     mkdirSync(join(dir, 'harness'));
-    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
+    for (const f of ['harness-rules.mjs', 'harness-tests.mjs', 'harness-git.mjs', 'check-harness.mjs']) copyFileSync(join(process.cwd(), 'scripts', f), join(dir, 'scripts', f));
     copyFileSync(join(process.cwd(), 'harness/done.sh'), join(dir, 'harness/done.sh'));
     writeFileSync(join(dir, 'harness/features.json'), '[]\n');
     writeFileSync(join(dir, 'harness/proof-legacy.txt'), readFileSync(join(process.cwd(), 'harness/proof-legacy.txt')));
@@ -388,5 +388,24 @@ describe('the harness', () => {
     expect(run.status).toBe(0);
     expect(run.out).toMatch(/stale.*pid 999999.*taking it over/i);
     expect(run.out).toContain('ran');
+  });
+
+  // A focused or skipped unit test is linted in the three packages (the vitest plugin's no-focused-tests and no-disabled-tests).
+  it('a focused or skipped unit test fails the check', () => {
+    const lint = (cwd: string, file: string, code: string): string[] => {
+      const r = spawnSync('pnpm', ['exec', 'eslint', '--stdin', '--stdin-filename', file, '--format', 'json'], { cwd: join(process.cwd(), cwd), input: code, encoding: 'utf8' });
+      const out = JSON.parse(r.stdout) as { messages: { ruleId: string | null }[] }[];
+      return out.flatMap((f) => f.messages.map((m) => m.ruleId ?? ''));
+    };
+    const here = [['.', 'src/x.test.ts'], ['api', 'test/x.test.ts'], ['runner', 'test/x.test.ts']] as const;
+    for (const [cwd, file] of here) {
+      expect(lint(cwd, file, "import { it } from 'vitest';\nit.only('a', () => {});\n")).toContain('vitest/no-focused-tests');
+      expect(lint(cwd, file, "import { it } from 'vitest';\nit.skip('a', () => {});\n")).toContain('vitest/no-disabled-tests');
+      expect(lint(cwd, file, "import { it } from 'vitest';\nit('a', () => {});\n")).toEqual([]);
+    }
+  }, 60_000);
+
+  it('both playwright configs forbid only', () => {
+    for (const f of ['playwright.config.ts', 'e2e/pwa.config.ts']) expect(readFileSync(f, 'utf8')).toMatch(/forbidOnly:\s*true/);
   });
 });

@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import { testRulesConfig } from '../scripts/eslint-test-rules.mjs';
 import { syntaxConfig } from '../scripts/eslint-syntax.mjs';
 
 export default tseslint.config(
@@ -14,5 +15,6 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', ignoreRestSiblings: true }],
     },
   },
+  testRulesConfig(['test/**/*.ts']),
   ...syntaxConfig('runner'),
 );

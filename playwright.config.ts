@@ -6,6 +6,8 @@ export default defineConfig({
   // pwa.spec.ts needs a production build: pnpm e2e:pwa (e2e/pwa.config.ts).
   testIgnore: [/_explore-/, /pwa\.spec\.ts/],
   timeout: 30_000,
+  // A committed test.only would silently run one test (https://playwright.dev/docs/api/class-testconfig#test-config-forbid-only).
+  forbidOnly: true,
   fullyParallel: true,
   reporter: 'list',
   use: { baseURL: 'http://localhost:5191', channel: 'chrome' },
