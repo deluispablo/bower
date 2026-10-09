@@ -10,26 +10,39 @@
 - **Review:** an escalated Claude reviewer plus one Codex read-only review pass (TL-P4-23 ruling 6).
 - **Starting model:** `bower-escalated`.
 
-## Contract
+## Contract (TL-P4-24 addendum 2, main 91c006e1)
 
-1. **The retry stays in its one home,** `drive-http.ts:461` (transport send).
-2. **Fenced resends only.** A write to an existing file is resent only through the caller's fence callback, which runs before each resend. If the fence refuses, the write is not resent and the refusal goes back to the caller.
-   - `once` (drive-vault) and the runner's fenced writes pass their fence, so the person sees no new error.
-   - A write to an existing file without a fence is not resent and fails as retry-kind.
-3. **Creates by reserved id** keep their resend (write-once).
-4. **Same class elsewhere:** the five sites in the note (`drive-http.ts:358, 367-381`, `runner/src/drive.ts:298-311`, `api/src/vault.ts:178`, `drive-vault.ts:326-348, 1066-1101`). Each either passes its fence or fails as retry-kind. No second retry path.
+**Order.** This entry runs after c4-app-fence has merged. Merge claude/p3 first, so `once` and the app writes already carry their fence.
 
-## Red (class test, from the note)
+1. **The retry stays in its one home:** `drive-http.ts:461` (transport send).
+2. **A `fence` option on existing-file writes.** `writeText`, `update`, `trash`, `untrash` and the multipart PATCH (`drive-http.ts:444`) take an optional `fence: () => Promise<void>`.
+   - The transport awaits it before each resend after a 429/403 rate limit or a 401 refresh (`:367-381`), never before the first send.
+   - If the fence throws, the call ends with the caller's own not-as-seen error. There is no resend.
+   - With no fence, the write is sent once. A resendable refusal then fails as retry-kind.
+   - `raw()` (`:358`) is unchanged.
+3. **Creates by reserved id keep their resend.** Meaning: a create sent with a reserved id (write-once `createById`) is resent as today, because a resend under the same id cannot make a second file. Creates without an id are unchanged, and the worker states what they do today.
+4. **Every fenced caller passes its fence.**
+   - The app: `once` and the writes c4-app-fence fenced, through `contracts/still-as-seen.ts`.
+   - The runner's fenced writes (`runner/src/drive.ts:298-311`), whose fence moves the attempt check before the resend.
+   - The Worker's `replaceText` (`api/src/vault.ts:178`).
+   - No second retry path.
 
-`a resent write to an existing file runs its fence first`: one table-driven unit test over every write port. It covers the `drive-http.test.ts` writes table, the runner's fenced writes and the Worker's `replaceText`.
-- A fetch stub refuses the first write with each resendable answer (429, 403 rateLimitExceeded or userRateLimitExceeded, 401→refresh).
-- It then changes the stored modifiedTime, name or parents.
-- It expects the resend to be refused by the fence, and Drive to be unchanged.
-- It fails today.
+## Red and verify (exact names and files)
 
-## Verify
-
-The red; `creates by reserved id are still resent after a rate limit`; `pnpm check`; and the goldens C04 78 and 25-runs 88.
+- `a resent write to an existing file runs its fence first` (`src/data/drive/drive-http.test.ts`, the table over the `writes` table).
+  - A fetch stub refuses the first write with 429, with 403 rateLimitExceeded or userRateLimitExceeded, and with 401 followed by a refresh.
+  - Then it changes the stored modifiedTime, name or parents.
+  - The fence must refuse, the resend must not happen, and Drive must be unchanged. This fails today.
+- `a passing fence still lands the resend` (same file).
+- `an unfenced write is sent once and fails as retry-kind` (same file).
+- `creates by reserved id are still resent after a rate limit` (same file). This is a guard that passes today and must keep passing.
+- The 401 row holds the refresh path. The runner row moves the attempt between the 429 and the resend (`runner/test/drive.test.ts` or the runner's fenced-write test).
+- Entry-point tests:
+  - the app's move and rename under a 429-then-changed target (`src/data/vault/drive-vault.test.ts`);
+  - the runner's `main` with a fenced write (`runner/test`);
+  - the Worker route's `replaceText` (`api/test`).
+  - Name the tests on your card.
+- `pnpm check` passes. Goldens: C04 78 and 25-runs 88 (`runner/test/drive-calls-golden.test.ts:21,69`).
 
 ## Commits
 
