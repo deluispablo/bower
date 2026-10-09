@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DRIVE_MS, modelled, type Call } from './modelled';
+import { finishedBefore } from './earlier-runs';
 
 interface PhaseCount {
   name: string;
@@ -134,5 +135,20 @@ describe('drive-calls-cut', () => {
     const apply = closing.at - (opening.at + DRIVE_MS);
     console.log(`apply: modelled ${apply} ms (was ${APPLY_MS_BEFORE})`);
     expect(apply).toBeLessThanOrEqual(APPLY_MS_BEFORE / 2);
+  });
+});
+
+/** Drive calls, reads and writes, of a modelled run. */
+const driveCalls = (calls: Call[]): number => calls.filter((c) => c.kind === 'read' || c.kind === 'write').length;
+
+describe('the C04 run past 20 earlier runs (retention-never-wired, round 2)', () => {
+  it('with 25 earlier runs a run makes at most 3 more Drive calls than C04', async () => {
+    const c04 = await modelled();
+    const past = await modelled(async (drive, root) => {
+      await finishedBefore(drive, root, 25);
+    });
+    expect(past.code).toBe(0);
+    console.log(`Drive calls: C04 ${driveCalls(c04.calls)}, with 25 earlier runs ${driveCalls(past.calls)}`);
+    expect(driveCalls(past.calls) - driveCalls(c04.calls)).toBeLessThanOrEqual(3);
   });
 });

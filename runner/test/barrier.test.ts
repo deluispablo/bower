@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { Checkpoint, EffectEvidence } from '../../src/data/contracts/run-checkpoint';
 import { hashRecordJson } from '../../src/data/contracts/record-json';
@@ -8,11 +7,12 @@ import type { FencedCall } from '../../src/data/drive/fake-drive';
 import type { AdmissionManifest } from '../../src/data/spine/admission';
 import { planAdmission } from '../../src/data/spine/plan';
 import { fakeRead } from '../../src/data/spine/read';
-import { RunRecords, canonical, checkpointName, firstCheckpoint, manifestName, nextCheckpoint, type RunManifest } from '../../src/data/spine/records';
+import { RunRecords, type RunManifest } from '../../src/data/spine/records';
 import { SYSTEM, isRunnerFile } from '../../src/data/vault/layout';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { runTidy, type TidyEnd, type TidyOptions } from '../src/main';
 import type { Admitted } from '../src/spine/admitted';
+import { finishedBefore, runFolders } from './earlier-runs';
 import { driveEffects, type Effects, type ReadBack, type Settled } from '../../src/data/spine/engine';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -522,63 +522,11 @@ describe('how an attempt ends (TL-P4-16 addendum 4)', () => {
   });
 });
 
-/** A manifest the fake runner planned on the demo folder, kept as it was planned (`checkpoints.test.ts`). */
-const PLANNED = readFileSync(new URL('./fixtures/planned-manifest.json', import.meta.url), 'utf8');
-
-/** The planned manifest for another run of this folder: its capture id and operation ids made again, as the planner makes them. */
-async function planned(rootId: string, runId: string): Promise<RunManifest> {
-  const value = JSON.parse(PLANNED) as RunManifest;
-  value.runId = runId;
-  value.requestId = `request-${runId}`;
-  value.scope = { rootId };
-  value.captureId = await hash({ scope: value.scope, runScope: value.runScope, capture: value.capture });
-  const renamed = new Map<string, string>();
-  const ref = (id: string): string => renamed.get(id) ?? id;
-  for (const op of value.operations) {
-    op.dependsOn = op.dependsOn.map(ref);
-    if ('parent' in op.effect && 'createdBy' in op.effect.parent) op.effect.parent = { createdBy: ref(op.effect.parent.createdBy) };
-    const next = await hash({ runId: value.runId, captureId: value.captureId, ordinal: op.ordinal, effect: op.effect });
-    renamed.set(op.operationId, next);
-    op.operationId = next;
-  }
-  for (const item of value.reportPlan) item.requires = item.requires.map(ref);
-  return value;
-}
-
-/** `count` earlier runs of the folder, each finished (`failed`, as a run that stopped) before this one, the first the oldest; gives their folders by run id. */
-async function finishedBefore(wire: DriveV3, root: string, count: number): Promise<Map<string, DriveFile>> {
-  const records = new RunRecords(wire.drive, root);
-  const w = wire.drive.fenced(() => {});
-  for (let i = 0; i < count; i++) {
-    const manifest = await planned(root, `run-${String(i).padStart(2, '0')}`);
-    const m = await canonical(manifest);
-    const where = { runId: manifest.runId };
-    await records.put(w, where, manifestName(m.hash), m.text);
-    const mark = { attemptId: `earlier-${i}`, epoch: 1 };
-    const first = firstCheckpoint(manifest, m.hash, mark, AT - 2000 + i);
-    const c0 = await canonical(first);
-    await records.put(w, where, checkpointName(0, c0.hash), c0.text);
-    const last = nextCheckpoint(first, c0.hash, mark, { phase: 'failed', phaseAt: AT - 1000 + i });
-    const c1 = await canonical(last);
-    await records.putNew(w, where, checkpointName(1, c1.hash), c1.text);
-  }
-  return runFolders(wire, root);
-}
-
-/** The folders in `.bower/runs` outside the Bin, by name. */
-async function runFolders(wire: DriveV3, root: string): Promise<Map<string, DriveFile>> {
-  const all = await wire.drive.listAll(root);
-  const sys = await systemFolder(wire, root);
-  const runs = all.find((f) => f.folder && f.name === 'runs' && f.parents.includes(sys.id));
-  if (!runs) throw new Error('no .bower/runs');
-  return new Map(all.filter((f) => f.folder && f.parents.includes(runs.id)).map((f) => [f.name, f]));
-}
-
 describe('the run folders a run keeps', () => {
   it('after 21 finished runs, 20 run folders remain and the oldest is in the Bin', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { wire, root } = await demo();
-    const earlier = await finishedBefore(wire, root, 20);
+    const earlier = await finishedBefore(wire.drive, root, 20);
     const oldest = earlier.get('run-00');
     if (!oldest) throw new Error('no run-00');
 
@@ -586,7 +534,7 @@ describe('the run folders a run keeps', () => {
 
     expect(end.phase).toBe('done');
     expect(wire.statuses.at(-1)?.phase).toBe('done');
-    const kept = await runFolders(wire, root);
+    const kept = await runFolders(wire.drive, root);
     expect(kept.size).toBe(20);
     expect(kept.has(RUN_ID)).toBe(true);
     expect(kept.has('run-00')).toBe(false);
@@ -599,7 +547,7 @@ describe('the run folders a run keeps', () => {
   it('a run whose retention Bin fails still ends done and logs it', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { wire, root } = await demo();
-    const earlier = await finishedBefore(wire, root, 20);
+    const earlier = await finishedBefore(wire.drive, root, 20);
     const oldest = earlier.get('run-00');
     if (!oldest) throw new Error('no run-00');
     // The oldest run folder is renamed after the run read it and before its Bin: the Bin checks the name and place it
@@ -622,5 +570,26 @@ describe('the run folders a run keeps', () => {
     expect((await stored(wire, root, SYSTEM.lastRun))?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done' } });
     expect((await wire.drive.evidence(oldest.id))?.trashed).not.toBe(true);
     expect(errors.mock.calls.some((c) => String(c[0]).includes('could not go to the Bin'))).toBe(true);
+  });
+
+  it('a backlog of run folders drains at most 3 per run', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { wire, root } = await demo();
+    const earlier = await finishedBefore(wire.drive, root, 25);
+
+    const end = await tidy(wire, root, 1, new StubEffects());
+
+    expect(end.phase).toBe('done');
+    expect(wire.statuses.at(-1)?.phase).toBe('done');
+    // 26 ended runs, 6 beyond the newest 20: this run puts the 3 oldest in the Bin, the next run the rest.
+    const kept = await runFolders(wire.drive, root);
+    expect(kept.size).toBe(23);
+    for (const name of ['run-00', 'run-01', 'run-02']) {
+      expect(kept.has(name)).toBe(false);
+      expect((await wire.drive.evidence(earlier.get(name)?.id ?? ''))?.trashed).toBe(true);
+    }
+    for (const name of ['run-03', 'run-04', 'run-05']) expect(kept.has(name)).toBe(true);
+    // This run's own folder is stamped as ended, so the next run knows it without reading its records.
+    expect(kept.get(RUN_ID)?.appProperties).toMatchObject({ bowerRun: RUN_ID, bowerRunEnded: expect.stringMatching(/^\d+$/) });
   });
 });

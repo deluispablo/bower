@@ -49,8 +49,8 @@ export interface CaseRun {
   root: string;
 }
 
-export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false): Promise<CaseRun> {
-  return runCase(c, { around, realTokens });
+export async function runScripted(c: LoadedCase, around?: (fetch: typeof globalThis.fetch) => typeof globalThis.fetch, realTokens = false, before?: Before): Promise<CaseRun> {
+  return runCase(c, { around, realTokens, ...(before ? { before } : {}) });
 }
 
 /**
