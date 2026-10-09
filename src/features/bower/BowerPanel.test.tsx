@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { DataProvider } from '@/data/provider';
 import { loadingSources } from '@/testing/loading-sources';
 import { BowerPanel } from './BowerPanel';
+import { RightPanel } from '@/features/note/RightPanel';
+import { useUi } from '@/app/ui-store';
 
 describe('the side panel while loading', () => {
   it('names the rules without claiming there are none', async () => {
@@ -54,5 +56,43 @@ describe('the side panel shows what failed', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Put it away' }));
     await waitFor(() => expect(screen.queryByText("Bower couldn't keep that rule.")).toBeNull());
     expect(putAway).toHaveBeenCalledWith('L1');
+  });
+});
+
+describe('what failed is found once on a note', () => {
+  it('the right panel turns to Bower once when a change could not be noted', async () => {
+    const never = (): Promise<never> => new Promise(() => undefined);
+    const listeners = new Set<() => void>();
+    let failed: Array<{ id: string; what: string; sentence: string }> = [];
+    const sources = loadingSources();
+    const vault = new Proxy({}, {
+      get: (_t, k) => {
+        if (k === 'driveLinks') return false;
+        if (k === 'subscribe') return (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); };
+        if (k === 'failedChanges') return async () => failed;
+        if (k === 'rules' || k === 'requests' || k === 'questions') return async () => [];
+        return never;
+      },
+    });
+    useUi.getState().setRightTab('links');
+    render(
+      <MemoryRouter initialEntries={['/note/Projects/Flat.md']}>
+        <DataProvider sources={{ ...sources, vault: vault as typeof sources.vault, runs: { ...sources.runs, subscribe: () => () => undefined } }}>
+          <RightPanel />
+        </DataProvider>
+      </MemoryRouter>,
+    );
+    // On a note the panel opens on its links; nothing has failed yet.
+    expect(screen.getByRole('tab', { name: 'Linked notes' })).toHaveAttribute('aria-selected', 'true');
+    // A line is refused in the background: the panel turns to Bower, where it shows.
+    failed = [{ id: 'L1', what: 'Moved Cooking to Archive', sentence: "Your change was made, but Bower couldn't make a note of it." }];
+    listeners.forEach((l) => l());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Bower' })).toHaveAttribute('aria-selected', 'true'));
+    expect(await screen.findByText("Your change was made, but Bower couldn't make a note of it.")).toBeInTheDocument();
+    // Once: the person goes back to the links, and the panel stays there.
+    fireEvent.click(screen.getByRole('tab', { name: 'Linked notes' }));
+    listeners.forEach((l) => l());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole('tab', { name: 'Linked notes' })).toHaveAttribute('aria-selected', 'true');
   });
 });

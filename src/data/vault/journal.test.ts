@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
-import { Journal } from './journal';
+import { FAILED_KEY, Journal } from './journal';
+import { forgetThisPerson } from '../device';
 import { driveError } from '../drive/drive-api';
 import { DriveHttp } from '../drive/drive-http';
 import type { BowerError } from '../types';
@@ -396,7 +397,7 @@ describe('c2-create-by-id reopened: a line refused for good', () => {
     expect(await told(journal.record('request', 'Asked Bower: "Put my id papers together"', { text: 'Put my id papers together' }))).toEqual({ message: "Bower couldn't keep that request.", applied: undefined });
     expect(await told(journal.record('answer', 'Answered "Yes" to a question', { questionId: 'q1', text: 'yes' }))).toEqual({ message: "Bower couldn't keep your answer.", applied: undefined });
     // A change made in Drive was made: only its note is missing, and no line is left to take back.
-    expect(await told(journal.record('move', 'Moved Lease draft to Areas', { path: 'Areas/Lease draft.pdf', fileId: 'F1' }))).toEqual({ message: "Your change was made, but Bower couldn't make a note of it.", applied: undefined });
+    expect(await told(journal.record('move', 'Moved Lease draft to Areas', { path: 'Areas/Lease draft.pdf', fileId: 'F1' }))).toEqual({ message: "Your change was made, but Bower couldn't make a note of it.", applied: { path: 'Areas/Lease draft.pdf' } });
     expect(await journal.list()).toEqual([]);
     expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
     // Refused while waiting, the same words are kept among what failed.
@@ -405,5 +406,98 @@ describe('c2-create-by-id reopened: a line refused for good', () => {
     drive.createText = async (...a: Parameters<FakeDrive['createText']>) => REFUSED().createText(...a);
     await journal.flush();
     expect(await journal.failed()).toEqual([{ id: rule.id, what: 'New rule: "receipts go in money"', sentence: "Bower couldn't keep that rule." }]);
+  });
+});
+
+describe('c2-create-by-id round 5: what a refusal leaves', () => {
+  const FULL = (): DriveHttp => answering(403, 'storageQuotaExceeded');
+  const toldBy = async (p: Promise<unknown>): Promise<{ message: string; applied: unknown }> =>
+    p.then(() => ({ message: 'saved', applied: undefined }), (e: unknown) => ({ message: (e as BowerError).message, applied: (e as BowerError).applied }));
+
+  it('a journal line refused for a full Drive keeps its id and is sent once space is free', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    let full = true;
+    const sentWith: Array<string | undefined> = [];
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sentWith.push(a[4]);
+      // P4-37d repro C: a full Drive refuses the line's create; moves and renames still go, so the change was made.
+      return full ? FULL().createText(...a) : create(...a);
+    };
+    const told = await toldBy(journal.record('move', 'Moved Cooking to Archive', { path: 'Archive/Cooking', fileId: 'F1' }));
+    expect(told.message).toBe("Your Google Drive is full. Your change was made; Bower will note it later.");
+    expect(told.applied).toMatchObject({ path: 'Archive/Cooking' });
+    const kept = outbox();
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.reserved).toBe(sentWith[0]);
+    // Still full in the background: the line waits, with its id, and nothing is called failed.
+    await expect(journal.flush()).rejects.toMatchObject({ code: 'offline' });
+    expect(outbox().map((w) => w.reserved)).toEqual([sentWith[0]]);
+    expect(await journal.failed()).toEqual([]);
+    // A rule is the line itself: kept, and said so.
+    expect((await toldBy(journal.record('rule', 'New rule: "receipts go in money"', { path: 'Rules.md', text: 'receipts go in money' }))).message).toBe('Your Google Drive is full. Bower kept this and will send it later.');
+    // Space is freed (P4-37d repro D): both are sent, the move under the id it kept.
+    full = false;
+    await expect(journal.flush()).resolves.toBeUndefined();
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+    expect((await drive.listAll(changes)).some((f) => f.id === sentWith[0])).toBe(true);
+    expect((await journal.list()).map((r) => r.what)).toEqual(['Moved Cooking to Archive', 'New rule: "receipts go in money"']);
+  });
+
+  it('a move whose line is refused for good follows the thing to where it went', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => REFUSED().createText(...a);
+    // P4-37d repro E: the thing was moved; only its line is gone, so the screen follows it and nothing names the line.
+    const said = "Your change was made, but Bower couldn't make a note of it.";
+    expect(await toldBy(journal.record('move', 'Moved Cooking to Archive', { path: 'Archive/Cooking', from: 'Resources/Cooking', fileId: 'F1' }))).toEqual({ message: said, applied: { path: 'Archive/Cooking' } });
+    expect(await toldBy(journal.record('rename', 'Renamed Cooking to Recipes', { path: 'Resources/Recipes', from: 'Resources/Cooking', fileId: 'F1' }))).toEqual({ message: said, applied: { path: 'Resources/Recipes' } });
+    expect(await toldBy(journal.record('create', 'New note "Soup" in Resources', { path: 'Resources/Soup.md', fileId: 'F2' }))).toEqual({ message: said, applied: { path: 'Resources/Soup.md' } });
+    expect(await toldBy(journal.record('trash', 'Put Soup in the Bin', { path: 'Resources/Soup.md', fileId: 'F2' }))).toEqual({ message: said, applied: { path: null } });
+  });
+
+  it('sign-out forgets a failed change kept in memory when storage refuses', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let mode: 'offline' | 'refuse' = 'offline';
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => (mode === 'offline' ? Promise.reject(driveError('offline')) : REFUSED().createText(...a));
+    await journal.record('move', 'Moved Lease draft to Areas', { path: 'Areas/Lease draft.pdf', fileId: 'F1' });
+    // This device's storage refuses what failed (P4-37d repro F): it is kept in this page's memory.
+    const setItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+      if (k === FAILED_KEY) throw new DOMException('Storage refused', 'QuotaExceededError');
+      setItem.call(this, k, v);
+    });
+    mode = 'refuse';
+    await journal.flush();
+    expect((await journal.failed()).map((f) => f.what)).toEqual(['Moved Lease draft to Areas']);
+    forgetThisPerson();
+    expect(await journal.failed()).toEqual([]);
+  });
+
+  it('a journal line answered 409 whose read-back holds other bytes ends as failed once', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    let mode: 'offline' | 'other' | 'fine' = 'offline';
+    const sent: Array<string | undefined> = [];
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sent.push(a[4]);
+      if (mode === 'offline') throw driveError('offline');
+      if (mode === 'other') {
+        // The reserved id already holds other bytes: Drive answers 409, and the read-back's checksum is not the line's.
+        if (!(await drive.listAll(changes)).some((f) => f.id === a[4])) await create(a[0], a[1], '{"other":true}\n', a[3], a[4]);
+        throw driveError('conflict');
+      }
+      return create(...a);
+    };
+    const one = await journal.record('move', 'one', { path: 'Areas/one', fileId: 'F1' });
+    mode = 'other';
+    await expect(journal.flush()).resolves.toBeUndefined();
+    // Ended honestly: out of the outbox, shown once among what failed, never sent again.
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+    expect(await journal.failed()).toEqual([{ id: one.id, what: 'one', sentence: "Your change was made, but Bower couldn't make a note of it." }]);
+    sent.length = 0;
+    mode = 'fine';
+    await journal.flush();
+    expect(sent).toEqual([]);
+    expect(await journal.failed()).toHaveLength(1);
   });
 });
