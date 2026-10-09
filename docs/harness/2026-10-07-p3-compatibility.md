@@ -138,3 +138,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `b48a7655` | c4-parse-once | none: tests only (parse-once red: one parse per read note per attempt, through the fake and runTidy); no stored data, route or format changes. |
 | `573c4bfd` | c4-parse-once | none: tests only (the red expects the existing bowerNote shape, TL-P4-22 addendum 26). |
 | `d146960e` | c4-parse-once | none for stored data or formats: an attempt-scoped ownership context memoises parseOwnership by (fileId, sha256 of the bytes); written bytes and sections unchanged. |
+| `0ee90829` | c4-parse-once | none: tests only (round 2 red: each Drive-read text parsed at most once across an attempt with piles). |
+| `eb909a67` | c4-parse-once | none for stored data or formats: pile reads (listedPiles, capturePiles, the fake pile read) take the attempt's ownership context; bytes and sections unchanged. |

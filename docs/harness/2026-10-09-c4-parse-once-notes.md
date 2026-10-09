@@ -91,3 +91,55 @@ those were corrected before the required final successful runs.
 
 `pnpm check` and e2e were not run, as instructed: the coordinator runs them under the lock.
 Left out: none within the assigned implementation scope; commits and integration remain with the coordinator.
+
+## Round 2 (addendum 27)
+
+Owner: TL-P4-22 addendum 27 and TL-P4-29; the separate session's committed round-2 red is unchanged.
+The coordinator owns the fix commit and then the separate notes commit. No writing git command or network
+request was run. The offline memoization and Identity Map references above remain the standard approach;
+this round only forwards the existing attempt context to the remaining fetched-note parse sites.
+
+Sites threaded (current file:line):
+
+- `src/data/fake/fake-worker.ts:266`: create the same attempt context before the initial pile read;
+  `:268` passes it to that read, `:276` to scoped admission, and `:278` still passes it to planning.
+  The existing service/effects handoff retains that context, and recovery still creates a fresh context.
+- `src/data/spine/scripted.ts:354` and `:370`: forward PlanOptions.context to the inbox read and capturePiles.
+- `src/data/spine/read.ts:22`: ScriptedRead.piles accepts the optional context; no parsing or memo here.
+- `runner/src/provider.ts:32`: runnerScripted forwards the piles argument to listedPiles.
+- `src/data/fake/fake-runner.ts:28`: fakeScripted forwards the piles argument to DriveVault.piles.
+- `src/data/spine/plan.ts:103`: CaptureOptions carries the context to the recorded-note parse at `:190`;
+  `:313`, `:419` and `:423` forward it through scoped admission; listedPiles accepts it at `:458`
+  and supplies the actual note id at its fetched-text parse at `:476`.
+- `src/data/vault/drive-vault.ts:583` and `:621`: the fake pile read forwards context into parsed;
+  `:668` supplies the recorded note id when that note differs from the first note; `:1811`–`:1813`
+  accept context in parsed, and `:1820` supplies the fetched file id to parseNote.
+
+Fix inventory: the seven code files listed above. Notes inventory: this file, for the coordinator's notes commit.
+There is still only one memo beside parseOwnership, keyed by file id and the exact-byte SHA-256 from hashes.ts.
+No context is retained on DriveVault or its persistent caches. Candidate parsing, bytes, stored formats,
+read/write calls, and standalone parsing behaviour are unchanged.
+
+compatibility: eb909a67
+
+tests changed: none
+removed: uncached fetched-note parse calls at listedPiles, capturePiles and the vault pile reader;
+replaced with the existing context lookup, with uncached fallback for standalone calls.
+removed: late context initialization in FakeWorker.begin; moved before its first pile read, not duplicated.
+removed: none of the candidate validation, tests, bounds, goldens, parser, or hashing mechanism.
+
+Baseline: `/tmp/parse-once-r2-red.log` failed the whole-attempt pile red on both entry points:
+each of two pile-note keys parsed three times in fake Worker/service and twice in runTidy, expected once.
+The first full data run then identified the fake Worker's initial pile read, still outside the context;
+that read and scoped admission now share the same context as planning and effects.
+
+Final required runs, all exit 0; logs searched only for test/TypeScript failures, none found:
+
+- `pnpm exec tsc -p tsconfig.app.json > /tmp/parse-once-r2-tsc.log 2>&1`
+- `pnpm exec vitest run src/data > /tmp/parse-once-r2-unit.log 2>&1`
+- `pnpm -C runner exec vitest run > /tmp/parse-once-r2-runner.log 2>&1`
+
+The complete data run passes the unchanged whole-attempt pile red, existing reds and changed-version guards,
+including fake Worker/service and runTidy, and the large-note test. The runner suite passes the unchanged
+Drive-call goldens at exactly 78 and 88 with their phase counts. `git diff --check` passes, and the test-file
+diff is empty. No pnpm check or e2e was run, as instructed. Nothing remains outside the assigned scope.
