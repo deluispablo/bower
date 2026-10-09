@@ -411,10 +411,16 @@ export class BirdEngine {
     if (this.doing === 'snap' || this.doing === 'preen') this.interrupt({ now: true });
     return true;
   }
-  /** Starts the one startle step from where the tuft and head are now. */
+  /**
+   * Starts the one startle step from where the tuft and head are now. The step
+   * owns the head while it plays (TL-P4-25 addendum 4): the gaze's head offset
+   * folds into its start, so nothing jumps, and the gaze moves only the iris.
+   */
   private startle(): void {
+    const C = this.C;
     this.S.startleT = STARTLE_TOTAL;
-    this.S.startleFrom = { tuft: this.C.tuft.v, head: this.C.head.v };
+    this.S.startleFrom = { tuft: C.tuft.v, head: C.head.v + C.gaze.v };
+    pin(C.gaze, 0);
   }
   /** Whether the mind owns the act channel: idle, wait, or a layer's bird. */
   private minded(): boolean {
@@ -1112,6 +1118,8 @@ export class BirdEngine {
       }
     }
     this.gaze(dt, who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
+    // The step owns the head: the gaze's offset waits at 0 and eases back after it (TL-P4-25 addendum 4).
+    if (S.startleT > 0) this.C.gaze.t = 0;
   }
 
   /**
