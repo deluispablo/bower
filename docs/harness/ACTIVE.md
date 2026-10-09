@@ -469,3 +469,4 @@ P3-9 is closed.
 - Planner-split smoke prep: four suites green at b9c2674d (check: app 3858, api 234, runner 236, harness 441/449; e2e 226; e2e:fake 257; pwa 4). main moved to a0a0c1a7 (docs-only beyond b9c2674d) and backed up (remote verified a0a0c1a7). SHA sent to the lead for deploy.
 - Planner-split smoke on staging a0a0c1a7: garden PASS 51 s, offer-and-flat PASS 61 s, c05-hub-lines PASS 55 s; rows per Timeline line and New marks correct; Home 4.5 s / 15 calls, no .bower growth. c3-note-sections delivered (red 650f1ac3, fix 8233a111).
 - c3-pair-ask dispatched (escalated, packet with ruling sweep). c3-state-mark (with write-it-silent, addendum 7) registered; dispatched after pair-ask (both touch scripted.ts and questions).
+- TL-P4-18 addendum 2 (main f6856abd): UI-touching questions/defects are flagged as UI in messages to the lead (lead consults the designer). c3-pair-ask copy may change before merge (lead sends final text).
