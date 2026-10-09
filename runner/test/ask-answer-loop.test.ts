@@ -758,6 +758,51 @@ describe('an answer applies at once (TL-P4-08 addendum 8)', () => {
     expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched);
   });
 
+  it('the same non-clash refusal never starts more runs than the cap, then shows the not-written row', async () => {
+    // TL-P4-19 addendum 21: Drive answers 503 to the granted write, every time. The engine is untouched: the answer's
+    // archive waits for its write, so the answer stays in your changes and nothing starts on its own. The run says so
+    // in one answered row (not a thing set aside), and the next press tries the write once more.
+    const w = await shownWorld();
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(0)).toBe(0);
+    const id = await hubId(w);
+    const before = await textAt(w, HUB);
+    const { vault, answerQuestion } = await vaultOf(w);
+    const done = await answerQuestion(vault, runsOf(w), `q-state-${id}`, true, { allowWeb: false });
+    expect(done?.outcome.kind).toBe('now');
+    const writes = { refused: 0, tried: 0 };
+    const busy: Hop = async (url, init, next) => {
+      if ((init.method ?? 'GET') === 'PATCH' && url.pathname === `/upload/drive/v3/files/${id}`) {
+        writes.refused += 1;
+        return new Response(null, { status: 503 });
+      }
+      return await next();
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dispatched = w.dispatched.length;
+    expect(await w.runJob(1, busy)).toBe(0);
+    expect(writes.refused).toBeGreaterThan(0);
+    expect(await textAt(w, HUB)).toBe(before);
+    // No further run, on its own or by the alarm.
+    expect(w.dispatched).toHaveLength(dispatched);
+    expect(await w.api.fireAlarm().then(() => w.dispatched.length)).toBe(dispatched);
+    // The answer is kept, and its row shows under the answered label, once.
+    expect(await answersWaiting(w, `q-state-${id}`)).toHaveLength(1);
+    const rows = await reportRowsAll(w);
+    expect(rows.setAside).toEqual([]);
+    expect(rows.answered).toEqual([{ questionId: `q-state-${id}`, kind: 'state', outcome: 'refused', why: "Not written: Bower couldn't reach Drive to change Job hunt. Bower will try again in the next tidy-up.", note: HUB }]);
+    // The next press tries the write once, under the stamp-plus-checksum check, and it lands.
+    const tries: Hop = async (url, init, next) => {
+      if ((init.method ?? 'GET') === 'PATCH' && url.pathname === `/upload/drive/v3/files/${id}`) writes.tried += 1;
+      return await next();
+    };
+    expect(await press(w)).toBe(true);
+    expect(await w.runJob(w.dispatched.length - 1, tries)).toBe(0);
+    expect(writes.tried).toBe(1);
+    expect(parseNote(HUB, (await textAt(w, HUB)) ?? '').currentState).toEqual(UPDATE);
+    expect(await answersWaiting(w, `q-state-${id}`)).toEqual([]);
+  });
+
   it('a write it refused for good writes one answered row on Home and on the note', async () => {
     // A note past the size Bower edits (1 MiB), asked about before questions kept the update they showed: the yes is
     // checked and its write refused for good. Nothing is written and the person's section is as they left it.

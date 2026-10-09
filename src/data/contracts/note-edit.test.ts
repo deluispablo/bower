@@ -246,6 +246,25 @@ describe('note edits change only what the contract allows', () => {
       await refuses(stated(lines(1, 200), lines(21, 400)), 'shape');
     });
 
+    it('an old manifest with a sourceless news line still reads', async () => {
+      // TL-P4-19 addendum 22: the uncited refusal is for writes and plans only. A manifest stored before it, with a news
+      // line that cites nothing, still parses (strict on write, lenient on read), so undo and history keep working.
+      const stored = variant((value) => {
+        const at = editAt(value).changes.find((c) => c.kind === 'timeline-append');
+        const first = at?.kind === 'timeline-append' ? at.entries[0] : undefined;
+        if (at?.kind !== 'timeline-append' || !first) throw new Error('The fixture must hold a Timeline line');
+        at.entries.push({ date: first.date, text: 'New: Alex called back.', source: null });
+      });
+      await admits(stored);
+      // Its other field rules still hold on read.
+      await refuses(variant((value) => {
+        const at = editAt(value).changes.find((c) => c.kind === 'timeline-append');
+        const first = at?.kind === 'timeline-append' ? at.entries[0] : undefined;
+        if (at?.kind !== 'timeline-append' || !first) throw new Error('The fixture must hold a Timeline line');
+        at.entries.push({ date: first.date, text: 'New: Alex [[called]] back.', source: null });
+      }), 'shape');
+    });
+
     it('refuses a v2 manifest without edit-text, and names a later version apart', async () => {
       await refuses(variant((value) => {
         value.operations = [op(archive('journal-merge', 'merge.json'))];
