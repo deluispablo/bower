@@ -470,3 +470,4 @@ c3-integrate-gate	5384e7d6a929f842	2026-10-09	red (fixed in cea01d57)
 c3-reservation-home	c361357357ec7ab1	2026-10-09	known-green: red at 89bd9cfb: 2 rule tests fail (/tmp/c3res-handred.log); green at fdf9736a
 c3-reviewer-guard	71314d312da68a1e	2026-10-09	known-green: red at 1f2a4979: module missing, 3 tests fail (/tmp/c3g-red.log); green at 2ae8516d
 c3-unused-code	8ae4530977b86ce1	2026-10-09	red (fixed in 35bb972a)
+c3-test-time	29bd6bc4329b8011	2026-10-09	red (fixed in 62bb8258)
