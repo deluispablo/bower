@@ -27,6 +27,8 @@
 
 No strings change.
 
+**Signed off** by the designer on 2026-10-09 (e6f2b10d), as written. The one Segmented brings its keyboard behaviour.
+
 ## Red
 
 - `the folder view toggle is the one segmented control`: today the toggle is `.views`, not Segmented, and 36 px.

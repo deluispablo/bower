@@ -6220,7 +6220,7 @@
       "Focus turns the gaze.",
       "60 s idle sleeps; input wakes with a startle."
     ],
-    "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird only blinks\"",
+    "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird only blinks|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order\"",
     "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md."
   }
 ]
