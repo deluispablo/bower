@@ -1519,6 +1519,27 @@ describe('uploads survive a reload, through the vault', () => {
     expect((await tab.vault.piles()).find((p) => p.id === pile.id)).toBeUndefined();
   });
 
+  it('every app write of an existing file refuses one that changed name or place elsewhere: held upload (404/1030, 1708)', async () => {
+    // A thing whose last answer was lost, then filed elsewhere in Drive before the pile is removed: it stays there.
+    const { d, idb } = await fresh();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    d.beforeChunk = (call) => {
+      if (call.start === 8) d.loseNextReply();
+    };
+    const tab = page(d, idb);
+    const pile = await tab.vault.addPile({ text: '', items: [scan()] });
+    await tab.vault.settled();
+    await tab.queue.idle();
+    d.beforeChunk = null;
+    const [made] = (await d.listAll(root)).filter((f) => f.name === 'scan.pdf');
+    if (!made) throw new Error('no scan');
+    const projects = (await d.listAll(root)).find((f) => f.folder && d.pathOf(f.id, root) === 'Projects');
+    await d.update(made.id, { addParent: projects?.id ?? '', ...(made.parents[0] ? { removeParent: made.parents[0] } : {}) });
+    await tab.vault.removePile(pile.id).catch(() => undefined);
+    expect((await d.get(made.id, { binned: true })).trashed).toBeFalsy();
+    expect(d.pathOf(made.id, root)).toBe('Projects/scan.pdf');
+  });
+
   it('a thing that waited for a connection is sent once on Try again', async () => {
     const { d, idb } = await fresh();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -3439,5 +3460,129 @@ describe('c4-app-fence: every app write of an existing file is checked still as 
     untrash.mockClear();
     await expect(vault.restore(PASSPORT)).rejects.toSatisfy((e: unknown) => notAsSeenReason(e) === 'gone');
     expect(untrash).not.toHaveBeenCalled();
+  });
+
+  /** The first call of `k` that `when` picks lands; its answer is lost, and so is the read that would find it. */
+  function loseWithRead(k: 'update' | 'writeText' | 'trash' | 'untrash', when: (args: unknown[]) => boolean = () => true): () => number {
+    const d = drive as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
+    const real = d[k]?.bind(drive);
+    if (!real) throw new Error(`no ${k}`);
+    let lost = 0;
+    d[k] = async (...a: unknown[]) => {
+      const out = await real(...a);
+      if (lost > 0 || !when(a)) return out;
+      lost++;
+      const get = drive.get.bind(drive);
+      drive.get = async () => {
+        drive.get = get;
+        throw driveError('offline');
+      };
+      throw driveError('offline');
+    };
+    return () => lost;
+  }
+
+  it('every app write of an existing file refuses one that changed name or place elsewhere: restore rename (467)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    const id = await idOf(PASSPORT);
+    await vault.trash(PASSPORT);
+    await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
+    const untrash = drive.untrash.bind(drive);
+    // Out of the Bin, and renamed elsewhere before Bower renames it to a free name.
+    drive.untrash = async (...a) => {
+      const out = await untrash(...a);
+      drive.untrash = untrash;
+      await drive.update(id, { name: 'Passport (Alex).md' });
+      return out;
+    };
+    const e: unknown = await vault.restore(PASSPORT).then(() => null, (err: unknown) => err);
+    expect(ELSEWHERE).toContain(notAsSeenReason(e));
+    expect((await drive.get(id)).name).toBe('Passport (Alex).md');
+  });
+
+  it('every app write of an existing file refuses one that changed name or place elsewhere: late upload (1544)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    let lateId = '';
+    let started: () => void = () => undefined;
+    const onItsWay = new Promise<void>((r) => (started = r));
+    holdChunks(drive, slow, true, (file) => { lateId = file.id; started(); });
+    const p = await vault.addPile({ text: 'Late papers', items: [{ name: 'late.pdf', kind: 'pdf', origin: 'x', body: new Blob(['x']) }] });
+    await onItsWay;
+    await vault.trash(p.path ?? '');
+    // Filed elsewhere in Drive before its answer comes: it is not Bower's to put in the Bin.
+    await moveElsewhere(lateId);
+    release();
+    await vault.settled();
+    expect((await drive.get(lateId, { binned: true })).trashed).toBeFalsy();
+    expect(drive.pathOf(lateId, root)).toBe('Projects/late.pdf');
+  });
+
+  it('a restore whose rename landed but lost its answer resolves on the second press', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    await vault.trash(PASSPORT);
+    await vault.create('Areas/Documents', 'note', 'Passport renewal.md');
+    const lost = loseWithRead('update', (a) => typeof (a[1] as { name?: string }).name === 'string');
+    await expect(vault.restore(PASSPORT)).rejects.toMatchObject({ code: 'offline' });
+    expect(lost()).toBe(1);
+    await expect(vault.restore(PASSPORT)).resolves.toBeUndefined();
+    expect((await drive.listAll(root)).filter((f) => f.name.startsWith('Passport renewal') && drive.pathOf(f.id, root).startsWith('Areas/Documents/'))).toHaveLength(2);
+  });
+
+  it('an updatePile folder rename that landed but lost its answer lets the retry finish', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const p = await textPile();
+    const lost = loseWithRead('update', (a) => typeof (a[1] as { name?: string }).name === 'string');
+    await expect(vault.updatePile(p.id, 'Flat near the new job')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost()).toBe(1);
+    await expect(vault.updatePile(p.id, 'Flat near the new job')).resolves.toMatchObject({ text: 'Flat near the new job' });
+    expect((await drive.listAll(root)).filter((f) => f.folder && f.name.endsWith('Flat near the new job'))).toHaveLength(1);
+  });
+
+  it('clearing a pile\'s words that landed but lost its answer resolves on retry: an ordinary pile\'s note Bin', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const p = await textPile();
+    const lost = loseWithRead('trash');
+    await expect(vault.updatePile(p.id, '')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost()).toBe(1);
+    await expect(vault.updatePile(p.id, '')).resolves.toMatchObject({ text: '' });
+    expect((await drive.get(p.note, { binned: true })).trashed).toBe(true);
+  });
+
+  it('clearing a pile\'s words that landed but lost its answer resolves on retry: a declared pile\'s empty note', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const v = declaring();
+    const made = await v.addPile({ text: 'Papers from Alex', items: [pdf('a.pdf')] });
+    await v.settled();
+    await v.flushJournal();
+    await v.piles();
+    const note = await idOf(`${made.path ?? ''}/Pile note.md`);
+    const lost = loseWithRead('writeText', (a) => a[0] === note);
+    await expect(v.updatePile(made.id, '')).rejects.toMatchObject({ code: 'offline' });
+    expect(lost()).toBe(1);
+    await expect(v.updatePile(made.id, '')).resolves.toMatchObject({ text: '' });
+    expect(await drive.readText(note)).toBe('');
+  });
+
+  it('an Undo whose Bin landed but lost its answer resolves without a resend', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const rule = (await vault.rules()).find((r) => !r.pending);
+    if (!rule) throw new Error('no worded rule');
+    const undo = await vault.removeRule(rule.id);
+    await vault.flushJournal();
+    await vault.changes();
+    const sent = vi.fn();
+    const trash = drive.trash.bind(drive);
+    drive.trash = async (...a) => {
+      sent();
+      return trash(...a);
+    };
+    loseWithRead('trash');
+    await expect(undo()).rejects.toMatchObject({ code: 'offline' });
+    await expect(undo()).resolves.toBeUndefined();
+    expect(sent).toHaveBeenCalledTimes(1);
   });
 });
