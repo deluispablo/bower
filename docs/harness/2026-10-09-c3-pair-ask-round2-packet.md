@@ -28,7 +28,10 @@
 4. **Hidden.** A question whose subject is gone is not listed at all. The app reader passes what it knows of the notes (`NotesSeen`) to `openQuestions`, so a pair whose other note is in the Bin no longer shows.
 5. **Copy.**
    - Pair: "Not merged: <other note display name> was already in the Bin.", with the fallback "Not merged: the other note was already in the Bin." (addendum 9; `keepAlreadyBinned` in note-edit.ts).
-   - q-ask and q-state: the designer is giving their sentences now, and the coordinator relays them. Until then, use a named seam (a constant per kind) and say so on your card. Never invent copy.
+   - q-ask, its thing gone: "Not done: <thing> had moved or gone to the Bin before Bower got to it." Fallback: "Not done: what the question was about had moved or gone to the Bin."
+   - q-state, a "Write it" whose note is gone: "Not written: <note> had moved or gone to the Bin before Bower got to it." Fallback: "Not written: the note had moved or gone to the Bin."
+   - <thing> and <note> are display names (a pile line or a note name), never a file name or extension.
+   - Where they show: all three appear under the Home result, in one list. Only the pair row also shows on the note that stays; q-ask and q-state have no note screen row. (Designer, 2026-10-09)
 
 ## Red
 
