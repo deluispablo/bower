@@ -41,3 +41,21 @@
 1. The red.
 2. The fix.
 3. The notes (`docs/harness/2026-10-09-c4-create-landed-notes.md`, with the inventory), compatibility rows and `tests changed:` lines.
+
+## Fix round 1 (TL-P4-24 addenda 15 and 16, main b9c98173)
+
+- **Why:** the Codex pass (`2026-10-09-codex-c4-create-landed-review.md`, 1 Important) came after the P4-61 PASS. On a retry, `landed` is judged against the name the retry recomputes (`write-once.ts:201`, `drive-vault.ts:368`), not against the name that was first sent.
+  - Scenario: the answer and the recovery read are both lost. Then refresh() runs, the retry picks the next free name, the recovered file is refused CHANGED_ELSEWHERE, the id is let go, and a second copy is made.
+- **Model:** a fresh `bower-escalated` (Opus) session, on the same branch and worktree. Then a delta review and a Codex pass.
+
+1. **Store the intent with the id.** When an id is reserved, the keeper stores the intent it was first sent with: name, place and content hash.
+   - The field is additive across all four keepers.
+   - An old keeper entry without an intent keeps today's behaviour, with a fixture test.
+2. **Retries resend the stored intent and never recompute the name.** `drive-vault.ts:368` picks a free name only for a first send. `landed` is judged against the stored intent, in write-once.ts, its one home.
+3. **Addendum 15:**
+   - (1) A not-as-seen refusal of a change line is permanent. This is accepted as it is; change nothing.
+   - (2) Retitle the c2 Bin test so its title says what it now asserts (refused first, then made), with a `tests changed:` line.
+
+**Red:** `a create whose answer and recovery read were lost is made once after a refresh and a retry`. It covers the answer and the recovery read both being lost, then refresh() and a retry, and expects one file, not two. Add it to the property's timings if it fits there. A worker may not loosen a red (TL-P4-22 addendum 22).
+
+**Verify:** as above. **Commits:** the red, the fix, then a notes section "Fix round 1" with `tests changed:` lines and compatibility rows.
