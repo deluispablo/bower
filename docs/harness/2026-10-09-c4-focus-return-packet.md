@@ -29,6 +29,21 @@
 4. **Mechanism map.** `docs/ARCHITECTURE.md` gets the row "Focus return after a menu, sheet, toast or palette closes" → `ui/focus.ts`.
 5. **Timers.** The five `focusRouteHeading` names in `harness/real-timers.json` belong to `c4-test-timers`. Remove a name only if your change makes its test timer-free, and never add one.
 
+## What the person sees (TL-P4-22; the designer signs this off before dispatch)
+
+No new or changed strings. Only where focus lands changes. Every case is checked at 375 and 1440, dark and light, by keyboard.
+
+| Screen and state | Action | Focus lands on |
+| --- | --- | --- |
+| Home, "Tidy up 15 things?" sheet open (opened from Home's "Tidy up N things" button) | Escape, or "Not now" | That Home button |
+| Desktop, the same sheet opened from the tab-bar button | Escape, or "Not now" | That tab-bar button |
+| Any other sheet: ConfirmBin, NameSheet (Rename, New note, New folder), MovePicker, Settings' delete, FolderScreen's New note, Explorer's two sheets | Close | The control that opened it |
+| A sheet whose opener has gone, for example the row was binned by the action | Close | The route heading, as today |
+| Explorer's tree menu on a folder | Escape, then Delete at once | The folder row. The Delete question shows ("Move … to the Bin?" with today's wording, unchanged) |
+| Palette, Replay, toasts | Close | As today: the opener, or the heading |
+
+The focus ring is the standard `:focus-visible` ring. No visual change otherwise.
+
 ## Red
 
 - d-v2-04: press Enter on Home's "Tidy up 15 things", then Escape. `document.activeElement` must be that button; today it is `MAIN#main`.

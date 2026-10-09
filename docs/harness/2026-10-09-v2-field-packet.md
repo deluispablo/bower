@@ -36,6 +36,24 @@
    - Out of scope: NameSheet's width and layout (d-v2-09) and FolderScreen's second New-note form (d-v2-09's own risk).
 4. **Copy:** none.
 
+## What the person sees (TL-P4-22; the designer signs this off before dispatch)
+
+There are no new strings. Existing placeholders and error messages keep their wording; only their drawing changes. Check every case at 375 and 1440, in dark and light.
+
+| Control (screen) | Default | Focus | Error | Placeholder |
+| --- | --- | --- | --- | --- |
+| "What is this?" (Add) | 1.5 px `control-line` border, radius 14, at least 48 px tall | standard ring, border `--text-muted` | `--danger` border; the message under the field in `--danger`, 13 px | `--text-muted` |
+| Link field "Paste a link" (Add) | same | same | same (today's invalid-link message) | `--text-muted` |
+| Pile note (Add) | same | same | — | `--text-muted` |
+| Tell Bower's box (Bower) | same edge on the box (no separate composer ring) | same | — | `--text-muted` |
+| Rename, New note, New folder input (NameSheet) | same edge only; width and layout belong to d-v2-09 | same | same (today's slash and name messages) | `--text-muted` |
+| Move's "Find a folder" (MovePicker) | same, radius 14 | same | — | `--text-muted` |
+| Search on Home (a button that opens the palette) and in the side panel | same edge, radius 999 | same | — | `--text-muted` |
+| Switch, off (Settings) | 1.5 px `control-line` inset ring | standard ring | — | — |
+| Switch, on (Settings) | unchanged | standard ring | — | — |
+| Unticked task box (note) | custom box 24 × 24, radius 7, 2 px `control-line` inset ring; same keyboard (Space) and the same accessible name and checked state | standard ring | — | — |
+| Ticked task box (note) | unchanged look of the ticked state | standard ring | — | — |
+
 ## Red
 
 `every control edge is at least 3:1 on its ground`: a unit test that reads `tokens.json` and checks `control-line` against `bg`, `bg-alt` and `surface` in both themes. It fails today, because the token is missing.
