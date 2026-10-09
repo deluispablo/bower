@@ -4033,6 +4033,25 @@ describe('report save failure cannot publish done or repeat effects on the B pat
       expect(viewOf(w)?.run.report?.updated).toEqual([]);
     });
 
+    // TL-P4-19 addendum 3: each updated row names the edit that wrote it and its Timeline line (counted from the end),
+    // in the plan and in the report the app reads, so the New mark ties by id, never by words.
+    it("each updated row carries its edit's op id and its line", async () => {
+      const w = await bWorld();
+      await hub(w, FLAT, FLAT_BEFORE);
+      await hub(w, JOB, JOB_BEFORE);
+      await w.worker.process('all');
+      await w.runs.settled();
+      const [manifest] = await manifestsV2(w);
+      const edits = editsOf(manifest);
+      const rows = viewOf(w)?.run.report?.updated ?? [];
+      expect(rows.map((r) => r.path)).toEqual([FLAT, JOB]);
+      for (const row of rows) {
+        const edit = edits.find((e) => e.effect.path === row.path);
+        expect(row).toEqual({ path: row.path, what: row.what, op: edit?.operationId, line: 0 });
+        expect(manifest?.reportPlan.filter((c) => c.value.updated.length && c.requires[0] === edit?.operationId).flatMap((c) => c.value.updated)).toEqual([row]);
+      }
+    });
+
     it('skips a line already in the Timeline, even from another day', async () => {
       const w = await bWorld();
       const there = legacyHub(['- 2026-10-01 · Started the flat hunt.', `- 2026-09-30 · ${FLAT_WHAT}`]);
@@ -4991,6 +5010,16 @@ describe('report save failure cannot publish done or repeat effects on the B pat
         expect(await pendingAnswers(w), cause).toEqual([]);
         await expectFiledOnce(w);
       }
+    });
+
+    // c3-planner-split part 3: the row says the note's name from the plan, so the note it could not join is not captured.
+    it('a merge that fell back captures no note it could not join', async () => {
+      const { w, into } = await merging();
+      await refusals[0]?.[1](w, into);
+      const { manifest } = await tidy(w);
+      expect(viewOf(w)?.run.report?.setAside.map((r) => r.why)).toEqual([ALONE]);
+      expect(manifest?.capture.places.map((p) => p.file.fileId)).not.toContain(into.id);
+      if (manifest) expect(grounded(manifest)).toBe(true);
     });
 
     // Coordinator ruling on the delta review: a note changed while read is a passing race, held like the cap deferral.

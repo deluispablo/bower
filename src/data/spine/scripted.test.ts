@@ -6,8 +6,9 @@ import { seedFakeDrive } from '../fake/seed';
 import type { AdmissionManifest } from './admission';
 import { planAdmission } from './plan';
 import { fakeRead } from './read';
-import { scriptedProvider } from '../demo/script';
-import { runKeys } from './scripted';
+import { scriptedDecisions, scriptedProvider } from '../demo/script';
+import * as planner from './scripted';
+import { runKeys, type Decisions, type PlanOptions, type RunPlan } from './scripted';
 
 const AT = Date.UTC(2026, 9, 7, 9);
 const RUN = 'run-scripted';
@@ -86,5 +87,51 @@ describe('the scripted provider', () => {
     const rule = m.capture.journal.find((j) => m.reportPlan.some((c) => c.value.rulesWorded === 1 && c.requires.some((id) => m.operations.some((o) => o.operationId === id && o.effect.kind === 'move' && j.fileIds.includes(o.effect.before.fileId)))));
     expect(rule).toBeDefined();
     expect(plan.needs.get(rule?.recordId ?? '')).toContain(made?.operationId);
+  });
+
+  // c3-planner-split part 3 (contract 1): the plan is three steps. Capture reads the folder and never the reply;
+  // decide reads the reply (one decisions type) and what it names; build makes the operations and the report from
+  // what was decided, reading neither Drive nor the reply.
+  it('the planner runs capture, decide and build as three steps', async () => {
+    type Steps = {
+      capture?: (drive: unknown, rootId: string, opts: PlanOptions) => Promise<unknown>;
+      decide?: (drive: unknown, captured: unknown, opts: PlanOptions) => Promise<{ kind: string }>;
+      build?: (decided: unknown) => Promise<{ kind: string; plan?: RunPlan }>;
+    };
+    const steps = planner as unknown as Steps;
+    expect([typeof steps.capture, typeof steps.decide, typeof steps.build]).toEqual(['function', 'function', 'function']);
+    const { capture, decide, build } = steps;
+    if (!capture || !decide || !build) return;
+    const { drive, root, admitted } = await seeded();
+    const base = { scope: 'all' as const, allowWeb: false, runId: RUN, requestId: admitted.id, requestedAt: admitted.at, taken: admitted, mintKey: await runKeys(RUN) };
+    // Every use of the reply, by the step that made it.
+    let step = 'capture';
+    const used: string[] = [];
+    const reply = scriptedDecisions();
+    const watched = new Proxy(reply, {
+      get(target, key, receiver) {
+        used.push(`${step}:${String(key)}`);
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    }) as Decisions;
+    const opts: PlanOptions = { ...base, decisions: watched };
+    let reads = 0;
+    const read = fakeScripted(drive);
+    const counted = Object.fromEntries(Object.entries(read).map(([k, v]) => [k, typeof v === 'function' ? (...a: unknown[]) => { reads += 1; return (v as (...x: unknown[]) => unknown)(...a); } : v])) as typeof read;
+    const captured = await capture(counted, root, opts);
+    expect(reads).toBeGreaterThan(0);
+    step = 'decide';
+    const decided = await decide(counted, captured, opts);
+    expect(decided.kind).toBe('decided');
+    step = 'build';
+    const before = reads;
+    const built = await build(decided);
+    expect(reads).toBe(before);
+    expect(used.filter((u) => !u.startsWith('decide:'))).toEqual([]);
+    expect(used.length).toBeGreaterThan(0);
+    // The three steps give the very plan the planner gives.
+    const whole = await planner.planScripted(fakeScripted(drive), root, { ...base, decisions: scriptedDecisions() });
+    expect(built.kind).toBe('plan');
+    expect(built.plan?.manifest).toEqual(whole.manifest);
   });
 });

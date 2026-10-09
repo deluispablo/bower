@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { hashRecordJson } from './record-json';
+import { parseRunManifestV2 } from './run-manifest';
+import { RUNNER_WRITES } from '../vault/layout';
 import {
   parseRunCheckpoint, parseRunReport, verifyCheckpointChain,
   type Checkpoint, type Outcome, type ReportRecord, type RunExpectation,
@@ -276,6 +278,32 @@ describe('run checkpoints keep one honest recoverable chain', () => {
       value.report.reportHash = digest.value;
     }
     await accept(value, run01);
+  });
+
+  // TL-P4-19 addendum 3: an updated row names the operation that wrote it and its Timeline line, an additive field;
+  // what was stored before it (this fixture) still reads, in the report and in the manifest's report plan.
+  it('an old report without row op ids still reads', async () => {
+    const path = 'Projects/Flat hunt/Flat hunt.md';
+    const old = report04();
+    old.report.updated = [{ path, what: 'Rent went up.' }];
+    expect(await parseRunReport(bytes(old), run04)).toMatchObject({ ok: true });
+    const now = report04();
+    now.report.updated = [{ path, what: 'Rent went up.', op: op04(0), line: 0 }, { path, what: 'Current state brought up to date.', op: op04(0) }];
+    expect(await parseRunReport(bytes(now), run04)).toMatchObject({ ok: true });
+    for (const bad of [{ op: 'not-an-op' }, { op: op04(0), line: -1 }, { op: op04(0), line: 0.5 }, { line: 0 }]) {
+      const value = report04();
+      value.report.updated = [{ path, what: 'Rent went up.', ...bad } as (typeof value.report.updated)[number]];
+      expect(await parseRunReport(bytes(value), run04), JSON.stringify(bad)).toEqual({ ok: false, reason: 'shape' });
+    }
+    const manifest = (rows: unknown[]): Uint8Array => {
+      const m = clone(at(f04, ['input', 'manifest'])) as { reportPlan: { value: { updated: unknown[] } }[] };
+      const first = m.reportPlan[0];
+      if (first) first.value.updated = rows;
+      return bytes(m);
+    };
+    expect(await parseRunManifestV2(manifest([{ path, what: 'Rent went up.' }]), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true });
+    expect(await parseRunManifestV2(manifest([{ path, what: 'Rent went up.', op: op04(0), line: 0 }]), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: true });
+    expect(await parseRunManifestV2(manifest([{ path, what: 'Rent went up.', op: op04(0), line: -1 }]), 'fake-root', RUNNER_WRITES)).toMatchObject({ ok: false });
   });
 
   it.each([
