@@ -1,6 +1,6 @@
 import { LoadError } from '@/ui/LoadError';
 import { Link, useNavigate } from 'react-router';
-import { useQuestions, useRequests, useRules, useRun, useSources } from '@/data/provider';
+import { useFailedChanges, useQuestions, useRequests, useRules, useRun, useSources } from '@/data/provider';
 import { report } from '@/ui/report';
 import { focusMain } from '@/ui/focus';
 import { useUi } from '@/app/ui-store';
@@ -20,8 +20,11 @@ export function BowerPanel() {
   const requestsState = useRequests();
   const { data: requests } = requestsState;
   const asked = (requests ?? []).filter((r) => !r.done);
+  const { data: failed } = useFailedChanges();
   const { setTidy } = useUi();
-  const { runs } = useSources();
+  const { runs, vault } = useSources();
+  // Seen once: put away, a change Bower could not note is not shown again.
+  const putAwayFailed = (id: string): void => void vault.putAwayFailed?.(id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'));
   // Put away is Home's Got it: the stopped run is seen, everywhere.
   const putAway = (id: string): void => void runs.markSeen(id).then(focusMain, (e: unknown) => report(e, 'That did not work. Try again.'));
   const nav = useNavigate();
@@ -49,6 +52,15 @@ export function BowerPanel() {
         ) : (
           <p className="muted">Resting. Tidy up when the inbox has what you want filed.</p>
         )}
+        {(failed ?? []).map((f) => (
+          <div key={f.id} className={s.panelCard}>
+            <strong>{f.sentence}</strong>
+            <span className="muted">{f.what}</span>
+            <Button size="sm" variant="ghost" onClick={() => putAwayFailed(f.id)}>
+              Put it away
+            </Button>
+          </div>
+        ))}
       </section>
       <LoadError state={questionsState} />
       {!!qs?.length && (

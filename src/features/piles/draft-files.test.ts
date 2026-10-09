@@ -18,7 +18,7 @@ describe('the files of an Add draft', () => {
 });
 
 
-const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away'];
+const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away', 'bower:failed-lines'];
 const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
 const OUTBOX = '[{"v":1,"id":"CHANGE_A","device":"DEVICE_A","at":1,"kind":"create","what":"Synthetic note","fileId":"FILE_A"}]';
 const PREFS = '{"theme":"dark"}';
@@ -102,7 +102,7 @@ describe('person cleanup forgets pending draft bytes and keeps the folder outbox
       expect(() => forgetThisPerson()).not.toThrow(); noBytes();
       for (const key of PERSON_LOCAL) expect(local.getItem(key), key).toBe('[]');
       for (const key of PERSON_SESSION) expect(session.getItem(key), key).toBe(both ? key === 'bower:add-items' ? '[{"key":"DRAFT_A","name":"Synthetic.txt"}]' : '[]' : null);
-      expect(log).toHaveBeenCalledTimes(both ? 10 : 6);
+      expect(log).toHaveBeenCalledTimes(PERSON_LOCAL.length + (both ? PERSON_SESSION.length : 0));
       expect(log.mock.calls.every(([error]) => error === denied)).toBe(true);
     } finally {
       for (const [name, descriptor] of original) {

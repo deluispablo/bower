@@ -11,7 +11,8 @@ import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
 import { makeText, updateByStamp } from '../spine/write-once';
-import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
+import { isRefused } from '../drive/transport';
+import type { FailedChange } from '../sources';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
 export { isJournalRecord } from '../contracts/journal-record';
@@ -32,6 +33,10 @@ export interface JournalPlace {
   removed?: (id: string) => void;
   /** A change is kept only on this page; refresh the screen before reporting it. */
   waiting?: () => void;
+  /** Drive no longer knows the changes folder it named (a 404): list the folder again before the next send. */
+  stale?: () => void;
+  /** A waiting line was refused for good and kept among what failed: refresh what the screen shows. */
+  failed?: () => void;
 }
 
 
@@ -39,12 +44,63 @@ export interface JournalPlace {
 const REFUSED_LINE = "Your change was made, but Bower couldn't make a note of it.";
 
 /**
- * A refusal that will not change on a later try: a 4xx other than the 409 that proves a create landed (Drive's
- * "Resolve errors" guide, https://developers.google.com/workspace/drive/api/guides/handle-errors). No answer, a 5xx, a
- * sign-in or a conflict are retryable; the id stays with the line only for those.
+ * What is true when Drive refuses a line for good: a rule, a request or an answer is the line itself, so nothing was
+ * kept; any other change was made in Drive, and only its note for the next tidy-up is missing.
  */
-const refusedForGood = (e: unknown): boolean =>
-  e instanceof BowerError && !isNoAnswer(e) && !isUnconfirmedWrite(e) && (e.code === 'unknown' || e.code === 'not-found');
+function refusedSentence(rec: JournalRecord): string {
+  if (rec.kind === 'rule') return rec.removes !== undefined ? "Bower couldn't take that rule out." : "Bower couldn't keep that rule.";
+  if (rec.kind === 'request') return "Bower couldn't keep that request.";
+  if (rec.kind === 'answer') return "Bower couldn't keep your answer.";
+  return REFUSED_LINE;
+}
+
+/**
+ * A refusal that will not change on a later try: a 4xx other than a rate limit, a 404 or the 409 that proves a create
+ * landed (Drive's "Resolve errors" guide, https://developers.google.com/workspace/drive/api/guides/handle-errors), told
+ * by the transport's kind (`isRefused`). No answer, a 5xx, a rate limit, a 404, a sign-in or anything else keeps the
+ * line and its id for a later try.
+ */
+const refusedForGood = (e: unknown): boolean => isRefused(e);
+
+/**
+ * The lines Drive refused for good while nobody waited on them (a send at start, back online, or before another
+ * change), per Bower folder: each is shown once among what failed, until it is put away. Forgotten at sign-out
+ * (`device.ts`). Where storage refuses, they are kept in this page's memory.
+ */
+export const FAILED_KEY = 'bower:failed-lines';
+const failedInMemory = new Map<string, FailedChange[]>();
+
+const isFailed = (v: unknown): v is FailedChange =>
+  typeof v === 'object' && v !== null && ['id', 'what', 'sentence'].every((k) => typeof (v as Record<string, unknown>)[k] === 'string');
+
+function readFailed(): Record<string, FailedChange[]> {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(FAILED_KEY) ?? '{}');
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error('Unreadable failed changes');
+    const out: Record<string, FailedChange[]> = {};
+    for (const [k, list] of Object.entries(v)) out[k] = Array.isArray(list) ? list.filter(isFailed) : [];
+    return out;
+  } catch (e) {
+    console.error(e);
+    return {};
+  }
+}
+
+function failedOf(folder: string): FailedChange[] {
+  return failedInMemory.get(folder) ?? readFailed()[folder] ?? [];
+}
+
+function keepFailed(folder: string, list: FailedChange[]): void {
+  const all = Object.fromEntries(Object.entries({ ...readFailed(), [folder]: list }).filter(([, l]) => l.length));
+  try {
+    if (Object.keys(all).length) localStorage.setItem(FAILED_KEY, JSON.stringify(all));
+    else localStorage.removeItem(FAILED_KEY);
+    failedInMemory.delete(folder);
+  } catch (e) {
+    console.error(e);
+    failedInMemory.set(folder, list);
+  }
+}
 
 /** This device's unsent lines, per Bower folder, so one person's never reach another's. */
 /** Where this device keeps a folder's change outbox (live sources read it to know lines wait). */
@@ -186,7 +242,8 @@ export class Journal {
       const sentNow = await this.send(line);
       if (sentNow === 'refused') {
         this.checkCurrent();
-        throw new BowerError('unknown', REFUSED_LINE, { path: kind === 'trash' ? null : (extra.path ?? null), changeId: rec.id });
+        // Told now, to the person who made it; the line no longer exists, so there is nothing to take back.
+        throw new BowerError('unknown', refusedSentence(rec));
       }
       if (sentNow === 'later') {
         let previous = this.volatile.get(key) ?? [];
@@ -243,18 +300,23 @@ export class Journal {
       this.keep(key, this.waiting(key).map((r) => (r.reserved === undefined && ids.has(r.line.id) ? { ...r, reserved: ids.get(r.line.id) } : r)));
     }
     const sent = new Set<string>();
-    let refused = 0;
+    const refused: FailedChange[] = [];
     for (const r of waiting) {
       this.checkCurrent();
       const out = await this.send(r);
       if (out !== 'later') sent.add(r.line.id);
-      if (out === 'refused') refused++;
+      if (out === 'refused') refused.push({ id: r.line.id, what: r.line.what, sentence: refusedSentence(r.line) });
     }
     // Only what was sent, or ended as failed, leaves; anything added meanwhile stays.
     this.checkCurrent();
     this.keep(key, this.waiting(key).filter((r) => !sent.has(r.line.id)));
-    // Told once: the line is gone from the outbox, so the next try does not say it again.
-    if (refused && required) throw new BowerError('unknown', REFUSED_LINE);
+    // Nobody waits on a line that waited: it is kept among what failed, shown once until put away, never sent again.
+    if (refused.length) {
+      const folder = await this.place.owner();
+      const known = failedOf(folder);
+      keepFailed(folder, [...known, ...refused.filter((f) => !known.some((k) => k.id === f.id))]);
+      this.place.failed?.();
+    }
     if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
   }
 
@@ -287,11 +349,24 @@ export class Journal {
       return 'sent';
     } catch (e) {
       console.error(e);
+      // A stale changes folder (deleted elsewhere): listed again before the next try, which makes it anew if gone.
+      if (e instanceof BowerError && e.code === 'not-found') this.place.stale?.();
       if (!refusedForGood(e)) return 'later';
       // Refused for good: the line ends as failed and its id is let go, never waiting for a try that cannot work.
       delete w.reserved;
       return 'refused';
     }
+  }
+
+  /** The lines Drive refused for good while nobody waited on them, not yet put away. */
+  async failed(): Promise<FailedChange[]> {
+    return failedOf(await this.place.owner());
+  }
+
+  /** The person has seen a line that failed: it is not shown again. */
+  async putAway(id: string): Promise<void> {
+    const folder = await this.place.owner();
+    keepFailed(folder, failedOf(folder).filter((f) => f.id !== id));
   }
 
   /** Every change since the last tidy-up, oldest first, each once (Drive and this device's outbox). */

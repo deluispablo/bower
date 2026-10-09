@@ -10,7 +10,7 @@ import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
 import { noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
-import { BIN_KEYS, DRIVE_MESSAGES, driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableTarget, type SessionStatus } from './drive-api';
+import { BIN_KEYS, DRIVE_MESSAGES, driveError, rateLimitedError, refusedError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableTarget, type SessionStatus } from './drive-api';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -76,7 +76,7 @@ export const toFile = (w: WireFile): DriveFile => ({
 export const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 const mimeOf = (name: string): string => (name.endsWith('.md') ? 'text/markdown' : 'text/plain');
 /** Drive's 403 for a rate limit, told apart from a refusal by its reason. */
-async function isRateLimit(res: Response): Promise<boolean> {
+async function rateLimitAnswer(res: Response): Promise<boolean> {
   if (res.status !== 403) return false;
   try {
     const body = (await res.clone().json()) as { error?: { errors?: Array<{ reason?: string }> } };
@@ -343,7 +343,7 @@ export class DriveHttp implements DriveApi {
    * again only for a status question (`idempotent`); a chunk or a create is not, and its caller asks the status.
    */
   private async raw(url: string, init: RequestInit, idempotent = false): Promise<Response> {
-    return this.authorized(url, init, { idempotent, again: async (res) => res.status === 429 || res.status >= 500 || (await isRateLimit(res)) });
+    return this.authorized(url, init, { idempotent, again: async (res) => res.status === 429 || res.status >= 500 || (await rateLimitAnswer(res)) });
   }
 
   /** The request under the transport's policy, with the token and its one refresh; any answer but a 401 goes back. */
@@ -430,13 +430,16 @@ export class DriveHttp implements DriveApi {
     const method = (init.method ?? 'GET').toUpperCase();
     // A rate limit says the request did not land: ask again. A 5xx on a write may have landed (a create made the
     // file, an update overwrote a newer edit): only a read is asked again; a write's 5xx is told as unconfirmed below.
-    const again = async (res: Response): Promise<boolean> => res.status === 429 || (await isRateLimit(res)) || (res.status >= 500 && method === 'GET');
+    const again = async (res: Response): Promise<boolean> => res.status === 429 || (await rateLimitAnswer(res)) || (res.status >= 500 && method === 'GET');
     const res = await this.authorized(url, init, { idempotent: method === 'GET', again }, method !== 'GET');
     if (res.ok || res.status === 308 || pass.includes(res.status)) return res;
     if (res.status === 404) throw driveError('not-found');
     // A create whose reserved id is taken (https://developers.google.com/workspace/drive/api/guides/handle-errors).
     if (res.status === 409) throw driveError('conflict');
     console.error(`Drive answered ${res.status} for ${method} ${new URL(url).pathname}`);
+    // Told by kind, never by words: still rate limited after the retries, it did not land; any other 4xx is a refusal.
+    if (res.status === 429 || (await rateLimitAnswer(res))) throw rateLimitedError();
+    if (res.status >= 400 && res.status < 500) throw refusedError();
     throw res.status >= 500 && method !== 'GET' ? unconfirmedWriteError() : driveError('unknown');
   }
 }

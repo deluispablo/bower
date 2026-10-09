@@ -145,3 +145,22 @@ export const UNCONFIRMED_WRITE = 'unconfirmed-write';
  * Nothing here reads it back or sends it again; the caller says what it could not confirm.
  */
 export const isUnconfirmedWrite = (e: unknown): boolean => e instanceof BowerError && e.cause === UNCONFIRMED_WRITE;
+
+/**
+ * The marker on a request still rate limited after the retries (429, or a 403 `rateLimitExceeded` /
+ * `userRateLimitExceeded`): Drive did not take it, and the guide lists it as retry-with-backoff
+ * (https://developers.google.com/workspace/drive/api/guides/handle-errors), so a later try may well go.
+ */
+export const RATE_LIMITED = 'rate-limited';
+
+/** A request Drive did not take for now: send it again later, with the same id. */
+export const isRateLimit = (e: unknown): boolean => e instanceof BowerError && e.cause === RATE_LIMITED;
+
+/**
+ * The marker on a request Drive refused with a 4xx that no later try changes: not a sign-in (401), not a rate limit,
+ * not a 404 (a stale id, found again by listing) nor the 409 that proves a create landed. Only this ends a pending write.
+ */
+export const REFUSED = 'refused';
+
+/** Drive answered that it will not do this request, now or later. */
+export const isRefused = (e: unknown): boolean => e instanceof BowerError && e.cause === REFUSED;

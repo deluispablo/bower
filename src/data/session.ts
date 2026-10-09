@@ -757,7 +757,7 @@ export function fenceWorker<T extends WorkerApi>(worker: T, guard: PlaceGuard): 
 /** Door methods that only read; any other one changes something and is fenced (fail closed). */
 const DOOR_READS: Record<keyof Omit<Sources, 'place'>, ReadonlySet<PropertyKey>> = {
   session: new Set(['current', 'signIn', 'signOut', 'folderState', 'subscribe']),
-  vault: new Set(['driveLink', 'tree', 'note', 'piles', 'pilesListed', 'duplicates', 'questions', 'rules', 'requests', 'linkAddress', 'search', 'suggestions', 'changes', 'uploadNotice', 'subscribe']),
+  vault: new Set(['driveLink', 'tree', 'note', 'piles', 'pilesListed', 'duplicates', 'questions', 'rules', 'requests', 'linkAddress', 'search', 'suggestions', 'changes', 'failedChanges', 'putAwayFailed', 'uploadNotice', 'subscribe']),
   runs: new Set(['current', 'markSeen', 'subscribe']),
 };
 

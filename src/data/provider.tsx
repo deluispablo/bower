@@ -77,6 +77,7 @@ export const useSuggestions = () => useLoad((s) => s.vault.suggestions(), (s, cb
 export const useRun = () => useLoad((s, again) => s.runs.current({ again }), (s, cb) => s.runs.subscribe(cb));
 export const useNote = (path: string) =>
   useLoad((s) => s.vault.note(path), (s, cb) => s.vault.subscribe(cb), [path]);
+export const useFailedChanges = () => useLoad(async (s) => (await s.vault.failedChanges?.()) ?? [], (s, cb) => s.vault.subscribe(cb));
 export const useChanges = () => useLoad((s) => s.vault.changes(), (s, cb) => s.vault.subscribe(cb));
 export const useRequests = () => useLoad((s) => s.vault.requests(), (s, cb) => s.vault.subscribe(cb));
 export const useUser = () => useLoad((s) => s.session.current(), (s, cb) => s.session.subscribe(cb));

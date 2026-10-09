@@ -11,7 +11,7 @@
  */
 import { forgetAll } from './draft-files';
 
-const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away'];
+const PERSON_LOCAL = ['bower:seen', 'bower:dismissed', 'bower:run-seen', 'bower:bookmarks', 'bower:open', 'bower:stopped-away', 'bower:failed-lines'];
 const PERSON_SESSION = ['bower:add-draft', 'bower:add-items', 'bower:toured', 'bower:tabs'];
 
 /** The account is gone: the sign-in screen says so once (it reads and clears 'bower:bye'). */

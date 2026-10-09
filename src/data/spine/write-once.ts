@@ -122,9 +122,14 @@ export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): 
 export class Intended {
   private readonly ids = new Map<string, string>();
 
-  /** Whether an id is kept for `key`: an earlier try may have landed, its answer lost. */
-  has(key: string): boolean {
-    return this.ids.has(key);
+  /** The id kept for `key`, when an earlier try may have landed with its answer lost. */
+  kept(key: string): string | undefined {
+    return this.ids.get(key);
+  }
+
+  /** What `key` meant is settled another way (found in the Bin, or changed elsewhere): its id is let go. */
+  forget(key: string): void {
+    this.ids.delete(key);
   }
 
   async make(key: string, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> {
