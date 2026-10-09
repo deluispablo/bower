@@ -5947,7 +5947,7 @@
       "A merged claude/design worktree survives integrate.",
       "A worktree with a running process survives integrate."
     ],
-    "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"integrate removes a merged branch and its clean worktree|a merged claude/design worktree survives integrate|a worktree with a running process survives integrate\"",
-    "note": "TL-P4-19 and addendum 2 (main df9e3476); defect cleanup-removed-active-worktrees. Tests use fixture repos in temp dirs. Starting model: bower-implementer."
+    "verify": "pnpm exec vitest run src/harness-git.test.ts -t \"integrate removes a merged branch and its clean worktree|a merged claude/design worktree survives integrate|a worktree with a running process survives integrate|harness-git imported under node -e with a sha argument does not run the cleanup\"",
+    "note": "TL-P4-19 and addendum 2 (main df9e3476); defect cleanup-removed-active-worktrees. Tests use fixture repos in temp dirs. Starting model: bower-implementer. Fix round (red fe4ef462, fix c8f43681): defect harness-git-cli-on-import (the CLI check threw on import under done.sh)."
   }
 ]
