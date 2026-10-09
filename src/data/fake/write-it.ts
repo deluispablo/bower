@@ -10,7 +10,7 @@ import type { DispatchAt } from './fake-run-service';
  * Made up, on Alex's folder.
  */
 export const WRITE_IT_STATES: readonly (Omit<AuthoredState, 'cites'> & { cites: string })[] = [
-  // Each cites the inbox thing its news is from, by its fixture key (`seedFixture`), resolved when the situation runs.
+  // Each cites the inbox thing its news is from, by its fixture key (`seedFakeDrive`), resolved when the situation runs.
   { path: 'Areas/Money/Money.md', lines: ['October is on budget so far.', 'Receipts are filed by month, as your rule says.'], cites: 'r0' },
   { path: 'Areas/Car/Car.md', lines: ['Insurance runs until 30 June.', 'MOT booked for 14 January.'], cites: 's1-0' },
 ];

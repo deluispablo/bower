@@ -24,26 +24,16 @@ export function madeUp(name: string, kind: string | undefined): string {
 const SAME_AS_DEFAULT: Scenario[] = ['signed-out', 'fail-run', 'start-fails', 'slow', 'offline', 'running', 'gone-answers', 'write-it'];
 
 /**
- * What the seed made: the folder's root, and each inbox thing's file id by its fixture key (the demo item id, `i1`,
- * `s1-0`…), so a situation cites a thing by the id it was given, never by its name (TL-P4-19 addendum 20).
+ * Seeds the pretend Drive and returns its root. `keys`, when given, gets each inbox thing's file id by its fixture key
+ * (the demo item id, `i1`, `s1-0`…), so a situation cites a thing by the id it was given, never by its name (TL-P4-19
+ * addendum 20).
  */
-export interface Seeded {
-  root: string;
-  keys: ReadonlyMap<string, string>;
-}
-
-/** The pretend Drive's root, seeded; see `seedFixture` for the fixture keys. */
-export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: number): Promise<string | null> {
-  return (await seedFixture(drive, scenario, now))?.root ?? null;
-}
-
-export async function seedFixture(drive: FakeDrive, scenario: Scenario, now: number): Promise<Seeded | null> {
+export async function seedFakeDrive(drive: FakeDrive, scenario: Scenario, now: number, keys: Map<string, string> = new Map()): Promise<string | null> {
   if (scenario === 'first') return null;
   const world = new DemoWorld({ scenario: SAME_AS_DEFAULT.includes(scenario) ? 'default' : scenario, scale: 'instant', latency: 0, now });
   // The write-it situation's news lines cite what they are from: Car's, the renewal pile's notice.
   if (scenario === 'write-it') world.addSample(CAR_RENEWAL);
   try {
-    const keys = new Map<string, string>();
     const itemKeys = new Map<string, string>();
     const { vault, runs } = world.sources();
     const root = (await drive.createFolder('root', BOWER_FOLDER)).id;
@@ -115,7 +105,7 @@ export async function seedFixture(drive: FakeDrive, scenario: Scenario, now: num
       const { seen: _seen, ...rest } = run;
       await json('last-run.json', { v: 1, run: rest } satisfies LastRunFile);
     }
-    return { root, keys };
+    return root;
   } finally {
     world.dispose();
   }

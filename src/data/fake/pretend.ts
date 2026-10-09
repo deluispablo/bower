@@ -7,7 +7,7 @@ import { FakeDrive } from '../drive/fake-drive';
 import type { Scenario, TimeScale } from '../demo/scenario';
 import { BOWER_FOLDER } from '../vault/layout';
 import { FakeRunService, type FakeRunServiceOptions } from './fake-run-service';
-import { seedFixture } from './seed';
+import { seedFakeDrive } from './seed';
 
 const FAKE_KEY = (scenario: Scenario): string => `bower:fake:${scenario}`;
 
@@ -34,9 +34,7 @@ export async function pretendDrive(scenario: Scenario): Promise<{ drive: FakeDri
     }
   } else {
     drive = new FakeDrive();
-    const seeded = await seedFixture(drive, scenario, Date.now());
-    rootId = seeded?.root ?? null;
-    keys = new Map(seeded?.keys ?? []);
+    rootId = await seedFakeDrive(drive, scenario, Date.now(), keys);
     try {
       sessionStorage.setItem(KEYS_KEY(scenario), JSON.stringify([...keys]));
     } catch (e) {

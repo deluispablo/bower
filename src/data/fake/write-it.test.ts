@@ -7,7 +7,7 @@ import { tidyUp } from '@/testing/tidy-up';
 import { FakeDrive } from '../drive/fake-drive';
 import { DriveVault } from '../vault/drive-vault';
 import { parseNote } from '../vault/note-format';
-import { seedFixture } from './seed';
+import { seedFakeDrive } from './seed';
 import { editAtWrite, editElsewhere, writeIt, writeItStates } from './write-it';
 import type { AuthoredState } from '../spine/scripted';
 import { FakeRunService } from './fake-run-service';
@@ -32,9 +32,9 @@ const REASK = (name: string): string => `The current state of ${name} changed af
 beforeEach(async () => {
   localStorage.clear();
   drive = new FakeDrive();
-  const seeded = await seedFixture(drive, 'write-it', Date.now());
-  root = seeded?.root ?? '';
-  WRITE_IT_STATES = writeItStates(seeded?.keys ?? new Map());
+  const keys = new Map<string, string>();
+  root = (await seedFakeDrive(drive, 'write-it', Date.now(), keys)) ?? '';
+  WRITE_IT_STATES = writeItStates(keys);
   await writeIt(drive, root);
 });
 
