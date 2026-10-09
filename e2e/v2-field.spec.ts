@@ -206,3 +206,36 @@ test('fields and switches draw their edge with the control line', async ({ page 
     }
   }
 });
+
+test('the sort menu tick keeps its own size and place', async ({ page }, info) => {
+  test.skip(!isFake, 'The fake Drive is the source this entry is judged on.');
+  test.skip(info.project.name !== 'desktop', 'The sort menu lives in the desktop Files panel.');
+  await open(page, '/files');
+  await page.getByRole('button', { name: 'Change sort order' }).click();
+  const item = page.getByRole('menuitemradio', { checked: true });
+  await expect(item).toBeVisible();
+  const tick = item.locator('span').last();
+  const [i, t] = [await item.boundingBox(), await tick.boundingBox()];
+  expect(t?.width, 'tick width').not.toBe(24);
+  expect(t?.width ?? 99, 'tick width').toBeLessThanOrEqual(20);
+  expect((i?.x ?? 0) + (i?.width ?? 0) - ((t?.x ?? 0) + (t?.width ?? 0)), 'gap to right edge').toBeLessThanOrEqual(16);
+  expect(await tick.evaluate((n) => getComputedStyle(n).boxShadow)).toBe('none');
+});
+
+test('a focused invalid field keeps the danger edge', async ({ page }) => {
+  test.skip(!isFake, 'The fake Drive is the source this entry is judged on.');
+  await open(page, '/add');
+  const link = page.getByLabel('Paste a link');
+  await link.fill('not a link');
+  await page.keyboard.press('Enter');
+  await expect(link).toHaveAttribute('aria-invalid', 'true');
+  await link.focus();
+  await expect(link).toBeFocused();
+  const box = page.locator('form', { has: link });
+  expect((await edge(box)).border, 'edge while focused').toBe(await resolved(page, '--danger'));
+  const ring = await box.evaluate((n) => {
+    const c = getComputedStyle(n);
+    return [c.outlineStyle, c.outlineWidth, c.outlineColor];
+  });
+  expect(ring, 'focus ring').toEqual(['solid', '2px', await resolved(page, '--accent-line')]);
+});
