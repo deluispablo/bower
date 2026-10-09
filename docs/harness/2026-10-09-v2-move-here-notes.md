@@ -35,3 +35,7 @@ Per the assignment, no `pnpm check` or e2e was run. The coordinator still needs 
 - [WCAG 2.5.8: Target size (minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html): pointer targets require 24 by 24 CSS pixels or a listed exception. The packet's 52 px row requirement exceeds that minimum; the e2e also enables axe's target-size rule.
 
 Compatibility: markup and styles only, with "Now here" and "Cancel" added. No stored data, routes, formats, or move protocol changes.
+
+## Round 2
+
+- Applied the designer's 2026-10-09 ruling: Enter on the current folder's name ignores case and shows the exact already-there status before the one-match rule; another exact-name folder shows the existing several-match hint. The named unit test covers the matching descendant, case, duplicate name, no move, and typing clearing the hint; the e2e now asserts the hint too. Red: the new unit test failed because Enter closed the sheet (`/tmp/v2-move-here-round2-red.log`). Green: both unit tests, tsc, and targeted ESLint passed (`/tmp/v2-move-here-round2-{green,tsc,eslint}.log`). No e2e, pnpm check, or git write commands were run.

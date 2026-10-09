@@ -121,3 +121,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `e2038262` | v2-perched-bower | UI only: the run chip's bird gains `minor` (it never takes Bower's turn and shows its still frame); the perched Bower moves through the engine instead of CSS keyframes. No stored format, wire, manifest or device-store field changed; nothing to deploy together |
 | `3a16e205` | v2-move-here | none: tests only (red for the move sheet current folder row). |
 | `137b59dd` | v2-move-here | none: markup and styles only (current folder row, reused pill, 52 px rows, Cancel); adds "Now here" and "Cancel". No stored data, route, format or move protocol changes. |
+| `72ad0e8f` | v2-move-here | none: tests only (Enter on the current folder name). |
+| `65425820` | v2-move-here | none: one hint line in the Move sheet; no stored data, route or format changes. |
