@@ -2,8 +2,7 @@
 
 Read-only and fresh. Unit, runner, api and contract tests only: never start a server, run e2e or call the claude CLI. Never check out the main repo in any form. Run git with `-C /private/tmp/bower-c3-state`.
 
-- **Diff:** `git diff 1d2e5a26..cab42f23`, skipping the merges of claude/p3: c861afa6, which brings in pair-ask round 3, and d3977010.
-  - To see only this entry's changes, use `git log --no-merges 1d2e5a26..cab42f23 -p`.
+- **Diff:** `git diff e03c72b4..cab42f23` shows the whole entry against claude/p3 (e03c72b4 is the claude/p3 parent of the last merge, d3977010). List the entry-only commits with `git log --first-parent --no-merges 1d2e5a26..cab42f23`.
   - Round 3: red e5301fc3, fix d824059e, notes dc0cf890.
   - Round 3b: red dcb46f11, fix abca07ea, e2e 107e2da1, notes 0d212bd7 and cab42f23.
 - **The previous review** (P4-47, BLOCK; /private/tmp/p4-47-review-notes.md) found that the stamp+md5 re-ask (`held`) had no test. Check that the new test fails when `held` is removed.
