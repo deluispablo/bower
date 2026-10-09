@@ -27,7 +27,7 @@ test('the move sheet shows where the thing is now and it cannot be chosen', asyn
   const current = sheet.getByRole('button', { name: /Flat hunt.*Now here/ });
   await expect(current).toHaveAttribute('aria-disabled', 'true');
   await expect(current.getByText('Now here', { exact: true })).toBeVisible();
-  await expect(sheet).toContainText('Now in Projects › Flat hunt');
+  await expect(sheet).toContainText('Now in Projects / Flat hunt');
   const rows = sheet.locator('li > button');
   for (const row of await rows.all()) {
     await row.scrollIntoViewIfNeeded();
