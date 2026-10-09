@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, slowProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, SLOW_CEILING, slowProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -314,7 +314,7 @@ describe('the harness', () => {
     // A name added beyond the recorded size fails, even for a test that is slow.
     expect(slowProblems(tests, ['a', 'b'], 1)).toEqual([expect.stringContaining('may only shrink')]);
     const list = JSON.parse(readFileSync(join(process.cwd(), 'harness/slow-tests.json'), 'utf8')) as { tests: string[] };
-    expect(list.tests.length).toBeLessThanOrEqual(16);
+    expect(list.tests.length).toBeLessThanOrEqual(SLOW_CEILING);
     expect(new Set(list.tests).size).toBe(list.tests.length);
   });
 });

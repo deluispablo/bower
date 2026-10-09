@@ -252,3 +252,21 @@ export function redKind(output) {
   if (!unitFailed && /^\s*Test Files\s+[1-9]\d* failed/m.test(plain)) return 'load';
   return 'none';
 }
+
+/** A unit test slower than this must be on harness/slow-tests.json (TL-P4-17 entry 3). */
+export const SLOW_MS = 1000;
+/** The size of harness/slow-tests.json today. The list may only shrink: lower this when a line goes, never raise it. */
+export const SLOW_CEILING = 20;
+/**
+ * The unit tests over SLOW_MS that are not on the slow list, a list longer than the ceiling, and lines that match no test.
+ * `tests` are `{ name, duration }` from test-results/unit.json (vitest's JSON report, the same file the pattern check reads).
+ */
+export function slowProblems(tests, list, ceiling = SLOW_CEILING) {
+  const bad = [];
+  const listed = new Set(list);
+  for (const t of tests) if (t.duration > SLOW_MS && !listed.has(t.name)) bad.push(`"${t.name}" took ${Math.round(t.duration)} ms: make it wait for events, not time, or (only if it cannot) it stays out of harness/slow-tests.json, which may only shrink`);
+  if (list.length > ceiling) bad.push(`harness/slow-tests.json has ${list.length} lines, over the ${ceiling} it may keep: the slow list may only shrink`);
+  const names = new Set(tests.map((t) => t.name));
+  for (const name of list) if (!names.has(name)) bad.push(`harness/slow-tests.json names "${name}", which matches no test: delete the line and lower SLOW_CEILING`);
+  return bad;
+}

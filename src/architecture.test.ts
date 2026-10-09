@@ -8,7 +8,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { fixture, removeFixtures, ROOT, run } from '@/testing/dependency-gate';
+import { fixture, removeFixtures, run } from '@/testing/dependency-gate';
 
 afterAll(removeFixtures);
 
@@ -19,7 +19,8 @@ const files = (dir: string): string[] =>
     return statSync(p).isDirectory() ? files(p) : /\.(ts|tsx)$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : [];
   });
 
-// Who may import which data source is checked by dependency-cruiser (.dependency-cruiser.cjs); these tests drive that gate.
+// Who may import which data source is checked by dependency-cruiser (.dependency-cruiser.cjs) on the real tree in pnpm check;
+// this test drives that gate on small fixture trees (the rule list itself: src/dependency-rules.test.ts).
 describe('the shape of the code', () => {
   it('the import rule sees dynamic and relative imports', () => {
     const base = { 'src/data/demo/world.ts': 'export const w = 1;\n', 'src/data/fake/pretend.ts': 'export const p = 1;\n', 'src/data/drive/fake-drive.ts': 'export const d = 1;\n' };
@@ -29,12 +30,6 @@ describe('the shape of the code', () => {
       expect(r.out).toContain('screens-use-data-only-through-sources');
     }
     expect(run(fixture({ ...base, 'src/data/provider.tsx': 'export const q = 1;\n', 'src/features/a/Screen.ts': "import { q } from '../../data/provider';\n" })).code).toBe(0);
-  });
-
-  it('screens never import a data source directly', () => {
-    const r = run(ROOT);
-    expect(r.out, 'Screens talk to data only through src/data/sources.ts (useSources, useLoad hooks in provider.tsx) and types.ts. Move what the screen needs behind a VaultSource/RunSource method, or into a pure module outside demo/drive/vault/live/worker/fake.').not.toContain('screens-use-data-only-through-sources');
-    expect(r.code).toBe(0);
   });
 
   it('errors are never swallowed', () => {
