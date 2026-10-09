@@ -25,7 +25,7 @@ A review finding inside the entry's contract, about its own new code, is still f
 3. **The lead decides the design.** When the defect touches the UI (what the person sees or does, copy, layout, states, focus, motion), the lead first consults the designer and cites its answer (TL-P4-18 addendum 2). The lead reads the note and rules on one option, with its entries and starting models. The ruling goes in the note under `## Ruling` and as a line in `DECISIONS.md`. **Never a second way to do the same thing:** a fix extends or consolidates the owner mechanism. A new mechanism must remove the copies it replaces, or name the entry that will.
 4. **Implement.** The coordinator writes the packets from the ruling. The packet cites the note and the mechanism-map entries it touches. The red reproduces the live evidence, and the class test is part of the verify.
 5. **Review.** Besides the acceptance contract, the reviewer answers one fixed question: *does this add a second way to do something that already exists?* A yes blocks.
-6. **Close and learn.** The log line gets `status: fixed <sha>`.
+6. **Close and learn.** A defect that touches the UI closes only after the designer's `verified` (TL-P4-18 addendum 3). The log line gets `status: fixed <sha>`.
    - At the end of each stage or slice, the lead reads every defect from that period together.
    - A class seen twice becomes a base-improvement entry.
    - A rule that keeps being broken by hand becomes a machine check (METHOD, "Rules machines check").

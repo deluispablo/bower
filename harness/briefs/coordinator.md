@@ -40,7 +40,10 @@ You are the one explicitly assigned integration coordinator for this batch. Foll
   - close an escalated entry only after its review PASS;
   - never loosen a gate to get a merge through: log the defect and ask the lead;
   - send the lead the list of unmerged branches; delete one with `-D` only with the owner's OK.
-- The designer (`Diseñador`, [TL-P4-18](../../docs/harness/2026-10-09-tl-p4-18-designer-role.md)) never messages you. Its specs reach you as entries from the lead.
+- The designer (`Diseñador`, [TL-P4-18](../../docs/harness/2026-10-09-tl-p4-18-designer-role.md), addendum 3):
+  - its specs reach you as entries from the lead;
+  - you may consult it directly on a UI question (copy, layout, states, focus, motion, Bower on screen), in one message of 10 lines at most. A design choice outside an agreed spec still goes to the lead, who rules after the designer's answer;
+  - an entry that changes what the person sees or does is marked `ui: true` in its packet. After its review PASS and merge, and before `done.sh` closes it, send the designer a design check: the entry id, the claude/p3 SHA, the screens, and how to reach them (`?source=demo` or `fake`, on the dev server). Close it only after `verified`. `not as specified: <what>` starts a fix round within the spec; anything else goes to the lead.
 - Research first, always (owner rule, 2026-10-06). Every packet tells the worker to look up the standard solution, recommended practice and specifications before designing a fix. The worker cites them in its delivery. A worker's own mechanism needs a stated reason why no standard approach fits.
 - Freeze evaluator targets and serialize shared browser resources. Return integrated/closure SHAs, evidence, remaining findings and next assignment. A documentation maintenance request authorizes its narrow files, not takeover of an implementation batch.
 
