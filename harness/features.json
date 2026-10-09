@@ -6262,5 +6262,20 @@
     ],
     "verify": "pnpm vitest run src/data/vault/drive-vault.test.ts -t \"every app write of an existing file refuses one that changed name or place elsewhere|every app write of a file reads it fresh in the same call|a fence read with no answer refuses with notReadError|a lost answer whose file already holds the write resolves without a resend|unbin expects the file in the Bin\"",
     "note": "TL-P4-24 finding 2 (a); defect app-bin-skips-read-check; after c4-undo-withdraw. Escalated + Codex review pass. Packet 2026-10-09-c4-app-fence-packet.md. TL-P4-24 addendum 4: one checkStillAsSeen(seen, read, message) helper; SeenFiles folds in."
+  },
+  {
+    "id": "v2-move-here",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "The Move sheet shows the current folder in place, dimmed with a \"Now here\" pill, not choosable (aria-disabled, skipped by tap, Enter and arrows); 52 px rows; a full-width ghost Cancel (d-v2-18).",
+    "steps": [
+      "The current folder row exists, carries Now here and aria-disabled, and cannot be chosen.",
+      "Arrows step over it.",
+      "Cancel closes the sheet and returns focus to the opener."
+    ],
+    "verify": "pnpm vitest run src/features/files/MovePicker.test.tsx -t \"the move sheet's arrows step over the current folder\" && bash scripts/e2e-both.sh e2e/v2-move-here.spec.ts -g \"the move sheet shows where the thing is now and it cannot be chosen|the move sheet has a cancel that returns focus to its opener\"",
+    "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex."
   }
 ]
