@@ -1,9 +1,9 @@
 /**
- * Retention of run folders (TL-P3-21 point 3; retention-never-wired, round 2): at a run's end, after the report
- * barrier and before `done` (`main.ts`), the folders in `.bower/runs/` of ended runs beyond the newest 20 go to the
- * Drive Bin, never a hard delete; the same 20 as the Worker's run history.
+ * Retention of run folders (TL-P3-21 point 3; retention-never-wired, rounds 2 and 3): at a run's terminal end, done
+ * after the report barrier or failed for good, before that report (`main.ts`), the folders in `.bower/runs/` of ended
+ * runs beyond the newest 20 go to the Drive Bin, never a hard delete; the same 20 as the Worker's run history.
  *
- * Ended is known without reading a record: at done a run stamps its own folder's `appProperties` with its run id and
+ * Ended is known without reading a record: at its end a run stamps its own folder's `appProperties` with its run id and
  * when it ended (`endedStamp`; app-private properties, https://developers.google.com/workspace/drive/api/guides/properties).
  * So the run's own listing of `.bower/runs` (the read cache, `records.ts`) is enough to pick the oldest; no kept chain
  * is read again. A folder is ended only when its stamp names its own run id (its folder name); a folder with no such
@@ -36,18 +36,24 @@ export function endedAt(folder: DriveFile): number | null {
 }
 
 /**
- * The run folders to put in the Bin, oldest first: of the ended ones and this run (`runId`, the newest), those beyond
- * the newest `keep`, at most `most` of them. This run's own folders are never among them.
+ * The run folders to put in the Bin, oldest first: of the ended runs and this run (`runId`, ended `at`), the runs
+ * beyond the newest `keep`, at most `most` folders. A run counts once however many folders carry its stamp. This run
+ * is placed by when it ended, never as the newest by default, so an old redispatch never lets go of one of the newest
+ * `keep`; its own folders are never among them.
  */
-export function toBin(folders: readonly DriveFile[], runId: string, keep = KEEP_FINISHED, most = BIN_PER_RUN): DriveFile[] {
-  const ended = folders.flatMap((folder) => {
+export function toBin(folders: readonly DriveFile[], runId: string, at: number, keep = KEEP_FINISHED, most = BIN_PER_RUN): DriveFile[] {
+  const runs = new Map<string, { name: string; at: number; folders: DriveFile[] }>([[runId, { name: runId, at, folders: [] }]]);
+  for (const folder of folders) {
     const when = folder.name === runId ? null : endedAt(folder);
-    return when === null ? [] : [{ folder, at: when }];
-  });
-  ended.sort((a, b) => a.at - b.at || (a.folder.name < b.folder.name ? -1 : a.folder.name > b.folder.name ? 1 : 0));
-  // This run is the newest, so it counts as one of the `keep`.
-  const beyond = Math.max(0, ended.length + 1 - keep);
-  return ended.slice(0, Math.min(beyond, most)).map((e) => e.folder);
+    if (when === null) continue;
+    const run = runs.get(folder.name);
+    if (run) {
+      run.at = Math.max(run.at, when);
+      run.folders.push(folder);
+    } else runs.set(folder.name, { name: folder.name, at: when, folders: [folder] });
+  }
+  const order = [...runs.values()].sort((a, b) => a.at - b.at || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return order.slice(0, Math.max(0, order.length - keep)).flatMap((run) => run.folders).slice(0, most);
 }
 
 type Ends = Pick<RunnerDrive, 'fencedWrites' | 'get' | 'expectSeen'>;
@@ -66,7 +72,7 @@ export async function keepFinishedAtEnd(drive: Ends, own: RunRecords, runId: str
     return [];
   }
   const binned: string[] = [];
-  const old = toBin(folders, runId, keep, most);
+  const old = toBin(folders, runId, at, keep, most);
   const mine = folders.filter((f) => f.name === runId && endedAt(f) === null);
   if (!old.length && !mine.length) return binned;
   // Every fenced write reads the attempt again right before it is sent (`drive.ts`), so no batch read goes first.

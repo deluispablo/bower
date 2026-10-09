@@ -172,7 +172,8 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
   }
   if (end.phase === 'done') {
     // Retention, once, after the report barrier: a Bin that fails is logged and never fails the run (`retention.ts`).
-    await seen.retain?.();
+    const head = seen.chain?.at(-1);
+    if (head?.phase === 'done') await seen.retain?.(head.phaseAt);
     // 5. Status, only after the report is read back; refused, it throws.
     await status.post('done', totalOf(seen.total));
     return end;
@@ -187,6 +188,8 @@ async function tidyRun(opts: TidyOptions, timing: RunTiming, status: RunnerStatu
     if (!seen.saving) await status.post('saving', totalOf(seen.total));
     return { phase: 'saving', why: end.why };
   }
+  // Failed for good (the final stop): retention, as at done, before the report the Worker takes.
+  await seen.retain?.((opts.clock ?? Date.now)());
   await status.post('failed', { failure: B_FAILURE });
   return { phase: 'failed', why: end.why };
 }
@@ -197,8 +200,11 @@ interface Seen {
   saving: boolean;
   /** The admitted things (pile members; your changes are not things), on every report from `reading` (undefined until known). */
   total: number | undefined;
-  /** At done: puts the oldest ended run folders beyond the newest 20 in the Bin and stamps this run's folder as ended; set once the run's records are known. */
-  retain?: () => Promise<unknown>;
+  /**
+   * At a terminal end (done, or failed for good), ended `at`: puts the oldest ended run folders beyond the newest 20 in
+   * the Bin and stamps this run's folder as ended; set once the run's records are known. Never at a stop recovery retries.
+   */
+  retain?: (at: number) => Promise<unknown>;
 }
 
 const totalOf = (total: number | undefined): { total?: number } => (total === undefined ? {} : { total });
@@ -220,10 +226,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
   timeCheckpoints(records, timing);
-  seen.retain = async () => {
-    const ended = seen.chain?.at(-1);
-    if (ended?.phase === 'done') await keepFinishedAtEnd(drive, records, opts.runId, ended.phaseAt);
-  };
+  seen.retain = (at) => keepFinishedAtEnd(drive, records, opts.runId, at);
   const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
@@ -268,6 +271,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   }));
   if (end.state === 'failed') {
     console.error(end.why);
+    await seen.retain?.(clock());
     await status.post('failed', { failure: UNREADABLE });
     return { phase: 'failed', why: end.why };
   }
