@@ -6277,5 +6277,19 @@
     ],
     "verify": "pnpm vitest run src/features/files/MovePicker.test.tsx -t \"the move sheet's arrows step over the current folder\" && bash scripts/e2e-both.sh e2e/v2-move-here.spec.ts -g \"the move sheet shows where the thing is now and it cannot be chosen|the move sheet has a cancel that returns focus to its opener\"",
     "note": "TL-P4-21 order 8; spec d-v2-18; impact block d-v2-18. Codex slot (TL-P4-23, lead 2026-10-09); a fresh Claude reviewer reviews it. Designer signed off at 59c72856 with the badge row. Packet 2026-10-09-d-v2-18-packet.md. implementer: codex."
+  },
+  {
+    "id": "c4-new-pill-one",
+    "task": "p4-consolidation",
+    "category": "refactor",
+    "passes": false,
+    "ui": true,
+    "what": "The New pill look has one home in src/ui; folder, home and note (and the Move sheet Now here pill) use it, and each caller keeps its own placement. No visual change.",
+    "steps": [
+      "One src/ui home for the pill look; the three module copies are gone.",
+      "No visual change on the three screens (designer check)."
+    ],
+    "verify": "",
+    "note": "TL-P4-22 addendum 16 (main b8b21a8b); defect new-pill-three-copies. UI-only, so the pruning trial applies (no re-review). Codex after v2-move-here merges, and it folds that entry use in. Packet to write."
   }
 ]
