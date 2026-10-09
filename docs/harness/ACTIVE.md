@@ -388,3 +388,4 @@ P3-9 is closed.
 - c2-fake-parity closed (27f7be45, P4-31c PASS). 419/425. c2-upload-queue-only (implementer) dispatched; qa10-toast-flake diagnoser next slot; c2-one-engine running.
 - c2-upload-queue-only merged (red aeac0faf, fix ed2430de, d6e03f80; app code -101/+63; check + full e2e:fake 256 green on merged tree). Open: the queue sends one file at a time, so Try again on pile A waits behind pile B's slow file (unlisted behaviour change; lead asked); late-file Bin-retry branch untested. P4-34 review dispatched.
 - c2-upload-queue-only: serial queue accepted; the late-file Bin-retry branch gets a test (or is deleted if unreachable) before closing, after P4-34.
+- P4-34 PASS (c2-upload-queue-only). Short fix round: a test for the late-file Bin-retry branch (lead), plus the dead code P4-34 lists. late-upload-undo-resend logged (lead asked).
