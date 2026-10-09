@@ -6,6 +6,7 @@
  *
  * A 204 means accepted, not started. Nothing here logs the ticket or the token; a failure logs the status only.
  */
+import { askAgainNow } from '../../src/data/drive/drive-http.js';
 import type { FetchLike } from './google.js';
 import type { RunScope } from '../../src/data/contracts/run-wire.js';
 import type { TidyJob, TidyLookup } from './recovery.js';
@@ -91,7 +92,8 @@ export async function dispatchOutcome(input: TidyDispatch, fetchImpl: FetchLike,
     }
     if (status === 204) return 'sent';
     if (status !== null) console.error(`tidy dispatch failed: status ${status}`);
-    if (status !== null && status < 500) return 'refused';
+    // Told by the one table (`transport.ts`): what may be asked again is, the rest was refused.
+    if (status !== null && !askAgainNow(status, [])) return 'refused';
     if (tried >= RETRIES) return 'lost';
     await sleep(RETRY_BASE_MS * 2 ** tried * (0.5 + Math.random() / 2));
   }

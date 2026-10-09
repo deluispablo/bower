@@ -11,6 +11,7 @@
  */
 import type { RunSource, StartedRun, StartOptions, Unsubscribe } from '../sources';
 import { ACTIVE_PHASES } from '../contracts/run-phases';
+import { answerKind } from '../drive/transport';
 import { BowerError, type RunReport, type RunState } from '../types';
 import type { DriveVault } from '../vault/drive-vault';
 import { httpStatusOf, type RunWire, type StatusReply, type WorkerApi } from '../worker/worker-api';
@@ -23,7 +24,8 @@ const clientError = (e: unknown): e is BowerError => {
   if (!(e instanceof BowerError)) return false;
   if (e.code === 'not-found' || e.code === 'conflict') return true;
   const status = httpStatusOf(e);
-  return status !== null && status >= 400 && status < 500 && status !== 401 && status !== 429;
+  // Told by the one table (`transport.ts`): only what no later try changes stops the asking.
+  return status !== null && answerKind(status, []) === 'permanent';
 };
 
 const finished = (r: RunWire | null): boolean => !!r && (r.phase === 'done' || r.phase === 'failed');

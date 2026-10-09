@@ -8,7 +8,7 @@
 import { BowerError } from '../types';
 import type { Digest } from '../pile-readiness';
 import { sha256 } from '../vault/hashes';
-import { answerKind, askAgainNow, noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
+import { answerKind, askAgainNow, mayHaveLanded, noAnswer, send, type Context, type Fetch, type Pacing } from './transport';
 import { confirmedFrom, chunkRange } from './resumable-upload';
 import { BIN_KEYS, DRIVE_MESSAGES, driveError, driveFailure, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type ResumableTarget, type SessionStatus } from './drive-api';
 
@@ -48,6 +48,8 @@ export interface WireFile {
 
 /** The waits between tries, as a client takes them (`transport.ts`). */
 export type { Pacing };
+/** The one table's retry question, for the Worker's other outbound calls (it imports only this adapter, TL-P3-21). */
+export { askAgainNow };
 
 export interface DriveHttpOptions {
   /** The access token; `fresh` asks the Worker for a new one. */
@@ -96,7 +98,7 @@ async function failureOf(res: Response, write: boolean): Promise<BowerError> {
   if (res.status === 409) return driveError('conflict');
   if (res.status === 401) return driveFailure('auth', kind, reasons);
   // A 5xx on a write may have landed: it is unconfirmed, never sent again as if it had not.
-  if (res.status >= 500 && write) return unconfirmedWriteError();
+  if (mayHaveLanded(res.status, write)) return unconfirmedWriteError();
   return driveFailure('unknown', kind, reasons);
 }
 
@@ -376,7 +378,22 @@ export class DriveHttp implements DriveApi {
       }
       if (res.status !== 401) return res;
       if (refreshed) throw await failureOf(res, write);
-      token = await this.token(true);
+      token = await this.refreshed();
+    }
+  }
+
+  /**
+   * The token's one refresh after a 401. In the browser, a refresh refused for the sign-in (`auth`) is the table's
+   * `authError`: the person signs in again, and what waits on it keeps waiting. Headless, its own error goes as it is:
+   * the runner and the Worker tell a refused ticket or grant themselves, never as a person's sign-in.
+   */
+  private async refreshed(): Promise<string> {
+    try {
+      return await this.token(true);
+    } catch (e) {
+      if (this.context !== 'browser' || !(e instanceof BowerError) || e.code !== 'auth') throw e;
+      console.error(e);
+      throw driveFailure('auth', 'wait');
     }
   }
 
@@ -441,7 +458,7 @@ export class DriveHttp implements DriveApi {
     const method = (init.method ?? 'GET').toUpperCase();
     // A rate limit says the request did not land: ask again. A 5xx on a write may have landed (a create made the
     // file, an update overwrote a newer edit): only a read is asked again; a write's 5xx is told as unconfirmed below.
-    const again = async (res: Response): Promise<boolean> => (res.status < 500 || method === 'GET') && askAgainNow(res.status, await reasonsOf(res));
+    const again = async (res: Response): Promise<boolean> => !mayHaveLanded(res.status, method !== 'GET') && askAgainNow(res.status, await reasonsOf(res));
     const res = await this.authorized(url, init, { idempotent: method === 'GET', again }, method !== 'GET');
     if (res.ok || res.status === 308 || pass.includes(res.status)) return res;
     if (res.status !== 404 && res.status !== 409) console.error(`Drive answered ${res.status} for ${method} ${new URL(url).pathname}`);

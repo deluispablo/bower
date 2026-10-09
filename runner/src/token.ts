@@ -7,7 +7,7 @@
  * or Google access revoked or unreadable) drops the kept token.
  */
 import { BowerError } from '../../src/data/types';
-import { noAnswer, send, type Fetch, type Pacing } from '../../src/data/drive/transport';
+import { askAgainNow, noAnswer, send, type Fetch, type Pacing } from '../../src/data/drive/transport';
 import { isAdmissionManifest, type AdmissionManifest } from '../../src/data/spine/admission';
 
 /** What `GET /runner/runs/:id/token` answers. */
@@ -59,8 +59,8 @@ export const isGone = (e: unknown): boolean => e instanceof BowerError && e.caus
 const UNREACHED = "Bower couldn't reach its server. It will try again.";
 export const unreached = (): BowerError => noAnswer('headless', { offline: UNREACHED, elsewhere: UNREACHED });
 
-/** A runner route's answer worth asking again: rate limited, or the server failed (Google Cloud retry strategy). */
-export const serverBusy = (res: Response): boolean => res.status === 429 || res.status >= 500;
+/** A runner route's answer worth asking again, by the one table (`transport.ts`): rate limited, timed out, or failed. */
+export const serverBusy = (res: Response): boolean => askAgainNow(res.status, []);
 
 export class RunnerToken {
   private readonly url: string;

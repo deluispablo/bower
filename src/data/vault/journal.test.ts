@@ -501,3 +501,67 @@ describe('c2-create-by-id round 5: what a refusal leaves', () => {
     expect(await journal.failed()).toHaveLength(1);
   });
 });
+
+describe('c2-create-by-id round 6: a gone target, a resent request', () => {
+  // What failed in an earlier test, kept in memory while storage refused it, is not this test's.
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    forgetThisPerson();
+  });
+
+  it('a second not-found ends the line for good', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    let listedAnew = 0;
+    const place = { owner: async () => root, folder: async () => changes, files: async () => (await drive.listAll(changes)).filter((f) => !f.folder), stale: () => { listedAnew += 1; } };
+    const j = new Journal(drive, place, 'device-a');
+    const sentWith: Array<string | undefined> = [];
+    // P4-37e repro G: Drive answers 404 to every create of the line, and a fresh listing does not clear it.
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sentWith.push(a[4]);
+      return answering(404, 'notFound').createText(...a);
+    };
+    const one = await j.record('move', 'Moved Taxes to Money', { path: 'Money/Taxes', fileId: 'F1' });
+    // The first 404: the line waits with its id, and its place is listed anew before the one more try.
+    expect(outbox().map((w) => w.line.id)).toEqual([one.id]);
+    expect(listedAnew).toBe(1);
+    expect(await j.failed()).toEqual([]);
+    // The second 404, after the fresh listing (here after a reload): permanent. Ended once among what failed.
+    const reloaded = new Journal(drive, place, 'device-a');
+    await expect(reloaded.flush()).resolves.toBeUndefined();
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+    expect(await reloaded.failed()).toEqual([{ id: one.id, what: 'Moved Taxes to Money', sentence: "Your change was made, but Bower couldn't make a note of it." }]);
+    expect(sentWith).toEqual([sentWith[0], sentWith[0]]);
+    // A gone target never loops: later tries send nothing and add nothing.
+    sentWith.length = 0;
+    for (let i = 0; i < 3; i++) await reloaded.flush();
+    expect(sentWith).toEqual([]);
+    expect(await reloaded.failed()).toHaveLength(1);
+  });
+
+  it('one request resent after a wait makes one line, under its reserved id', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const create = drive.createText.bind(drive);
+    let full = true;
+    const sentWith: Array<string | undefined> = [];
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      sentWith.push(a[4]);
+      return full ? answering(403, 'storageQuotaExceeded').createText(...a) : create(...a);
+    };
+    const ask = (): Promise<unknown> => journal.record('request', 'Asked Bower: "Put my id papers together"', { text: 'Put my id papers together' }, 'press-1');
+    const kept = 'Your Google Drive is full. Bower kept this and will send it later.';
+    await expect(ask()).rejects.toMatchObject({ message: kept });
+    // P4-37e minor: the words stay in the composer and the person sends them again: still the one line.
+    await expect(ask()).rejects.toMatchObject({ message: kept });
+    expect(outbox()).toHaveLength(1);
+    expect(new Set(sentWith)).toEqual(new Set([outbox()[0]?.reserved]));
+    full = false;
+    const sent = await ask();
+    expect(outbox()).toEqual([]);
+    const lines = (await drive.listAll(changes)).filter((f) => f.name.endsWith('.json'));
+    expect(lines.map((f) => f.id)).toEqual([sentWith[0]]);
+    expect((await journal.list()).map((r) => r.id)).toEqual([(sent as { id: string }).id]);
+    // Another press is another request.
+    await journal.record('request', 'Asked Bower: "Compare the flats"', { text: 'Compare the flats' }, 'press-2');
+    expect((await journal.list()).map((r) => r.what)).toEqual(['Asked Bower: "Put my id papers together"', 'Asked Bower: "Compare the flats"']);
+  });
+});

@@ -355,11 +355,7 @@ export class RunnerDrive implements RunDrive {
     // A TypeError is how fetch fails with no network; the transport reads it as no answer (`isNoAnswer`).
     if (now.action === 'refuse') throw new TypeError('A fault refused this write.');
     const res = await this.fetchFn(url, init);
-    // A write Google failed on may still have landed: read as a lost answer, so it is read back, never sent again.
-    if (res.status >= 500) {
-      console.error(`Drive answered ${res.status} to a write`);
-      throw new TypeError('Drive failed on this write; it may have landed.');
-    }
+    // Any refusal goes back as Drive gave it: the transport's one table tells its kind (a 5xx write is unconfirmed).
     if (!res.ok) return res;
     this.current = null;
     this.fault?.applied?.(now.call);
