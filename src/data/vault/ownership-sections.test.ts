@@ -64,7 +64,7 @@ describe('the note sections', () => {
     const twice = sectionsOf('---\nsummary: S\n---\n## Timeline\n- 1 Oct · old\n\n## Timeline\n- 2 Oct · new\n');
     expect(twice).toMatchObject({ status: 'legacy', timeline: '## Timeline\n- 2 Oct · new\n' });
     // A byte-order mark in front of the fence leaves the legacy reading plain, and frames a v2 note.
-    expect(sectionsOf(`﻿${LEGACY}`)).toMatchObject({ status: 'plain', front: null, current: null });
-    expect(sectionsOf(`﻿${V2}`)).toMatchObject({ status: 'v2', front: 'summary: S\nbower_format: ownership/2\n', timeline: '## Timeline\n- 1 Oct · x\n' });
+    expect(sectionsOf(`\ufeff${LEGACY}`)).toMatchObject({ status: 'plain', front: null, current: null });
+    expect(sectionsOf(`\ufeff${V2}`)).toMatchObject({ status: 'v2', front: 'summary: S\nbower_format: ownership/2\n', timeline: '## Timeline\n- 1 Oct · x\n' });
   });
 });

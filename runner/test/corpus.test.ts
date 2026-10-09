@@ -62,7 +62,7 @@ describe('the capability corpus', () => {
 
   it('the corpus scorer names every kind of unmet expectation', () => {
     const before = { 'A.md': 'one\n', 'B.md': 'two\n' };
-    const after = { 'A.md': 'changed\n', 'N.md': '[[Nowhere]]\n\n## Timeline\n- 2026-10-07 · One line.\n', 'Inbox/x.pdf': 'x' };
+    const after = { 'A.md': 'changed\n', 'N.md': '---\nby: bower\n---\n\n[[Nowhere]]\n\n## Timeline\n- 2026-10-07 · One line.\n', 'Inbox/x.pdf': 'x' };
     const lastRun = { v: 1, run: { report: { filed: [{}], created: [{ path: 'N.md' }], updated: [], setAside: [], questions: [{ id: 'q1' }, { id: 'q2' }], requests: ['a'], rulesWorded: 0, yourChanges: 0 } } };
     const unmet = (expected: Parameters<typeof score>[0]['expected'], run: unknown = lastRun): string[] => score({ expected, before, after, lastRun: run }).unmet;
     expect(unmet({ files: { present: ['Z.md'] } })).toEqual(['missing file: Z.md']);
