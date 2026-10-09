@@ -133,3 +133,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `a0d246ef` | c4-app-fence | none for stored data: a lost answer is landed only when the file is what the write makes it, at the fence and at its own read; one changed elsewhere before that read is refused with the same sentence. Stamps, routes, strings and Drive calls unchanged; nothing to deploy together. |
 | `c5ca3e44` | v2-still-marks | none: tests only (fake phone/desktop running tidy-up mark and live-dot animation checks, with dialog-scoped shared axe); no app code, stored format, route or string changes. |
 | `0be6c48d` | v2-still-marks | none: CSS only (still brand live and current-step dots, verified unused CSS removed); no stored data, route, format or string changes. |
+| `815b0d08` | v2-boot-states | none: tests only (boot status timer, read pose, failure/retry, phone/desktop copy and boot-scoped axe); no stored data, route or format changes. |
+| `0a08db90` | v2-boot-states | none for stored data: one 3 s boot status step, still read pose, revised opening/error copy and primary retry button; no stored format, wire or route changes. |
