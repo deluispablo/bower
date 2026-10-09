@@ -5621,7 +5621,7 @@
       "An update retried after a lost answer is resolved by its stamp and checksum."
     ],
     "verify": "pnpm vitest run -t \"a create retried after a lost answer makes one file by its reserved id|the app, runner and Worker write through one create-by-id and update-by-stamp helper\"",
-    "note": "Lead ruling (DECISIONS main 9ffa36e; mechanism map updated): the Worker generateIds+409 path and the stamp path become one write-once rule with two documented cases. Last stage 2 entry, after the c2-write-once fix round. Starting model: bower-escalated. Report production-only lines; C04 must not rise from 76. Acceptance (lead): each still-unstamped app write gets the helper and a named test: trash, untrash, update, keyed pile-note creates, upload shortcuts, the system folder."
+    "note": "Lead ruling (DECISIONS main 9ffa36e; mechanism map updated): the Worker generateIds+409 path and the stamp path become one write-once rule with two documented cases. Last stage 2 entry, after the c2-write-once fix round. Starting model: bower-escalated. Report production-only lines; C04 must not rise from 76. Acceptance (lead): each still-unstamped app write gets the helper and a named test: trash, untrash, update, keyed pile-note creates, upload shortcuts, the system folder. Also from P4-36b: engine inPlace (engine.ts:529) gets a test that fails if it checks id only; app creates stamped by place+name (drive-vault.ts:343,1077) move to reserved ids; the barrier test gains an md5-mismatch case so \"confirmed by its answer\" is proven."
   },
   {
     "id": "c2-upload-queue-only",
