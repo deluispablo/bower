@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { lockTestEnv } from './testing/harness-lock-env';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, REAL_TIMER_CEILING, cpuReport, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, REAL_TIMER_CEILING, cpuReport, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, patterns, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -15,6 +15,16 @@ const V = 'pnpm vitest run src/x.test.ts -t "it works"';
 const proofOf = (e: Entry): Map<string, string> => readProofs(`${e.id}\t${hashOf(e.verify)}\t2026-10-04\tred\n`) as Map<string, string>;
 
 describe('the harness', () => {
+  it('a test name that mentions e2e does not make a vitest verify an e2e one', () => {
+    expect(patterns('pnpm exec vitest run src/harness.test.ts -t "e2e-both uses the same re-entry rule"')?.kind).toBe('unit');
+  });
+
+  it('a playwright verify is still e2e', () => {
+    for (const command of ['pnpm exec playwright test', 'bash scripts/e2e-both.sh', 'pnpm e2e:fake']) {
+      expect(patterns(`${command} -g "a whole name"`)?.kind).toBe('e2e');
+    }
+  });
+
   it('an entry that passes needs a proof from done.sh', () => {
     const e: Entry = { id: 'a', task: 'qa-6', steps: S, verify: V, passes: true };
     expect(problems([e], new Map())).toHaveLength(1);

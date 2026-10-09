@@ -28,6 +28,7 @@
  * runner or the Worker never is, since its network is not the person's.
  */
 import { BowerError } from '../types';
+import { notAsSeenReason } from '../contracts/still-as-seen';
 import { answered, waitFor } from '../wait';
 
 /** At most this many more sends after the first. */
@@ -216,10 +217,14 @@ const KIND_MARK: Readonly<Record<FailureKind, string>> = { retry: 'kind:retry', 
 /** The options that mark an error with its kind, for `new BowerError(code, sentence, undefined, marked(kind))`. */
 export const marked = (kind: FailureKind): ErrorOptions => ({ cause: KIND_MARK[kind] });
 
-/** What becomes of a failed request, told by its marker only, never by its words: unmarked, it is tried again. */
+/**
+ * What becomes of a failed request, told by its marker only, never by its words: unmarked, it is tried again. A
+ * refusal by a fresh read (`notAsSeenReason`, its typed marker) is permanent: the same request is refused again until
+ * the person looks (a create found moved elsewhere, TL-P4-24 addendum 10).
+ */
 export function failureKind(e: unknown): FailureKind {
   if (e instanceof BowerError) for (const kind of ['wait', 'permanent'] as const) if (e.cause === KIND_MARK[kind]) return kind;
-  return 'retry';
+  return notAsSeenReason(e) !== null ? 'permanent' : 'retry';
 }
 
 /**
