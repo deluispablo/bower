@@ -6042,7 +6042,7 @@
     "id": "c3-permissions",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "Settings deny edits to public/landing, reads of .env files and git push; a hook allows only the BACKUP.md push of main to backup.",
     "steps": [
       "Fixture inputs: only the exact backup push is allowed.",
