@@ -1,7 +1,7 @@
 /// <reference types="node" />
 /** The harness's own rules (scripts/harness-rules.mjs): what makes the feature list dishonest. */
-import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -317,5 +317,51 @@ describe('the harness', () => {
     const source = readFileSync(join(process.cwd(), 'scripts/check-harness.mjs'), 'utf8');
     expect(source).toContain('slowReport(unit)');
     expect(source).not.toMatch(/bad\.push\([^)]*slowReport/);
+  });
+  // harness/with-lock.sh is the one lock done.sh and integrate.sh share around the heavy runs.
+  const lockScript = join(process.cwd(), 'harness/with-lock.sh');
+  const stamp = "node -e 'console.log(Date.now())'";
+  const runLocked = (lock: string, command: string): Promise<{ status: number | null; out: string }> =>
+    new Promise((resolve) => {
+      const child = spawn('bash', [lockScript, 'bash', '-c', command], { env: { ...process.env, HARNESS_LOCK: lock } });
+      let out = '';
+      child.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+      child.stderr.on('data', (d: Buffer) => { out += d.toString(); });
+      child.on('close', (status) => resolve({ status, out }));
+    });
+  const fixtureDir = () => mkdtempSync(join(tmpdir(), 'lock-'));
+
+  it('two checks started together run one after the other', async () => {
+    const dir = fixtureDir();
+    const times = join(dir, 'times.txt');
+    const stub = `echo "start $(${stamp})" >> ${times}; sleep 0.5; echo "end $(${stamp})" >> ${times}`;
+    const [a, b] = await Promise.all([runLocked(join(dir, 'lock'), stub), runLocked(join(dir, 'lock'), stub)]);
+    expect([a.status, b.status]).toEqual([0, 0]);
+    const lines = existsSync(times) ? readFileSync(times, 'utf8').trim().split('\n') : [];
+    expect(lines.map((l) => l.split(' ')[0])).toEqual(['start', 'end', 'start', 'end']);
+    const t = lines.map((l) => Number(l.split(' ')[1]));
+    // The second run starts only after the first ended.
+    expect(t[2]).toBeGreaterThanOrEqual(t[1]);
+    expect(existsSync(join(dir, 'lock'))).toBe(false);
+  });
+
+  it('a second check waits and prints who holds the lock', async () => {
+    const dir = fixtureDir();
+    const first = runLocked(join(dir, 'lock'), 'sleep 0.6');
+    for (let i = 0; i < 50 && !existsSync(join(dir, 'lock')); i += 1) await new Promise<void>((r) => { setImmediate(r); });
+    const second = await runLocked(join(dir, 'lock'), 'true');
+    await first;
+    expect(second.status).toBe(0);
+    expect(second.out).toMatch(/waiting.*pid \d+.*sleep 0\.6.*started \d{4}-\d\d-\d\d \d\d:\d\d:\d\d/i);
+  });
+
+  it('a lock whose holder is gone is taken over with a printed line', async () => {
+    const dir = fixtureDir();
+    mkdirSync(join(dir, 'lock'));
+    writeFileSync(join(dir, 'lock/holder'), '999999\n2026-01-01 00:00:00\nold check\n');
+    const run = await runLocked(join(dir, 'lock'), 'echo ran');
+    expect(run.status).toBe(0);
+    expect(run.out).toMatch(/stale.*pid 999999.*taking it over/i);
+    expect(run.out).toContain('ran');
   });
 });
