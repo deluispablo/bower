@@ -5702,14 +5702,14 @@
     "id": "c3-test-time",
     "task": "p4-consolidation",
     "category": "test",
-    "passes": true,
+    "passes": false,
     "what": "Unit tests never wait on real time: backoff, deadlines and toasts use the injected clock, transport options or fake timers; dependency-cruiser runs once (scripts/check-dependencies.mjs in pnpm check), not inside vitest; check-harness fails any unit test over 1000 ms that is not in harness/slow-tests.json, a list that may only shrink.",
     "steps": [
       "A unit test over 1000 ms not in harness/slow-tests.json fails the harness check.",
       "harness/slow-tests.json may only shrink.",
       "dependency-cruiser runs only in pnpm check."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/unused-gate.test.ts src/data/spine/write-once.test.ts src/data/upload-queue-real.test.ts -t \"a unit test over 1000 ms not on the slow list fails the harness check|a test slow in the full run and fast alone passes the slow ratchet|the slow list may only shrink|the rule list names every forbidden import|a new unused export fails the unused-code gate|the rule targets the primitive, not the names of what holds an id|lost bytes ask to choose the file again\"",
+    "verify": "pnpm exec vitest run src/harness.test.ts src/dependency-rules.test.ts src/unused-gate.test.ts src/data/spine/write-once.test.ts src/data/upload-queue-real.test.ts -t \"the timer allowlist may only shrink|wall-clock times are reported, never failed|the rule list names every forbidden import|a new unused export fails the unused-code gate|the rule targets the primitive, not the names of what holds an id|lost bytes ask to choose the file again\"",
     "note": "TL-P4-17 entry 3 (main e1bbf010). Closes dependency-rules-timeout (ruled here) and the lost-bytes-slow class (docs/harness/defects/2026-10-09-lost-bytes-slow.md). qa10 stays with c4-focus-return. Baseline: the tests over 1000 ms in test-results/unit.json today (16 at 0cc1247a), each sped up or listed. Starting model: bower-implementer. TL-P4-17 addendum 4 (main bed5503b): reservation-rule-test-slow folds in; syntax rules have one home, ESLint (no-restricted-syntax / no-restricted-imports with per-file overrides for allowed sites); the generateIds rule and dependency-rules keep only a fast fixture test of the rule, never a repo scan inside vitest; red: current timings on the slow list, then gone. TL-P4-17 addendum 6 (main 7f5fa754): a test over 1000 ms in the full run is rerun alone and only its alone time counts; the list is rebuilt from alone times; the knip gate test keeps a fixture only; the ESLint reservation rule targets the primitive (generateIds and write-once reserve/create calls outside the allowed files), never holder names."
   },
   {
@@ -5875,13 +5875,13 @@
     "id": "c3-alone-margin",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": true,
+    "passes": false,
     "what": "Temporary (TL-P4-17 addendum 9): a unit test over 1000 ms in the full run fails the slow ratchet only if its alone rerun takes over 2000 ms; lifted by c3-timer-gate.",
     "steps": [
       "A test 1500 ms alone passes; 2500 ms alone fails."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test under 2000 ms alone passes the temporary alone margin|a test over 2000 ms alone fails the slow ratchet\"",
-    "note": "TL-P4-17 addendum 9 (main 925d3fbb). scripts/harness-rules.mjs:272 compares the alone time with SLOW_MS; a separate ALONE_MS = 2000 with a comment naming c3-timer-gate. Starting model: bower-mechanical."
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"wall-clock times are reported, never failed\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb). scripts/harness-rules.mjs:272 compares the alone time with SLOW_MS; a separate ALONE_MS = 2000 with a comment naming c3-timer-gate. Starting model: bower-mechanical. Retired by c3-timer-gate: the alone margin and its tests are gone; the verify names the report test."
   },
   {
     "id": "c3-timer-gate",
@@ -5894,8 +5894,8 @@
       "The same wait under fake timers passes.",
       "A slow compute-bound test is reported, not failed."
     ],
-    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed\"",
-    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer."
+    "verify": "pnpm exec vitest run src/harness.test.ts src/timer-gate.test.ts -t \"a real wait of 100 ms or more fails the unit run|a wait under fake timers passes the timer gate|the timer allowlist may only shrink|wall-clock times are reported, never failed|two checks started together run one after the other|a second check waits and prints who holds the lock|a lock whose holder is gone is taken over with a printed line\"",
+    "note": "TL-P4-17 addendum 9 (main 925d3fbb); defect slow-ratchet-alone-under-load. Starting model: bower-implementer. TL-P4-17 addendum 10 (main 56dd8d86): a timer counts when it fires (a cleared timer never waited); fix round: done.sh and integrate.sh share one mkdir-based lock around pnpm check and the e2e suites, a second caller waits and prints who holds it (red: two checks started together run one after the other); the 22-name allowlist goes to c4-test-timers in stage 4."
   },
   {
     "id": "c3-planner-split",
@@ -5908,7 +5908,19 @@
       "Two Timeline lines on one hub give two report rows.",
       "The runner's model path loads no demo fixture."
     ],
-    "verify": "pnpm vitest run -t \"two moves with the same name get their own rows by op id|every Timeline line a run writes has its own report row|the live path imports no demo fixture|one map from records to the operations they need\" && pnpm -C runner exec vitest run -t \"answers reach the model path|the C04 run makes the golden number of Drive calls per step\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05: a tidy-up brings a project note up to date\"",
-    "note": "TL-P4-14 stage 3 row (escalated); carry-overs report rows by op id (report.ts:58-61) and report-misses-hub-line (TL-P4-17 addendum 2; scripted.ts:936/:1354). Coordinator mapping: docs/harness/2026-10-09-c3-planner-split-map.md. Starting model: bower-escalated. Goldens C04 78, 25-runs 88 never rise."
+    "verify": "pnpm vitest run -t \"two moves with the same name get their own rows by op id|every Timeline line a run writes has its own report row|the live path imports no demo fixture|the claude provider path cannot reach the fixture modules|one map from records to the operations they need\" && pnpm -C runner exec vitest run -t \"answers reach the model path|the C04 run makes the golden number of Drive calls per step\" && bash scripts/e2e-both.sh e2e/capabilities.spec.ts -g \"C05: a tidy-up brings a project note up to date\"",
+    "note": "TL-P4-14 stage 3 row (escalated); carry-overs report rows by op id (report.ts:58-61) and report-misses-hub-line (TL-P4-17 addendum 2; scripted.ts:936/:1354). Coordinator mapping: docs/harness/2026-10-09-c3-planner-split-map.md. Starting model: bower-escalated. Goldens C04 78, 25-runs 88 never rise. TL-P4-14 addendum 23 (main a0564115): the model path never reads fixtures and there is no demo gate or flag; the scripted provider owns the fixtures and returns the same reply shape as the model; the planner core only reads a reply; a live behaviour that changes is logged as live-uses-fixtures with evidence and the work carries on (rule wording on the live path comes from the model reply or is not done); class check: a dependency-cruiser rule that the claude provider path cannot reach fixture modules; 600-line staged stop approved."
+  },
+  {
+    "id": "c4-test-timers",
+    "task": "p4-consolidation",
+    "category": "test",
+    "passes": false,
+    "what": "The 22 unit tests on harness/real-timers.json move to fake timers or event waits, so the real-timer allowlist reaches its empty target.",
+    "steps": [
+      "harness/real-timers.json is empty and the ceiling is 0."
+    ],
+    "verify": "pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\"",
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer."
   }
 ]
