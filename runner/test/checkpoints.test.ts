@@ -138,16 +138,20 @@ const writes = (wire: DriveV3): number => wire.requests.filter((r) => r.method !
 const appliedIn = (c: Checkpoint | undefined): number => c?.outcomes.filter((o) => o.state === 'applied').length ?? 0;
 
 /**
- * Run folders in `.bower/runs` as listed (each with its stamp, if any); then this run (`RUN_ID`) ends at `at`. Gives the
+ * Run folders in `.bower/runs` as listed (each with its stamp, if any, made at `created`, else at `at`); then this run (`RUN_ID`) ends at `at`. Gives the
  * names of the folders it put in the Bin, as it said and as Drive holds them.
  */
-async function keptAt(folders: { name: string; props?: Record<string, string> }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
+async function keptAt(folders: { name: string; props?: Record<string, string>; created?: number }[], at: number): Promise<{ binned: string[]; trashed: string[] }> {
   const drive = fixedDrive();
   const root = (await drive.createFolder('root', 'Bower')).id;
   const sys = (await drive.createFolder(root, '.bower')).id;
   const runs = (await drive.createFolder(sys, 'runs')).id;
   const made: DriveFile[] = [];
-  for (const f of folders) made.push(await drive.createFolder(runs, f.name, f.props));
+  for (const f of folders) {
+    const folder = await drive.createFolder(runs, f.name, f.props);
+    drive.setTimes(folder.id, f.created ?? at, f.created ?? at);
+    made.push(folder);
+  }
   const wire = driveV3(drive);
   const token = new RunnerToken({ api: API, runId: RUN_ID, ticket: TICKET, fetch: wire.fetch, now: () => wire.now });
   const adapter = new RunnerDrive({ token, attempt: 1, fetch: wire.fetch });
@@ -377,7 +381,8 @@ describe('runner checkpoints', () => {
 
   it('an unstamped or wrongly stamped oldest folder is never counted nor binned', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    // The two oldest folders: one with no stamp, one whose stamp names another run. 20 stamped runs and this run follow.
+    // The two oldest folders: one with no stamp made as this run ends (it may be a run still going), one whose stamp
+    // names another run. 20 stamped runs and this run follow.
     const unstamped = { name: 'run-a' };
     const wrong = { name: 'run-b', props: endedStamp('run-c', AT) };
     const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
@@ -385,6 +390,38 @@ describe('runner checkpoints', () => {
     // 21 runs counted: only run-00, the oldest stamped one, goes; the other two are kept.
     expect(binned).toEqual(['run-00']);
     expect(trashed).toEqual(['run-00']);
+  });
+
+  it('an unstamped run folder two days old beyond 20 is binned', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A run that never stamped its folder (failed by the stale deadline, gone, or ended elsewhere), made two days ago,
+    // then 19 stamped runs and this run: 21 ended runs, so the unstamped one, the oldest, goes to the Bin.
+    const unstamped = { name: 'run-p2', created: AT - 2 * 24 * 3_600_000 };
+    const others = Array.from({ length: 19 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([unstamped, ...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-p2']);
+    expect(trashed).toEqual(['run-p2']);
+  });
+
+  it('an unstamped run folder an hour old is kept', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // An unstamped folder made an hour before this run ends may be a run still going: it is not counted, so of 20
+    // stamped runs and this run only the oldest stamped one goes.
+    const young = { name: 'run-young', created: AT + 5000 - 3_600_000 };
+    const others = Array.from({ length: 20 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const { binned, trashed } = await keptAt([young, ...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-00']);
+    expect(trashed).toEqual(['run-00']);
+  });
+
+  it('the Bin cap counts runs, not folders', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 24 stamped runs, the oldest in two folders, and this run: the 3 oldest runs go whole, its two folders included.
+    const others = Array.from({ length: 24 }, (_, i) => ({ name: `run-${String(i).padStart(2, '0')}`, props: endedStamp(`run-${String(i).padStart(2, '0')}`, AT + 100 + i) }));
+    const twin = { name: 'run-00', props: endedStamp('run-00', AT + 100) };
+    const { binned, trashed } = await keptAt([twin, ...others, { name: RUN_ID }], AT + 5000);
+    expect(binned).toEqual(['run-00', 'run-00', 'run-01', 'run-02']);
+    expect(trashed).toEqual(['run-00', 'run-00', 'run-01', 'run-02']);
   });
 
   it('a run folder let go of whose Bin answer was lost is resolved by its stamp', async () => {
