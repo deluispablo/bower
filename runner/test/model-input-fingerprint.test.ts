@@ -81,6 +81,17 @@ describe('model input fingerprint', () => {
     expect(normalized).toBe(readFileSync(goldenPath, 'utf8'));
   });
 
+  it('the raw model input on the C04 fixture equals its golden copy', async () => {
+    // Pins the prompt bytes the model reads (not the fingerprint form): a fingerprint change must not move them.
+    const c = (await loadCorpus(ROOT)).find((x) => x.id === 'c04-garden-newsletter');
+    if (!c) throw new Error('the C04 garden newsletter case is missing');
+    const calls: ClaudeCall[] = [];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await runWithClaude(c, async (call) => (calls.push(call), { code: 0, stderr: '', cut: null, stdout: envelope('not intent') } satisfies ClaudeExit));
+    const rawGoldenPath = resolve(import.meta.dirname, 'fixtures/model-input-c04.raw.golden.txt');
+    expect(calls[0]?.input ?? '').toBe(readFileSync(rawGoldenPath, 'utf8'));
+  });
+
   it('the timing line carries the model input fingerprint', async () => {
     const g = await gardenFolder();
     const admitted = await planAdmission(fakeRead(g.drive), g.root, { scope: 'all', clock: () => AT, newId: () => 'admission-1' });
