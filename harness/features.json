@@ -6216,7 +6216,7 @@
     "id": "d-v2-07",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The one Bower with the turn runs the engine idle mind on its pose: gaze (pointer, focus, touch), turn with a hop, idle acts with preen, blink, tap, sleep after 60 s with a startle wake; still with moves off or reduced motion; chip bird only blinks.",
     "steps": [
