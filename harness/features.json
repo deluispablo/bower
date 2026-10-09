@@ -5927,7 +5927,7 @@
     "id": "c3-done-harness-paths",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "done.sh treats harness/ scripts (*.sh, *.mjs, *.ts) as code, so a fix there is proved like code; harness/*.json and docs stay data.",
     "steps": [
       "A commit that only changes harness/with-lock.sh is code to done.sh.",

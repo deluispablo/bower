@@ -484,3 +484,4 @@ fingerprint-normalised	d9421e6532f8bc06	2026-10-09	known-green: verify passes at
 c3-timer-gate	4f947bdd521d20a2	2026-10-09	known-green: red at b6e01216 and ff34204c (/tmp/c3timer-handred*.log); green at baadeb7d
 c3-test-time	103288c755edf8b5	2026-10-09	known-green: verify passes at 0110ebab after c3-timer-gate
 c3-alone-margin	09e27ecc04e4bb7e	2026-10-09	known-green: verify passes at 0110ebab after c3-timer-gate
+c3-done-harness-paths	2c906fd88093e0d5	2026-10-09	red (fixed in b2222dd5)
