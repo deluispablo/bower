@@ -50,3 +50,21 @@ Also:
 3. A notes addendum ("Round 3 (addendum 12)") with compatibility rows and `tests changed:` lines.
 
 Then a Claude delta re-review, a Codex pass on the delta, and the designer's check.
+
+## Addendum 13 (main 04a05499), added to round 3
+
+1. **Accepted:** a confirmed line also drops on a byId read that shows a 404, the file in the Bin, or the change archived. This is liveness: an archived change can't be undone.
+2. **Not accepted: the residual.** When Undo finds no line under the lock, it decides on a **fresh listing taken under that lock**, never the memo:
+   - a found file is binned, through the fence;
+   - a failed listing is refused, with the existing sentence;
+   - only a confirmed absence counts as success.
+
+Red: `tab B drops the line, then tab A's Undo with a stale memo bins the file`.
+
+## Addendum 14 (main 5cc9e251): narrows addendum 13 (1)
+
+- **One exit.** Every line drop goes through the Holder port's one exit, withdraw's let-go. Never a second path.
+- **When a confirmed line is let go.** Only on a 404, on a file in the Bin, or on a file in the archive folder that carries a run's stamp. The write-once stamp tells a run's move from a person's.
+- **A file the person moved elsewhere.** The line stays confirmed. Undo fences against the changes folder and refuses with CHANGED_ELSEWHERE; nothing is binned.
+- **`outboxWaiting`** counts waiting lines only.
+- **Red:** `a person moves the confirmed file out, and another tab's Undo is refused while the file stays live`.

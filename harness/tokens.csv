@@ -253,3 +253,9 @@ d-v2-07 round3 review,reviewer,codex,codex,medium,3,198690,197953,0,149888,737,,
 c4-undo-withdraw round2 review,reviewer,codex,codex,medium,2,435738,433245,0,365824,2493,,,,3 Important,2026-10-09
 v2-boot-states test fix 3,implementer,claude,bower-implementer,,4,82091,,,,,,21,10.4,delivered,2026-10-09
 v2-boot-states P4-60,reviewer,claude,bower-reviewer,,1,36630,,,,,,5,0.3,PASS (5 minor),2026-10-09
+d-v2-24a contract,reviewer,claude,bower-reviewer,,1,75961,,,,,,17,1.3,CHANGES (17),2026-10-09
+c4-undo-withdraw round 3,implementer,claude,bower-escalated,,3,163343,,,,,,41,12.2,delivered,2026-10-09
+c4-undo-withdraw round3 review,reviewer,codex,codex,medium,3,267815,266570,0,220800,1245,,,,2 Important,2026-10-09
+c4-undo-withdraw P4-56c,reviewer,claude,bower-reviewer,,3,55966,,,,,,13,1.1,PASS (4 minor),2026-10-09
+d-v2-07 startle round,implementer,claude,bower-escalated,,4,116778,,,,,,29,9.5,delivered,2026-10-09
+d-v2-07 P4-58d,reviewer,claude,bower-reviewer,,4,32401,,,,,,5,0.3,PASS (3 minor; open labels),2026-10-09

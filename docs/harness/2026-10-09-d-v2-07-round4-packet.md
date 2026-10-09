@@ -10,7 +10,7 @@
 
 ## Contract
 
-1. **The startle's tuft** eases from −26 to 18° with no overshoot, holds for 0.6 s, then returns eased, never more than 2° past its range in either direction (no undershoot below −2°).
+1. **The one startle step (TL-P4-26 addendum 1, main 2f1ae3bb): tuft 18° plus head −10°, held 0.6 s.** Both ease with no overshoot, then return eased, never more than 2° past their range (the tuft never undershoots below −2°). d-v2-24a reuses this step for its error and offline wakes.
    - Use the same easing as proud (`showOff`'s `fall`, `smooth`).
    - Add no second easing path.
 2. **Meta-test (the class, seen twice now):** every act or action name the engine exposes (`act(name)` names, the named actions such as `nudge`'s startle, and the pose loops) must have a row in `pose-reference.fixture.ts`. A new name without a row fails the test.
@@ -19,7 +19,7 @@
 
 ## Red
 
-- `the wake startle stays within its reference range`: a new fixture row for the startle (tuft 18 ± 2° peak, hold 0.6 s, range −2..20 for the return). Today it overshoots to +30.9° and undershoots to −5.5°.
+- `the wake startle stays within its reference range`: a new fixture row for the startle (tuft 18 ± 2° and head −10 ± 2° at the peak, hold 0.6 s, tuft range −2..20 on the return). Today it overshoots to +30.9° and undershoots to −5.5°.
 - `every engine act has a reference row`: the meta-test. It fails today for any exposed name that has no row; list them in the notes.
 
 ## Verify
@@ -36,3 +36,12 @@
 3. A notes addendum ("Startle round (addendum 20)") with `tests changed:` lines.
 
 Then a Claude delta review, a Codex pass on the delta, and the designer's re-check of the startle.
+
+## Addendum 21 (main 39519641): the script-step exemption is a closed list
+
+- **The allowlist.** The meta-test keeps an explicit allowlist of the exact layer choreography names: flyTo, peck, showOff, poke, and the rest. Each entry has a one-line reason ("pre-V2, no reference").
+  - A `script` or `control` label on a member is not an exemption.
+  - Any new engine name that is neither referenced nor on the list fails.
+- **Steps that poses or reactions play.** If a pose or a reaction plays a step, that step has a row through the pose or reaction. 24a's composite steps use exempt steps only through rows carrying the designer's values.
+- **The list only shrinks,** like the baselines. A check fails if it grows.
+- **Red:** `a new engine name tagged script but not on the allowlist fails the meta-test`.
