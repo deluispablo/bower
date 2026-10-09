@@ -21,6 +21,7 @@
  * at the instant it passes the check. It proves no real Drive CAS or
  * exactly-once delivery.
  */
+import { createOwnershipContext, type OwnershipContext } from '../contracts/ownership-format';
 import type { FakeDrive, FencedDrive } from '../drive/fake-drive';
 import type { Checkpoint } from '../contracts/run-checkpoint';
 import type { OperationV2 } from '../contracts/run-manifest';
@@ -186,7 +187,7 @@ export class FakeRunService {
    * the folder before the row exists and before anything is acknowledged.
    * The run then goes on here, whatever the client does.
    */
-  async admit(binding: Binding, manifest: RunManifest, opts: { failAt?: 'writing' } = {}): Promise<RunWire> {
+  async admit(binding: Binding, manifest: RunManifest, opts: { failAt?: 'writing'; context?: OwnershipContext } = {}): Promise<RunWire> {
     this.authorize(binding);
     const key = keyOf(binding);
     if (manifest.scope.rootId !== binding.rootId) throw new BowerError('auth', NOT_YOURS);
@@ -202,7 +203,7 @@ export class FakeRunService {
     }
   }
 
-  private async admitNow(binding: Binding, key: string, manifest: RunManifest, opts: { failAt?: 'writing' }): Promise<RunWire> {
+  private async admitNow(binding: Binding, key: string, manifest: RunManifest, opts: { failAt?: 'writing'; context?: OwnershipContext }): Promise<RunWire> {
     const before = this.rows.get(key);
     if (before) {
       const now = await this.publicPhase(key);
@@ -237,7 +238,7 @@ export class FakeRunService {
     this.changed();
     // Acknowledged only once durable: an admitted run survives the client that asked for it.
     await this.persist?.();
-    this.launch(attempt);
+    this.launch(attempt, opts.context);
     return (await this.publicPhase(key)).wire;
   }
 
@@ -345,9 +346,9 @@ export class FakeRunService {
     await this.launch(attempt);
   }
 
-  private launch(attempt: Attempt): Promise<void> {
+  private launch(attempt: Attempt, context: OwnershipContext = createOwnershipContext()): Promise<void> {
     this.live.add(attempt.attemptId);
-    const work = this.execute(attempt)
+    const work = this.execute(attempt, context)
       .then(() => {
         const cache = this.cache.get(attempt.key);
         if (cache) cache.failures = 0;
@@ -386,7 +387,7 @@ export class FakeRunService {
   }
 
   /** One attempt: from the committed head to the terminal view, never planning again. */
-  private async execute(attempt: Attempt): Promise<void> {
+  private async execute(attempt: Attempt, context: OwnershipContext): Promise<void> {
     const { manifest, chain } = await this.loaded(attempt.key, !attempt.original);
     let head = chain.at(-1);
     if (!head) throw new BowerError('unknown', SAVE_FAILED);
@@ -407,7 +408,7 @@ export class FakeRunService {
     }
     if (head.phase === 'saving') {
       const pace = attempt.original ? this.pace(ms.saving) : Promise.resolve();
-      if (head.report.state === 'not-ready') await this.apply(attempt, manifest);
+      if (head.report.state === 'not-ready') await this.apply(attempt, manifest, context);
       await pace;
       await this.finish(attempt, manifest);
     } else if (TERMINAL.includes(head.phase)) await this.publish(attempt);
@@ -448,10 +449,10 @@ export class FakeRunService {
    * adapter, under this attempt's claim: it reads the chain from the folder and goes on from it, one opening and one
    * closing checkpoint per batch, each effect stamped and read back by that stamp after an interrupted attempt.
    */
-  private async apply(attempt: Attempt, manifest: RunManifest): Promise<void> {
+  private async apply(attempt: Attempt, manifest: RunManifest, context: OwnershipContext): Promise<void> {
     const row = this.row(attempt.key);
     const drive = new FakeRunDrive(this.drive, () => this.check(attempt));
-    const effects = driveEffects(drive);
+    const effects = driveEffects(drive, context);
     const hooked: Effects = {
       ...effects,
       apply: (op, head, w, m, sending) => effects.apply(op, head, w, m, async () => {

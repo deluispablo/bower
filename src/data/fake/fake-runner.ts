@@ -25,7 +25,7 @@ export type { HubUpdate };
 export function fakeScripted(drive: FakeDrive): ScriptedRead {
   return {
     ...fakeRead(drive),
-    piles: (rootId) => new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' }).piles(),
+    piles: (rootId, context) => new DriveVault({ drive, rootId: async () => rootId, runningPiles: () => new Set(), device: 'runner' }).piles(context),
     provenance: 'fake-stored',
   };
 }

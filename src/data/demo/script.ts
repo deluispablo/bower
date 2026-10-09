@@ -82,7 +82,7 @@ export function scriptedProvider(read: ScriptedRead, run: ScriptedRun): RunProvi
       console.error(`The admitted set is for another folder than run ${run.runId}'s`);
       throw new BowerError('unknown', "Bower's server didn't say what to tidy. Try again.");
     }
-    const plan = await planScripted(read, run.rootId, { scope: taken.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: taken.id, requestedAt: taken.at, taken, mintKey: await runKeys(run.runId), decisions: scriptedDecisions() });
+    const plan = await planScripted(read, run.rootId, { scope: taken.scope, allowWeb: run.allowWeb, runId: run.runId, requestId: taken.id, requestedAt: taken.at, taken, mintKey: await runKeys(run.runId), decisions: scriptedDecisions(), context: run.context });
     return plan.manifest;
   };
 }

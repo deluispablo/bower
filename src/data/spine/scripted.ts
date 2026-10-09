@@ -10,6 +10,7 @@
  * (`fake-run-service.ts`) or the runner applies it, recoverably, through the one engine (`engine.ts`). Given the admitted set
  * a run took (`taken`), it plans only those piles, those things and those journal lines.
  */
+import type { OwnershipContext } from '../contracts/ownership-format';
 import type { DriveFile } from '../drive/drive-api';
 import { ADOPT_STATES_ID, ADOPT_STATES_QUESTION, ADOPT_STATES_RULE, STATE_UPDATED, applyChanges, ruleSequence, KEEP_CHANGED, keptLine, currentStateOf, renameOk, renamesFor, ruleAddOk, ruleRemoveOk, savedLinkKey, stateMark, stateMarkOf, stateNewsLine, timelineDate } from '../contracts/note-edit';
 import { canonicalRecordJson } from '../contracts/record-json';
@@ -77,6 +78,7 @@ export type RunPlan = {
 };
 
 export interface PlanOptions {
+  context?: OwnershipContext;
   scope: 'all' | 'instructions';
   allowWeb: boolean;
   runId: string;
@@ -349,7 +351,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   const read = await journalOf(drive, ix);
   const lines = opts.taken ? tookLines(read, opts.taken) : read;
   // An instructions run takes no pile: it reads only your changes.
-  const inbox = all ? await drive.piles(rootId) : [];
+  const inbox = all ? await drive.piles(rootId, opts.context) : [];
   // Bower's own files (TL-P2-17): a failed read refuses before admission and any effect; a malformed one is
   // replaced when the run writes it, its old entries never claimed; a missing one is made again.
   const sys = ix.file(SYSTEM.dir);
@@ -365,7 +367,7 @@ export async function capture(drive: ScriptedRead, rootId: string, opts: PlanOpt
   if (all && !inbox.length && !opts.taken) throw new BowerError('conflict', NOTHING_WAITING);
   const piles = opts.taken ? tookPiles(inbox, opts.taken) : inbox;
   // The capture the Worker's admission shares (TL-P3-21), with the one pile note each pile records read and checked.
-  const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true });
+  const readiness = await capturePiles(drive, rootId, piles.map(pileShape), { notes: true, context: opts.context });
   // Things already saved (`duplicates.ts`, TL-P4-10 addendum 2), by their content.
   const dups = duplicatesOf(listing, ix, piles.flatMap((p) => p.items.map((i) => i.id)));
   return { rootId, all, listing, ix, lines, inbox, sys, requests, hashesFile, requestsBroken, requestsDone, hashesText, hashesBroken, piles, readiness, dups };
@@ -386,6 +388,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
    * a run that can act on them, never archived unanswered.
    */
   const d = opts.decisions;
+  const fetched = (fileId: string) => opts.context ? { fileId, context: opts.context } : undefined;
   // Notes kept as one: each by its yes, among the lines this run took; one held back (`keep:<answer>`) waits with it.
   // A run with no day to date its lines (outside years 0000-9999) keeps nothing: the answer waits, never archived unmerged.
   const keepDay = timelineDate(opts.requestedAt) !== null;
@@ -623,7 +626,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       }
     }
     // Where its things go is guessed from the bound note's words only, never from an unbound note listed first.
-    const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), noteText).body.trim();
+    const words = !note ? '' : note.id === notes[0]?.id ? pile.text : parseNote(join(pile.path ?? '', PILE_NOTE), noteText, fetched(note.id)).body.trim();
     const keys: Array<string | null> = [];
     const taken: string[] = [];
     let askedKeys = 0;
@@ -980,7 +983,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const keeping: Array<{ k: KeepOne; kept: DriveFile; other: DriveFile; rename: Rename; lines: WantedLine[] }> = [];
   for (const { k, kept, other, rename } of date ? keeps : []) {
     const was = await drive.readText(kept.id);
-    const lines = carriedLines(parseNote(k.other, await drive.readText(other.id)), parseNote(k.kept, was))
+    const lines = carriedLines(parseNote(k.other, await drive.readText(other.id), fetched(other.id)), parseNote(k.kept, was, fetched(kept.id)))
       .map((entry): WantedLine => ({ entry: { ...entry, date: date ?? '' }, record: k.answer, what: null, after: null }));
     want(kept, k.kept).lines.push(...lines);
     keeping.push({ k, kept, other, rename, lines });
@@ -1048,7 +1051,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // The bytes the later changes of this one edit apply to: after its link rewrite, which goes first (R3-7 m4).
     let rewritten = bytes;
     if (w.renames) {
-      const result = applyChanges(bytes, [{ kind: 'link-rewrite', recordIds: [], renames: w.renames }]);
+      const result = applyChanges(bytes, [{ kind: 'link-rewrite', recordIds: [], renames: w.renames }], fetched(f.id));
       rewrite = result.ok;
       if (result.ok) rewritten = result.bytes;
       // A note that links to a former name but cannot be rewritten keeps the rename lines (rule 7).
@@ -1064,8 +1067,8 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // a Bower note with none gets one, with its mark.
     let state: StateRewrite | null = null;
     const grant = grants.get(f.id);
-    const section = grant ? currentStateOf(bytes) : null;
-    const mark = stateMarkOf(bytes);
+    const section = grant ? currentStateOf(bytes, fetched(f.id)) : null;
+    const mark = stateMarkOf(bytes, fetched(f.id));
     const name = displayName(nameOf(w.path));
     // The note as read now: its checksum and stamp, what a question asked now records as the note was left.
     const stamp = f.appProperties?.[STAMP];
@@ -1084,7 +1087,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // (an older question's run had no update, or the note has no mark to grant under). Settled, with its answered row.
     const already = !!update && !!section && section.lines.join('\n') === update.join('\n');
     const change: StateRewrite | null = granted && !already && !changed && held && mark !== null && update ? { kind: 'state-rewrite', recordIds: [granted.answer], previous: section?.lines ?? [], lines: update, granted: { answer: granted.answer, mark } } : null;
-    const result = change ? applyChanges(bytes, [change]) : null;
+    const result = change ? applyChanges(bytes, [change], fetched(f.id)) : null;
     // A clash: the write's own check finds the section is not as read (`person-edited`, `state-changed`).
     const clash = !!result && !result.ok && (result.reason === 'person-edited' || result.reason === 'state-changed');
     if (granted && section && !already && (changed || !held || clash)) {
@@ -1104,12 +1107,12 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     } else if (granted) {
       answeredRows.set(granted.answer, answeredState(granted.question.id, 'nothing-to-write', w.path));
     } else if (w.state && !(grant && section?.owner === 'person')) {
-      const now = currentStateOf(bytes);
+      const now = currentStateOf(bytes, fetched(f.id));
       const adopt = now?.owner === 'unmarked' && (await adopting());
       if (now && (now.owner === 'bower' || now.owner === 'missing' || adopt)) {
         if (now.lines.join('\n') !== w.state.lines.join('\n')) {
           const change: StateRewrite = { kind: 'state-rewrite', recordIds: [], previous: now.lines, lines: w.state.lines, ...(adopt ? { adopted: true as const } : {}) };
-          const result = applyChanges(bytes, [change]);
+          const result = applyChanges(bytes, [change], fetched(f.id));
           if (result.ok) state = change;
           else console.error(`A note's Current state was refused (${result.reason}); none is planned for it`);
         }
@@ -1135,7 +1138,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     // Each line on its own: one already there (from any day) is dropped; a person's note takes none.
     const lines: WantedLine[] = [];
     // A hub line with nothing to cite is there already when its words are, with or without a source (C06).
-    const said = new Set(timelineBullets(new TextDecoder().decode(bytes)).flatMap((x) => {
+    const said = new Set(timelineBullets(new TextDecoder().decode(bytes), fetched(f.id)).flatMap((x) => {
       const m = parseTimelineLine(x);
       return m ? [m.text] : [];
     }));
@@ -1144,7 +1147,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
         lineState.set(l, 'present');
         continue;
       }
-      const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [], entries: [l.entry] }]);
+      const result = applyChanges(bytes, [{ kind: 'timeline-append', recordIds: [], entries: [l.entry] }], fetched(f.id));
       const twin = lines.find((x) => x.entry.text === l.entry.text);
       if (result.ok && twin) twins.set(l, twin);
       else if (result.ok) lines.push(l);
@@ -1159,7 +1162,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     if (w.rules) {
       // A rule taken out is matched as it reads after this edit's link rewrite (TL-P2-38); still no match, it is gone.
       const change = rewrite && w.renames ? relinkedRemovals(w.rules, w.renames) : w.rules;
-      const result = applyChanges(rewritten, [change]);
+      const result = applyChanges(rewritten, [change], rewritten === bytes ? fetched(f.id) : undefined);
       const worded = result.ok ? wordedBy(new TextDecoder().decode(rewritten), change, result.text) : null;
       if (worded) {
         rules = change;
@@ -1182,7 +1185,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const changesOf = (c: (typeof candidates)[number], recordIds: string[]): Change[] =>
     [...(c.state ? [c.state] : []), ...(c.rewrite ? [{ kind: 'link-rewrite' as const, recordIds: [...recordIds, ...keptFor(c.bytes)], renames }] : []), ...appendOf(c.lines), ...(c.rules ? [c.rules] : [])];
   const authored = candidates.slice(0, editCap).flatMap((c) => {
-    const result = applyChanges(c.bytes, changesOf(c, []));
+    const result = applyChanges(c.bytes, changesOf(c, []), fetched(c.file.id));
     if (result.ok) return [{ c, text: result.text }];
     console.error(`A note edit was refused (${result.reason}); none is planned for it`);
     if (c.rewrite) holdRenames = true;
@@ -1378,7 +1381,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       if (!f || f.folder) continue;
       let stored: ParsedNote;
       try {
-        stored = parseNote(rule.note, await drive.readText(f.id));
+        stored = parseNote(rule.note, await drive.readText(f.id), fetched(f.id));
       } catch (e) {
         if (e instanceof BowerError && e.code === 'auth') throw e;
         console.error(e);
@@ -1400,7 +1403,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
       const f = ix.file(path);
       if (!f || f.folder) break;
       try {
-        read.push(parseNote(path, await drive.readText(f.id)));
+        read.push(parseNote(path, await drive.readText(f.id), fetched(f.id)));
       } catch (e) {
         // A note that cannot be read now leaves the request with its plain line; a sign-out stops the run.
         if (e instanceof BowerError && e.code === 'auth') throw e;
@@ -1524,7 +1527,7 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
     hashesNew = { text, before: hashesFile && text !== hashesText ? await ownVerified(hashesFile) : null };
   }
   return {
-    kind: 'decided' as const, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
+    kind: 'decided' as const, context: opts.context, run: { runId: opts.runId, requestId: opts.requestId, scope: opts.scope, allowWeb: opts.allowWeb, requestedAt: opts.requestedAt },
     rootId, all, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas: d.areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
@@ -1538,6 +1541,7 @@ type Decided = Extract<Awaited<ReturnType<typeof decide>>, { kind: 'decided' }>;
  * It reads neither Drive nor the reply; the manifest guard and grounding check what it built.
  */
 export async function build(decided: Decided): Promise<Ended> {
+  const fetched = (fileId: string) => decided.context ? { fileId, context: decided.context } : undefined;
   const { run: opts, rootId, listing, ix, newKey, held, scope, captureId, captureValue, journal, edited, missing, areas, filing, fallbackOf, derive, need,
     generated, modelLines, madeAs, edits, lineState, answerLines, keeping, saved, capturedPiles, partly, answers, compared, requestsRead,
     requestsBroken, requestsDone, sys, questionsList, stateAsks, questionsRead, fresh, asking, disagreeing, closing, related, sameContent, rules, ruleWords,
@@ -1655,11 +1659,11 @@ export async function build(decided: Decided): Promise<Ended> {
   for (const edit of recited.size ? edits : []) {
     const mine = [...recited].filter((l) => edit.changes.some((c) => c.kind === 'timeline-append' && c.entries.includes(l.entry)));
     if (!mine.length) continue;
-    let result = applyChanges(edit.bytes, edit.changes);
+    let result = applyChanges(edit.bytes, edit.changes, fetched(edit.file.id));
     if (!result.ok) {
       console.error(`A note's Timeline line could not cite the name its thing was given (${result.reason}); it cites nothing`);
       for (const l of mine) l.entry.source = null;
-      result = applyChanges(edit.bytes, edit.changes);
+      result = applyChanges(edit.bytes, edit.changes, fetched(edit.file.id));
     }
     if (!result.ok) throw new BowerError('unknown', B_FAILURE);
     edit.text = result.text;
@@ -2295,6 +2299,7 @@ export async function runKeys(runId: string): Promise<(kind: string) => string> 
 
 /** Who a scripted run is: its folder, its id, and whether it may look things up on the web. */
 export interface ScriptedRun {
+  context?: OwnershipContext;
   rootId: string;
   runId: string;
   allowWeb: boolean;

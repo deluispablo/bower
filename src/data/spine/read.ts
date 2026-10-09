@@ -3,6 +3,7 @@
  * runner), the Worker's admission reader over it (`admissionRead`), and the pretend Drive (the fake and demo sources). Both give digests from what Drive keeps, never by
  * reading a file's content.
  */
+import type { OwnershipContext } from '../contracts/ownership-format';
 import { BIN_KEYS, SEARCH_MAX_PAGES, type DriveApi, type DriveFile, type ResumableDrive } from '../drive/drive-api';
 import { declarationCopies, pileRecords } from '../pile-readiness';
 import { PILE_NOTE } from '../piles';
@@ -19,7 +20,7 @@ import type { SpineRead } from './plan';
  * adapters build the piles over their own Drive (`DriveVault.piles`), outside the spine.
  */
 export interface ScriptedRead extends SpineRead {
-  piles(rootId: string): Promise<Pile[]>;
+  piles(rootId: string, context?: OwnershipContext): Promise<Pile[]>;
   provenance: 'fake-stored' | 'adapter-read';
 }
 

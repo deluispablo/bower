@@ -6,6 +6,7 @@
  * no network of its own: the adapters in `read.ts` own the I/O.
  */
 import type { BinnedItem, DriveFile } from '../drive/drive-api';
+import type { OwnershipContext } from '../contracts/ownership-format';
 import type { DeclarationResult } from '../contracts/pile-declaration';
 import { isJournalRecord } from '../contracts/journal-record';
 import { recordableId, recordableRecordId } from '../contracts/run-manifest';
@@ -100,6 +101,7 @@ export interface CaptureOptions {
    * admission (TL-P3-25 point 2), transiently: what it keeps of a note is its id and version, never its text.
    */
   notes: boolean;
+  context?: OwnershipContext;
 }
 
 /** A pile as the Inbox reads it, in the shape the capture takes; the same for the Worker's admission and the run. */
@@ -185,7 +187,7 @@ export async function capturePiles(read: SpineRead, rootId: string, piles: reado
         if (recorded) {
           let refusal: ReturnType<typeof noteRefusal> = null;
           try {
-            parseNote(join(pile.path, PILE_NOTE), raw);
+            parseNote(join(pile.path, PILE_NOTE), raw, opts.context ? { fileId: recorded.id, context: opts.context } : undefined);
           } catch (e) {
             refusal = noteRefusal(e);
             if (!refusal) throw e;
@@ -308,6 +310,7 @@ async function looseCapture(
 }
 
 export interface AdmissionOptions {
+  context?: OwnershipContext;
   scope: AdmissionScope;
   clock: () => number;
   newId: () => string;
@@ -413,11 +416,11 @@ export async function planAdmission(source: SpineRead, rootId: string, opts: Adm
   if (!inboxPiles(ix, only).some((p) => p.itemIds.length || p.hasWords)) return wanted.length && journal.length ? manifest([]) : { kind: 'nothing', cause: 'waiting' };
   const unread = new Set<string>();
   // A pile whose note was not read has words when the note is not empty (its size is in the listing), as `inboxPiles` says.
-  const piles = (await listedPiles(read, rootId, unread, only)).map((p) => {
+  const piles = (await listedPiles(read, rootId, unread, only, opts.context)).map((p) => {
     const shape = pileShape(p);
     return unread.has(p.id) ? { ...shape, hasWords: ix.filesIn(p.path ?? '').some((k) => !k.folder && k.name === PILE_NOTE && k.size !== 0) } : shape;
   });
-  const capture = await capturePiles(read, rootId, piles, { notes: true });
+  const capture = await capturePiles(read, rootId, piles, { notes: true, context: opts.context });
   const taken: AdmittedPile[] = [];
   for (const pile of piles) {
     const cap = capture.get(pile.id);
@@ -452,7 +455,7 @@ function listedItem(f: DriveFile): PileItem {
  * the words of its first note, and each loose thing. A note Bower will not parse, or cannot read now, holds its pile
  * with the Inbox's reason; a sign-out stops the run. What a run takes of each is decided by `capturePiles`, as in the fake.
  */
-export async function listedPiles(read: SpineRead, rootId: string, unread?: Set<string>, only: (f: DriveFile) => boolean = () => true): Promise<Pile[]> {
+export async function listedPiles(read: SpineRead, rootId: string, unread?: Set<string>, only: (f: DriveFile) => boolean = () => true, context?: OwnershipContext): Promise<Pile[]> {
   const ix = VaultIndex.build(rootId, await read.listAll(rootId));
   const out: Pile[] = [];
   for (const f of ix.filesIn('Inbox').filter(only)) {
@@ -470,7 +473,7 @@ export async function listedPiles(read: SpineRead, rootId: string, unread?: Set<
     let setAside: SetAside | null = null;
     if (note) {
       try {
-        text = parseNote(join(path, PILE_NOTE), await read.readText(note.id)).body.trim();
+        text = parseNote(join(path, PILE_NOTE), await read.readText(note.id), context ? { fileId: note.id, context } : undefined).body.trim();
       } catch (e) {
         if (e instanceof NotReadHere && unread) {
           unread.add(id);
