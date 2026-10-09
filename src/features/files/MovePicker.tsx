@@ -10,7 +10,7 @@ import { Icon } from '@/ui/Icon';
 import { Button } from '@/ui/Button';
 import { useFileActions } from './file-actions';
 import s from './files.module.css';
-import folder from './folder.module.css';
+import ui from '@/ui/ui.module.css';
 
 /** "Move to…": every folder, filtered as you type. */
 export function MovePicker() {
@@ -110,7 +110,7 @@ export function MovePicker() {
               <span className={s.dot} style={{ background: paraColor(f) }} />
               <span className={s.pickName}>{nameOf(f)}</span>
               <span className={s.pickPath}>{crumbs(parentOf(f))}</span>
-              {f === from && <span className={folder.new}>Now here</span>}
+              {f === from && <span className={ui.freshPill}>Now here</span>}
             </button>
           </li>
         ))}

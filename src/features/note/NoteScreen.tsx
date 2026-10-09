@@ -21,6 +21,7 @@ import { AnsweredRows } from '@/features/tidy/RunLinks';
 import { newLineIndexes } from './new-lines';
 import { LinkedList } from './RightPanel';
 import { inAppHistory } from '@/app/paths';
+import ui from '@/ui/ui.module.css';
 import s from './note.module.css';
 
 export function NoteScreen() {
@@ -182,7 +183,7 @@ function NoteView({ path }: { path: string }) {
                 <span className={s.when}>{timelineDay(t.date)}</span>
                 <span>
                   <Inline text={t.text} link={link} />
-                  {marked.has(i) && <span className={s.new}>New</span>}
+                  {marked.has(i) && <span className={`${ui.freshPill} ${s.new}`}>New</span>}
                   {t.source && (
                     <span className={s.from}>
                       {' '}

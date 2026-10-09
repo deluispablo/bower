@@ -246,3 +246,16 @@ textarea.field { padding: 12px 14px; resize: vertical; }
   transform: rotate(45deg);
 }
 .taskBox:disabled { cursor: default; }
+
+/* Fresh marks share their look; screens own their placement. */
+.freshPill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--fresh);
+  color: var(--brand-line);
+  font-size: 13px;
+  font-weight: 600;
+}

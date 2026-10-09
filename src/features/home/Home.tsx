@@ -25,6 +25,7 @@ import { PileStack } from '@/features/piles/PileStack';
 import { SetAsideNote } from '@/features/piles/PileScreen';
 import { Inline, type LinkFn } from '@/features/note/markdown';
 import { resolverFor } from '@/features/note/resolve';
+import ui from '@/ui/ui.module.css';
 import s from './home.module.css';
 import runStyles from '@/features/tidy/tidy.module.css';
 import noteStyles from '@/features/note/note.module.css';
@@ -434,7 +435,7 @@ function JustFiled({ run }: { run: RunState | null }) {
                   {crumbs(parentOf(n.path))}
                 </span>
               </span>
-              {n.isNew && <span className={s.new}>New</span>}
+              {n.isNew && <span className={`${ui.freshPill} ${s.new}`}>New</span>}
             </Link>
           </li>
         ))}
