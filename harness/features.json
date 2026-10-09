@@ -6436,7 +6436,7 @@
     "id": "p4-corpus-driver",
     "task": "p4-c",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "The corpus scorer counts questions exactly and checks a pair subject; cases may edit the folder between two runs; a two-run scripted driver runs the C05 prep cases 1-6 through the existing planner and provider.",
     "steps": [
       "The C05 corpus cases, old and new, score green with scripted proposals.",
