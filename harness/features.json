@@ -5724,5 +5724,18 @@
     ],
     "verify": "pnpm exec vitest run src/guard-main-checkout.test.ts -t \"a subagent.s git checkout in the main checkout is refused|the coordinator.s own git checkout in the main checkout is allowed|a subagent.s git checkout in a scratch worktree is allowed\"",
     "note": "TL-P4-17 entry 2 (main e1bbf010); closes reviewer-checkout-main. Wiring the hook into .claude/settings.json or agent frontmatter is Claude Code config: the coordinator does not change it on a peer ruling; the owner wires it (one line, given on the card). Starting model: bower-implementer. Red at 1f2a4979: the script is a new file, so the red is its missing module (/tmp/c3g-red.log); done.sh cannot load a revert of a new file. Wiring (owner): PreToolUse matcher Bash, command node \"$CLAUDE_PROJECT_DIR/scripts/guard-main-checkout.mjs\"; subagent field agent_id."
+  },
+  {
+    "id": "c3-unused-code",
+    "task": "p4-consolidation",
+    "category": "tooling",
+    "passes": false,
+    "what": "knip (the standard detector of unused files, exports and dependencies) runs in pnpm check across the app, api and runner workspaces against harness/unused-baseline.json, a list that may only shrink (same pattern as check-duplication-gate.mjs); what it finds dead is removed in this entry or listed under left out.",
+    "steps": [
+      "A new unused export fails pnpm check.",
+      "The unused baseline may only shrink."
+    ],
+    "verify": "pnpm exec vitest run src/unused-gate.test.ts -t \"a new unused export fails the unused-code gate|the unused baseline may only shrink\"",
+    "note": "TL-P4-17 entry 4 (main e1bbf010): class C (promised but never wired: keepFinished had no production caller). Research: https://knip.dev. Harness code: production net does not count it, but removed dead code is reported as removed lines. Starting model: bower-implementer."
   }
 ]
