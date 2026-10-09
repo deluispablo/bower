@@ -359,8 +359,12 @@ export class Journal {
         return;
       }
       this.checkCurrent();
-      const ids = new Map(bare.map((r) => [r.line.id, r.reserved]));
-      this.keep(key, this.waiting(key).map((r) => (r.reserved === undefined && ids.has(r.line.id) ? { ...r, reserved: ids.get(r.line.id) } : r)));
+      // Each line read again is kept as the holder the home gave its id to.
+      const held = new Map(bare.map((r) => [r.line.id, r]));
+      this.keep(key, this.waiting(key).map((r) => {
+        const h = held.get(r.line.id);
+        return r.reserved === undefined && h ? { ...r, ...h } : r;
+      }));
     }
     const sent = new Set<string>();
     const refused: FailedChange[] = [];
@@ -409,6 +413,8 @@ export class Journal {
       // One table tells what becomes of it (`transport.ts`): tried again later, waiting on the person, or refused for good.
       if (tried.kind === 'retry') return 'later';
       if (tried.kind === 'wait') return { waits: e instanceof BowerError ? e.message : '' };
+      // Refused for good: the line leaves the outbox with its id. A conflict whose read-back found no file under that id
+      // is permanent here too; the home keeps the id then (unsettled), but this line is never sent again, so no second file.
       if (tried.kind === 'permanent') return 'refused';
       // Its place or id could not be had: the line itself was not refused, so it waits (on the person, when they must
       // act); only a place still not found after a fresh listing ends it.

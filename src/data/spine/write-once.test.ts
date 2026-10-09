@@ -6,6 +6,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { FakeDrive } from '../drive/fake-drive';
 import { driveError } from '../drive/drive-api';
@@ -59,9 +60,97 @@ const RESERVING = new Set(['generateIds', 'reserveId']);
  * 4. the slot's id put in a store by hand (`ids.set(key, h.reserved)`).
  */
 function reservationSites(files: readonly Source[]): string[] {
-  // The line rule as it stood (P4-39): a call for ids, an id set on a holder, or a field named `intended`.
-  const reserves = /\bgenerateIds\(|\breserveId\(|\.reserved\s*(\?\?=|=(?!=))|\bintended\s*=\s*new Map\b/;
-  return files.filter((f) => f.path !== HOME).flatMap((f) => f.text.split('\n').flatMap((line, i) => (reserves.test(line) && !/^\s*(\*|\/\/)/.test(line) ? [`${f.path}:${i + 1} reserves`] : [])));
+  const parsed = files.map((f) => ({ ...f, ast: ts.createSourceFile(f.path, f.text, ts.ScriptTarget.Latest, true) }));
+  const home = parsed.find((f) => f.path === HOME)?.ast;
+  if (!home) throw new Error('No write-once home');
+  const ports = new Set<string>();
+  const slots = new Set<string>();
+  ts.forEachChild(home, (n) => {
+    if (ts.isInterfaceDeclaration(n) && n.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) {
+      ports.add(n.name.text);
+      for (const m of n.members) if (m.name && ts.isIdentifier(m.name)) slots.add(m.name.text);
+    }
+  });
+  const nameOf = (n: ts.PropertyName | ts.BindingName | undefined): string | undefined =>
+    n && (ts.isIdentifier(n) || ts.isStringLiteral(n)) ? n.text : undefined;
+  const refs = (n: ts.Node | undefined, out = new Set<string>()): Set<string> => {
+    if (!n) return out;
+    if (ts.isTypeReferenceNode(n) && ts.isIdentifier(n.typeName)) out.add(n.typeName.text);
+    if (ts.isExpressionWithTypeArguments(n) && ts.isIdentifier(n.expression)) out.add(n.expression.text);
+    n.forEachChild((c) => void refs(c, out));
+    return out;
+  };
+  // An id's type: a string, or a string not had yet (`string | null`, `string | undefined`).
+  const idLike = (t: ts.TypeNode | undefined): boolean =>
+    !!t && (t.kind === ts.SyntaxKind.StringKeyword || (ts.isUnionTypeNode(t) && t.types.some((u) => u.kind === ts.SyntaxKind.StringKeyword) && t.types.every((u) => u.kind === ts.SyntaxKind.StringKeyword || u.kind === ts.SyntaxKind.UndefinedKeyword || (ts.isLiteralTypeNode(u) && u.literal.kind === ts.SyntaxKind.NullKeyword))));
+  // The object types Bower declares (what a holder carries is one of them, never a platform type such as a Blob).
+  const declared = new Set<string>();
+  for (const { ast } of parsed) {
+    const visit = (n: ts.Node): void => {
+      const shaped = ts.isInterfaceDeclaration(n) || ts.isClassDeclaration(n) || (ts.isTypeAliasDeclaration(n) && (ts.isTypeLiteralNode(n.type) || ts.isIntersectionTypeNode(n.type)));
+      if (shaped && n.name) declared.add(n.name.text);
+      n.forEachChild(visit);
+    };
+    visit(ast);
+  }
+  // The holders (a type with the slot for an id, or built on a port) and what they carry, in every file.
+  const holders = new Set<string>(ports);
+  const carried = new Set<string>();
+  for (const { ast } of parsed) {
+    const visit = (n: ts.Node): void => {
+      const decl = ts.isInterfaceDeclaration(n) || ts.isClassDeclaration(n) || ts.isTypeAliasDeclaration(n) ? n : undefined;
+      const literals = decl && ts.isTypeAliasDeclaration(decl) ? (ts.isIntersectionTypeNode(decl.type) ? [...decl.type.types] : [decl.type]).flatMap((t) => (ts.isTypeLiteralNode(t) ? [...t.members] : [])) : [];
+      const members: readonly ts.TypeElement[] | readonly ts.ClassElement[] | undefined = !decl ? undefined : ts.isTypeAliasDeclaration(decl) ? literals : decl.members;
+      if (decl?.name && members) {
+        const built = [...(ts.isTypeAliasDeclaration(decl) ? refs(decl.type) : (decl.heritageClauses ?? []).flatMap((h) => [...refs(h)]))].some((r) => ports.has(r));
+        const slotted = members.some((m) => slots.has(nameOf(m.name) ?? '') && (ts.isPropertySignature(m) || ts.isPropertyDeclaration(m)) && idLike(m.type));
+        if (built || slotted) {
+          holders.add(decl.name.text);
+          // What a holder always carries to Drive (a journal line, a thing of a pile), not what it may learn after.
+          for (const m of members) if (!slots.has(nameOf(m.name) ?? '') && (ts.isPropertySignature(m) || ts.isPropertyDeclaration(m)) && !m.questionToken) refs(m.type, carried);
+        }
+      }
+      n.forEachChild(visit);
+    };
+    visit(ast);
+  }
+  const intended = (t: ts.TypeNode | undefined): boolean => !!t && ts.isTypeReferenceNode(t) && ts.isIdentifier(t.typeName) && (holders.has(t.typeName.text) || (carried.has(t.typeName.text) && declared.has(t.typeName.text)));
+  const isMap = (name: string): boolean => ['Map', 'WeakMap', 'ReadonlyMap', 'Record'].includes(name);
+  const slotOf = (e: ts.Node): boolean =>
+    (ts.isPropertyAccessExpression(e) && slots.has(e.name.text)) || (ts.isElementAccessExpression(e) && ts.isStringLiteralLike(e.argumentExpression) && slots.has(e.argumentExpression.text));
+  const reads = (e: ts.Node): boolean => slotOf(e) || (e.forEachChild((c) => (reads(c) ? true : undefined)) ?? false);
+  const kept = (n: ts.Node): boolean => {
+    for (let p = n.parent; p; p = p.parent) if (ts.isFunctionLike(p) || ts.isBlock(p)) return false;
+    return true;
+  };
+  const out: string[] = [];
+  for (const { path, ast } of parsed) {
+    if (path === HOME) continue;
+    const at = (n: ts.Node, what: string): void => void out.push(`${path}:${ast.getLineAndCharacterOfPosition(n.getStart(ast)).line + 1} ${what}`);
+    const visit = (n: ts.Node): void => {
+      if (ts.isTypeNode(n) || ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) return;
+      // 1. A call for ids, or that call passed on.
+      if (ts.isPropertyAccessExpression(n) && RESERVING.has(n.name.text)) at(n, 'calls for ids');
+      else if (ts.isElementAccessExpression(n) && ts.isStringLiteralLike(n.argumentExpression) && RESERVING.has(n.argumentExpression.text)) at(n, 'calls for ids');
+      else if (ts.isIdentifier(n) && RESERVING.has(n.text) && !ts.isPropertyAccessExpression(n.parent) && !ts.isMethodSignature(n.parent) && !ts.isMethodDeclaration(n.parent) && !ts.isPropertyAssignment(n.parent) && !ts.isFunctionDeclaration(n.parent)) at(n, 'calls for ids');
+      // 2. The slot set, cleared or given by hand.
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && slotOf(n.left)) at(n, 'sets an id by hand');
+      if (ts.isDeleteExpression(n) && slotOf(n.expression)) at(n, 'lets an id go by hand');
+      if ((ts.isPropertyAssignment(n) || ts.isShorthandPropertyAssignment(n)) && ts.isObjectLiteralExpression(n.parent) && slots.has(nameOf(n.name) ?? '')) at(n, 'gives an id by hand');
+      // 3. A store of intended creates kept beyond one call.
+      if ((ts.isPropertyDeclaration(n) || ts.isVariableDeclaration(n)) && kept(n)) {
+        const init = n.initializer;
+        const made = init && ts.isNewExpression(init) && ts.isIdentifier(init.expression) && isMap(init.expression.text) ? init.typeArguments?.[1] : undefined;
+        const typed = n.type && ts.isTypeReferenceNode(n.type) && ts.isIdentifier(n.type.typeName) && isMap(n.type.typeName.text) ? n.type.typeArguments?.[1] : undefined;
+        if (intended(made) || intended(typed)) at(n, 'keeps intended creates outside the home');
+      }
+      // 4. The slot's id put in a store by hand.
+      if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'set' && n.arguments.some(reads)) at(n, 'stores an id by hand');
+      n.forEachChild(visit);
+    };
+    visit(ast);
+  }
+  return out;
 }
 
 /** Every source file Bower runs, tests aside. */
