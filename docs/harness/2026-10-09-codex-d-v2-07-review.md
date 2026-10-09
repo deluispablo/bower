@@ -30,3 +30,11 @@ prior findings: Both fix-round findings and all five original findings are fixed
 second way: No new loop, timer, input listener system or tap queue.
 validation: Read-only inspection; tests not run.
 findings: 0
+
+## Startle round pass (e49ff311..296b8021)
+
+- **Important — `src/bird/engine.ts:1111`: Wake startle’s visible head exceeds the ±2° bound.** The startle pins the head to −10°, but `gaze()` still runs and `apply()` adds its angle. Concrete reproduction: idle Bower at home `(50,92)`, size 100, sleeps for 61 seconds; wake with `look({x:200,y:-100}, 'focus')`. Injected frames show the head held at **−22°**, while the tuft holds 18°. A focus point `(200,250)` produces **−3°**. The new test exercises only `nudge()` without gaze, so misses both failures. Mechanism home violated: the one startle step in `BirdEngine`’s mind, with the packet’s bounded head movement.
+
+- **Important — `src/bird/engine.test.ts:238`: The meta-test permits exposed actions without reference rows.** It ignores members classified as `script` or `control`; `EngineMember` explicitly permits both. Concrete scenario: add a public motion method `stretch()` and classify it as `stretch: 'script'` in `ENGINE_MEMBERS`. Compilation and the meta-test pass without any reference row. Existing script actions are likewise exempt. Mechanism home violated: `pose-reference.fixture.ts` and its meta-test, which the packet requires to cover every exposed act or action name.
+
+findings: 2
