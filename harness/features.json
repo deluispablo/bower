@@ -6193,5 +6193,34 @@
     ],
     "verify": "pnpm vitest run -t \"two worktrees run e2e at once, each on its own server|a server from another worktree is never reused\"",
     "note": "TL-P4-22 addendum 10 (c), gate integrity; defect e2e-port-shared-across-worktrees. Starting model bower-implementer. Packet 2026-10-09-c4-e2e-port-packet.md. After merge: rerun the closed stage 4 entries e2e once on claude/p3 under the lock."
+  },
+  {
+    "id": "c4-segmented-one",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "A folder List / Table toggle uses the one Segmented; Files bookmark chips reach 44 px on the phone through the src/ui rule.",
+    "steps": [
+      "The toggle is Segmented at 44 px.",
+      "Chips are 44 px at 375."
+    ],
+    "verify": "bash scripts/e2e-both.sh -g \"the folder view toggle is the one segmented control|the files bookmark chips are at least 44 px on the phone\"",
+    "note": "TL-P4-22 addendum 10 (a); defect second-segmented-list-table. Starting model bower-implementer; pruning trial (no re-review). Packet 2026-10-09-c4-segmented-one-packet.md."
+  },
+  {
+    "id": "d-v2-07",
+    "task": "p4-consolidation",
+    "category": "ui",
+    "passes": false,
+    "ui": true,
+    "what": "The one Bower with the turn runs the engine idle mind on its pose: gaze (pointer, focus, touch), turn with a hop, idle acts with preen, blink, tap, sleep after 60 s with a startle wake; still with moves off or reduced motion; chip bird only blinks.",
+    "steps": [
+      "Iris offset follows the pointer within 0.2 s.",
+      "Focus turns the gaze.",
+      "60 s idle sleeps; input wakes with a startle."
+    ],
+    "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird only blinks\"",
+    "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md."
   }
 ]
