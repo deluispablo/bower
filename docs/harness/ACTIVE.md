@@ -439,3 +439,4 @@ P3-9 is closed.
 - Table deviations accepted with bounds (404 once then permanent); runner drive.ts:359 joins the table in a round 6 after P4-37e.
 - P4-38c BLOCK (retention round 4): the 24 h rule can bin a person-made folder in .bower/runs (no run-id or Bower mark check, records.ts:101). Lead asked: (a) bowerRun stamped at create, (b) run-id name shape.
 - P4-37e PASS (create round 5). Round 6 dispatched: 404 once then permanent, 401 wait after refresh, runner drive.ts:359 onto the table, plus the P4-37e minors (panel turn focus, request resend makes a second line).
+- Retention round 5 merged (red a7a59d7c, fix 74ff0aa0; bowerRun at create; only marked folders binned; prod -24; check green). P4-38d check dispatched.
