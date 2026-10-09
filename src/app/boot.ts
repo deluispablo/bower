@@ -9,11 +9,10 @@
 
 /** Long enough for Bower to land and look round (the boot's land pose, 2.4 s). */
 const MIN_SHOWN_MS = 2000;
-const SLOW_MS = 8000;
+const STATUS_MS = 3000;
 
 const t0 = performance.now();
-let slowTimer: ReturnType<typeof setTimeout> | undefined;
-let lineTimer: ReturnType<typeof setTimeout> | undefined;
+let statusTimer: ReturnType<typeof setTimeout> | undefined;
 
 function el(): HTMLElement | null {
   return document.getElementById('boot');
@@ -23,18 +22,19 @@ function line(): HTMLElement | null {
 }
 
 export function bootStart(): void {
-  lineTimer = setTimeout(() => line()?.classList.add('show'), 3000);
-  slowTimer = setTimeout(() => {
+  statusTimer = setTimeout(() => {
     const l = line();
     if (!l) return;
-    l.innerHTML = '<b>Still loading</b>This is taking longer than usual. Your notes are safe in your Drive.';
-    l.classList.add('show');
-  }, SLOW_MS);
+    l.innerHTML = '<b>Still opening</b>Your Drive is answering slowly. Bower keeps trying.';
+    const bird = el()?.querySelector('.bird');
+    bird?.classList.remove('land');
+    bird?.classList.add('read');
+    l.classList.add('opening', 'show');
+  }, STATUS_MS);
 }
 
 export function bootDone(): void {
-  clearTimeout(slowTimer);
-  clearTimeout(lineTimer);
+  clearTimeout(statusTimer);
   const b = el();
   if (!b) return;
   const shown = performance.now() - t0;
@@ -48,20 +48,21 @@ export function bootDone(): void {
 }
 
 export function bootFail(kind: 'offline' | 'error', retry: () => void): void {
-  clearTimeout(slowTimer);
-  clearTimeout(lineTimer);
+  clearTimeout(statusTimer);
   const l = line();
   if (!l) return;
+  l.classList.remove('opening');
   const bird = el()?.querySelector('.bird');
-  bird?.classList.remove('land');
+  bird?.classList.remove('land', 'read');
   bird?.classList.add(kind === 'offline' ? 'sleep' : 'alarm');
   l.innerHTML =
     kind === 'offline'
       ? "<b>You're offline</b>Bower opens when you're back online."
-      : "<b>Bower couldn't open</b>Google didn't answer. Nothing was lost.";
+      : '<b>Bower could not open</b>Something went wrong while opening. Your notes are safe in your Drive.';
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.textContent = 'Try again';
+  if (kind === 'error') btn.classList.add('primary');
   btn.style.display = 'block';
   btn.style.margin = '18px auto 0';
   btn.addEventListener('click', () => {
