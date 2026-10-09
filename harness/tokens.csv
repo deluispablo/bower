@@ -279,3 +279,5 @@ c4-create-landed,reviewer,codex,gpt-5-codex,medium,1,455283,452747,,375680,2536,
 c4-lockf,implementer,codex,gpt-5-codex,medium,1,601737,591226,,542208,10511,,,,delivered (knip fix pending),2026-10-09
 c4-lockf,implementer,codex,gpt-5-codex,medium,2,102188,101233,,90496,955,,,,knip fix,2026-10-09
 c4-lockf,implementer,codex,gpt-5-codex,medium,3,142637,141608,,116352,1029,,,,lockf path (addendum 24),2026-10-09
+c4-undo-compensate,property-red,codex,gpt-5-codex,medium,1,1122124,1104942,,1031168,17182,,,,red written (seed 427285),2026-10-09
+c4-lockf,reviewer,claude,bower-reviewer,,1,40025,,,,,,7,0.6,PASS (P4-62),2026-10-09
