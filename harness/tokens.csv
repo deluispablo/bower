@@ -300,3 +300,4 @@ d-v2-07,reviewer,codex,gpt-5-codex,medium,6,367616,364182,,320128,3434,,,,2 Impo
 c4-undo-compensate,implementer,codex,gpt-5-codex,medium,2,860365,855398,,787712,4967,,,,merge resolved,2026-10-09
 c4-parse-once,property-red,codex,gpt-5-codex,medium,1,1745363,1733288,,1648128,12075,,,,red written,2026-10-09
 c4-undo-compensate,property-red,codex,gpt-5-codex,medium,2,327658,325314,,294272,2344,,,,amended (addendum 6),2026-10-09
+c4-parse-once,implementer,codex,gpt-5-codex,medium,1,525214,522255,,451840,2959,,,,blocked on red shape,2026-10-09
