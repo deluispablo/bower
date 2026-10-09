@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module, checked by these tests
-import { apiTests, doneArgs, REAL_TIMER_CEILING, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
+import { apiTests, doneArgs, REAL_TIMER_CEILING, cpuReport, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
 type Entry = { id: string; task: string | number; steps?: string[]; verify: string; passes: boolean };
 const S = ['Open Home.', 'See it.'];
@@ -345,6 +345,13 @@ describe('the harness', () => {
     const source = readFileSync(join(process.cwd(), 'scripts/check-harness.mjs'), 'utf8');
     expect(source).toContain('slowReport(unit)');
     expect(source).not.toMatch(/bad\.push\([^)]*slowReport/);
+  });
+  it('CPU time is reported, never failed', () => {
+    const rows = [{ name: 'quick', ms: 40 }, { name: 'heavy', ms: 2600 }, { name: 'middling', ms: 900 }];
+    expect(cpuReport(rows, 2)).toEqual(['2600 ms CPU (52% of the timeout)  heavy', '900 ms CPU (18% of the timeout)  middling']);
+    const source = readFileSync(join(process.cwd(), 'scripts/check-harness.mjs'), 'utf8');
+    expect(source).toContain('cpuReport(cpuRows)');
+    expect(source).not.toMatch(/bad\.push\([^)]*cpuReport/);
   });
   // harness/with-lock.sh is the one lock done.sh and integrate.sh share around the heavy runs.
   const lockScript = join(process.cwd(), 'harness/with-lock.sh');

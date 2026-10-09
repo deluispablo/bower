@@ -255,7 +255,7 @@ export function redKind(output) {
 }
 
 /** The size of harness/real-timers.json today. The list may only shrink, to empty: lower this when a line goes, never raise it. */
-export const REAL_TIMER_CEILING = 22;
+export const REAL_TIMER_CEILING = 0;
 /**
  * The timer allowlist (harness/real-timers.json, enforced while tests run by harness/timer-gate.ts): a list longer than the
  * ceiling, and lines that match no test. `names` are the full names of every unit test of the app, api and runner.
@@ -277,6 +277,18 @@ export function slowReport(tests, count = 5) {
     .sort((a, b) => b.duration - a.duration)
     .slice(0, count)
     .map((t) => `${Math.round(t.duration)} ms  ${t.name}`);
+}
+
+/**
+ * The CPU-time report (c4-test-timers): the tests that used the most CPU, with their share of vitest's 5000 ms timeout.
+ * CPU time moves less with load than wall time, so it shows a test that does too much work (a profile found the size-cap
+ * run re-encoding every note). A report only: it never fails the check. `rows` are {name, ms}.
+ */
+export function cpuReport(rows, count = 5, timeoutMs = 5000) {
+  return [...rows]
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, count)
+    .map((r) => `${r.ms} ms CPU (${Math.round((100 * r.ms) / timeoutMs)}% of the timeout)  ${r.name}`);
 }
 
 /** Test files: unit, e2e, and the api and runner tests (the same set as TEST_PATTERN in harness-git.mjs, without the helper folders). */

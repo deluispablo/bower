@@ -273,14 +273,16 @@ describe('the tidy-up sheet and Home focus', () => {
     first.focus();
     fireEvent.click(first);
     await waitFor(() => expect(screen.queryByText('Is this a receipt?')).toBeNull());
-    await new Promise((r) => setTimeout(r, 100));
+    // focusMain runs on a zero-delay timer queued earlier: one more zero-delay turn runs after it.
+    await new Promise((r) => setTimeout(r, 0));
     // On to the next question.
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Yes, a lease' }));
     const last = screen.getByRole('button', { name: 'Yes, a lease' });
     fireEvent.click(last);
     await waitFor(() => expect(screen.queryByText('Is this a lease?')).toBeNull());
-    await new Promise((r) => setTimeout(r, 100));
+    // focusMain runs on a zero-delay timer queued earlier: one more zero-delay turn runs after it.
+    await new Promise((r) => setTimeout(r, 0));
     // No question left: the Home heading, never the body.
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
