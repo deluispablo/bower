@@ -330,6 +330,9 @@ describe('the harness', () => {
     expect(timerListProblems(names, ['a', 'b'], 1)).toEqual([expect.stringContaining('may only shrink')]);
     const list = JSON.parse(readFileSync(join(process.cwd(), 'harness/real-timers.json'), 'utf8')) as { tests: string[] };
     expect(list.tests.length).toBeLessThanOrEqual(REAL_TIMER_CEILING);
+    // The target is reached (c4-test-timers): no unit test waits on the real clock, so the list is empty and stays so.
+    expect(list.tests).toEqual([]);
+    expect(REAL_TIMER_CEILING).toBe(0);
     expect(new Set(list.tests).size).toBe(list.tests.length);
   });
 
