@@ -18,7 +18,6 @@
     "exports src/data/fake/fake-runner.ts SET_ASIDE",
     "exports src/data/fake/fake-runner.ts WORDS_NOT_WRITTEN",
     "exports src/data/fake/fake-worker.ts ReportLedger",
-    "exports src/data/fake/ordered-reports.fixture.ts SEQUENCES",
     "exports src/data/session.ts LEASE_TTL_MS",
     "exports src/data/spine/read.ts driveRead",
     "exports src/features/piles/add-words.ts leftOut",
@@ -30,10 +29,6 @@
     "files src/data/drive/drive-contract.ts src/data/drive/drive-contract.ts",
     "files src/data/vault/ownership-format.ts src/data/vault/ownership-format.ts",
     "files src/test-setup.ts src/test-setup.ts",
-    "files src/testing/dependency-gate.ts src/testing/dependency-gate.ts",
-    "files src/testing/loading-sources.ts src/testing/loading-sources.ts",
-    "files src/testing/tidy-up.ts src/testing/tidy-up.ts",
-    "files src/testing/upload-hook.ts src/testing/upload-hook.ts",
     "types src/data/drive/fake-drive.ts FaultAction"
   ]
 }

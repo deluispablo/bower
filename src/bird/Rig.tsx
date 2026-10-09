@@ -1,11 +1,9 @@
 /** The parts of the v10 drawing the motion engine moves. */
-export type RigPart = 'rig' | 'head' | 'tail' | 'wing' | 'legs' | 'jaw' | 'tuft' | 'eye' | 'iris';
+export type RigPart = 'rig' | 'head' | 'tail' | 'wing' | 'legs' | 'jaw' | 'tuft' | 'eye' | 'iris' | 'carry';
 
 interface Props {
   /** Hears each part's element (for the motion engine). */
   onPart?: (part: RigPart, el: SVGGElement | null) => void;
-  /** Something small held in the beak, shown by the `carry` pose. */
-  carrying?: boolean;
 }
 
 /**
@@ -14,7 +12,7 @@ interface Props {
  * rotation or a scale of the same parts. Decorative: what Bower "says" is
  * always written next to it.
  */
-export function Rig({ onPart, carrying = false }: Props) {
+export function Rig({ onPart }: Props) {
   const r = (part: RigPart) => (onPart ? (el: SVGGElement | null) => onPart(part, el) : undefined);
   return (
     <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true" focusable="false" style={{ overflow: 'visible', display: 'block' }}>
@@ -54,12 +52,11 @@ export function Rig({ onPart, carrying = false }: Props) {
             <path fill="#d9952e" d="M78 38Q86 38 89 39Q85 42 78 41Z" />
           </g>
           <path fill="#f0b64f" d="M78 31Q88 33 92 37Q86 38 78 38Z" />
-          {carrying && (
-            <g className="b-carry">
-              <rect x="84" y="34" width="14" height="17" rx="2.5" fill="#f3f6fa" />
-              <path d="M87 40h8M87 44h8M87 48h5" stroke="#93a3b8" strokeWidth="1.4" strokeLinecap="round" />
-            </g>
-          )}
+          {/* Something small held in the beak: hidden until the engine's holding() or the carry still frame shows it. */}
+          <g className="b-carry" ref={r('carry')} display="none">
+            <rect x="84" y="34" width="14" height="17" rx="2.5" fill="#f3f6fa" />
+            <path d="M87 40h8M87 44h8M87 48h5" stroke="#93a3b8" strokeWidth="1.4" strokeLinecap="round" />
+          </g>
         </g>
       </g>
     </svg>

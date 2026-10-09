@@ -9,7 +9,8 @@
     ".": {
       // Production starts here: the Vite app (index.html loads src/main.tsx), the scripts that pnpm check and the harness run, the e2e specs.
       "entry": ["scripts/*.{mjs,cjs}", "e2e/**/*.ts", "src/main.tsx!"],
-      "project": ["src/**/*.{ts,tsx}!", "scripts/**", "e2e/**"],
+      // Fixtures and test helpers are not production (same patterns as .dependency-cruiser.cjs NOT_PRODUCTION).
+      "project": ["src/**/*.{ts,tsx}!", "!**/*.fixture.ts", "!**/*.fixture.tsx", "!src/testing/**", "scripts/**", "e2e/**"],
       "ignoreDependencies": [
         // Run by path from scripts/check-dependencies.mjs, so knip does not see the binary used.
         "dependency-cruiser",
