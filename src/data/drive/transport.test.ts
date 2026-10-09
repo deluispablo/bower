@@ -264,3 +264,42 @@ describe('one table of Drive failures', () => {
     expect(await sentence('dailyLimitExceeded')).toBe('Google Drive is not taking more from Bower today.');
   });
 });
+
+describe('the table deviations, each with its reason', () => {
+  const pacing = { baseMs: 0, sleep: async () => {} };
+  const expired = (): Response => json({ error: { code: 401, errors: [{ reason: 'authError', message: 'Invalid Credentials' }] } }, 401);
+  const told = async (drive: DriveHttp): Promise<Array<[string, string, string]>> => {
+    const out: Array<[string, string, string]> = [];
+    for (const p of [drive.get('FILE_ID'), drive.createText('FOLDER_ID', 'a.md', 'a')]) {
+      const e = await p.then(() => null, (x: unknown) => x);
+      out.push(e instanceof BowerError ? [e.code, transport.failureKind(e), e.message] : ['none', '', '']);
+    }
+    return out;
+  };
+
+  it('an expired sign-in waits only after the token refresh fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const signIn: [string, string, string] = ['auth', 'wait', DRIVE_MESSAGES.auth];
+    // A stale token: the transport's own refresh gets a fresh one and the request goes. Nothing waits.
+    const asked: boolean[] = [];
+    const refreshed = new DriveHttp({
+      token: async (fresh) => (asked.push(fresh), fresh ? 'new' : 'old'),
+      fetch: async (_url, init) => ((init?.headers as Record<string, string>).authorization === 'Bearer new' ? json(file) : expired()),
+      pacing,
+    });
+    await expect(refreshed.get('FILE_ID')).resolves.toMatchObject({ id: 'FILE_ID' });
+    expect(asked).toEqual([false, true]);
+    // The refresh itself is refused (Google no longer grants Bower a token): the person must sign in again.
+    const refused = new DriveHttp({
+      token: async (fresh) => {
+        if (fresh) throw new BowerError('auth', 'Sign in again to keep going.', undefined, { cause: { httpStatus: 401 } });
+        return 'old';
+      },
+      fetch: async () => expired(),
+      pacing,
+    });
+    expect(await told(refused)).toEqual([signIn, signIn]);
+    // A fresh token still answered 401: the same.
+    expect(await told(new DriveHttp({ token: async () => 't', fetch: async () => expired(), pacing }))).toEqual([signIn, signIn]);
+  });
+});

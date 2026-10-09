@@ -40,6 +40,8 @@ export function BowerScreen() {
   const [typing, setTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
+  /** One id per intended request: the same words sent again after a wait are that request, never a second one. */
+  const intent = useRef<{ text: string; id: string } | null>(null);
   // The phone has no side panel: what failed shows here, where Bower's panel content lives on a phone.
   const desktop = useIsDesktop();
   const pose: Pose = listening ? 'wait' : typing ? 'wait' : isRunning(run) ? 'write' : 'idle';
@@ -51,7 +53,11 @@ export function BowerScreen() {
       if (kind === 'rule') {
         await vault.addRule(t);
         toast('Saved as you wrote it. Bower words it clearly in the next tidy-up.');
-      } else await vault.addRequest(t);
+      } else {
+        if (intent.current?.text !== t) intent.current = { text: t, id: crypto.randomUUID() };
+        await vault.addRequest(t, intent.current.id);
+      }
+      intent.current = null;
       setText('');
       composerRef.current?.focus();
     } catch (e) {

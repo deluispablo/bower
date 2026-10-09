@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router';
-import { useFailedChanges, useNote } from '@/data/provider';
+import { useFailedChanges, useNote, useSources } from '@/data/provider';
 import { thingName, nameOf, parentOf } from '@/data/tree';
 import type { Note } from '@/data/types';
 import { crumbs, decodeSplat, noteRoute } from '@/app/paths';
@@ -19,17 +19,31 @@ const turnedTo = new Set<string>();
 export function RightPanel() {
   const { rightTab, setRightTab } = useUi();
   const { data: failed } = useFailedChanges();
-  // A change that failed is found once: the panel turns to Bower, where it shows, and the person may turn away again.
-  useEffect(() => {
-    const fresh = (failed ?? []).filter((f) => !turnedTo.has(f.id));
-    fresh.forEach((f) => turnedTo.add(f.id));
-    if (fresh.length) setRightTab('bower');
-  }, [failed, setRightTab]);
+  const { vault } = useSources();
+  const body = useRef<HTMLDivElement>(null);
+  /** Focus was inside the panel that a turn closed: it goes to the Bower tab, never to the page. */
+  const focusTab = useRef(false);
   const loc = useLocation();
   const path = loc.pathname.startsWith('/note/') ? decodeSplat(loc.pathname.slice(6)) : null;
   const isNote = !!path && path.endsWith('.md');
   // Without a note there are no links or headings: show Bower there instead.
   const tab = isNote ? rightTab : 'bower';
+  // A change that failed is found once: the panel turns to Bower, where it shows, and the person may turn away again.
+  // Marked seen where what failed is kept, so no later page load turns to it again.
+  useEffect(() => {
+    const fresh = (failed ?? []).filter((f) => !f.seen && !turnedTo.has(f.id));
+    if (!fresh.length) return;
+    fresh.forEach((f) => turnedTo.add(f.id));
+    focusTab.current = tab !== 'bower' && !!body.current?.contains(document.activeElement);
+    setRightTab('bower');
+    // Storage that refuses keeps it in this page's memory (journal); a failure here can only mean one more turn later.
+    for (const f of fresh) void vault.markFailedSeen?.(f.id).catch((e: unknown) => console.error(e));
+  }, [failed, setRightTab, vault, tab]);
+  useEffect(() => {
+    if (tab !== 'bower' || !focusTab.current) return;
+    focusTab.current = false;
+    document.getElementById('right-tab-bower')?.focus();
+  }, [tab]);
   return (
     <>
       <Tabs
@@ -45,7 +59,7 @@ export function RightPanel() {
           { key: 'bower', label: 'Bower', icon: <BowerHead size={20} /> },
         ]}
       />
-      <div className={s.body} {...tabPanel('right', tab)}>
+      <div ref={body} className={s.body} {...tabPanel('right', tab)}>
         {tab === 'bower' ? (
           <BowerPanel />
         ) : !isNote || !path ? (

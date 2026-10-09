@@ -231,6 +231,11 @@ export class DriveVault implements VaultSource {
     this.emit();
   }
 
+  async markFailedSeen(id: string): Promise<void> {
+    await this.journal.markSeen(id);
+    this.emit();
+  }
+
   /** Lists the folder again (after a tidy-up, or when another device may have changed it). */
   async refresh(): Promise<void> {
     this.ix = null;
@@ -1319,10 +1324,10 @@ export class DriveVault implements VaultSource {
     return [...waiting, ...done];
   }
 
-  async addRequest(input: string): Promise<Request> {
+  async addRequest(input: string, intent?: string): Promise<Request> {
     const text = input.trim();
     if (!text) throw new BowerError('conflict', 'Write what you want first.');
-    const r = await this.journal.record('request', `Asked Bower: "${text}"`, { text });
+    const r = await this.journal.record('request', `Asked Bower: "${text}"`, { text }, intent);
     this.emit();
     return { id: r.id, text, at: r.at };
   }

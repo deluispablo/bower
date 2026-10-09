@@ -158,11 +158,17 @@ export const isUnconfirmedWrite = (e: unknown): boolean => e instanceof BowerErr
  */
 export type FailureKind = 'retry' | 'wait' | 'permanent';
 
-/** Every reason the guide documents with a kind of its own; a 4xx with any other reason is `permanent`. */
+/**
+ * Every reason the guide documents with a kind of its own; a 4xx with any other reason is `permanent`. Two deviate from
+ * "every other 4xx is permanent", each for its reason (lead ruling, round 6):
+ * - `authError` (401) waits: it reaches the table only after the transport's own token refresh failed (`DriveHttp`),
+ *   so the person has to sign in again; nothing is dropped meanwhile.
+ * - `notFound` (404) is tried once more, after its caller lists anew (the guide: a stale id or place); a second 404
+ *   for the same request is permanent (`afterNotFound`), so a target that is gone never loops.
+ */
 export const DRIVE_REASONS: Readonly<Record<string, FailureKind>> = {
   rateLimitExceeded: 'retry',
   userRateLimitExceeded: 'retry',
-  // A stale id or place (the guide: check the id): the caller lists again, and the next try goes where it is now.
   notFound: 'retry',
   storageQuotaExceeded: 'wait',
   dailyLimitExceeded: 'wait',
@@ -188,6 +194,12 @@ export function answerKind(status: number, reasons: readonly string[]): FailureK
  */
 export const askAgainNow = (status: number, reasons: readonly string[]): boolean => status !== 404 && answerKind(status, reasons) === 'retry';
 
+/**
+ * Whether an answer to a write may mean it landed: a 5xx may come after the server applied it (RFC 9110 9.2.2), so it
+ * is never sent again as if it had not, and is told as unconfirmed (`isUnconfirmedWrite`).
+ */
+export const mayHaveLanded = (status: number, write: boolean): boolean => write && status >= 500;
+
 /** The marker of each kind on a `BowerError` (its ES2022 `cause`). */
 const KIND_MARK: Readonly<Record<FailureKind, string>> = { retry: 'kind:retry', wait: 'kind:wait', permanent: 'kind:permanent' };
 
@@ -199,3 +211,10 @@ export function failureKind(e: unknown): FailureKind {
   if (e instanceof BowerError) for (const kind of ['wait', 'permanent'] as const) if (e.cause === KIND_MARK[kind]) return kind;
   return 'retry';
 }
+
+/**
+ * The kind of a failure for a request already tried once after a 404 and a fresh listing (`relisted`): a second 404 is
+ * permanent, so a gone target never loops; anything else is as the table says.
+ */
+export const afterNotFound = (e: unknown, relisted: boolean): FailureKind =>
+  relisted && e instanceof BowerError && e.code === 'not-found' ? 'permanent' : failureKind(e);
