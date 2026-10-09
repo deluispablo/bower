@@ -396,3 +396,4 @@ P3-9 is closed.
 - qa10-toast-flake ruled (b) (main 7a708aa): c4-focus-return registered (opens stage 4). Until then rerun qa10 alone when it fails; never loosen it. 420/426.
 - c2-one-engine fix round merged (red 90cf9577, fix 3f642845; move reads its destination at the write boundary, no clock; C04 80→82 and the golden bound raised to 82: lead to weigh; check green on merged tree, e2e:fake 256). Open: summary counts unconfirmed rows as "set aside"; barrier test changed from failed to done. P4-35b check dispatched.
 - c2-one-engine rulings (main 19609e7): 82 accepted; round 3 (after P4-35b) adds the "couldn't confirm N" summary line and fence-cannot-read → stopped (barrier test ends stopped).
+- P4-35b BLOCK (c2-one-engine): matches the lead rulings 2 and 3 (unconfirmed row counted as set aside; failed fence read ends done with code offline headless). Round 3 (escalated) dispatched.
