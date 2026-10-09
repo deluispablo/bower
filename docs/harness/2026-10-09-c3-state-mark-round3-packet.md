@@ -25,6 +25,14 @@
 - `a write it refused for good writes one answered row on Home and on the note`
 - `a write it with nothing to write writes one answered row`
 
+## P4-47 BLOCK (fold in, review /private/tmp/p4-47-review-notes.md)
+
+- Important: the stamp+md5 re-ask (`held`, scripted.ts:~1063) has no test. Add `write it re-asks when the note changed elsewhere since it was shown`. It must fail when `held` is removed; prove that in the notes.
+- Minors:
+  - test the unreadable-manifest branch of `lastWritten`;
+  - test a lone "no", and a lone yes beside a pile, on the no-model path (claude.ts:~1158);
+  - `stateChangesOf`/`MANIFEST_PATH` read manifests beside `parseRunManifestV2`: use the one reader, or say on the card why it cannot (a second-way check).
+
 ## Verify
 
 - The three reds.
