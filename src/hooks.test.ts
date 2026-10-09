@@ -148,8 +148,10 @@ describe('the stop gate', () => {
 
   it('pnpm check writes the green mark for its tree and head', () => {
     const { main, worker } = fixture();
-    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts: { check: string } };
-    expect(pkg.scripts.check.trim().endsWith('node scripts/write-check-mark.mjs')).toBe(true);
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts: { check: string; 'check:run': string } };
+    // `pnpm check` is the lock around `check:run`, whose last step writes the mark.
+    expect(pkg.scripts.check).toContain('pnpm check:run');
+    expect(pkg.scripts['check:run'].trim().endsWith('node scripts/write-check-mark.mjs')).toBe(true);
     expect(mark(worker).status).toBe(0);
     const path = join(git(worker, 'rev-parse', '--absolute-git-dir'), 'bower-check-green');
     expect(readFileSync(path, 'utf8').trim()).toBe(git(worker, 'rev-parse', 'HEAD'));
