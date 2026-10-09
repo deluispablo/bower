@@ -150,6 +150,8 @@ P3-9 is closed.
 
 - 2026-10-09: stage 3 entries all closed (c3-state-mark 5795b39b last). Ready for the coordinator restart; resume order in HANDOFF.
 
+- 2026-10-09 stage 3 end: suites on 55ea8194 with E2E_BATCH=1: check 3905 + api 235 + runner 259, e2e 226, e2e:fake 263, e2e:pwa 4; no flaky. main = backup = 55ea8194 (scan clean). Live push hook check: the exact backup command alone is allowed; a chained command with it is refused (fail-safe). SHA sent to the lead for deploy and smoke.
+
 ## P4 ([TL-P4-01](2026-10-07-tl-p4-01-p4-start.md), [P4_PLAN](../P4_PLAN.md))
 
 - Owner authorized P4 (main fb33b21). HANDOFF restored to the docs-test headings (0dc5fde).
