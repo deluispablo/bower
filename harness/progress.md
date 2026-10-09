@@ -278,3 +278,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c2-create-by-id passes — harness: c2-create-by-id re-proved after c4-undo-compensate removed the journal Bin
 - 2026-10-09: p4-corpus-driver passes — harness: p4-corpus-driver passes (P4-64 PASS)
 - 2026-10-10: c4-parse-once passes — fix(c4-parse-once): passes (P4-65 PASS)
+- 2026-10-10: d-v2-07 passes — feat(bird): d-v2-07 passes (P4-58h PASS, designer verified)

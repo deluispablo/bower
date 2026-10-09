@@ -6216,7 +6216,7 @@
     "id": "d-v2-07",
     "task": "p4-consolidation",
     "category": "ui",
-    "passes": false,
+    "passes": true,
     "ui": true,
     "what": "The one Bower with the turn runs the engine idle mind on its pose: gaze (pointer, focus, touch), turn with a hop, idle acts with preen, blink, tap, sleep after 60 s with a startle wake; still with moves off or reduced motion; chip bird only blinks.",
     "steps": [
@@ -6226,7 +6226,8 @@
     ],
     "verify": "pnpm vitest run src/bird -t \"the perched Bower follows the pointer|a focused control turns the gaze|after 60 s with no input the bird sleeps|with reduced motion or moves off no transform changes over 5 s|preen and snap never run while input is recent|the run chip bird keeps its still frame|a sleeping bird does not blink|Bower is aria-hidden and out of the tab order|a tap starts within 0.1 s and cuts the running act|each idle act stays within its range\"",
     "note": "TL-P4-21 order 4 (Opus, after v2-perched-bower). Contract sign-off trial and designer sign-off before dispatch. Packet 2026-10-09-d-v2-07-packet.md. Red e3fbbfc8, fix 08f344c1; round 2 red edeb7e2f, fix fbd1c431; round 3 red 1371da20, fix 5c2529ea. P4-58 BLOCK, 58b PASS, 58c PASS; Codex 5, 2, then 0. Designer check at 7860f261: all rows verified except the wake startle (DEFECT_LOG wake-startle-overshoot).",
-    "review": "P4-58c PASS"
+    "review": "P4-58h PASS",
+    "design": "verified"
   },
   {
     "task": "p4-consolidation",
