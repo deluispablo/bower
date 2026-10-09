@@ -125,3 +125,5 @@ The P2 app was accepted at `00ec9a5`. The files it wrote are kept in `src/data/c
 | `65425820` | v2-move-here | none: one hint line in the Move sheet; no stored data, route or format changes. |
 | `65ceae64` | c4-test-timers | none: the legacy ownership parse builds one byte table per note instead of re-encoding a prefix per span; the spans are the same bytes (a test compares them with LF and CRLF, accents, CJK and emoji). No stored format, wire or string changes. |
 | `2b0c9552` | c4-test-timers | none: tests only under src/features (the palette and Home focus tests use fake time or an event instead of a real wait); no app code, stored format, route or string changes. |
+| `588023ab` | c4-new-pill-one | none: tests only (shared fresh pill source check and fake phone/desktop appearance and axe coverage); no app code, stored format, route or string changes. |
+| `01fc4694` | c4-new-pill-one | none: markup and styles only (one fresh pill class in src/ui, four callers, 22 px inline-flex shape); no stored data, route, format or string changes. |
