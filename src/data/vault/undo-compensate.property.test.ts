@@ -41,7 +41,8 @@ interface Change {
   line: JournalRecord;
   kind: Kind;
   tab: number;
-  undone: boolean;
+  cancelled: boolean;
+  inverses: Array<{ id: string; outcome: 'pending' | 'sent' | 'refused' }>;
   undo?: () => Promise<unknown>;
 }
 interface Model { changes: Change[] }
@@ -64,6 +65,27 @@ interface Real {
 }
 
 function tabAt(r: Real, tab: number): Tab { return tab % 2 === 0 ? r.tabs[0] : r.tabs[1]; }
+
+function undone(c: Change): boolean {
+  return c.cancelled || c.inverses.some((inverse) => inverse.outcome === 'sent');
+}
+
+async function inverseOutcomes(m: Model, r: Real): Promise<void> {
+  const failed = await tabAt(r, 0).port().failed();
+  for (const c of m.changes) {
+    for (const inverse of c.inverses) {
+      // Addendum 7: keep each inverse's outcome separate, including repeated/two-tab Undo.
+      if (inverse.outcome === 'pending') {
+        if (r.confirmed.has(inverse.id)) inverse.outcome = 'sent';
+        else if (r.refused.has(inverse.id)) {
+          inverse.outcome = 'refused';
+          expect(failed.some((line) => line.id === inverse.id), `refused inverse ${inverse.id} missing from failed list`)
+            .toBe(true);
+        }
+      }
+    }
+  }
+}
 
 // Only transport errors are accepted as an unresolved send. Assertions and coding errors propagate.
 async function transport(work: () => Promise<unknown>): Promise<void> {
@@ -180,19 +202,20 @@ async function change(m: Model, r: Real, kind: Kind, tab: number, api: boolean):
   if (!original) throw new Error('The change did not record a line');
   // Addendum 4(5): record's immediate refusal offers no Undo. Retry refusals of already offered lines do.
   if (r.refused.has(original.id)) return;
-  m.changes.push({ line: original, kind, tab, undone: false, ...(undo ? { undo } : {}) });
+  m.changes.push({ line: original, kind, tab, cancelled: false, inverses: [], ...(undo ? { undo } : {}) });
 }
 
 async function undo(m: Model, r: Real, index: number, tab: number, api: boolean): Promise<void> {
   const c = m.changes[index % m.changes.length];
   if (!c) return;
   // A dropped change has no second Undo button. Two-tab repeated Undo is exercised for sent changes.
-  if (c.undone && r.dropped.has(c.line.id)) return;
+  if (undone(c) && r.dropped.has(c.line.id)) return;
   const before = new Set(r.observed.keys());
   const decisionCount = r.decisions.length;
   let thrown: BowerError | undefined;
   try {
-  if (api && c.undo && !c.undone && !r.refused.has(c.line.id)) {
+  if (api && c.undo && !undone(c) && !c.inverses.some((inverse) => inverse.outcome === 'pending') &&
+      !r.refused.has(c.line.id)) {
     await c.undo();
   } else {
     const journal = tabAt(r, tab).port();
@@ -212,6 +235,11 @@ async function undo(m: Model, r: Real, index: number, tab: number, api: boolean)
   }
   await observe(r);
   const added = [...r.observed.values()].filter((line) => !before.has(line.id));
+  for (const line of added) {
+    if (line.undoes === c.line.id) c.inverses.push({ id: line.id,
+      outcome: r.confirmed.has(line.id) ? 'sent' : r.refused.has(line.id) ? 'refused' : 'pending' });
+  }
+  await inverseOutcomes(m, r);
   if (thrown) {
     // Addendum 6: a kept inverse is pending until flush; only a refusal leaves Undo unresolved.
     const waiting = JSON.parse(localStorage.getItem(outboxKey(r.root)) ?? '[]') as
@@ -231,7 +259,7 @@ async function undo(m: Model, r: Real, index: number, tab: number, api: boolean)
     expect(added).toHaveLength(1);
     expect(added[0]?.undoes).toBe(c.line.id);
   }
-  c.undone = true;
+  if (decision?.result === 'dropped') c.cancelled = true;
 }
 
 async function oracle(m: Model, r: Real): Promise<void> {
@@ -253,7 +281,7 @@ async function oracle(m: Model, r: Real): Promise<void> {
   const expectedRules = new Set(r.baselineRules);
   // Expectation comes from the person's commands and Undo choices, not from the observed Drive lines.
   for (const c of m.changes) {
-    if (c.undone) continue;
+    if (undone(c)) continue;
     if (c.kind === 'add' && c.line.text) expectedRules.add(c.line.text);
     if (c.kind === 'remove' && c.line.removes) expectedRules.delete(c.line.removes);
     if (c.line.fileId && c.kind === 'bin') expectedThings.set(c.line.fileId, null);
@@ -266,7 +294,7 @@ async function oracle(m: Model, r: Real): Promise<void> {
     ? [line.id, line.undoes] : []));
   expect(new Set(pairsOf(lines))).toEqual(pairedIds);
   expect(lines.filter((line) => !pairedIds.has(line.id)).map((line) => line.id).sort())
-    .toEqual(m.changes.filter((c) => !c.undone).map((c) => c.line.id).sort());
+    .toEqual(m.changes.filter((c) => !undone(c)).map((c) => c.line.id).sort());
 }
 
 type Action = { op: 'change'; kind: Kind; tab: number; api: boolean } |
@@ -301,6 +329,7 @@ class Command implements fc.AsyncCommand<Model, Real> {
       delete r.reserveGate;
     }
     await observe(r);
+    await inverseOutcomes(m, r);
     await invariants(r);
   }
 }
@@ -421,12 +450,14 @@ it.each([
       await fc.asyncModelRun(() => state, commands);
       r.outcome = 'landed';
       await transport(() => real.tabs[0].port().flush());
+      await inverseOutcomes(state.model, r);
       for (let index = 0; index < state.model.changes.length; index++) {
         const c = state.model.changes[index];
-        if (c && !c.undone && (undoAll || r.refused.has(c.line.id))) await undo(state.model, r, index, index % 2, false);
+        if (c && !undone(c) && (undoAll || r.refused.has(c.line.id))) await undo(state.model, r, index, index % 2, false);
       }
       await r.tabs[1].port().flush();
       await observe(r);
+      await inverseOutcomes(state.model, r);
       await invariants(r);
       await oracle(state.model, r);
       expect(localStorage.getItem(outboxKey(r.root))).toBeNull();
