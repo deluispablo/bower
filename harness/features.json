@@ -5922,12 +5922,12 @@
     "task": "p4-consolidation",
     "category": "test",
     "passes": false,
-    "what": "The 22 unit tests on harness/real-timers.json move to fake timers or event waits, so the real-timer allowlist reaches its empty target.",
+    "what": "Load-proof tests: one byte table per note (rawByteAt), a re-entrant heavy-run lock around check and every e2e (done.sh too), Vite optimizeDeps include and warmup, the shared axe helper waits for animations, the real-timer allowlist empty, a CPU report and a map row.",
     "steps": [
       "harness/real-timers.json is empty and the ceiling is 0."
     ],
-    "verify": "pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\"",
-    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer."
+    "verify": "pnpm vitest run -t \"the size-cap run fits its time bound with no load|a second heavy run waits for the first\" && pnpm exec vitest run src/timer-gate.test.ts -t \"the timer allowlist may only shrink\" && bash scripts/e2e-both.sh -g \"axe runs after the sheet.s animations end\"",
+    "note": "TL-P4-17 addendum 10 (main 56dd8d86); stage 4. Starting model: bower-implementer. TL-P4-22 addenda 11 and 13 (main f01eda6c) widen the scope; part 1 gets an escalated review. Packet 2026-10-09-c4-test-timers-packet.md. Goes after the Codex-finding fixes."
   },
   {
     "id": "c3-done-harness-paths",
