@@ -10,7 +10,7 @@ import type { DriveApi, DriveFile } from '../drive/drive-api';
 import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
-import { makeText, updateByStamp } from '../spine/write-once';
+import { Intended, makeOnce, makeText, reserveFor, updateByStamp, type Holder } from '../spine/write-once';
 import { afterNotFound, type FailureKind } from '../drive/transport';
 import type { FailedChange } from '../sources';
 
@@ -118,11 +118,12 @@ function keepFailed(folder: string, list: FailedChange[]): void {
 export const outboxKey = (folder: string): string => `bower:outbox:${folder}`;
 
 /**
- * A line waiting to be sent, with the id Drive reserved for its file once one was (`spine/write-once.ts`): kept with
- * the line until its create is confirmed, so a line whose answer was lost is sent again with the same id and found by
- * it, never written twice. An outbox from before keeps bare lines; each gets its id before it is sent.
+ * A line waiting to be sent, the holder of the id Drive reserved for its file once one was (`spine/write-once.ts`, the
+ * outbox port): kept with the line until its create is confirmed, so a line whose answer was lost is sent again with the
+ * same id and found by it, after a reload too, never written twice. An outbox from before keeps bare lines; each gets its
+ * id before it is sent.
  */
-type Waiting = { line: JournalRecord; reserved?: string; notFound?: true };
+interface Waiting extends Holder { line: JournalRecord; notFound?: true }
 
 const isWaiting = (v: unknown): v is Waiting =>
   typeof v === 'object' && v !== null && isJournalRecord((v as Waiting).line) && (typeof (v as Waiting).reserved === 'string' || (v as Waiting).reserved === undefined) &&
@@ -162,8 +163,8 @@ export class Journal {
   private readonly reads: ReadCache;
   /** Drive files per record id (a line written twice has two), as last read or written, for remove. */
   private filesOf = new Map<string, DriveFile[]>();
-  /** The line each intended create made while it waits, by the caller's intent: sent again, it is that line. */
-  private intended = new Map<string, JournalRecord>();
+  /** The line each intended create made while it waits, by the caller's intent (`write-once.ts`): sent again, it is that line. */
+  private readonly intended = new Intended<Waiting>();
   /** Two changes in one millisecond still keep their order. */
   private lastAt = 0;
   /** Writes go one at a time, so a line is never sent twice nor dropped from the outbox by another write. */
@@ -229,9 +230,9 @@ export class Journal {
    */
   async record(kind: ChangeKind, what: string, extra: JournalExtra = {}, intent?: string): Promise<JournalRecord> {
     // The same intended create sent again (a person's retry): the line kept for it, never a second one.
-    const kept = intent === undefined ? undefined : this.intended.get(intent);
-    const rec: JournalRecord = kept ?? this.newLine(kind, what, extra);
-    const line: Waiting = { line: rec };
+    const kept = intent === undefined ? undefined : this.intended.holder(intent);
+    const rec: JournalRecord = kept?.line ?? this.newLine(kind, what, extra);
+    const line: Waiting = kept ?? { line: rec };
     // Capture the original owner before queue admission, including post-effect bookkeeping.
     const owner = await this.place.owner();
     const key = outboxKey(owner);
@@ -259,7 +260,7 @@ export class Journal {
         const pending = this.pendingLine(key, rec.id);
         if (pending === null) {
           // Sent with the others meanwhile, or ended among what failed: done either way, and said so once.
-          this.intended.delete(intent);
+          this.intended.forget(intent);
           if (failedOf(owner).some((f) => f.id === rec.id)) throw new BowerError('unknown', refusedSentence(rec));
           return rec;
         }
@@ -268,8 +269,8 @@ export class Journal {
       }
       const sentNow = await this.send(w);
       if (intent !== undefined) {
-        if (sentNow === 'sent' || sentNow === 'refused') this.intended.delete(intent);
-        else this.intended.set(intent, rec);
+        if (sentNow === 'sent' || sentNow === 'refused') this.intended.forget(intent);
+        else this.intended.keep(intent, w);
       }
       if (kept && (sentNow === 'sent' || sentNow === 'refused')) this.drop(key, rec.id);
       // What the screen follows: where the thing is now, made in Drive whatever became of its line.
@@ -347,12 +348,11 @@ export class Journal {
     if (!waiting.length) return;
     // A line whose answer was lost may be in Drive already, archived by a run or not: never write it twice. It is sent
     // again with the id reserved for it, and Drive refuses a second file with that id, so it is found by it. Lines with
-    // none yet get theirs in one request, kept in the outbox before any is sent.
+    // none yet get theirs from the home in one request, kept in the outbox before any is sent.
     const bare = waiting.filter((r) => r.reserved === undefined);
     if (bare.length) {
       try {
-        const ids = await this.drive.generateIds(bare.length);
-        bare.forEach((r, i) => (r.reserved = ids[i]));
+        await reserveFor(this.drive, bare);
       } catch (e) {
         console.error(e);
         if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
@@ -384,31 +384,20 @@ export class Journal {
     if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
   }
 
-  /** Sends one line with the id reserved for it, reserved now when it has none and kept on `w` for a later try. */
+  /**
+   * Sends one line with the id the home keeps on it (`spine/write-once.ts`), reserved now when it has none: a lost answer
+   * is found again by that id, now or on a later try, after a reload too; a refusal lets it go.
+   */
   private async send(w: Waiting): Promise<Sent> {
     const rec = w.line;
+    // The kind of a failed create, once it was sent (`kindOf`, told once); a failure before it is not the line's.
+    const tried: { kind?: FailureKind } = {};
     try {
       this.checkCurrent();
       const folder = await this.place.folder();
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
-      w.reserved ??= (await this.drive.generateIds(1))[0];
-      return await this.create(w, folder, text);
-    } catch (e) {
-      console.error(e);
-      // Its place or id could not be had: the line itself was not refused, so it waits (on the person, when they must
-      // act); only a place still not found after a fresh listing ends it.
-      const kind = this.kindOf(w, e);
-      if (kind === 'permanent' && w.notFound && e instanceof BowerError && e.code === 'not-found') return this.refused(w);
-      return kind === 'wait' && e instanceof BowerError ? { waits: e.message } : 'later';
-    }
-  }
-
-  private async create(w: Waiting, folder: string, text: string): Promise<Sent> {
-    const rec = w.line;
-    try {
-      // Made by its reserved id (`spine/write-once.ts`): a lost answer is found again by that id, now or on a later try.
-      const f = await makeText(this.drive, this.drive, { parent: folder, name: `${rec.id}.json`, ...(w.reserved ? { id: w.reserved } : {}) }, text);
+      const f = await makeOnce(w, this.drive, (id) => makeText(this.drive, this.drive, { parent: folder, name: `${rec.id}.json`, id }, text), (e) => (tried.kind = this.kindOf(w, e)));
       if (this.current()) {
         this.reads.wrote(f, text);
         this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f]);
@@ -418,10 +407,14 @@ export class Journal {
     } catch (e) {
       console.error(e);
       // One table tells what becomes of it (`transport.ts`): tried again later, waiting on the person, or refused for good.
+      if (tried.kind === 'retry') return 'later';
+      if (tried.kind === 'wait') return { waits: e instanceof BowerError ? e.message : '' };
+      if (tried.kind === 'permanent') return 'refused';
+      // Its place or id could not be had: the line itself was not refused, so it waits (on the person, when they must
+      // act); only a place still not found after a fresh listing ends it.
       const kind = this.kindOf(w, e);
-      if (kind === 'retry') return 'later';
-      if (kind === 'wait') return { waits: e instanceof BowerError ? e.message : '' };
-      return this.refused(w);
+      if (kind === 'permanent' && w.notFound && e instanceof BowerError && e.code === 'not-found') return 'refused';
+      return kind === 'wait' && e instanceof BowerError ? { waits: e.message } : 'later';
     }
   }
 
@@ -436,12 +429,6 @@ export class Journal {
       this.place.stale?.();
     }
     return kind;
-  }
-
-  /** Refused for good: the line ends as failed and its id is let go, never waiting for a try that cannot work. */
-  private refused(w: Waiting): Sent {
-    delete w.reserved;
-    return 'refused';
   }
 
   /** The lines Drive refused for good while nobody waited on them, not yet put away. */

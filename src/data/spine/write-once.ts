@@ -14,7 +14,7 @@
 import { BowerError } from '../types';
 import { md5Hex, sha256Sync } from '../contracts/hashes';
 import { driveError, type DriveApi, type DriveFile, type FencedDrive } from '../drive/drive-api';
-import { isNoAnswer, isUnconfirmedWrite, marked } from '../drive/transport';
+import { failureKind, isNoAnswer, isUnconfirmedWrite, marked, type FailureKind } from '../drive/transport';
 
 export const STAMP = 'bowerOp';
 
@@ -115,33 +115,86 @@ export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): 
   confirmed(await createById(at.id ?? (await reserveId(w)), (id) => w.createText(at.parent, at.name, text, at.props, id), (id) => byId(reads, id)), text);
 
 /**
- * The ids reserved for the creates a person means to make, each kept by what is meant (its `key`) until its create is
- * confirmed: a try again after an answer lost and a read-back failed too is sent with the same id, so it makes one file.
- * There is no pool: each id is reserved for one create, when it is first tried.
+ * The port: where one intended create keeps the id reserved for it, the home keeping no store of its own. Its outbox
+ * line on the device (the journal: it survives a reload), a thing on its way (`Sending`), or this page's memory
+ * (`Intended`).
  */
-export class Intended {
-  private readonly ids = new Map<string, string>();
+export interface Holder {
+  reserved?: string;
+}
+
+/** Ids for every holder that has none yet, in one request (`files.generateIds`), each set on its holder. */
+export async function reserveFor(w: Pick<Makes, 'generateIds'>, holders: readonly Holder[]): Promise<void> {
+  const bare = holders.filter((h) => h.reserved === undefined);
+  if (!bare.length) return;
+  const ids = await w.generateIds(bare.length);
+  if (ids.length < bare.length) throw driveError('unknown');
+  bare.forEach((h, i) => (h.reserved = ids[i]));
+}
+
+/**
+ * Whether a failed create lets its id go: only when refused outright (a 4xx, `permanent` in the transport's table,
+ * TL-P4-14 addendum 13). Not known to have failed (no answer, a 5xx, a conflict its landing may explain), or not taken
+ * for now (a rate limit, a full Drive: addendum 16), it keeps it for the next try.
+ */
+const releases = (e: unknown, kind: FailureKind): boolean => kind === 'permanent' && !unsettled(e);
+
+/**
+ * One intended create, sent with the id its holder keeps (reserved now when it has none) and found again by it: the id
+ * stays on the holder until the create is confirmed, so a try after a lost answer and a failed read-back is that same
+ * file; a refusal lets it go. `kindOf` tells a failure's kind when the caller's own table refines it (a 404 listed anew).
+ */
+export async function makeOnce(h: Holder, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>, kindOf: (e: unknown) => FailureKind = failureKind): Promise<DriveFile> {
+  await reserveFor(w, [h]);
+  const id = h.reserved;
+  if (id === undefined) throw driveError('unknown');
+  try {
+    return await create(id);
+  } catch (e) {
+    if (releases(e, kindOf(e))) delete h.reserved;
+    throw e;
+  }
+}
+
+/**
+ * The memory port: what a person means to make, each kept by what is meant (its `key`) with the holder of its id until
+ * it is settled. A try again after an answer lost and a read-back failed too is sent with the same id, so it makes one
+ * file. There is no pool: each id is reserved for one create, when it is first tried.
+ */
+export class Intended<H extends Holder = Holder> {
+  private readonly held = new Map<string, H>();
 
   /** The id kept for `key`, when an earlier try may have landed with its answer lost. */
   kept(key: string): string | undefined {
-    return this.ids.get(key);
+    return this.held.get(key)?.reserved;
   }
 
-  /** What `key` meant is settled another way (found in the Bin, or changed elsewhere): its id is let go. */
+  /** The holder kept for `key`, when what it means is not settled yet. */
+  holder(key: string): H | undefined {
+    return this.held.get(key);
+  }
+
+  /** What `key` means waits on `h`: a later try with the same key is that one. */
+  keep(key: string, h: H): void {
+    this.held.set(key, h);
+  }
+
+  /** What `key` meant is settled (made, refused, or found another way): its holder and id are let go. */
   forget(key: string): void {
-    this.ids.delete(key);
+    this.held.delete(key);
   }
 
-  async make(key: string, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> {
-    const id = this.ids.get(key) ?? (await reserveId(w));
-    this.ids.set(key, id);
+  /** One intended create kept in this page's memory, by its key (`makeOnce`). */
+  async make(this: Intended<Holder>, key: string, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> {
+    const h = this.held.get(key) ?? {};
+    this.held.set(key, h);
     try {
-      const made = await create(id);
-      this.ids.delete(key);
+      const made = await makeOnce(h, w, create);
+      this.held.delete(key);
       return made;
     } catch (e) {
-      // Still not known whether it landed: the id stays for the next try. Refused outright: it is not kept.
-      if (!unsettled(e)) this.ids.delete(key);
+      // Still not known whether it landed, or not taken for now: the id stays for the next try. Refused: let go.
+      if (h.reserved === undefined) this.held.delete(key);
       throw e;
     }
   }
