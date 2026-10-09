@@ -101,4 +101,18 @@ The builder never grades its own work: every phase ends with an evaluator round 
 - Lint, strict types, unit tests, build: `pnpm check`.
 - Duplication (jscpd) and dependency rules (dependency-cruiser) in `pnpm check`, each with a baseline that may only shrink (TL-P4-15, entries `c1-duplication-gate` and `c1-dependency-rules`).
 
+- `harness/integrate.sh <branch>` is the only way a worker branch reaches the integration branch. It runs a no-commit merge, then `pnpm check`, and commits only when the check is green. After a green merge it removes the worker's worktree and deletes its branch with `-d` (TL-P4-17, TL-P4-19).
+- `scripts/check-harness.mjs` and `done.sh`:
+  - a tracked line that is only a conflict marker fails;
+  - an escalated consolidation entry cannot pass without a `review` PASS;
+  - history checks judge HEAD plus `MERGE_HEAD` during a merge;
+  - `harness/` scripts count as code (TL-P4-17).
+- One heavy gate at a time on this machine: `done.sh` and `integrate.sh` share the lock in `harness/with-lock.sh` (TL-P4-17 addendum 10).
+- Unused code: knip, with a normal pass and a `--production` pass, each against a baseline that may only shrink (TL-P4-17).
+- Syntax rules live in ESLint, for example "Drive ids are reserved only through write-once". Import rules live in dependency-cruiser, for example "the model path cannot reach fixtures" (TL-P4-17, TL-P4-14 addendum 23).
+- Real timers: a unit test whose real timer of 100 ms or more fires fails, unless it is on an allowlist that may only shrink. Wall-clock times are a report, never a failure (TL-P4-17 addenda 9 and 10).
+- Claude Code `PreToolUse` hooks in `.claude/settings.json`:
+  - `quiet-gates.mjs` sends gate output to a log file;
+  - `guard-main-checkout.mjs` stops a subagent from moving the main checkout's branch (TL-P4-17).
+
 When a rule keeps being broken by hand, turn it into a check here rather than a longer `AGENTS.md`.
