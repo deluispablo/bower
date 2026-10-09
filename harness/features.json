@@ -5674,7 +5674,7 @@
     "id": "c3-reservation-home",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "One home for \"reserve an id per intended create, keep it until confirmed\": write-once Intended, with a port for where the id is kept (outbox line, memory). The journal and drive-vault links and empty things use it; no second intent map.",
     "steps": [
       "A person retries a journal line after a double failure: one file, by the id kept on the outbox line.",
