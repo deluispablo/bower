@@ -137,3 +137,20 @@ Red c58dc1c9 (tests and fixture only), fix 619b8640.
 
 tests changed: src/bird/engine.test.ts: reads the rig's width as `stretch`; adds the range bound and the hold check
 tests changed: src/bird/pose-reference.fixture.ts: adds `stretch`, `range` and `hold` per part
+
+## Round 2, addendum 17: the other four poses (main 63566a5a)
+
+Red 8f75c915 (fixture: carry's legs `hold: [0.22, 0.48]`; it failed with legs 0.156 off the 0.55 tuck), fix b1606f7d.
+The bound and every tolerance are unchanged.
+
+- **Tails (idle, carry, land).** Eased targets on the tail spring made it worse (idle +8.27, carry −19.62,
+  land −20.59/+10.33): the spring (k 420, c 14) is underdamped and the flicks last 0.1–0.2 s. So the tail
+  plays its keyframes straight on the part, eased in and out of each key, with no velocity: the way the carry
+  wing already plays its beat in `perch`. `keyed()` gains an `eased` mode (smoothstep per interval) instead
+  of a second helper.
+- **Carry legs.** The same: the tuck is played on the part, eased, so it sits at 0.55 from 22% to 48%.
+- **Sleep.** `girth` −7/6 in the sleep script, so 0.97 tall is 1.035 wide (breathe: scale(1.035, .97)).
+- **Gates.** `pnpm check` green (3936 unit tests). e2e bird-engine, qa6 and qa27, phone and desktop, demo and
+  fake: 37 and 39 passed.
+
+tests changed: src/bird/pose-reference.fixture.ts: carry legs gain the 22–48% hold (addendum 17)
