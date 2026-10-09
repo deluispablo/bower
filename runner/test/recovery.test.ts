@@ -25,6 +25,8 @@ const AT = Date.UTC(2026, 9, 7, 9);
 const RENAMED = 'Dentist reminder.pdf';
 /** The existing signed-out sentence, as the runner says it when the person is gone. */
 const GONE_SENTENCE = 'This tidy-up is no longer allowed to change your folder.';
+/** A thing possibly moved, then emptied from the Bin before Bower read it back (TL-P4-14 addendum 7). */
+const UNCONFIRMED_GONE = "Bower couldn't confirm this; the file is gone.";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -578,6 +580,84 @@ describe('recovery without the browser', () => {
     expect(data.files.filter((f) => f.meta.parents.includes(binned ?? '')).length).toBe(0);
   });
 
+  it('a move into a folder binned since the run read it is refused', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    // Right before the first move into another folder is sent (its checks done), the person puts that folder in the Bin.
+    let binned: { folder: string; thing: string; from: string[]; op: string } | null = null;
+    const end = await tidy(w, 1, {
+      afterIntent: async (op) => {
+        const e = op.effect;
+        if (binned !== null || e.kind !== 'move') return;
+        let folder: string | undefined;
+        if ('fileId' in e.parent) folder = e.parent.fileId;
+        else {
+          const by = 'createdBy' in e.parent ? e.parent.createdBy : '';
+          const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+          const made = found.kind === 'run' ? found.manifest.operations.find((o) => o.operationId === by) : undefined;
+          const key = made?.effect.kind === 'create-folder' ? made.effect.createKey : '';
+          folder = (await w.wire.drive.listAll(w.root)).find((f) => f.folder && f.appProperties?.bowerItem === key)?.id;
+        }
+        if (folder === undefined || e.before.parents.includes(folder)) return;
+        binned = { folder, thing: e.before.fileId, from: [...e.before.parents], op: op.operationId };
+        await w.wire.drive.trash(folder);
+      },
+    });
+    const b = binned as { folder: string; thing: string; from: string[]; op: string } | null;
+    expect(b).not.toBeNull();
+    // Refused before it was sent, as a run that found the folder gone: the thing stays where it was, out of the Bin.
+    expect(end.phase).toBe('done');
+    const outcome = (await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === b?.op);
+    expect(outcome?.state === 'rejected' ? outcome.failure.code : outcome?.state).toBe('not-found');
+    const thing = await w.wire.drive.evidence(b?.thing ?? '');
+    expect(thing?.trashed).toBe(false);
+    expect(thing?.file.parents).toEqual(b?.from);
+  });
+
+  it('a landed move later purged is reported as applied', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    let purged: string | null = null;
+    const end = await tidy(w, 1, {
+      applied: (call) => {
+        if (purged !== null || call.op !== 'update' || call.patch.addParent === undefined) return;
+        // Drive answered the move; the person then empties it from the Bin before Bower reads anything more of it.
+        purged = call.id;
+        (w.wire.drive as unknown as { files: Map<string, unknown> }).files.delete(call.id);
+      },
+    });
+    expect(purged).not.toBeNull();
+    expect(end.phase).toBe('done');
+    const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+    const move = found.kind === 'run' ? found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === purged) : undefined;
+    expect((await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === move?.operationId)?.state).toBe('applied');
+  });
+
+  it('a lost-answer move purged before the read-back is reported as unconfirmed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const w = await world();
+    let purged: string | null = null;
+    const isMove = (call: FencedCall): boolean => call.op === 'update' && call.patch.addParent !== undefined;
+    const end = await tidy(w, 1, {
+      loseReply: (call) => purged === null && isMove(call),
+      applied: (call) => {
+        if (purged !== null || !isMove(call) || !('id' in call)) return;
+        // The move landed and its answer is lost; the person empties it from the Bin before Bower reads it back.
+        purged = call.id;
+        (w.wire.drive as unknown as { files: Map<string, unknown> }).files.delete(call.id);
+      },
+    });
+    expect(purged).not.toBeNull();
+    expect(end.phase).toBe('done');
+    const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
+    const move = found.kind === 'run' ? found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === purged) : undefined;
+    const outcome = (await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === move?.operationId);
+    // Neither applied nor moved away: Bower cannot tell whether it landed, and says so.
+    expect(outcome?.state === 'rejected' ? outcome.failure : outcome?.state).toEqual({ code: 'unknown', message: UNCONFIRMED_GONE });
+    expect(JSON.stringify(end.view)).toContain(UNCONFIRMED_GONE);
+    expect(JSON.stringify(end.view)).not.toContain(MOVED_AWAY);
+  });
+
   it('the bowerOp stamp is never accumulated', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // An earlier run's stamp is already on the payslip.
@@ -625,7 +705,7 @@ describe('recovery without the browser', () => {
     expect((await w.wire.drive.get(folder?.id ?? '')).parents).toEqual([w.root]);
   });
 
-  it('a never-sent thing purged after a kill is set aside like an uninterrupted run', async () => {
+  it('a possibly-sent thing purged after a kill is reported as unconfirmed, as in one attempt', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const w = await world();
     const payslip = (await w.wire.drive.listAll(w.root)).find((f) => f.name === 'Payslip_Aug.pdf');
@@ -642,9 +722,10 @@ describe('recovery without the browser', () => {
     const found = await new RunRecords(w.wire.drive, w.root).found(RUN_ID);
     const move = found.kind === 'run' ? found.manifest.operations.find((o) => o.effect.kind === 'move' && o.effect.before.fileId === payslip?.id) : undefined;
     const outcome = (await chainOf(w.wire, w.root)).at(-1)?.outcomes.find((o) => o.operationId === move?.operationId);
-    // Never sent, set aside and reported as moved away, as a run that found it gone before its move would.
+    // Never sent, but the new attempt cannot tell that: named as possibly sent, and gone. The same sentence as a lost
+    // answer read back in one attempt, since Drive keeps nothing to tell the two apart.
     expect(w.sends.get(move?.operationId ?? '') ?? 0).toBe(0);
-    expect(outcome?.state).toBe('rejected');
-    expect(JSON.stringify((await endOf(w)).view)).toContain(MOVED_AWAY);
+    expect(outcome?.state === 'rejected' ? outcome.failure : outcome?.state).toEqual({ code: 'unknown', message: UNCONFIRMED_GONE });
+    expect(JSON.stringify((await endOf(w)).view)).toContain(UNCONFIRMED_GONE);
   });
 });
