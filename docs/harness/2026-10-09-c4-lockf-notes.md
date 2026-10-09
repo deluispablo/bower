@@ -24,7 +24,7 @@ tests changed: src/harness-git.test.ts: a worktree with a running process surviv
 
 with-lock.sh uses /usr/bin/lockf -k -t 0 for the first attempt. On EX_TEMPFAIL it reads lock.holder for the advisory Waiting line, then blocks with /usr/bin/lockf -k. The locked child publishes its PID, start time and command only after acquisition. Missing, empty, partial and outdated metadata never decides admission. The lock file and advisory file remain after exit; mkdir, PID liveness checks, stale/ownerless takeovers and traps are removed.
 
-HARNESS_LOCK remains the path override. The locked child exports HARNESS_LOCK_HELD as that exact path. Both with-lock.sh and e2e-both.sh compare the inherited value to the selected path. Every lock fixture in both test files clears the inherited flag through src/harness-lock-test-env.ts.
+HARNESS_LOCK remains the path override. The locked child exports HARNESS_LOCK_HELD as that exact path. Both with-lock.sh and e2e-both.sh compare the inherited value to the selected path. Every lock fixture in both test files clears the inherited flag through src/testing/harness-lock-env.ts.
 
 Command output stays on its original stdout and stderr. A private descriptor carries the command exit status separately from lockf acquisition status: a command returning 75 must not be mistaken for a busy lock and executed again. The extra regression test verifies exits 1 and 75, output forwarding and exactly one execution per command.
 
@@ -34,11 +34,13 @@ Read the installed manual before editing: `man lockf`, LOCKF(1), macOS 26.6, man
 
 ## Evidence and remaining gates
 
+Fix: helper moved to src/testing/ for the unused-code gate (knip --production).
+
 Tests were written before scripts. /private/tmp/c4-lockf-red.log records an AssertionError for e2e-both uses the same re-entry rule as with-lock against the old script. The same focused red run also records a timeout for the six-caller case because the old mkdir mechanism cannot acquire a planted lock file; this timeout is not claimed as assertion evidence.
 
 Green: pnpm vitest run src/harness.test.ts: 45/45 passed, including all four exact packet names and the exit-status regression. Log: /private/tmp/c4-lockf-green.log.
 Green: pnpm exec tsc -p tsconfig.app.json. Log: /private/tmp/c4-lockf-tsc.log.
-Green: pnpm exec eslint src/harness.test.ts src/harness-git.test.ts src/harness-lock-test-env.ts. Log: /private/tmp/c4-lockf-eslint.log.
+Green: pnpm exec eslint src/harness.test.ts src/harness-git.test.ts src/testing/harness-lock-env.ts. Log: /private/tmp/c4-lockf-eslint.log.
 Green: bash -n harness/with-lock.sh scripts/e2e-both.sh; git diff --check.
 
 Left out by owner instruction: pnpm check, all e2e, commits, staging, pushes and changes in any other worktree. harness-git.test.ts was typechecked and linted but not executed, since its fixtures write git state. The coordinator owns the three commits: test files and helper, scripts, then this notes file.

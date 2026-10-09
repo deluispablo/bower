@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { lockTestEnv } from './harness-lock-test-env';
+import { lockTestEnv } from './testing/harness-lock-env';
 // @ts-expect-error plain JS module, checked by these tests
 import { codeInCommit, codeInWorktree, commitsSince, historyTips, protectedReason, statusPaths, undoCommit } from '../scripts/harness-git.mjs';
 

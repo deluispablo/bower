@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { lockTestEnv } from './harness-lock-test-env';
+import { lockTestEnv } from './testing/harness-lock-env';
 // @ts-expect-error plain JS module, checked by these tests
 import { apiTests, doneArgs, REAL_TIMER_CEILING, cpuReport, slowReport, timerListProblems, hashOf, nextProblems, notStaged, othersFlipped, problems, readProofs, redKind, runnerTests } from '../scripts/harness-rules.mjs';
 
