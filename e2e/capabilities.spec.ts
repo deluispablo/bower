@@ -195,3 +195,34 @@ test('C11: a kept rule and a merge answer are applied', async ({ page }) => {
   await expect(worded).toContainText(`You wrote: "${RULE}"`);
   await expect(page.getByText('Waiting for the next tidy-up, where Bower words it clearly.')).toHaveCount(0);
 });
+
+test('a refused merge shows as an answered row on the note that stays and under the Home result, and is not counted as set aside', async ({ page }) => {
+  test.skip(!isFake, FAKE_ONLY);
+  test.setTimeout(90_000);
+  // The gone-answers situation: three yes answers wait whose subjects went to the Bin since (TL-P4-19 addendum 10).
+  const PAIR = 'Not merged: the other note was already in the Bin.';
+  const ASKED = 'Not done: Kitchen photo had moved or gone to the Bin before Bower got to it.';
+  const STATE = 'Not written: Weeknight curry had moved or gone to the Bin before Bower got to it.';
+  const STAYS = 'Flat 7, Cobble Row';
+  await open(page, '/', 'gone-answers');
+  // A question whose subject is gone is not shown.
+  await expect(page.getByRole('heading', { level: 1, name: /G'day/ })).toBeVisible();
+  await expect(page.getByText('look like one flat')).toHaveCount(0);
+  await tidyUp(page);
+  const sheet = page.getByRole('dialog');
+  for (const row of [PAIR, ASKED, STATE]) await expect(sheet.getByText(row, { exact: true })).toBeVisible();
+  await expect(sheet).not.toContainText('set aside');
+  // The note that stays says so too.
+  await sheet.getByRole('list', { name: 'Brought up to date' }).getByRole('link', { name: 'Flat hunt', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Flat hunt' })).toBeVisible();
+  await page.getByRole('main').getByRole('link', { name: 'Projects / Flat hunt', exact: true }).click();
+  await page.getByRole('main').getByRole('link', { name: new RegExp(`^${STAYS} Changed`) }).click();
+  await expect(page.getByRole('heading', { level: 1, name: STAYS })).toBeVisible();
+  await expect(page.getByRole('main').getByText(PAIR, { exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByText(ASKED, { exact: true })).toHaveCount(0);
+  // Home's result lists all three, in one list, and counts none of them as set aside.
+  await home(page);
+  const card = page.getByRole('region', { name: /things? filed/ });
+  for (const row of [PAIR, ASKED, STATE]) await expect(card.getByText(row, { exact: true })).toBeVisible();
+  await expect(card).not.toContainText('set aside');
+});
