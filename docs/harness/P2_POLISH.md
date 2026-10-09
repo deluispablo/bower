@@ -339,3 +339,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
 - 2026-10-09 P4-49 (c4-segmented-one, Codex), Minors:
   - `.small` gives the chips a base min-height of 40 at 900 px and wider;
   - the Segmented doc comment names only Settings and Tell Bower.
+- 2026-10-09 v2-move-here (P4-51 minors): an Inbox item typing "inbox" + Enter says "It is already in Inbox" though Inbox is never listed (MovePicker.tsx:90); ArrowDown with only disabled rows after it focuses nothing (no-op, :56); the current-name "Several folders match" branch has no test.
