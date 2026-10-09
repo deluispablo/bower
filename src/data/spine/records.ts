@@ -292,9 +292,9 @@ export class RunRecords {
   /** The record folder, made (with `.bower/runs`) when missing; a lost reply finds the folder that landed by its stamp. */
   private async ensure(w: FencedDrive, where: Where, { bower, ns, run }: Folders): Promise<string> {
     if (run[0]) return run[0].id;
-    const sys = bower[0]?.id ?? (await makeFolder(w, this.reads, this.rootId, SYSTEM.dir));
-    const space = ns[0]?.id ?? (await makeFolder(w, this.reads, sys, where === 'piles' ? PILES_NAME : RUNS_NAME));
-    return where === 'piles' ? space : makeFolder(w, this.reads, space, where.runId);
+    const sys = bower[0]?.id ?? (await makeFolder(w, this.reads, this.rootId, SYSTEM.dir)).id;
+    const space = ns[0]?.id ?? (await makeFolder(w, this.reads, sys, where === 'piles' ? PILES_NAME : RUNS_NAME)).id;
+    return where === 'piles' ? space : (await makeFolder(w, this.reads, space, where.runId)).id;
   }
 }
 

@@ -200,7 +200,7 @@ async function write(save: ReportSave, path: string, found: Stored | null, text:
 /** The `.bower` folder, made when missing; a lost reply finds the folder that landed by its stamp. */
 async function system(save: ReportSave, w: FencedDrive): Promise<string> {
   const { sys } = await where(save, SYSTEM.dir);
-  return sys ? sys.id : makeFolder(w, save.reads, save.rootId, SYSTEM.dir);
+  return (sys ?? (await makeFolder(w, save.reads, save.rootId, SYSTEM.dir))).id;
 }
 
 /** A runner file's value; undefined, said once in the log, when it is not JSON. */

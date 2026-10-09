@@ -8,7 +8,7 @@
 import { type DriveApi, type DriveFile } from '../drive/drive-api';
 import { ReadCache, type Version } from '../drive/read-cache';
 import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
-import { STAMP, stampOf, writeOnce } from '../spine/write-once';
+import { STAMP, confirmed, confirms, makeFolder, makeText, stampOf, writeOnce } from '../spine/write-once';
 import { sha256Sync } from '../contracts/hashes';
 import type { Unsubscribe, VaultSource } from '../sources';
 import { PILE_NOTE, pileFolderName, pileHasFolder, safeInboxName } from '../piles';
@@ -340,7 +340,7 @@ export class DriveVault implements VaultSource {
     checkCreationName(base, type);
     const path = join(folder, freeName(ix.entries(), folder, base));
     refuseReserved(path);
-    const made = type === 'folder' ? await this.drive.createFolder(parent, nameOf(path)) : await this.drive.createText(parent, nameOf(path), '');
+    const made = type === 'folder' ? await makeFolder(this.drive, this.drive, parent, nameOf(path)) : await makeText(this.drive, this.drive, parent, nameOf(path), '');
     ix.put(made);
     await this.journal.record('create', `New ${type} "${(type === 'folder' ? nameOf(path) : thingName(nameOf(path)))}" in ${where(folder)}`, { path, fileId: made.id });
     this.emit();
@@ -459,7 +459,7 @@ export class DriveVault implements VaultSource {
     const out = toggleTaskInText(await this.reads.text(f, () => this.drive.readText(f.id)), index);
     let written: DriveFile;
     try {
-      written = await this.once(f, `text:${sha256Sync(out.text)}`, (op) => this.drive.writeText(f.id, out.text, f.modifiedTime, op), true);
+      written = await this.once(f, { text: out.text }, (op) => this.drive.writeText(f.id, out.text, f.modifiedTime, op));
     } catch (e) {
       // Changed somewhere else: show the new version, write nothing.
       if (e instanceof BowerError && e.code === 'conflict') void this.refresh();
@@ -918,7 +918,7 @@ export class DriveVault implements VaultSource {
       throw new BowerError('unknown', 'Bower could not save this pile. Try again.');
     }
     const at = await this.systemFolder(SYSTEM.piles);
-    const written = await this.drive.createText(at, record.name, record.text, recordStamp(declaration.pileId, name === null ? 'loose' : 'folder'));
+    const written = await makeText(this.drive, this.drive, at, record.name, record.text, recordStamp(declaration.pileId, name === null ? 'loose' : 'folder'));
     this.checkCurrent();
     (await this.index()).put(written);
     return { pileId: declaration.pileId, declarationId: declaration.declarationId, contextKey, keys: members.map((m) => m.memberKey), hashes: members.map((m) => m.content.sha256) };
@@ -1040,7 +1040,9 @@ export class DriveVault implements VaultSource {
     // Words Bower could not read are never saved over: the note must read back first.
     if (note) await this.text(note);
     // Check the context before a rename or removal can partially apply a stale edit.
-    if (note && (await this.drive.get(note.id)).modifiedTime !== note.modifiedTime) {
+    // Changed since, unless by this very write already landed (a retry of the person's own unknown write, `once`).
+    const now = note ? await this.drive.get(note.id, { checksums: !!text }) : null;
+    if (note && now && now.modifiedTime !== note.modifiedTime && !(text && this.holds(note, { text }, now))) {
       void this.refresh();
       throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
     }
@@ -1068,13 +1070,13 @@ export class DriveVault implements VaultSource {
     const folderId = ix.idOf(folderPath);
     const declared = f.folder && f.appProperties?.[PROP.declaration] ? await this.declarationOf(f, this.known(ix)) : null;
     const contextKey = declared?.state === 'found' && declared.declaration.context.kind === 'text' ? declared.declaration.context.memberKey : null;
-    if (note && text) ix.put(await this.drive.writeText(note.id, text, note.modifiedTime));
+    if (note && text) ix.put(await this.once(note, { text }, (op) => this.drive.writeText(note.id, text, note.modifiedTime, op)));
     // A declared pile's note stays, empty: its context arrived, and only your words changed.
-    else if (note && declared) ix.put(await this.drive.writeText(note.id, '', note.modifiedTime));
+    else if (note && declared) ix.put(await this.once(note, { text: '' }, (op) => this.drive.writeText(note.id, '', note.modifiedTime, op)));
     else if (note) {
       await this.drive.trash(note.id);
       ix.drop(note.id);
-    } else if (text && folderId) ix.put(contextKey ? await this.drive.createText(folderId, PILE_NOTE, text, { [PROP.item]: contextKey }) : await this.drive.createText(folderId, PILE_NOTE, text));
+    } else if (text && folderId) ix.put(await makeText(this.drive, this.drive, folderId, PILE_NOTE, text, contextKey ? { [PROP.item]: contextKey } : undefined));
     this.emit();
     return this.pile(id);
   }
@@ -1677,24 +1679,39 @@ export class DriveVault implements VaultSource {
 
   /**
    * One of the person's writes to `f`, sent once with its stamp (`spine/write-once.ts`), named by the version it read
-   * and what it does, so a retry of the same change is the same write. With no answer, an unknown outcome or a
-   * conflict, the file is read by id: carrying this stamp, it landed (their own write, never a change elsewhere);
-   * still as read, the error stands; otherwise it changed somewhere else.
+   * and what it does, so a retry of the same change is the same write. A text write (`intent` is `{ text }`, the text
+   * sent) also carries the modifiedTime it read and counts only when Drive's checksum is that of the text sent. With no
+   * answer, an unknown outcome or a conflict, the file is read by id: carrying this stamp and, for text, that checksum,
+   * it landed (their own write, never a change elsewhere). The stamp alone proves only that the write landed once, not
+   * that the file still holds it: another text is a change elsewhere, never "saved". Still as read, the error stands.
    */
-  private async once(f: DriveFile, intent: string, write: (op: Record<string, string>) => Promise<DriveFile>, withTime = false): Promise<DriveFile> {
+  private async once(f: DriveFile, intent: string | { text: string }, write: (op: Record<string, string>) => Promise<DriveFile>): Promise<DriveFile> {
+    const sent = typeof intent !== 'string';
     const read: { now?: DriveFile } = {};
+    let out: DriveFile;
     try {
-      return await writeOnce(stampOf(f.id, `${f.modifiedTime}:${intent}`), write, async (stamp) => {
-        read.now = await this.drive.get(f.id);
-        return read.now.appProperties?.[STAMP] === stamp ? read.now : null;
+      out = await writeOnce(this.stampOf(f, intent), write, async () => {
+        read.now = await this.drive.get(f.id, { checksums: sent });
+        return this.holds(f, intent, read.now) ? read.now : null;
       });
     } catch (e) {
       if (!isNoAnswer(e) && !isUnconfirmedWrite(e)) throw e;
       if (!read.now) throw isUnconfirmedWrite(e) ? e : new BowerError('offline', "Bower isn't sure that saved. Check again when you're back online.");
-      if (notAsSeen({ ...seenPlace(f), ...(withTime ? { modifiedTime: f.modifiedTime } : {}) }, { ...read.now, trashed: false }) === null) throw e;
+      if (notAsSeen({ ...seenPlace(f), ...(sent ? { modifiedTime: f.modifiedTime } : {}) }, { ...read.now, trashed: false }) === null) throw e;
       void this.refresh();
       throw new BowerError('conflict', 'This changed somewhere else. Look again and try once more.');
     }
+    return typeof intent === 'string' ? out : confirmed(out, intent.text);
+  }
+
+  /** The stamp of one of the person's writes to `f`: the version it read and what it does. */
+  private stampOf(f: DriveFile, intent: string | { text: string }): string {
+    return stampOf(f.id, `${f.modifiedTime}:${typeof intent === 'string' ? intent : `text:${sha256Sync(intent.text)}`}`);
+  }
+
+  /** Whether `now` holds that write: it carries its stamp and, for text, Drive's checksum of the text sent. */
+  private holds(f: DriveFile, intent: string | { text: string }, now: DriveFile): boolean {
+    return now.appProperties?.[STAMP] === this.stampOf(f, intent) && (typeof intent === 'string' || confirms(now, new TextEncoder().encode(intent.text)));
   }
 
   /** Your own write changes the file's time; if you had seen it, it stays seen. */

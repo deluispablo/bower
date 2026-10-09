@@ -39,7 +39,7 @@ describe('the pile-records query picks records by the pile id they are stamped w
     const folder = (await drive.listAll(root)).find((f) => f.folder && f.name.endsWith('Papers from Alex'));
     const copies = pileRecords(await drive.listAll(root), root, 'declaration');
     expect(copies).toHaveLength(1);
-    expect(copies[0]?.appProperties).toEqual({ [PROP.recordPile]: folder?.appProperties?.[PROP.pile], [PROP.recordAnchor]: 'folder' });
+    expect(copies[0]?.appProperties).toEqual({ [PROP.recordPile]: folder?.appProperties?.[PROP.pile], [PROP.recordAnchor]: 'folder', bowerOp: expect.stringMatching(/^[0-9a-f]{32}$/) });
     expect(folder?.appProperties?.[PROP.pile]).toBe(pile.id);
   });
 });

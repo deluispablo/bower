@@ -4110,7 +4110,7 @@
       "The Worker ends a run still in saving past the recovery ceiling as failed with a sentence that says changes were made, never the nothing-happened one.",
       "runner/src/main.ts calls token, spine, barrier and status; its test runs it end to end with a provider stub."
     ],
-    "verify": "pnpm exec vitest run src/data -t \"the shared barrier writes the same report on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"every admitted item ends with one disposition|last-run.json is written last and read back before done|a failed report save stays in saving and a redispatch only writes the report|main runs token, spine, barrier and status end to end\" && pnpm -C api exec vitest run -t \"a run past the ceiling in saving fails saying changes were made\"",
+    "verify": "pnpm exec vitest run src/data -t \"the shared barrier writes the same report on the fake and on Drive\" && pnpm -C runner exec vitest run -t \"every admitted item ends with one disposition|last-run.json is written last and confirmed by its answer, with no read back, before done|a failed report save stays in saving and a redispatch only writes the report|main runs token, spine, barrier and status end to end\" && pnpm -C api exec vitest run -t \"a run past the ceiling in saving fails saying changes were made\"",
     "passes": true,
     "note": "TL-P3-22 point 2; ARCHITECTURE invariant 6."
   },

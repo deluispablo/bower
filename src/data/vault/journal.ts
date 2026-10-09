@@ -10,6 +10,8 @@ import type { DriveApi, DriveFile } from '../drive/drive-api';
 import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
+import { makeText } from '../spine/write-once';
+import { PROP } from './layout';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
 export { isJournalRecord } from '../contracts/journal-record';
@@ -194,8 +196,9 @@ export class Journal {
     this.checkCurrent();
     const waiting = this.waiting(key);
     if (!waiting.length) return;
-    // A line whose answer was lost may be in Drive already: never write it twice. The folder
-    // itself is asked (a cached listing never saw a file whose answer was lost).
+    // A line whose answer was lost may be in Drive already, archived by a run or not: never write it twice. It is found
+    // by its own key (`PROP.line`, its record id), which the archive move keeps. The folder itself is asked (a cached
+    // listing never saw a file whose answer was lost).
     let there: DriveFile[];
     try {
       there = await this.place.files(true, true);
@@ -204,24 +207,11 @@ export class Journal {
       if (required) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
       return;
     }
+    const landed = new Set(there.map((f) => f.appProperties?.[PROP.line]));
     const sent = new Set<string>();
     for (const r of waiting) {
       this.checkCurrent();
-      const copies = there.filter((f) => f.name === `${r.id}.json`);
-      for (const f of copies) {
-        try {
-          const v: unknown = JSON.parse(await this.drive.readText(f.id));
-          if (!isJournalRecord(v)) throw new Error(`Unreadable change ${f.id}`);
-          // Compare every stored field, independently of JSON key order and whitespace.
-          const expected = new Map(Object.entries(r).filter(([, value]) => value !== undefined));
-          const actual = Object.entries(v);
-          if (actual.length !== expected.size || !actual.every(([key, value]) => expected.has(key) && expected.get(key) === value)) throw new Error(`Change ${f.id} does not match waiting change ${r.id}`);
-        } catch (e) {
-          console.error(e);
-          throw new BowerError('unknown', 'Bower could not confirm your waiting changes.');
-        }
-      }
-      if (copies.length || (await this.send(r))) sent.add(r.id);
+      if (landed.has(r.id) || (await this.send(r))) sent.add(r.id);
     }
     // Only what was sent leaves; anything added meanwhile stays.
     this.checkCurrent();
@@ -235,7 +225,8 @@ export class Journal {
       const folder = await this.place.folder();
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
-      const f = await this.drive.createText(folder, `${rec.id}.json`, text);
+      // Stamped (`spine/write-once.ts`): a lost answer is found again by its stamp; and keyed by its record id.
+      const f = await makeText(this.drive, this.drive, folder, `${rec.id}.json`, text, { [PROP.line]: rec.id });
       if (this.current()) {
         this.reads.wrote(f, text);
         this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f.id]);

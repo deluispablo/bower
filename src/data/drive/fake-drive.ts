@@ -155,9 +155,10 @@ export class FakeDrive implements DriveApi {
     return this.live(rootId).map((f) => this.listed(f));
   }
 
-  async get(id: string): Promise<DriveFile> {
+  async get(id: string, opts: { checksums?: boolean } = {}): Promise<DriveFile> {
     await this.gate();
-    return this.listed(this.find(id));
+    const f = this.listed(this.find(id));
+    return opts.checksums ? this.answered(f) : f;
   }
 
   /** A file as a listing gives it: its metadata, and whether a checksum of its content is kept (`unchecked`). */
@@ -237,7 +238,7 @@ export class FakeDrive implements DriveApi {
 
   async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.changed(this.add(parentId, name, false, text, appProperties));
+    return this.answered(this.changed(this.add(parentId, name, false, text, appProperties)));
   }
 
   async upload(parentId: string, name: string, body: Blob, onProgress?: (fraction: number) => void, appProperties?: Record<string, string>): Promise<DriveFile> {
@@ -249,7 +250,7 @@ export class FakeDrive implements DriveApi {
 
   async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    return this.reply(this.applyWrite(id, text, ifModified, appProperties));
+    return this.reply(this.answered(this.applyWrite(id, text, ifModified, appProperties)));
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
@@ -518,7 +519,7 @@ export class FakeDrive implements DriveApi {
     };
   }
 
-  /** A run's write answered as Drive answers it when `fields` asks: with the stored text's `md5Checksum`. */
+  /** A write answered as Drive answers it when `fields` asks (every write does): with the stored text's `md5Checksum`. */
   private answered(file: DriveFile): DriveFile {
     const content = this.files.get(file.id)?.content;
     return typeof content === 'string' ? { ...file, md5Checksum: md5Hex(new TextEncoder().encode(content)) } : file;

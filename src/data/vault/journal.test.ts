@@ -63,36 +63,24 @@ describe('when Drive does not answer', () => {
     });
     const key = `bower:outbox:${root}`;
     const waiting = localStorage.getItem(key);
-    const copy = await drive.createText(location === 'direct' ? changes : archive, `${rec.id}.json`, JSON.stringify(rec));
-    // Warm the normal journal read cache: acknowledgement must still read Drive afresh.
-    await journal.list();
+    // A file with the line's name and fields but not its key is not the line: it is never taken by its name or contents.
+    const lookalike = await drive.createText(location === 'direct' ? changes : archive, `${rec.id}.json`, JSON.stringify(rec));
     create.mockClear();
     const read = vi.spyOn(drive, 'readText');
-    const invalid = [
-      '{broken',
-      JSON.stringify({ ...rec, text: {} }),
-      JSON.stringify({ ...rec, device: undefined }),
-      ...Object.entries({ v: 2, id: 'ANOTHER_ID', device: 'device-b', at: rec.at + 1, kind: 'request', what: 'Other change', path: 'Other.md', from: 'Other', text: 'Changed words', questionId: 'OTHER_QUESTION', fileId: 'OTHER_FILE', removes: 'Other rule' }).map(([field, value]) => JSON.stringify({ ...rec, [field]: value })),
-      JSON.stringify({ ...rec, removes: undefined }),
-    ];
-    for (const text of invalid) {
-      await drive.writeText(copy.id, text, (await drive.get(copy.id)).modifiedTime);
-      read.mockClear();
-      await expect(journal.flush()).rejects.toMatchObject({ name: 'BowerError', code: 'unknown', message: 'Bower could not confirm your waiting changes.' });
-      expect(read).toHaveBeenCalledWith(copy.id);
-      expect(files).toHaveBeenLastCalledWith(true, true);
-      expect(localStorage.getItem(key)).toBe(waiting);
-      expect(await drive.readText(copy.id)).toBe(text);
-      expect(create).not.toHaveBeenCalled();
-    }
-    // Key order and whitespace do not change the immutable record's contents.
-    const exact = JSON.stringify(Object.fromEntries(Object.entries(rec).reverse()), null, 2);
-    await drive.writeText(copy.id, exact, (await drive.get(copy.id)).modifiedTime);
     await expect(journal.flush()).resolves.toBeUndefined();
+    expect(files).toHaveBeenLastCalledWith(true, true);
+    expect(create).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(key)).toBeNull();
+    const sent = (await drive.listAll(changes)).filter((f) => !f.folder && f.id !== lookalike.id);
+    expect(sent.map((f) => f.appProperties?.bowerLine)).toEqual([rec.id]);
+    // A copy that carries the line's key, wherever it is, is the line: acknowledged without a read and never sent again.
+    localStorage.setItem(key, waiting ?? '');
+    await drive.update(sent[0]?.id ?? '', location === 'direct' ? {} : { addParent: archive, removeParent: changes });
+    create.mockClear();
+    await expect(journal.flush()).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
-    expect(await drive.readText(copy.id)).toBe(exact);
-    expect((await drive.listAll(changes)).filter((f) => !f.folder)).toHaveLength(1);
+    expect(read).not.toHaveBeenCalled();
+    expect(localStorage.getItem(key)).toBeNull();
   });
 
   it('a rule is not reported saved when Drive and the outbox both fail', async () => {

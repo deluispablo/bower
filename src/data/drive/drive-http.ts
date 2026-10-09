@@ -133,8 +133,8 @@ export class DriveHttp implements DriveApi {
     return out;
   }
 
-  async get(id: string): Promise<DriveFile> {
-    const w = (await (await this.call(`${API}/files/${id}?fields=${FIELDS}`)).json()) as WireFile;
+  async get(id: string, opts: { checksums?: boolean } = {}): Promise<DriveFile> {
+    const w = (await (await this.call(`${API}/files/${id}?fields=${opts.checksums ? LISTED_FIELDS : FIELDS}`)).json()) as WireFile;
     if (w.trashed) throw driveError('not-found');
     return toFile(w);
   }
