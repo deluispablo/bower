@@ -19,3 +19,11 @@ The prior Sending race is fixed. The journal now reads under its lock, but the n
 3. **Important — `src/data/vault/journal.ts:184`: different outbox locks do not protect the shared sent-lines key.** Tabs sending for folders X and Y hold different locks. Both read the shared map; X writes its confirmed record, then Y writes its previously read map plus Y’s record, overwriting X’s record. Both subsequently drop their outbox lines. An Undo in another X tab with a memoised empty listing finds neither line nor record and reports success while X’s file stays live. **Violated home:** journal `acrossTabs` coordination must protect the state used to hand confirmed ids to write-once `withdraw`.
 
 findings: 3
+
+## Round 3 pass (bbd57496..2681f7b7)
+
+1. **Important — `src/data/vault/journal.ts:573`: listing-based removal of the confirmed line still allows false-success Undo across tabs.** Tab A lists a waiting rule against an empty memoised listing. Tab B flushes it, then lists its created file; `arrived` drops the confirmed line. A presses Undo, finds no line, calls `withdraw({})`, and finds nothing through its stale listing. Undo resolves while the file stays live. The three specific round-2 causes are removed, but their false-success outcome remains. **Violated home:** journal’s locked handoff of confirmed ids to write-once withdrawal; the gone-state listing path must actually locate the file before reporting success.
+
+2. **Important — `src/data/vault/journal.ts:547`: the added parent check discards a confirmed id while its file remains live, bypassing withdrawal.** Confirm a waiting rule, then move its file outside the changes folder before any listing shows it. A listing reads it by id, sees different parents, and drops its outbox line at line 553 without calling `withdraw`. Another tab with an empty memoised listing can subsequently report successful Undo while that moved file remains live. **Violated home:** write-once’s Holder `withdraw` is the one exit; packet contract point 2 permits dropping after a listing shows the file. This addition creates a second release path that treats “elsewhere” as withdrawn.
+
+findings: 2
