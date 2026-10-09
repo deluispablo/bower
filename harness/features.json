@@ -5971,7 +5971,7 @@
     "id": "c3-state-mark",
     "task": "p4-consolidation",
     "category": "refactor",
-    "passes": false,
+    "passes": true,
     "what": "Bower's last-written Current state is read from the previous state change in the manifest (or each line is marked), so the 2^12 subset search goes. Also write-it-silent: the q-state question stores the shown text with its evidence; a yes applies that text with no model call through the usual fence; if the section changed since it was shown, the question is re-asked; stamp+checksum comparison from write-once, no new helper.",
     "steps": [
       "Bower's last-written state is found without a subset search.",

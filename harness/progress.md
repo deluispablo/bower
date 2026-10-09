@@ -251,3 +251,4 @@ Earlier log: [archive](../docs/harness/archive/2026-10-06-progress-before-tl-p2-
 - 2026-10-09: c3-pair-ask passes — typed pair ask, words piles cited, answered rows with label and names (addenda 8-14)
 - 2026-10-09: c3-agent-defs passes — agent defs: maxTurns, no nested dispatch, read-only tools allowlists, concurrency 2
 - 2026-10-09: c3-stop-gate passes — stop gate: judges the card worktree; pnpm check writes the mark
+- 2026-10-09: c3-state-mark passes — state mark from the previous change; write it applies the shown text; clash re-asks; answered rows; cited lines
