@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { keep as keepDraft, get as getDraft, forget as forgetDraft } from '../../features/piles/draft-files';
 import { FakeDrive } from '../drive/fake-drive';
 import { driveError, type DriveApi } from '../drive/drive-api';
+import { DriveHttp } from '../drive/drive-http';
 import { FakeWorker } from '../fake/fake-worker';
 import { B_FAILURE, FakeRunService } from '../fake/fake-run-service';
 import { seedFakeDrive } from '../fake/seed';
@@ -1670,5 +1671,49 @@ describe('person cleanup forgets pending draft bytes and keeps the folder outbox
     for (const key of personSession) expect(sessionStorage.getItem(key), key).not.toBeNull();
     expect(sessionStorage.getItem('bower:bye')).toBeNull(); retained();
     await s.session.signOut(); expect(await s.session.current()).toBeNull(); forgotten();
+  });
+});
+
+describe('c2-create-by-id: a line Drive refuses while nobody waits on it', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a journal line refused in the background shows once in what failed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    localStorage.clear();
+    const drive = new FakeDrive();
+    const folder = await drive.createFolder('root', 'Synthetic A');
+    for (const name of ['Inbox', 'Projects', 'Areas', 'Resources', 'Archive']) await drive.createFolder(folder.id, name);
+    await drive.createFolder((await drive.createFolder(folder.id, '.bower')).id, 'changes');
+    const worker = new FakeWorker({ drive, runs: new FakeRunService({ drive, scale: 'instant' }), rootId: folder.id, scenario: 'empty' });
+    vi.spyOn(worker, 'me').mockResolvedValue({ user: { name: 'Alex', email: 'you@example.com' }, folderId: folder.id });
+    // A rule kept on this device while Drive was out of reach, and a move: Drive now refuses their lines for good.
+    const line = (id: string, kind: 'rule' | 'move', what: string) => ({ line: { v: 1, id, at: Date.parse('2026-10-09T08:00:00Z'), kind, what, device: 'device-a' } });
+    localStorage.setItem(`bower:outbox:${folder.id}`, JSON.stringify([line('L1', 'rule', 'New rule: "receipts go in money"')]));
+    const create = drive.createText.bind(drive);
+    const refusing = new DriveHttp({ token: async () => 't', fetch: async () => new Response(JSON.stringify({ error: { errors: [{ reason: 'insufficientFilePermissions' }] } }), { status: 403 }), pacing: { baseMs: 0, sleep: async () => {} } });
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => (a[1].startsWith('L') ? refusing.createText(...a) : create(...a));
+    live = makeLiveSources({ drive, worker });
+    const s = live;
+    const changed = vi.fn();
+    s.vault.subscribe(changed);
+    // At start the outbox goes by itself; nobody is there to be told, so the refused line is kept among what failed.
+    await vi.waitFor(() => expect(localStorage.getItem(`bower:outbox:${folder.id}`)).toBeNull());
+    await vi.waitFor(async () => expect(await s.vault.failedChanges?.()).toEqual([{ id: 'L1', what: 'New rule: "receipts go in money"', sentence: "Bower couldn't keep that rule." }]));
+    expect(changed).toHaveBeenCalled();
+    // Back online, nothing is sent again and nothing is told twice.
+    window.dispatchEvent(new Event('online'));
+    await s.vault.flushJournal();
+    expect(await s.vault.failedChanges?.()).toHaveLength(1);
+    // Put away, it is seen: it does not come back.
+    await s.vault.putAwayFailed?.('L1');
+    expect(await s.vault.failedChanges?.()).toEqual([]);
+    // A waiting line refused while the next change goes is kept the same way, once; the new change is noted.
+    localStorage.setItem(`bower:outbox:${folder.id}`, JSON.stringify([line('L2', 'move', 'Moved Lease draft to Areas')]));
+    await s.vault.tree();
+    await s.vault.create('Resources', 'note');
+    expect(await s.vault.failedChanges?.()).toEqual([{ id: 'L2', what: 'Moved Lease draft to Areas', sentence: "Your change was made, but Bower couldn't make a note of it." }]);
+    expect((await s.vault.changes()).map((c) => c.kind)).toEqual(['create']);
+    await s.vault.flushJournal();
+    expect(await s.vault.failedChanges?.()).toHaveLength(1);
   });
 });

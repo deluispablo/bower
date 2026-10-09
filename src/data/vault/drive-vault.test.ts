@@ -2934,6 +2934,84 @@ describe('c2-create-by-id: an app write whose answer was lost is found again by 
     expect(await drive.readText(notes[0]?.id ?? '')).toBe('Job offer, signed papers');
   });
 
+  /** A pile note made with `words`, landed with its answer and its read-back both lost: Bower does not know it is there. */
+  async function lostPileNote(words: string): Promise<{ pile: string; folder: string; note: string }> {
+    const blind = (): true => {
+      const real = drive.get.bind(drive);
+      drive.get = async () => {
+        drive.get = real;
+        throw driveError('offline');
+      };
+      return true;
+    };
+    await vault.tree();
+    const pile = (await vault.piles()).find((p) => p.path && p.text.startsWith('Job offer'));
+    if (!pile?.path) throw new Error('no pile');
+    const folder = await idOf(pile.path);
+    for (const n of (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md')) await drive.trash(n.id);
+    await vault.refresh();
+    lose('createText', (a) => a[1] === 'Pile note.md' && blind());
+    await expect(vault.updatePile(pile.id, words)).rejects.toMatchObject({ code: 'offline' });
+    const note = (await drive.listAll(folder)).find((f) => f.name === 'Pile note.md');
+    if (!note) throw new Error('the note did not land');
+    return { pile: pile.id, folder, note: note.id };
+  }
+
+  it('a pile note retried after a double failure never overwrites an edit made between tries', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { pile, folder, note } = await lostPileNote('Job offer papers');
+    // Alex adds a line to the landed note on another device before this page lists the folder again.
+    await drive.writeText(note, 'Job offer papers, and my own line', (await drive.get(note, {})).modifiedTime);
+    const retried = await vault.updatePile(pile, 'Job offer, signed papers').then(() => 'saved', (e: unknown) => (e as BowerError).message);
+    expect({ retried, text: await drive.readText(note) }).toEqual({ retried: 'This note changed somewhere else. Open it again to see the new version.', text: 'Job offer papers, and my own line' });
+    // Looked at again, the pile shows Alex's words, and the next save goes into that one note.
+    await vault.refresh();
+    expect((await vault.piles()).find((p) => p.id === pile)?.text).toBe('Job offer papers, and my own line');
+    await expect(vault.updatePile(pile, 'Job offer, signed papers', 'Job offer papers, and my own line')).resolves.toMatchObject({ text: 'Job offer, signed papers' });
+    expect((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id)).toEqual([note]);
+  });
+
+  it('a pile note binned elsewhere after a double failure is made again with the new words', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { pile, folder, note } = await lostPileNote('Job offer papers');
+    // Alex bins the landed note in Drive before this page lists the folder again: it stays in the Bin, untouched.
+    await drive.trash(note);
+    await expect(vault.updatePile(pile, 'Job offer, signed papers')).resolves.toMatchObject({ text: 'Job offer, signed papers' });
+    const notes = (await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.id).not.toBe(note);
+    expect(await drive.readText(notes[0]?.id ?? '')).toBe('Job offer, signed papers');
+    expect(await drive.get(note, { binned: true })).toMatchObject({ trashed: true });
+    expect(await drive.readText(note)).toBe('Job offer papers');
+    // Nothing is left stuck: the next words go into the new note.
+    await expect(vault.updatePile(pile, 'Job offer, all signed')).resolves.toMatchObject({ text: 'Job offer, all signed' });
+    expect((await drive.listAll(folder)).filter((f) => f.name === 'Pile note.md').map((f) => f.id)).toEqual([notes[0]?.id]);
+  });
+
+  it('a journal line whose changes folder is gone waits and is sent once the folder is found again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await vault.tree();
+    await vault.create('Resources/Cooking', 'note');
+    const stale = await idOf('.bower/changes');
+    // The changes folder goes to the Bin elsewhere; Drive answers 404 for a file made in it.
+    await drive.trash(stale);
+    const create = drive.createText.bind(drive);
+    drive.createText = async (...a: Parameters<FakeDrive['createText']>) => {
+      if (a[0] === stale) throw driveError('not-found');
+      return create(...a);
+    };
+    const made = vault.create('Resources/Cooking', 'note');
+    await expect(made).resolves.toBe('Resources/Cooking/Untitled (2).md');
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toContain('Untitled (2)');
+    // The next send lists the folder again and makes the changes folder anew: the line is not lost.
+    await vault.flushJournal();
+    expect(localStorage.getItem(`bower:outbox:${root}`)).toBeNull();
+    const fresh = await idOf('.bower/changes');
+    expect(fresh).not.toBe(stale);
+    const lines = (await drive.listAll(fresh)).filter((f) => f.name.endsWith('.json'));
+    expect(await Promise.all(lines.map(async (f) => (JSON.parse(await drive.readText(f.id)) as { path?: string }).path))).toEqual(['Resources/Cooking/Untitled (2).md']);
+  });
+
   it('a create whose answer is lost and that never landed never takes an older file of that name', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await vault.tree();
