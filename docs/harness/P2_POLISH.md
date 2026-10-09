@@ -330,3 +330,4 @@ From the P3-9 delta review (minor, TL-P3-18 addendum):
   - In Home.tsx, the list key={l} is duplicated when two update lines are equal.
   - A pretend Drive kept in sessionStorage by an older build has no keys, so write-it throws on load.
   - newsLineCited relies on the "New: " prefix (ruled; heuristic).
+- 2026-10-09 v2-name-sheet (designer nit, severity 1; lead's call whether to log as a defect): the slash case is not an error. Rename still goes ahead with a dash, so a red edge and aria-invalid send the wrong signal; a muted notice would fit better.
