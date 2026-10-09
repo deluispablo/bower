@@ -5775,5 +5775,17 @@
     ],
     "verify": "pnpm -C api exec vitest run -t \"a route over its rate limit is refused\"",
     "note": "TL-P4-17 addendum 6 point 4 (main 7f5fa754): an owed P4 promise, not dead code. After stage 3. Starting model: bower-escalated."
+  },
+  {
+    "id": "c3-integrate-history",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": false,
+    "what": "A history check judges the tree that will be committed: HEAD, plus MERGE_HEAD while a merge is uncommitted. One helper in scripts/harness-git.mjs returns the tips to judge; src/docs.test.ts and every other history reader use it; integrate.sh is unchanged.",
+    "steps": [
+      "Under a no-commit merge, a branch commit with no compatibility row fails the docs check."
+    ],
+    "verify": "pnpm exec vitest run src/harness-git.test.ts src/docs.test.ts -t \"a branch commit with no compatibility row fails the check under a no-commit merge|every history reader takes its tips from the one helper\"",
+    "note": "TL-P4-17 addendum 8 (main 96f1fafc); defect integrate-misses-branch-commits. Red: a fixture repo whose branch commit lacks its compatibility row, under a no-commit merge. Starting model: bower-implementer."
   }
 ]
