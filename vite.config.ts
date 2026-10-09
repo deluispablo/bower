@@ -2,10 +2,13 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'node:url';
+import { identityPlugin } from './e2e/port.ts';
 
 export default defineConfig({
   plugins: [
     react(),
+    // Dev and preview servers only: tells e2e which worktree a server serves (e2e/port.ts).
+    identityPlugin(),
     // Installable, and the app shell opens with no network. Only the shell is cached:
     // never Google Drive or the Worker (their answers are the person's own notes).
     VitePWA({

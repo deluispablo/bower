@@ -1,6 +1,7 @@
+// @vitest-environment node
 /// <reference types="node" />
 /** The e2e port and server identity (c4-e2e-port): one port per worktree, and a server is reused only if it serves this worktree. */
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -38,12 +39,12 @@ describe('the e2e port and server identity', () => {
     expect(await checkIdentity(port, '/tmp/bower-other')).toEqual({ state: 'own' });
     expect(await checkIdentity(port, '/tmp/bower-mine')).toEqual({ state: 'foreign', root: '/tmp/bower-other' });
     // The real entry point that starts a run: it refuses in one line naming the other root, and starts nothing.
-    const run = spawnSync('node', [fileURLToPath(new URL('../e2e/serve.ts', import.meta.url)), 'dev'], {
-      env: { ...process.env, E2E_PORT: String(port) },
-      encoding: 'utf8',
-    });
-    expect(run.status).toBe(1);
-    expect(run.stderr.trim().split('\n')).toHaveLength(1);
-    expect(run.stderr).toContain('/tmp/bower-other');
+    const child = spawn('node', [fileURLToPath(new URL('../e2e/serve.ts', import.meta.url)), 'dev'], { env: { ...process.env, E2E_PORT: String(port) } });
+    let stderr = '';
+    child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+    const status = await new Promise<number | null>((done) => child.on('exit', done));
+    expect(status).toBe(1);
+    expect(stderr.trim().split('\n')).toHaveLength(1);
+    expect(stderr).toContain('/tmp/bower-other');
   });
 });
