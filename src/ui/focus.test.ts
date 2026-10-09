@@ -149,7 +149,7 @@ describe('a sheet opened from a menu sheet', () => {
 
 describe('focusRouteHeading', () => {
   // The checks run on timers: fake time moves them, so no test waits on the clock.
-  const wait = (ms: number): Promise<void> => vi.advanceTimersByTimeAsync(ms);
+  const wait = async (ms: number): Promise<void> => { await vi.advanceTimersByTimeAsync(ms); };
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
