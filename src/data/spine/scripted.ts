@@ -1125,10 +1125,6 @@ export async function decide(drive: ScriptedRead, snapshot: Captured, opts: Plan
   const edited = new Set(edits.map((e) => e.file.id));
   const filing: Array<{ thing: (typeof things)[number]; to: string; name: string; note?: SavedNote; merge?: MergeState }> = [];
   for (const thing of things) {
-    // A merge that fell back on a refused line: the note it could not join is captured, grounding its row's name.
-    const fell = fallbackOf(thing);
-    const target = fell && fell.alone !== null ? ix.file(fell.into) : undefined;
-    if (target && !target.folder) places.set(target.id, target);
     // A merge (TL-P2-20 I4): the thing joins the note's folder under the merge's title.
     const merge = mergeState(thing);
     if (merge) {
