@@ -116,14 +116,14 @@ describe('the runner process', () => {
     // Every thing taken was filed, and your change was read and archived: filed too, with no pile.
     expect(value.items.filter((i) => things.includes(i.fileId)).map((i) => i.disposition)).toEqual(things.map(() => 'filed'));
     expect(value.items.find((i) => i.fileId === lines[0])).toEqual({ fileId: lines[0], pileId: null, disposition: 'filed' });
-    // Written before last-run.json (the pretend Drive numbers files as they are made), and last-run.json, the barrier's
-    // last word, is read back from Drive; dispositions.json is confirmed by its write's own answer (`runner-reads-and-report`).
+    // Written before last-run.json (the pretend Drive numbers files as they are made); both are confirmed by their write's
+    // own answer, with no read after it (`write-once.ts`).
     const view = files.find((f) => pathOf(files, root, f.id) === SYSTEM.lastRun);
     const made = (id: string | undefined): number => Number((id ?? '').replace(/^f/, ''));
     expect(made(file?.id)).toBeGreaterThan(0);
     expect(made(file?.id)).toBeLessThan(made(view?.id));
     const readBack = wire.requests.findIndex((r) => r.method === 'GET' && r.url.searchParams.get('alt') === 'media' && r.url.pathname.endsWith(`/${view?.id ?? ''}`));
-    expect(readBack).toBeGreaterThanOrEqual(0);
+    expect(readBack).toBe(-1);
   });
 
   it('main picks the scripted provider', async () => {

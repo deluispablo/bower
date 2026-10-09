@@ -5,6 +5,7 @@
  */
 import { BowerError, type ErrorCode } from '../types';
 import { sha256 } from '../vault/hashes';
+import { md5Hex } from '../contracts/hashes';
 import { driveError, RESUMABLE_UNIT, SEARCH_FOLDERS, SEARCH_MAX_PAGES, SEARCH_PAGE_SIZE, unconfirmedWriteError, type BinnedItem, type DriveApi, type DriveFile, type DrivePatch, type FaultHook, type FencedCall, type FencedDrive, type ResumableTarget, type SessionStatus, type StoredEvidence } from './drive-api';
 /** The fence's types live with the Drive ports; kept here for the tests that import them from the fake. */
 export type { FaultAction, FaultHook, FencedCall, FencedDrive, StoredEvidence } from './drive-api';
@@ -256,9 +257,9 @@ export class FakeDrive implements DriveApi {
     return this.reply(this.applyUpdate(id, patch));
   }
 
-  async trash(id: string, appProperties?: Record<string, string>): Promise<void> {
+  async trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
     await this.gate();
-    this.applyTrash(id, appProperties);
+    return this.applyTrash(id, appProperties);
   }
 
   async untrash(id: string): Promise<DriveFile> {
@@ -496,13 +497,13 @@ export class FakeDrive implements DriveApi {
    * look at what is stored at that instant, and is told which write it guards. The fault hook sees each call first.
    */
   fenced(check: (peek: Peek, call: FencedCall) => void): FencedDrive {
-    const run = async <T>(call: FencedCall, apply: () => T): Promise<T> => {
+    const run = async (call: FencedCall, apply: () => DriveFile): Promise<DriveFile> => {
       await this.gate();
       const action = this.fault?.before?.(call) ?? 'pass';
       // A run's write with no answer, worded as the runner's transport words it: never offline (`transport.ts`).
       if (action === 'refuse') throw runNoAnswer();
       check((id) => this.peek(id), call);
-      const out = apply();
+      const out = this.answered(apply());
       this.fault?.applied?.(call);
       if (action === 'lose-reply') throw runNoAnswer();
       return out;
@@ -515,6 +516,12 @@ export class FakeDrive implements DriveApi {
       trash: (id, appProperties) => run({ op: 'trash', id, ...props(appProperties) }, () => this.applyTrash(id, appProperties)),
       writeText: (id, text, ifModified, appProperties) => run({ op: 'write-text', id, text, ifModified, ...props(appProperties) }, () => this.applyWrite(id, text, ifModified, appProperties)),
     };
+  }
+
+  /** A run's write answered as Drive answers it when `fields` asks: with the stored text's `md5Checksum`. */
+  private answered(file: DriveFile): DriveFile {
+    const content = this.files.get(file.id)?.content;
+    return typeof content === 'string' ? { ...file, md5Checksum: md5Hex(new TextEncoder().encode(content)) } : file;
   }
 
   /** What is stored for an id right now: for a fenced check. */
@@ -555,11 +562,11 @@ export class FakeDrive implements DriveApi {
   }
 
   /** `trash` after its gate, with its properties set in the same change (Drive's `files.update` with `trashed`). */
-  private applyTrash(id: string, appProperties?: Record<string, string>): void {
+  private applyTrash(id: string, appProperties?: Record<string, string>): DriveFile {
     const f = this.find(id);
     f.trashed = true;
     if (appProperties) f.meta = { ...f.meta, appProperties: { ...f.meta.appProperties, ...appProperties } };
-    this.changed(null);
+    return this.changed(this.copy(f.meta));
   }
 
   /**
@@ -586,7 +593,7 @@ export class FakeDrive implements DriveApi {
    */
   async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
     await this.gate();
-    return [...this.files.values()].filter((f) => f.meta.appProperties?.[key] === value).map((f) => ({ file: this.copy(f.meta), trashed: f.trashed }));
+    return [...this.files.values()].filter((f) => f.meta.appProperties?.[key] === value).map((f) => ({ file: this.answered(this.copy(f.meta)), trashed: f.trashed }));
   }
 
   /** What is stored for an id, in the Bin or not: its metadata, its own Bin flag and its bytes' size and SHA-256 (fake-stored). */

@@ -20,7 +20,7 @@ import { MANIFEST_V2_LIMIT, type EditText, type Manifest, type ManifestV2, type 
 import { EDIT_FILE_LIMIT, savedLinkKey } from '../contracts/note-edit';
 import { grounded, groundedKeys } from '../spine/grounded';
 import { canonical } from '../spine/records';
-import { stampOf } from '../spine/engine';
+import { stampOf } from '../spine/write-once';
 import type { Checkpoint, ReportRecord } from '../contracts/run-checkpoint';
 import { parsePileDisposition } from '../contracts/pile-disposition';
 import type { Declaration } from '../contracts/pile-declaration';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { AUTHORED_LINE_MAX, STATE_KEY, applyChanges, currentStateOf, readBackEdit, recheckEdit, stateMark, stateNewsLine, undoChanges } from './note-edit';
+import { AUTHORED_LINE_MAX, STATE_KEY, applyChanges, currentStateOf, recheckEdit, stateMark, stateNewsLine, undoChanges } from './note-edit';
 import { md5Hex } from './hashes';
 import type { Change, EditText } from './run-manifest';
 
@@ -71,7 +71,7 @@ describe('the state-rewrite change (C05)', () => {
     expect(text(back)).toBe(marked);
   });
 
-  it('is checked again before the write and read back after a lost reply, as any note edit', async () => {
+  it('is checked again before the write, as any note edit', async () => {
     const digest = (t: string): string => createHash('sha256').update(Buffer.from(t, 'utf8')).digest('hex');
     const changes = [rewrite(['One application open.'], ['Two applications open.'])];
     const after = text(applyChanges(enc(HUB), changes));
@@ -83,9 +83,6 @@ describe('the state-rewrite change (C05)', () => {
     };
     expect(await recheckEdit(effect, enc(HUB))).toBe('ok');
     expect(await recheckEdit(effect, enc(HUB.replace('One application', 'One open application')))).toBe('conflict');
-    const seen = { fileId: 'f-hub', name: 'Job hunt.md', parents: ['f-job'], trashed: false };
-    expect(await readBackEdit(effect, { ...seen, bytes: enc(after) })).toBe('applied');
-    expect(await readBackEdit(effect, { ...seen, bytes: enc(HUB) })).toBe('possible-effect');
   });
 });
 

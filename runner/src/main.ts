@@ -39,14 +39,13 @@ import type { Pacing } from '../../src/data/drive/transport';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import type { Checkpoint } from '../../src/data/contracts/run-checkpoint';
-import { checksumOf } from '../../src/data/contracts/hashes';
 import { admittedThings } from '../../src/data/spine/admission';
 import type { RunProvider } from '../../src/data/spine/provider';
 import { B_FAILURE } from '../../src/data/spine/scripted';
 import { BowerError } from '../../src/data/types';
 import { RunRecords } from '../../src/data/spine/records';
 import type { ItemDisposition } from '../../src/data/spine/report';
-import { finishRun, shownDone, type Checksum } from '../../src/data/spine/barrier';
+import { finishRun, shownDone } from '../../src/data/spine/barrier';
 import { RunnerDrive } from './drive';
 import { RunnerStatus } from './status';
 import { NO_LONGER_ALLOWED, RunnerToken, isGone, isStaleAttempt } from './token';
@@ -216,8 +215,7 @@ async function tidy(opts: TidyOptions, token: RunnerToken, status: RunnerStatus,
   const reads = runnerReads(drive, opts.runId);
   const records = new RunRecords(reads, rootId);
   timeCheckpoints(records, timing);
-  const checksum: Checksum = { stored: (id) => drive.md5(id), of: checksumOf };
-  const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, checksum, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
+  const barrier = { rootId, runId: opts.runId, attempt: opts.attempt, records, reads, batch: () => drive.batch(), fenced: () => drive.fencedWrites(), admission: grant.manifest, clock, newId };
 
   // 2. This run's report already in the folder: nothing is repeated. Its chain says done before the Worker hears it.
   if (await timing.time('reads', () => shownDone(reads, rootId, opts.runId))) {

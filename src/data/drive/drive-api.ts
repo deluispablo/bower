@@ -56,12 +56,12 @@ export interface DriveApi extends ResumableDrive {
   readBytes(id: string): Promise<Uint8Array>;
   createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
-  /** Writes only if the file still has `ifModified`; otherwise rejects `conflict`. */
-  writeText(id: string, text: string, ifModified: string): Promise<DriveFile>;
+  /** Writes only if the file still has `ifModified`; otherwise rejects `conflict`. `appProperties` go in the same request. */
+  writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   /** Renames, moves, or sets appProperties (a null value removes one). */
   update(id: string, patch: DrivePatch): Promise<DriveFile>;
   /** To Drive's Bin; the app never deletes for good. */
-  trash(id: string): Promise<void>;
+  trash(id: string): Promise<DriveFile>;
   untrash(id: string): Promise<DriveFile>;
   /**
    * Files under `rootId` whose name or text has every word of `query` (Drive's `fullText contains`: whole words, any
@@ -198,8 +198,8 @@ export interface FencedDrive {
   createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   update(id: string, patch: DrivePatch): Promise<DriveFile>;
-  /** `appProperties`, when given, are set in the same request (a run's stamp on its effect). */
-  trash(id: string, appProperties?: Record<string, string>): Promise<void>;
+  /** `appProperties`, when given, are set in the same request (a run's stamp on its effect); answers the file binned. */
+  trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile>;
   writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>): Promise<DriveFile>;
 }
 /** What Drive stores for a file now, as evidence of an effect: metadata, Bin state, and the content's size and SHA-256. */
@@ -212,8 +212,7 @@ export interface StoredEvidence {
 /**
  * The apply engine's port (`spine/engine.ts`, ports and adapters): what one run's operations read of a Drive besides
  * its fenced writes. `RunnerDrive` adapts Google Drive for the runner; `FakeRunDrive` adapts the pretend Drive for the
- * fake run service. The answer methods are the runner's (it keeps what each write's answer said); an adapter without
- * them leaves the engine to read the effect from Drive.
+ * fake run service. What a write did is read from its own answer (`spine/write-once.ts`).
  */
 export interface RunDrive {
   /** Where the evidence it gives comes from, as a checkpoint records it. */
@@ -232,10 +231,4 @@ export interface RunDrive {
    * and, with `withTime`, its modifiedTime too (a content write, which carries it).
    */
   expectSeen(seen: { fileId: string; name: string; parents: string[]; folder: boolean; modifiedTime: string }, withTime?: boolean): void;
-  /** What the answer to this run's own write to `id` shows as stored evidence; null when it cannot. */
-  fromAnswer?(id: string): StoredEvidence | null;
-  /** Whether the answer to this run's own write to `id` confirms exactly these bytes. */
-  confirmsBytes?(id: string, bytes: Uint8Array): Promise<boolean>;
-  /** The file this run's own write answered, as it was then. */
-  answeredFile?(id: string): DriveFile | null;
 }

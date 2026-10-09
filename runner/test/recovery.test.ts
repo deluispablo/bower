@@ -16,7 +16,8 @@ import { MOVED_AWAY } from '../../src/data/spine/report';
 import { SYSTEM } from '../../src/data/vault/layout';
 import { runTidy, type TidyEnd } from '../src/main';
 import { providerFor } from '../src/provider';
-import { STAMP, driveEffects, stampOf, type Effects } from '../../src/data/spine/engine';
+import { driveEffects, type Effects } from '../../src/data/spine/engine';
+import { STAMP, stampOf } from '../../src/data/spine/write-once';
 import { RunnerToken, isStaleAttempt } from '../src/token';
 import { API, RUN_ID, TICKET, driveV3, fixedDrive, type DriveV3 } from './drive-v3';
 
@@ -105,7 +106,6 @@ function tidy(w: World, attempt: number, opts: Attempt = {}): Promise<TidyEnd> {
   const effects = (drive: Parameters<typeof driveEffects>[0]): Effects => {
     const real = driveEffects(drive);
     return {
-      observe: real.observe,
       readBack: real.readBack,
       async apply(op, head, fenced, manifest, sending) {
         const e = op.effect;
@@ -793,7 +793,8 @@ describe('recovery without the browser', () => {
     expect(stamped.length).toBeGreaterThan(1);
     for (const e of stamped) {
       expect(Object.keys(e.appProperties).filter((k) => k.startsWith('bowerOp')), e.path).toEqual(['bowerOp']);
-      expect(ops.some((o) => stampOf(RUN_ID, o.operationId) === e.appProperties.bowerOp), e.path).toBe(true);
+      // Outside `.bower`, the stamp of one of the run's operations; Bower's own files carry their own write's stamp.
+      if (!e.path.startsWith('.bower/')) expect(ops.some((o) => stampOf(RUN_ID, o.operationId) === e.appProperties.bowerOp), e.path).toBe(true);
     }
   });
 

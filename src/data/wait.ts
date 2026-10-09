@@ -3,8 +3,8 @@
  * timeout of its own: a stalled connection (a phone changing network, a tab woken from sleep) leaves it pending
  * for ever, and the person sees "Saving…" with no request, no error and no outcome (C16). Past the bound the
  * request is dropped and told as a `TypeError`, which both clients already word as "offline"; for a write that
- * may have landed, the vault then reads it back (`settle`, Google Cloud retry strategy: an ambiguous outcome is
- * read, not assumed) and says "saved" or "not sure it saved".
+ * may have landed, the vault then looks for it by its stamp (`spine/write-once.ts`: an ambiguous outcome is read, not
+ * assumed) and says "saved" or "not sure it saved".
  * Cancelling is the same as the web platform's `AbortSignal.timeout`, done with our own timer so that tests with
  * faked timers control it and so a transport that ignores the signal is still cut off.
  */

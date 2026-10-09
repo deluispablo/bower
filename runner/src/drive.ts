@@ -20,17 +20,8 @@
  *   itself can still let one land (a precheck, not a lock), and that attempt's
  *   next status report is refused (409 `stale-attempt`).
  *
- * A created file is confirmed by the create's own answer: Drive v3 gives the
- * stored content's `md5Checksum` (and `sha256Checksum`, when it has one) when
- * `fields` asks for them (https://developers.google.com/drive/api/reference/rest/v3/files,
- * https://developers.google.com/drive/api/guides/fields-parameter). When the
- * answer's checksum is that of the bytes sent, the one read-back that follows
- * a record's create (a checkpoint, the report, a disposition) is answered from
- * them, with no second request; with no checksum, or another one, it is read from
- * Drive as before. The report files' own writes (and `dispositions.json`) are
- * confirmed the same way, from the md5 their answer gives (`md5`); `last-run.json`
- * is the barrier's last word and is always read back from Drive. Other files are
- * read back from Drive as they always were.
+ * Every write is confirmed by its own answer, which carries the stored content's
+ * checksums (`DriveHttp`, `spine/write-once.ts`); nothing is kept of it here.
  *
  * Faults for tests come through the fetch: `fault` sees each fenced write's
  * request once, as the fake's `FaultHook` does (`refuse`: nothing is sent;
@@ -43,7 +34,7 @@ import { DriveHttp, FIELDS, quote, toFile, type WireFile } from '../../src/data/
 import type { SpineRead } from '../../src/data/spine/plan';
 import type { AdmissionScope } from '../../src/data/spine/admission';
 import { admissionRead } from '../../src/data/spine/read';
-import { md5Hex, sha256, sha256Hex } from '../../src/data/contracts/hashes';
+import { sha256 } from '../../src/data/contracts/hashes';
 import { ReadCache } from '../../src/data/drive/read-cache';
 import { destinationOf, SeenFiles, targetOf, type FenceTarget, type StoredNow } from '../../src/data/drive/seen-files';
 import { staleAttempt, type RunnerToken } from './token';
@@ -58,13 +49,6 @@ export interface RunnerDriveOptions {
 }
 
 const API = 'https://www.googleapis.com/drive/v3';
-/** What a create's answer is asked to carry besides its metadata, to confirm the bytes Drive stored. */
-const CHECKSUMS = 'md5Checksum,sha256Checksum';
-/** A run's records (`checkpointName`, `reportName`, `dispositionName`) and its `dispositions.json`: written once, never changed. */
-const RECORD = /^(?:(?:checkpoint-\d+|manifest|report|disposition)-[0-9a-f]{64}\.json|dispositions\.json)$/;
-/** The report files the barrier brings up to date: confirmed by the md5 of their write's answer, never by kept text. */
-const REPORT_FILE = /^(?:questions|suggestions|requests|hashes)\.json$/;
-
 /** What one of this run's own writes did to a folder listing: the file as Drive answered, or the file put in the Bin. */
 export type Change = { file: DriveFile } | { gone: string };
 
@@ -81,20 +65,12 @@ export class RunnerDrive implements RunDrive {
   /** The fenced write whose request is in flight, and what the fault hook said of it. */
   private current: { call: FencedCall; action: FaultAction | null } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
-  /** Files whose create's answer confirmed the bytes sent, by id: the text, for the one read-back that follows. */
-  private readonly confirmed = new Map<string, string>();
   /** Rises when a fenced write is about to be sent and again when it ends: a listing read at one value is current at it. */
   generation = 0;
-  /** The md5 a write's answer gave for a file, by id, taken once by `md5` (the barrier's read-back of its own write). */
-  private readonly answered = new Map<string, string>();
   /** Whether a fenced write's request is out now. */
   private writing = false;
-  /** The file each fenced write answered, by id, for `fromAnswer` and `answeredFile`: the effect read from its answer. */
-  private readonly answers = new Map<string, { file: DriveFile; trashed: boolean }>();
   /** The target of the fenced write in flight, as its fence saw it: a content write compares it instead of reading again. */
   private peeked: DriveFile | null = null;
-  /** What each write's answer said of the stored bytes, by id (checksums asked of every fenced write). */
-  private readonly sums = new Map<string, { size?: number; md5?: string; sha256?: string; trashed?: boolean }>();
   /** Each fenced write that ended, with the generation it ended at: what it did (null: not known, e.g. a lost answer). */
   private readonly ended: Array<{ end: number; change: Change | null }> = [];
   /** What the plan read of each file, by id and the modifiedTime its listing gave (the one read cache, `read-cache.ts`). */
@@ -190,33 +166,6 @@ export class RunnerDrive implements RunDrive {
     }
   }
 
-  /**
-   * What the answer to this run's own write to `id` shows as stored evidence, or null when the answer cannot confirm it
-   * (no checksum asked back): the caller then reads it from Drive. A folder has no content; a file's is the answer's.
-   */
-  fromAnswer(id: string): StoredEvidence | null {
-    const a = this.answers.get(id);
-    if (!a) return null;
-    if (a.file.folder) return { file: a.file, trashed: a.trashed, content: null };
-    const sum = this.sums.get(id);
-    if (sum?.sha256 === undefined || a.file.size === undefined) return null;
-    return { file: a.file, trashed: a.trashed, content: { size: a.file.size, sha256: sum.sha256 } };
-  }
-
-  /** Whether the answer to this run's own write to `id` confirms exactly these bytes (the md5 or sha-256 Drive stored). */
-  async confirmsBytes(id: string, bytes: Uint8Array): Promise<boolean> {
-    const sum = this.sums.get(id);
-    if (!sum) return false;
-    if (sum.size !== undefined && sum.size !== bytes.byteLength) return false;
-    if (sum.sha256 !== undefined) return sum.sha256 === (await sha256Hex(bytes));
-    return sum.md5 !== undefined && sum.md5 === md5Hex(bytes);
-  }
-
-  /** The file this run's own write answered, as it was then. */
-  answeredFile(id: string): DriveFile | null {
-    return this.answers.get(id)?.file ?? null;
-  }
-
   async get(id: string): Promise<DriveFile> {
     return this.seen.note(await this.http.get(id));
   }
@@ -231,48 +180,18 @@ export class RunnerDrive implements RunDrive {
 
   /** A folder's live children, every page. */
   async list(parentId: string): Promise<DriveFile[]> {
-    const out: DriveFile[] = [];
-    let pageToken = '';
-    do {
-      const params = new URLSearchParams({ q: `${quote(parentId)} in parents and trashed = false`, fields: `nextPageToken,files(${FIELDS})`, pageSize: '1000' });
-      if (pageToken) params.set('pageToken', pageToken);
-      const body = (await this.read(`${API}/files?${params}`)) as { files?: WireFile[]; nextPageToken?: string };
-      for (const w of body.files ?? []) out.push(this.seen.note(toFile(w)));
-      pageToken = body.nextPageToken ?? '';
-    } while (pageToken);
-    return out;
+    return (await this.http.query(`${quote(parentId)} in parents and trashed = false`)).map((f) => this.seen.note(f));
   }
 
-  /**
-   * The files that carry `key` = `value` in their appProperties, wherever they are and in the Bin or not: Drive's
-   * `appProperties has { key=... and value=... }` query, with no parent clause and no `trashed` clause
-   * (https://developers.google.com/workspace/drive/api/guides/search-files). A run's own stamp is found this way even
-   * after the person moved the thing it made elsewhere, or put it in the Bin.
-   */
+  /** The files carrying a stamp, anywhere and in the Bin or not (`DriveHttp.stamped`); those out of the Bin are kept as seen. */
   async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
-    const out: Array<{ file: DriveFile; trashed: boolean }> = [];
-    let pageToken = '';
-    do {
-      const q = `appProperties has { key=${quote(key)} and value=${quote(value)} }`;
-      const params = new URLSearchParams({ q, fields: `nextPageToken,files(${FIELDS})`, pageSize: '1000' });
-      if (pageToken) params.set('pageToken', pageToken);
-      const body = (await this.read(`${API}/files?${params}`)) as { files?: WireFile[]; nextPageToken?: string };
-      for (const w of body.files ?? []) out.push({ file: w.trashed === true ? toFile(w) : this.seen.note(toFile(w)), trashed: w.trashed === true });
-      pageToken = body.nextPageToken ?? '';
-    } while (pageToken);
-    return out;
+    const found = await this.http.stamped(key, value);
+    for (const f of found) if (!f.trashed) this.seen.note(f.file);
+    return found;
   }
 
   async readText(id: string): Promise<string> {
-    return this.confirmedText(id) ?? this.http.readText(id);
-  }
-
-  /** The text a create's answer confirmed, taken once: any later read goes to Drive. */
-  private confirmedText(id: string): string | null {
-    const text = this.confirmed.get(id);
-    if (text === undefined) return null;
-    this.confirmed.delete(id);
-    return text;
+    return this.http.readText(id);
   }
 
   /**
@@ -352,34 +271,16 @@ export class RunnerDrive implements RunDrive {
 
   /** The bytes of a file. */
   async readBytes(id: string): Promise<Uint8Array> {
-    const text = this.confirmedText(id);
-    return text === null ? this.http.readBytes(id) : new TextEncoder().encode(text);
-  }
-
-  /**
-   * The MD5 of a file's stored bytes, hex, as Drive's `md5Checksum` gives it: the one its own write's answer gave, once
-   * (for a report file or record; Drive computed it from what it stored), otherwise read from the bytes Drive holds.
-   */
-  async md5(id: string): Promise<string> {
-    const answered = this.answered.get(id);
-    if (answered !== undefined) {
-      this.answered.delete(id);
-      return answered;
-    }
-    return md5Hex(await this.http.readBytes(id));
+    return this.http.readBytes(id);
   }
 
   /** One fenced write: one at a time, after its still-as-seen read. */
-  private fenced<T>(call: FencedCall, write: () => Promise<T>): Promise<T> {
+  private fenced(call: FencedCall, write: () => Promise<DriveFile>): Promise<DriveFile> {
     const run = this.queue.then(async () => {
       // The attempt again, right before this write: a runner that stalled after its batch began and woke after a
       // takeover sends nothing more (TL-P3-23).
       // and the target read again (still as seen). Both must pass before anything is sent; neither waits for the other.
       const target = targetOf(call);
-      if ('id' in call) {
-        this.confirmed.delete(call.id);
-        this.answered.delete(call.id);
-      }
       // Every read of the fence goes through the one cannot-read handling (`SeenFiles.read`): a read that gets no
       // answer is no change found, thrown as not read, so the attempt stops for recovery.
       const into = destinationOf(call);
@@ -387,28 +288,20 @@ export class RunnerDrive implements RunDrive {
       if (into) this.seen.assert(into, intoNow);
       this.seen.assert(target, now);
       this.peeked = now?.file ?? null;
-      if ('id' in call) {
-        this.answers.delete(call.id);
-        this.sums.delete(call.id);
-      }
       this.current = { call, action: null };
       this.generation++;
       this.writing = true;
       let change: Change | null = null;
       try {
         const answer = await write();
-        change = call.op === 'trash' ? { gone: call.id } : { file: answer as DriveFile };
-        if (call.op === 'trash') {
-          // The Bin is shown by Drive's own answer (`trashed`), not by what was read before.
-          if (this.peeked && this.sums.get(call.id)?.trashed === true) this.answers.set(call.id, { file: this.peeked, trashed: true });
-        } else {
+        change = call.op === 'trash' ? { gone: call.id } : { file: answer };
+        if (call.op !== 'trash') {
           // Noted here too, before the next queued write asks: the wrap notes it only after this promise has resolved.
-          const file = this.seen.note(answer as DriveFile);
-          this.answers.set(file.id, { file, trashed: false });
-          // A record folder this run made (a folder with no operation's stamp), kept by the version its create answered.
-          if (call.op === 'create-folder' && call.appProperties?.bowerOp === undefined) {
-            this.reads.keep(file);
-            this.records.add(file.id);
+          this.seen.note(answer);
+          // A record folder this run made (a folder with no create key of the person's), kept by the version its create answered.
+          if (call.op === 'create-folder' && call.appProperties?.bowerItem === undefined) {
+            this.reads.keep(answer);
+            this.records.add(answer.id);
           }
         }
         return answer;
@@ -452,9 +345,7 @@ export class RunnerDrive implements RunDrive {
     now.action ??= this.fault?.before?.(now.call) ?? 'pass';
     // A TypeError is how fetch fails with no network; the transport reads it as no answer (`isNoAnswer`).
     if (now.action === 'refuse') throw new TypeError('A fault refused this write.');
-    // A record's or report file's create, and any text write, asks its answer for the stored checksums too.
-    // Every fenced write asks its answer for the stored checksums too: the answer then shows the effect, with no read-back.
-    const res = await this.fetchFn(withChecksums(url), init);
+    const res = await this.fetchFn(url, init);
     // A write Google failed on may still have landed: read as a lost answer, so it is read back, never sent again.
     if (res.status >= 500) {
       console.error(`Drive answered ${res.status} to a write`);
@@ -464,49 +355,11 @@ export class RunnerDrive implements RunDrive {
     this.current = null;
     this.fault?.applied?.(now.call);
     if (now.action === 'lose-reply') throw new TypeError('A fault lost the answer to this write.');
-    await this.confirm(now.call.op === 'create-text' ? now.call.text : null, res.clone());
     return res;
-  }
-
-  /**
-   * Keeps what the answer proves. A record created (immutable) keeps its text when the answer's checksum is that of the
-   * bytes sent; a report file keeps only the md5 Drive gave, for the barrier's read-back right after (`md5`). An answer
-   * with no checksum confirms nothing, and `last-run.json` is never confirmed: it is read back from Drive.
-   */
-  private async confirm(text: string | null, res: Response): Promise<void> {
-    const body = (await res.json().catch(() => null)) as { id?: string; name?: string; size?: string; trashed?: boolean; md5Checksum?: string; sha256Checksum?: string } | null;
-    if (!body?.id || body.name === undefined) return;
-    this.sums.set(body.id, {
-      ...(body.size !== undefined ? { size: Number(body.size) } : {}),
-      ...(body.trashed !== undefined ? { trashed: body.trashed } : {}),
-      ...(body.md5Checksum !== undefined ? { md5: body.md5Checksum } : {}),
-      ...(body.sha256Checksum !== undefined ? { sha256: body.sha256Checksum } : {}),
-    });
-    const record = RECORD.test(body.name);
-    if (!record && !REPORT_FILE.test(body.name)) return;
-    if (!record) {
-      if (body.md5Checksum !== undefined) this.answered.set(body.id, body.md5Checksum);
-      return;
-    }
-    if (text === null) return;
-    const bytes = new TextEncoder().encode(text);
-    const sha = body.sha256Checksum !== undefined && body.sha256Checksum === (await sha256Hex(bytes));
-    const md5 = body.md5Checksum !== undefined && body.md5Checksum === md5Hex(bytes);
-    if (sha || md5) this.confirmed.set(body.id, text);
-    else if (body.sha256Checksum !== undefined || body.md5Checksum !== undefined) console.error(`Drive stored other bytes for file ${body.id} than were sent`);
   }
 
   /** A read through the transport: the token, its one refresh, the retry policy and the error mapping (`DriveHttp.call`). */
   private async read(url: string): Promise<unknown> {
     return (await this.http.call(url)).json();
   }
-}
-
-/** A create's address asking its answer for the stored content's checksums too (`fields`). */
-function withChecksums(input: string): string {
-  const url = new URL(input);
-  const fields = url.searchParams.get('fields');
-  if (fields === null) return input;
-  url.searchParams.set('fields', `${fields},${CHECKSUMS}`);
-  return url.href;
 }

@@ -17,8 +17,11 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 export const FIELDS = 'id,name,mimeType,parents,modifiedTime,createdTime,size,appProperties,trashed';
 /** A file made by a resumable upload, with its content's checksum to check it. */
 const UPLOADED_FIELDS = `${FIELDS},sha256Checksum`;
-/** A listing with checksums: also `md5Checksum`, which names the same content uploaded again. */
-const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
+/**
+ * A listing with checksums: also `md5Checksum`, which names the same content uploaded again. Every write's answer asks
+ * for them too, so the answer confirms the bytes Drive stored (`spine/write-once.ts`).
+ */
+export const LISTED_FIELDS = `${UPLOADED_FIELDS},md5Checksum`;
 /** The only session addresses that get the person's token. */
 const UPLOAD_SESSIONS = 'https://www.googleapis.com/upload/';
 export const FOLDER = 'application/vnd.google-apps.folder';
@@ -153,7 +156,7 @@ export class DriveHttp implements DriveApi {
   }
 
   async createFolder(parentId: string, name: string, appProperties?: Record<string, string>): Promise<DriveFile> {
-    return this.json(`${API}/files?fields=${FIELDS}`, 'POST', { name, mimeType: FOLDER, parents: [parentId], ...(appProperties ? { appProperties } : {}) });
+    return this.json(`${API}/files?fields=${LISTED_FIELDS}`, 'POST', { name, mimeType: FOLDER, parents: [parentId], ...(appProperties ? { appProperties } : {}) });
   }
 
   async createText(parentId: string, name: string, text: string, appProperties?: Record<string, string>): Promise<DriveFile> {
@@ -161,30 +164,41 @@ export class DriveHttp implements DriveApi {
     return this.multipart(meta, new Blob([text], { type: mimeOf(name) }));
   }
 
-  /** Drive v3 has no If-Match on files: this reads, then writes, which leaves a short window. */
   /**
+   * Drive v3 has no If-Match on files: this reads, then writes, which leaves a short window. `current`, when given, is
+   * the file as the caller read it moments ago (the runner's fence), compared in place of one more read.
    * `appProperties`, when given, go in the same request: a multipart `files.update`, metadata then media
    * (https://developers.google.com/workspace/drive/api/guides/manage-uploads#multipart).
    */
-  /** `current`, when given, is the file as the caller read it moments ago (the runner's fence): it is compared in place of one more read. */
   async writeText(id: string, text: string, ifModified: string, appProperties?: Record<string, string>, current?: DriveFile): Promise<DriveFile> {
     const now = current ?? (await this.get(id));
     if (now.modifiedTime !== ifModified) throw driveError('conflict');
     if (appProperties) return this.multipart({ appProperties }, new Blob([text], { type: mimeOf(now.name) }), id);
-    const res = await this.call(`${UPLOAD}/files/${id}?uploadType=media&fields=${FIELDS}`, { method: 'PATCH', headers: { 'content-type': mimeOf(now.name) }, body: text });
+    const res = await this.call(`${UPLOAD}/files/${id}?uploadType=media&fields=${LISTED_FIELDS}`, { method: 'PATCH', headers: { 'content-type': mimeOf(now.name) }, body: text });
     return toFile((await res.json()) as WireFile);
   }
 
   async update(id: string, patch: DrivePatch): Promise<DriveFile> {
-    const q = new URLSearchParams({ fields: FIELDS });
+    const q = new URLSearchParams({ fields: LISTED_FIELDS });
     if (patch.addParent) q.set('addParents', patch.addParent);
     if (patch.removeParent) q.set('removeParents', patch.removeParent);
     return this.json(`${API}/files/${id}?${q}`, 'PATCH', { ...(patch.name ? { name: patch.name } : {}), ...(patch.appProperties ? { appProperties: patch.appProperties } : {}) });
   }
 
   /** `appProperties`, when given, are set by the same `files.update` that puts it in the Bin. */
-  async trash(id: string, appProperties?: Record<string, string>): Promise<void> {
-    await this.json(`${API}/files/${id}?fields=${FIELDS}`, 'PATCH', { trashed: true, ...(appProperties ? { appProperties } : {}) });
+  async trash(id: string, appProperties?: Record<string, string>): Promise<DriveFile> {
+    return this.json(`${API}/files/${id}?fields=${LISTED_FIELDS}`, 'PATCH', { trashed: true, ...(appProperties ? { appProperties } : {}) });
+  }
+
+  /**
+   * The files that carry `key` = `value` in their appProperties, wherever they are and in the Bin or not, with their
+   * checksums: Drive's `appProperties has { key=... and value=... }` query, with no parent clause and no `trashed`
+   * clause (https://developers.google.com/workspace/drive/api/guides/search-files). A write is found again this way
+   * by its stamp (`spine/write-once.ts`), even after the person moved it elsewhere or put it in the Bin.
+   */
+  async stamped(key: string, value: string): Promise<Array<{ file: DriveFile; trashed: boolean }>> {
+    const found = await this.wires(`appProperties has { key=${quote(key)} and value=${quote(value)} }`, Infinity, LISTED_FIELDS);
+    return found.map((w) => ({ file: toFile(w), trashed: w.trashed === true }));
   }
 
   async untrash(id: string): Promise<DriveFile> {
@@ -356,8 +370,13 @@ export class DriveHttp implements DriveApi {
     }
   }
 
-  private async query(q: string, maxPages = Infinity, fields = FIELDS): Promise<DriveFile[]> {
-    const out: DriveFile[] = [];
+  /** The files `q` finds, every page up to `maxPages`, as Drive answers them. */
+  async query(q: string, maxPages = Infinity, fields = FIELDS): Promise<DriveFile[]> {
+    return (await this.wires(q, maxPages, fields)).map(toFile);
+  }
+
+  private async wires(q: string, maxPages: number, fields: string): Promise<WireFile[]> {
+    const out: WireFile[] = [];
     let pageToken = '';
     let pages = 0;
     do {
@@ -365,7 +384,7 @@ export class DriveHttp implements DriveApi {
       const params = new URLSearchParams({ q, fields: `nextPageToken,files(${fields})`, pageSize: String(SEARCH_PAGE_SIZE) });
       if (pageToken) params.set('pageToken', pageToken);
       const body = (await (await this.call(`${API}/files?${params}`)).json()) as { files?: WireFile[]; nextPageToken?: string };
-      out.push(...(body.files ?? []).map(toFile));
+      out.push(...(body.files ?? []));
       pageToken = body.nextPageToken ?? '';
     } while (pageToken);
     return out;
@@ -395,7 +414,7 @@ export class DriveHttp implements DriveApi {
       content,
       `\r\n--${boundary}--`,
     ]);
-    const res = await this.call(`${UPLOAD}/files${id ? `/${id}` : ''}?uploadType=multipart&fields=${FIELDS}`, {
+    const res = await this.call(`${UPLOAD}/files${id ? `/${id}` : ''}?uploadType=multipart&fields=${LISTED_FIELDS}`, {
       method: id ? 'PATCH' : 'POST',
       headers: { 'content-type': `multipart/related; boundary=${boundary}` },
       body,

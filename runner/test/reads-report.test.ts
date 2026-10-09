@@ -45,7 +45,7 @@ describe('the runner plan reads and report', () => {
     console.log(`report: modelled=${p.reportMs}ms calls=${p.report.length} (was ${REPORT_BEFORE_CALLS} in 8060ms)`);
     expect(code).toBe(0);
     // The barrier's order (TL-P3-22): the report record, the dispositions, dispositions.json, then last-run.json,
-    // read back last, and only then the closing checkpoint.
+    // confirmed by its answer, and only then the closing checkpoint.
     const writes = p.report.filter((c) => c.kind === 'write').map((c) => c.name ?? '?');
     const at = (re: RegExp): number => writes.findIndex((n) => re.test(n));
     expect(at(/^report-/)).toBeGreaterThanOrEqual(0);
@@ -56,10 +56,8 @@ describe('the runner plan reads and report', () => {
     expect(at(/^last-run\.json$/)).toBe(writes.length - 2);
     expect(at(/^checkpoint-/)).toBe(-1 + writes.length);
     const lastRun = p.report.findIndex((c) => c.kind === 'write' && c.name === 'last-run.json');
-    const after = p.report.slice(lastRun + 1).filter((c) => c.kind === 'read');
-    // The first thing read after last-run.json is written is last-run.json itself, and nothing is written in between.
-    expect(after[0]?.name).toBe('last-run.json');
-    expect(p.report.slice(lastRun + 1).findIndex((c) => c.kind === 'write')).toBeGreaterThan(p.report.slice(lastRun + 1).findIndex((c) => c.name === 'last-run.json' && c.kind === 'read'));
+    // last-run.json is confirmed by its write's answer: nothing reads it back.
+    expect(p.report.slice(lastRun + 1).filter((c) => c.kind === 'read' && c.name === 'last-run.json')).toEqual([]);
     // Fewer calls: at most half of today's.
     expect(p.report.length).toBeLessThanOrEqual(REPORT_BEFORE_CALLS / 2);
   });

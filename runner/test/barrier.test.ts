@@ -213,7 +213,7 @@ describe('the report barrier', () => {
     expect((view?.value as { run: { report: { filed: unknown[] } } }).run.report.filed).toHaveLength(2);
   });
 
-  it('last-run.json is written last and read back before done', async () => {
+  it('last-run.json is written last and confirmed by its answer before done', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { wire, root } = await demo();
     const writes: Write[] = [];
@@ -236,11 +236,11 @@ describe('the report barrier', () => {
     }
     const view = await stored(wire, root, SYSTEM.lastRun);
     expect(view?.value).toMatchObject({ v: 1, run: { id: RUN_ID, phase: 'done', report: { filed: expect.any(Array) } } });
-    // Read back after it was written, and only then is done reported.
+    // Confirmed by its write's answer (its md5Checksum), with no read after it, and only then is done reported.
     const readBack = wire.requests.findIndex((r, i) => i > last.at && r.method === 'GET' && r.url.searchParams.get('alt') === 'media' && r.url.pathname.endsWith(`/${view?.file.id ?? ''}`));
-    expect(readBack).toBeGreaterThan(last.at);
+    expect(readBack).toBe(-1);
     const done = wire.statuses.find((s) => s.phase === 'done');
-    expect(done?.after).toBeGreaterThan(readBack);
+    expect(done?.after).toBeGreaterThan(last.at);
     expect(wire.statuses.filter((s) => s.phase === 'done')).toHaveLength(1);
     const head = (await chainOf(wire, root)).at(-1);
     expect(head).toMatchObject({ phase: 'done', report: { state: 'published' } });
