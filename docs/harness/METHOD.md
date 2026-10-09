@@ -101,7 +101,7 @@ The builder never grades its own work: every phase ends with an evaluator round 
 - Lint, strict types, unit tests, build: `pnpm check`.
 - Duplication (jscpd) and dependency rules (dependency-cruiser) in `pnpm check`, each with a baseline that may only shrink (TL-P4-15, entries `c1-duplication-gate` and `c1-dependency-rules`).
 
-- `harness/integrate.sh <branch>` is the only way a worker branch reaches the integration branch. It runs a no-commit merge, then `pnpm check`, and commits only when the check is green. After a green merge it removes the worker's worktree and deletes its branch with `-d` (TL-P4-17; the cleanup lands with `c3-branch-cleanup`, TL-P4-19).
+- `harness/integrate.sh <branch>` is the only way a worker branch reaches the integration branch. It runs a no-commit merge, then `pnpm check`, and commits only when the check is green. After a green merge it removes the worker's worktree and deletes its branch with `-d` (TL-P4-17; cleanup by `c3-branch-cleanup`, 5dda3a7f, TL-P4-19).
 - `scripts/check-harness.mjs` and `done.sh`:
   - a tracked line that is only a conflict marker fails;
   - an escalated consolidation entry cannot pass without a `review` PASS;
