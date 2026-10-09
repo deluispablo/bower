@@ -216,3 +216,5 @@ c4-app-fence P4-50c,reviewer,claude,bower-reviewer,,1,54163,,,,,,12,1.0,PASS (3 
 d-v2-07 contract,reviewer,claude,bower-reviewer,,1,89341,,,,,,14,2.0,CHANGES (14),2026-10-09
 c4-new-pill-one,implementer,codex,codex,medium,1,564632,558931,0,509056,5701,,,,delivered,2026-10-09
 d-v2-07 contract 2,reviewer,claude,bower-reviewer,,2,87182,,,,,,17,2.6,CHANGES (13),2026-10-09
+c4-app-fence P4-50d,reviewer,claude,bower-reviewer,,1,57930,,,,,,17,1.2,PASS (minors; 2 lead calls),2026-10-09
+c4-app-fence round 4,implementer,claude,bower-escalated,,4,149027,,,,,,52,10.5,delivered,2026-10-09
