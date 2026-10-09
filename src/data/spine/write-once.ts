@@ -122,6 +122,11 @@ export const makeText = async (w: Makes, reads: Gets, at: Place, text: string): 
 export class Intended {
   private readonly ids = new Map<string, string>();
 
+  /** Whether an id is kept for `key`: an earlier try may have landed, its answer lost. */
+  has(key: string): boolean {
+    return this.ids.has(key);
+  }
+
   async make(key: string, w: Pick<Makes, 'generateIds'>, create: (id: string) => Promise<DriveFile>): Promise<DriveFile> {
     const id = this.ids.get(key) ?? (await reserveId(w));
     this.ids.set(key, id);

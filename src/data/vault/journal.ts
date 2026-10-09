@@ -11,6 +11,7 @@ import { ReadCache } from '../drive/read-cache';
 import type { ChangeKind } from '../types';
 import { BowerError } from '../types';
 import { makeText, updateByStamp } from '../spine/write-once';
+import { isNoAnswer, isUnconfirmedWrite } from '../drive/transport';
 
 export type { JournalExtra, JournalRecord } from '../contracts/journal-record';
 export { isJournalRecord } from '../contracts/journal-record';
@@ -33,6 +34,17 @@ export interface JournalPlace {
   waiting?: () => void;
 }
 
+
+/** What the person is told, once, when Drive refuses a line for good (it is made, but not noted for the next tidy-up). */
+const REFUSED_LINE = "Your change was made, but Bower couldn't make a note of it.";
+
+/**
+ * A refusal that will not change on a later try: a 4xx other than the 409 that proves a create landed (Drive's
+ * "Resolve errors" guide, https://developers.google.com/workspace/drive/api/guides/handle-errors). No answer, a 5xx, a
+ * sign-in or a conflict are retryable; the id stays with the line only for those.
+ */
+const refusedForGood = (e: unknown): boolean =>
+  e instanceof BowerError && !isNoAnswer(e) && !isUnconfirmedWrite(e) && (e.code === 'unknown' || e.code === 'not-found');
 
 /** This device's unsent lines, per Bower folder, so one person's never reach another's. */
 /** Where this device keeps a folder's change outbox (live sources read it to know lines wait). */
@@ -171,7 +183,12 @@ export class Journal {
         console.error(e);
         readable = false;
       }
-      if (!(await this.send(line))) {
+      const sentNow = await this.send(line);
+      if (sentNow === 'refused') {
+        this.checkCurrent();
+        throw new BowerError('unknown', REFUSED_LINE, { path: kind === 'trash' ? null : (extra.path ?? null), changeId: rec.id });
+      }
+      if (sentNow === 'later') {
         let previous = this.volatile.get(key) ?? [];
         if (readable) {
           try { previous = this.waiting(key); } catch (e) { console.error(e); readable = false; }
@@ -226,18 +243,23 @@ export class Journal {
       this.keep(key, this.waiting(key).map((r) => (r.reserved === undefined && ids.has(r.line.id) ? { ...r, reserved: ids.get(r.line.id) } : r)));
     }
     const sent = new Set<string>();
+    let refused = 0;
     for (const r of waiting) {
       this.checkCurrent();
-      if (await this.send(r)) sent.add(r.line.id);
+      const out = await this.send(r);
+      if (out !== 'later') sent.add(r.line.id);
+      if (out === 'refused') refused++;
     }
-    // Only what was sent leaves; anything added meanwhile stays.
+    // Only what was sent, or ended as failed, leaves; anything added meanwhile stays.
     this.checkCurrent();
     this.keep(key, this.waiting(key).filter((r) => !sent.has(r.line.id)));
+    // Told once: the line is gone from the outbox, so the next try does not say it again.
+    if (refused && required) throw new BowerError('unknown', REFUSED_LINE);
     if (required && sent.size !== waiting.length) throw new BowerError('offline', 'Your changes must arrive before Bower can tidy up.');
   }
 
   /** Sends one line with the id reserved for it, reserved now when it has none and kept on `w` for a later try. */
-  private async send(w: Waiting): Promise<boolean> {
+  private async send(w: Waiting): Promise<'sent' | 'later' | 'refused'> {
     const rec = w.line;
     try {
       this.checkCurrent();
@@ -245,6 +267,16 @@ export class Journal {
       this.checkCurrent();
       const text = `${JSON.stringify(rec)}\n`;
       w.reserved ??= (await this.drive.generateIds(1))[0];
+      return await this.create(w, folder, text);
+    } catch (e) {
+      console.error(e);
+      return 'later';
+    }
+  }
+
+  private async create(w: Waiting, folder: string, text: string): Promise<'sent' | 'later' | 'refused'> {
+    const rec = w.line;
+    try {
       // Made by its reserved id (`spine/write-once.ts`): a lost answer is found again by that id, now or on a later try.
       const f = await makeText(this.drive, this.drive, { parent: folder, name: `${rec.id}.json`, ...(w.reserved ? { id: w.reserved } : {}) }, text);
       if (this.current()) {
@@ -252,10 +284,13 @@ export class Journal {
         this.filesOf.set(rec.id, [...(this.filesOf.get(rec.id) ?? []), f]);
         this.place.wrote?.(f);
       }
-      return true;
+      return 'sent';
     } catch (e) {
       console.error(e);
-      return false;
+      if (!refusedForGood(e)) return 'later';
+      // Refused for good: the line ends as failed and its id is let go, never waiting for a try that cannot work.
+      delete w.reserved;
+      return 'refused';
     }
   }
 
