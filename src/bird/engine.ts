@@ -30,8 +30,17 @@ export interface RigParts {
   tuft: SVGGElement;
   eye: SVGGElement;
   iris: SVGGElement;
-  /** Whatever Bower carries in its beak, positioned by the engine. */
+  /**
+   * The label chip that hangs from the beak in a flight (a layer's `carryLabel`
+   * or the caller's own thing), positioned by the engine. d-v2-06 changes what
+   * it shows; there is no third carry.
+   */
   carry?: HTMLElement | null;
+  /**
+   * The drawing's own thing in the beak (Rig's `carry` part). `holding()` is
+   * the one home for what Bower holds: it shows this when there is no chip.
+   */
+  glyph?: SVGGElement | null;
   /** A burst of sparkles, restarted by `sparkle()`. */
   spark?: HTMLElement | null;
 }
@@ -65,8 +74,89 @@ interface Action {
 }
 
 const spring = (v: number, k: number, c: number): Spring => ({ v, vel: 0, t: v, k, c });
-const rand = (a: number, b: number): number => a + (b - a) * Math.random();
 const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v));
+
+/** The poses a perched Bower plays in place (the same names as the still frames). */
+export type PoseName = 'idle' | 'wait' | 'read' | 'write' | 'carry' | 'proud' | 'sleep' | 'alarm' | 'land';
+
+/**
+ * Where frames and chance come from. Defaults: requestAnimationFrame and
+ * Math.random; tests inject fake frames and a seeded source.
+ */
+export interface EngineOptions {
+  frame?: (cb: (ts: number) => void) => number;
+  cancelFrame?: (id: number) => void;
+  random?: () => number;
+}
+
+export interface PeckOptions {
+  /** How far the body leans in, the head's angle and the open beak while down. */
+  depth?: number;
+  head?: number;
+  jaw?: number;
+  /** Body and head on the way back up. */
+  upPitch?: number;
+  upHead?: number;
+  /** Seconds: down until `lean`, the bite until `bite`, done at `end`. */
+  lean?: number;
+  bite?: number;
+  end?: number;
+  /** The body's bob at the bite. */
+  kick?: number;
+}
+
+export interface ShowOffOptions {
+  tail?: number;
+  wing?: number;
+  tuft?: number;
+  head?: number;
+  /** A held lean; without it the body bounces. */
+  pitch?: number;
+  /** Chest out: the body's vertical scale while showing off. */
+  swell?: number;
+  seconds?: number;
+  /** Seconds to grow into the display (0: at once). */
+  rise?: number;
+  turn?: boolean;
+  chirp?: boolean;
+  sparkle?: boolean;
+  /** The settle at the end. */
+  kick?: number;
+}
+
+/** Seconds per loop of each perched pose (poses.css as it was). */
+const POSE_PERIOD: Record<PoseName, number> = {
+  idle: 6,
+  wait: 4,
+  read: 2.2,
+  write: 2.8,
+  carry: 1.3,
+  proud: 3,
+  sleep: 3.6,
+  alarm: 4,
+  land: 6,
+};
+
+/** The value of the last step at or before phase `p`. */
+const held = (p: number, steps: ReadonlyArray<readonly [number, number]>): number => {
+  let v = steps[0]?.[1] ?? 0;
+  for (const [at, value] of steps) if (p >= at) v = value;
+  return v;
+};
+/** Straight lines between keyframes, as CSS plays them. */
+const keyed = (p: number, keys: ReadonlyArray<readonly [number, number]>): number => {
+  for (let i = 1; i < keys.length; i++) {
+    const [a, va] = keys[i - 1] ?? [0, 0];
+    const [b, vb] = keys[i] ?? [1, 0];
+    if (p <= b) return b === a ? vb : va + ((vb - va) * (p - a)) / (b - a);
+  }
+  return keys[keys.length - 1]?.[1] ?? 0;
+};
+/** A wing beat as keyframes: `up` at `ups`, `down` at `downs`, then `rest` from `end` on. */
+const beat = (ups: number[], downs: number[], up: number, down: number, end: number, rest: number) =>
+  [...ups.map((p) => [p, up] as const), ...downs.map((p) => [p, down] as const), [end, rest] as const, [1, rest] as const].sort(
+    (a, b) => a[0] - b[0],
+  );
 
 export class BirdEngine {
   private C: Record<SpringName, Spring> = {
@@ -95,6 +185,9 @@ export class BirdEngine {
     ws: 1,
     home: true,
     carrying: false,
+    headY: 0,
+    tuftY: 0,
+    opacity: 1,
   };
   private S = {
     t: 0,
@@ -117,12 +210,24 @@ export class BirdEngine {
   private idleWaiters: Array<() => void> = [];
   /** Plays actions faster (a replay) or slower; springs keep their own pace. */
   speed = 1;
+  /** The perched pose, or null for a bird that flies about its layer. */
+  private pose: PoseName | null = null;
+  private poseT0 = 0;
+  private poseCycle = -1;
+  private poseActed = false;
+  private frame: (cb: (ts: number) => void) => number;
+  private cancelFrame: (id: number) => void;
+  private random: () => number;
 
   constructor(
     private parts: RigParts,
     private home: TargetFn,
     private size = 96,
+    options: EngineOptions = {},
   ) {
+    this.frame = options.frame ?? ((cb) => requestAnimationFrame(cb));
+    this.cancelFrame = options.cancelFrame ?? ((id) => cancelAnimationFrame(id));
+    this.random = options.random ?? Math.random;
     const h = home();
     this.B.x = h.x;
     this.B.y = h.y;
@@ -134,11 +239,39 @@ export class BirdEngine {
     if (this.running) return;
     this.running = true;
     this.last = 0;
-    this.raf = requestAnimationFrame(this.loop);
+    this.raf = this.frame(this.loop);
   }
   stop(): void {
     this.running = false;
-    cancelAnimationFrame(this.raf);
+    this.cancelFrame(this.raf);
+  }
+  /**
+   * Stops and gives the drawing back: every attribute the engine wrote is
+   * cleared, so the still frame's CSS shows again (the bird lost its turn).
+   */
+  release(): void {
+    this.stop();
+    const P = this.parts;
+    for (const g of [P.rig, P.head, P.tail, P.wing, P.legs, P.jaw, P.tuft, P.eye, P.iris]) g.removeAttribute('transform');
+    P.glyph?.setAttribute('display', 'none');
+    for (const k of ['transform', 'width', 'height', 'opacity'] as const) P.bird.style[k] = '';
+  }
+  /**
+   * Plays a pose in place, looping its fixed script, and never flies home or
+   * idles at random; `null` gives the bird back to its layer's idle mind.
+   */
+  setPose(pose: PoseName | null): void {
+    this.interrupt();
+    this.pose = pose;
+    this.poseT0 = this.S.t;
+    this.poseCycle = -1;
+    this.B.headY = 0;
+    this.B.tuftY = 0;
+    this.B.opacity = 1;
+    if (pose === 'carry') this.holding(true);
+  }
+  private rand(a: number, b: number): number {
+    return a + (b - a) * this.random();
   }
   setSize(size: number): void {
     this.size = size;
@@ -335,28 +468,29 @@ export class BirdEngine {
   }
 
   /** Leans in and pecks. `onBite` runs when the beak closes (pick up, drop). */
-  peck(onBite?: () => void): this {
+  peck(onBite?: () => void, o: PeckOptions = {}): this {
     const C = this.C;
+    const { depth = 34, head = 24, jaw = 20, upPitch = -8, upHead = -10, lean = 0.16, bite = 0.3, end = 0.55, kick = 1.2 } = o;
     let bit = false;
     return this.act({
       update: (el) => {
-        if (el < 0.16) {
-          C.pitch.t = 34;
-          C.head.t = 24;
-          C.jaw.t = 20;
-        } else if (el < 0.3) {
+        if (el < lean) {
+          C.pitch.t = depth;
+          C.head.t = head;
+          C.jaw.t = jaw;
+        } else if (el < bite) {
           C.jaw.t = 0;
           if (!bit) {
             bit = true;
-            C.squash.vel -= 1.2;
+            C.squash.vel -= kick;
             onBite?.();
           }
         } else {
-          C.pitch.t = -8;
-          C.head.t = -10;
+          C.pitch.t = upPitch;
+          C.head.t = upHead;
           C.legs.t = 1;
         }
-        return el > 0.55;
+        return el > end;
       },
       end: () => {
         C.pitch.t = 0;
@@ -427,38 +561,43 @@ export class BirdEngine {
   }
 
   /** The satin bowerbird's display: tail fanned, wings out, chirps. */
-  showOff(): this {
+  showOff(o: ShowOffOptions = {}): this {
     const B = this.B;
     const C = this.C;
+    const { tail = 32, wing = 42, tuft = -26, head = -18, pitch, swell, seconds = 2.8, rise = 0, turn = true, chirp = true, sparkle = true, kick = 2 } = o;
+    const hello = (): void => {
+      if (chirp) this.chirp(0.5);
+      if (sparkle) this.sparkle();
+    };
     let c1 = false,
       c2 = false,
       c3 = false;
     return this.act({
       start: () => {
-        B.face = 1;
+        if (turn) B.face = 1;
       },
       update: (el) => {
-        C.tail.t = 32;
-        C.wing.t = 42;
-        C.tuft.t = -26;
-        C.head.t = -18;
-        C.pitch.t = 14 * Math.max(0, Math.sin(el * Math.PI * 1.4));
+        const q = rise > 0 ? Math.min(1, el / rise) : 1;
+        C.tail.t = tail * q;
+        C.wing.t = wing * q;
+        C.tuft.t = tuft * q;
+        C.head.t = head * q;
+        C.pitch.t = pitch === undefined ? 14 * Math.max(0, Math.sin(el * Math.PI * 1.4)) : pitch * q;
+        if (swell !== undefined) C.squash.t = 1 + (swell - 1) * q;
         if (el > 0.2 && !c1) {
           c1 = true;
-          this.chirp(0.5);
-          this.sparkle();
+          hello();
         }
         if (el > 1.5 && !c2) {
           c2 = true;
-          this.chirp(0.5);
-          this.sparkle();
-          B.face = -1;
+          hello();
+          if (turn) B.face = -1;
         }
         if (el > 2.1 && !c3) {
           c3 = true;
-          B.face = 1;
+          if (turn) B.face = 1;
         }
-        return el > 2.8;
+        return el > seconds;
       },
       end: () => {
         C.tail.t = 0;
@@ -466,7 +605,8 @@ export class BirdEngine {
         C.tuft.t = 0;
         C.head.t = 0;
         C.pitch.t = 0;
-        C.squash.vel += 2;
+        C.squash.t = 1;
+        C.squash.vel += kick;
       },
     });
   }
@@ -500,7 +640,7 @@ export class BirdEngine {
     this.think(dt);
     this.step(dt);
     this.apply();
-    this.raf = requestAnimationFrame(this.loop);
+    this.raf = this.frame(this.loop);
   };
 
   private think(dt: number): void {
@@ -524,6 +664,10 @@ export class BirdEngine {
           w.forEach((f) => f());
         }
       }
+      if (!this.pose) return;
+    }
+    if (this.pose) {
+      this.perch(this.pose);
       return;
     }
     if (!B.home) {
@@ -534,6 +678,98 @@ export class BirdEngine {
     B.x = h.x;
     B.y = h.y;
     this.idle(dt);
+  }
+
+  /**
+   * One frame of a perched pose's fixed script: the loops of poses.css, played
+   * on the springs and the existing actions (peck, holding, showOff). Runs
+   * every frame, beside a queued action, and only touches its pose's parts.
+   */
+  private perch(pose: PoseName): void {
+    const B = this.B;
+    const C = this.C;
+    const Z = this.size;
+    const h = this.home();
+    const period = POSE_PERIOD[pose];
+    const el = this.S.t - this.poseT0;
+    const cycle = Math.floor(el / period + 1e-9);
+    const p = el / period - cycle;
+    if (cycle !== this.poseCycle) {
+      this.poseCycle = cycle;
+      this.poseActed = false;
+    }
+    B.x = h.x;
+    B.y = h.y;
+    B.hopY = 0;
+    const snaps = (q: number): number => held(q, [[0, 0], [0.225, -12], [0.465, 7], [0.705, 0]]);
+    switch (pose) {
+      case 'idle':
+        C.head.t = snaps(p);
+        C.tail.t = keyed(p, [[0, 0], [0.72, 0], [0.74, -14], [0.77, 4], [0.8, 0], [1, 0]]);
+        break;
+      case 'wait':
+        C.head.t = snaps(p);
+        C.tuft.t = 8;
+        C.ix.t = held(p, [[0, 0], [0.41, -2.2], [0.71, 1]]);
+        C.iy.t = 0;
+        break;
+      case 'read':
+        C.tail.t = keyed(p, [[0, 0], [0.3, 0], [0.44, -18], [0.74, 0], [1, 0]]);
+        if (p >= 0.3 && !this.poseActed) {
+          this.poseActed = true;
+          this.peck(undefined, { depth: 24, head: 14, jaw: 0, upPitch: 0, upHead: -10, lean: 0.5, bite: 0.75, end: 1.28, kick: 0 });
+        }
+        break;
+      case 'write': {
+        const nod = (el % 1.4) / 1.4;
+        C.head.t = held(nod, [[0, 16], [0.12, 22], [0.23, 16], [0.47, 21], [0.58, 16]]);
+        C.jaw.t = held(p, [[0, 0], [0.82, 14], [0.9, 0]]);
+        break;
+      }
+      case 'carry':
+        B.hopY = (keyed(p, [[0, 0], [0.12, 0], [0.35, -16], [0.58, 0], [1, 0]]) * Z) / 100;
+        C.pitch.t = keyed(p, [[0, 0], [0.12, 0], [0.35, -6], [0.58, 0], [1, 0]]);
+        C.squash.t = keyed(p, [[0, 0.92], [0.12, 1.06], [0.35, 1], [0.58, 0.9], [0.72, 1], [1, 0.92]]);
+        C.wing.v = keyed(p, [[0, 0], [0.12, 0], ...beat([0.2, 0.36], [0.28, 0.44], -38, 18, 0.6, 0)]);
+        C.wing.vel = 0;
+        B.ws = keyed(p, [[0, 1], [0.12, 1], [0.2, 0.7], [0.28, 1], [0.36, 0.7], [0.44, 1], [1, 1]]);
+        C.legs.t = keyed(p, [[0, 1], [0.12, 1], [0.22, 0.55], [0.48, 0.55], [0.58, 1], [1, 1]]);
+        C.tail.t = keyed(p, [[0, 0], [0.58, 0], [0.64, -16], [1, 0]]);
+        break;
+      case 'proud':
+        if (!this.poseActed) {
+          this.poseActed = true;
+          this.showOff({ tail: -22, wing: 0, tuft: 16, head: 0, pitch: -4, swell: 1.03, seconds: 1.5, rise: 0.6, turn: false, chirp: false, sparkle: false, kick: 0 });
+        }
+        break;
+      case 'sleep':
+        C.head.t = 20;
+        B.headY = 3;
+        C.tuft.t = -26;
+        C.squash.t = 1 - 0.015 * (1 - Math.cos(2 * Math.PI * p));
+        break;
+      case 'alarm':
+        C.tuft.t = 18;
+        B.tuftY = -2;
+        C.head.t = held(p, [[0, 0], [0.11, -10], [0.61, 0]]);
+        break;
+      case 'land': {
+        B.x = h.x + (keyed(p, [[0, -120], [0.22, 0], [1, 0]]) * Z) / 100;
+        B.hopY = (keyed(p, [[0, -150], [0.22, -6], [0.26, 0], [1, 0]]) * Z) / 100;
+        B.opacity = Math.min(1, p / 0.04);
+        C.pitch.t = keyed(p, [[0, -18], [0.22, -6], [0.26, 0], [1, 0]]);
+        C.squash.t = keyed(p, [[0, 1], [0.22, 1], [0.26, 0.86], [0.31, 1.04], [0.35, 1], [1, 1]]);
+        const ups = [0, 0.02, 0.06, 0.1, 0.14, 0.18];
+        const downs = [0.04, 0.08, 0.12, 0.16, 0.2];
+        C.wing.v = keyed(p, beat(ups, downs, -46, 22, 0.24, 0));
+        C.wing.vel = 0;
+        B.ws = keyed(p, beat(ups, downs, 0.6, 1, 0.24, 1));
+        C.legs.t = keyed(p, [[0, 0.5], [0.19, 0.5], [0.24, 1], [1, 1]]);
+        C.tail.t = keyed(p, [[0, 0], [0.3, 0], [0.33, -18], [0.36, 5], [0.4, 0], [1, 0]]);
+        C.head.t = held(p, [[0, 0], [0.445, -12], [0.625, 8], [0.805, 0]]);
+        break;
+      }
+    }
   }
 
   private idle(dt: number): void {
@@ -555,7 +791,7 @@ export class BirdEngine {
       } else S.behindT = 0;
       const ang = (Math.atan2(dy, Math.max(20, dx)) * 180) / Math.PI;
       const want = clamp(ang * 0.7, -32, 30);
-      if (S.t - S.lastSnap > rand(0.14, 0.4) && Math.abs(want - C.head.t) > 6) {
+      if (S.t - S.lastSnap > this.rand(0.14, 0.4) && Math.abs(want - C.head.t) > 6) {
         C.head.t = want;
         S.lastSnap = S.t;
       }
@@ -568,9 +804,9 @@ export class BirdEngine {
     }
     S.nextIdle -= dt;
     if (S.nextIdle <= 0) {
-      S.nextIdle = rand(0.8, 2);
-      const r = Math.random();
-      if (!looking && r < 0.4) C.head.t = rand(-26, 22);
+      S.nextIdle = this.rand(0.8, 2);
+      const r = this.random();
+      if (!looking && r < 0.4) C.head.t = this.rand(-26, 22);
       else if (r < 0.6) C.tail.vel += 300;
       else if (r < 0.72) this.chirp(0.35);
       else if (r < 0.82) C.wing.vel += 260;
@@ -606,14 +842,15 @@ export class BirdEngine {
       B.bob = -2.5 * s;
       C.tail.t = B.flare ? 26 : -6 + 4 * s;
     } else {
-      B.ws += (1 - B.ws) * 0.2;
+      // A perched pose draws its own wing beat.
+      if (!this.pose) B.ws += (1 - B.ws) * 0.2;
       B.bob = 0;
     }
     S.nextBlink -= dt;
     if (S.nextBlink <= 0) {
       S.blinkT = 0;
-      S.nextBlink = 1.6 + Math.random() * 3.6;
-      S.blinkDouble = Math.random() < 0.25;
+      S.nextBlink = 1.6 + this.random() * 3.6;
+      S.blinkDouble = this.random() < 0.25;
     }
     if (S.blinkT >= 0) {
       S.blinkT += dt;
@@ -658,13 +895,15 @@ export class BirdEngine {
     let f = C.face.v;
     if (Math.abs(f) < 0.06) f = f < 0 ? -0.06 : 0.06;
     P.bird.style.transform = `translate(${(B.x - Z / 2).toFixed(1)}px,${(B.y + B.hopY + B.bob - 0.92 * Z).toFixed(1)}px) scaleX(${f.toFixed(3)})`;
-    const sy = C.squash.v * (1 + 0.014 * Math.sin(this.S.t * 2.6));
+    if (this.pose === 'land') P.bird.style.opacity = B.opacity.toFixed(2);
+    // A flier breathes on its own; a perched pose breathes only in its script (sleep).
+    const sy = C.squash.v * (this.pose ? 1 : 1 + 0.014 * Math.sin(this.S.t * 2.6));
     const sx = 1 + (1 - sy) * 0.7;
     P.rig.setAttribute(
       'transform',
       `rotate(${C.pitch.v.toFixed(2)} 50 92) translate(50 92) scale(${sx.toFixed(3)} ${sy.toFixed(3)}) translate(-50 -92)`,
     );
-    P.head.setAttribute('transform', `rotate(${C.head.v.toFixed(2)} 60 50)`);
+    P.head.setAttribute('transform', `rotate(${C.head.v.toFixed(2)} 60 50)${B.headY ? ` translate(0 ${B.headY})` : ''}`);
     P.tail.setAttribute('transform', `rotate(${C.tail.v.toFixed(2)} 32 70)`);
     P.wing.setAttribute(
       'transform',
@@ -675,11 +914,10 @@ export class BirdEngine {
       `translate(50 82) scale(1 ${Math.max(0.2, C.legs.v).toFixed(3)}) translate(-50 -82)`,
     );
     P.jaw.setAttribute('transform', `rotate(${Math.max(0, C.jaw.v).toFixed(2)} 78 38)`);
-    P.tuft.setAttribute('transform', `rotate(${C.tuft.v.toFixed(2)} 61 23)`);
-    P.eye.setAttribute(
-      'transform',
-      `translate(70 34) scale(1 ${(1 - 0.92 * this.S.blink).toFixed(3)}) translate(-70 -34)`,
-    );
+    P.tuft.setAttribute('transform', `rotate(${C.tuft.v.toFixed(2)} 61 23)${B.tuftY ? ` translate(0 ${B.tuftY})` : ''}`);
+    // Asleep, the eyes stay shut through the blink.
+    const open = this.pose === 'sleep' ? 0.08 : 1 - 0.92 * this.S.blink;
+    P.eye.setAttribute('transform', `translate(70 34) scale(1 ${open.toFixed(3)}) translate(-70 -34)`);
     P.iris.setAttribute('transform', `translate(${C.ix.v.toFixed(2)} ${C.iy.v.toFixed(2)})`);
     if (P.carry) {
       if (B.carrying) {
@@ -691,5 +929,6 @@ export class BirdEngine {
         P.carry.style.transform = `translate(${(p.x - w * 0.35 + C.face.v * w * 0.25).toFixed(1)}px,${(p.y - h * 0.3).toFixed(1)}px) rotate(${(C.pitch.v * C.face.v * 0.5).toFixed(1)}deg)`;
       } else P.carry.style.opacity = '0';
     }
+    P.glyph?.setAttribute('display', B.carrying && !P.carry ? 'inline' : 'none');
   }
 }

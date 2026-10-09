@@ -25,6 +25,7 @@
     "exports src/data/spine/read.ts driveRead",
     "exports src/features/piles/add-words.ts leftOut",
     "files runner/src/corpus.ts runner/src/corpus.ts",
+    "files src/bird/pose-reference.ts src/bird/pose-reference.ts",
     "files src/copy-rules.ts src/copy-rules.ts",
     "files src/data/compat-p2-fixtures.ts src/data/compat-p2-fixtures.ts",
     "files src/data/contract/vault-contract.ts src/data/contract/vault-contract.ts",

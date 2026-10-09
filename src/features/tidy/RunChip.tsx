@@ -19,7 +19,7 @@ export function RunChip() {
   if (!running && !unseen && !stopped) return null;
   return (
     <button type="button" className={`${s.chip} ${stopped ? s.chipStopped : ''}`} onClick={() => (unseen ? startReplay(run.id) : setTidy(true))}>
-      <PoseBower pose={PHASE_POSE[run.phase]} size={34} />
+      <PoseBower pose={PHASE_POSE[run.phase]} size={34} minor />
       {unseen ? `${runShort(run)}. Watch` : stopped ? 'The tidy-up stopped. See why' : runShort(run)}
     </button>
   );
