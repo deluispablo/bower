@@ -9,7 +9,11 @@
  * at which the keyframes hold it at rest. A part whose peak equals its rest is
  * a still part of the pose (a tuft held up, eyes shut).
  *
- * The rig's scale is read on its vertical factor; blink (5.2 s) is left out.
+ * The rig's scale is read on both axes: `squash` is its vertical factor and
+ * `stretch` its horizontal one. `range` is the lowest and highest value the
+ * keyframes give the part over a loop (several cross rest by design), and
+ * `hold` is the phase window through which the keyframes hold the peak.
+ * Blink (5.2 s) is left out.
  */
 import type { Pose } from './Bower';
 
@@ -18,6 +22,7 @@ export type PartKey =
   | 'dy'
   | 'pitch'
   | 'squash'
+  | 'stretch'
   | 'head'
   | 'headY'
   | 'tail'
@@ -37,6 +42,7 @@ export const PART_KIND: Record<PartKey, PartKind> = {
   dy: 'offset',
   pitch: 'angle',
   squash: 'scale',
+  stretch: 'scale',
   head: 'angle',
   headY: 'offset',
   tail: 'angle',
@@ -56,6 +62,7 @@ export const NEUTRAL: Record<PartKey, number> = {
   dy: 0,
   pitch: 0,
   squash: 1,
+  stretch: 1,
   head: 0,
   headY: 0,
   tail: 0,
@@ -73,6 +80,10 @@ export interface PartRef {
   peak: number;
   rest: number;
   restAt: number;
+  /** The lowest and highest value over a loop. */
+  range: [number, number];
+  /** The phases (0..1) between which the peak is held. */
+  hold?: [number, number];
 }
 
 export interface PoseRef {
@@ -85,72 +96,75 @@ export const POSE_REFERENCE: Record<Pose, PoseRef> = {
   // snaps 6s (head 0 → -12 → 7 → 0), flick 6s (tail -14 at 74%, 4 at 77%)
   idle: {
     period: 6,
-    parts: { head: { peak: -12, rest: 0, restAt: 0.1 }, tail: { peak: -14, rest: 0, restAt: 0.5 } },
+    parts: { head: { peak: -12, rest: 0, restAt: 0.1, range: [-12, 7] }, tail: { peak: -14, rest: 0, restAt: 0.5, range: [-14, 4] } },
   },
   // snaps 4s, tuft held at 8deg, iris look 4s (-2.2px at 42–70%, 1px at 72–100%)
   wait: {
     period: 4,
     parts: {
-      head: { peak: -12, rest: 0, restAt: 0.1 },
-      tuft: { peak: 8, rest: 8, restAt: 0.5 },
-      iris: { peak: -2.2, rest: 0, restAt: 0.2 },
+      head: { peak: -12, rest: 0, restAt: 0.1, range: [-12, 7] },
+      tuft: { peak: 8, rest: 8, restAt: 0.5, range: [8, 8] },
+      iris: { peak: -2.2, rest: 0, restAt: 0.2, range: [-2.2, 1] },
     },
   },
   // peck 2.2s (rig 24–25deg at 40–64%), peckhead (14deg, then -10deg at 76–88%), pecktail (-18deg at 44%)
   read: {
     period: 2.2,
     parts: {
-      pitch: { peak: 25, rest: 0, restAt: 0.15 },
-      head: { peak: 14, rest: 0, restAt: 0.15 },
-      tail: { peak: -18, rest: 0, restAt: 0.15 },
+      pitch: { peak: 25, rest: 0, restAt: 0.15, range: [0, 25] },
+      head: { peak: 14, rest: 0, restAt: 0.15, range: [-10, 14] },
+      tail: { peak: -18, rest: 0, restAt: 0.15, range: [-18, 0] },
     },
   },
   // nod 1.4s around 16deg (22 at 20%, 21 at 55%), chirp 2.8s (jaw 14deg at 84–90%)
   write: {
     period: 2.8,
-    parts: { head: { peak: 22, rest: 16, restAt: 0.95 }, jaw: { peak: 14, rest: 0, restAt: 0.5 } },
+    parts: { head: { peak: 22, rest: 16, restAt: 0.95, range: [16, 22] }, jaw: { peak: 14, rest: 0, restAt: 0.5, range: [0, 14] } },
   },
   // hop 1.3s (-16px and -6deg at 35%; scaleY .92/1.06/.9), beat (-38deg scaleY .7), tuck (.55), flick2 (-16deg at 64%)
   carry: {
     period: 1.3,
     parts: {
-      dy: { peak: -16, rest: 0, restAt: 0.8 },
-      pitch: { peak: -6, rest: 0, restAt: 0.8 },
-      squash: { peak: 0.9, rest: 1, restAt: 0.72 },
-      wing: { peak: -38, rest: 0, restAt: 0.8 },
-      wingScale: { peak: 0.7, rest: 1, restAt: 0.8 },
-      legs: { peak: 0.55, rest: 1, restAt: 0.8 },
-      tail: { peak: -16, rest: 0, restAt: 0.3 },
+      dy: { peak: -16, rest: 0, restAt: 0.8, range: [-16, 0] },
+      pitch: { peak: -6, rest: 0, restAt: 0.8, range: [-6, 0] },
+      squash: { peak: 0.9, rest: 1, restAt: 0.72, range: [0.9, 1.06] },
+      stretch: { peak: 1.08, rest: 1, restAt: 0.72, range: [0.96, 1.08] },
+      wing: { peak: -38, rest: 0, restAt: 0.8, range: [-38, 18] },
+      wingScale: { peak: 0.7, rest: 1, restAt: 0.8, range: [0.7, 1] },
+      legs: { peak: 0.55, rest: 1, restAt: 0.8, range: [0.55, 1] },
+      tail: { peak: -16, rest: 0, restAt: 0.3, range: [-16, 0] },
     },
   },
-  // proud 3s (scale 1.05,1.03 rotate -4deg at 20–50%), fan (-22deg), tuftup (16deg)
+  // proud 3s (scale 1.05,1.03 rotate -4deg held at 20–50%), fan (-22deg), tuftup (16deg), each eased back to rest
   proud: {
     period: 3,
     parts: {
-      squash: { peak: 1.03, rest: 1, restAt: 0 },
-      pitch: { peak: -4, rest: 0, restAt: 0 },
-      tail: { peak: -22, rest: 0, restAt: 0 },
-      tuft: { peak: 16, rest: 0, restAt: 0 },
+      squash: { peak: 1.03, rest: 1, restAt: 0, range: [1, 1.03], hold: [0.2, 0.5] },
+      stretch: { peak: 1.05, rest: 1, restAt: 0, range: [1, 1.05], hold: [0.2, 0.5] },
+      pitch: { peak: -4, rest: 0, restAt: 0, range: [-4, 0], hold: [0.2, 0.5] },
+      tail: { peak: -22, rest: 0, restAt: 0, range: [-22, 0], hold: [0.2, 0.5] },
+      tuft: { peak: 16, rest: 0, restAt: 0, range: [0, 16], hold: [0.2, 0.5] },
     },
   },
   // eyes shut (.08), head 20deg and 3px down, tuft -26deg, breathe 3.6s (scale 1.035,.97 at 50%)
   sleep: {
     period: 3.6,
     parts: {
-      squash: { peak: 0.97, rest: 1, restAt: 0 },
-      eye: { peak: 0.08, rest: 0.08, restAt: 0.5 },
-      head: { peak: 20, rest: 20, restAt: 0.5 },
-      headY: { peak: 3, rest: 3, restAt: 0.5 },
-      tuft: { peak: -26, rest: -26, restAt: 0.5 },
+      squash: { peak: 0.97, rest: 1, restAt: 0, range: [0.97, 1] },
+      stretch: { peak: 1.035, rest: 1, restAt: 0, range: [1, 1.035] },
+      eye: { peak: 0.08, rest: 0.08, restAt: 0.5, range: [0.08, 0.08] },
+      head: { peak: 20, rest: 20, restAt: 0.5, range: [20, 20] },
+      headY: { peak: 3, rest: 3, restAt: 0.5, range: [3, 3] },
+      tuft: { peak: -26, rest: -26, restAt: 0.5, range: [-26, -26] },
     },
   },
   // tuft 18deg and 2px up, startle 4s (head -10deg at 12–60%)
   alarm: {
     period: 4,
     parts: {
-      head: { peak: -10, rest: 0, restAt: 0.05 },
-      tuft: { peak: 18, rest: 18, restAt: 0.5 },
-      tuftY: { peak: -2, rest: -2, restAt: 0.5 },
+      head: { peak: -10, rest: 0, restAt: 0.05, range: [-10, 0] },
+      tuft: { peak: 18, rest: 18, restAt: 0.5, range: [18, 18] },
+      tuftY: { peak: -2, rest: -2, restAt: 0.5, range: [-2, -2] },
     },
   },
   // landin 6s (from translate(-120px,-150px) rotate(-18deg); scale 1.12,.86 at 26%), landwing (-46deg scaleY .6),
@@ -158,15 +172,16 @@ export const POSE_REFERENCE: Record<Pose, PoseRef> = {
   land: {
     period: 6,
     parts: {
-      dx: { peak: -120, rest: 0, restAt: 0.5 },
-      dy: { peak: -150, rest: 0, restAt: 0.5 },
-      pitch: { peak: -18, rest: 0, restAt: 0.5 },
-      squash: { peak: 0.86, rest: 1, restAt: 0.5 },
-      wing: { peak: -46, rest: 0, restAt: 0.5 },
-      wingScale: { peak: 0.6, rest: 1, restAt: 0.5 },
-      legs: { peak: 0.5, rest: 1, restAt: 0.5 },
-      tail: { peak: -18, rest: 0, restAt: 0.5 },
-      head: { peak: -12, rest: 0, restAt: 0.3 },
+      dx: { peak: -120, rest: 0, restAt: 0.5, range: [-120, 0] },
+      dy: { peak: -150, rest: 0, restAt: 0.5, range: [-150, 0] },
+      pitch: { peak: -18, rest: 0, restAt: 0.5, range: [-18, 0] },
+      squash: { peak: 0.86, rest: 1, restAt: 0.5, range: [0.86, 1.04] },
+      stretch: { peak: 1.12, rest: 1, restAt: 0.5, range: [0.97, 1.12] },
+      wing: { peak: -46, rest: 0, restAt: 0.5, range: [-46, 22] },
+      wingScale: { peak: 0.6, rest: 1, restAt: 0.5, range: [0.6, 1] },
+      legs: { peak: 0.5, rest: 1, restAt: 0.5, range: [0.5, 1] },
+      tail: { peak: -18, rest: 0, restAt: 0.5, range: [-18, 5] },
+      head: { peak: -12, rest: 0, restAt: 0.3, range: [-12, 8] },
     },
   },
 };
