@@ -7,7 +7,7 @@
  * (TL-P2-19). Phone and desktop, on demo and on fake.
  */
 import type { Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import { expect, isFake, test } from './fixtures';
 
 const CHANGED = 'Some of its things changed after they were added. Remove it and add them again.';
@@ -23,8 +23,7 @@ const toast = (page: Page, text: string | RegExp) => page.getByRole('status').ge
 const inbox = (page: Page) => page.getByRole('region', { name: 'Inbox' });
 const rowOf = (page: Page, name: RegExp) => inbox(page).getByRole('listitem').filter({ has: page.getByRole('link', { name }) });
 const axeClean = async (page: Page): Promise<void> => {
-  const axe = await new AxeBuilder({ page }).include('main').analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: 'main' });
 };
 
 /** Adds a pile of one file from Add, and waits until it is in Drive (no longer sending). */

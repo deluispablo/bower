@@ -3,7 +3,7 @@
  * motion engine only. While the engine runs, no CSS animation runs on any
  * bird part (jsdom runs no CSS, so this lives here). Phone and desktop.
  */
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import { expect, test, withSource } from './fixtures';
 
 test('no CSS animation runs on a bird part while the engine runs', async ({ page }) => {
@@ -29,6 +29,5 @@ test('no CSS animation runs on a bird part while the engine runs', async ({ page
   );
   expect(running).toBe(0);
 
-  const axe = await new AxeBuilder({ page }).include('main').analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: 'main' });
 });

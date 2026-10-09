@@ -3,7 +3,7 @@
  * drawn with the one field rule. Phone and desktop, on the fake Drive.
  */
 import type { Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import { expect, isFake, test } from './fixtures';
 
 const open = async (page: Page, path: string): Promise<void> => {
@@ -12,16 +12,7 @@ const open = async (page: Page, path: string): Promise<void> => {
 };
 
 const axeClean = async (page: Page, within: string): Promise<void> => {
-  // A sheet pops in; check it once it has settled.
-  await page.evaluate(() =>
-    Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))),
-  );
-  const axe = await new AxeBuilder({ page })
-    .include(within)
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .options({ rules: { 'target-size': { enabled: true } } })
-    .analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: within, wcag22: true });
 };
 
 /** An empty folder "Empty one", opened as a list, so its own "New note in" button shows. */

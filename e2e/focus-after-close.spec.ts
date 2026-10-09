@@ -4,7 +4,7 @@
  * the single-page-app routing studies (Fable Tech Labs, GOV.UK): after a route change
  * focus moves to the new view's h1.
  */
-import AxeBuilder from '@axe-core/playwright';
+import { expectAxeClean } from './axe';
 import type { Locator, Page } from '@playwright/test';
 import { expect, isFake, test } from './fixtures';
 
@@ -129,8 +129,7 @@ const openers = (page: Page, isMobile: boolean): Array<[string, Locator]> => {
 
 // The page body and the open sheet. The desktop tab strip's close buttons have a known target-size finding of their own.
 const axeClean = async (page: Page): Promise<void> => {
-  const axe = await new AxeBuilder({ page }).include('main').include('[role="dialog"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'target-size': { enabled: true } } }).analyze();
-  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+  await expectAxeClean(page, { include: ['main', '[role="dialog"]'], wcag22: true });
 };
 
 for (const [name, how] of [
