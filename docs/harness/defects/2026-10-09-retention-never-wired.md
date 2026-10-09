@@ -34,3 +34,4 @@ A promised behaviour proved by calling a helper directly instead of through the 
 
 ## Ruling, round 6 (lead, after P4-38d)
 - A person's folder moved inside a marked run folder would be binned with it (same data-safety class). Bin a marked run folder only if every item inside it, known from the listing the runner already holds, also carries Bower's mark; otherwise skip that folder and log it, with no extra call.
+- Round 6 detail (lead): option A. Every record create in a run folder carries bowerRun=<runId> (rides on the create). At the end only the ≤3 candidates' children are listed; a candidate is binned only if all its children carry the mark. The 25-run golden becomes 88; C04 stays 78. Existing unmarked records (staging only) are kept; no cutover rule. A skipped folder counts among the kept 20.
