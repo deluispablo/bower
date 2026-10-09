@@ -5780,7 +5780,7 @@
     "id": "c3-integrate-history",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "what": "A history check judges the tree that will be committed: HEAD, plus MERGE_HEAD while a merge is uncommitted. One helper in scripts/harness-git.mjs returns the tips to judge; src/docs.test.ts and every other history reader use it; integrate.sh is unchanged.",
     "steps": [
       "Under a no-commit merge, a branch commit with no compatibility row fails the docs check."
