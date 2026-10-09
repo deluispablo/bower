@@ -289,3 +289,5 @@ c4-parse-once,signoff,codex,gpt-5-codex,medium,1,285627,282718,,229504,2909,,,,C
 c4-precheck-runner,implementer,codex,gpt-5-codex,medium,1,432245,428449,,399872,3796,,,,delivered (precheck run by coordinator),2026-10-09
 p4-c05-prep,prep,codex,gpt-5-codex,medium,1,436073,427328,,380800,8745,,,,draft for lead review,2026-10-09
 c4-precheck-runner,reviewer,claude,bower-reviewer,,1,31090,,,,,,6,0.9,PASS (P4-63),2026-10-09
+c4-create-landed,implementer,claude,bower-escalated,,2,153395,,,,,,51,12.1,delivered (round 1),2026-10-09
+c4-create-landed,reviewer,codex,gpt-5-codex,medium,2,377003,375931,,318080,1072,,,,0 findings,2026-10-09
