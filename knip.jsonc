@@ -8,8 +8,8 @@
   "workspaces": {
     ".": {
       // Production starts here: the Vite app (index.html loads src/main.tsx), the scripts that pnpm check and the harness run, the e2e specs.
-      "entry": ["scripts/*.{mjs,cjs}", "e2e/**/*.ts", "src/main.tsx"],
-      "project": ["src/**/*.{ts,tsx}", "scripts/**", "e2e/**"],
+      "entry": ["scripts/*.{mjs,cjs}", "e2e/**/*.ts", "src/main.tsx!"],
+      "project": ["src/**/*.{ts,tsx}!", "scripts/**", "e2e/**"],
       "ignoreDependencies": [
         // Run by path from scripts/check-dependencies.mjs, so knip does not see the binary used.
         "dependency-cruiser",
@@ -19,15 +19,15 @@
     },
     "api": {
       // The Worker (wrangler.jsonc main) and its tests.
-      "entry": ["src/index.ts", "test/**/*.test.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "entry": ["src/index.ts!", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts!", "test/**/*.ts"],
       // 'cloudflare:test' is a virtual module of the workers test pool, not a package.
       "ignoreDependencies": ["cloudflare"]
     },
     "runner": {
       // The runner's main (esbuild entry in package.json build) and its tests.
-      "entry": ["src/main.ts", "test/**/*.test.ts"],
-      "project": ["src/**/*.ts", "test/**/*.ts"]
+      "entry": ["src/main.ts!", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts!", "test/**/*.ts"]
     }
   }
 }
