@@ -32,7 +32,7 @@ describe('the capability corpus', () => {
     for (const c of scripted) {
       const run = await runScripted(c);
       expect({ id: c.id, code: run.code }).toEqual({ id: c.id, code: 0 });
-      expect({ id: c.id, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun }) }).toEqual({ id: c.id, pass: true, unmet: [] });
+      expect({ id: c.id, ...score({ expected: c.expected, before: c.folder, after: run.after, lastRun: run.lastRun, pathsById: run.pathsById }) }).toEqual({ id: c.id, pass: true, unmet: [] });
     }
   });
 
