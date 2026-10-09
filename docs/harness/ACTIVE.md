@@ -431,3 +431,4 @@ P3-9 is closed.
 - Rulings main e1c4a22: phone "what failed" in the side sheet; retention covers every terminal run (spine-operations-checkpoints reopened). One round (escalated: it bins) after P4-37d. 421/427.
 - P4-37d BLOCK (create-by-id round 4): quota/daily-limit/408 treated as refused (line lost); refused move/rename has no applied path; failed-in-memory survives sign-out when storage refuses. Round 5 (escalated, app) and retention terminal-runs round (escalated, runner) dispatched in parallel.
 - Lead (main ea058a7): one Drive failure table in the transport (retry / wait-for-the-person / permanent); forwarded to round 5.
+- Retention terminal-run round merged (red 21806fbf, fix fdea3310; check green). Open: runs failed by the Worker stale deadline never stamped (no runner); failure path +11 calls in the fake (stale listing pages). P4-38b check dispatched.
