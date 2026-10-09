@@ -154,3 +154,4 @@ c3-flaky-policy (merge),mechanical,claude,bower-mechanical,,1,60470,,,,,,6,1.4,d
 c3-pair-ask round3 (part 2),implementer,claude,bower-escalated,,2,152619,,,,,,30,8.1,delivered,2026-10-09
 P4-46d,reviewer,claude,bower-reviewer,,1,89520,,,,,,18,1.1,PASS (5 minor),2026-10-09
 c3-permissions,implementer,claude,bower-implementer,,1,79953,,,,,,13,2.4,delivered,2026-10-09
+c3-agent-defs,implementer,claude,bower-implementer,,1,194033,,,,,,48,9.6,delivered (2 passes),2026-10-09
