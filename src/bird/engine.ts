@@ -117,11 +117,11 @@ const RECENT = 2.5;
 /** Seconds of engine time with no input before the mind sleeps. */
 const DOZE = 60;
 /**
- * The startle on waking or a nudge: the tuft eases up to `tuft` degrees in
- * `rise` seconds, holds for `seconds`, and eases back to rest in `fall`
- * (TL-P4-22 addendum 20).
+ * The one startle step, on waking or a nudge: the tuft and the head ease to
+ * `tuft` and `head` degrees in `rise` seconds, hold for `seconds`, and ease
+ * back to rest in `fall` (TL-P4-22 addendum 20, TL-P4-26 addendum 1).
  */
-const STARTLE = { tuft: 18, rise: 0.15, seconds: 0.6, fall: 0.4 } as const;
+const STARTLE = { tuft: 18, head: -10, rise: 0.15, seconds: 0.6, fall: 0.4 } as const;
 const STARTLE_TOTAL = STARTLE.rise + STARTLE.seconds + STARTLE.fall;
 /** The iris at rest, where no act or input moves it (wait looks straight ahead instead). */
 const IRIS_REST = { x: 0.4, y: 0 } as const;
@@ -264,9 +264,9 @@ export class BirdEngine {
     quietT: 0,
     /** The act under way on the act channel (idle, wait, a layer's bird between flights). */
     doing: null as Action | null,
-    /** The startle's seconds left, and the tuft's angle when it began. */
+    /** The startle's seconds left, and the tuft's and head's angles when it began. */
     startleT: 0,
-    startleFrom: 0,
+    startleFrom: { tuft: 0, head: 0 },
     sleepT0: 0,
     /** The latest tap on a layer bird in flight or carrying, played when it lands. */
     tap: false,
@@ -390,7 +390,7 @@ export class BirdEngine {
     this.S.ptrSrc = source;
   }
   /**
-   * An input with no place: wakes the bird with a startle (tuft up 18 degrees
+   * An input with no place: wakes the bird with a startle (tuft up 18 degrees, head -10,
    * for 0.6 s), or startles it where the mind owns its acts.
    * @public d-v2-24's `react()` calls it; nothing in the app does yet.
    */
@@ -411,10 +411,10 @@ export class BirdEngine {
     if (this.doing === 'snap' || this.doing === 'preen') this.interrupt({ now: true });
     return true;
   }
-  /** Starts the startle from where the tuft is now. */
+  /** Starts the one startle step from where the tuft and head are now. */
   private startle(): void {
     this.S.startleT = STARTLE_TOTAL;
-    this.S.startleFrom = this.C.tuft.v;
+    this.S.startleFrom = { tuft: this.C.tuft.v, head: this.C.head.v };
   }
   /** Whether the mind owns the act channel: idle, wait, or a layer's bird. */
   private minded(): boolean {
@@ -1104,9 +1104,12 @@ export class BirdEngine {
     if (S.startleT > 0) {
       // Keyed and eased as the acts are, back to the rest `rest()` just set: no spring overshoot.
       S.startleT = Math.max(0, S.startleT - dt);
-      const { tuft, rise, seconds } = STARTLE;
-      const keys = [[0, S.startleFrom], [rise, tuft], [rise + seconds, tuft], [STARTLE_TOTAL, this.C.tuft.t]] as const;
-      pin(this.C.tuft, keyed(STARTLE_TOTAL - S.startleT, keys, true));
+      const { rise, seconds } = STARTLE;
+      for (const part of ['tuft', 'head'] as const) {
+        const to = STARTLE[part];
+        const c = this.C[part];
+        pin(c, keyed(STARTLE_TOTAL - S.startleT, [[0, S.startleFrom[part]], [rise, to], [rise + seconds, to], [STARTLE_TOTAL, c.t]], true));
+      }
     }
     this.gaze(dt, who === 'layer' ? LAYER_HEAD : PERCHED_HEAD);
   }
