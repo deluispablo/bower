@@ -421,3 +421,4 @@ P3-9 is closed.
 - Two P4-37b defects ruled (main cb4f7c8); c2-create-by-id reopened; implementer round queued after the retention round. 421/427.
 - Retention round delivered (red 7550a442, fix a6328140) but NOT merged: above 20 finished runs every run adds +128 Drive calls (37 → 165; re-verifies every kept chain); no engine.ts change. Lead asked. c2-create-by-id round dispatched.
 - Retention round 2 dispatched (bounded: stamp at done, Bin ≤3 oldest per run, ≤+3 calls past 20, golden variant with 25 runs).
+- c2-create-by-id round 3 merged (red da4624ed, fix 700ce9f9; 4xx releases the id with "Your change was made, but Bower couldn't make a note of it."; pile note keyed by pile id; check green). Open: a background flush only logs a refused line (lead asked). P4-37c check dispatched.
