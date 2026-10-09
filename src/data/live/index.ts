@@ -96,12 +96,11 @@ interface WaitingHere {
 
 /**
  * Waits while another place is active (Use here lets it go); any other refusal is the caller's.
- * `fresh`: the lease is asked right before the write, as before each upload starts (TL-P2-14 Q3).
  */
-async function untilActive(guard: PlaceGuard, here: WaitingHere, fresh: boolean): Promise<void> {
+async function untilActive(guard: PlaceGuard, here: WaitingHere): Promise<void> {
   for (;;) {
     try {
-      await guard.verify(fresh);
+      await guard.verify(false);
       return;
     } catch (e) {
       if (!isOpenElsewhere(e)) throw e;
@@ -122,7 +121,6 @@ async function untilActive(guard: PlaceGuard, here: WaitingHere, fresh: boolean)
  * note written as text with the "as added" property that only a pile's send sets.
  */
 function addedHere(key: PropertyKey, args: readonly unknown[]): boolean {
-  if (key === 'upload') return true;
   const props = key === 'createText' ? args[3] : undefined;
   return !!props && typeof props === 'object' && typeof (props as Record<string, unknown>)[PROP.asAdded] === 'string';
 }
@@ -309,7 +307,7 @@ export function makeLiveSources(opts: LiveOptions): LiveSources {
             if (disposed) throw new BowerError('unknown', 'Bower is no longer open on this page.');
             // Fail closed: every method that is not a read goes only from the active place.
             // A file on its way waits while another place is active, and goes after Use here (TL-P2-24).
-            const fencing = guard && policy ? (addedHere(key, args) ? untilActive(guard, waitingHere, key === 'upload') : policy.before(key, args)) : null;
+            const fencing = guard && policy ? (addedHere(key, args) ? untilActive(guard, waitingHere) : policy.before(key, args)) : null;
             if (fencing) {
               await fencing;
               check(at);

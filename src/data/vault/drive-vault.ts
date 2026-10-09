@@ -143,6 +143,8 @@ export class DriveVault implements VaultSource {
   private answering = new Map<string, Promise<void>>();
   private sending = new Set<Promise<void>>();
   private disposed = false;
+  /** Files that landed and went to the Bin before their pile's Bin entry existed, by the pile's folder and key. */
+  private readonly lateFor = new Map<string, string[]>();
   private readonly queued: DriveVaultUploads;
   private queueStart: Promise<void> | null = null;
   private unqueue: () => void = () => undefined;
@@ -379,8 +381,12 @@ export class DriveVault implements VaultSource {
       // What arrived though its answer was lost, here or filed elsewhere, is not sent again on Undo.
       if (pending) pending.entries = pending.entries.filter((e) => !held.arrived.has(e.key));
       for (const e of pending?.entries ?? []) delete e.queued;
+      for (const key of new Set([f.id, pileKey])) {
+        binned.push(...(this.lateFor.get(key) ?? []));
+        this.lateFor.delete(key);
+      }
       const copies = this.removedDeclarations(pileKey);
-      this.bin.set(path, { id: f.id, change: null, top, ...(pending ? { pending, pileKey } : {}), ...(binned.length ? { late: binned } : {}), ...(copies.length ? { declarations: copies } : {}) });
+      this.bin.set(path, { id: f.id, change: null, top, ...(pending ? { pending, pileKey } : {}), ...(binned.length ? { late: [...new Set(binned)] } : {}), ...(copies.length ? { declarations: copies } : {}) });
       this.emit();
       return;
     }
@@ -1485,7 +1491,10 @@ export class DriveVault implements VaultSource {
             console.error(err);
             await this.drive.trash(made.id);
           });
-          for (const g of this.bin.values()) if (g.id === u.parent || g.id === pileId) g.late = [...(g.late ?? []), made.id];
+          // Its Bin entry may not exist yet (the pile's own Bin is still being written): then trash() takes it from here.
+          let kept = false;
+          for (const g of this.bin.values()) if (g.id === u.parent || g.id === pileId) { g.late = [...(g.late ?? []), made.id]; kept = true; }
+          if (!kept) for (const key of new Set([u.parent, pileId])) this.lateFor.set(key, [...(this.lateFor.get(key) ?? []), made.id]);
           return;
         }
         ix.put(made);
@@ -1597,7 +1606,7 @@ export class DriveVault implements VaultSource {
 
   /** The file id reserved for a thing this page is sending, once the queue has one. */
   private reservedFor(e: Sending): string | null {
-    return e.queued ? (this.queued?.queue.items().find((i) => i.id === e.queued)?.reserved ?? null) : null;
+    return e.queued ? (this.queued.queue.items().find((i) => i.id === e.queued)?.reserved ?? null) : null;
   }
 
   /**
@@ -1605,9 +1614,8 @@ export class DriveVault implements VaultSource {
    * the files a lost answer already made where they were sent, as sent.
    */
   private async haltQueued(pileId: string): Promise<{ ids: string[]; made: DriveFile[]; arrived: Set<string> }> {
-    const queue = this.queued?.queue;
+    const queue = this.queued.queue;
     const arrived = new Set<string>();
-    if (!queue) return { ids: [], made: [], arrived };
     const ids: string[] = [];
     const made: DriveFile[] = [];
     for (const it of queue.items()) {
@@ -1649,11 +1657,11 @@ export class DriveVault implements VaultSource {
   }
 
   private resumeQueued(ids: readonly string[]): void {
-    for (const id of ids) this.queued?.queue.resume(id);
+    for (const id of ids) this.queued.queue.resume(id);
   }
 
   private async endQueued(ids: readonly string[]): Promise<void> {
-    for (const id of ids) await this.queued?.queue.discard(id);
+    for (const id of ids) await this.queued.queue.discard(id);
   }
 
   /** Refuses to change a file that changed name or place elsewhere since the folder was listed (`notAsSeen`, the one check). */
