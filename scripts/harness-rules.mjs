@@ -41,14 +41,17 @@ export function runnerTests(root, cwd = process.cwd()) {
   return packageTests('runner', root, cwd);
 }
 
+/** Remove quoted test-name values, keeping empty arguments so option parsing stays the same. */
+const withoutTestNames = (part) => part.replace(/((?:^|\s)(?:-t|-g|--grep|--testNamePattern)(?:\s+|=))(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, '$1""');
+
 /** A command that runs the browser tests: playwright, e2e-both.sh, or the pnpm e2e scripts. */
-const isE2e = (part) => /playwright test|e2e-both|\bpnpm\s+e2e(:\w+)?(\s|$)/.test(part);
+const isE2e = (part) => /playwright test|e2e-both|\bpnpm\s+e2e(:\w+)?(\s|$)/.test(withoutTestNames(part));
 
 /** The test patterns a verify names: vitest -t "…" and playwright -g "…"; `pnpm -C api …` and `pnpm -C runner …` run those packages' own tests. */
 export function patterns(part) {
   const m = /(?: -| --)(t|g|grep|testNamePattern)(?: |=)"([^"]*)"/.exec(part);
   if (!m) return null;
-  const pkg = /\bpnpm\s+(-C|--dir)\s+(api|runner)\b/.exec(part)?.[2];
+  const pkg = /\bpnpm\s+(-C|--dir)\s+(api|runner)\b/.exec(withoutTestNames(part))?.[2];
   const kind = m[1] === 'g' || m[1] === 'grep' || isE2e(part) ? 'e2e' : (pkg ?? 'unit');
   return { kind, pattern: m[2] };
 }
@@ -74,7 +77,7 @@ function topLevelParts(pattern) {
 
 /** The files/config/projects a named verify actually selects, before its name filter. */
 function selectedTests(command, kind, tests) {
-  const words = [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
+  const words = [...withoutTestNames(command).matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
   const start = kind !== 'e2e' ? words.indexOf('run') : words.findIndex((w) => w.endsWith('e2e-both.sh') || w === 'e2e' || w.startsWith('e2e:'));
   const at = start >= 0 ? start : words.indexOf('test');
   const filters = [];
@@ -153,7 +156,7 @@ export function problems(features, proofs, tests, legacy = new Set(), checkOpen 
     if (typeof f.task !== 'string') continue;
     if (!Array.isArray(f.steps) || !f.steps.some((x) => typeof x === 'string' && x.trim())) bad.push(`${f.id}: no steps (how a person sees it, for an evaluator to replay)`);
     for (const p of f.verify.split('&&').map((x) => x.trim())) {
-      const named = /vitest run|playwright test|e2e-both/.test(p) || (isE2e(p) && patterns(p) !== null);
+      const named = /vitest run|playwright test|e2e-both/.test(withoutTestNames(p)) || (isE2e(p) && patterns(p) !== null);
       if (!named) continue;
       const pat = patterns(p);
       if (!pat) {

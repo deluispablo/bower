@@ -6311,8 +6311,8 @@
       "A run parses each unchanged note at most once.",
       "A note whose md5 changed is parsed again."
     ],
-    "verify": "",
-    "note": "TL-P4-22 addendum 18 (main 5083a711); split from c4-test-timers (P4-52 BLOCK b1; load-timeouts diagnosis b1, 13 parseOwnership call sites, ~850 parses in the size-cap run). Escalated. After the TL-P4-24 entries. Red: a spy counting at most one parse per unchanged note per run. Packet to write."
+    "verify": "pnpm exec vitest run src/data -t \"each unchanged note is parsed at most once per run|a note changed during the run is parsed again\"",
+    "note": "TL-P4-22 addendum 18 (main 5083a711); split from c4-test-timers (P4-52 BLOCK b1; load-timeouts diagnosis b1, 13 parseOwnership call sites, ~850 parses in the size-cap run). Escalated. After the TL-P4-24 entries. Red: a spy counting at most one parse per unchanged note per run. Packet to write. Packet 2026-10-09-c4-parse-once-packet.md (written); Codex contract sign-off (TL-P4-28 ruling 1)."
   },
   {
     "id": "c4-api-audit",
@@ -6406,14 +6406,29 @@
     "id": "c4-lockf",
     "task": "p4-consolidation",
     "category": "harness",
-    "passes": false,
+    "passes": true,
     "ui": null,
     "what": "The heavy-run lock uses macOS lockf -k (kernel releases on holder death): try -t 0, print the advisory holder, then block; HARNESS_LOCK_HELD re-entry kept and e2e-both uses the same rule; mkdir lock and takeover code deleted.",
     "steps": [
       "An empty holder file and a second caller: the second waits.",
       "Six callers alternate strictly."
     ],
-    "verify": "",
-    "note": "TL-P4-22 addendum 23 (main 28ff2f23); defect check-lock-order-flaky. Ahead of other heavy work. Codex (TL-P4-23). Packet 2026-10-09-c4-lockf-packet.md. implementer: codex."
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"an empty holder file and a second caller: the second waits|a held lockf blocks the caller and a killed holder frees it|six callers started together alternate strictly|uses the same re-entry rule as with-lock|two checks started together run one after the other\"",
+    "note": "TL-P4-22 addendum 23 (main 28ff2f23); defect check-lock-order-flaky. Ahead of other heavy work. Codex (TL-P4-23). Packet 2026-10-09-c4-lockf-packet.md. implementer: codex.",
+    "review": "P4-62 PASS"
+  },
+  {
+    "id": "c4-precheck-runner",
+    "task": "p4-consolidation",
+    "category": "harness",
+    "passes": true,
+    "what": "done.sh precheck detects the e2e runner from the command words, never from text in a test name (defect done-precheck-matches-words).",
+    "steps": [
+      "A vitest verify whose -t names mention e2e is read as unit.",
+      "A playwright, e2e-both.sh or pnpm e2e* verify is still e2e."
+    ],
+    "verify": "pnpm exec vitest run src/harness.test.ts -t \"a test name that mentions e2e does not make a vitest verify an e2e one|a playwright verify is still e2e\"",
+    "note": "Lead ruling 2026-10-09 (message; DEFECT_LOG done-precheck-matches-words): detect the runner from the command, never from a test name. Codex, then a Claude review. Packet 2026-10-09-c4-precheck-runner-packet.md.",
+    "review": "P4-63 PASS"
   }
 ]

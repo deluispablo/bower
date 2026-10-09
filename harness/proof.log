@@ -516,3 +516,5 @@ c4-retry-fence	fe957584e016a036	2026-10-09	known-green: reds a6ea6210 (drive-htt
 c4-api-audit	d72de6d04e0bd1a9	2026-10-09	known-green: red: pnpm audit in api/ reported 12 (sharp <0.35.5 high x2, undici <7.29.1 x10), /private/tmp/c4-audit-red.log; after 2e29fd6c: 1 (sharp librsvg, clears 2026-10-11 under the two-week rule); a dependency change has no test that a revert turns red
 v2-boot-states	4f0115c3179a11c2	2026-10-09	red (fixed in 0a08db90)
 c3-timer-gate	7e67fd89f37dafae	2026-10-09	known-green: verify renamed by c4-lockf (a lock whose holder is gone is released by the kernel); green at ac143e39
+c4-lockf	5a2a41ca7a59a1ce	2026-10-09	known-green: red at 5ae6061c (/private/tmp/c4-lockf-red.log: e2e-both re-entry assertion fails on the old script); fixes c8cc4389, fb9ff3ed, 106b7d20 (harness/*.sh outside CODE_PATHS); green in done.sh at c899a167 and in integrate at 81e4445b
+c4-precheck-runner	8cc553b4ddfb3fcb	2026-10-09	red (fixed in 835eb3f5)
