@@ -442,3 +442,4 @@ P3-9 is closed.
 - Retention round 5 merged (red a7a59d7c, fix 74ff0aa0; bowerRun at create; only marked folders binned; prod -24; check green). P4-38d check dispatched.
 - spine-operations-checkpoints closed (retention complete, P4-38d PASS). 422/427. Waiting: c2-create-by-id round 6, then the stage 2 suites.
 - Retention round 6 (lead): skip run folders holding unmarked items; spine-operations-checkpoints reopened; escalated round dispatched (it bins). 421/427.
+- Retention round 6 blocked: the runner listing has no children of other run folders and Bower records carry no mark; options A (stamp records at create + list ≤3 candidates) / C to the lead.
