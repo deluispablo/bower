@@ -45,10 +45,19 @@
 | Phone, the run chip | The same box and place, with `--brand` fill and `--on-brand` text, the text on one line. It sits in the same dock as the messages. |
 | Desktop, a message or the chip | At most 520 px wide, centred at the bottom of the main column (not the window), 24 px above the status bar. |
 | Several messages | They stack upward with an 8 px gap, three at most. The oldest goes first. |
+| Chip and messages together | The chip is lowest in the dock, and messages stack above it with an 8 px gap. The chip does not count toward the three. `--dock-h` is the whole stack. |
+| A phone screen with a sticky header | It gets the same scroll-padding at the top. If none exists, nothing changes. |
 | While a message or the chip shows | The scrolling page gets bottom space equal to the dock's height plus 12 px, so nothing you can press stays under it. At full scroll in `scenario=back`, the last result row ends above the chip. |
 | Motion | The box rises in 0.22 s ease-out (`--ease-out`). It stays 4 s, or 8 s with an action. The timer pauses while the box is pointed at or holds focus (today's rule). With reduced motion it appears in place. |
 | Bin message | "Flat 2, 40 Tanners Walk is in your Drive's Bin." with the action "Undo" on one line. The name is the display name, never a file name. |
 | Keyboard focus, phone shell (Home, a note, Settings, a pile, Tell Bower; at 375 and 768, and desktop zoomed to 200%) | Every focused control's box ends at least 16 px above the tab bar's top, plus the dock's height while one shows. |
+
+**Signed off** by the designer, 2026-10-09 (9c250864, with the chip-and-messages row added). At the design check the designer measures:
+- At 375: left 16, right 359, and at least 12 px above the tab bar. "Undo" sits on one line.
+- After "Yes, merge": elementFromPoint at the centre of "Keep both" returns that button.
+- At 1440: at most 520 px wide, centred in main.
+- In scenario=back: the last row ends above the chip.
+- Focus boxes end at least 16 px above the tab bar, at 375 and 768.
 
 ## Red
 
