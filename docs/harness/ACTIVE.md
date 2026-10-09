@@ -417,3 +417,4 @@ P3-9 is closed.
 - Lead: stage 2 closes at +167 (main 7ccb60f); condition: jscpd clones ≤ 22 at the stage end. keepFinished removal dispatched (mechanical).
 - keepFinished removal held: it is TL-P3-21 retention, promised by closed entry spine-operations-checkpoints and never wired (retention-never-wired logged).
 - retention-never-wired ruled (a) (main f9e2515): spine-operations-checkpoints reopened; escalated wiring round dispatched. 421/427.
+- c2-create-by-id closed (8322ae27, P4-37b PASS). 422/427. Two P4-37b minors asked of the lead (journal 4xx reserved id waits forever; pile-note retry with new words makes a second note). Waiting: retention wiring (spine-operations-checkpoints), then the stage 2 suites.
